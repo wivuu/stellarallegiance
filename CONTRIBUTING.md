@@ -22,8 +22,7 @@ in snapshots. The client keeps **no compile-time tuning fallback** — `client/s
 guards until the server's defs arrive, so prediction never runs on stale numbers.
 
 When you change the wire format, bump `Protocol.Version` (server) and the matching
-`ProtocolVersion` constant in `client/scripts/GameNetClient.cs` together; the handshake refuses a
-mismatch rather than misreading frames.
+`ProtocolVersion` constant in `shared/Net/Wire.cs`.
 
 ## Building & running
 

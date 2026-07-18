@@ -39,10 +39,15 @@ const int Settle = 30; // ticks to hold a configuration so the 2 Hz apply reflec
 Simulation BootSim(ulong seed, bool sync = true)
 {
     var content = ContentLoader.Load(stockPath, worldPath);
+    // The bomber (class 2) is tech-gated behind the `bomber` tech at match start (StrategyTest's subject);
+    // this suite reads a bomber's signature, so seed the tech so StartMatch unlocks class 2.
+    content.Start.BaseTechs.Add("bomber");
+    content.Start.BaseTechs.Add("supremacy-1"); // unlock the Enh Fighter hull (gated since Phase 4) — used as a vision target
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
     var sim = new Simulation(world, content);
     sim.PigsEnabled = false;
     sim.MinersEnabled = false; // isolate from the auto-seeded team miner (mirrors PigsEnabled)
+    sim.AttributesEnabled = false; // Phase 6: neutral ×1.0 — this suite asserts exact signature/detection boundaries
     sim.FogEnabled = true;
     sim.VisionSynchronous = sync;
     sim.StartMatch();
@@ -126,7 +131,7 @@ Simulation.TeamVision Vision(Simulation sim, byte team) => sim.VisionFor(team)!;
         if (br.ReadByte() != 0) { br.ReadBytes(28); if (br.ReadByte() != 0) br.ReadUInt32(); } // nebula: colorA+colorB+intensity (+seed)
         if (br.ReadByte() != 0) { br.ReadBytes(16); int nc = br.ReadUInt16(); br.ReadBytes(nc * 20); } // dust: color(3) + opacity(1) + clouds
     }
-    int nb = br.ReadUInt16(); br.ReadBytes(nb * 33);
+    int nb = br.ReadUInt16(); br.ReadBytes(nb * 34); // base-static record: +1 byte baseTypeId (v37)
     // RockStatic v32: 41-byte prefix + mining block (u8 class + f32 currentRadius + u8 orePct + f32 oreCapacity) = 51.
     long nr = br.ReadUInt32(); br.ReadBytes((int)nr * 51);
     int na = br.ReadUInt16(); br.ReadBytes(na * 28);
@@ -484,7 +489,7 @@ Vec3 AtAngle(float dist, float angleDeg)
             if (br.ReadByte() != 0) { br.ReadBytes(28); if (br.ReadByte() != 0) br.ReadUInt32(); }
             if (br.ReadByte() != 0) { br.ReadBytes(16); int nc = br.ReadUInt16(); br.ReadBytes(nc * 20); }
         }
-        int nb = br.ReadUInt16(); br.ReadBytes(nb * 33);
+        int nb = br.ReadUInt16(); br.ReadBytes(nb * 34); // base-static record: +1 byte baseTypeId (v37)
         long nr = br.ReadUInt32();
         for (long i = 0; i < nr; i++) { var rec = br.ReadBytes(51); if (BitConverter.ToUInt64(rec, 0) == id) return rec; }
         return null;
@@ -494,7 +499,7 @@ Vec3 AtAngle(float dist, float angleDeg)
         using var ms = new MemoryStream(frame);
         using var br = new BinaryReader(ms);
         br.ReadByte();
-        int nb = br.ReadByte(); br.ReadBytes(nb * 33);
+        int nb = br.ReadByte(); br.ReadBytes(nb * 34); // base-static record: +1 byte baseTypeId (v37)
         int nr = br.ReadUInt16();
         for (int i = 0; i < nr; i++) { var rec = br.ReadBytes(51); if (BitConverter.ToUInt64(rec, 0) == id) return rec; }
         return null;
@@ -1010,15 +1015,39 @@ Vec3 AtAngle(float dist, float angleDeg)
 
     // Park the scout on the aleph so Pass A's TryWarp fires this step, then verify the arrival rock
     // was scouted synchronously (streamed via the reveal log the same tick).
+    // A test-seam rock is unknown to RockOre, so RockClassOf defaults it to Carbonaceous — no seeded
+    // rock in this unmapped world carries that class, making it a clean marker for the mask fold.
+    Check((sim.World.TeamStates[0].DiscoveredRockClasses & (1 << (byte)RockClass.Carbonaceous)) == 0,
+        "the marker rock class is undiscovered before the warp (pre-condition)", "carbonaceous bit already set before warping");
     Park(scout, g.SectorId, g.Pos);
     sim.Step();
     Check(scout.SectorId == g.DestSectorId, "the scout warped to the destination sector (pre-condition)", "the scout did not warp");
     Check(Vision(sim, 0).RevealLogRocks.Contains(exitRock.Id), "warping scouts the arrival-point rocks the SAME tick (reveal log) (F8)", "the arrival rock was not revealed on warp");
+    Check((sim.World.TeamStates[0].DiscoveredRockClasses & (1 << (byte)RockClass.Carbonaceous)) != 0,
+        "warp discovery folds the rock's class into TeamState.DiscoveredRockClasses the SAME tick (F8)",
+        $"warp did not set the class mask bit (mask {sim.World.TeamStates[0].DiscoveredRockClasses:x2})");
 
     // Hold at the exit a couple of vision boundaries: the warp-staged rock is merged into the
     // persistent DiscoveredRocks (so a late joiner's Welcome and fog memory carry it).
     Run(sim, () => Park(scout, g.DestSectorId, g.PartnerPos), Settle);
     Check(Vision(sim, 0).DiscoveredRocks.Contains(exitRock.Id), "the warp-revealed rock persists into DiscoveredRocks (F8)", "the warp-revealed rock was never persisted");
+}
+
+// ================================================================================================
+// 14b. DiscoveredRockClasses lifecycle: home vision seeds the mask by the first boundaries, and a
+//      match reset clears it back to 0 under fog (the new match's teams re-scout from scratch).
+// ================================================================================================
+{
+    var sim = BootSim(88);
+    Run(sim, () => { }, Settle);
+    Check(sim.World.TeamStates[0].DiscoveredRockClasses != 0,
+        "garrison vision seeds the discovered-rock-class mask within the first boundaries",
+        "class mask still 0 after settling — vision apply never folded a rock class");
+    sim.ReturnToLobby(); // match reset path — ResetVision clears fog memory including the class mask
+    sim.StartMatch();    // (StartMatch alone no-ops while Active; the lobby round-trip is the real cycle)
+    Check(sim.World.TeamStates[0].DiscoveredRockClasses == 0,
+        "a match reset clears DiscoveredRockClasses under fog",
+        $"class mask survived the match reset ({sim.World.TeamStates[0].DiscoveredRockClasses:x2})");
 }
 
 // ================================================================================================
@@ -1145,7 +1174,7 @@ Vec3 AtAngle(float dist, float angleDeg)
         using var ms = new MemoryStream(frame);
         using var br = new BinaryReader(ms);
         br.ReadByte(); // MsgReveal
-        int nb = br.ReadByte(); br.ReadBytes(nb * 33);
+        int nb = br.ReadByte(); br.ReadBytes(nb * 34); // base-static record: +1 byte baseTypeId (v37)
         int nr = br.ReadUInt16(); br.ReadBytes(nr * 51); // RockStatic v32: 41 + mining block (class + currentRadius + orePct + oreCapacity)
         int na = br.ReadByte(); br.ReadBytes(na * 28);
         int ns = br.ReadByte(); br.ReadBytes(ns * 8); // sector slice: u32 id + f32 radius
@@ -1297,7 +1326,7 @@ Vec3 AtAngle(float dist, float angleDeg)
     Pump(20); // matchmaker auto-starts the match while in lobby
     Check(crash is null && sim.IsActive, "the hub-driven match auto-starts fog-on without exceptions", $"the match did not start cleanly ({crash?.GetType().Name}: {crash?.Message})");
 
-    ft.Feed(new byte[] { Protocol.MsgSpawn, FlightModel.ClassScout });
+    ft.Feed(new byte[] { Protocol.MsgSpawn, FlightModel.ClassScout, 0, 0, 0, 0, 0, 0, 0, 0 }); // v36: [4][cls][u64 launchBaseId=0]
     Thread.Sleep(50);
     Pump(300); // fly the async vision worker across ~30 boundaries with a live ship
 
@@ -1575,6 +1604,7 @@ Vec3 AtAngle(float dist, float angleDeg)
     Simulation MkDustSim(float amount, float opacity, out World w)
     {
         var c = ContentLoader.Load(stockPath, worldPath);
+        c.Start.BaseTechs.Add("supremacy-1"); // unlock the Enh Fighter hull (gated since Phase 4) — dust-sim viewers/targets
         c.World.AsteroidDensity = 0f; // no rocks — isolate dust from rock occlusion
         c.World.SectorScale = 1f;
         c.World.SectorRadius = baseR; // sector 0 (no explicit radius) → radius baseR, dust ~0.9·baseR
@@ -1748,6 +1778,7 @@ Vec3 AtAngle(float dist, float angleDeg)
 // ship sees OUT while remaining unseen itself: dust-signature-mult quiets targets, not viewers.
 {
     var c = ContentLoader.Load(stockPath, worldPath);
+    c.Start.BaseTechs.Add("supremacy-1"); // unlock the Enh Fighter hull (gated since Phase 4) — dust-signature viewers/targets
     float dustMult = c.World.DustSignatureMult;
     if (dustMult >= 0.95f)
         Console.WriteLine("SKIP: dust-signature-mult is neutral — dust signature test skipped");

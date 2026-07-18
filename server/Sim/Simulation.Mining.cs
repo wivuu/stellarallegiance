@@ -36,8 +36,11 @@ public sealed partial class Simulation
         if ((s.State.Pos - rock.Pos).LengthSquared() > reach * reach)
             return 0f;
         // Clamp the transfer by the rate·dt budget, the rock's remaining ore, and the miner's free hold.
+        // MiningRate (v41): the per-second harvest budget scales by the miner team's faction multiplier
+        // (Iron ×0.85 mines slower); MiningCapacity scales the hold (inside MinerOreCapacity).
         float hold = MinerOreCapacity(s);
-        float move = MathF.Min(_mining.HarvestRatePerSecond * dt, MathF.Min(ore.OreRemaining, hold - s.Ore));
+        float rate = _mining.HarvestRatePerSecond * TeamAttr(s.Team, Allegiance.Factions.Model.GameAttribute.MiningRate);
+        float move = MathF.Min(rate * dt, MathF.Min(ore.OreRemaining, hold - s.Ore));
         if (move <= 0f)
             return 0f;
         s.Ore += move;
@@ -45,10 +48,13 @@ public sealed partial class Simulation
         return move;
     }
 
-    // The ore-hold size for a ship, read straight from its class def (0 = not a miner hull — a non-miner
-    // therefore harvests nothing). Mirrors HullFor's def lookup; an unknown class holds nothing.
+    // The ore-hold size for a ship, read from its class def and scaled by the team's MiningCapacity
+    // faction multiplier (v41; Iron ×0.75 = smaller holds). 0 = not a miner hull (a non-miner harvests
+    // nothing). Mirrors HullFor's def lookup; an unknown class holds nothing.
     private float MinerOreCapacity(ShipSim s) =>
-        ShipDefs.TryGetValue(s.Class, out var d) ? d.OreCapacity : 0f;
+        ShipDefs.TryGetValue(s.Class, out var d)
+            ? d.OreCapacity * TeamAttr(s.Team, Allegiance.Factions.Model.GameAttribute.MiningCapacity)
+            : 0f;
 
     // ================================================================================================
     // Miner AI (Stream 6): team-owned autonomous ore drones. A team seeds ONE free miner slot each
@@ -109,7 +115,10 @@ public sealed partial class Simulation
 
     private readonly List<MinerSlot> _miners = [];
     private ulong _nextMinerId = 1;
-    private readonly Queue<byte> _minerBuyQueue = new(); // drained under _qLock in DrainQueues
+    // (team, launchBaseId): the garrison the commander was docked at when they ordered, so the miner
+    // joins THAT garrison's build pipeline (0 = resolve the team's default garrison). Drained under
+    // _qLock in DrainQueues.
+    private readonly Queue<(byte Team, ulong LaunchBase)> _minerBuyQueue = new();
 
     // Team-scoped one-liners the hub relays as system chat ("Miner destroyed", "at cap", ...).
     // Cleared each step alongside the other *ThisStep state.
@@ -132,11 +141,17 @@ public sealed partial class Simulation
 
     private bool IsMinerClass(byte cls) => ShipDefs.TryGetValue(cls, out var d) && d.OreCapacity > 0f;
 
+    // A team's miners toward the cap: live/docked miners PLUS any still producing in the shared
+    // constructor queue (ProducesMiner slots), so ordering counts against the cap immediately and the
+    // count survives the graduate hand-off (producing slot removed as the MinerSlot is added).
     public int MinerCount(byte team)
     {
         int n = 0;
         foreach (var m in _miners)
             if (m.Team == team)
+                n++;
+        foreach (var c in _constructors)
+            if (c.Team == team && c.ProducesMiner)
                 n++;
         return n;
     }
@@ -155,20 +170,25 @@ public sealed partial class Simulation
 
     // ---- Purchase + orders (thread-safe enqueue; applied on the sim thread in DrainQueues) ----
 
-    public void EnqueueMinerBuy(byte team)
+    // launchBaseId = the garrison the buy came from (Build tab). 0 = resolve the team's default
+    // garrison (the tests, and any caller without a docked base, pass 0).
+    public void EnqueueMinerBuy(byte team, ulong launchBaseId = 0)
     {
         lock (_qLock)
-            _minerBuyQueue.Enqueue(team);
+            _minerBuyQueue.Enqueue((team, launchBaseId));
     }
 
     // Called from DrainQueues (already under _qLock, on the sim thread).
     private void DrainMinerQueues(uint tick)
     {
         while (_minerBuyQueue.Count > 0)
-            TryBuyMiner(_minerBuyQueue.Dequeue(), tick);
+        {
+            var (team, launchBase) = _minerBuyQueue.Dequeue();
+            TryBuyMiner(team, launchBase, tick);
+        }
     }
 
-    private void TryBuyMiner(byte team, uint tick)
+    private void TryBuyMiner(byte team, ulong launchBaseId, uint tick)
     {
         if (!MinersEnabled)
         {
@@ -191,6 +211,22 @@ public sealed partial class Simulation
             MinerNoticesThisStep.Add((team, $"Miner cap reached ({_mining.MaxMinersPerTeam})."));
             return;
         }
+        // A TIMED order joins the docked garrison's build pipeline (shared with constructors), so it's
+        // gated by build.queue-limit; an instant order (order-time 0) has no build stage to queue and
+        // is fleet-cap-only. Resolve the garrison up front so the pipeline count / slot both see it; a
+        // garrison-less world falls back to LaunchBaseId 0 (still buyable, no per-garrison scoping).
+        int orderSec = ShipDefs.TryGetValue((byte)cls, out var md) ? md.OrderTimeSeconds : 0;
+        uint orderTicks = orderSec > 0 ? SecondsToTicks(orderSec) : 0;
+        ulong launchBase = 0;
+        if (orderTicks > 0 && ResolveConstructorLaunchBase(team, launchBaseId) is World.BaseSite gb)
+        {
+            launchBase = gb.Id;
+            if (BuildPipelineCountForBase(gb.Id) >= World.Build.QueueLimit)
+            {
+                MinerNoticesThisStep.Add((team, $"This garrison's build queue is full ({World.Build.QueueLimit})."));
+                return;
+            }
+        }
         // Same authoritative unlock + charge seam as a player hull buy. Buy AUTHORITY is
         // commander-gated at the connection layer (ClientHub.CommanderOrWarn) before the enqueue.
         switch (TryReserveSpawn(team, (byte)cls))
@@ -203,8 +239,20 @@ public sealed partial class Simulation
                 MinerNoticesThisStep.Add((team, $"Not enough credits for a miner ({cost})."));
                 return;
         }
-        NewMinerSlot(team, tick);
-        MinerNoticesThisStep.Add((team, $"Miner purchased ({MinerCount(team)}/{_mining.MaxMinersPerTeam})."));
+        // Order → launch production, routed through the SAME per-garrison pipeline as a constructor
+        // purchase (a slot in _constructors, shown in the Build-tab roster with a queue/progress bar +
+        // cancel). The dwell is the miner hull's faction-tunable order-time-seconds; on completion the
+        // brain graduates the slot into a MinerSlot. 0 = no production, launch at once (fleet cap only).
+        if (orderTicks == 0)
+        {
+            NewMinerSlot(team, tick);
+            MinerNoticesThisStep.Add((team, $"Miner purchased ({MinerCount(team)}/{_mining.MaxMinersPerTeam})."));
+        }
+        else
+        {
+            NewMinerProductionSlot(team, tick, orderTicks, launchBase);
+            MinerNoticesThisStep.Add((team, $"Miner ordered — building {orderSec}s ({MinerCount(team)}/{_mining.MaxMinersPerTeam})."));
+        }
     }
 
     private MinerSlot NewMinerSlot(byte team, uint tick)
@@ -216,6 +264,7 @@ public sealed partial class Simulation
             LaunchAtTick = tick, // launches on the next brain tick if there's eligible work
         };
         _miners.Add(slot);
+        TeamStateChangedThisStep = true; // restream the MsgTeamState miner-count tail (Build tab "X / N")
         return slot;
     }
 
@@ -263,6 +312,7 @@ public sealed partial class Simulation
                 MinerNoticesThisStep.Add((s.Team,
                     $"Miner destroyed ({MinerCount(s.Team) - 1}/{_mining.MaxMinersPerTeam} left)."));
                 _miners.RemoveAt(i);
+                TeamStateChangedThisStep = true; // restream the miner-count tail so the card ticks down
                 break;
             }
     }
@@ -757,13 +807,16 @@ public sealed partial class Simulation
         var stats = StatsFor(s.Class, false);
         // Exclude the miner's current claim from avoidance: while flying at / mining a rock, avoiding
         // that same rock would deflect the nose off it (the "doesn't face the rock" bug). TargetRockId
-        // is 0 while heading to base, so the offload leg avoids every rock normally.
-        Func<Vec3, Vec3, Vec3> avoid = (p, d) => PigAvoidAsteroids(s.SectorId, p, d, slot.TargetRockId);
+        // is 0 while heading to base, so the offload leg avoids every rock normally. Base hulls join
+        // the field too (see AvoidObstacles); the ToBase leg excludes its offload base the same way —
+        // avoidBaseId is set there so the dock maneuver owns that base's clearance.
+        ulong avoidBaseId = 0;
+        Vec3 Avoid(Vec3 p, Vec3 d) => AvoidObstacles(s.SectorId, p, d, slot.TargetRockId, avoidBaseId);
 
         ShipInputState Approach(Vec3 point, float stopDistance) =>
             AutoSteer.ApproachPoint(
                 myPos, myRot, s.State.Vel, point, stopDistance,
-                stats.MaxSpeed, stats.Accel, stats.BackMult, PigTurnGain, ApBrakeMargin, avoid
+                stats.MaxSpeed, stats.Accel, stats.BackMult, PigTurnGain, ApBrakeMargin, Avoid
             );
 
         // Cross-sector leg toward destSector: FULL-THRUST run at the next-hop gate mouth (TryWarp
@@ -780,7 +833,7 @@ public sealed partial class Simulation
             if (destSector == s.SectorId)
                 return false;
             if (World.NextGateTo(s.SectorId, destSector) is World.Gate gate)
-                input = AlignGated(AutoSteer.SteerToPoint(myPos, myRot, gate.Pos, PigTurnGain, 1f, avoid), gate.Pos);
+                input = AlignGated(AutoSteer.SteerToPoint(myPos, myRot, gate.Pos, PigTurnGain, 1f, Avoid), gate.Pos);
             return true;
         }
 
@@ -855,6 +908,7 @@ public sealed partial class Simulation
             {
                 if (slot.TargetBaseId == 0 || World.BaseById(slot.TargetBaseId) is not World.BaseSite b)
                     return default; // no live friendly base — hold; brain keeps re-checking
+                avoidBaseId = b.Id; // the offload destination — DockApproach owns its clearance
                 if (CrossSector(b.SectorId, out var xin))
                     return xin;
                 // Same fly-to-door logic as the player autopilot's friendly-base leg: the 3-phase
@@ -862,12 +916,12 @@ public sealed partial class Simulation
                 // way the collision-pass dock trigger fires and routes to OffloadMiner. The legacy
                 // steer gets the same near-target align gate as the aleph run: the dock sphere is
                 // small and a fast misaligned miner would otherwise orbit it forever.
-                if (World.BaseDockFaces.Length == 0 || World.BaseHull is null)
+                if (World.BaseDockFacesOf(b.BaseTypeId).Length == 0 || World.BaseHullOf(b.BaseTypeId) is null)
                 {
-                    Vec3 aim = World.BaseHull is not null ? b.Pos + World.BaseDoorCenter : b.Pos;
-                    return AlignGated(AutoSteer.SteerToPoint(myPos, myRot, aim, PigTurnGain, 1f, avoid), aim);
+                    Vec3 aim = World.BaseHullOf(b.BaseTypeId) is not null ? b.Pos + World.BaseDoorCenterOf(b.BaseTypeId) : b.Pos;
+                    return AlignGated(AutoSteer.SteerToPoint(myPos, myRot, aim, PigTurnGain, 1f, Avoid), aim);
                 }
-                return DockApproach(s, tick, b, stats, avoid);
+                return DockApproach(s, tick, b, stats, Avoid);
             }
         }
     }

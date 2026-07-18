@@ -6,8 +6,14 @@
 # HP_DockingEntrance_* / HP_DockingExit_* / HP_Light_* / HP_Turret_* nodes supply the docking doors
 # + nav lights in the exact frame World.LoadBase already uses for the server dock geometry — so the
 # streamed client markers and the server dock discs come from one source. No YAML hardpoints
-# authored: every mesh node appends (by kind byte, then index) → garrison.glb carries 44 lights,
-# 10 docking entrances (2 doors), 2 docking exits, 4 turrets = 60.
+# authored: every mesh node appends (by kind byte, then index).
+#
+# Phase 3 (Iron Coalition roster): the full base roster lands here — Outpost (Hvy) on ss90, plus the
+# constructor-buildable Supremacy (ss21a) and Shipyard (acs05) forward bases. Garrison stays ss27
+# (garrison.glb is byte-pristine ss27 — never touched). Stats translated from PCore014.igc via the
+# igc-format skill (--iron-slice): max-armor kept-magnitude (station armor x0.1 of IGC), radius from
+# the mesh's IGC radius, price x0.06. Per-type max-health + research-slots are now resolved from the
+# base's OWN type def in the sim (World.BaseMaxHealthOf / Simulation.Research.SlotsFor).
 stations:
   - id: garrison
     name: Garrison
@@ -20,4 +26,157 @@ stations:
     vision-sphere-radius: 3600
     radar-signature: 2.5   # a base is seen from far away
     abilities: [start, restart]
+    research-slots: 1      # concurrent research orders this base can run (0 => 1 at projection)
     required-capabilities: [base]
+    successor-station-id: garrison-str   # dev-upgrade-garrison swaps this base to Garrison (Str)
+
+  # Garrison (Str) — the UPGRADED garrison tier (Phase 4). base-type-id 4 makes it a runtime base
+  # with its own def, but it is NOT constructor-buildable (no build-on-rock-class): a team reaches it
+  # ONLY by researching dev-upgrade-garrison at its garrison (upgrade-scope: single), which swaps the
+  # hosting garrison's type in place. Same ss27 mesh/radius as the garrison (never re-baked) and it
+  # KEEPS the win-condition abilities (start/restart) so it remains the headquarters the match ends on.
+  # required-techs is the tier gate the dev grants (garrison-str); it grants nothing new of its own —
+  # dev-minigun-3 keys off the garrison-str tech directly.
+  - id: garrison-str
+    name: Garrison (Str)
+    base-type-id: 4
+    class: garrison
+    model-name: garrison   # SAME mesh/collision as the garrison (ss27) — no re-bake
+    description: "Structurally reinforced home garrison — tougher armor, same headquarters role."
+    radius: 90
+    max-armor: 2500        # IGC Garrison (Str) 25000 x0.1 kept-magnitude
+    vision-sphere-radius: 4500
+    radar-signature: 2.5
+    abilities: [start, restart]   # still the win-condition base
+    research-slots: 1
+    required-techs: [garrison-str]
+
+  # Outpost — the first constructor-built forward base (base tier). base-type-id makes it a RUNTIME
+  # base (projected to a BaseDef, streamed, spawnable); model-name binds ss90.glb (server collision +
+  # client mesh). build-on-rock-class gates which asteroid a constructor may raise it on (Regolith =
+  # the common class, so an outpost is always possible). NO `start` ability => not a win-condition
+  # base (destroying it doesn't end the match). Reinforce it in place to Outpost (Hvy) by researching
+  # dev-upgrade-outpost at the base (upgrade-scope: single) — successor-station-id names that tier.
+  - id: outpost
+    name: Outpost
+    base-type-id: 1
+    class: garrison
+    model-name: ss90   # res://assets/bases/ss90.glb (IGC Outpost Hvy)
+    description: "A forward garrison — eyes and a foothold in a contested sector."
+    radius: 64            # IGC Outpost (Hvy) radius (302.5 IGC -> 64 kept-magnitude); close to the
+                          # old outpost's 55, ss90 carries real docking doors so it isn't cramped.
+    max-armor: 667        # IGC 6666 x0.1 kept-magnitude
+    vision-sphere-radius: 2400
+    radar-signature: 1.8
+    price: 300
+    align-time-seconds: 5     # constructor dwell at the standoff shell before creeping into the rock
+    build-time-seconds: 45    # how long the build sphere runs once the drone is embedded
+    build-on-rock-class: regolith
+    research-slots: 1         # hosts its own upgrade research (dev-upgrade-outpost)
+    abilities: [land, repair, capture]
+    required-capabilities: [base]         # buildable from match start
+    successor-station-id: outpost-hvy     # dev-upgrade-outpost swaps this base to Outpost (Hvy)
+
+  # Outpost (Hvy) — the UPGRADED outpost tier (same ss90 mesh, no re-bake). Reached only by researching
+  # dev-upgrade-outpost at an Outpost (upgrade-scope: single), which swaps the hosting outpost's type in
+  # place. base-type-id makes it a runtime base; NOT constructor-buildable (no build-on-rock-class) — an
+  # upgrade tier, like garrison-str / supremacy-adv / shipyard-dry. required-techs is the tier gate the
+  # dev grants (outpost-hvy); tougher armor + longer sight are the reinforcement. Not a win-condition base.
+  - id: outpost-hvy
+    name: Outpost (Hvy)
+    base-type-id: 7
+    class: garrison
+    model-name: ss90      # SAME mesh/collision as the Outpost — no re-bake
+    description: "A heavy forward garrison — the reinforced outpost tier: thicker armor, longer eyes."
+    radius: 64
+    max-armor: 1200       # reinforced tier (~1.8x the base outpost's 667)
+    vision-sphere-radius: 3000
+    radar-signature: 1.8
+    research-slots: 1
+    required-techs: [outpost-hvy]
+    abilities: [land, repair, capture]
+
+  # Supremacy Center — constructor-built research/ordnance base (IGC ss21a). Grants the supremacy-1
+  # tech on completion (station-completion tech grant, Simulation.Constructors.GrantStationUnlocks),
+  # which unlocks the Gat/AutoCan tier-2 developments + the Enhanced Fighter hull. Two research slots
+  # (resolved per-type in SlotsFor). NOT a win-condition base (no start/restart). Independent of the
+  # Outpost (matching IGC, where the tech bases are parallel paths); the real gate is finding a
+  # Carbonaceous asteroid — the buy stays locked until the team's fog of war reveals one.
+  - id: supremacy
+    name: Supremacy Center
+    base-type-id: 2
+    class: ordnance   # IGC classes Supremacy as Ordinance(Sup)
+    model-name: ss21a   # res://assets/bases/ss21a.glb
+    description: "Ordnance and research hub — unlocks the supremacy weapon and hull tier."
+    radius: 64           # IGC Supremacy radius (302.5 IGC -> 64 kept-magnitude)
+    max-armor: 1333      # IGC 13333 x0.1 kept-magnitude
+    vision-sphere-radius: 2400
+    radar-signature: 2.0
+    price: 600
+    income: 0
+    align-time-seconds: 5
+    build-time-seconds: 50
+    build-on-rock-class: carbonaceous   # tech bases claim a RARE special rock (seeded ~1/sector, hash-rolled class)
+    research-slots: 2
+    abilities: [land, repair, capture]
+    required-capabilities: [base]
+    granted-techs: [supremacy-1]
+    successor-station-id: supremacy-adv   # dev-upgrade-supremacy swaps this base to Adv Supremacy
+
+  # Adv Supremacy Center — the UPGRADED Supremacy tier (Phase 4, same ss21a mesh). Reached only by
+  # researching dev-upgrade-supremacy at the Supremacy (upgrade-scope: single). required-techs is the
+  # tier gate the dev grants (supremacy-adv); tier-3 gun research (dev-gat-3/dev-autocan-3) and the Adv
+  # Fighter key off the supremacy-adv tech directly, so this tier grants nothing new of its own.
+  - id: supremacy-adv
+    name: Adv Supremacy Center
+    base-type-id: 5
+    class: ordnance
+    model-name: ss21a      # SAME mesh/collision as the Supremacy — no re-bake
+    description: "Advanced ordnance hub — the top weapon and hull tier."
+    radius: 64
+    max-armor: 2000        # IGC Supremacy (Adv) 20000 x0.1 kept-magnitude
+    vision-sphere-radius: 3000
+    radar-signature: 2.0
+    research-slots: 2
+    required-techs: [supremacy-adv]
+
+  # Shipyard — constructor-built forward hull yard (IGC acs05). Grants shipyard-1 on completion.
+  # Runtime base as of Phase 3 (was catalog-only). No research slots (authored 0 => resolves to 1 at
+  # projection). Independent of the Outpost (matching IGC).
+  - id: shipyard
+    name: Shipyard
+    base-type-id: 3
+    class: shipyard
+    model-name: acs05   # res://assets/bases/acs05.glb
+    description: "Builds and services ships away from the home garrison."
+    radius: 115          # IGC Shipyard radius (540 IGC -> 115 kept-magnitude)
+    max-armor: 1333      # IGC 13333 x0.1 kept-magnitude
+    vision-sphere-radius: 2400
+    radar-signature: 2.0
+    price: 900
+    income: 0
+    align-time-seconds: 5
+    build-time-seconds: 60
+    build-on-rock-class: regolith
+    research-slots: 0    # projection min-clamps to 1 slot; shipyard runs no research tree of its own
+    abilities: [land, repair, capture]
+    required-capabilities: [base]
+    granted-techs: [shipyard-1]
+    successor-station-id: shipyard-dry   # dev-upgrade-heavy-class swaps this base to Shipyard (Dry)
+
+  # Shipyard (Dry) — the UPGRADED Shipyard tier (Phase 4, same acs05 mesh). Reached only by researching
+  # dev-upgrade-heavy-class at the Shipyard (upgrade-scope: single); that dev ALSO grants heavy-class,
+  # and the pair (shipyard-dry + heavy-class) gates the Devastator. required-techs is the tier gate the
+  # dev grants (shipyard-dry).
+  - id: shipyard-dry
+    name: Shipyard (Dry)
+    base-type-id: 6
+    class: shipyard
+    model-name: acs05      # SAME mesh/collision as the Shipyard — no re-bake
+    description: "Dry-dock shipyard — services the heavy capital hull."
+    radius: 115
+    max-armor: 2000        # IGC Shipyard (Dry) 20000 x0.1 kept-magnitude
+    vision-sphere-radius: 3000
+    radar-signature: 2.0
+    research-slots: 1
+    required-techs: [shipyard-dry]

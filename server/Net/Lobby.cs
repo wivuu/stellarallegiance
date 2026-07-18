@@ -98,7 +98,7 @@ public sealed class Lobby
     }
 
     // The team's commander (-1 when the side is empty). AI vessels obey only this pilot's orders;
-    // /buyminer and mouse AI-vessel orders are gated on it (ClientHub).
+    // miner buys (MsgBuyMiner) and mouse AI-vessel orders are gated on it (ClientHub).
     public int CommanderOf(byte team)
     {
         if (team > 1)

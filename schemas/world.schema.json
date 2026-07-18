@@ -626,6 +626,20 @@
           ],
           "description": "Vertical (Y-axis) random jitter applied to garrison placement, world units."
         },
+        "rock-min-gap": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Minimum surface-to-surface gap between any two rocks, world units (0 = allow overlap)."
+        },
+        "base-clearance": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Minimum gap between a rock\u0027s surface and a base\u0027s collision sphere, world units (0 = off)."
+        },
         "he3-per-sector": {
           "type": [
             "integer",
@@ -653,6 +667,37 @@
             "null"
           ],
           "description": "Chance (0..1) that a HOME (garrison) sector receives its special rocks at all; default 0 = home fields hold none. Deterministic per world seed; a map-authored per-sector special-count bypasses the roll."
+        },
+        "special-weights": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "carbonaceous": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "Relative share for the Carbonaceous class (default 0 when the block is authored but this key omitted)."
+            },
+            "silicon": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "Relative share for the Silicon class."
+            },
+            "uranium": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "Relative share for the Uranium class."
+            }
+          },
+          "description": "Default relative weights for which special CLASS (carbonaceous/silicon/uranium) each special rock becomes; omitted \u2192 uniform. A map may override per sector. See SpecialWeightsDef.",
+          "additionalProperties": false
         },
         "special-rock-radius-mult": {
           "type": [
@@ -736,6 +781,82 @@
         }
       },
       "description": "Mining/ore economy tuning (server-side only \u2014 never streamed). Null -\u003E stock.",
+      "additionalProperties": false
+    },
+    "constructor": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "production-seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Garrison production dwell after purchase, before the drone launches, seconds."
+        },
+        "approach-speed": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Creep speed from the standoff shell to surface contact, world units/second."
+        },
+        "sink-speed": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Creep speed from surface contact to the embed depth, world units/second."
+        },
+        "standoff": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Extra reach past the rock surface where the travel leg \u0022arrives\u0022 (the align shell), world units."
+        },
+        "sink-depth-frac": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "How deep the drone embeds: fraction of the rock radius it descends below the surface."
+        },
+        "sink-backstop-seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Backstop: force the build to start after this long in the Sinking phase, seconds."
+        }
+      },
+      "description": "Constructor/base-building tuning (server-side only \u2014 never streamed). Null -\u003E stock.",
+      "additionalProperties": false
+    },
+    "build": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "parallel-limit": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Ordered items a garrison builds at once (1 = strictly one at a time)."
+        },
+        "queue-limit": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Total ordered (building \u002B queued) a garrison may hold before the Build tab locks."
+        }
+      },
+      "description": "Build-pipeline tuning: the per-garrison order queue (parallel \u002B queue limits). Null -\u003E stock.",
       "additionalProperties": false
     }
   },

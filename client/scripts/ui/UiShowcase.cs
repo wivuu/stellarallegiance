@@ -42,6 +42,8 @@ public partial class UiShowcase : Control
         Controls(col);
         DataAndFeedback(col);
         GameElements(col);
+        Research(col);
+        Build(col);
         Modals(col);
         Backgrounds(col);
 
@@ -388,11 +390,171 @@ public partial class UiShowcase : Control
         emptyMap.SetMap(null);
         mapRow.AddChild(emptyMap);
         s.AddChild(mapRow);
+
+        // Docked-screen ship-class card strip: normal / selected / tech-locked / unaffordable states.
+        s.AddChild(UiKit.MakeLabel("// DOCKED SCREEN — SHIP CLASS STRIP", UiKit.TextStyle.Data, DesignTokens.TextDim));
+        var cardRow = new HBoxContainer();
+        cardRow.AddThemeConstantOverride("separation", 10);
+        var c1 = new ShipLoadout.ShipCard();
+        c1.Configure("◆", "INTERCEPTOR", "STRIKE · 120 CR");
+        var c2 = new ShipLoadout.ShipCard { Selected = true };
+        c2.Configure("▲", "FIGHTER", "LINE · 180 CR");
+        var c3 = new ShipLoadout.ShipCard();
+        c3.Configure("⬟", "BOMBER", "HEAVY · 300 CR");
+        c3.SetGate(WorldRenderer.SpawnGate.Locked);
+        var c4 = new ShipLoadout.ShipCard();
+        c4.Configure("◇", "CARRIER", "CAPITAL · 900 CR");
+        c4.SetGate(WorldRenderer.SpawnGate.TooPoor);
+        foreach (var card in new[] { c1, c2, c3, c4 })
+            cardRow.AddChild(card);
+        s.AddChild(cardRow);
+
+        // Docked-screen CommandSidebar: live map + selectable YOUR BASES rows (active / selected /
+        // destroyed). Mock data lives only here — the component itself bakes none.
+        s.AddChild(UiKit.MakeLabel("// DOCKED SCREEN — COMMAND SIDEBAR", UiKit.TextStyle.Data, DesignTokens.TextDim));
+        var sidebar = new CommandSidebar { CustomMinimumSize = new Vector2(340, 560), SizeFlagsHorizontal = SizeFlags.ShrinkBegin };
+        s.AddChild(sidebar);
+        var mockMap = new SectorMapPreview.MapModel(
+            new()
+            {
+                new SectorMapPreview.SectorModel(0, 2100f, new() { new SectorMapPreview.BaseMark(0) }, new(), "BRIMSTONE", -0.6f, 0f, true),
+                new SectorMapPreview.SectorModel(1, 900f, new() { new SectorMapPreview.BaseMark(0) }, new(), "CINDER BELT", 0.6f, 0.3f, true),
+            },
+            new() { (0u, 1u) });
+        sidebar.SetData(
+            new[]
+            {
+                new CommandSidebar.BaseEntry(1, "GARRISON 01", "BRIMSTONE", 0, true),
+                new CommandSidebar.BaseEntry(2, "OUTPOST 02", "CINDER BELT", 1, true),
+                new CommandSidebar.BaseEntry(3, "GARRISON 03", "PALLAS-7", 1, false),
+            },
+            mockMap);
+    }
+
+    // Docked-screen RESEARCH tab building blocks: node cards (each status), a cluster header, the
+    // action-footer states, and a CommandSidebar base row carrying a live research banner. Mock data
+    // lives only here — the components bake none.
+    private static void Research(VBoxContainer parent)
+    {
+        var s = Section(parent, "07 — RESEARCH");
+
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", 20);
+
+        // Cluster: header + node tree (one card per status).
+        var cluster = new VBoxContainer { CustomMinimumSize = new Vector2(460, 0) };
+        cluster.AddThemeConstantOverride("separation", 3);
+        var header = new ClusterHeader();
+        header.Configure("▾", "WEAPONS", "1/4");
+        cluster.AddChild(header);
+        var nodes = new VBoxContainer();
+        nodes.AddThemeConstantOverride("separation", 3);
+        var done = new NodeCard();
+        done.ConfigureMock(ResearchTab.Status.Done, "Heavy Ordnance", "₡ 400", true, 1f);
+        var prog = new NodeCard();
+        prog.ConfigureMock(ResearchTab.Status.InProgress, "Cannon Tier II", "₡ 300", false, 0.55f);
+        var avail = new NodeCard();
+        avail.ConfigureMock(ResearchTab.Status.Available, "Tactical Doctrine", "₡ 500", false, 0f, selected: true);
+        var deck = new NodeCard();
+        deck.ConfigureMock(ResearchTab.Status.OnDeck, "Expansion Charter", "₡ 500", false, 0f);
+        var locked = new NodeCard();
+        locked.ConfigureMock(ResearchTab.Status.Locked, "Supremacy Core", "₡ 900", false, 0f);
+        foreach (var n in new[] { done, prog, avail, deck, locked })
+        {
+            n.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            nodes.AddChild(n);
+        }
+        cluster.AddChild(nodes);
+        row.AddChild(cluster);
+
+        // Action-footer states (representative).
+        var footers = new VBoxContainer { CustomMinimumSize = new Vector2(360, 0) };
+        footers.AddThemeConstantOverride("separation", 8);
+        footers.AddChild(UiKit.MakeLabel("// ACTION FOOTER STATES", UiKit.TextStyle.Data, DesignTokens.TextDim));
+        var f1 = UiKit.MakeButton("◆ AUTHORIZE RESEARCH", null, ButtonVariant.Primary);
+        f1.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        footers.AddChild(f1);
+        var f2 = UiKit.MakeButton("▲ COMMANDER AUTHORIZATION REQUIRED", null, ButtonVariant.Danger);
+        f2.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        f2.Disabled = true;
+        footers.AddChild(f2);
+        var f3 = UiKit.MakeButton("⊘ LOCKED", null, ButtonVariant.Secondary);
+        f3.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        f3.Disabled = true;
+        footers.AddChild(f3);
+        footers.AddChild(UiKit.MakeLabel("Needs Cannon Tier II", UiKit.TextStyle.Data, DesignTokens.TextDim));
+        row.AddChild(footers);
+
+        s.AddChild(row);
+
+        // CommandSidebar base rows with live research banners (mock).
+        s.AddChild(UiKit.MakeLabel("// COMMAND SIDEBAR — LIVE RESEARCH ROWS", UiKit.TextStyle.Data, DesignTokens.TextDim));
+        var sidebar = new CommandSidebar { CustomMinimumSize = new Vector2(340, 560), SizeFlagsHorizontal = SizeFlags.ShrinkBegin };
+        s.AddChild(sidebar);
+        var map = new SectorMapPreview.MapModel(
+            new()
+            {
+                new SectorMapPreview.SectorModel(0, 2100f, new() { new SectorMapPreview.BaseMark(0) }, new(), "BRIMSTONE", -0.6f, 0f, true),
+                new SectorMapPreview.SectorModel(1, 900f, new() { new SectorMapPreview.BaseMark(0) }, new(), "CINDER BELT", 0.6f, 0.3f, true),
+            },
+            new() { (0u, 1u) });
+        sidebar.SetData(
+            new[]
+            {
+                new CommandSidebar.BaseEntry(1, "GARRISON 01", "BRIMSTONE", 0, true, 0, "HEAVY ORDNANCE", 0.55f, false, 1),
+                new CommandSidebar.BaseEntry(2, "OUTPOST 02", "CINDER BELT", 1, true, 1, "CANNON TIER II", 0f, true),
+                new CommandSidebar.BaseEntry(3, "GARRISON 03", "PALLAS-7", 1, true),
+            },
+            map);
+    }
+
+    // Build tab (Phase D placeholder): the responsive station-card grid (available / locked /
+    // selected), the shared TechDetailPanel schematic, and the always-disabled CONSTRUCTORS OFFLINE
+    // footer, plus a tech-locked arsenal row. Mock data lives only here — the components bake none.
+    private static void Build(VBoxContainer parent)
+    {
+        var s = Section(parent, "08 — BUILD");
+
+        // Station cards, one per status.
+        s.AddChild(UiKit.MakeLabel("// DOCKED SCREEN — CONSTRUCTION CATALOG CARDS", UiKit.TextStyle.Data, DesignTokens.TextDim));
+        var cards = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        cards.AddThemeConstantOverride("h_separation", 14);
+        cards.AddThemeConstantOverride("v_separation", 14);
+        var avail = new StationCard();
+        avail.ConfigureMock("⬡", "SHIPYARD", "SHIPYARD", "Builds and services ships away from the home garrison.", "₡ 600", "01:30", available: true);
+        var sel = new StationCard();
+        sel.ConfigureMock("❖", "TECHNOLOGY LAB", "RESEARCH", "Hosts advanced research and unlocks the tactical doctrine tree.", "₡ 500", "01:15", available: true, selected: true);
+        var locked = new StationCard();
+        locked.ConfigureMock("✦", "SUPREMACY CENTER", "STARBASE", "The team's supremacy fortress — raising it unlocks the supremacy victory path.", "₡ 1500", "02:30", available: false);
+        foreach (var c in new[] { avail, sel, locked })
+            cards.AddChild(c);
+        s.AddChild(cards);
+
+        // Shared detail panel with the always-disabled construction footer.
+        s.AddChild(UiKit.MakeLabel("// SHARED DETAIL PANEL — CONSTRUCTORS OFFLINE", UiKit.TextStyle.Data, DesignTokens.TextDim));
+        var detail = new TechDetailPanel { CustomMinimumSize = new Vector2(400, 460), SizeFlagsHorizontal = SizeFlags.ShrinkBegin };
+        s.AddChild(detail);
+        detail.SetSchematic("❖", "// STRUCTURE");
+        detail.SetTitle("TECHNOLOGY LAB");
+        detail.SetStatus("◈ AVAILABLE", StatusPill.Kind.Accent);
+        detail.SetDescription("Hosts advanced research and unlocks the tactical doctrine tree.");
+        detail.SetMeta("₡ 500", "01:15", "GARRISON 01");
+        detail.SetPrereqs(new[] { ("TACTICAL DOCTRINE", true) });
+        detail.SetUnlocks(new[] { "TACTICAL OPS", "SUPREMACY CENTER" });
+        detail.SetFooter(true, "⊘ CONSTRUCTORS OFFLINE", ButtonVariant.Secondary, null,
+            "Construction logic arrives with the base-building update.");
+
+        // A tech-locked arsenal row (hangar): the real ⚿ LOCKED affordance replacing "TECH TREE (SOON)".
+        s.AddChild(UiKit.MakeLabel("// HANGAR ARSENAL — TECH-LOCKED WEAPON ROW", UiKit.TextStyle.Data, DesignTokens.TextDim));
+        var lockedRow = new LoadoutSlot { Accent = DesignTokens.TextDim, CustomMinimumSize = new Vector2(380, 0), SizeFlagsHorizontal = SizeFlags.ShrinkBegin };
+        lockedRow.Configure("⚿ LOCKED", "HEAVY CANNON", "REQUIRES CLASS-2 CANNON DOCTRINE");
+        lockedRow.Modulate = new Color(1, 1, 1, 0.6f);
+        s.AddChild(lockedRow);
     }
 
     private static void Modals(VBoxContainer parent)
     {
-        var s = Section(parent, "07 — MODALS");
+        var s = Section(parent, "09 — MODALS");
         s.AddChild(UiKit.MakeLabel(
             "SettingsDialog (audio / controls / pilot) and EscapeMenu (pause) — open live over the gallery; Esc dismisses.",
             UiKit.TextStyle.Body, DesignTokens.Text2));
@@ -405,7 +567,7 @@ public partial class UiShowcase : Control
 
     private static void Backgrounds(VBoxContainer parent)
     {
-        var s = Section(parent, "08 — BACKGROUNDS");
+        var s = Section(parent, "10 — BACKGROUNDS");
         s.AddChild(UiKit.MakeLabel(
             "NebulaBackground — animated gas-cloud backdrop for menu screens with no live space behind them (server browser). Intensity 0.35 vs 0.7.",
             UiKit.TextStyle.Body, DesignTokens.Text2));

@@ -264,6 +264,14 @@
             "type": "number",
             "description": "Total payload budget the hull can carry: the summed Mass of mounted weapons plus the cargo hold (expendable Mass \u00D7 count). 0 = no hold (e.g. the pod). Runtime hulls with weapon hardpoints must author enough capacity for their default loadout \u2014 CoreValidator enforces this at load."
           },
+          "ore-capacity": {
+            "type": "number",
+            "description": "Ore hold size (helium-3 units) for a mining hull: the harvest capacity a miner fills at a rock and offloads at a friendly base. 0 = not a miner (no ore hold). Independent of PayloadCapacity (weapons/cargo budget) \u2014 an ore hull is typically unarmed. Omit-when-default; projected onto ShipClassDef.OreCapacity."
+          },
+          "order-time-seconds": {
+            "type": "integer",
+            "description": "Production delay (seconds) between ORDERING this hull and it actually launching \u2014 the miner\u0027s analogue of a constructor\u0027s Producing phase. When a team buys a miner it is charged \u002B counted immediately but does not fly until this many seconds elapse (0 = launches at once). Sits next to Price as the other faction-tunable cost of a miner. Omit-when-default; projected onto ShipClassDef.OrderTimeSeconds."
+          },
           "drift-yaw-deg": {
             "type": "number",
             "description": "Drift (turn-rate slop) knobs the game\u0027s flight model needs; no clean Core source."
@@ -347,32 +355,62 @@
                   "description": "Disambiguates multiples of one kind (e.g. two boosters)."
                 },
                 "off-x": {
-                  "type": "number",
-                  "description": "Local-space X offset from the hull origin."
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Local-space X offset from the hull origin. Null = inherit the mesh node\u0027s position."
                 },
                 "off-y": {
-                  "type": "number",
-                  "description": "Local-space Y offset from the hull origin."
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Local-space Y offset from the hull origin. Null = inherit the mesh node\u0027s position."
                 },
                 "off-z": {
-                  "type": "number",
-                  "description": "Local-space Z offset from the hull origin."
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Local-space Z offset from the hull origin. Null = inherit the mesh node\u0027s position."
                 },
                 "dir-x": {
-                  "type": "number",
-                  "description": "Local-space X component of the hardpoint\u0027s facing direction."
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Local-space X component of the hardpoint\u0027s facing direction. Null = inherit the mesh node\u0027s forward."
                 },
                 "dir-y": {
-                  "type": "number",
-                  "description": "Local-space Y component of the hardpoint\u0027s facing direction."
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Local-space Y component of the hardpoint\u0027s facing direction. Null = inherit the mesh node\u0027s forward."
                 },
                 "dir-z": {
-                  "type": "number",
-                  "description": "Local-space Z component of the hardpoint\u0027s facing direction."
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Local-space Z component of the hardpoint\u0027s facing direction. Null = inherit the mesh node\u0027s forward."
                 },
                 "weapon-id": {
-                  "type": "integer",
-                  "description": "Meaningful only for Weapon; references a runtime weapon id."
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "description": "Meaningful only for Weapon; references a runtime weapon id. Null = an EMPTY mount (exists on the hull, fires nothing, assignable via loadout) \u2014 authored to type or place a mount without binding a default weapon."
+                },
+                "mount": {
+                  "enum": [
+                    "any",
+                    "gun",
+                    "missile",
+                    null
+                  ],
+                  "description": "Which weapon category a pilot may assign to this Weapon mount (mount: gun|missile|any). Null = derive from the bound weapon: a gun stays a gun mount, a missile rack stays a missile mount, an EMPTY mount accepts either. Authored mainly to type an empty mount (the mesh HP_ node carries no gun/missile distinction) or to opt a bound mount out of the restriction (any)."
                 }
               },
               "description": "A mount point on a hull/station, in LOCAL space \u2014 mirrors the game\u0027s HardpointDef. Carries what a loader needs to attach a weapon muzzle, engine nozzle, light or docking marker without any hard-coded offset. Declaration order of RuntimeHardpointKind fixes the wire byte, so it is APPEND-ONLY.",
@@ -493,6 +531,16 @@
               ]
             },
             "description": "Research techs granted to the team once this is owned/completed."
+          },
+          "obsoleted-by-techs": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": "Successor semantics: once the owning team possesses ANY of these techs, this item is no longer offered (e.g. a tier-2 gun\u0027s granted tech retires the tier-1 gun). Distinct from RequiredTechs (which gate availability) \u2014 this is a \u0022made obsolete by\u0022 retirement set. Serialized kebab-case as obsoleted-by-techs; omitted when empty."
           }
         },
         "description": "A ship chassis. Mirrors the C\u002B\u002B DataHullTypeIGC (igc.h:1767). Sound ids and the trailing hardpoint data from the original struct are intentionally omitted here \u2014 model geometry / hardpoints are covered separately (GLB-AND-HARDPOINT-FORMAT.md).",
@@ -562,6 +610,10 @@
           "can-damage-base": {
             "type": "boolean",
             "description": "True if this weapon\u0027s shots/warheads apply damage to bases (station siege ordnance)."
+          },
+          "is-healing": {
+            "type": "boolean",
+            "description": "True if this weapon\u0027s shots HEAL rather than damage: a bolt striking a same-team ship restores hull (clamped to max, shields untouched); an enemy hit does nothing. The ER Nanite gun line. Mutually exclusive with CanDamageBase (a healing shot never sieges a base)."
           },
           "mass": {
             "type": "number",
@@ -689,6 +741,16 @@
               ]
             },
             "description": "Research techs granted to the team once this is owned/completed."
+          },
+          "obsoleted-by-techs": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": "Successor semantics: once the owning team possesses ANY of these techs, this item is no longer offered (e.g. a tier-2 gun\u0027s granted tech retires the tier-1 gun). Distinct from RequiredTechs (which gate availability) \u2014 this is a \u0022made obsolete by\u0022 retirement set. Serialized kebab-case as obsoleted-by-techs; omitted when empty."
           }
         },
         "description": "A gun. Mirrors the C\u002B\u002B DataWeaponTypeIGC (igc.h:1833).",
@@ -845,6 +907,16 @@
               ]
             },
             "description": "Research techs granted to the team once this is owned/completed."
+          },
+          "obsoleted-by-techs": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": "Successor semantics: once the owning team possesses ANY of these techs, this item is no longer offered (e.g. a tier-2 gun\u0027s granted tech retires the tier-1 gun). Distinct from RequiredTechs (which gate availability) \u2014 this is a \u0022made obsolete by\u0022 retirement set. Serialized kebab-case as obsoleted-by-techs; omitted when empty."
           }
         },
         "description": "A shield generator. Mirrors the C\u002B\u002B DataShieldTypeIGC (igc.h:1846).",
@@ -1002,6 +1074,16 @@
               ]
             },
             "description": "Research techs granted to the team once this is owned/completed."
+          },
+          "obsoleted-by-techs": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": "Successor semantics: once the owning team possesses ANY of these techs, this item is no longer offered (e.g. a tier-2 gun\u0027s granted tech retires the tier-1 gun). Distinct from RequiredTechs (which gate availability) \u2014 this is a \u0022made obsolete by\u0022 retirement set. Serialized kebab-case as obsoleted-by-techs; omitted when empty."
           }
         },
         "description": "A cloaking device. Mirrors the C\u002B\u002B DataCloakTypeIGC (igc.h:1855).",
@@ -1159,6 +1241,16 @@
               ]
             },
             "description": "Research techs granted to the team once this is owned/completed."
+          },
+          "obsoleted-by-techs": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": "Successor semantics: once the owning team possesses ANY of these techs, this item is no longer offered (e.g. a tier-2 gun\u0027s granted tech retires the tier-1 gun). Distinct from RequiredTechs (which gate availability) \u2014 this is a \u0022made obsolete by\u0022 retirement set. Serialized kebab-case as obsoleted-by-techs; omitted when empty."
           }
         },
         "description": "An afterburner. Mirrors the C\u002B\u002B DataAfterburnerTypeIGC (igc.h:1865).",
@@ -1308,6 +1400,16 @@
               ]
             },
             "description": "Research techs granted to the team once this is owned/completed."
+          },
+          "obsoleted-by-techs": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": "Successor semantics: once the owning team possesses ANY of these techs, this item is no longer offered (e.g. a tier-2 gun\u0027s granted tech retires the tier-1 gun). Distinct from RequiredTechs (which gate availability) \u2014 this is a \u0022made obsolete by\u0022 retirement set. Serialized kebab-case as obsoleted-by-techs; omitted when empty."
           }
         },
         "description": "A consumable booster pack. Mirrors the C\u002B\u002B DataPackTypeIGC (igc.h:1875).",
@@ -1475,6 +1577,16 @@
               ]
             },
             "description": "Research techs granted to the team once this is owned/completed."
+          },
+          "obsoleted-by-techs": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": "Successor semantics: once the owning team possesses ANY of these techs, this item is no longer offered (e.g. a tier-2 gun\u0027s granted tech retires the tier-1 gun). Distinct from RequiredTechs (which gate availability) \u2014 this is a \u0022made obsolete by\u0022 retirement set. Serialized kebab-case as obsoleted-by-techs; omitted when empty."
           }
         },
         "description": "A launcher that carries and fires expendables (a magazine, dispenser, or chaff launcher). Mirrors the C\u002B\u002B DataLauncherTypeIGC (igc.h:1881); its Slot selects which kind it is (Magazine / Dispenser / ChaffLauncher).",
@@ -1637,6 +1749,21 @@
             "type": "number",
             "description": "Detection-range multiplier applied to every viewer\u0027s range against this base (omitted/0 resolves to 1.0)."
           },
+          "research-slots": {
+            "type": "integer",
+            "description": "How many research orders this station may run concurrently. Omit-when-default (serialized kebab-case as research-slots); 0 means \u0022default (1)\u0022 and is resolved to a single slot at projection. Only meaningful for stations that project to a runtime base."
+          },
+          "build-on-rock-class": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Runtime extension: the asteroid resource-class name (kebab-case, e.g. regolith, matching StellarAllegiance\u0027s RockClass) a constructor drone may build this station on. Null/empty = not constructor-buildable (e.g. the garrison, placed at match start). Distinct from BuildableOn (the Core AsteroidAbility model, unused by the runtime). Serialized kebab-case as build-on-rock-class; projected onto BaseDef/StationCatalogDef.BuildRockClass."
+          },
+          "align-time-seconds": {
+            "type": "integer",
+            "description": "Runtime extension: how long a constructor drone holds nose-locked at the rock\u0027s standoff shell before creeping in to build THIS station, in seconds. Omit-when-default (serialized kebab-case as align-time-seconds); 0 resolves to the stock default at projection. Pairs with the inherited BuildTimeSeconds (how long the build sphere runs)."
+          },
           "id": {
             "type": "string",
             "description": "Stable, unique id used for references (kebab-case by convention, e.g. \u0022heavy-fighter\u0022)."
@@ -1728,6 +1855,16 @@
               ]
             },
             "description": "Research techs granted to the team once this is owned/completed."
+          },
+          "obsoleted-by-techs": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": "Successor semantics: once the owning team possesses ANY of these techs, this item is no longer offered (e.g. a tier-2 gun\u0027s granted tech retires the tier-1 gun). Distinct from RequiredTechs (which gate availability) \u2014 this is a \u0022made obsolete by\u0022 retirement set. Serialized kebab-case as obsoleted-by-techs; omitted when empty."
           }
         },
         "description": "A building / station. Mirrors the C\u002B\u002B DataStationTypeIGC (igc.h:2649).",
@@ -1754,6 +1891,13 @@
             "type": "boolean",
             "description": "When true this development exists only to grant techs (no lasting effect of its own), so it becomes obsolete once its GrantedTechs are already owned. Mirrors the C\u002B\u002B tech-only / IsObsolete behaviour (developmentigc.h:110)."
           },
+          "upgrade-scope": {
+            "enum": [
+              "all",
+              "single"
+            ],
+            "description": "For a development whose granted techs unlock a station\u0027s successor tier (a \u0022station upgrade\u0022), which of the team\u0027s matching bases physically upgrade on completion. Serialized kebab-case as upgrade-scope (all | single); defaults to All. A development that triggers no station upgrade ignores this field."
+          },
           "id": {
             "type": "string",
             "description": "Stable, unique id used for references (kebab-case by convention, e.g. \u0022heavy-fighter\u0022)."
@@ -1845,6 +1989,16 @@
               ]
             },
             "description": "Research techs granted to the team once this is owned/completed."
+          },
+          "obsoleted-by-techs": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": "Successor semantics: once the owning team possesses ANY of these techs, this item is no longer offered (e.g. a tier-2 gun\u0027s granted tech retires the tier-1 gun). Distinct from RequiredTechs (which gate availability) \u2014 this is a \u0022made obsolete by\u0022 retirement set. Serialized kebab-case as obsoleted-by-techs; omitted when empty."
           }
         },
         "description": "A research / tech purchase. Mirrors the C\u002B\u002B DataDevelopmentIGC (igc.h:2691). Besides flipping GrantedTechs, it can apply team-wide stat modifiers.",
@@ -1983,6 +2137,16 @@
               ]
             },
             "description": "Research techs granted to the team once this is owned/completed."
+          },
+          "obsoleted-by-techs": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": "Successor semantics: once the owning team possesses ANY of these techs, this item is no longer offered (e.g. a tier-2 gun\u0027s granted tech retires the tier-1 gun). Distinct from RequiredTechs (which gate availability) \u2014 this is a \u0022made obsolete by\u0022 retirement set. Serialized kebab-case as obsoleted-by-techs; omitted when empty."
           }
         },
         "description": "An AI-piloted ship (miner, constructor, turret, bot). Mirrors DataDroneTypeIGC (igc.h:2698).",
@@ -2605,6 +2769,114 @@
         "additionalProperties": false
       },
       "description": "The probe expendable catalog."
+    },
+    "fuels": {
+      "type": "array",
+      "items": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "fuel-per-charge": {
+            "type": "number",
+            "description": "Afterburner fuel restored per consumed charge, clamped to the hull\u0027s max-fuel (overshoot is wasted \u2014 author a value \u2265 every tank for \u0022full refill\u0022 semantics)."
+          },
+          "id": {
+            "type": "string",
+            "description": "Stable, unique id used for references (kebab-case by convention, e.g. \u0022seeker-missile\u0022)."
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable display name."
+          },
+          "icon-name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Art asset id for the HUD/cargo-list icon."
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Flavor/UI text shown for the expendable."
+          },
+          "mass": {
+            "type": "number",
+            "description": "Payload units one carried unit occupies in a hull\u0027s hold (see PayloadCapacity)."
+          },
+          "load-time": {
+            "type": "number",
+            "description": "Time to load/ready the expendable, in seconds."
+          },
+          "lifespan": {
+            "type": "number",
+            "description": "How long it lives once released, in seconds."
+          },
+          "signature": {
+            "type": "number",
+            "description": "Radar signature the expendable presents to enemy detection while active."
+          },
+          "hit-points": {
+            "type": "number",
+            "description": "Hit points before the expendable is destroyed; 0 = invulnerable."
+          },
+          "defense-type": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Damage-type category this expendable counts as when it deals or absorbs damage."
+          },
+          "abilities": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "capture",
+                "warp-bomb-dual",
+                "warp-bomb-single",
+                "quick-ready",
+                "ripcord",
+                "shoot-stations",
+                "shoot-ships",
+                "shoot-missiles",
+                "shoot-only-target",
+                "rescue",
+                "rescue-any"
+              ],
+              "description": "Capability flags for consumables (missiles, mines, etc.). Mirrors ExpendableAbilityBitMask (igc.h:770-782)."
+            },
+            "description": "Special capability flags granted to this expendable."
+          },
+          "cargo-id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Stable wire id for this expendable as a runtime cargo item the hangar can stock. Null = not a runtime cargo item. Authored explicitly, like ClassId / weapon ids."
+          },
+          "glyph": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Single-character UI glyph the hangar cargo list renders."
+          },
+          "charges-per-pack": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Charges dispensed from one loaded pack; the hangar loads a number of PACKS (each costing one Mass) and every press distributes one charge. Total charges = packs \u00D7 charges-per-pack. Null \u2192 1 (a pack is a single charge \u2014 legacy one-for-one behavior)."
+          }
+        },
+        "description": "Auxiliary afterburner fuel carried in the hold. Pure cargo \u2014 nothing is fired or deployed: when a fuel-modeled hull\u0027s tank hits 0 while boost is held, one charge auto-loads and the tank refills by FuelPerCharge. No C\u002B\u002B IGC equivalent (StellarAllegiance-only).",
+        "additionalProperties": false
+      },
+      "description": "The fuel-pod expendable catalog (reserve afterburner fuel carried as cargo)."
     },
     "projectiles": {
       "type": "array",

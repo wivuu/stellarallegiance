@@ -109,6 +109,7 @@ public static class TechTreeReport
             NeedsCapabilities = Sorted(b.RequiredCapabilities),
             GrantsTechs = Sorted(b.GrantedTechs),
             GrantsCapabilities = Sorted(b.GrantedCapabilities),
+            ObsoletedByTechs = Sorted(b.ObsoletedByTechs),
             AvailableAtStart = atStart,
             UnlockedBy = SortedIds(unlockedBy),
         };
@@ -196,6 +197,9 @@ public sealed record BuildableInfo
     public List<Capability> NeedsCapabilities { get; set; } = new();
     public List<string> GrantsTechs { get; set; } = new();
     public List<Capability> GrantsCapabilities { get; set; } = new();
+
+    /// <summary>Techs that, once owned, retire this item from the offer list (successor semantics).</summary>
+    public List<string> ObsoletedByTechs { get; set; } = new();
 
     /// <summary>True when this faction can build it from the start (no research/building needed).</summary>
     public bool AvailableAtStart { get; set; }

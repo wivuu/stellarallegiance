@@ -27,7 +27,10 @@ namespace StellarAllegiance.Shared
             IReadOnlyList<ShipClassDef> ships,
             IReadOnlyList<WeaponDef> weapons,
             IReadOnlyList<BaseDef> bases,
-            IReadOnlyList<CargoItemDef>? cargoItems = null
+            IReadOnlyList<CargoItemDef>? cargoItems = null,
+            IReadOnlyList<TechDef>? techs = null,
+            IReadOnlyList<DevelopmentDef>? developments = null,
+            IReadOnlyList<StationCatalogDef>? stationCatalog = null
         )
         {
             var errors = new List<string>();
@@ -40,6 +43,8 @@ namespace StellarAllegiance.Shared
                 {
                     cargoIds.Add(c.CargoId);
                     cargoById[c.CargoId] = c;
+                    if (c.FuelPerCharge < 0)
+                        errors.Add($"cargo item {c.CargoId} (\"{c.Name}\") has negative FuelPerCharge");
                 }
 
             var weaponIds = new HashSet<uint>();
@@ -61,36 +66,56 @@ namespace StellarAllegiance.Shared
                     if (w.LockRange <= 0f)
                         errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive LockRange {w.LockRange}");
                     if (w.ProjectileSpeed <= 0f)
-                        errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive ProjectileSpeed {w.ProjectileSpeed}");
+                        errors.Add(
+                            $"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive ProjectileSpeed {w.ProjectileSpeed}"
+                        );
                     if (w.MagazineSize == 0)
                         errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has MagazineSize 0 — empty launcher");
                     if (w.ProjectileLifeTicks == 0)
-                        errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has ProjectileLifeTicks 0 — instantly culled");
+                        errors.Add(
+                            $"missile weapon {w.WeaponId} (\"{w.Name}\") has ProjectileLifeTicks 0 — instantly culled"
+                        );
                     if (w.BlastPower <= 0f)
                         errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive BlastPower {w.BlastPower}");
                     if (w.BlastRadius <= 0f)
-                        errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive BlastRadius {w.BlastRadius}");
+                        errors.Add(
+                            $"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive BlastRadius {w.BlastRadius}"
+                        );
                     if (w.DirectHitMult <= 0f)
-                        errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive DirectHitMult {w.DirectHitMult}");
+                        errors.Add(
+                            $"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive DirectHitMult {w.DirectHitMult}"
+                        );
                 }
                 else if (w.Kind == WeaponKind.Mine)
                 {
                     // Mine-kind dispenser: the field/blast/arming block must be live, and it must link
                     // to a stockable cargo item (the mine expendable it consumes).
                     if (w.MineCloudCount < 1 || w.MineCloudCount > 64)
-                        errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") has MineCloudCount {w.MineCloudCount} — must be 1..64");
+                        errors.Add(
+                            $"mine weapon {w.WeaponId} (\"{w.Name}\") has MineCloudCount {w.MineCloudCount} — must be 1..64"
+                        );
                     if (w.MineCloudRadius <= 0f)
-                        errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") has non-positive MineCloudRadius {w.MineCloudRadius}");
+                        errors.Add(
+                            $"mine weapon {w.WeaponId} (\"{w.Name}\") has non-positive MineCloudRadius {w.MineCloudRadius}"
+                        );
                     if (w.BlastPower <= 0f)
                         errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") has non-positive BlastPower {w.BlastPower}");
                     if (w.ProjectileLifeTicks == 0)
                         errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") has ProjectileLifeTicks 0 — never lives");
                     if (w.MineArmTicks >= w.ProjectileLifeTicks)
-                        errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") MineArmTicks {w.MineArmTicks} >= ProjectileLifeTicks {w.ProjectileLifeTicks} — never arms");
+                        errors.Add(
+                            $"mine weapon {w.WeaponId} (\"{w.Name}\") MineArmTicks {w.MineArmTicks} >= ProjectileLifeTicks {w.ProjectileLifeTicks} — never arms"
+                        );
                     // Radar signature must resolve positive (projection maps 0 -> 1).
                     if (w.MineSignature <= 0f)
-                        errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") has non-positive MineSignature {w.MineSignature}");
-                    if (cargoItems is not null && !cargoIds.Contains(w.CargoId))
+                        errors.Add(
+                            $"mine weapon {w.WeaponId} (\"{w.Name}\") has non-positive MineSignature {w.MineSignature}"
+                        );
+                    // CargoId 0 is a deliberate sentinel for a tier-2/3 dispenser (no cargo-id authored —
+                    // the hangar keeps one tier-neutral cargo row per line; the fired tier is resolved
+                    // server-side from owned techs, Simulation.SeedDispenserAmmo). Same convention as
+                    // Simulation.cs's `w.CargoId != 0` guard on _dispenserByCargo.
+                    if (cargoItems is not null && w.CargoId != 0 && !cargoIds.Contains(w.CargoId))
                         errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") CargoId {w.CargoId} resolves to no cargo item");
                 }
                 else if (w.Kind == WeaponKind.Chaff)
@@ -98,30 +123,46 @@ namespace StellarAllegiance.Shared
                     // Chaff-kind dispenser: decoy strength/radius/life must be live, and it must link
                     // to a stockable cargo item (the chaff expendable it consumes).
                     if (w.ChaffStrength <= 0f)
-                        errors.Add($"chaff weapon {w.WeaponId} (\"{w.Name}\") has non-positive ChaffStrength {w.ChaffStrength}");
+                        errors.Add(
+                            $"chaff weapon {w.WeaponId} (\"{w.Name}\") has non-positive ChaffStrength {w.ChaffStrength}"
+                        );
                     if (w.DecoyRadius <= 0f)
                         errors.Add($"chaff weapon {w.WeaponId} (\"{w.Name}\") has non-positive DecoyRadius {w.DecoyRadius}");
                     if (w.ProjectileLifeTicks == 0)
                         errors.Add($"chaff weapon {w.WeaponId} (\"{w.Name}\") has ProjectileLifeTicks 0 — instantly culled");
-                    if (cargoItems is not null && !cargoIds.Contains(w.CargoId))
-                        errors.Add($"chaff weapon {w.WeaponId} (\"{w.Name}\") CargoId {w.CargoId} resolves to no cargo item");
+                    // CargoId 0 = tier-2/3 dispenser sentinel (see the Mine-kind branch's comment above).
+                    if (cargoItems is not null && w.CargoId != 0 && !cargoIds.Contains(w.CargoId))
+                        errors.Add(
+                            $"chaff weapon {w.WeaponId} (\"{w.Name}\") CargoId {w.CargoId} resolves to no cargo item"
+                        );
                 }
                 else if (w.Kind == WeaponKind.Probe)
                 {
                     // Probe dispenser: sight-radius/lifespan must be live, and it must link to a
                     // stockable cargo item (the probe expendable it consumes).
                     if (w.ProbeSightRadius <= 0f)
-                        errors.Add($"probe weapon {w.WeaponId} (\"{w.Name}\") has non-positive ProbeSightRadius {w.ProbeSightRadius}");
+                        errors.Add(
+                            $"probe weapon {w.WeaponId} (\"{w.Name}\") has non-positive ProbeSightRadius {w.ProbeSightRadius}"
+                        );
                     if (w.ProbeLifespanSec <= 0f)
-                        errors.Add($"probe weapon {w.WeaponId} (\"{w.Name}\") has non-positive ProbeLifespanSec {w.ProbeLifespanSec}");
+                        errors.Add(
+                            $"probe weapon {w.WeaponId} (\"{w.Name}\") has non-positive ProbeLifespanSec {w.ProbeLifespanSec}"
+                        );
                     // Combat block: signature must resolve positive (projection maps 0 -> 1), and
                     // a destructible probe (ProbeHitPoints > 0) needs a live hit sphere.
                     if (w.ProbeSignature <= 0f)
-                        errors.Add($"probe weapon {w.WeaponId} (\"{w.Name}\") has non-positive ProbeSignature {w.ProbeSignature}");
+                        errors.Add(
+                            $"probe weapon {w.WeaponId} (\"{w.Name}\") has non-positive ProbeSignature {w.ProbeSignature}"
+                        );
                     if (w.ProbeHitPoints > 0f && w.ProbeHitRadius <= 0f)
-                        errors.Add($"probe weapon {w.WeaponId} (\"{w.Name}\") has ProbeHitPoints {w.ProbeHitPoints} but non-positive ProbeHitRadius {w.ProbeHitRadius}");
-                    if (cargoItems is not null && !cargoIds.Contains(w.CargoId))
-                        errors.Add($"probe weapon {w.WeaponId} (\"{w.Name}\") CargoId {w.CargoId} resolves to no cargo item");
+                        errors.Add(
+                            $"probe weapon {w.WeaponId} (\"{w.Name}\") has ProbeHitPoints {w.ProbeHitPoints} but non-positive ProbeHitRadius {w.ProbeHitRadius}"
+                        );
+                    // CargoId 0 = tier-2/3 dispenser sentinel (see the Mine-kind branch's comment above).
+                    if (cargoItems is not null && w.CargoId != 0 && !cargoIds.Contains(w.CargoId))
+                        errors.Add(
+                            $"probe weapon {w.WeaponId} (\"{w.Name}\") CargoId {w.CargoId} resolves to no cargo item"
+                        );
                 }
 
                 // A weapon must be able to damage a shield: ShieldMult <= 0 would make it useless
@@ -129,6 +170,19 @@ namespace StellarAllegiance.Shared
                 if (w.ShieldMult <= 0f)
                     errors.Add($"weapon {w.WeaponId} (\"{w.Name}\") has non-positive ShieldMult {w.ShieldMult}");
             }
+
+            // Weapon-tier succession must stay within one category: MigrateWeaponTier swaps a
+            // mount's weapon for its successor IN PLACE, so a successor of a different kind would
+            // smuggle a rack onto a gun mount (or a gun onto a rack mount) past the mount-type gate.
+            foreach (var w in weapons)
+                if (
+                    w.SucceededByWeaponId != uint.MaxValue
+                    && weaponsById.TryGetValue(w.SucceededByWeaponId, out var succ)
+                    && succ.Kind != w.Kind
+                )
+                    errors.Add(
+                        $"weapon {w.WeaponId} (\"{w.Name}\", {w.Kind}) is succeeded by {succ.WeaponId} (\"{succ.Name}\", {succ.Kind}) — tier migration would change weapon category"
+                    );
 
             var classIds = new HashSet<byte>();
             foreach (var d in ships)
@@ -139,7 +193,7 @@ namespace StellarAllegiance.Shared
                 if (d.ClassId != GameContent.PodClassId && d.MaxHull <= 0f)
                     errors.Add($"class \"{d.Name}\" ({d.ClassId}) has non-positive MaxHull {d.MaxHull}");
 
-                ValidateWeaponHardpoints(d.Name, d.Hardpoints, weaponIds, errors);
+                ValidateWeaponHardpoints(d.Name, d.Hardpoints, weaponIds, weaponsById, errors);
                 ValidatePayload(d, weaponsById, cargoById, cargoItems is not null, errors);
                 ValidateFuel(d, errors);
                 ValidateShield(d, errors);
@@ -159,11 +213,65 @@ namespace StellarAllegiance.Shared
                 if (!baseIds.Add(b.BaseTypeId))
                     errors.Add($"duplicate BaseTypeId {b.BaseTypeId} (\"{b.Name}\")");
 
-                ValidateWeaponHardpoints(b.Name, b.Hardpoints, weaponIds, errors);
+                ValidateWeaponHardpoints(b.Name, b.Hardpoints, weaponIds, weaponsById, errors);
                 ValidateBaseVision(b, errors);
             }
 
+            // ---- Tech-path catalog (Stage 4): the projected research defs the wire streams. ----
+            // CoreValidator already proved the STRING refs resolve; these rules guard the projected
+            // INDEX space + the research engine's assumptions (positive research time, unique ids).
+            int nTechs = techs?.Count ?? 0;
+            if (techs is not null)
+            {
+                var techIds = new HashSet<string>();
+                foreach (var t in techs)
+                    if (string.IsNullOrEmpty(t.Id) || !techIds.Add(t.Id))
+                        errors.Add($"tech catalog: duplicate/empty tech id \"{t.Id}\"");
+            }
+            if (developments is not null)
+            {
+                var devIds = new HashSet<string>();
+                foreach (var d in developments)
+                {
+                    if (string.IsNullOrEmpty(d.Id) || !devIds.Add(d.Id))
+                        errors.Add($"tech catalog: duplicate/empty development id \"{d.Id}\"");
+                    if (d.BuildTimeSeconds <= 0)
+                        errors.Add(
+                            $"development \"{d.Id}\" has non-positive build-time-seconds {d.BuildTimeSeconds} — research would never complete"
+                        );
+                    if (d.Price < 0)
+                        errors.Add($"development \"{d.Id}\" has negative price {d.Price}");
+                    ValidateTechIdx(d.Id, d.RequiredTechIdx, nTechs, errors);
+                    ValidateTechIdx(d.Id, d.GrantedTechIdx, nTechs, errors);
+                    ValidateTechIdx(d.Id, d.ObsoletedByTechIdx, nTechs, errors);
+                }
+            }
+            if (stationCatalog is not null)
+            {
+                var stationIds = new HashSet<string>();
+                foreach (var s in stationCatalog)
+                {
+                    if (string.IsNullOrEmpty(s.Id) || !stationIds.Add(s.Id))
+                        errors.Add($"tech catalog: duplicate/empty station id \"{s.Id}\"");
+                    // A runtime station's catalog entry must reference a projected BaseDef.
+                    if (s.BaseTypeId >= 0 && !baseIds.Contains((byte)s.BaseTypeId))
+                        errors.Add($"station catalog \"{s.Id}\" names BaseTypeId {s.BaseTypeId} with no runtime BaseDef");
+                    ValidateTechIdx(s.Id, s.RequiredTechIdx, nTechs, errors);
+                    ValidateTechIdx(s.Id, s.GrantedTechIdx, nTechs, errors);
+                    ValidateTechIdx(s.Id, s.ObsoletedByTechIdx, nTechs, errors);
+                }
+            }
+
             return errors;
+        }
+
+        // Every projected tech index must land inside the streamed tech catalog — an out-of-range
+        // index would silently mis-gate on the client (it indexes the same array).
+        private static void ValidateTechIdx(string owner, ushort[] idx, int nTechs, List<string> errors)
+        {
+            foreach (ushort i in idx)
+                if (i >= nTechs)
+                    errors.Add($"\"{owner}\" references tech index {i} outside the {nTechs}-entry tech catalog");
         }
 
         // The hangar blocks launch when a loadout exceeds PayloadCapacity, so a def set whose
@@ -188,12 +296,25 @@ namespace StellarAllegiance.Shared
                 foreach (var load in ship.DefaultCargo)
                 {
                     if (cargoById.TryGetValue(load.CargoId, out var item))
+                    {
                         used += load.Count * item.Mass;
+                        // Fuel pods on a hull with no fuel model are dead cargo — and this boot
+                        // gate is what keeps ResolveLoadout's authored-fallback path safe (the
+                        // fallback skips the per-request fuel-hull check).
+                        if (item.FuelPerCharge > 0 && load.Count > 0 && ship.MaxFuel <= 0)
+                            errors.Add(
+                                $"class \"{ship.Name}\" ({ship.ClassId}) default cargo carries fuel (id {load.CargoId}) but has no fuel model (MaxFuel <= 0)"
+                            );
+                    }
                     else if (haveCargo)
-                        errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) default cargo id {load.CargoId} resolves to no cargo item");
+                        errors.Add(
+                            $"class \"{ship.Name}\" ({ship.ClassId}) default cargo id {load.CargoId} resolves to no cargo item"
+                        );
                 }
             if (used > ship.PayloadCapacity)
-                errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) default loadout payload {used} exceeds PayloadCapacity {ship.PayloadCapacity}");
+                errors.Add(
+                    $"class \"{ship.Name}\" ({ship.ClassId}) default loadout payload {used} exceeds PayloadCapacity {ship.PayloadCapacity}"
+                );
         }
 
         // A base can only take damage from a weapon flagged CanDamageBase, so if no ship's
@@ -213,7 +334,9 @@ namespace StellarAllegiance.Shared
                     if (h.Kind == HardpointKind.Weapon && weaponsById.TryGetValue(h.WeaponId, out var w) && w.CanDamageBase)
                         return;
             }
-            errors.Add("no ship's default loadout mounts a can-damage-base weapon — bases can never be destroyed, matches can never end");
+            errors.Add(
+                "no ship's default loadout mounts a can-damage-base weapon — bases can never be destroyed, matches can never end"
+            );
         }
 
         // Afterburner and fuel are authored as a pair, and the drain/recharge rates must
@@ -223,11 +346,17 @@ namespace StellarAllegiance.Shared
             if (ship.AbAccel > 0 && ship.MaxFuel <= 0)
                 errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) has an afterburner (AbAccel > 0) but no MaxFuel");
             if (ship.MaxFuel > 0 && ship.AbAccel <= 0)
-                errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) has MaxFuel but no afterburner (AbAccel <= 0) — dead data");
+                errors.Add(
+                    $"class \"{ship.Name}\" ({ship.ClassId}) has MaxFuel but no afterburner (AbAccel <= 0) — dead data"
+                );
             if (ship.MaxFuel > 0 && ship.AbFuelDrain <= 0)
-                errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) has MaxFuel but no AbFuelDrain — never drains, an unlimited boost with a gauge");
+                errors.Add(
+                    $"class \"{ship.Name}\" ({ship.ClassId}) has MaxFuel but no AbFuelDrain — never drains, an unlimited boost with a gauge"
+                );
             if (ship.MaxFuel > 0 && ship.AbFuelRecharge >= ship.AbFuelDrain)
-                errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) AbFuelRecharge >= AbFuelDrain — fuel never net-depletes");
+                errors.Add(
+                    $"class \"{ship.Name}\" ({ship.ClassId}) AbFuelRecharge >= AbFuelDrain — fuel never net-depletes"
+                );
             if (ship.AbFuelDrain < 0)
                 errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) has negative AbFuelDrain");
             if (ship.AbFuelRecharge < 0)
@@ -246,7 +375,9 @@ namespace StellarAllegiance.Shared
             if (ship.ShieldDelaySec < 0f)
                 errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) has negative ShieldDelaySec {ship.ShieldDelaySec}");
             if (ship.ShieldCapacity > 0f && ship.ShieldRecharge <= 0f)
-                errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) has ShieldCapacity but no ShieldRecharge — shield never regenerates");
+                errors.Add(
+                    $"class \"{ship.Name}\" ({ship.ClassId}) has ShieldCapacity but no ShieldRecharge — shield never regenerates"
+                );
         }
 
         // Fog-of-war vision (all inert until a later WP wires up filtering, but bad authoring here
@@ -270,7 +401,9 @@ namespace StellarAllegiance.Shared
             // The additive equipment bias must leave the effective base positive — a base+bias of 0
             // would make the hull undetectable at any range (the signature clamp rails scale off it).
             if (ship.RadarSignature + ship.SignatureBias <= 0f)
-                errors.Add($"{ctx} has RadarSignature + SignatureBias <= 0 ({ship.RadarSignature} + {ship.SignatureBias}) — hull would be undetectable");
+                errors.Add(
+                    $"{ctx} has RadarSignature + SignatureBias <= 0 ({ship.RadarSignature} + {ship.SignatureBias}) — hull would be undetectable"
+                );
         }
 
         // Same sphere/signature checks as ships, minus the directional cone (bases are omnidirectional-only).
@@ -286,12 +419,16 @@ namespace StellarAllegiance.Shared
         // Validates a ship's/base's hardpoint list: every (Kind,Index) is unique, every hardpoint
         // has a non-zero facing direction (a zero forward can't orient a muzzle/nozzle/marker), and
         // every Weapon mount either resolves to a known WeaponDef OR is an explicit empty mount
-        // (HardpointDef.NoWeapon — exists on the hull, fires nothing, assignable via loadout). These
-        // also cover a def set built by hand or via an operator Upsert that never ran the GLB merge.
+        // (HardpointDef.NoWeapon — exists on the hull, fires nothing, assignable via loadout). A
+        // BOUND mount's weapon must also pass the mount-type rule (HardpointDef.MountAccepts): a
+        // default loadout that contradicts its own mount type (or binds a dispenser) would author a
+        // ship the hangar/server gate could never legally reproduce. These also cover a def set
+        // built by hand or via an operator Upsert that never ran the GLB merge.
         private static void ValidateWeaponHardpoints(
             string ownerName,
             List<HardpointDef> hardpoints,
             HashSet<uint> weaponIds,
+            Dictionary<uint, WeaponDef> weaponsById,
             List<string> errors
         )
         {
@@ -304,8 +441,17 @@ namespace StellarAllegiance.Shared
                     errors.Add($"\"{ownerName}\" has a duplicate hardpoint (kind {h.Kind}, index {h.Index})");
                 if (h.DirX == 0f && h.DirY == 0f && h.DirZ == 0f)
                     errors.Add($"\"{ownerName}\" hardpoint (kind {h.Kind}, index {h.Index}) has a zero-length direction");
-                if (h.Kind == HardpointKind.Weapon && h.WeaponId != HardpointDef.NoWeapon && !weaponIds.Contains(h.WeaponId))
-                    errors.Add($"\"{ownerName}\" weapon hardpoint references unknown WeaponId {h.WeaponId}");
+                if (h.Kind != HardpointKind.Weapon || h.WeaponId == HardpointDef.NoWeapon)
+                    continue;
+                if (!weaponsById.TryGetValue(h.WeaponId, out var w))
+                {
+                    if (!weaponIds.Contains(h.WeaponId))
+                        errors.Add($"\"{ownerName}\" weapon hardpoint references unknown WeaponId {h.WeaponId}");
+                }
+                else if (!HardpointDef.MountAccepts(h.Mount, w.Kind))
+                    errors.Add(
+                        $"\"{ownerName}\" hardpoint index {h.Index} ({h.Mount} mount) binds incompatible weapon {h.WeaponId} (\"{w.Name}\", {w.Kind})"
+                    );
             }
         }
     }

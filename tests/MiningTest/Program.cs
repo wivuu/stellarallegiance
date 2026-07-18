@@ -33,6 +33,17 @@ var content = ContentLoader.Load(manifest, worldPath);
 var stockCfg = content.World;
 float baseHp = content.Bases[0].MaxHealth;
 
+// Phase 6: this suite asserts absolute harvest rates + miner-hold capacities. Neutralize the Iron
+// Coalition GAS (MiningRate ×0.85 / MiningCapacity ×0.75) for every sim built below so those numbers
+// stay pre-multiplier. A dedicated Iron-enabled case at the end proves the multipliers DO apply.
+Simulation.AttributesEnabledDefault = false;
+
+// Bought miners now have a per-hull order→launch production delay (order-time-seconds, stock 30s).
+// This suite asserts POST-LAUNCH behavior (claims, collisions, reroutes), so neutralize the delay so
+// a purchased miner launches on the next eligible brain tick like before. A dedicated case at the end
+// (`order-time-seconds gates the launch`) restores it and proves the delay DOES hold the launch back.
+content.Ships.First(s => s.ClassId == 4).OrderTimeSeconds = 0;
+
 // Mirror World.AssignOre's size-scaled, clamped He3 capacity so the capacity assertions match the sim
 // exactly: the rock's volume (radius³) fraction across the field size range interpolates [capMin,
 // capMax], richness scales it, and the result is clamped hard back into the band.
@@ -235,6 +246,85 @@ WorldConfig FieldConfig(WorldMiningTuning mining, WorldSeedingTuning? seeding = 
     int he3 = He3Counts(w).GetValueOrDefault(0u);
     Check(n >= 5, $"override test sector has enough rocks (n={n})", $"too few rocks to test override (n={n})");
     Check(he3 == 5, $"sector he3-count override forces exactly 5 He3 (world default was 1) — got {he3}", $"per-sector override ignored: got {he3}, want 5");
+}
+
+// ---- 5. Minimum spawn spacing: every rock honours rock-min-gap (rock↔rock) and base-clearance
+//          (rock↔base), both surface-to-surface at SPAWN size; 0-knobs disable the checks entirely
+//          (no rock is ever dropped). Ore classes are assigned AFTER spacing prunes (AssignOre runs
+//          post-seeding on the survivors), so the guaranteed He3/special counts are untouched —
+//          tests 3 and 7b pin those on this same stock config. ----
+{
+    var s = stockCfg.Seeding;
+    // Spacing is enforced on the rolled spawn radius; specials are inflated ×SpecialRockRadiusMult
+    // AFTER seeding (accepted caveat), so divide the mult back out to recover spawn geometry.
+    float SpawnRadius(World w, ulong id, float radius) =>
+        w.RockClassOf(id) is RockClass.Carbonaceous or RockClass.Silicon or RockClass.Uranium
+            ? radius / s.SpecialRockRadiusMult
+            : radius;
+
+    bool gapOk = true, clearOk = true, nonEmpty = true;
+    string detail = "";
+    foreach (ulong seed in new ulong[] { 1, 7, 12345 })
+    {
+        var w = MakeWorld(seed, stockCfg);
+        foreach (var group in w.Asteroids.GroupBy(r => r.SectorId))
+        {
+            var rocks = group.ToList();
+            if (rocks.Count == 0)
+            {
+                nonEmpty = false;
+                detail = $"seed {seed} sector {group.Key} seeded no rocks";
+            }
+            for (int i = 0; i < rocks.Count && gapOk; i++)
+            {
+                float ri = SpawnRadius(w, rocks[i].Id, rocks[i].Radius);
+                for (int j = i + 1; j < rocks.Count; j++)
+                {
+                    float rj = SpawnRadius(w, rocks[j].Id, rocks[j].Radius);
+                    float need = ri + rj + s.RockMinGap - 1e-3f;
+                    if ((rocks[i].Pos - rocks[j].Pos).LengthSquared() < need * need)
+                    {
+                        gapOk = false;
+                        detail = $"seed {seed} rocks {rocks[i].Id}/{rocks[j].Id}: dist {(rocks[i].Pos - rocks[j].Pos).Length():F1} < {need:F1}";
+                        break;
+                    }
+                }
+                foreach (var b in w.Bases)
+                {
+                    if (b.SectorId != group.Key)
+                        continue;
+                    float need = World.BaseRadius + ri + s.BaseClearance - 1e-3f;
+                    if ((rocks[i].Pos - b.Pos).LengthSquared() < need * need)
+                    {
+                        clearOk = false;
+                        detail = $"seed {seed} rock {rocks[i].Id} vs base {b.Id}: dist {(rocks[i].Pos - b.Pos).Length():F1} < {need:F1}";
+                    }
+                }
+            }
+        }
+    }
+    Check(s.RockMinGap > 0f && s.BaseClearance > 0f,
+        $"stock spacing knobs are on (rock-min-gap {s.RockMinGap}, base-clearance {s.BaseClearance})",
+        "stock spacing knobs are zero — the spacing assertions would be vacuous");
+    Check(nonEmpty, "spacing never empties a seeded sector (3 seeds)", $"spacing emptied a sector: {detail}");
+    Check(gapOk, "every same-sector rock pair honours rock-min-gap (surface-to-surface, 3 seeds)", $"rock gap violated: {detail}");
+    Check(clearOk, "every rock honours base-clearance around its sector's bases (3 seeds)", $"base clearance violated: {detail}");
+
+    // Knobs at 0 disable spacing entirely: the rock count equals the analytic area formula (no
+    // rejection ever drops a rock), and the enabled stock world keeps ≳ that count too (the retry
+    // loop relocates rocks instead of dropping them at stock density).
+    var off = new WorldSeedingTuning { RockMinGap = 0f, BaseClearance = 0f };
+    const float radius = 1500f, density = 3f;
+    int expected = (int)MathF.Round(density * off.FieldAreaDensity * MathF.PI
+        * (radius * off.FieldFillFrac) * (radius * off.FieldFillFrac));
+    var wOff = MakeWorld(24680, FieldConfig(new WorldMiningTuning(), seeding: off, radius: radius, density: density));
+    var wOn = MakeWorld(24680, FieldConfig(new WorldMiningTuning(), radius: radius, density: density));
+    Check(wOff.Asteroids.Count == expected,
+        $"zeroed spacing knobs place the full analytic rock count ({expected}) — no drops",
+        $"disabled spacing still dropped rocks: got {wOff.Asteroids.Count}, want {expected}");
+    Check(wOn.Asteroids.Count >= (int)(expected * 0.9f),
+        $"stock spacing keeps ≥90% of the analytic count ({wOn.Asteroids.Count}/{expected})",
+        $"stock spacing dropped too many rocks: {wOn.Asteroids.Count}/{expected}");
 }
 
 // ---- 6. Capacity: size-scaled, clamped into [ore-capacity-min, ore-capacity-max], richness within band. ----
@@ -1373,6 +1463,75 @@ if (retreatSim is { } rsim)
             "a lightly-damaged miner keeps working the field",
             $"sub-threshold damage triggered a retreat (state {row.State})");
     }
+}
+
+// ---- Phase 6: Iron Coalition GAS applies to mining when attributes are ENABLED. ----
+// Overrides the file-wide neutral default for one sim: StartMatch seeds the per-team attr cache from
+// the live Iron faction (mining-rate ×0.85, mining-capacity ×0.75), and both flow through HarvestStep.
+{
+    var cfg = HarvestConfig(rate: 40f);
+    var w = MakeWorld(2025, cfg);
+    var sim = new Simulation(w, content) { PigsEnabled = false, MinersEnabled = false };
+    sim.AttributesEnabled = true; // Iron GAS on (override the top-of-file neutral default)
+    sim.StartMatch();             // seeds the per-team attr cache from the Iron faction
+    var he3 = w.Asteroids.First(r => w.RockOre[r.Id].Class == RockClass.Helium3);
+    float defCap = MinerHold();   // 2000 (class-4 def ore-capacity)
+    const float dt = 0.05f;
+
+    // MiningRate ×0.85: one in-range tick moves 0.85 × rate·dt (rate 40 ⇒ 40·0.05·0.85 = 1.7).
+    var mr = MinerAt(he3.Pos, he3.SectorId, ore: 0f); // team 0 (ShipSim default)
+    float moved = sim.HarvestStep(mr, he3.Id, dt);
+    float wantRate = 40f * dt * 0.85f;
+    Check(MathF.Abs(moved - wantRate) < 1e-3f,
+        $"Iron MiningRate ×0.85: a tick moves {moved:F3} (= 40·dt·0.85 = {wantRate:F3})",
+        $"mining-rate multiplier not applied (moved {moved}, want {wantRate})");
+
+    // MiningCapacity ×0.75: the effective hold is 2000 × 0.75 = 1500 — a miner AT 1500 is full; one
+    // 0.5 below takes exactly its last 0.5 (hold-limited, since 0.5 < the 1.7/tick rate budget).
+    float scaledHold = defCap * 0.75f; // 1500
+    var atCap = MinerAt(he3.Pos, he3.SectorId, ore: scaledHold);
+    var belowCap = MinerAt(he3.Pos, he3.SectorId, ore: scaledHold - 0.5f);
+    float movedFull = sim.HarvestStep(atCap, he3.Id, dt);
+    float movedNearFull = sim.HarvestStep(belowCap, he3.Id, dt);
+    Check(movedFull == 0f && MathF.Abs(movedNearFull - 0.5f) < 1e-3f,
+        $"Iron MiningCapacity ×0.75: hold caps at {scaledHold:F0} (full miner moves 0; a 0.5-below miner takes exactly 0.5)",
+        $"mining-capacity multiplier not applied (atCap {movedFull}, belowCap {movedNearFull})");
+
+    // TeamAttr defaults to 1.0 for an attribute Iron does not set (ScanRange = GameAttribute id 11).
+    Check(w.TeamAttr(0, 11) == 1f,
+        "TeamAttr defaults to 1.0 for an unset attribute (ScanRange)",
+        $"unset attribute did not default to 1.0 (ScanRange {w.TeamAttr(0, 11)})");
+}
+
+// ---- order-time-seconds routes a miner order through the SAME production queue as constructors:
+//      it PRODUCES (in the constructor roster, counted toward the miner cap) before graduating into a
+//      MinerSlot. Restores the delay this suite zeroed above. ----
+{
+    var minerDef = content.Ships.First(s => s.ClassId == 4);
+    minerDef.OrderTimeSeconds = 3; // 3s = 60 ticks at 20 Hz
+    try
+    {
+        var cfg = FieldConfig(LoopMining(), seeding: LoopSeeding(4), radius: 500f);
+        var w = MakeWorld(777, cfg);
+        var sim = new Simulation(w, content);
+        sim.StartMatch();
+        w.TeamStates[0].Credits = 100_000; // fund the buy
+        sim.EnqueueMinerBuy(0);
+        for (int i = 0; i < 15; i++) sim.Step(); // drain the buy + a few ticks (well under the 60-tick delay)
+        // While producing: the order is NOT yet a MinerSlot (only the free seed is), but it counts
+        // toward the cap and shows in the constructor roster as a ProducesMiner Producing (state 0) row.
+        bool producing = sim.ConstructorStatesView().Any(r => r.ProducesMiner && r.State == 0);
+        Check(sim.MinerCount(0) == 2 && sim.MinerSlotsView().Count == 1 && producing,
+            "a bought miner PRODUCES in the shared queue (counts toward cap, roster row, not yet a MinerSlot)",
+            $"produce routing wrong (count {sim.MinerCount(0)}, slots {sim.MinerSlotsView().Count}, producing {producing})");
+        for (int i = 0; i < 70; i++) sim.Step(); // step past the 60-tick order-time → graduate
+        bool graduated = sim.MinerSlotsView().Count == 2
+            && !sim.ConstructorStatesView().Any(r => r.ProducesMiner);
+        Check(graduated && sim.MinerCount(0) == 2,
+            "after order-time the miner graduates into a MinerSlot and leaves the production queue",
+            $"graduation wrong (slots {sim.MinerSlotsView().Count}, count {sim.MinerCount(0)})");
+    }
+    finally { minerDef.OrderTimeSeconds = 0; }
 }
 
 Console.WriteLine(failures == 0 ? "\nALL MINING TESTS PASSED" : $"\n{failures} MINING TEST(S) FAILED");

@@ -315,8 +315,9 @@ public partial class Hud : CanvasLayer
             _credits.Text = $"Credits: {_world.TeamCredits(_world.LocalTeam ?? _net.MyTeam)}";
 
         // Missile launcher presence gates the empty-rack blip below. The live ammo/lock readout now
-        // lives in the bottom-right WeaponsPanel; MissileMount() returns null for hulls with no rack.
-        WeaponDef? missileMount = flying && !ship!.IsPod ? _defs.MissileMount((byte)ship.Class) : null;
+        // lives in the bottom-right WeaponsPanel; MissileMount() returns null for hulls with no rack
+        // — loadout-aware, so a rack emptied in the hangar doesn't blip either.
+        WeaponDef? missileMount = flying && !ship!.IsPod ? _defs.MissileMount((byte)ship.Class, ship.LoadoutIds) : null;
 
         // Empty-rack click: a "no rounds" blip on the pressed edge of the secondary-fire keys when
         // the launcher is dry. Mirrors ShipController's Firing2 gate (F, or RMB while the cursor is

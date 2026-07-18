@@ -1,5 +1,18 @@
 catalog:
-  version: 2026.06.28-stock
+  version: 2026.07.14-tech-tree
+  techs:
+  - id: heavy-ordnance
+    name: Heavy Ordnance Certification
+    description: Clears the team to field siege-grade weapons and the assault hulls that carry them.
+  - id: cannon-tier-2
+    name: Class-2 Cannon Doctrine
+    description: Uprated cannon fire-control, unlocking the heavier class-2 gun line.
+  - id: expansion-1
+    name: Expansion Doctrine
+    description: Logistics and survey training that authorizes building out beyond the home garrison.
+  - id: tactical-1
+    name: Tactical Doctrine
+    description: Advanced electronics and ordnance protocols that open the tactical station tree.
   hulls:
   - mass: 40
     speed: 160
@@ -13,19 +26,41 @@ catalog:
     reverse-thrust-multiplier: 0.25
     armor-hit-points: 60
     class-id: 0
+    glyph: ▲
+    role: RECON
+    model-length: 4.5
+    payload-capacity: 12
     drift-yaw-deg: 5
     drift-pitch-deg: 5
     ab-on-rate: 2
     ab-off-rate: 1
+    shield-capacity: 60
+    shield-recharge: 8
+    shield-delay: 3
+    vision-cone-length: 2400
+    vision-cone-angle-deg: 30
+    vision-sphere-radius: 1080
+    radar-signature: 0.5
     hardpoints:
-    - off-z: 3
+    - {}
+    - index: 1
+      weapon-id: 3
+    - kind: cockpit
+      off-y: 0.35
+      off-z: 0.9
       dir-z: 1
+    default-cargo:
+    - item: proximity-mine
+      count: 3
     - &o1
-      kind: main-engine
-      off-z: -2.25
-      dir-z: -1
+      item: sensor-decoy
+      count: 1
+    - item: recon-probe
+      count: 1
     id: scout
     name: Scout
+    description: Fastest hull in the fleet. Finds the fight, paints targets, and outruns what it can't kill.
+    model-name: scout
     price: 100
     required-capabilities:
     - base
@@ -39,34 +74,47 @@ catalog:
     thrust: 25
     strafe-thrust-multiplier: 0.5
     reverse-thrust-multiplier: 0.5
+    max-fuel: 15
     armor-hit-points: 120
     class-id: 1
+    glyph: ◆
+    role: INTERCEPT
+    model-length: 5.5
+    payload-capacity: 20
     drift-yaw-deg: 5
     drift-pitch-deg: 5
     ab-accel: 10
     ab-on-rate: 2
     ab-off-rate: 1
+    ab-fuel-drain: 1.75
+    ab-fuel-recharge: 1.5
+    shield-capacity: 60
+    shield-recharge: 8
+    shield-delay: 3
+    vision-cone-length: 1200
+    vision-cone-angle-deg: 20
+    vision-sphere-radius: 450
+    radar-signature: 1
     hardpoints:
-    - off-x: -0.9
-      off-z: 3
-      dir-z: 1
-      weapon-id: 1
+    - weapon-id: 1
     - index: 1
-      off-x: 0.9
-      off-z: 3
-      dir-z: 1
       weapon-id: 1
+    - index: 2
+      weapon-id: 3
     - kind: booster
-      off-x: -1.1
-      off-z: -2.75
-      dir-z: -1
     - kind: booster
       index: 1
-      off-x: 1.1
-      off-z: -2.75
-      dir-z: -1
+    - kind: cockpit
+      off-y: 0.55
+      off-z: 1.4
+      dir-z: 1
+    default-cargo:
+    - item: sensor-decoy
+      count: 2
     id: fighter
     name: Fighter
+    description: The all-rounder — twin cannons and enough armor to hold the line. Backbone of any squad.
+    model-name: fighter
     price: 200
     required-capabilities:
     - base
@@ -82,34 +130,89 @@ catalog:
     reverse-thrust-multiplier: 0.5
     armor-hit-points: 240
     class-id: 2
+    glyph: ⬢
+    role: ASSAULT
+    model-length: 7.2
+    payload-capacity: 37
     drift-yaw-deg: 8
     drift-pitch-deg: 8
     ab-on-rate: 2
     ab-off-rate: 1
+    shield-capacity: 100
+    shield-recharge: 6
+    shield-delay: 4
+    vision-cone-length: 1000
+    vision-cone-angle-deg: 18
+    vision-sphere-radius: 400
+    radar-signature: 1.75
     hardpoints:
-    - off-z: 3
-      dir-z: 1
+    - weapon-id: 2
+    - index: 1
       weapon-id: 2
-    - kind: main-engine
-      off-x: -1.4
-      off-z: -3.4
-      dir-z: -1
-    - kind: main-engine
-      index: 1
-      off-x: 1.4
-      off-z: -3.4
-      dir-z: -1
+    - index: 2
+      weapon-id: 5
+    - kind: cockpit
+      off-y: 0.7
+      off-z: 1.8
+      dir-z: 1
+    default-cargo:
+    - item: proximity-mine
+      count: 8
+    - *o1
     id: bomber
     name: Bomber
+    description: Slow and loud, but its payload cracks bases open. Bring an escort.
+    model-name: bomber
     price: 350
+    required-capabilities:
+    - base
+    required-techs:
+    - heavy-ordnance
+  - mass: 60
+    speed: 50
+    max-turn-rates: &o2
+      yaw: 40
+      pitch: 40
+      roll: 40
+    turn-torques: *o0
+    thrust: 10
+    strafe-thrust-multiplier: 0.5
+    reverse-thrust-multiplier: 0.5
+    armor-hit-points: 500
+    class-id: 4
+    glyph: ⬟
+    role: MINING
+    model-length: 6.5
+    ore-capacity: 2000
+    drift-yaw-deg: 8
+    drift-pitch-deg: 8
+    ab-on-rate: 1
+    ab-off-rate: 1
+    shield-capacity: 40
+    shield-recharge: 6
+    shield-delay: 3
+    vision-cone-length: 2000
+    vision-cone-angle-deg: 28
+    vision-sphere-radius: 1000
+    radar-signature: 1.5
+    hardpoints:
+    - kind: main-engine
+      off-z: -3
+      dir-z: -1
+    - kind: cockpit
+      off-y: 0.6
+      off-z: 1.6
+      dir-z: 1
+    id: miner
+    name: Miner
+    description: Slow, unarmed ore hauler. Strips helium-3 from asteroids and offloads it at base for credits. Defenseless — keep it escorted.
+    model-name: utl19
+    price: 400
     required-capabilities:
     - base
   - mass: 10
     speed: 60
-    max-turn-rates:
-      yaw: 40
-      pitch: 40
-      roll: 40
+    max-turn-rates: *o2
     turn-torques: *o0
     thrust: 15
     strafe-thrust-multiplier: 1
@@ -119,14 +222,24 @@ catalog:
     - is-lifepod
     - no-ripcord
     class-id: 255
+    model-length: 2.8
     drift-yaw-deg: 8
     drift-pitch-deg: 8
     ab-on-rate: 2
     ab-off-rate: 1
+    vision-sphere-radius: 250
+    radar-signature: 0.35
     hardpoints:
-    - *o1
+    - kind: main-engine
+      off-z: -2.25
+      dir-z: -1
+    - kind: cockpit
+      off-y: 0.2
+      off-z: 0.3
+      dir-z: 1
     id: pod
     name: Pod
+    model-name: pod
     required-capabilities:
     - base
   weapons:
@@ -135,6 +248,7 @@ catalog:
     weapon-id: 0
     fire-interval-ticks: 4
     projectile-life-ticks: 16
+    mass: 2
     id: scout-cannon
     name: Scout Cannon
     required-capabilities:
@@ -144,6 +258,7 @@ catalog:
     weapon-id: 1
     fire-interval-ticks: 4
     projectile-life-ticks: 16
+    mass: 5
     id: fighter-cannon
     name: Fighter Cannon
     required-capabilities:
@@ -153,8 +268,80 @@ catalog:
     weapon-id: 2
     fire-interval-ticks: 14
     projectile-life-ticks: 16
+    mass: 11
+    shield-damage-multiplier: 0.5
     id: bomber-cannon
     name: Bomber Cannon
+    required-capabilities:
+    - base
+  - dispersion: 0.01
+    projectile-id: heavy-bolt
+    weapon-id: 9
+    fire-interval-ticks: 18
+    projectile-life-ticks: 16
+    mass: 14
+    shield-damage-multiplier: 0.5
+    id: heavy-cannon
+    name: Heavy Cannon
+    required-capabilities:
+    - base
+    required-techs:
+    - cannon-tier-2
+  launchers:
+  - amount: 6
+    expendable-id: seeker-missile
+    weapon-id: 3
+    fire-interval-ticks: 30
+    mass: 4
+    slot: magazine
+    id: missile-rack
+    name: Missile Rack
+    required-capabilities:
+    - base
+  - amount: 8
+    expendable-id: dart-missile
+    weapon-id: 4
+    fire-interval-ticks: 20
+    mass: 3
+    slot: magazine
+    id: dart-rack
+    name: Dart Rack
+    required-capabilities:
+    - base
+  - amount: 6
+    expendable-id: anti-base-torpedo
+    weapon-id: 5
+    fire-interval-ticks: 60
+    mass: 4
+    slot: magazine
+    id: torpedo-rack
+    name: Torpedo Rack
+    required-capabilities:
+    - base
+  - amount: 1
+    expendable-id: sensor-decoy
+    weapon-id: 6
+    fire-interval-ticks: 40
+    id: decoy-dispenser
+    name: Decoy Dispenser
+    required-capabilities:
+    - base
+  - amount: 1
+    expendable-id: proximity-mine
+    weapon-id: 7
+    fire-interval-ticks: 100
+    slot: dispenser
+    id: mine-dispenser
+    name: Mine Dispenser
+    required-capabilities:
+    - base
+  - amount: 1
+    expendable-id: recon-probe
+    weapon-id: 8
+    fire-interval-ticks: 100
+    slot: dispenser
+    id: probe-dispenser
+    name: Probe Dispenser
     required-capabilities:
     - base
   stations:
@@ -165,40 +352,290 @@ catalog:
     - start
     - restart
     base-type-id: 0
-    hardpoints:
-    - kind: docking-entrance
-      off-z: 90
-      dir-z: 1
-    - kind: docking-exit
-      off-z: 90
-      dir-z: 1
-    - kind: light
-      off-y: 90
-      dir-y: 1
-    - kind: light
-      index: 1
-      off-y: -90
-      dir-y: -1
+    vision-sphere-radius: 3600
+    radar-signature: 2.5
+    research-slots: 1
     id: garrison
     name: Garrison
+    model-name: garrison
     required-capabilities:
     - base
+  - class: garrison
+    abilities:
+    - land
+    - repair
+    - capture
+    id: outpost
+    name: Outpost
+    description: A light forward garrison — eyes and a foothold in a contested sector.
+    price: 300
+    build-time-seconds: 45
+    required-capabilities:
+    - expansion-allowed
+  - class: shipyard
+    abilities:
+    - land
+    - repair
+    - capture
+    id: shipyard
+    name: Shipyard
+    description: Builds and services ships away from the home garrison.
+    price: 600
+    build-time-seconds: 90
+    required-capabilities:
+    - expansion-allowed
+    granted-capabilities:
+    - shipyard-allowed
+  - income: 50
+    class: mining
+    abilities:
+    - unload
+    - capture
+    id: refinery
+    name: Refinery
+    description: Processes mined helium-3 on-site, shortening the haul back to base.
+    price: 400
+    build-time-seconds: 60
+    required-capabilities:
+    - expansion-allowed
+  - class: research
+    abilities:
+    - land
+    - capture
+    research-slots: 2
+    id: tech-lab
+    name: Technology Lab
+    description: Hosts advanced research and unlocks the tactical doctrine tree.
+    price: 500
+    build-time-seconds: 75
+    granted-capabilities:
+    - tactical-allowed
+    required-techs:
+    - tactical-1
+  - abilities:
+    - land
+    - repair
+    - capture
+    id: supremacy-center
+    name: Supremacy Center
+    description: The team's supremacy fortress — raising it unlocks the supremacy victory path.
+    price: 1500
+    build-time-seconds: 150
+    required-capabilities:
+    - shipyard-allowed
+    granted-capabilities:
+    - supremacy-allowed
+    required-techs:
+    - heavy-ordnance
+  - class: garrison
+    abilities:
+    - land
+    - repair
+    - capture
+    id: expansion-complex
+    name: Expansion Complex
+    description: Command-and-logistics hub that authorizes the team to expand into new sectors.
+    price: 450
+    build-time-seconds: 70
+    granted-capabilities:
+    - expansion-allowed
+    required-techs:
+    - expansion-1
+  - class: ripcord
+    abilities:
+    - ripcord
+    - land
+    id: teleport-receiver
+    name: Teleport Receiver
+    description: A ripcord waypoint that pulls friendly ships across the map to a forward line.
+    price: 350
+    build-time-seconds: 60
+    required-capabilities:
+    - expansion-allowed
+  developments:
+  - tech-only: true
+    id: dev-heavy-ordnance
+    name: Heavy Ordnance
+    description: Certify the team for siege weapons and assault hulls.
+    price: 400
+    build-time-seconds: 90
+    group: WEAPONS
+    required-capabilities:
+    - base
+    granted-techs:
+    - heavy-ordnance
+  - tech-only: true
+    id: dev-cannon-tier-2
+    name: Class-2 Cannons
+    description: Uprate the cannon line to class-2 fire-control.
+    price: 300
+    build-time-seconds: 60
+    group: WEAPONS
+    required-techs:
+    - heavy-ordnance
+    granted-techs:
+    - cannon-tier-2
+  - tech-only: true
+    id: dev-expansion
+    name: Expansion Doctrine
+    description: Authorize building out beyond the home garrison.
+    price: 500
+    build-time-seconds: 120
+    group: EXPANSION
+    required-capabilities:
+    - base
+    granted-techs:
+    - expansion-1
+  - tech-only: true
+    id: dev-tactical
+    name: Tactical Doctrine
+    description: Open the tactical station and ordnance tree.
+    price: 500
+    build-time-seconds: 120
+    group: TACTICAL
+    required-capabilities:
+    - base
+    granted-techs:
+    - tactical-1
+  missiles:
+  - acceleration: 40
+    turn-rate: 80
+    initial-speed: 90
+    lock-time: 2
+    max-lock: 1200
+    chaff-resistance: 1
+    lock-angle: 0.5
+    power: 45
+    blast-power: 30
+    blast-radius: 25
+    width: 1
+    max-speed: 220
+    direct-hit-multiplier: 1.5
+    model-name: mis09
+    trail-lifetime: 0.7
+    trail-scale: 0.45
+    trail-color: ffc890ff
+    id: seeker-missile
+    name: Seeker Missile
+    description: Lock-on ordnance. Fired from the hold.
+    mass: 4
+    lifespan: 8
+  - acceleration: 80
+    turn-rate: 30
+    initial-speed: 180
+    lock-time: 1
+    max-lock: 1000
+    chaff-resistance: 0.5
+    lock-angle: 0.4
+    power: 18
+    blast-power: 10
+    blast-radius: 12
+    width: 2
+    max-speed: 320
+    direct-hit-multiplier: 1.25
+    model-name: mis01
+    trail-lifetime: 0.4
+    trail-scale: 0.3
+    trail-color: aaccffcc
+    id: dart-missile
+    name: Dart Missile
+    description: Fast fire-and-forget dart. Barely tracks.
+    mass: 3
+    lifespan: 5
+  - acceleration: 25
+    turn-rate: 25
+    initial-speed: 60
+    lock-time: 3
+    max-lock: 1500
+    chaff-resistance: 2.5
+    lock-angle: 0.35
+    power: 200
+    blast-power: 40
+    blast-radius: 30
+    width: 1
+    max-speed: 140
+    direct-hit-multiplier: 1
+    model-name: mis09
+    trail-lifetime: 1
+    trail-scale: 0.6
+    trail-color: ff9060ff
+    can-damage-base: true
+    id: anti-base-torpedo
+    name: Anti-Base Torpedo
+    description: Heavy siege torpedo. Locks onto enemy stations.
+    mass: 6
+    lifespan: 12
+  mines:
+  - power: 60
+    cloud-radius: 80
+    cloud-count: 64
+    arm-delay: 1
+    model-name: acs41
+    id: proximity-mine
+    name: Proximity Mine
+    description: Dropped behind the ship; arms after 1s.
+    mass: 1
+    lifespan: 60
+    signature: 1
+    cargo-id: 2
+    glyph: ◈
+    charges-per-pack: 1
+  chaffs:
+  - chaff-strength: 1
+    decoy-radius: 60
+    model-name: acs40
+    id: sensor-decoy
+    name: Countermeasures
+    description: Fakes the ship's signature for pursuers.
+    mass: 1
+    lifespan: 3
+    cargo-id: 3
+    glyph: ◇
+    charges-per-pack: 8
+  probes:
+  - sight-radius: 4800
+    model-name: acs64
+    hit-radius: 12
+    model-size: 4
+    id: recon-probe
+    name: Recon Probe
+    description: Deployable sensor buoy. Destructible; expires after 10 minutes.
+    mass: 2
+    lifespan: 1200
+    signature: 1
+    hit-points: 25
+    cargo-id: 4
+    glyph: ◉
+    charges-per-pack: 2
   projectiles:
   - id: scout-bolt
     name: Scout Bolt
     power: 4
     speed: 200
     width: 1
+    bolt-radius: 0.22
+    bolt-length: 2.2
   - id: fighter-bolt
     name: Fighter Bolt
     power: 10
     speed: 200
     width: 1
+    bolt-radius: 0.22
+    bolt-length: 2.2
   - id: bomber-bolt
     name: Bomber Bolt
     power: 22
     speed: 200
     width: 1
+    bolt-radius: 0.3
+    bolt-length: 2.8
+  - id: heavy-bolt
+    name: Heavy Bolt
+    power: 40
+    speed: 180
+    width: 1
+    bolt-radius: 0.34
+    bolt-length: 3.2
   factions:
   - id: stock
     name: Stock
@@ -208,9 +645,6 @@ catalog:
     - base
     lifepod-hull-id: pod
     initial-station-id: garrison
-  world:
-    sector-scale: 2.25
-    asteroid-density: 1
 analysis:
   stock:
     starting:
@@ -220,29 +654,136 @@ analysis:
       - base
       initial-station-id: garrison
       lifepod-hull-id: pod
+    reachable-techs:
+    - cannon-tier-2
+    - expansion-1
+    - heavy-ordnance
+    - tactical-1
     reachable-capabilities:
     - base
+    - shipyard-allowed
+    - expansion-allowed
+    - tactical-allowed
+    - supremacy-allowed
     available-at-start:
-    - bomber
     - bomber-cannon
+    - dart-rack
+    - decoy-dispenser
+    - dev-expansion
+    - dev-heavy-ordnance
+    - dev-tactical
     - fighter
     - fighter-cannon
     - garrison
+    - mine-dispenser
+    - miner
+    - missile-rack
     - pod
+    - probe-dispenser
     - scout
     - scout-cannon
+    - torpedo-rack
+    techs:
+      cannon-tier-2:
+        granted-by:
+        - dev-cannon-tier-2
+        unlocks:
+        - heavy-cannon
+        requires-first:
+        - heavy-ordnance
+      expansion-1:
+        granted-by:
+        - dev-expansion
+        unlocks:
+        - expansion-complex
+      heavy-ordnance:
+        granted-by:
+        - dev-heavy-ordnance
+        unlocks:
+        - bomber
+        - dev-cannon-tier-2
+        - supremacy-center
+      tactical-1:
+        granted-by:
+        - dev-tactical
+        unlocks:
+        - tech-lab
     buildables:
       bomber:
         kind: hull
         price: 350
+        needs-techs:
+        - heavy-ordnance
         needs-capabilities:
         - base
-        available-at-start: true
+        unlocked-by:
+        - dev-heavy-ordnance
       bomber-cannon:
         kind: weapon
         needs-capabilities:
         - base
         available-at-start: true
+      dart-rack:
+        kind: launcher
+        needs-capabilities:
+        - base
+        available-at-start: true
+      decoy-dispenser:
+        kind: launcher
+        needs-capabilities:
+        - base
+        available-at-start: true
+      dev-cannon-tier-2:
+        kind: development
+        price: 300
+        build-time-seconds: 60
+        group: WEAPONS
+        needs-techs:
+        - heavy-ordnance
+        grants-techs:
+        - cannon-tier-2
+        unlocked-by:
+        - dev-heavy-ordnance
+      dev-expansion:
+        kind: development
+        price: 500
+        build-time-seconds: 120
+        group: EXPANSION
+        needs-capabilities:
+        - base
+        grants-techs:
+        - expansion-1
+        available-at-start: true
+      dev-heavy-ordnance:
+        kind: development
+        price: 400
+        build-time-seconds: 90
+        group: WEAPONS
+        needs-capabilities:
+        - base
+        grants-techs:
+        - heavy-ordnance
+        available-at-start: true
+      dev-tactical:
+        kind: development
+        price: 500
+        build-time-seconds: 120
+        group: TACTICAL
+        needs-capabilities:
+        - base
+        grants-techs:
+        - tactical-1
+        available-at-start: true
+      expansion-complex:
+        kind: station
+        price: 450
+        build-time-seconds: 70
+        needs-techs:
+        - expansion-1
+        grants-capabilities:
+        - expansion-allowed
+        unlocked-by:
+        - dev-expansion
       fighter:
         kind: hull
         price: 200
@@ -259,11 +800,56 @@ analysis:
         needs-capabilities:
         - base
         available-at-start: true
+      heavy-cannon:
+        kind: weapon
+        needs-techs:
+        - cannon-tier-2
+        needs-capabilities:
+        - base
+        unlocked-by:
+        - dev-cannon-tier-2
+      mine-dispenser:
+        kind: launcher
+        needs-capabilities:
+        - base
+        available-at-start: true
+      miner:
+        kind: hull
+        price: 400
+        needs-capabilities:
+        - base
+        available-at-start: true
+      missile-rack:
+        kind: launcher
+        needs-capabilities:
+        - base
+        available-at-start: true
+      outpost:
+        kind: station
+        price: 300
+        build-time-seconds: 45
+        needs-capabilities:
+        - expansion-allowed
+        unlocked-by:
+        - expansion-complex
       pod:
         kind: hull
         needs-capabilities:
         - base
         available-at-start: true
+      probe-dispenser:
+        kind: launcher
+        needs-capabilities:
+        - base
+        available-at-start: true
+      refinery:
+        kind: station
+        price: 400
+        build-time-seconds: 60
+        needs-capabilities:
+        - expansion-allowed
+        unlocked-by:
+        - expansion-complex
       scout:
         kind: hull
         price: 100
@@ -272,6 +858,52 @@ analysis:
         available-at-start: true
       scout-cannon:
         kind: weapon
+        needs-capabilities:
+        - base
+        available-at-start: true
+      shipyard:
+        kind: station
+        price: 600
+        build-time-seconds: 90
+        needs-capabilities:
+        - expansion-allowed
+        grants-capabilities:
+        - shipyard-allowed
+        unlocked-by:
+        - expansion-complex
+      supremacy-center:
+        kind: station
+        price: 1500
+        build-time-seconds: 150
+        needs-techs:
+        - heavy-ordnance
+        needs-capabilities:
+        - shipyard-allowed
+        grants-capabilities:
+        - supremacy-allowed
+        unlocked-by:
+        - dev-heavy-ordnance
+        - shipyard
+      tech-lab:
+        kind: station
+        price: 500
+        build-time-seconds: 75
+        needs-techs:
+        - tactical-1
+        grants-capabilities:
+        - tactical-allowed
+        unlocked-by:
+        - dev-tactical
+      teleport-receiver:
+        kind: station
+        price: 350
+        build-time-seconds: 60
+        needs-capabilities:
+        - expansion-allowed
+        unlocked-by:
+        - expansion-complex
+      torpedo-rack:
+        kind: launcher
         needs-capabilities:
         - base
         available-at-start: true

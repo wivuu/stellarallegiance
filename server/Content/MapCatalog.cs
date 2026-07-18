@@ -133,11 +133,16 @@ public static class MapCatalog
         AlephRadarSignature = w.AlephRadarSignature,
         RockRadarSignature = w.RockRadarSignature,
         // Tuning blocks are read-only after projection, so the clone shares the instances (maps
-        // never override them — MapLoader.ApplyTo touches sectors/links/scale/radius only).
+        // never override them — MapLoader.ApplyTo touches sectors/links/scale/radius only). EVERY
+        // tuning block World construction reads must be carried across: a dropped block silently
+        // reverts to the WorldConfig field-initializer default (e.g. omitting Build reset an authored
+        // build.parallel-limit back to 4, defeating the per-garrison build pipeline on any mapped game).
         Ai = w.Ai,
         Combat = w.Combat,
         Mechanics = w.Mechanics,
         Mining = w.Mining,
         Seeding = w.Seeding,
+        Constructor = w.Constructor,
+        Build = w.Build,
     };
 }

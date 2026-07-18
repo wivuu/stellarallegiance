@@ -181,7 +181,9 @@ catch (Exception ex)
     Console.Error.WriteLine($"[SimServer] FATAL: failed to load content '{contentPath}' / world '{worldPath}': {ex.Message}");
     return;
 }
-var contentErrors = ContentValidator.Validate(content.Ships, content.Weapons, content.Bases, content.CargoItems);
+var contentErrors = ContentValidator.Validate(
+    content.Ships, content.Weapons, content.Bases, content.CargoItems,
+    content.Techs, content.Developments, content.StationCatalog);
 if (contentErrors.Count > 0)
 {
     Console.Error.WriteLine($"[SimServer] FATAL: content validation failed ({contentErrors.Count} error(s)):");
@@ -240,7 +242,7 @@ string mapName = selectedMapDef.Name!.Trim();
 
 // Base health (the win-condition hull) comes from the content's base def — the validator guarantees
 // at least one base, so [0] is safe — so a YAML-tuned base max-health is the server's authority too.
-var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships, loggerFactory.CreateLogger<World>());
+var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships, content.Bases, loggerFactory.CreateLogger<World>());
 var sim = new Simulation(world, content, loggerFactory.CreateLogger<Simulation>());
 var hub = new ClientHub(sim, auth, players, matchmaker, mapName, mapCatalog, loggerFactory.CreateLogger<ClientHub>());
 
@@ -264,7 +266,7 @@ World? BuildWorldForMap(string name)
     // seed so any live layout can be reproduced later with --seed.
     ulong matchSeed = pinnedSeed ?? RandomSeed();
     Log.MatchWorldSeed(log, name, matchSeed);
-    return new World(matchSeed, cfg, content.Bases[0].MaxHealth, content.Start, content.Ships, loggerFactory.CreateLogger<World>());
+    return new World(matchSeed, cfg, content.Bases[0].MaxHealth, content.Start, content.Ships, content.Bases, loggerFactory.CreateLogger<World>());
 }
 sim.BuildMatchWorld = () => BuildWorldForMap(hub.SelectedMap);
 sim.OnMatchStart = hub.OnMatchStart;

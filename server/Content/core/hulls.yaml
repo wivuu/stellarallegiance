@@ -1,162 +1,243 @@
 # Hulls — the playable ships + the escape pod. Flight stats derive onto the runtime ShipClassDef:
 #   mass→mass, speed→max-speed, thrust→accel, max-turn-rates→rate-*-deg, armor-hit-points→max-hull,
 #   strafe/reverse-thrust-multiplier→side/back-mult. class-id, drift-*-deg, ab-*, and hardpoints are
-#   explicit runtime extensions. Numbers reproduce server/Content/stock.yaml exactly.
+#   explicit runtime extensions.
+#
+#   Iron Coalition combat roster (Phase 2, PCore014.igc). Flight stats are the --iron-slice
+#   anchor-translation (plan Adaptation §3): IGC Enh Fighter ↔ our fighter (mass ×1.2, speed ×0.8333,
+#   thrust ×0.03333, hitPoints ×0.342857). side/back-mult come straight from IGC. Fields the IGC
+#   doesn't cover (drift-*, ab-*, shield-*, vision-*) are kept from the closest current hull.
+#   model-length scales fighter's 5.5 by the IGC length ratio (Enh Fighter 14.9 = anchor).
+#   Ship GLBs (fig13/wc_ic*) DO carry HP_ nodes, so weapon/booster/light geometry comes from the
+#   mesh via HardpointGeometryMerge — YAML binds weapon-ids + authors the cockpit (no HP_Cockpit node)
+#   and any mounts beyond the mesh's HP_Weapon inventory. Miner/constructor/pod are unchanged.
+#
 #   payload-capacity = the hull's payload budget (mounted weapon mass + cargo hold). Every armed
 #   hull MUST author enough for its default hardpoint weapons — CoreValidator refuses to boot otherwise.
+#   Mount types: a Weapon hardpoint only accepts its own weapon CATEGORY in the hangar (and the
+#   server rejects anything else): a mount binding a gun is gun-typed, one binding a missile rack is
+#   missile-typed. A mesh HP_Weapon node that NO yaml entry binds or types is NON-MOUNTABLE — not a
+#   loadout slot at all: hidden in the hangar, rejected by the server. To expose an EMPTY assignable
+#   mount, author an entry with `mount: gun|missile|any` and no weapon-id (the mesh node carries no
+#   gun/missile distinction, so its type must be authored). `mount:` on a bound entry overrides the
+#   derivation; CoreValidator refuses a `mount:` that contradicts the bound weapon.
 #   Shield (optional, all keys omitted = no shield): shield-capacity is a regenerating energy pool that
 #   absorbs incoming damage BEFORE the hull (overflow from a shield-popping hit spills into the hull the
 #   same tick); shield-recharge is points/second, resuming shield-delay seconds after the last shield hit.
 #   A hull authoring shield-capacity MUST author a positive shield-recharge (else it never comes back) —
-#   ContentValidator refuses to boot otherwise. Scout/Pod carry no shield; Fighter/Bomber do.
+#   ContentValidator refuses to boot otherwise.
 #   Afterburner fuel (optional, gauges the afterburner): max-fuel is the tank size; ab-fuel-drain is
 #   burned per second while the afterburner is engaged; ab-fuel-recharge trickles back per second
 #   while the boost input is released. A hull authoring ab-accel > 0 MUST also author max-fuel (and vice versa) —
 #   CoreValidator refuses to boot on a mismatched pair. ab-fuel-recharge: 0 is a valid, deliberate
 #   convention meaning "dock-only": the tank never refills in flight, only on relaunch (spawn-time
-#   init refuels — see Simulation.SpawnCombatShip). Scout/Bomber/Pod have no afterburner and
-#   author none of these keys (max-fuel <= 0 = unmodeled, i.e. legacy unlimited boost).
+#   init refuels — see Simulation.SpawnCombatShip).
 #   Signature (optional): radar-signature scales every viewer's fog detection range against this
-#   hull; signature is an ADDITIVE per-hull bias on top of it (radar-signature units, default 0),
-#   summed at projection with the preferred-parts loadout's per-part signature values into the
-#   hull's equipment bias (ShipClassDef.SignatureBias). No stock hull authors it — author it to
-#   make a hull read louder/quieter than its class baseline without retuning radar-signature.
+#   hull; signature is an ADDITIVE per-hull bias on top of it (radar-signature units, default 0).
 hulls:
-  # Scout (class-id 0): a single main nozzle; one near-pinpoint cannon.
+  # Scout (class-id 0, fig13): fastest hull, one PW Gat Gun. IGC 1×0x3 mount.
   - id: scout
     name: Scout
     glyph: "▲"
     role: RECON
     description: "Fastest hull in the fleet. Finds the fight, paints targets, and outruns what it can't kill."
-    model-name: scout   # res://assets/ships/<model-name>.glb (else procedural placeholder)
-    model-length: 4.5   # world-unit silhouette length the client normalizes the GLB to
+    model-name: fig13   # res://assets/ships/<model-name>.glb (HP_Weapon/Booster/Thruster/Light baked in)
+    model-length: 4.0   # 5.5 × 10.9/14.9 (IGC length ratio)
     class-id: 0
-    mass: 40
-    speed: 160
-    thrust: 30
+    mass: 48
+    speed: 173.3
+    thrust: 40
     max-turn-rates: { yaw: 50, pitch: 50, roll: 50 }
-    strafe-thrust-multiplier: 0.5
-    reverse-thrust-multiplier: 0.25
+    strafe-thrust-multiplier: 0.5   # IGC sideMult
+    reverse-thrust-multiplier: 0.25 # IGC backMult
     drift-yaw-deg: 5
     drift-pitch-deg: 5
     ab-accel: 0
     ab-on-rate: 2.0
     ab-off-rate: 1.0
-    armor-hit-points: 60
+    armor-hit-points: 69
     shield-capacity: 60   # regenerating shield absorbed before hull
     shield-recharge: 8    # points/sec once the quiet delay elapses (~7.5 s to full)
     shield-delay: 3       # seconds after the last shield hit before recharge resumes
-    # Fog-of-war vision: long-range directional cone (occluded by asteroids) + omnidirectional
-    # proximity sphere (unoccluded). Scouts trade armor for the best eyes in the fleet.
     vision-cone-length: 2400
     vision-cone-angle-deg: 30
     vision-sphere-radius: 1080  # 900 x1.2 — scout's omnidirectional radar bubble
     radar-signature: 0.5   # small + quiet — must be approached closer before being seen
     price: 100
-    payload-capacity: 12 # cannon 2 + missile rack 4 = 6 -> 6 free for cargo
+    payload-capacity: 12 # gat 1 + mine 3 + decoy 1 + probe 2 = 7 -> 5 free
     required-capabilities: [base]
-    # GLB is authoritative for the hardpoint inventory + geometry (HardpointGeometryMerge). A YAML
-    # entry BINDS a weapon-id to a mesh HP_<Kind>_<Index> node and inherits its position/direction
-    # unless it authors off-*/dir-* to override. Unclaimed mesh nodes append at the end (by kind,
-    # index): Booster_0/1 nozzles, Thruster_0 + Light_0..2.
+    # fig13 carries HP_Weapon_0 (nose) + HP_Weapon_1 (belly). Bind the nose to PW Gat Gun 1; type the
+    # belly as an EMPTY missile-only mount (no weapon-id -> unarmed by default, but a pilot may fit a
+    # rack there). Geometry inherits mesh HP_Weapon_1. Unclaimed nodes append: Booster_0/1,
+    # Thruster_0, Light_0..2. Cockpit has no mesh node — fully authored here.
     hardpoints:
-      - { kind: weapon, index: 0, weapon-id: 0 }   # binds mesh HP_Weapon_0 (cannon; geometry from mesh)
-      - { kind: weapon, index: 1, weapon-id: 3 }   # binds mesh HP_Weapon_1 (missile rack) — P2
-      # Cockpit eye point for the first-person camera (client-only). No HP_Cockpit mesh node, so it
-      # stays FULLY authored here (slightly above the centreline, forward of centre).
-      - { kind: cockpit, off-y: 0.35, off-z: 0.9, dir-z: 1 }
-    # Default hold: cannon 2 + missile rack 4 + proximity-mine (3) + sensor-decoy (1) + recon-probe (2) = 12 == capacity.
-    # Probe mass is authored low (2, not a "realistic" 20) so a single pack fits alongside the
-    # scout's loadout without ballooning payload-capacity for every hull.
+      - { kind: weapon, index: 0, weapon-id: 0 }   # binds mesh HP_Weapon_0 (PW Gat Gun 1)
+      - { kind: weapon, index: 1, mount: missile } # belly missile hardpoint (empty; inherits mesh HP_Weapon_1)
+      - { kind: cockpit, off-y: 0.35, off-z: 0.8, dir-z: 1 }
     default-cargo:
-      - { item: proximity-mine, count: 3 }
-      - { item: sensor-decoy, count: 1 }
-      - { item: recon-probe, count: 1 }
+      - { item: prox-mine-1, count: 3 }
+      - { item: counter-1, count: 1 }
+      - { item: ews-probe-1, count: 1 }
 
-  # Fighter (class-id 1): twin boosters; twin wing cannons firing together.
-  - id: fighter
-    name: Fighter
+  # Lt Interceptor (class-id 3, wc_icint): agile dock-only booster hull, twin PW Mini-Gun. IGC 2×0x18.
+  - id: lt-interceptor
+    name: Lt Interceptor
+    glyph: "◇"
+    role: INTERCEPT
+    description: "Nimble booster hull with twin mini-guns. Runs down anything and dumps its whole tank to do it."
+    model-name: wc_icint
+    model-length: 5.5   # 5.5 × 14.8/14.9
+    class-id: 3
+    mass: 24
+    speed: 75
+    thrust: 10
+    max-turn-rates: { yaw: 60, pitch: 60, roll: 60 }
+    strafe-thrust-multiplier: 1.0   # IGC sideMult
+    reverse-thrust-multiplier: 1.0  # IGC backMult
+    drift-yaw-deg: 5
+    drift-pitch-deg: 5
+    ab-accel: 14
+    ab-on-rate: 2.5
+    ab-off-rate: 1.5
+    max-fuel: 60          # ~15 s burn at drain 4 — the booster hull carries a serious tank
+    ab-fuel-drain: 4.0    # per second while the afterburner is engaged
+    ab-fuel-recharge: 0   # dock-only: no in-flight regen — spent tank reloads from fuel pods or relaunch
+    armor-hit-points: 206
+    shield-capacity: 60
+    shield-recharge: 8
+    shield-delay: 3
+    vision-cone-length: 1200
+    vision-cone-angle-deg: 20
+    vision-sphere-radius: 450
+    radar-signature: 1.0
+    price: 150
+    payload-capacity: 12 # 2x mini-gun 2 + 2x decoy 2 + 2x fuel pod 2 = 6 -> 6 free
+    required-capabilities: [base]
+    # wc_icint carries HP_Weapon_0 (center) + HP_Weapon_1/2 (symmetric wing tips). Mount the two wing
+    # guns as the twin Mini-Gun pair; the center mount stays empty. Booster_0/1, Thruster_0, Light_0..4
+    # append. Cockpit authored (no mesh node).
+    hardpoints:
+      - { kind: weapon, index: 1, weapon-id: 9 }   # binds mesh HP_Weapon_1 (right wing PW Mini-Gun 1)
+      - { kind: weapon, index: 2, weapon-id: 9 }   # binds mesh HP_Weapon_2 (left wing PW Mini-Gun 1)
+      - { kind: cockpit, off-y: 0.4, off-z: 1.2, dir-z: 1 }
+    default-cargo:
+      - { item: counter-1, count: 2 }
+      - { item: fuel-pod-1, count: 2 } # two auto-load refills out of the box (dock-only recharge hull)
+
+  # Enh Fighter (class-id 1, wc_icfig): the all-rounder — three PW Gat Guns. IGC 3×0x1. The anchor
+  # hull for the whole stat translation. Gated behind supremacy-1 (Phase 4): buildable once the team
+  # raises a Supremacy base. Scout + Lt Interceptor + (researched) Bomber remain flyable from start.
+  - id: enh-fighter
+    name: Enh Fighter
     glyph: "◆"
     role: INTERCEPT
-    description: "The all-rounder — twin cannons and enough armor to hold the line. Backbone of any squad."
-    model-name: fighter
+    description: "The all-rounder — three cannons and enough armor to hold the line. Backbone of any squad."
+    model-name: wc_icfig
     model-length: 5.5
     class-id: 1
     mass: 36
     speed: 100
     thrust: 25
     max-turn-rates: { yaw: 60, pitch: 60, roll: 60 }
-    strafe-thrust-multiplier: 0.5
-    reverse-thrust-multiplier: 0.5
+    strafe-thrust-multiplier: 0.5   # fighter-family value (side/back-mult isn't in the --iron-slice translation)
+    reverse-thrust-multiplier: 0.5  # fighter-family value
     drift-yaw-deg: 5
     drift-pitch-deg: 5
     ab-accel: 10
     ab-on-rate: 2.0
     ab-off-rate: 1.0
     max-fuel: 15          # burn time = max-fuel / ab-fuel-drain = 5 s
-    ab-fuel-drain: 1.75    # per second while the afterburner is engaged
-    ab-fuel-recharge: 1.5 # per second while boost is released (~30 s to full); 0 = dock-only (relaunch refills)
+    ab-fuel-drain: 3.0    # per second while the afterburner is engaged
+    ab-fuel-recharge: 0.5 # per second while boost is released (~30 s to full)
     armor-hit-points: 120
-    shield-capacity: 60   # regenerating shield absorbed before hull
-    shield-recharge: 8    # points/sec once the quiet delay elapses (~7.5 s to full)
-    shield-delay: 3       # seconds after the last shield hit before recharge resumes
+    shield-capacity: 60
+    shield-recharge: 8
+    shield-delay: 3
     vision-cone-length: 1200
     vision-cone-angle-deg: 20
     vision-sphere-radius: 450
     radar-signature: 1.0   # baseline detectability
     price: 200
-    payload-capacity: 20 # twin cannons 2x5 + seeker rack 4 = 14 -> 6 free for cargo
+    payload-capacity: 20 # 3x gat 3 + 2x decoy 2 = 5 -> 15 free
     required-capabilities: [base]
-    # GLB-authoritative geometry (HardpointGeometryMerge): each weapon/booster entry BINDS its mesh
-    # HP_<Kind>_<Index> node and inherits its position/direction. The seeker rack keeps weapon-index 2
-    # (AFTER the two guns 0/1) so the barrel spread-seed indices stay aligned on server + client.
-    # Unclaimed mesh nodes append at the end (by kind, index): Thruster_0 + Light_0..4.
+    required-techs: [supremacy-1]   # unbuildable until the team raises a Supremacy base
+    # wc_icfig carries HP_Weapon_0/1 (nose pair) + HP_Weapon_2 (belly). All three mount PW Gat Gun 1.
+    # Booster_0/1, Thruster_0, Light_0..4 append. Cockpit authored (no mesh node).
     hardpoints:
-      - { kind: weapon, index: 0, weapon-id: 1 }   # binds mesh HP_Weapon_0 (left cannon)
-      - { kind: weapon, index: 1, weapon-id: 1 }   # binds mesh HP_Weapon_1 (right cannon)
-      - { kind: weapon, index: 2, weapon-id: 3 }   # binds mesh HP_Weapon_2 (seeker rack)
-      - { kind: booster, index: 0 }                # binds mesh HP_Booster_0
-      - { kind: booster, index: 1 }                # binds mesh HP_Booster_1
-      # Cockpit eye point for the first-person camera (client-only). No HP_Cockpit mesh node, so it
-      # stays FULLY authored here.
+      - { kind: weapon, index: 0, weapon-id: 0 }   # binds mesh HP_Weapon_0 (right nose PW Gat Gun 1)
+      - { kind: weapon, index: 1, weapon-id: 0 }   # binds mesh HP_Weapon_1 (left nose PW Gat Gun 1)
+      - { kind: weapon, index: 2, weapon-id: 0 }   # binds mesh HP_Weapon_2 (belly PW Gat Gun 1)
       - { kind: cockpit, off-y: 0.55, off-z: 1.4, dir-z: 1 }
-    # Default hold: twin cannons 2x5 + seeker rack 4 = 14, + 2x sensor-decoy (3) = 20 == capacity.
     default-cargo:
-      - { item: sensor-decoy, count: 2 }
+      - { item: counter-1, count: 2 }
 
-  # Interceptor (stub — no model/class-id yet): the dock-only booster hull. Uncomment + assign
-  # class-id when the hull lands.
-  # - id: interceptor
-  #   name: Interceptor
-  #   class-id: 3
-  #   ab-accel: 14
-  #   ab-on-rate: 2.5
-  #   ab-off-rate: 1.5
-  #   max-fuel: 20
-  #   ab-fuel-drain: 4.0
-  #   ab-fuel-recharge: 0 # dock-only: no in-flight regen, full tank only on relaunch
+  # Adv Fighter (class-id 6, wc_icadv): the Enh Fighter's successor — three PW Gat Guns, more armor.
+  # Gated behind supremacy-adv (unbuildable until Phase 3/4 delivers the Supremacy (Adv) base).
+  - id: adv-fighter
+    name: Adv Fighter
+    glyph: "◈"
+    role: INTERCEPT
+    description: "Up-armored successor to the Enh Fighter. Same three guns, a tougher frame, tighter handling."
+    model-name: wc_icadv
+    model-length: 5.5
+    class-id: 6
+    mass: 36
+    speed: 100
+    thrust: 25
+    max-turn-rates: { yaw: 60, pitch: 60, roll: 60 }
+    strafe-thrust-multiplier: 0.5   # fighter-family value (side/back-mult isn't in the --iron-slice translation)
+    reverse-thrust-multiplier: 0.5  # fighter-family value
+    drift-yaw-deg: 5
+    drift-pitch-deg: 5
+    ab-accel: 12
+    ab-on-rate: 2.0
+    ab-off-rate: 1.0
+    max-fuel: 20          # IGC maxFuel 20
+    ab-fuel-drain: 3.0
+    ab-fuel-recharge: 0.5
+    armor-hit-points: 154
+    shield-capacity: 60
+    shield-recharge: 8
+    shield-delay: 3
+    vision-cone-length: 1200
+    vision-cone-angle-deg: 20
+    vision-sphere-radius: 450
+    radar-signature: 1.0
+    price: 300
+    payload-capacity: 20 # 3x gat 3 + 2x decoy 2 = 5 -> 15 free
+    required-capabilities: [base]
+    required-techs: [supremacy-adv]   # unbuildable until the Supremacy (Adv) base grants it
+    hardpoints:
+      - { kind: weapon, index: 0, weapon-id: 0 }   # binds mesh HP_Weapon_0 (right nose PW Gat Gun 1)
+      - { kind: weapon, index: 1, weapon-id: 0 }   # binds mesh HP_Weapon_1 (left nose PW Gat Gun 1)
+      - { kind: weapon, index: 2, weapon-id: 0 }   # binds mesh HP_Weapon_2 (belly PW Gat Gun 1)
+      - { kind: cockpit, off-y: 0.55, off-z: 1.4, dir-z: 1 }
+    default-cargo:
+      - { item: counter-1, count: 2 }
 
-  # Bomber (class-id 2): the heavy hull — twin main engines; twin main cannons + a missile rack.
+  # Bomber (class-id 2, wc_icbmb): the heavy assault hull — 2x PW Gat Gun + 2x PW AutoCan + the
+  # SRM Anti-Base rack (the ONLY can-damage-base weapon, so the bomber is the match-ender). IGC
+  # 2×0x1 + 2×0x4000. Gated behind the `bomber` tech (dev-bomber, researchable at match start).
   - id: bomber
     name: Bomber
     glyph: "⬢"
     role: ASSAULT
-    description: "Slow and loud, but its payload cracks bases open. Bring an escort."
-    model-name: bomber
-    model-length: 7.2
+    description: "Slow and loud, but its guns and torpedo crack bases open. Bring an escort."
+    model-name: wc_icbmb
+    model-length: 9.6   # 5.5 × 25.9/14.9
     class-id: 2
-    mass: 50
-    speed: 60
-    thrust: 15
+    mass: 60
+    speed: 50
+    thrust: 25
     max-turn-rates: { yaw: 20, pitch: 20, roll: 20 }
-    strafe-thrust-multiplier: 0.5
-    reverse-thrust-multiplier: 0.5
+    strafe-thrust-multiplier: 0.5   # IGC sideMult
+    reverse-thrust-multiplier: 0.5  # IGC backMult
     drift-yaw-deg: 8
     drift-pitch-deg: 8
     ab-accel: 0
     ab-on-rate: 2.0
     ab-off-rate: 1.0
-    armor-hit-points: 240
+    armor-hit-points: 274
     shield-capacity: 100  # the heavy hull carries the largest shield
     shield-recharge: 6    # points/sec once the quiet delay elapses (~16.7 s to full)
     shield-delay: 4       # seconds after the last shield hit before recharge resumes
@@ -165,27 +246,75 @@ hulls:
     vision-sphere-radius: 400
     radar-signature: 1.75  # big and loud — seen from much further away than a scout
     price: 350
-    payload-capacity: 37 # twin cannons 2x11 + missile rack 4 = 26 -> 11 free for cargo; the payload hull carries the most
+    payload-capacity: 20 # 2x gat + 2x autocan (4) + anti-base rack (4) = 8; + 8 mine + 1 decoy = 17 -> 3 free
     required-capabilities: [base]
-    # GLB-authoritative geometry (HardpointGeometryMerge). Twin main cannons BIND mesh HP_Weapon_0
-    # (right barrel) and HP_Weapon_1 (left barrel), inheriting mesh position/direction as-is — a
-    # symmetric forward gun pair, no authored override. The missile rack keeps weapon-index 2 (AFTER
-    # the guns) so the guns' spread-seed indices (0/1) stay aligned, binding mesh HP_Weapon_2.
-    # Unclaimed mesh nodes append at the end (by kind, index): Booster_0/1, Thruster_0, Turret_0, Light_0..4.
-    # The rack on HP_Weapon_2 carries the anti-base torpedo (weapon-id 5) — the ONLY can-damage-base
-    # weapon in the game; the bomber is the only hull that mounts it, so it stays the match-ender.
+    required-techs: [bomber]
+    # wc_icbmb carries HP_Weapon_0 (top-left) + HP_Weapon_1/2 (symmetric nose tips). The nose pair take
+    # the two heavy PW AutoCans; the top-left mount + an authored symmetric top-right mount take the two
+    # PW Gat Guns; index 4 (authored belly rack, no mesh node) carries the SRM Anti-Base rack. Guns stay
+    # at the low indices, rack last. Booster_0/1, Thruster_0, Turret_0/1, Light_0..4 append.
     hardpoints:
-      - { kind: weapon, index: 0, weapon-id: 2 }   # binds mesh HP_Weapon_0 (right cannon barrel)
-      - { kind: weapon, index: 1, weapon-id: 2 }   # binds mesh HP_Weapon_1 (left cannon barrel) — 2nd main cannon
-      - { kind: weapon, index: 2, weapon-id: 5 }   # binds mesh HP_Weapon_2 (missile/torpedo rack)
-      # Cockpit eye point for the first-person camera (client-only). No HP_Cockpit mesh node, so it
-      # stays FULLY authored here.
+      - { kind: weapon, index: 0, weapon-id: 0 }   # binds mesh HP_Weapon_0 (PW Gat Gun 1)
+      - { kind: weapon, index: 1, weapon-id: 12 }  # binds mesh HP_Weapon_1 (right nose PW AutoCan 1)
+      - { kind: weapon, index: 2, weapon-id: 12 }  # binds mesh HP_Weapon_2 (left nose PW AutoCan 1)
+      - { kind: weapon, index: 3, weapon-id: 0, off-x: 2.25, off-y: 0.92, off-z: 1.36, dir-z: 1 } # PW Gat Gun 1 (top-right, mirror of HP_Weapon_0)
+      - { kind: weapon, index: 4, weapon-id: 5, off-y: -0.5, off-z: 1.5, dir-z: 1 } # SRM Anti-Base rack (belly)
       - { kind: cockpit, off-y: 0.7, off-z: 1.8, dir-z: 1 }
-    # Default hold: twin cannons 2x11 + torpedo rack 4 = 26, + 8x proximity-mine (8) + sensor-decoy (3) = 37 <= 37.
-    # 8 mines = one full cloud-count deploy; mine mass 1 keeps the whole field affordable.
     default-cargo:
-      - { item: proximity-mine, count: 8 }
-      - { item: sensor-decoy, count: 1 }
+      - { item: prox-mine-1, count: 8 }
+      - { item: counter-1, count: 1 }
+
+  # Devastator (class-id 7, cap09): the Iron capital hull — four heavy PW AutoCans. IGC 0xc400 +
+  # 4×0xc000; the 0xc400 (SkyRip) mount is unauthored (cap09.glb exposes exactly four HP_Weapon nodes,
+  # all bound to AutoCan 1). Gated behind BOTH heavy-class AND shipyard-dry (granted together by
+  # dev-upgrade-heavy-class at the Shipyard). Flight stats are the --iron-slice translation (mass 3000,
+  # speed 62.5, thrust 833, armor 1200, turn 10°/s, side/back-mult 0.5).
+  #   model-length: the IGC hull is enormous (length 225 ≈ a real capital ship) — untranslatable to our
+  #   smaller world. Capped to 20 (≈2× the bomber's 9.6, within the plan's ≤3×-bomber ceiling). Note:
+  #   ship COLLISION uses the global World.ShipRadius for every hull (model-length is purely the client
+  #   mesh scale), so the Devastator launches/re-docks through base doors exactly like any other ship —
+  #   only its visual mesh is larger. A DELIBERATE fidelity deviation (plan Phase 4).
+  - id: devastator
+    name: Devastator
+    glyph: "✦"
+    role: ASSAULT
+    description: "The Iron capital hull — four heavy auto-cannons and a frame that shrugs off a squadron. The fleet's hammer."
+    model-name: cap09   # res://assets/ships/cap09.glb (4x HP_Weapon nodes -> 4x AutoCan)
+    model-length: 20    # capped for playability (IGC length 225 untranslatable); collision is ShipRadius
+    class-id: 7
+    mass: 3000
+    speed: 62.5
+    thrust: 833.33
+    max-turn-rates: { yaw: 10, pitch: 10, roll: 10 }
+    strafe-thrust-multiplier: 0.5   # IGC sideMult
+    reverse-thrust-multiplier: 0.5  # IGC backMult
+    drift-yaw-deg: 10
+    drift-pitch-deg: 10
+    ab-accel: 0
+    ab-on-rate: 2.0
+    ab-off-rate: 1.0
+    armor-hit-points: 1200
+    shield-capacity: 200  # the capital hull carries the fleet's largest shield
+    shield-recharge: 5    # points/sec once the quiet delay elapses (~40 s to full)
+    shield-delay: 5       # seconds after the last shield hit before recharge resumes
+    vision-cone-length: 1000
+    vision-cone-angle-deg: 16
+    vision-sphere-radius: 500
+    radar-signature: 3.5   # IGC sig 3.5 — a capital hull is seen from a very long way off
+    price: 3500           # IGC 4000 x0.875 (bomber anchor: IGC 400 -> our 350)
+    payload-capacity: 12 # 4x autocan (4) + 8 mine = 12
+    required-capabilities: [base]
+    required-techs: [heavy-class, shipyard-dry]   # both granted by dev-upgrade-heavy-class
+    # cap09 carries HP_Weapon_0..3 (four hull mounts) — all four take the heavy PW AutoCan. Turret_0..3,
+    # Thruster_0, Light_0..8 append. Cockpit authored (no mesh node).
+    hardpoints:
+      - { kind: weapon, index: 0, weapon-id: 12 }   # HP_Weapon_0 (PW AutoCan 1)
+      - { kind: weapon, index: 1, weapon-id: 12 }   # HP_Weapon_1 (PW AutoCan 1)
+      - { kind: weapon, index: 2, weapon-id: 12 }   # HP_Weapon_2 (PW AutoCan 1)
+      - { kind: weapon, index: 3, weapon-id: 12 }   # HP_Weapon_3 (PW AutoCan 1)
+      - { kind: cockpit, off-y: 0.9, off-z: 3.2, dir-z: 1 }
+    default-cargo:
+      - { item: prox-mine-1, count: 8 }
 
   # Miner (class-id 4): the AI mining hull — slow, heavy, unarmed. Harvests helium-3 from asteroids
   # into its ore hold (ore-capacity) and offloads it at friendly bases for team credits. No weapon
@@ -224,6 +353,7 @@ hulls:
     vision-sphere-radius: 1000
     radar-signature: 1.5   # big and loud — spotted well before it can react
     price: 400
+    order-time-seconds: 30 # production delay from ordering a miner (Build tab) to it launching — the miner analogue of a constructor's Producing phase (faction-tunable, like price). 0 = instant.
     ore-capacity: 2000     # helium-3 units the miner fills at a rock and offloads at base
     required-capabilities: [base]
     # No weapon hardpoints (unarmed) — utl19's GLB carries HP_Weapon_0, but no YAML loadout binds it,
@@ -234,6 +364,47 @@ hulls:
     hardpoints:
       - { kind: main-engine, off-z: -3.0, dir-z: -1 }
       # Cockpit eye point for the first-person camera (client-only).
+      - { kind: cockpit, off-y: 0.6, off-z: 1.6, dir-z: 1 }
+
+  # Constructor (class-id 5): a slow, unarmed AI utility drone that builds forward bases. Bought from
+  # the docked Build tab bound to a station type, launches from a garrison, and — F3-ordered to a
+  # compatible asteroid — aligns, sinks in, and raises the base (Simulation.Constructors.cs). Marked a
+  # builder by the `is-builder` ability (ConstructorClassId resolves it). Like the miner it is unarmed
+  # and tough; utl11 is a boxy industrial hull.
+  - id: constructor
+    name: Constructor
+    glyph: "⊞"
+    role: CONSTRUCTION
+    description: "Slow, unarmed construction drone. Sinks into an asteroid and raises a forward base from it. Defenseless — escort it."
+    model-name: utl11   # res://assets/ships/utl11.glb
+    model-length: 7.0
+    class-id: 5
+    mass: 70
+    speed: 45
+    thrust: 10
+    max-turn-rates: { yaw: 40, pitch: 40, roll: 40 }
+    strafe-thrust-multiplier: 0.5
+    reverse-thrust-multiplier: 0.5
+    drift-yaw-deg: 8
+    drift-pitch-deg: 8
+    ab-accel: 0
+    ab-on-rate: 1.0
+    ab-off-rate: 1.0
+    armor-hit-points: 500
+    shield-capacity: 40
+    shield-recharge: 6
+    shield-delay: 3
+    vision-cone-length: 2000
+    vision-cone-angle-deg: 28
+    vision-sphere-radius: 1000
+    radar-signature: 1.5
+    price: 500
+    abilities: [is-builder]   # marks this hull a constructor chassis (ShipClassDef.IsConstructor)
+    required-capabilities: [base]
+    # Unarmed: utl11's HP_Weapon_* (if any) merges as an appended empty mount. main-engine + cockpit
+    # authored here (no HP_MainEngine/HP_Cockpit mesh nodes), like the miner.
+    hardpoints:
+      - { kind: main-engine, off-z: -3.2, dir-z: -1 }
       - { kind: cockpit, off-y: 0.6, off-z: 1.6, dir-z: 1 }
 
   # Escape pod (class-id 255): slow, unarmed lifeboat (no weapon hardpoint). The faction's lifepod.

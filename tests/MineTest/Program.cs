@@ -26,6 +26,8 @@
 //   5. Expiry: an untouched field vanishes at ExpireAtTick with no FX pings; the change flag fires.
 //   6. Determinism: identical scripts on two fresh sims produce bit-identical MinePos arrays, AliveMask
 //      timelines, and ship-health timelines. Plus: MinefieldLayout.Positions is a pure function.
+//   8. Tier resolution (Iron ordnance import): a team owning mine-2 spawns a bomber whose fired mine
+//      dispenser resolves to prox-mine-dispenser-2 (weapon-id 29) via SeedDispenserAmmo's tier walk.
 
 using System.Linq;
 using System.Text;
@@ -62,11 +64,16 @@ const uint EmptySector = 999;
 Simulation BootSim(ulong seed)
 {
     var content = ContentLoader.Load(stockPath, worldPath);
+    // The bomber (class 2) is tech-gated behind the `bomber` tech at match start (StrategyTest's
+    // subject); this suite lays mines from bombers, so seed the tech so StartMatch unlocks class 2.
+    content.Start.BaseTechs.Add("bomber");
+    content.Start.BaseTechs.Add("supremacy-1"); // unlock the Enh Fighter hull (gated since Phase 4)
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
     var sim = new Simulation(world, content);
     sim.PigsEnabled = false;
     sim.MinersEnabled = false; // isolate from the auto-seeded team miner (mirrors PigsEnabled)
     sim.ShieldsEnabled = false; // isolate raw mine damage from shield absorption (ShieldTest covers shields)
+    sim.AttributesEnabled = false; // Phase 6: neutral ×1.0 — this suite asserts pre-multiplier damage/base health
     sim.StartMatch();
     return sim;
 }
@@ -441,6 +448,34 @@ Simulation.ShipSim JoinShip(Simulation sim, int clientId, byte team)
     Check(pure, "MinefieldLayout.Positions is pure (same seed → identical array twice)", "MinefieldLayout.Positions returned different arrays for the same seed");
 }
 
+// ---- 8. Tier resolution: owning mine-2 upgrades a spawn's dispenser to prox-mine-dispenser-2 (29) --
+// The bomber's default cargo carries prox-mine-1 (cargo-id 2); SeedDispenserAmmo walks the tier
+// chain (MigrateWeaponTier) against the team's OwnedTechs at spawn, so a team that has researched
+// mine-2 fires the tier-2 dispenser (weapon-id 29) even though the cargo item itself never changes.
+{
+    var sim = BootSim(seed: 8);
+    sim.World.TeamStates[0].OwnedTechs.Add("mine-2"); // grant the tier-2 mine tech to team 0
+    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassBomber);
+    sim.Step();
+    var bomber = sim.Ships.First(s => s.OwnerClientId == 1);
+    Check(
+        bomber.MineWeaponId == 29,
+        "a team owning mine-2 spawns a bomber whose fired mine dispenser resolves to prox-mine-dispenser-2 (weapon-id 29)",
+        $"mine tier resolution wrong (MineWeaponId {bomber.MineWeaponId}, expected 29)"
+    );
+
+    // Control: without mine-2 owned, the same spawn resolves the tier-1 dispenser (weapon-id 7).
+    var simControl = BootSim(seed: 8);
+    simControl.EnqueueJoin(1, team: 0, cls: FlightModel.ClassBomber);
+    simControl.Step();
+    var bomberControl = simControl.Ships.First(s => s.OwnerClientId == 1);
+    Check(
+        bomberControl.MineWeaponId == 7,
+        "control: without mine-2 the bomber's dispenser stays tier-1 (weapon-id 7)",
+        $"control mine tier wrong (MineWeaponId {bomberControl.MineWeaponId}, expected 7)"
+    );
+}
+
 // ================================================================================================
 // 7. Hub-level: MsgMinefields frame header + anchor-change trigger (proto 35). Drives the REAL
 //    ClientHub over an in-memory transport (FakeHubTransport, copied from FogTest #18/#19): joins via
@@ -452,6 +487,10 @@ Simulation.ShipSim JoinShip(Simulation sim, int clientId, byte team)
 Simulation BootHubSim(ulong seed, bool fog)
 {
     var content = ContentLoader.Load(stockPath, worldPath);
+    // Seed the bomber tech so the matchmaker's StartMatch unlocks the tech-gated bomber (class 2)
+    // this harness spawns (gating is StrategyTest's subject, not this one).
+    content.Start.BaseTechs.Add("bomber");
+    content.Start.BaseTechs.Add("supremacy-1"); // unlock the Enh Fighter hull (gated since Phase 4)
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
     return new Simulation(world, content) { PigsEnabled = false, MinersEnabled = false, FogEnabled = fog, VisionSynchronous = true };
 }
@@ -530,7 +569,7 @@ uint ExpectedAnchor(Simulation sim, byte team)
 
     void Pump(int n) { for (int i = 0; i < n; i++) { sim.Step(); hub.AfterStep(); } }
     Pump(20); // matchmaker auto-starts the match
-    ft.Feed(new byte[] { Protocol.MsgSpawn, FlightModel.ClassBomber });
+    ft.Feed(new byte[] { Protocol.MsgSpawn, FlightModel.ClassBomber, 0, 0, 0, 0, 0, 0, 0, 0 }); // v36: [4][cls][u64 launchBaseId=0]
     System.Threading.Thread.Sleep(50);
     Pump(5); // let the spawn resolve into a controlled ship
 
@@ -626,7 +665,7 @@ uint ExpectedAnchor(Simulation sim, byte team)
 
     void Pump(int n) { for (int i = 0; i < n; i++) { sim.Step(); hub.AfterStep(); } }
     Pump(20); // auto-start
-    ft.Feed(new byte[] { Protocol.MsgSpawn, FlightModel.ClassScout });
+    ft.Feed(new byte[] { Protocol.MsgSpawn, FlightModel.ClassScout, 0, 0, 0, 0, 0, 0, 0, 0 }); // v36: [4][cls][u64 launchBaseId=0]
     System.Threading.Thread.Sleep(50);
     Pump(5);
     var viewer = sim.Ships.First(s => s.OwnerClientId == 1);

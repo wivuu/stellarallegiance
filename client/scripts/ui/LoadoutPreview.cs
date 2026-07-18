@@ -155,6 +155,10 @@ public partial class LoadoutPreview : SubViewportContainer
         {
             // The loader guarantees a marker per def hardpoint (def-seeded or GLB-authored);
             // fall back to the def offset if an authored GLB hid it somewhere unexpected.
+            // A NonMountable weapon mount isn't a loadout slot (an unauthored mesh HP_Weapon node):
+            // skip it entirely so no marker, dot, or pick area renders — it's HIDDEN in the hangar.
+            if (hp.Kind == HardpointKind.Weapon && hp.Mount == WeaponMountKind.NonMountable)
+                continue;
             Node3D? marker = _model.GetNodeOrNull<Node3D>($"HP_{hp.Kind}_{hp.Index}");
             Vector3 pos = marker?.Position ?? new Vector3(hp.OffX, hp.OffY, hp.OffZ);
             bool assignable = hp.Kind == HardpointKind.Weapon;

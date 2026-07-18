@@ -28,6 +28,7 @@ public static class CoreValidator
         {
             CheckTechs(result, techIds, buildable.RequiredTechs, $"{Describe(buildable)} required-techs");
             CheckTechs(result, techIds, buildable.GrantedTechs, $"{Describe(buildable)} granted-techs");
+            CheckTechs(result, techIds, buildable.ObsoletedByTechs, $"{Describe(buildable)} obsoleted-by-techs");
         }
 
         // Hulls.
@@ -37,8 +38,8 @@ public static class CoreValidator
             foreach (var partId in hull.PreferredParts)
                 CheckRef(result, partIds, partId, $"hull '{hull.Id}' preferred-parts");
             foreach (var (slot, allowed) in hull.AllowedParts)
-                foreach (var partId in allowed)
-                    CheckRef(result, partIds, partId, $"hull '{hull.Id}' allowed-parts[{slot}]");
+            foreach (var partId in allowed)
+                CheckRef(result, partIds, partId, $"hull '{hull.Id}' allowed-parts[{slot}]");
         }
 
         // Runtime hulls: the authored default loadout (hardpoint weapons) must fit the payload budget.
@@ -55,14 +56,41 @@ public static class CoreValidator
         var expendableById = new Dictionary<string, Expendable>(StringComparer.Ordinal);
         foreach (var e in core.AllExpendables())
             expendableById[e.Id] = e;
+        // Weapon-id category sets for the hardpoint mount-type check: guns vs missile racks (a
+        // launcher whose expendable is a missile). An authored `mount:` must not contradict the
+        // weapon it binds — the mount type is what the hangar/server enforce on loadout swaps.
+        var gunWeaponIds = new HashSet<uint>(core.Weapons.Where(w => w.WeaponId is not null).Select(w => w.WeaponId!.Value));
+        var missileExpendableIds = new HashSet<string>(core.Missiles.Select(m => m.Id), StringComparer.Ordinal);
+        var rackWeaponIds = new HashSet<uint>(
+            core.Launchers.Where(l =>
+                    l.WeaponId is not null
+                    && !string.IsNullOrEmpty(l.ExpendableId)
+                    && missileExpendableIds.Contains(l.ExpendableId)
+                )
+                .Select(l => l.WeaponId!.Value)
+        );
         foreach (var hull in core.Hulls)
         {
             if (hull.ClassId is null)
                 continue;
             double defaultPayload = 0;
             foreach (var hp in hull.Hardpoints)
-                if (hp.Kind == RuntimeHardpointKind.Weapon && runtimeWeaponMass.TryGetValue(hp.WeaponId, out var mass))
+            {
+                if (hp.Kind != RuntimeHardpointKind.Weapon)
+                    continue;
+                if (hp.WeaponId is not uint hpWid)
+                    continue; // authored-empty mount: no default weapon, no payload
+                if (runtimeWeaponMass.TryGetValue(hpWid, out var mass))
                     defaultPayload += mass;
+                if (hp.Mount == RuntimeMountKind.Gun && rackWeaponIds.Contains(hpWid))
+                    result.Error(
+                        $"hull '{hull.Id}' hardpoint index {hp.Index} is mount: gun but binds missile rack weapon-id {hpWid}."
+                    );
+                if (hp.Mount == RuntimeMountKind.Missile && gunWeaponIds.Contains(hpWid))
+                    result.Error(
+                        $"hull '{hull.Id}' hardpoint index {hp.Index} is mount: missile but binds gun weapon-id {hpWid}."
+                    );
+            }
             // Default cargo hold: each entry must resolve to a known expendable that carries a
             // cargo-id (a hangar-stockable consumable), and its mass counts against the budget.
             foreach (var load in hull.DefaultCargo)
@@ -73,13 +101,21 @@ public static class CoreValidator
                     continue;
                 }
                 if (item.CargoId is null)
-                    result.Error($"hull '{hull.Id}' default-cargo item '{load.Item}' has no cargo-id (not a stockable consumable).");
+                    result.Error(
+                        $"hull '{hull.Id}' default-cargo item '{load.Item}' has no cargo-id (not a stockable consumable)."
+                    );
                 if (load.Count < 0)
                     result.Error($"hull '{hull.Id}' default-cargo item '{load.Item}' has negative count {load.Count}.");
+                if (item is FuelPod && load.Count > 0 && hull.MaxFuel <= 0)
+                    result.Error(
+                        $"hull '{hull.Id}' default-cargo carries fuel pods ('{load.Item}') but has no fuel model (max-fuel <= 0)."
+                    );
                 defaultPayload += Math.Max(0, load.Count) * item.Mass;
             }
             if (defaultPayload > hull.PayloadCapacity)
-                result.Error($"hull '{hull.Id}' authored default loadout payload {defaultPayload} exceeds payload-capacity {hull.PayloadCapacity}.");
+                result.Error(
+                    $"hull '{hull.Id}' authored default loadout payload {defaultPayload} exceeds payload-capacity {hull.PayloadCapacity}."
+                );
         }
 
         // Runtime launchers: a launcher carrying a weapon id projects to a runtime WeaponDef whose
@@ -108,7 +144,10 @@ public static class CoreValidator
                 result.Error($"{ctx} has non-positive amount {launcher.Amount} — an empty magazine.");
             if (launcher.FireIntervalTicks == 0)
                 result.Error($"{ctx} has fire-interval-ticks 0 — no launch cadence.");
-            if (!string.IsNullOrEmpty(launcher.ExpendableId) && missilesById.TryGetValue(launcher.ExpendableId, out var missile))
+            if (
+                !string.IsNullOrEmpty(launcher.ExpendableId)
+                && missilesById.TryGetValue(launcher.ExpendableId, out var missile)
+            )
             {
                 if (missile.InitialSpeed <= 0)
                     result.Error($"{ctx} missile '{missile.Id}' needs initial-speed > 0.");
@@ -125,7 +164,9 @@ public static class CoreValidator
                 if (missile.TurnRate < 0)
                     result.Error($"{ctx} missile '{missile.Id}' has negative turn-rate.");
                 if (missile.Width <= 0)
-                    result.Error($"{ctx} missile '{missile.Id}' needs width > 0 (proximity fuse + blast falloff inner radius).");
+                    result.Error(
+                        $"{ctx} missile '{missile.Id}' needs width > 0 (proximity fuse + blast falloff inner radius)."
+                    );
                 if (missile.BlastPower <= 0)
                     result.Error($"{ctx} missile '{missile.Id}' needs blast-power > 0.");
                 if (missile.BlastRadius <= 0)
@@ -133,9 +174,13 @@ public static class CoreValidator
                 if (missile.DirectHitMultiplier <= 0)
                     result.Error($"{ctx} missile '{missile.Id}' needs direct-hit-multiplier > 0.");
                 if (!string.IsNullOrEmpty(missile.TrailColor) && !IsHexColor(missile.TrailColor))
-                    result.Error($"{ctx} missile '{missile.Id}' trail-color '{missile.TrailColor}' must be a 6- or 8-digit hex string.");
+                    result.Error(
+                        $"{ctx} missile '{missile.Id}' trail-color '{missile.TrailColor}' must be a 6- or 8-digit hex string."
+                    );
             }
-            else if (!string.IsNullOrEmpty(launcher.ExpendableId) && minesById.TryGetValue(launcher.ExpendableId, out var mine))
+            else if (
+                !string.IsNullOrEmpty(launcher.ExpendableId) && minesById.TryGetValue(launcher.ExpendableId, out var mine)
+            )
             {
                 if (mine.Lifespan <= 0)
                     result.Error($"{ctx} mine '{mine.Id}' needs lifespan > 0.");
@@ -148,9 +193,13 @@ public static class CoreValidator
                 if (mine.ArmDelay < 0)
                     result.Error($"{ctx} mine '{mine.Id}' has negative arm-delay.");
                 if (mine.ArmDelay >= mine.Lifespan)
-                    result.Error($"{ctx} mine '{mine.Id}' arm-delay {mine.ArmDelay} >= lifespan {mine.Lifespan} — never arms.");
+                    result.Error(
+                        $"{ctx} mine '{mine.Id}' arm-delay {mine.ArmDelay} >= lifespan {mine.Lifespan} — never arms."
+                    );
             }
-            else if (!string.IsNullOrEmpty(launcher.ExpendableId) && chaffsById.TryGetValue(launcher.ExpendableId, out var chaff))
+            else if (
+                !string.IsNullOrEmpty(launcher.ExpendableId) && chaffsById.TryGetValue(launcher.ExpendableId, out var chaff)
+            )
             {
                 if (chaff.Lifespan <= 0)
                     result.Error($"{ctx} chaff '{chaff.Id}' needs lifespan > 0.");
@@ -159,7 +208,9 @@ public static class CoreValidator
                 if (chaff.DecoyRadius <= 0)
                     result.Error($"{ctx} chaff '{chaff.Id}' needs decoy-radius > 0.");
             }
-            else if (!string.IsNullOrEmpty(launcher.ExpendableId) && probesById.TryGetValue(launcher.ExpendableId, out var probe))
+            else if (
+                !string.IsNullOrEmpty(launcher.ExpendableId) && probesById.TryGetValue(launcher.ExpendableId, out var probe)
+            )
             {
                 if (probe.SightRadius <= 0)
                     result.Error($"{ctx} probe '{probe.Id}' needs sight-radius > 0.");
@@ -170,11 +221,15 @@ public static class CoreValidator
                 if (probe.HitPoints > 0 && probe.HitRadius <= 0)
                     result.Error($"{ctx} probe '{probe.Id}' with hit-points needs hit-radius > 0.");
                 if (probe.HitPoints < 0 || probe.HitRadius < 0 || probe.ModelSize < 0 || probe.Signature < 0)
-                    result.Error($"{ctx} probe '{probe.Id}' hit-points/hit-radius/model-size/signature must not be negative.");
+                    result.Error(
+                        $"{ctx} probe '{probe.Id}' hit-points/hit-radius/model-size/signature must not be negative."
+                    );
             }
             else
             {
-                result.Error($"{ctx} expendable-id '{launcher.ExpendableId}' must resolve to a missile, mine, chaff, or probe.");
+                result.Error(
+                    $"{ctx} expendable-id '{launcher.ExpendableId}' must resolve to a missile, mine, chaff, or probe."
+                );
             }
         }
 
@@ -189,13 +244,27 @@ public static class CoreValidator
             if (hull.MaxFuel > 0 && hull.AbAccel <= 0)
                 result.Error($"hull '{hull.Id}' has max-fuel but no afterburner (ab-accel <= 0) — dead data.");
             if (hull.MaxFuel > 0 && hull.AbFuelDrain <= 0)
-                result.Error($"hull '{hull.Id}' has max-fuel but no ab-fuel-drain — never drains, an unlimited boost with a gauge.");
+                result.Error(
+                    $"hull '{hull.Id}' has max-fuel but no ab-fuel-drain — never drains, an unlimited boost with a gauge."
+                );
             if (hull.MaxFuel > 0 && hull.AbFuelRecharge >= hull.AbFuelDrain)
                 result.Error($"hull '{hull.Id}' ab-fuel-recharge >= ab-fuel-drain — fuel never net-depletes.");
             if (hull.AbFuelDrain < 0)
                 result.Error($"hull '{hull.Id}' has negative ab-fuel-drain.");
             if (hull.AbFuelRecharge < 0)
                 result.Error($"hull '{hull.Id}' has negative ab-fuel-recharge.");
+        }
+
+        // Fuel pods: pure cargo (no launcher, nothing fired) — a pod without a cargo-id or a
+        // refill amount is dead data, so both are required, unlike the launcher-fed expendables.
+        foreach (var fuel in core.Fuels)
+        {
+            if (fuel.FuelPerCharge <= 0)
+                result.Error($"fuel pod '{fuel.Id}' needs fuel-per-charge > 0.");
+            if (fuel.CargoId is null)
+                result.Error($"fuel pod '{fuel.Id}' needs a cargo-id (it is nothing but a cargo item).");
+            if (fuel.Mass < 0)
+                result.Error($"fuel pod '{fuel.Id}' has negative mass.");
         }
 
         // Runtime cargo items: wire ids must be unique.
@@ -208,7 +277,13 @@ public static class CoreValidator
         foreach (var part in core.AllParts())
             CheckRef(result, partIds, part.SuccessorPartId, $"{Describe(part)} successor-part-id");
         foreach (var weapon in core.Weapons)
+        {
             CheckRef(result, projectileIds, weapon.ProjectileId, $"weapon '{weapon.Id}' projectile-id");
+            // A healing weapon heals friendly ships; it must never also be a base-siege weapon (the
+            // heal power would then damage enemy bases through the base-hit path). Mutually exclusive.
+            if (weapon.IsHealing && weapon.CanDamageBase)
+                result.Error($"weapon '{weapon.Id}' is both is-healing and can-damage-base (mutually exclusive).");
+        }
         foreach (var launcher in core.Launchers)
             CheckRef(result, expendableIds, launcher.ExpendableId, $"launcher '{launcher.Id}' expendable-id");
 
@@ -222,6 +297,40 @@ public static class CoreValidator
             CheckTechs(result, techIds, station.LocalTechs, $"station '{station.Id}' local-techs");
             CheckRef(result, stationIds, station.SuccessorStationId, $"station '{station.Id}' successor-station-id");
             CheckRef(result, droneIds, station.ConstructionDroneId, $"station '{station.Id}' construction-drone-id");
+            if (station.ResearchSlots < 0)
+                result.Error($"station '{station.Id}' research-slots must be >= 0 (got {station.ResearchSlots}).");
+        }
+
+        // Developments: a station-upgrade with `upgrade-scope: single` must actually TRIGGER an
+        // upgrade — i.e. it must grant a tech that some station's SUCCESSOR tier requires. Without
+        // that link the scoped completion has no valid target (the ResearchOpStart from-type guard
+        // would reject every base), so refuse boot with a named key. Build the successor→required-tech
+        // map once from the station roster (successor-station-id points at the upgraded tier).
+        var stationById = core.Stations.ToDictionary(s => s.Id, StringComparer.Ordinal);
+        foreach (var dev in core.Developments)
+        {
+            if (dev.UpgradeScope != UpgradeScope.Single)
+                continue;
+            bool triggersAnUpgrade = false;
+            foreach (var station in core.Stations)
+            {
+                if (
+                    string.IsNullOrEmpty(station.SuccessorStationId)
+                    || !stationById.TryGetValue(station.SuccessorStationId, out var successor)
+                )
+                    continue;
+                if (successor.RequiredTechs.Any(t => dev.GrantedTechs.Contains(t)))
+                {
+                    triggersAnUpgrade = true;
+                    break;
+                }
+            }
+            if (!triggersAnUpgrade)
+                result.Error(
+                    $"development '{dev.Id}' has upgrade-scope: single but grants no tech required by any "
+                        + "station's successor tier — it would upgrade nothing. Grant a tech the successor "
+                        + "station's required-techs names, or drop upgrade-scope."
+                );
         }
 
         // Drones.
@@ -242,7 +351,9 @@ public static class CoreValidator
             {
                 var station = core.Stations.First(s => s.Id == faction.InitialStationId);
                 if (!station.Abilities.Contains(StationAbility.Restart))
-                    result.Error($"faction '{faction.Id}' initial station '{station.Id}' must have the '{StationAbility.Restart}' ability.");
+                    result.Error(
+                        $"faction '{faction.Id}' initial station '{station.Id}' must have the '{StationAbility.Restart}' ability."
+                    );
             }
         }
 
@@ -293,8 +404,7 @@ public static class CoreValidator
     }
 
     /// <summary>A 6-digit (RRGGBB) or 8-digit (RRGGBBAA) hex color string, no leading '#'.</summary>
-    private static bool IsHexColor(string s) =>
-        (s.Length == 6 || s.Length == 8) && s.All(Uri.IsHexDigit);
+    private static bool IsHexColor(string s) => (s.Length == 6 || s.Length == 8) && s.All(Uri.IsHexDigit);
 
     private static string Describe(Buildable buildable)
     {

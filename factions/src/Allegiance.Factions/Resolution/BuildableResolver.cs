@@ -11,13 +11,17 @@ public static class BuildableResolver
 {
     /// <summary>
     /// Every catalog buildable whose required techs and capabilities are all owned, excluding
-    /// tech-only developments that are already obsolete (their granted effects are all owned).
+    /// tech-only developments that are already obsolete (their granted effects are all owned) and any
+    /// item retired by an owned <see cref="Buildable.ObsoletedByTechs"/> successor tech.
     /// </summary>
     public static IReadOnlyList<Buildable> GetBuildables(Core core, TechState owned) =>
         core.AllBuildables()
             .Where(b => b.RequiredTechs.IsSubsetOf(owned.Techs)
                         && b.RequiredCapabilities.IsSubsetOf(owned.Capabilities))
             .Where(b => !IsObsolete(b, owned))
+            // Successor retirement: ANY owned obsoleted-by tech pulls this item from the catalog
+            // (e.g. researching a tier-2 gun's tech retires the tier-1 gun). Empty set never matches.
+            .Where(b => !owned.Techs.Overlaps(b.ObsoletedByTechs))
             .ToList();
 
     /// <summary>Convenience overload taking the owned techs and capabilities directly.</summary>

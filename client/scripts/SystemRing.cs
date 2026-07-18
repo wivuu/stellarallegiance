@@ -68,7 +68,11 @@ public partial class SystemRing : Control
         Camera3D cam = Cam;
         Vector2 c;
         Vector3 fwd = local.GlobalTransform.Basis.Z.Normalized();
-        float aimRange = _defs.BoltAimRange(local.IsPod ? DefRegistry.PodClassId : (byte)local.Class, DefaultAimRange);
+        float aimRange = _defs.BoltAimRange(
+            local.IsPod ? DefRegistry.PodClassId : (byte)local.Class,
+            DefaultAimRange,
+            local.IsPod ? null : local.LoadoutIds // effective gun's reach, not the class default
+        );
         Vector3 reticle = local.GlobalPosition + fwd * aimRange;
         if (cam.IsPositionBehind(reticle))
             c = GetViewportRect().Size * 0.5f;
@@ -100,10 +104,32 @@ public partial class SystemRing : Control
         // Mono labels just outside each gauge: tag in the token colour, value in TextHi. SHLD sits
         // above HULL on the right (design order), only when this hull carries a shield.
         if (hasShield)
-            DrawTagValue(c + new Vector2(Radius + 12f, -14f), "SHLD", $"{local.Shield:0}", DesignTokens.TeamAccent, rightAlign: false);
-        DrawTagValue(c + new Vector2(Radius + 12f, 4f), "HULL", $"{local.Health:0}", HealthColor(hullFrac), rightAlign: false);
+            DrawTagValue(
+                c + new Vector2(Radius + 12f, -14f),
+                "SHLD",
+                $"{local.Shield:0}",
+                DesignTokens.TeamAccent,
+                rightAlign: false
+            );
+        DrawTagValue(
+            c + new Vector2(Radius + 12f, 4f),
+            "HULL",
+            $"{local.Health:0}",
+            HealthColor(hullFrac),
+            rightAlign: false
+        );
         string leftTag = hasFuel ? "FUEL" : "BST";
         DrawTagValue(c + new Vector2(-(Radius + 12f), 4f), leftTag, $"{leftFrac * 100f:0}", leftColor, rightAlign: true);
+        // Fuel-pod reserve under the FUEL tag (predicted count — drops the instant one
+        // auto-loads). Hidden at zero so the legacy layout is untouched without pods.
+        if (hasFuel && local.FuelPods > 0)
+            DrawTagValue(
+                c + new Vector2(-(Radius + 12f), 22f),
+                "POD",
+                $"+{local.FuelPods}",
+                DesignTokens.Warn,
+                rightAlign: true
+            );
     }
 
     // One segmented arc gauge centred at `centerDeg`, sweeping `SpanDeg`. Each block is a

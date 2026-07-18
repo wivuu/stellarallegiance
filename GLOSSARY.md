@@ -16,7 +16,7 @@ Single `ulong` from which the whole static arena — base positions, asteroid fi
   - `server/Sim/World.cs` — `Seed`; `DetRng` streams for bases (`seed ^ 0xB453…`), asteroids/alephs (`DetRng(seed)`), dust (own RNG)
   - `tests/FogTest/Program.cs` — same-seed identical / different-seed differ layout assertions
 - **Related:** [[Minefield]], [[Per-Sector Environment (God Rays / Nebula / Dust Clouds)]]
-- **Notes:** Each rolled match seed is logged (`match world: … seed=…`) so any live layout is reproducible with `--seed`. Asteroids + alephs share `DetRng(seed)` (reroll together by design); dust runs on its own RNG so it never perturbs rock/aleph placement.
+- **Notes:** Each rolled match seed is logged (`match world: … seed=…`) so any live layout is reproducible with `--seed`. Asteroids + alephs share `DetRng(seed)` (reroll together by design); dust runs on its own RNG so it never perturbs rock/aleph placement. Rock placement enforces minimum spawn spacing (`seeding.rock-min-gap` rock↔rock, `seeding.base-clearance` rock↔base; surface-to-surface, 0 disables) by deterministic rejection sampling — a rock that can't fit after a fixed attempt count is dropped, and ore classes are assigned afterwards from the survivors so guaranteed He3/special counts are unaffected.
 
 ### Flight Model
 Core deterministic physics system shared between server and client for ship movement, thrust, and rotation.
@@ -112,6 +112,66 @@ A team-owned, unarmed AI ship (`ShipSim.IsMiner`, `ShipFlagMiner = 32`, hull cla
 - **Related:** [[Rock Class / Ore (Mining)]], [[PigBrain]], [[Autopilot / AutoSteer]], [[Dock Refund]]
 - **Notes:** Enemy PIGs auto-hunt miners via the normal chase path (intended). Any teammate can buy/order v1 (Stage-2 bootstrap authority; commander tightens later). Miners scout as they fly (hull vision values) — a miner's own vision reveals new rocks.
 
+### Constructor (AI base-builder drone) & per-type Bases
+Proto v37 base building. A **constructor** is a team-owned AI drone (`ShipKind.Constructor`,
+`ShipFlagConstructor=128`, hull `is-builder` → `ShipClassDef.IsConstructor`) modeled on the miner: a
+commander buys one from the docked **Build tab** bound to a station TYPE (`MsgBuildConstructor=14`,
+charges the station price), it launches from a **garrison** (win-condition base) only, and — F3-ordered
+to a compatible asteroid (reuses the miner order plumbing; stock outpost → **Regolith**) — it navigates,
+then runs the v38 build sequence: **Aligning** (nose-locked at the standoff shell for the station's
+`align-time-seconds`), **Approaching** (creeps at `approach-speed` until the hull TOUCHES the rock),
+**Sinking** (creeps at `sink-speed` until embedded `sink-depth-frac` below the surface — DISTANCE-gated,
+not timed; the **build sphere** emerges from the rock center here, its growth tracking the real embed
+depth), then **Building**: the sphere envelops the asteroid over the station's `build-time-seconds`
+before the base appears fully constructed and its capabilities are granted. **The finished base CONSUMES its asteroid**: `CompleteConstruction` calls
+`World.RemoveRock` (drops the rock from the asteroid list, spatial grid, ore + collision-body state, and
+the id cache), and the removal broadcasts as `MsgRockGone=27` (reliable, fog-agnostic) so every client
+deletes its rock node + client collision — nothing lingers under the new base. The swap is hidden under
+the build sphere (full envelop + opaque core); the client caches the rock's last radius (`_buildRockRadius`)
+so the sphere keeps growing after the node is gone. The **collision-flicker** fix is related: a
+constructor skips asteroid collision with **its own target rock** while Aligning/Sinking/Building
+(`ConstructorEmbeddedRock` → `ResolveAsteroidCollisions` ignore) so the embedded drone isn't shoved out
+each tick (Approaching included — the phase ends BY touching). **Bases are now per-type data like ship
+hulls**: `BaseDef.ModelName` picks the
+GLB (server collision `World.LoadBaseModel` + client `BaseModelLoader`/`CollisionWorld`, keyed by
+`BaseSite.BaseTypeId` on the wire), and `World.CreateBase` appends a base at runtime (the base list +
+parallel `BaseHealth`/`ResearchByBase` are APPEND-ONLY so indices never shift). A new base reveals via
+the owning team's fog reveal log (fog-off: a broadcast `BuildBaseReveal`). **Win condition reworked**: a
+per-type `WinCondition` flag (the `start` ability, garrison-only) — a team loses only when ALL its
+win-condition bases die, so a destroyed outpost never ends the match.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `server/Sim/Simulation.Constructors.cs` — the drone (FSM Idle→ToRock→Aligning→Approaching→Sinking→Building, buy/charge, brain+steering, completion, orders, build-stream view)
+  - `server/Sim/World.cs` — `BaseSite.BaseTypeId`, `_baseModels`/`BaseHullOf`/`BaseRadiusOf`/…, `CreateBase`, `ResetMatchBases`, `GarrisonCount`; `Simulation.cs` — `ApplyBaseDamage` win-condition, per-type collision sweep, `IsConstructorClass`
+  - `server/Net/Protocol.cs` — `MsgBuildConstructor=14`, `MsgConstructorBuilds=25`, `MsgRockGone=27`/`BuildRockGone` (rock despawn), `BuildBaseReveal`, `WriteBaseStatic` (+baseTypeId/per-type radius); `server/Content/core/stations.yaml` (outpost) + `hulls.yaml` (constructor)
+  - `client/scripts/BuildSphere.cs` — the enveloping VFX; `WorldRenderer.UpdateBuildSpheres`/`NetRemoveRock`, `CollisionWorld.RemoveAsteroid`; `ui/BuildTab.cs` — commander BUILD action (`GameNetClient.SendBuildConstructor`)
+  - `tests/ConstructorTest` — full loop, rock-class gate, win-condition, def flags
+- **Related:** [[Miner (AI ore drone)]], [[Autopilot / AutoSteer]], [[Commander orders / F3 select-and-command]], [[Tech Paths / Research]], [[Build Tab (Construction Placeholder)]]
+- **Notes:** Outpost collision = convex hull from Outpost.glb (no COL_ parts, no dock faces → no docking yet). The other 6 station types are authored placeholders — add `base-type-id`+`model-name`+`build-on-rock-class` to activate, no code. Cost = station price. **All beats are YAML (v38)**: per-station `align-time-seconds` + `build-time-seconds` (stations.yaml, streamed on the catalog), drone-wide creep speeds / standoff / embed depth / production dwell under world.yaml `constructor:` (server-only, mirrors `mining:`). Gotcha: `AutoSteer.ApproachPoint` is bang-bang (thrust 0/1) — the slow legs instead COMMAND a speed (throttle = speed/hull-max via `SteerToPoint`, the `Creep` helper), so tuning a hull's max-speed is NOT how you pace the approach.
+
+### Rock-Discovery Construction Gate (DiscoveredRockClasses)
+A constructor station is only buyable once the team's fog of war has **revealed at least one asteroid
+of its `build-on-rock-class`** — the Supremacy Center (Carbonaceous, a rare hash-rolled special
+seeded only in NON-home sectors) must literally be scouted before it unlocks; common Regolith unlocks
+on the garrison's first vision apply so outpost/shipyard never notice the gate. State is a per-team
+byte bitmask `World.TeamState.DiscoveredRockClasses` (`1 << (byte)RockClass`), **monotonic like
+`TeamVision.DiscoveredRocks`** and folded at exactly that set's sim-thread write sites
+(`Simulation.Vision.DiscoverRockClass`: boundary apply, warp-time discovery, `ResetVision` clear).
+**Fog OFF stamps `0xFF`** at match (re)start AND the server gate short-circuits on `!FogEnabled` —
+without fog there is no gate. Server-enforced in `TryBuyConstructor` (before the caps/tech
+`StationAvailableTo` check, one seam covering the Build tab + `/build` chat); streamed as a trailing
+`u8` on `MsgTeamState` so the client Build tab predicts the lock (card greyed, footer
+"NO {CLASS} ASTEROID DISCOVERED"). The tech bases are otherwise **independent of the Outpost** —
+the placeholder-era `expansion-allowed` chain was removed (IGC-faithful: rock + credits are the gate).
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `server/Sim/Simulation.Vision.cs` — `DiscoverRockClass` + the three write sites; `server/Sim/World.cs` — `TeamState.DiscoveredRockClasses`
+  - `server/Sim/Simulation.Constructors.cs` — the `TryBuyConstructor` gate; `server/Net/Protocol.cs` — `BuildTeamState` tail
+  - `client/scripts/WorldRenderer.cs` — `TeamRockClassDiscovered` (defers-to-server pre-team-state); `client/scripts/ui/BuildTab.cs` — `RockDiscovered` card/footer/buy-guard
+  - `tests/ConstructorTest` scenarios 6/7, `tests/FogTest` 14/14b
+- **Related:** [[Constructor (AI base-builder drone) & per-type Bases]], [[Fog of War (Team Vision)]], [[Rock Class / Ore (Mining)]]
+- **Notes:** A given map/seed may hold NO Carbonaceous rock (stock: 1 special per non-home sector, class = per-rock hash % 3) — then the Supremacy stays locked all match by design; map authors tune supply via `special-count`/`special-per-sector`. Mask is monotonic: building on the only discovered Carbonaceous rock does NOT re-lock the card (a second constructor just finds no valid target, same as any no-rock case). Test gotcha: an unmapped test world (no `MapLoader.ApplyTo`) has ONLY home sectors ⇒ zero specials ⇒ no Carbonaceous anywhere — use ConstructorTest's `NewMappedSim`.
+
 ---
 
 ## Weapons & Combat
@@ -136,7 +196,7 @@ Guidance system that locks onto and tracks targets; disrupted by chaff clouds.
 - **Notes:** ResolveSeekerTarget checks chaff clouds; seekers can be spoofed
 
 ### Chaff
-Expendable sensor-decoy puff a ship ejects (key `C`); a seeker rolls a stateless hash
+Expendable decoy puff (the Counter line) a ship ejects (key `C`); a seeker rolls a stateless hash
 (`ChaffStrength` vs the missile's `ChaffResistance`) to break its lock and home on the puff.
 - **Frequency:** Common
 - **Key Files:**
@@ -252,6 +312,22 @@ and drops a probe just ahead of the ship, granting its team an unoccluded vision
 - **Related:** [[Fog of War (Team Vision)]], [[Minefield]], [[Chaff]], [[Expendables]]
 - **Notes:** Proto v23: `WeaponKind.Probe` dispenser, ammo/cadence rides the same D6/D9 seam as chaff/mine
 
+### Fuel Pod
+Reserve afterburner fuel carried as pure cargo (no launcher, no key): when a fuel-modeled hull's
+tank hits 0 while boost is held, one charge auto-loads pre-Integrate and the tank refills by
+`fuel-per-charge` (clamped to `max-fuel` — the stock 999 value means "full refill").
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `factions/src/Allegiance.Factions/Model/Expendables/FuelPod.cs` — authoring model (`fuels:` in expendables.yaml)
+  - `server/Sim/Simulation.cs` — `ShipSim.FuelPodAmmo` + the Pass A auto-load before `FlightModel.Integrate`
+  - `client/scripts/PredictionController.cs` — `ConsumeFuelPod` prediction mirror (live Step + reconcile replay)
+  - `client/scripts/SystemRing.cs` — `POD +N` reserve readout under the FUEL arc
+- **Related:** [[Expendables]], [[Payload]], [[Afterburner]]
+- **Notes:** Proto v35: ship record appends u8 fuelPodAmmo; cargo defs append f32 FuelPerCharge.
+  FlightModel.Integrate is untouched (PIG determinism) — the refill lands between InputFor and
+  Integrate so the boost gate (which reads pre-tick fuel) never blinks. Hangar hides the row on
+  fuel-less hulls; server rejects fuel cargo there (whole-request authored fallback).
+
 ### Threat Lock (being-locked warning)
 Warning that an enemy missile-armed ship is locking you: `ShipSim.ThreatLockState` (0 none / 1 locking /
 2 locked) rides free bits in the snapshot flags byte (`ShipFlagLockingMe=4`, `ShipFlagLockedMe=8`).
@@ -340,6 +416,17 @@ Server message reporting ballistic projectile hits: target ship ID, impact posit
 - **Related:** [[Projectile]], [[Client-Side Hit Sparks]]
 - **Notes:** Separate batch drained per SimTick; allows client to render bolts and confirm hits
 
+### Per-Ship Weapon Loadout (mount overrides)
+The hangar's weapon-slot assignments (swap or leave-empty per Weapon hardpoint) carried on MsgSpawn, validated + stored per-ship in the sim, and echoed to every client via MsgShipLoadout=28 (full table, reconcile-by-omission: an omitted ship flies its authored class loadout).
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `client/scripts/ui/LoadoutState.cs` — hangar model; WeaponOverridesFor / ExpectedEffectiveIds
+  - `server/Sim/Simulation.cs` — ResolveLoadout (joint mount+cargo validation: mountable kind, team tech, PayloadCapacity), ShipSim.MountWeaponIds/MountLastFire, WeaponIdAt
+  - `shared/FireCadence.cs` — THE per-mount gun-cadence rule shared by server TryFire, PredictionController, and WorldRenderer.SpawnBoltFor
+  - `client/scripts/DefRegistry.cs` — WeaponSlots (positional, empties kept) vs filtered WeaponMounts; SlotsForShip overlay
+- **Related:** [[Projectile]], [[Dock Refund]], [[Held-Input Replay]]
+- **Notes:** Guns fire on PER-MOUNT cooldowns; the wire carries only LastFireTick — clients derive WHICH mounts fired by replaying FireCadence against a per-ship shadow, so hardpoint count is unlimited (no fired-mask field). Barrel index = position in the FULL Weapon-hardpoint list (empties included) and seeds the spread — barrel-indexed code must never use the filtered mount list. Whole-request reject → authored fallback (mounts AND cargo); empty cargo alongside overrides = deliberately empty hold, not "seed default". Mount TYPES gate what fits each slot (gun mounts take guns, missile mounts take racks, `any` mounts take either, and an UNAUTHORED empty mesh mount is `NonMountable` — hidden in the hangar, not a slot — via `HardpointDef.MountAccepts`, enforced hangar-side and in ResolveLoadout). Bots/pods always fly authored (MountWeaponIds null). tests/LoadoutTest covers the seams.
+
 ---
 
 ## Content Pipeline & Game Data
@@ -391,7 +478,7 @@ Playable ship chassis with base stats (armor, speed, turn-rate) and hardpoints f
 - **Notes:** Immutable after game start; each hull has unique GLB 3D model and collision shape
 
 ### Hardpoint
-Mount point on a hull/base: weapon muzzle, engine nozzle, nav light, turret, docking entrance/exit, cockpit eye. The GLB mesh's `HP_<Kind>_<Index>` empty nodes (local +Z = forward) are the AUTHORITATIVE inventory and geometry; YAML `hardpoints:` entries only bind weapon-ids and override pos/dir when `off-*`/`dir-*` are explicitly authored. Unbound mesh Weapon nodes stream as empty assignable mounts (`HardpointDef.NoWeapon`).
+Mount point on a hull/base: weapon muzzle, engine nozzle, nav light, turret, docking entrance/exit, cockpit eye. The GLB mesh's `HP_<Kind>_<Index>` empty nodes (local +Z = forward) are the AUTHORITATIVE inventory and geometry; YAML `hardpoints:` entries only bind weapon-ids and override pos/dir when `off-*`/`dir-*` are explicitly authored. An unbound mesh Weapon node that no YAML entry binds or types streams as `NonMountable` (`HardpointDef.NoWeapon`, hidden — not a loadout slot); author a `mount:` entry (no `weapon-id`) to expose it as an empty assignable mount. Every Weapon mount carries a MOUNT TYPE (`WeaponMountKind` any/gun/missile/non-mountable, streamed): authored via `mount:` in YAML or derived from the bound weapon (gun→gun, rack→missile, unauthored empty→non-mountable) — the hangar and `ResolveLoadout` both reject a weapon of the wrong category via `HardpointDef.MountAccepts`.
 - **Frequency:** Very common
 - **Key Files:**
   - `server/Content/HardpointGeometryMerge.cs` — the mesh→def merge pass (in ContentLoader.Load)
@@ -441,6 +528,46 @@ Unlock progression system: techs gate hull/weapon/payload availability; advancin
   - `shared/Defs.cs` — tech table registry
 - **Related:** [[YAML Content Pipeline]], [[Def]], [[Hull]], [[Weapon]]
 - **Notes:** Server-side gates available items; clients only render unlocked techs; tech data is a def
+
+---
+
+### Tech Paths / Research
+The team investment tree: a commander spends credits at a friendly base to research a YAML-authored
+**development** over wall-clock time; on completion the whole team gains its granted **techs** and
+**capabilities**, and the unlock set re-resolves mid-match (e.g. the bomber unlocks once
+`heavy-ordnance` is researched). Per-base research runs in configurable slots plus one on-deck queue
+slot; credits deduct at start and at queue-reservation; cancel refunds 100%. State encodes
+startTick+duration — the client derives live progress from ServerTick.
+- **Frequency:** Common
+- **Key Files:**
+  - `server/Sim/Simulation.Research.cs` — the sim engine (enqueue/step/complete, on-deck promotion)
+  - `server/Content/core/techs.yaml`, `developments.yaml` — the authored tech + development catalog
+  - `client/scripts/ui/ResearchTab.cs` — the RESEARCH docked-screen tab (clusters, rail-line nodes, banners)
+  - `client/scripts/ui/TechDetailPanel.cs` — shared right-hand detail column (schematic / cost-time-at / prereqs / unlocks / action footer), reused by RESEARCH and BUILD
+  - `shared/Net/Wire.cs`, `server/Net/Protocol.cs`, `client/scripts/GameNetClient.cs` — `MsgResearch` (13, c→s: start/queue/cancel) + `MsgResearchState` (24, s→c: per-team live progress)
+- **Related:** [[Tech Tree]], [[YAML Content Pipeline]], [[Def]], [[Build Tab (Construction Placeholder)]]
+- **Notes:** Client status is derived from streamed data only (owned techs/caps + per-base research),
+  never baked; non-commanders see a disabled affordance. Protocol v36 introduced the wire.
+
+---
+
+### Build Tab (Construction Placeholder)
+The BUILD docked-screen tab: a responsive card grid of the **station catalog** — future structures
+(outpost, shipyard, refinery, tech-lab, supremacy-center, expansion-complex, teleport-receiver)
+authored with `base-type-id` omitted, so they never project to a runtime base (`BaseTypeId == -1`).
+Cards use the same owned-tech/cap rules as research, but an UNRESEARCHED structure is hidden
+outright (no card until its prerequisites are owned); only situational locks — undiscovered build
+rock, full build queue — render as dim "⊘ LOCKED" cards. It reuses `TechDetailPanel`. Construction is **not wired** — the action footer is always
+disabled ("CONSTRUCTORS OFFLINE"); base-building lands in a later phase. No frames are sent from this tab.
+- **Frequency:** Occasional
+- **Key Files:**
+  - `client/scripts/ui/BuildTab.cs` — the tab + `StationCard` grid cell
+  - `client/scripts/ui/TechDetailPanel.cs` — shared detail column
+  - `server/Content/core/stations.yaml` — catalog-only station entries (below the runtime garrison)
+  - `shared/Defs.cs` — `StationCatalogDef` (streamed catalog tail of `MsgDefs`)
+- **Related:** [[Tech Paths / Research]], [[YAML Content Pipeline]], [[Def]]
+- **Notes:** `DefRegistry.AllStationCatalog()` filtered to `BaseTypeId == -1`; empty catalog shows an
+  awaiting-uplink guard (no baked data).
 
 ---
 

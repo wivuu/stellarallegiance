@@ -47,6 +47,10 @@ public static class TechResolver
         return new TechState(techs, capabilities);
     }
 
+    // NOTE: forward-closure reachability deliberately IGNORES Buildable.ObsoletedByTechs. A
+    // development that later gets obsoleted may already have granted its techs, so its grants must
+    // still flow into the closure — obsoleted-by only hides an item from GetBuildables (the current
+    // offer list), it never retracts a grant. Keep this grant-only; do not consult ObsoletedByTechs.
     private static bool TryGrant(Buildable buildable, TechSet techs, CapabilitySet capabilities)
     {
         if (!buildable.RequiredTechs.IsSubsetOf(techs) || !buildable.RequiredCapabilities.IsSubsetOf(capabilities))

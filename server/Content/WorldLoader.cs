@@ -126,6 +126,12 @@ public sealed class WorldDef
 
     /// <summary>Mining/ore economy tuning (server-side only — never streamed). Null -&gt; stock.</summary>
     public WorldMiningDef? Mining { get; set; }
+
+    /// <summary>Constructor/base-building tuning (server-side only — never streamed). Null -&gt; stock.</summary>
+    public WorldConstructorDef? Constructor { get; set; }
+
+    /// <summary>Build-pipeline tuning: the per-garrison order queue (parallel + queue limits). Null -&gt; stock.</summary>
+    public WorldBuildDef? Build { get; set; }
 }
 
 /// <summary>
@@ -376,6 +382,13 @@ public sealed class WorldSeedingDef
     /// <summary>Vertical (Y-axis) random jitter applied to garrison placement, world units.</summary>
     public double? BaseYJitter { get; set; }
 
+    // Minimum spawn spacing, enforced by rejection sampling at world-gen (unplaceable rocks drop).
+    /// <summary>Minimum surface-to-surface gap between any two rocks, world units (0 = allow overlap).</summary>
+    public double? RockMinGap { get; set; }
+
+    /// <summary>Minimum gap between a rock's surface and a base's collision sphere, world units (0 = off).</summary>
+    public double? BaseClearance { get; set; }
+
     // Rock-class seeding: which rocks become He3 / special at world-gen.
     /// <summary>Guaranteed He3 rocks per ordinary sector (clamped to the sector's actual rock count). A map's per-sector he3-count override wins.</summary>
     public int? He3PerSector { get; set; }
@@ -389,8 +402,30 @@ public sealed class WorldSeedingDef
     /// <summary>Chance (0..1) that a HOME (garrison) sector receives its special rocks at all; default 0 = home fields hold none. Deterministic per world seed; a map-authored per-sector special-count bypasses the roll.</summary>
     public double? HomeSpecialChance { get; set; }
 
+    /// <summary>Default relative weights for which special CLASS (carbonaceous/silicon/uranium) each special rock becomes; omitted → uniform. A map may override per sector. See <c>SpecialWeightsDef</c>.</summary>
+    public SpecialWeightsDef? SpecialWeights { get; set; }
+
     /// <summary>Radius multiplier for the rare special rocks (Carbonaceous/Silicon/Uranium); 1 = no change, 3 = oversized by 200%.</summary>
     public double? SpecialRockRadiusMult { get; set; }
+}
+
+/// <summary>
+/// Relative weights for which special CLASS a seeded special rock becomes. Authored as a small map of
+/// class name → non-negative share, e.g. <c>{ carbonaceous: 0.5, silicon: 0.25, uranium: 0.25 }</c>.
+/// An omitted class defaults to 0 (excluded); at least one share must be positive. Shared by the
+/// world seeding default (<c>seeding.special-weights</c>) and the per-sector map override
+/// (<c>sectors[].special-weights</c>). Projected + validated by <c>ParseSpecialWeights</c>.
+/// </summary>
+public sealed class SpecialWeightsDef
+{
+    /// <summary>Relative share for the Carbonaceous class (default 0 when the block is authored but this key omitted).</summary>
+    public double? Carbonaceous { get; set; }
+
+    /// <summary>Relative share for the Silicon class.</summary>
+    public double? Silicon { get; set; }
+
+    /// <summary>Relative share for the Uranium class.</summary>
+    public double? Uranium { get; set; }
 }
 
 /// <summary>
@@ -428,6 +463,52 @@ public sealed class WorldMiningDef
 
     /// <summary>Hull fraction below which a miner abandons mining and returns to base (0 disables).</summary>
     public double? RetreatHealthFrac { get; set; }
+}
+
+/// <summary>
+/// Constructor / base-building tuning, authored under <c>constructor:</c> — the drone-wide beats of
+/// the build sequence (production dwell, creep speeds, standoff, embed depth). The PER-STATION beats
+/// (<c>align-time-seconds</c>, <c>build-time-seconds</c>) are authored on each station in
+/// stations.yaml instead. Every field is optional; null falls back to the stock value (the shared
+/// <c>WorldConstructorTuning</c> initializers). Server-side only — never streamed. Durations are
+/// SECONDS, speeds world-units/second.
+/// </summary>
+public sealed class WorldConstructorDef
+{
+    /// <summary>Garrison production dwell after purchase, before the drone launches, seconds.</summary>
+    public double? ProductionSeconds { get; set; }
+
+    /// <summary>Creep speed from the standoff shell to surface contact, world units/second.</summary>
+    public double? ApproachSpeed { get; set; }
+
+    /// <summary>Creep speed from surface contact to the embed depth, world units/second.</summary>
+    public double? SinkSpeed { get; set; }
+
+    /// <summary>Extra reach past the rock surface where the travel leg "arrives" (the align shell), world units.</summary>
+    public double? Standoff { get; set; }
+
+    /// <summary>How deep the drone embeds: fraction of the rock radius it descends below the surface.</summary>
+    public double? SinkDepthFrac { get; set; }
+
+    /// <summary>Backstop: force the build to start after this long in the Sinking phase, seconds.</summary>
+    public double? SinkBackstopSeconds { get; set; }
+}
+
+/// <summary>
+/// Build-pipeline tuning, authored under <c>build:</c> — the per-garrison order queue shared by
+/// constructor AND miner purchases from the docked Build tab. Every field is optional; null falls
+/// back to the stock value (the shared <c>WorldBuildTuning</c> initializers, 4/4). Replaces the old
+/// <c>constructor.max-constructors-per-base</c> cap; the live-drone fleet cap
+/// (<c>mining.max-miners-per-team</c>) is a SEPARATE gate. <c>queue-limit</c> is streamed to the
+/// client (Build-tab gray-out); <c>parallel-limit</c> is server-only.
+/// </summary>
+public sealed class WorldBuildDef
+{
+    /// <summary>Ordered items a garrison builds at once (1 = strictly one at a time).</summary>
+    public int? ParallelLimit { get; set; }
+
+    /// <summary>Total ordered (building + queued) a garrison may hold before the Build tab locks.</summary>
+    public int? QueueLimit { get; set; }
 }
 
 // Loads content/core/world.yaml and projects it onto the shared runtime WorldConfig the sim runs on and
@@ -577,10 +658,14 @@ public static class WorldLoader
             t.BaseInnerFrac = F(se.BaseInnerFrac, t.BaseInnerFrac);
             t.BaseOuterFrac = F(se.BaseOuterFrac, t.BaseOuterFrac);
             t.BaseYJitter = F(se.BaseYJitter, t.BaseYJitter);
+            t.RockMinGap = F(se.RockMinGap, t.RockMinGap);
+            t.BaseClearance = F(se.BaseClearance, t.BaseClearance);
             t.He3PerSector = se.He3PerSector ?? t.He3PerSector;
             t.He3PerHomeSector = se.He3PerHomeSector ?? t.He3PerHomeSector;
             t.SpecialPerSector = se.SpecialPerSector ?? t.SpecialPerSector;
             t.HomeSpecialChance = F(se.HomeSpecialChance, t.HomeSpecialChance);
+            if (ParseSpecialWeights(se.SpecialWeights, "seeding.special-weights") is { } sw)
+                t.SpecialWeights = sw;
             t.SpecialRockRadiusMult = F(se.SpecialRockRadiusMult, t.SpecialRockRadiusMult);
         }
         if (w.Mining is { } mi)
@@ -596,9 +681,45 @@ public static class WorldLoader
             t.MinerStandoff = F(mi.MinerStandoff, t.MinerStandoff);
             t.RetreatHealthFrac = F(mi.RetreatHealthFrac, t.RetreatHealthFrac);
         }
+        if (w.Constructor is { } ct)
+        {
+            var t = cfg.Constructor;
+            t.ProductionSeconds = F(ct.ProductionSeconds, t.ProductionSeconds);
+            t.ApproachSpeed = F(ct.ApproachSpeed, t.ApproachSpeed);
+            t.SinkSpeed = F(ct.SinkSpeed, t.SinkSpeed);
+            t.Standoff = F(ct.Standoff, t.Standoff);
+            t.SinkDepthFrac = F(ct.SinkDepthFrac, t.SinkDepthFrac);
+            t.SinkBackstopSeconds = F(ct.SinkBackstopSeconds, t.SinkBackstopSeconds);
+        }
+        if (w.Build is { } bd)
+        {
+            var t = cfg.Build;
+            t.ParallelLimit = bd.ParallelLimit ?? t.ParallelLimit;
+            t.QueueLimit = bd.QueueLimit ?? t.QueueLimit;
+        }
         return cfg;
     }
 
     // Authored-override resolve: a knob the author wrote wins; null keeps the stock default.
     private static float F(double? authored, float stock) => authored is { } v ? (float)v : stock;
+
+    // Project + validate an authored special-class weight block into the runtime SpecialWeights.
+    // Null in → null out (caller keeps its default). Fail-fast (like the rest of content loading) on
+    // a negative share or an all-zero block: a distribution the seeder could never draw from is an
+    // authoring bug, not a silently-tolerated one. Shared by the world seeding default and the
+    // per-sector map override so both validate identically. `ctx` names the offending block.
+    public static SpecialWeights? ParseSpecialWeights(SpecialWeightsDef? d, string ctx)
+    {
+        if (d is null)
+            return null;
+        float c = (float)(d.Carbonaceous ?? 0);
+        float s = (float)(d.Silicon ?? 0);
+        float u = (float)(d.Uranium ?? 0);
+        if (c < 0 || s < 0 || u < 0)
+            throw new InvalidDataException($"{ctx}: special-weights must be non-negative (got carbonaceous={c}, silicon={s}, uranium={u}).");
+        var w = new SpecialWeights { Carbonaceous = c, Silicon = s, Uranium = u };
+        if (!w.AnyPositive)
+            throw new InvalidDataException($"{ctx}: special-weights has no positive share — at least one of carbonaceous/silicon/uranium must be > 0.");
+        return w;
+    }
 }

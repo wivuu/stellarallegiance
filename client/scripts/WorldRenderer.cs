@@ -13,11 +13,24 @@ public partial class WorldRenderer : Node3D
     // DefaultBaseTypeId); the BaseDef supplies radius/health/hardpoints.
     private const byte DefaultBaseTypeId = 0;
 
-    // BaseMaxHealth mirrors the module's win-condition hull (Lib.cs BaseMaxHealth) so the
-    // damage bar can show a 0..1 fraction; keep the two in sync. The bar itself is a
-    // screen-space overlay drawn by TargetMarkers (see VisibleBaseHealth) so it never clips
-    // behind the base geometry.
-    private const float BaseMaxHealth = 2000f;
+    // Fallback full hull used only until a base's own BaseDef has streamed in — the real max
+    // is resolved PER TYPE by BaseMaxHealthOf (garrison 2000, outpost 667, supremacy/shipyard
+    // 1333, …). Dividing every base by this single value made a full-health built outpost read
+    // at ~1/3 of its bar. The bar itself is a screen-space overlay drawn by TargetMarkers (see
+    // VisibleBaseHealth) so it never clips behind the base geometry.
+    private const float BaseMaxHealthFallback = 2000f;
+
+    // The authored full hull for a base, resolved from its OWN per-type BaseDef so the damage
+    // bar reads a correct 0..1 fraction regardless of station tier. Falls back to the garrison-
+    // tier constant until the def has streamed (and if a type is somehow unknown). Note: server
+    // max can additionally scale by a per-team armor attribute; the def value matches the common
+    // (attribute-off) case, and a >1 factor merely clamps to full — never under-reads.
+    private float BaseMaxHealthOf(ulong baseId)
+    {
+        byte typeId = _baseType.TryGetValue(baseId, out byte t) ? t : DefaultBaseTypeId;
+        float max = _defs.GetBaseDef(typeId)?.MaxHealth ?? 0f;
+        return max > 0f ? max : BaseMaxHealthFallback;
+    }
 
     // ShipGone reason codes (mirror server Simulation.GoneDestroyed/GoneClean). A clean removal is
     // a voluntary dock or a pod rescue — it despawns silently instead of playing the death blast.
@@ -42,7 +55,9 @@ public partial class WorldRenderer : Node3D
     // Parallel list of (base node, team, id) for the HUD off-screen indicators — VisibleBases()
     // walks it and filters by Node.Visible (sector visibility), so it allocates nothing. Id is
     // also read by LockableEnemyBases() to offer a base as a Tab-cycle lock target.
-    private readonly List<(Node3D Node, byte Team, ulong Id)> _baseList = new();
+    private readonly List<(Node3D Node, byte Team, ulong Id, uint Sector)> _baseList = new();
+    // Base id -> type id (garrison 0, outpost 1, …), for type-aware base naming. Parallel to _baseList.
+    private readonly Dictionary<ulong, byte> _baseType = new();
 
     // Per-base health fraction (0..1), keyed by BaseId. Drives the screen-space damage bar
     // TargetMarkers draws over each base; full-health (>= ~1) bases are skipped so the bar
@@ -70,6 +85,20 @@ public partial class WorldRenderer : Node3D
     private readonly Dictionary<ulong, MiningBeam> _miningBeams = new();
     private readonly List<ulong> _miningBeamPrune = new(); // scratch: beams to drop this frame
 
+    // Base construction (v37): one BuildSphere per rock a constructor is actively raising a base on,
+    // driven by the MsgConstructorBuilds stream (NetUpdateConstructorBuilds). Keyed by rock id; created
+    // when the build appears, grown by phase/progress, freed when the build drops out (base completes).
+    public struct ConstructorBuild { public ulong ShipId, RockId; public byte Phase; public float Progress; }
+    private List<ConstructorBuild> _constructorBuilds = new();
+    private readonly Dictionary<ulong, BuildSphere> _buildSpheres = new();
+    private readonly List<ulong> _buildSpherePrune = new(); // scratch
+    // Rock-spitting debris spray per active build, live only while the drone SINKS into the rock (phase 1).
+    private readonly Dictionary<ulong, ConstructorDebris> _constructorDebris = new();
+    private readonly List<ulong> _constructorDebrisPrune = new(); // scratch
+    // Last-known radius per active build's rock, so the sphere keeps growing after the rock despawns
+    // mid-build (a finished base consumes its asteroid — the rock node is gone but the sphere lives on).
+    private readonly Dictionary<ulong, float> _buildRockRadius = new();
+
     // Streamed (MsgMinerTargets): shipId -> the rock that miner is actively harvesting, so the beam
     // aims at the real target instead of guessing the nearest He3. Replaced wholesale each frame it
     // arrives; a miner that stops mining drops out of the broadcast (and its beam clears on the flag).
@@ -96,6 +125,7 @@ public partial class WorldRenderer : Node3D
 
     // Cyan shield-bubble tint (#37E0FF), matching the HUD SHLD arc; alpha sets the flash's base opacity.
     private static readonly Color ShieldFlashTint = new(0.216f, 0.878f, 1f, 0.3f);
+    private static readonly Color HealSparkTint = new(0.35f, 1f, 0.5f, 1f); // ER Nanite heal-impact spark (green)
     private readonly Dictionary<ulong, Node3D> _alephNodes = new();
 
     // Scratch reused by VisibleAlephs() so the per-frame marker pass allocates nothing.
@@ -120,6 +150,52 @@ public partial class WorldRenderer : Node3D
     public IReadOnlyCollection<Sector> MapSectors => _sectors.Values;
     public IReadOnlyList<(uint Sector, uint Dest)> MapAlephLinks => _alephLinks;
     public IReadOnlyList<(uint Sector, byte Team)> MapBaseTeams => _baseTeams;
+
+    // Every base currently streamed to this client, as (id, sector, team, alive). Feeds the docked
+    // screen's CommandSidebar "YOUR BASES" list (the sidebar filters to the local team). Alive = the
+    // base still has hull (see _baseHealthFrac, updated from MsgBases); a base whose health frame
+    // hasn't landed yet reads alive so a freshly-inserted garrison isn't shown DESTROYED. This exposes
+    // only what MsgBases already streams — no secret sector-local base positions.
+    public IReadOnlyList<(ulong Id, uint Sector, byte Team, bool Alive, byte TypeId)> KnownBases()
+    {
+        var list = new List<(ulong, uint, byte, bool, byte)>(_baseList.Count);
+        foreach (var (_, team, id, sector) in _baseList)
+        {
+            bool alive = !_baseHealthFrac.TryGetValue(id, out float frac) || frac > 0f;
+            byte typeId = _baseType.TryGetValue(id, out byte t) ? t : (byte)0;
+            list.Add((id, sector, team, alive, typeId));
+        }
+        return list;
+    }
+
+    // The friendly base the local ship most recently docked at — the nearest team base, in the dock
+    // sector, to where the ship vanished (docking flies you INTO a base's door, so nearest is
+    // unambiguous). 0 until the first dock this session. The hangar's CommandSidebar defaults its
+    // launch-base pick to this, so a pilot relaunches from where they last docked unless they pick
+    // another base; the next dock updates it. Purely a UI default — the sim still validates the id.
+    public ulong LastDockedBaseId { get; private set; }
+
+    // Record the base a just-docked local ship touched: the closest same-team base in `sector` to the
+    // ship's final position. Leaves LastDockedBaseId unchanged if no candidate exists (e.g. a pod
+    // rescued away from any base — callers already exclude pods).
+    private void RememberDockedBase(Vector3 dockPos, uint sector, byte team)
+    {
+        ulong best = 0;
+        float bestSq = float.MaxValue;
+        foreach (var (node, bteam, id, bsector) in _baseList)
+        {
+            if (bteam != team || bsector != sector)
+                continue;
+            float sq = (node.GlobalPosition - dockPos).LengthSquared();
+            if (sq < bestSq)
+            {
+                bestSq = sq;
+                best = id;
+            }
+        }
+        if (best != 0)
+            LastDockedBaseId = best;
+    }
 
     // ---- Fog of war (WP3 stores; WP4 renders) --------------------------
     // A last-known enemy contact (from MsgContacts). HUD/radar glyph only — never a 3D node. Pos is
@@ -455,7 +531,14 @@ public partial class WorldRenderer : Node3D
     private const int MaxShadowOccluders = 64; // safety backstop: keep at most the NEAREST this many in range
     private readonly List<(Node3D Node, float D)> _occluderScratch = new(); // D = distance² to camera (bases sort first)
     private readonly List<(Node3D Node, Vector3[] LocalVerts)> _sectorEnvOccluders = new();
-    private readonly Dictionary<Node3D, Vector3[]> _hullVertCache = new(); // per-node LOCAL hull verts, built once
+    private readonly Dictionary<Node3D, Vector3[]> _hullVertCache = new(); // per-node LOCAL hull verts (base hierarchies), built once
+
+    // Lone-mesh occluders (rocks): the collected local verts collapse to RAW MESH vertices (the
+    // root's own transform cancels out), identical for every instance sharing a variant Mesh — so
+    // the cache keys on the Mesh, not the node. Keyed per node, spawning into a 60-rock sector
+    // re-read the same handful of giant asteroid meshes ~10x each (~1s of SurfaceGetArrays +
+    // Extremes on the spawn frame). STATIC so AssetPreloader can warm it per variant at startup.
+    private static readonly Dictionary<Mesh, Vector3[]> _meshHullVertCache = new();
     private Vector3 _lastOccluderCamPos = new(float.MaxValue, float.MaxValue, float.MaxValue);
 
     // The shadow-casting occluders for `sector` given a camera/reference position: every base in the sector
@@ -465,7 +548,7 @@ public partial class WorldRenderer : Node3D
     private IReadOnlyList<(Node3D Node, Vector3[] LocalVerts)> GatherShadowOccluders(uint sector, Vector3 refPos)
     {
         _occluderScratch.Clear();
-        foreach (var (node, _, _) in _baseList)
+        foreach (var (node, _, _, _) in _baseList)
             if (InSector(node, sector))
                 _occluderScratch.Add((node, 0f)); // bases always cast: sort ahead of every rock
         foreach (var n in _asteroidNodes.Values)
@@ -519,11 +602,29 @@ public partial class WorldRenderer : Node3D
     // rock's meshes every time it re-selects the set. Cleared on world teardown (Reset).
     private Vector3[] HullVertsFor(Node3D node)
     {
+        if (node is MeshInstance3D { Mesh: Mesh mesh } && !HasMeshDescendant(node))
+        {
+            if (_meshHullVertCache.TryGetValue(mesh, out var meshCached))
+                return meshCached;
+            var meshVerts = CollectHullVerts(node);
+            _meshHullVertCache[mesh] = meshVerts;
+            return meshVerts;
+        }
         if (_hullVertCache.TryGetValue(node, out var cached))
             return cached;
         var verts = CollectHullVerts(node);
         _hullVertCache[node] = verts;
         return verts;
+    }
+
+    // A node with any MeshInstance3D below it collects hierarchy-dependent verts and must stay
+    // node-keyed; a lone-mesh node (every rock) is safe to share by Mesh.
+    private static bool HasMeshDescendant(Node node)
+    {
+        foreach (Node child in node.GetChildren())
+            if (child is MeshInstance3D || HasMeshDescendant(child))
+                return true;
+        return false;
     }
 
     private static bool InSector(Node3D n, uint sector) =>
@@ -551,21 +652,41 @@ public partial class WorldRenderer : Node3D
     private static void CollectMeshVerts(Node node, Transform3D rootInv, List<Vector3> outVerts)
     {
         if (node is MeshInstance3D mi && mi.Mesh is Mesh mesh)
-        {
             // Vertex into the occluder-root's local frame: undo the root, apply the sub-mesh's own world
             // placement. For a lone-mesh rock (mi is the root) this collapses to the raw mesh vertices.
-            Transform3D xform = rootInv * mi.GlobalTransform;
-            for (int s = 0; s < mesh.GetSurfaceCount(); s++)
-            {
-                var arrays = mesh.SurfaceGetArrays(s);
-                if (arrays.Count <= (int)Mesh.ArrayType.Vertex)
-                    continue;
-                foreach (var v in arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array())
-                    outVerts.Add(xform * v);
-            }
-        }
+            CollectSurfaceVerts(mesh, rootInv * mi.GlobalTransform, outVerts);
         foreach (var child in node.GetChildren())
             CollectMeshVerts(child, rootInv, outVerts);
+    }
+
+    private static void CollectSurfaceVerts(Mesh mesh, Transform3D xform, List<Vector3> outVerts)
+    {
+        for (int s = 0; s < mesh.GetSurfaceCount(); s++)
+        {
+            var arrays = mesh.SurfaceGetArrays(s);
+            if (arrays.Count <= (int)Mesh.ArrayType.Vertex)
+                continue;
+            foreach (var v in arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array())
+                outVerts.Add(xform * v);
+        }
+    }
+
+    // Startup warm (AssetPreloader, time-sliced during the splash/browser screen): pull the variant
+    // GLB into the static mesh cache (GD.Load is near-free once the threaded load landed) and bake
+    // its shadow-occluder extremes, so the first sector reveal does neither on a gameplay frame.
+    internal static void WarmAsteroidVariant(string variant)
+    {
+        var (mesh, _, _) = AsteroidMesh(variant);
+        if (mesh is null)
+            return;
+        MeshRaycaster.WarmMesh(mesh); // beam/impact traces BVH, else baked at first in-flight hit
+        if (_meshHullVertCache.ContainsKey(mesh))
+            return;
+        _hullVertScratch.Clear();
+        CollectSurfaceVerts(mesh, Transform3D.Identity, _hullVertScratch);
+        _meshHullVertCache[mesh] = _hullVertScratch.Count >= 4
+            ? ShadowVolume.Extremes(_hullVertScratch, 48)
+            : System.Array.Empty<Vector3>();
     }
 
     private byte? _localTeam;
@@ -600,6 +721,7 @@ public partial class WorldRenderer : Node3D
     private StandardMaterial3D _pigTeam0Mat = null!;
     private StandardMaterial3D _pigTeam1Mat = null!;
     private StandardMaterial3D _projectileMat = null!;
+    private StandardMaterial3D _healBoltMat = null!; // green tracer for ER Nanite healing guns (IsHealing)
 
     private ShipController? _ship; // sibling; lazily resolved for the live latency readout
     private Starscape? _starscape; // sibling; repaints the backdrop as the local sector changes
@@ -685,15 +807,133 @@ public partial class WorldRenderer : Node3D
 
     // Per-team economy, fed by GameNetClient.ApplyTeamState (mirrors NetUpdateBaseHealth's role for
     // base health). Read accessors return 0 for an unknown team so callers never need a null check.
-    public void NetUpdateTeamState(byte team, int credits, int score, byte[] unlocked)
+    public void NetUpdateTeamState(byte team, int credits, int score, byte[] unlocked, ushort[]? ownedTechs = null, byte[]? ownedCaps = null, byte discoveredRockClasses = 0xFF, int minerCount = 0, int minerCap = 0, int buildQueueLimit = 0)
     {
         _teamEconomy[team] = (credits, score);
+        _teamRockClasses[team] = discoveredRockClasses;
+        _teamMiners[team] = (minerCount, minerCap);
+        BuildQueueLimit = buildQueueLimit; // world-global scalar (same for every team)
         if (!_teamUnlocks.TryGetValue(team, out var set))
             _teamUnlocks[team] = set = new HashSet<byte>();
         set.Clear();
         foreach (byte cls in unlocked)
             set.Add(cls);
+        // Owned techs (wire indices into DefRegistry.AllTechs) + capabilities (v36 research state).
+        if (!_teamOwnedTechs.TryGetValue(team, out var techSet))
+            _teamOwnedTechs[team] = techSet = new HashSet<ushort>();
+        techSet.Clear();
+        if (ownedTechs is not null)
+            foreach (ushort t in ownedTechs)
+                techSet.Add(t);
+        if (!_teamOwnedCaps.TryGetValue(team, out var capSet))
+            _teamOwnedCaps[team] = capSet = new HashSet<byte>();
+        capSet.Clear();
+        if (ownedCaps is not null)
+            foreach (byte c in ownedCaps)
+                capSet.Add(c);
     }
+
+    // ---- Stage-4 research state (v36) ------------------------------------------------------
+
+    private readonly Dictionary<byte, HashSet<ushort>> _teamOwnedTechs = new();
+    private readonly Dictionary<byte, HashSet<byte>> _teamOwnedCaps = new();
+
+    // Discovered-rock-class bitmask per team (MsgTeamState tail, v42). Gates constructor-base cards
+    // in the Build tab exactly like the server's TryBuyConstructor rock gate.
+    private readonly Dictionary<byte, byte> _teamRockClasses = new();
+
+    // Live miner count + per-team cap (MsgTeamState miner tail). Drives the Build tab's "X / N"
+    // MINER DRONE card readout + its cap gate. (0, 0) until the first team state arrives.
+    private readonly Dictionary<byte, (int Count, int Cap)> _teamMiners = new();
+
+    // Miners the team currently fields / the per-team cap (server-authoritative, from MsgTeamState).
+    public int TeamMinerCount(byte team) => _teamMiners.TryGetValue(team, out var m) ? m.Count : 0;
+    public int TeamMinerCap(byte team) => _teamMiners.TryGetValue(team, out var m) ? m.Cap : 0;
+
+    // Per-garrison build-queue depth (MsgTeamState build-pipeline tail). World-global scalar: the Build
+    // tab grays out when a garrison's pipeline (BuildPipelineCountForBase) reaches this. 0 until the
+    // first team state arrives (treated as "no gate").
+    public int BuildQueueLimit { get; private set; }
+
+    // True once the team's fog has revealed at least one asteroid of `rockClass`. Defers to the
+    // server while no team state has arrived yet (only block on positive knowledge — the server
+    // gate is authoritative either way).
+    public bool TeamRockClassDiscovered(byte team, byte rockClass) =>
+        !_teamRockClasses.TryGetValue(team, out var mask) || (mask & (1 << rockClass)) != 0;
+
+    public bool TeamOwnsTech(byte team, ushort techIdx) =>
+        _teamOwnedTechs.TryGetValue(team, out var s) && s.Contains(techIdx);
+
+    public bool TeamOwnsCap(byte team, byte cap) =>
+        _teamOwnedCaps.TryGetValue(team, out var s) && s.Contains(cap);
+
+    public IReadOnlyCollection<ushort> TeamOwnedTechs(byte team) =>
+        _teamOwnedTechs.TryGetValue(team, out var s) ? s : System.Array.Empty<ushort>();
+
+    // Per-base research orders at OUR team's bases (MsgResearchState reconciles by omission — an
+    // absent base is idle). Progress derives from StartTick/DurationTicks vs the live ServerTick.
+    public readonly record struct BaseResearch(
+        (ushort DevIndex, uint StartTick, uint DurationTicks)[] Active,
+        ushort? OnDeck
+    );
+
+    private Dictionary<ulong, BaseResearch> _baseResearch = new();
+
+    public void NetUpdateResearch(Dictionary<ulong, BaseResearch> map) => _baseResearch = map;
+
+    public BaseResearch? ResearchAt(ulong baseId) =>
+        _baseResearch.TryGetValue(baseId, out var r) ? r : null;
+
+    public IReadOnlyDictionary<ulong, BaseResearch> AllResearch() => _baseResearch;
+
+    // 0..1 progress of a research order at the live server tick (clamped; 1 = due to complete).
+    public float ResearchProgress(uint startTick, uint durationTicks) =>
+        durationTicks == 0 ? 1f : System.Math.Clamp((ServerTick - (float)startTick) / durationTicks, 0f, 1f);
+
+    // Per-team constructor roster (MsgConstructorState, v38): queued + producing + launched drones for
+    // the Build tab. State ordinals mirror the server: 0 producing, 1 idle, 2 to-rock, 3 move, 4 align,
+    // 5 sink, 6 build, 8 queued. StartTick/DurationTicks describe the current timed phase (0/0 for
+    // untimed states, incl. queued) so the progress bar derives client-side; TargetId = rock (build
+    // orders) or sector (move orders); LaunchBaseId groups a garrison's build pipeline for the
+    // queue-full gray-out.
+    public struct ConstructorStatus
+    {
+        public ulong Id;
+        public byte StationTypeId;
+        public byte State;
+        public uint StartTick;
+        public uint DurationTicks;
+        public ulong TargetId;
+        public bool ProducesMiner; // true = a miner order in the shared production queue (roster shows "MINER DRONE")
+        public ulong LaunchBaseId; // the garrison whose build pipeline this order sits in (0 = default)
+    }
+
+    // Constructor State byte values that occupy a garrison's build PIPELINE (still queued or building).
+    public const byte ConstructorStateProducing = 0;
+    public const byte ConstructorStateQueued = 8;
+
+    // Items in a garrison's build pipeline (queued + producing), mirroring the server's
+    // BuildPipelineCountForBase — the divisor for the Build-tab queue-full gray-out.
+    public int BuildPipelineCountForBase(ulong launchBaseId)
+    {
+        int n = 0;
+        foreach (var c in _constructorStates)
+            if (c.LaunchBaseId == launchBaseId
+                && (c.State == ConstructorStateProducing || c.State == ConstructorStateQueued))
+                n++;
+        return n;
+    }
+
+    private System.Collections.Generic.List<ConstructorStatus> _constructorStates = new();
+
+    public void NetUpdateConstructorState(System.Collections.Generic.List<ConstructorStatus> list) =>
+        _constructorStates = list;
+
+    public IReadOnlyList<ConstructorStatus> ConstructorStates() => _constructorStates;
+
+    // 0..1 progress of a constructor's current timed phase (same derivation as research).
+    public float ConstructorProgress(uint startTick, uint durationTicks) =>
+        durationTicks == 0 ? 0f : System.Math.Clamp((ServerTick - (float)startTick) / durationTicks, 0f, 1f);
 
     public int TeamCredits(byte team) => _teamEconomy.TryGetValue(team, out var e) ? e.Credits : 0;
 
@@ -788,7 +1028,7 @@ public partial class WorldRenderer : Node3D
     public IReadOnlyList<(Vector3 Pos, byte Team, bool Dead)> VisibleBases()
     {
         _baseScratch.Clear();
-        foreach (var (node, team, id) in _baseList)
+        foreach (var (node, team, id, _) in _baseList)
             if (node.Visible)
                 _baseScratch.Add((node.GlobalPosition, team, BaseIsDead(id)));
         return _baseScratch;
@@ -808,7 +1048,7 @@ public partial class WorldRenderer : Node3D
         if (!FogActive)
             return false; // stale memory is a fog-only mechanic — fog off renders as pre-fog (F9)
         bool any = false;
-        foreach (var (node, t, id) in _baseList)
+        foreach (var (node, t, id, _) in _baseList)
         {
             if (t != team || !node.HasMeta("sector") || (int)node.GetMeta("sector") != (int)sector)
                 continue;
@@ -830,7 +1070,7 @@ public partial class WorldRenderer : Node3D
     {
         _lockableBaseScratch.Clear();
         if (_localTeam is byte lt)
-            foreach (var (node, team, id) in _baseList)
+            foreach (var (node, team, id, _) in _baseList)
                 if (node.Visible && team != lt && (!_baseHealthFrac.TryGetValue(id, out float frac) || frac > 0f))
                     _lockableBaseScratch.Add((id, node.GlobalPosition));
         return _lockableBaseScratch;
@@ -847,7 +1087,7 @@ public partial class WorldRenderer : Node3D
     public IReadOnlyList<(ulong Id, Vector3 Pos, byte Team)> AllVisibleBases()
     {
         _pickBaseScratch.Clear();
-        foreach (var (node, team, id) in _baseList)
+        foreach (var (node, team, id, _) in _baseList)
             if (node.Visible)
                 _pickBaseScratch.Add((id, node.GlobalPosition, team));
         return _pickBaseScratch;
@@ -968,6 +1208,17 @@ public partial class WorldRenderer : Node3D
             Emission = new Color(1f, 0.85f, 0.35f),
             EmissionEnergyMultiplier = 2.5f,
         };
+        // ER Nanite healing tracer: a distinct green (chrome is cyan, teams are blue/red — a saturated
+        // heal-green reads as "friendly restorative" without colliding with either). Same recipe as
+        // the golden gun tracer, just retuned; bolt colour is hardcoded in the renderer like _projectileMat.
+        _healBoltMat = new StandardMaterial3D
+        {
+            AlbedoColor = new Color(0.35f, 1f, 0.5f),
+            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+            EmissionEnabled = true,
+            Emission = new Color(0.3f, 1f, 0.45f),
+            EmissionEnergyMultiplier = 2.5f,
+        };
 
         _defs = GetNode<DefRegistry>("../DefRegistry");
         _starscape = GetNodeOrNull<Starscape>("../Starscape");
@@ -1007,7 +1258,7 @@ public partial class WorldRenderer : Node3D
     // this records the 0..1 fraction TargetMarkers reads for the screen-space damage bar.
     public void NetUpdateBaseHealth(ulong baseId, float health)
     {
-        float frac = Mathf.Clamp(health / BaseMaxHealth, 0f, 1f);
+        float frac = Mathf.Clamp(health / BaseMaxHealthOf(baseId), 0f, 1f);
         // Detect the alive→destroyed transition so the 3D silhouette is dimmed exactly once. A base's
         // last-known health only ever falls (a re-scout of a killed base shows it destroyed), so this
         // never needs to un-dim.
@@ -1058,7 +1309,7 @@ public partial class WorldRenderer : Node3D
     // destroyed-but-remembered base so a re-scout fade settles at the ghostly dim rather than solid.
     private float RestTransparencyFor(Node3D node)
     {
-        foreach (var (bn, _, id) in _baseList)
+        foreach (var (bn, _, id, _) in _baseList)
             if (bn == node)
                 return FogActive && _baseHealthFrac.TryGetValue(id, out float f) && f <= 0.001f
                     ? StaleBaseTransparency
@@ -1170,7 +1421,48 @@ public partial class WorldRenderer : Node3D
     public void NetDeleteShip(Ship row, byte reason)
     {
         _shipShield.Remove(row.ShipId);
+        _shipMounts.Remove(row.ShipId); // immediate prune; the next MsgShipLoadout omits it anyway
+        _mountShadow.Remove(row.ShipId);
         DeleteShip(row, reason);
+    }
+
+    // ---- Per-ship weapon loadouts (MsgShipLoadout mirror) -----------------
+
+    // Effective per-barrel weapon ids for every ship flying a NON-authored loadout (absent =
+    // authored class loadout). Fed whole by GameNetClient.ApplyShipLoadout each frame.
+    private readonly Dictionary<ulong, uint[]> _shipMounts = new();
+    // Per-remote-ship derived MountLastFire shadow (FireCadence): which tick each gun barrel
+    // last fired, reconstructed from observed LastFireTick changes so SpawnBoltFor knows WHICH
+    // mounts fired a given volley. Reset when that ship's loadout changes; pruned with the ship.
+    private readonly Dictionary<ulong, uint[]> _mountShadow = new();
+    private static readonly List<ulong> _loadoutScratch = new(); // stale-key sweep, reused
+
+    // Reconcile the loadout mirror to the streamed table (replace-whole, reconcile-by-omission).
+    // Only ships whose ids ACTUALLY changed reset their cadence shadow / re-seed the local
+    // predictor — the frame also arrives as a coarse keepalive every ~0.5s, and resetting shadows
+    // on every keepalive would re-derive "all mounts eligible" mid-burst.
+    public void NetShipLoadouts(List<(ulong shipId, uint[] ids)> table)
+    {
+        _loadoutScratch.Clear();
+        foreach (var id in _shipMounts.Keys)
+            _loadoutScratch.Add(id);
+        foreach (var (shipId, ids) in table)
+        {
+            _loadoutScratch.Remove(shipId);
+            if (_shipMounts.TryGetValue(shipId, out var old) && old.AsSpan().SequenceEqual(ids))
+                continue; // unchanged keepalive row
+            _shipMounts[shipId] = ids;
+            _mountShadow.Remove(shipId);
+            if (LocalShip is { } pc && pc.ShipId == shipId)
+                pc.SetLoadout(ids); // the authoritative echo of what the server accepted
+        }
+        foreach (var shipId in _loadoutScratch) // omitted = back on the authored loadout
+        {
+            _shipMounts.Remove(shipId);
+            _mountShadow.Remove(shipId);
+            if (LocalShip is { } pc && pc.ShipId == shipId)
+                pc.SetLoadout(null);
+        }
     }
 
     // ---- Guided missiles (render stubs — filled in by the missile render/HUD agent) ----
@@ -1320,6 +1612,7 @@ public partial class WorldRenderer : Node3D
         _fades.Clear(); // keyed by the base/asteroid nodes freed just above
         _baseNodes.Clear();
         _baseList.Clear();
+        _baseType.Clear();
         _baseHealthFrac.Clear();
         _asteroidNodes.Clear();
         _asteroidSpins.Clear();
@@ -1335,6 +1628,11 @@ public partial class WorldRenderer : Node3D
         _probes.Clear(); // nodes freed by the _projectiles QueueFree sweep above
         _chaffFx.Clear(); // chaff/minefield container nodes aren't in the group sweep above
         _minefieldViews.Clear();
+        _buildSpheres.Clear(); // BuildSphere nodes freed by the _effects sweep above
+        _constructorDebris.Clear(); // ConstructorDebris nodes freed by the _effects sweep above
+        _buildRockRadius.Clear();
+        _constructorBuilds.Clear();
+        _constructorStates.Clear();
         _collidingShips.Clear();
         _collidingPairs.Clear();
         _alephNodes.Clear();
@@ -1408,6 +1706,40 @@ public partial class WorldRenderer : Node3D
             n.SetMeta("shadowRadius", radius);
     }
 
+    // MsgRockGone: a rock was fully consumed by a finished constructor base — delete it outright. Frees
+    // the mesh node (a brief fade, hidden under the build sphere's opaque core), drops every id-keyed
+    // cache, and neutralizes its collision + occlusion so nothing lingers where the base now sits. Its
+    // last-known radius is stashed first so any active build sphere keeps growing after the node is gone
+    // (UpdateBuildSpheres falls back to it). A no-op for an unknown id.
+    public void NetRemoveRock(ulong id)
+    {
+        // If a build sphere is mid-flight on this rock, stash its last radius so the sphere keeps growing
+        // after the node is gone (the prune loop clears the entry when the build ends). Only when a sphere
+        // exists — otherwise there is nothing to feed and the entry would leak.
+        if (_buildSpheres.ContainsKey(id) && _asteroidRows.TryGetValue(id, out var row))
+            _buildRockRadius[id] = row.CurrentRadius > 0f ? row.CurrentRadius : row.Radius;
+
+        if (_asteroidNodes.TryGetValue(id, out var node))
+        {
+            _asteroidNodes.Remove(id);
+            QuietFade(node); // slips out under the opaque build sphere instead of popping
+        }
+        _asteroidRows.Remove(id);
+        _rockScaleBasis.Remove(id);
+        _rockShrinkTarget.Remove(id);
+        _asteroidSpins.Remove(id);
+        // The clip list is index-addressed (_asteroidClipIndex), so don't compact it — zero this rock's
+        // clip radius so it stops occluding bolts/sun where it used to be, and forget the mapping.
+        if (_asteroidClipIndex.TryGetValue(id, out int ci) && ci < _asteroidClip.Count)
+        {
+            var c = _asteroidClip[ci];
+            c.Radius = 0f;
+            _asteroidClip[ci] = c;
+        }
+        _asteroidClipIndex.Remove(id);
+        _collisionWorld.RemoveAsteroid(id);
+    }
+
     public void NetAddAleph(Aleph row) => InsertAleph(row);
 
     // ---- Sector visibility ---------------------------------------------
@@ -1417,7 +1749,10 @@ public partial class WorldRenderer : Node3D
     private void SetNodeSector(Node3D n, uint sector)
     {
         n.SetMeta("sector", (int)sector);
-        n.Visible = sector == ViewSector;
+        // A constructor mesh hidden inside its build sphere (HideForBuild) must stay hidden even as its
+        // per-snapshot update re-runs this — otherwise the frame-rate build-hide and this snapshot-rate
+        // show fight and the drone blinks at the snapshot rate.
+        n.Visible = sector == ViewSector && n is not RemoteShip { HideForBuild: true };
     }
 
     // Re-evaluate every world node's visibility against the current view sector — called on a warp
@@ -1439,7 +1774,8 @@ public partial class WorldRenderer : Node3D
         foreach (var group in new[] { _ships, _projectiles, _alephs, _effects })
         foreach (var child in group.GetChildren())
             if (child is Node3D n && n.HasMeta("sector"))
-                n.Visible = (int)n.GetMeta("sector") == (int)ViewSector;
+                // Keep a build-embedded constructor hidden (see SetNodeSector) across this sector re-eval.
+                n.Visible = (int)n.GetMeta("sector") == (int)ViewSector && n is not RemoteShip { HideForBuild: true };
     }
 
     // Phase A of a warp (cover): hide every sector-tagged node NOT in the destination sector, HARD, so
@@ -1544,13 +1880,19 @@ public partial class WorldRenderer : Node3D
             Vector3 c = ship.GlobalPosition;
             if (bodies.Count > 0)
             {
-                bool now = Collide.Touches(
-                    new Vec3(c.X, c.Y, c.Z),
-                    CollisionConfig.ShipRadius,
-                    bodies,
-                    ShipTeamOf(ship),
-                    CollisionConfig.DockFaceDepth
-                );
+                // A constructor on an active build job (align → build) deliberately contacts and embeds
+                // in its target rock; the server skips that collision entirely (ConstructorEmbeddedRock),
+                // so the touch is not an impact — no thud. Gated on the build stream (a row exists from
+                // Aligning on), so a constructor merely flying past rocks (ToRock/MoveTo) still thuds.
+                bool buildContact = ship is RemoteShip { IsConstructor: true } && HasBuildRow(shipId);
+                bool now = !buildContact
+                    && Collide.Touches(
+                        new Vec3(c.X, c.Y, c.Z),
+                        CollisionConfig.ShipRadius,
+                        bodies,
+                        ShipTeamOf(ship),
+                        CollisionConfig.DockFaceDepth
+                    );
                 if (now && _collidingShips.Add(shipId))
                     PlayCollisionSfx(c);
                 else if (!now)
@@ -1598,6 +1940,28 @@ public partial class WorldRenderer : Node3D
 
     // Visible local-sector ships collected each CheckCollisions sweep (reused buffer).
     private readonly List<(ulong Id, Node3D Node)> _pairScratch = new();
+
+    // Whether this ship has a row in the live build stream (MsgConstructorBuilds) — i.e. it is a
+    // constructor in its Aligning/Approaching/Sinking/Building window at its target rock. The list is
+    // at most a few drones, so a linear scan per visible ship is trivial.
+    private bool HasBuildRow(ulong shipId)
+    {
+        foreach (var b in _constructorBuilds)
+            if (b.ShipId == shipId)
+                return true;
+        return false;
+    }
+
+    // Whether a constructor has claimed this rock for a base (it has a row in the live build stream,
+    // any phase from Aligning through Building). Such a rock is about to become a base, so it drops
+    // out of Tab/lock targeting (TargetMarkers) — you can't nav-lock a rock that's being consumed.
+    public bool IsRockUnderConstruction(ulong rockId)
+    {
+        foreach (var b in _constructorBuilds)
+            if (b.RockId == rockId)
+                return true;
+        return false;
+    }
 
     // Class + pod flag of a ship node, for the per-class collision-hull lookup.
     private static (byte Cls, bool IsPod) ShipClassOf(Node3D ship) =>
@@ -1686,13 +2050,28 @@ public partial class WorldRenderer : Node3D
     private void InsertBase(Base row)
     {
         if (_baseNodes.ContainsKey(row.BaseId))
+        {
+            // Known base. A mid-match station upgrade (v39) swaps its BaseTypeId (same id) and re-streams
+            // the static. Refresh the type record so name/labels that read _baseType (KnownBases -> the
+            // CommandSidebar) reflect the new tier. The Iron slice's upgrade tiers reuse the same mesh
+            // (garrison/ss21a/acs05), so the visual node needs no rebuild — updating the type is enough
+            // and avoids a flicker. A future divergent-mesh upgrade would warn (live re-mesh unsupported).
+            if (_baseType.TryGetValue(row.BaseId, out byte prev) && prev != row.BaseTypeId)
+            {
+                _baseType[row.BaseId] = row.BaseTypeId;
+                string? oldModel = _defs.GetBaseDef(prev)?.ModelName;
+                string? newModel = _defs.GetBaseDef(row.BaseTypeId)?.ModelName;
+                if (!string.Equals(oldModel ?? "", newModel ?? "", StringComparison.Ordinal))
+                    Log.Warn($"[WorldRenderer] Base {row.BaseId} upgraded to a DIFFERENT mesh ({oldModel} -> {newModel}); live re-mesh is not supported — mesh stays stale until reload.");
+            }
             return;
+        }
 
         // Procedural sphere + hardpoint markers + blinking nav beacons, all sized/placed
-        // from the subscribed BaseDef (M5). Every base is BaseTypeId 0 this phase.
+        // from the subscribed BaseDef. v37: the base type is streamed per-base (garrison 0, outpost 1).
         var node = BaseModelLoader.Build(
             _defs,
-            DefaultBaseTypeId,
+            row.BaseTypeId,
             row.Team,
             row.Team == 0 ? _team0Mat : _team1Mat,
             out Node3D? glbHull
@@ -1701,14 +2080,15 @@ public partial class WorldRenderer : Node3D
         node.Position = new Vector3(row.PosX, row.PosY, row.PosZ);
         _bases.AddChild(node);
         _baseNodes[row.BaseId] = node;
-        _baseList.Add((node, row.Team, row.BaseId));
+        _baseList.Add((node, row.Team, row.BaseId, row.SectorId));
+        _baseType[row.BaseId] = row.BaseTypeId;
         NetUpdateBaseHealth(row.BaseId, row.Health);
         // Bake a visible-mesh ray-caster from the authored GLB hull child (null when the base fell
         // back to the procedural sphere). node.Transform is already the base's world placement, so
         // the raycaster composes correct world transforms without waiting for the tree.
         MeshRaycaster? ray = glbHull != null ? new MeshRaycaster(glbHull, node.Transform) : null;
         _baseClip.Add((new Vector3(row.PosX, row.PosY, row.PosZ), row.SectorId, ray));
-        _collisionWorld.AddBase(row);
+        _collisionWorld.AddBase(_defs, row);
         _baseTeams.Add((row.SectorId, row.Team));
         SetNodeSectorFading(node, row.SectorId);
         // A newly-streamed garrison may be what finally resolves the pre-launch home sector (the team
@@ -1724,10 +2104,13 @@ public partial class WorldRenderer : Node3D
     // colour/normal/ORM maps. AuthoredRadius is the mesh's bounding radius at author scale,
     // used to scale each instance to its row's collision Radius. A null Mesh marks a variant
     // that failed to load (e.g. asset missing) so we don't retry and fall back to a sphere.
-    private readonly Dictionary<string, (Mesh? Mesh, float AuthoredRadius, Material? BaseMat)> _asteroidMeshes = new();
+    // STATIC: the cache is instance-independent (meshes are immutable shared resources), so
+    // AssetPreloader can warm it at startup — first-touch GD.Load of a variant GLB costs
+    // ~300ms and used to land mid-join, inside the world-restream frame.
+    private static readonly Dictionary<string, (Mesh? Mesh, float AuthoredRadius, Material? BaseMat)> _asteroidMeshes = new();
 
     // Load (and cache) the mesh + authored radius for a variant, or (null, 0) if unavailable.
-    private (Mesh? Mesh, float AuthoredRadius, Material? BaseMat) AsteroidMesh(string variant)
+    internal static (Mesh? Mesh, float AuthoredRadius, Material? BaseMat) AsteroidMesh(string variant)
     {
         if (_asteroidMeshes.TryGetValue(variant, out var cached))
             return cached;
@@ -1928,6 +2311,17 @@ public partial class WorldRenderer : Node3D
             pc.AddChild(ShipModelLoader.Build(_defs, row.Class, row.IsPod, ShipMaterial(row.Team, row.IsPig)));
             ShipModelLoader.AttachEngineGlow(pc, _defs, row.Class, row.IsPod, row.Team);
             pc.Initialize(row, _defs);
+            // Seed the loadout prediction fires from: the authoritative MsgShipLoadout echo when
+            // it already landed (reliable, sent the spawn tick — it can precede this insert), else
+            // the hangar's optimistic expectation (matches the server unless it rejected the
+            // request; the echo corrects that within a tick). Pods fly no guns — skip.
+            if (!row.IsPod)
+                pc.SetLoadout(
+                    _shipMounts.TryGetValue(row.ShipId, out var mountIds) ? mountIds
+                    : _defs.GetHardpoints((byte)row.Class) is { } hps
+                        ? StellarAllegiance.Ui.LoadoutState.Shared.ExpectedEffectiveIds((byte)row.Class, hps)
+                        : null
+                );
             // Fresh launch (base spawn/respawn or pod-eject) gets the establishing cinematic; a
             // reconnect reclaim of a ship already in flight does not (NetPromoteLocal tagged it).
             if (_reclaimedShipId == row.ShipId)
@@ -2098,6 +2492,16 @@ public partial class WorldRenderer : Node3D
         if (local)
         {
             LocalShip = null;
+            // A local COMBAT ship going clean (GoneClean) can only mean it docked — the sole clean
+            // despawn for a non-pod own ship (rescue is pod-only; fog lost-contact never targets your
+            // own ship). Remember the base it docked at so the hangar defaults the next relaunch to it.
+            if (reason == GoneClean && !row.IsPod)
+            {
+                RememberDockedBase(node.GlobalPosition, row.SectorId, row.Team);
+                // Remember the hull too, so the hangar's ship picker defaults to the ship the pilot
+                // just flew (parallel to the launch-base default above; persists across sessions).
+                UserPrefs.SetLastShip((byte)row.Class);
+            }
             // Death-cam ONLY when the local POD is DESTROYED — that's the real death (spawn
             // menu reopens). A local COMBAT ship's death instead ejects an escape pod the
             // SAME tick: OnShipInsert for that pod re-points LocalShip, cutting the camera
@@ -2161,13 +2565,23 @@ public partial class WorldRenderer : Node3D
 
     // A REMOTE ship's row showed a new LastFireTick: rebuild the shot the server fired —
     // the exact mirror of the module's TryFire muzzle math. The spread direction is
-    // deterministic in (ShipId, fire tick) via the shared FlightModel.SpreadDirection, so
-    // every client and the server derive the same bolt from the same replicated row.
+    // deterministic in (ShipId, fire tick) via the shared FlightModel.SpreadDirection, and
+    // WHICH mounts fired is derived by replaying the shared FireCadence rule against this
+    // ship's per-mount shadow (per-mount cooldowns; the wire carries only LastFireTick), so
+    // every client and the server derive the same bolts from the same replicated row. A fresh
+    // shadow (first sight / loadout change / reconnect) renders the first volley from every
+    // off-cooldown mount and is in lockstep from then on; a lossy far-tier ship that skips
+    // fire events drifts and self-corrects — visual only.
     private void SpawnBoltFor(Ship row)
     {
-        var mounts = _defs.WeaponMounts((byte)row.Class);
-        if (mounts.Count == 0)
+        var slots = _defs.SlotsForShip(
+            (byte)row.Class,
+            _shipMounts.TryGetValue(row.ShipId, out var mountIds) ? mountIds : null
+        );
+        if (slots.Count == 0)
             return;
+        if (!_mountShadow.TryGetValue(row.ShipId, out var shadow) || shadow.Length < slots.Count)
+            _mountShadow[row.ShipId] = shadow = new uint[slots.Count];
 
         var state = ShipMath.StateFromRow(row);
 
@@ -2179,16 +2593,20 @@ public partial class WorldRenderer : Node3D
             row.LastInputTick > row.LastFireTick ? System.Math.Min(row.LastInputTick - row.LastFireTick, 8u) : 0u;
         Vec3 firePos = state.Pos - state.Vel * (ticksPast * FlightModel.Dt);
 
-        // One bolt per weapon hardpoint (the Fighter's twin cannons), each from its own muzzle
-        // offset and with its own barrel-seeded scatter — the exact mirror of the server's TryFire.
-        for (byte barrel = 0; barrel < mounts.Count; barrel++)
+        // One bolt per FIRING weapon slot, each from its own muzzle offset and with its own
+        // barrel-seeded scatter — the exact mirror of the server's TryFire.
+        for (byte barrel = 0; barrel < slots.Count; barrel++)
         {
-            var (hp, weapon) = mounts[barrel];
-            // Skip missile racks: they don't fire bolts. The barrel index is STILL consumed so the
-            // per-barrel spread seed stays aligned with the server's TryFire loop regardless of where
-            // racks sit in the hardpoint array (server mirror: Simulation.TryFire).
-            if (weapon.Kind != WeaponKind.Bolt)
+            var (hp, weapon) = slots[barrel];
+            // Skip empty slots and missile racks: they don't fire bolts. The barrel index is
+            // STILL consumed so the per-barrel spread seed stays aligned with the server's
+            // TryFire loop regardless of where racks/empties sit in the hardpoint array.
+            if (weapon is null || weapon.Kind != WeaponKind.Bolt)
                 continue;
+            // Off cooldown at the observed fire tick? (The same gate the server fired by.)
+            if (!FireCadence.MountFires(row.LastFireTick, shadow[barrel], weapon.FireIntervalTicks))
+                continue;
+            shadow[barrel] = row.LastFireTick;
             Vec3 fwd = state.Rot.Rotate(new Vec3(hp.DirX, hp.DirY, hp.DirZ));
             Vec3 shotDir = FlightModel.SpreadDirection(fwd, weapon.SpreadRad, row.ShipId, row.LastFireTick, barrel);
             Vec3 mp = firePos + state.Rot.Rotate(new Vec3(hp.OffX, hp.OffY, hp.OffZ));
@@ -2203,15 +2621,16 @@ public partial class WorldRenderer : Node3D
                 row.ShipId,
                 ShotMaskLeadSec(),
                 weapon.BoltRadius,
-                weapon.BoltLength
+                weapon.BoltLength,
+                weapon.IsHealing
             );
         }
     }
 
     // The LOCAL ship's fire prediction produced a shot this tick (ShipController). Same
     // rendering as a remote bolt, no masking lead (prediction is already now-correct).
-    public void SpawnLocalBolt(Vector3 pos, Vector3 vel, Vector3 aimDir, float lifeSec, float boltRadius, float boltLength) =>
-        AddBolt(pos, vel, aimDir, _localSector, lifeSec, LocalShip?.ShipId ?? 0, 0f, boltRadius, boltLength);
+    public void SpawnLocalBolt(Vector3 pos, Vector3 vel, Vector3 aimDir, float lifeSec, float boltRadius, float boltLength, bool isHeal) =>
+        AddBolt(pos, vel, aimDir, _localSector, lifeSec, LocalShip?.ShipId ?? 0, 0f, boltRadius, boltLength, isHeal);
 
     private void AddBolt(
         Vector3 pos,
@@ -2222,12 +2641,13 @@ public partial class WorldRenderer : Node3D
         ulong ownerShipId,
         float leadSec,
         float boltRadius,
-        float boltLength
+        float boltLength,
+        bool isHeal
     )
     {
-        var pv = new ProjectileView { Name = "Bolt" };
+        var pv = new ProjectileView { Name = "Bolt", IsHeal = isHeal };
         _projectiles.AddChild(pv);
-        pv.AddChild(NewProjectileMesh(boltRadius, boltLength));
+        pv.AddChild(NewProjectileMesh(boltRadius, boltLength, isHeal));
         float ttl = ClipBoltTtl(sector, pos, vel, lifeSec, out Vector3 impact, out bool impactAtExpiry);
         pv.Initialize(pos, vel, aimDir, ttl, ownerShipId, leadSec);
         // Carry the static-surface impact (if any) so the TTL-expiry cull sparks it (see _Process).
@@ -2441,7 +2861,7 @@ public partial class WorldRenderer : Node3D
 
     // Bolt visual size is authored per-projectile (WeaponDef.BoltRadius/BoltLength); a 0 falls back
     // to the built-in default so an unauthored weapon still renders a bolt.
-    private MeshInstance3D NewProjectileMesh(float radius, float height)
+    private MeshInstance3D NewProjectileMesh(float radius, float height, bool isHeal)
     {
         float r = radius > 0f ? radius : 0.22f;
         float h = height > 0f ? height : 2.2f;
@@ -2457,7 +2877,7 @@ public partial class WorldRenderer : Node3D
                 RadialSegments = 8,
                 Rings = 1,
             },
-            MaterialOverride = _projectileMat,
+            MaterialOverride = isHeal ? _healBoltMat : _projectileMat,
             RotationDegrees = new Vector3(-90f, 0f, 0f),
             // Self-lit glowing tracers: casting shadows would be wasteful and wrong-looking.
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
@@ -2534,6 +2954,7 @@ public partial class WorldRenderer : Node3D
         }
 
         UpdateMiningBeams();
+        UpdateBuildSpheres();
 
         // Quick discover fade for static geometry (asteroids + bases), then the warp-settle window that
         // holds the WarpFlash until the warped-into sector's rocks have finished streaming in.
@@ -2572,6 +2993,153 @@ public partial class WorldRenderer : Node3D
     // MsgMinerTargets: replace the shipId -> target-rock map wholesale. A ship that stopped mining
     // simply isn't in the new map; its beam clears on the ShipFlagMining falling edge below.
     public void NetUpdateMinerTargets(Dictionary<ulong, ulong> map) => _minerTargetRock = map;
+
+    // True while MsgMinerTargets says this miner is actively harvesting that exact rock — the F3 map
+    // uses it to dismiss a commander MINE waypoint once the order is fulfilled (the miner arrived and
+    // its beam is on the ordered rock), the miner analog of IsRockUnderConstruction for constructors.
+    public bool IsMinerHarvesting(ulong shipId, ulong rockId) =>
+        _minerTargetRock.TryGetValue(shipId, out ulong target) && target == rockId;
+
+    // MsgConstructorBuilds: replace the active-build list wholesale. UpdateBuildSpheres reconciles the
+    // BuildSphere nodes against it each frame (a build that completed/cancelled drops out → its sphere
+    // FADES out and self-frees; the finished base arrives via the normal reveal path). The server sends
+    // a brief 0-count keepalive after builds end so this drop is reliably seen despite lossy delivery.
+    public void NetUpdateConstructorBuilds(List<ConstructorBuild> builds) => _constructorBuilds = builds;
+
+    // Grow/place a glowing sphere enveloping each rock a constructor is building on; free spheres whose
+    // build dropped out. Envelop fraction ramps through the phases (align → sink → build) so the sphere
+    // gradually swallows the asteroid, peaking just past the rock surface as the base completes.
+    private void UpdateBuildSpheres()
+    {
+        var live = new HashSet<ulong>();
+        foreach (var b in _constructorBuilds)
+        {
+            // No sphere during ALIGNING (phase 0) — it only appears once the drone starts sinking into
+            // the rock (phase 1), when the meshes begin to intersect.
+            if (b.Phase < 1)
+                continue;
+            // Resolve the rock's live position/radius. Once it despawns (a finished base consumes it, or
+            // it goes fogged), fall back to the last-known radius + the sphere's held position so the
+            // sphere keeps growing rather than blinking out. A build we never had a rock for is skipped.
+            Node3D? node = _asteroidNodes.TryGetValue(b.RockId, out var n) ? n : null;
+            Asteroid? rock = node is not null ? GetAsteroid(b.RockId) : null;
+            if (rock is null && !_buildSpheres.ContainsKey(b.RockId))
+                continue; // never saw the rock and have no sphere to anchor — nothing to draw
+            live.Add(b.RockId);
+            if (!_buildSpheres.TryGetValue(b.RockId, out var sphere))
+            {
+                sphere = new BuildSphere();
+                _effects.AddChild(sphere);
+                _buildSpheres[b.RockId] = sphere;
+            }
+            if (rock is not null)
+            {
+                sphere.GlobalPosition = node!.GlobalPosition;
+                SetNodeSector(sphere, rock.SectorId);
+                _buildRockRadius[b.RockId] = MathF.Max(2f, rock.CurrentRadius);
+            }
+            // Envelop radius (world units). Phase 1 (sink) BEGINS at surface contact and its progress is
+            // the drone's physical embed-depth fraction (v38), so the sphere emerges from the rock CENTER
+            // and grows with the hull's actual descent out to the rock surface. Phase 2 (build, the
+            // station's build-time-seconds) grows it from the surface out to finalR — the eventual base's
+            // footprint, so the finished base is revealed from INSIDE a fully-enveloping shell rather than
+            // poking out of a sphere that only reached the rock radius. NOT bigger, or the sphere dwarfs
+            // the base: the base GLB is scaled so its LONGEST axis spans baseR·2 (BaseModelLoader.LoadHull
+            // → NormalizeLongestAxis), so baseR IS the base's furthest tip — the sphere ends snug there.
+            // rockR·1.05 is a floor for the rare rock wider than the base (still covered as it grows).
+            float rockR = _buildRockRadius.TryGetValue(b.RockId, out var rr) ? rr : 2f;
+            float baseR = _defs.GetBaseDef(DefaultBaseTypeId)?.Radius ?? BaseModelLoader.FallbackRadius;
+            float finalR = MathF.Max(rockR * 1.05f, baseR);
+            float worldR = b.Phase == 1
+                ? rockR * (0.05f + 0.50f * b.Progress)
+                : Mathf.Lerp(rockR * 0.55f, finalR, b.Progress);
+            sphere.SetEnvelop(worldR);
+            // Solid barrier for local prediction: only in BUILDING (phase 2), when the shell grows PAST
+            // the (still-solid) rock — matches the server's ResolveBuildSphereCollisions so the local
+            // ship bounces off the shell instead of sinking into it and snapping back. Registered in
+            // SIM/sector coordinates (the rock's raw row position), where the ship prediction runs — not
+            // the sphere node's render-space GlobalPosition. Dropped when the rock is unavailable
+            // (fogged/gone: a predict-miss the server reconciles) or the build leaves phase 2.
+            if (b.Phase >= 2 && rock is not null)
+                _collisionWorld.SetBuildSphere(rock.SectorId, b.RockId, new Vec3(rock.PosX, rock.PosY, rock.PosZ), worldR);
+            else
+                _collisionWorld.RemoveBuildSphere(b.RockId);
+            // Core opacity: stay mostly TRANSLUCENT while the drone SINKS (so you watch the mesh slide
+            // down into the rock), then ramp to opaque through the first half of BUILDING as the sphere
+            // swallows it. Continuous across the phase seam (sink ends ≈0.35, build starts at 0.35).
+            sphere.SetCover(b.Phase == 1 ? b.Progress * 0.35f : Mathf.Clamp(0.35f + b.Progress * 1.4f, 0f, 1f));
+            // Rock-spitting debris: while the drone grinds into the surface (phase 1) throw a continuous
+            // spray of rock chunks from the contact point, anchored on the still-visible drone (falling
+            // back to the sphere centre). The instant it embeds and hides (phase 2) stop the spray — the
+            // last chunks in flight settle out, then the node self-frees.
+            if (b.Phase == 1 && rock is not null)
+            {
+                if (!_constructorDebris.TryGetValue(b.RockId, out var debris))
+                {
+                    debris = new ConstructorDebris();
+                    _effects.AddChild(debris);
+                    _constructorDebris[b.RockId] = debris;
+                }
+                debris.GlobalPosition = _shipNodes.TryGetValue(b.ShipId, out var dn) && dn.Visible
+                    ? dn.GlobalPosition
+                    : sphere.GlobalPosition;
+                SetNodeSector(debris, rock.SectorId);
+            }
+            else if (_constructorDebris.TryGetValue(b.RockId, out var debris))
+            {
+                debris.Stop();                     // embedded/hidden — cut the spray
+                _constructorDebris.Remove(b.RockId); // stop tracking; it self-frees so we never touch a freed node
+            }
+            // Keep the mesh VISIBLE only while it SINKS (phase 1) so you watch it slide into the rock;
+            // the instant BUILDING begins (phase 2) hard-hide it. By then it's fully embedded — the still-
+            // solid rock (its fade doesn't start until build ~35%) plus the growing opaque core cover the
+            // spot, so it eases away rather than popping — and the build sphere must completely occlude it,
+            // never leaving the drone floating visibly inside. Latching HideForBuild stops the per-snapshot
+            // SetNodeSector re-showing it (else it blinks); Building is terminal, so it stays hidden to
+            // despawn.
+            if (b.Phase >= 2
+                && _shipNodes.TryGetValue(b.ShipId, out var shipNode) && shipNode is RemoteShip drone)
+            {
+                drone.HideForBuild = true;
+                drone.Visible = false;
+            }
+            // Dissolve the actual ROCK as the base rises so it's gone by the time the finished base is
+            // revealed — the opaque core hides the drone, this fades the rock itself. Stays fully SOLID
+            // through the sink and the first third of BUILDING (so the drone-hide above is covered), then
+            // dissolves gradually across the back two-thirds, fully gone by ~build-95% (the server then
+            // sends MsgRockGone and the already-transparent node slips away under the sphere). Only its
+            // own node, only while a build row is live; RestTransparencyFor restores it if it cancels.
+            if (node is not null)
+                DimNode(node, b.Phase >= 2 ? Mathf.Clamp((b.Progress - 0.35f) / 0.60f, 0f, 1f) : 0f);
+        }
+        // A build that completed/cancelled drops out of the stream. Don't free its sphere instantly —
+        // FADE it (the finished base has appeared underneath via the reveal path); it self-frees.
+        _buildSpherePrune.Clear();
+        foreach (var kv in _buildSpheres)
+            if (!live.Contains(kv.Key))
+                _buildSpherePrune.Add(kv.Key);
+        foreach (var id in _buildSpherePrune)
+        {
+            _buildSpheres[id].BeginFade();
+            _buildSpheres.Remove(id);
+            _collisionWorld.RemoveBuildSphere(id); // build ended — stop predicting a bounce off its shell
+            _buildRockRadius.Remove(id); // build's done — drop its cached rock radius
+            // If the rock still exists, the build CANCELLED (a completion would have consumed it via
+            // MsgRockGone) — un-dim the rock we were fading so it returns to its normal opaque look.
+            if (_asteroidNodes.TryGetValue(id, out var rockNode))
+                DimNode(rockNode, RestTransparencyFor(rockNode));
+        }
+        // A build that dropped out while still sinking (cancelled) leaves an orphaned debris spray — stop it.
+        _constructorDebrisPrune.Clear();
+        foreach (var kv in _constructorDebris)
+            if (!live.Contains(kv.Key))
+                _constructorDebrisPrune.Add(kv.Key);
+        foreach (var id in _constructorDebrisPrune)
+        {
+            _constructorDebris[id].Stop();
+            _constructorDebris.Remove(id);
+        }
+    }
 
     // Mining beams (client-only VFX). For every ship whose ShipFlagMining is set and whose mesh is
     // visible, ensure a MiningBeam child exists and point it at the rock it's harvesting; tear a beam
@@ -2686,9 +3254,16 @@ public partial class WorldRenderer : Node3D
                 Vector3 hit = ClosestPointOnSegment(a, b, c);
                 if (c.DistanceSquaredTo(hit) <= VisualHitRadius * VisualHitRadius)
                 {
+                    if (pv.IsHeal)
+                    {
+                        // ER Nanite heal impact: a green spark on the (same-team) ship it restores;
+                        // a heal bypasses shields, so never the shield-bubble flash even if it's up.
+                        SpawnEffect(new HitFlash { CoreColor = HealSparkTint, EmissionColor = HealSparkTint }, hit, _localSector);
+                        SfxManager.Instance?.PlayAt(SfxManager.SfxId.Impact, hit, pitch: 1.15f + GD.Randf() * 0.12f);
+                    }
                     // Shield up on the struck ship → a hemisphere shield-bubble flash + shield sound;
                     // otherwise the plain hull spark + impact sound. Both cosmetic/predicted.
-                    if (_shipShield.TryGetValue(shipId, out float sh) && sh > 0f)
+                    else if (_shipShield.TryGetValue(shipId, out float sh) && sh > 0f)
                     {
                         SpawnEffect(new ShieldFlash(hit - c, VisualHitRadius * 1.2f, ShieldFlashTint), c, _localSector);
                         SfxManager.Instance?.PlayAt(SfxManager.SfxId.ShieldImpact, hit, pitch: 0.95f + GD.Randf() * 0.12f);

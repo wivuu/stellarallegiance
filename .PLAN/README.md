@@ -20,6 +20,10 @@ Archives:
 
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
+- Faction name "Iron Coalition" is streamed but never displayed.
+- Reloading things from cargo should take a configurable amount of time (i.e. ammo and fuel)
+- Make gun and missile weapon mounts not compatible with all gun and missiles (explore configuration style options in YAML)
+- hulls.yaml:264-266 comment wrongly claims collision is purely ShipRadius — ship-vs-ship uses the full model-length hull, so the Devastator body-blocks on its ~20u silhouette.
 ---
 
 ## Content philosophy (the through-line)
@@ -256,13 +260,18 @@ Stage-2 economy, no rework.
   - Abstract the PIG autopilot/autosteer behavior so that it can be reused for player ships, allowing them to follow waypoints or targets with similar logic.
   - We will eventually (out of scope) want to be able to attach this autopilot behavior to other entities, such as miners and constructors (that fly to asteroids to make bases)
   - Press 'T' (new mappable control) to engage the autopilot towards the selected target or waypoint.
-- ☐ **[L]** **Ship salvage & pickups** — destroyed ships drop expendables (ammo / booster fuel / guns / missiles / mines)
-  to fly over and collect; ties into the Stage-2 economy.
-  - When a ship is destroyed, there should be a chance that it drops whatever expendable or weapon that was equipped/not consumed, flying out in a random direction until it comes to rest.
-  - Meshes for various dropped items should match GLB visual representation, or if none are available, pick an asset from the pick-assets folder. Ask me for each missing asset.
-  - The dropped item should be able to be picked up by a ship flying over it, if the ship has the capacity to carry it.
-  - If the ship does not have capacity, the item can bounce off harmlessly.
-  - If the item is in-motion, it should collision detect with asteroids and bases
+- Turrets: Allow players to mount turret endpoints while a ship that supports turret hardpoints is in-base ('load up' the turrets)
+  - Once launched, the player will 'ride along' with the pilot, able to control a gun from the turret's hardpoint, aiming it and firing it
+- Ripcord: Allows specific types of ships (with the ability) to jump to a specific location in a sector after a brief, configurable, delay
+  - When player picks the sector to teleport to, the ship will pick a ripcordable device (either a probe or a teleport base) in that sector
+  - The player yields control of the ship, and is exposed/vulnerable to damage for a length of time that is based on yaml config + configurable target multiplier (i.e. probes take longer to ripcord to, potentially)
+  - As the ship is preparing to ripcord, it should display a visual countdown, and very slowly list/spin in a circle until the countdown reaches zero, then the ship is instantly transported.
+  - If the player interrupts the autopilot-ripcord (thrust, fire, steer etc), control is yielded back and the countdown cancels
+  - Show a visual flash as the user leaves and enters the sector via teleport/ripcord
+- **[M]** **Mini-preview of target** — Display information about the currently selected target in a compact HUD element, including health, type, and distance. This allows players to quickly assess threats and opportunities without opening the full F3 map. We should also show it in the F3 map.
+- Add different gun effects
+  - i.e. minigun green, different looking bolt
+  - ER nanite shoots glowing blue, thin, toruses
 
 ### Stage 4 — Strategy depth (Allegiance core)
 
@@ -336,20 +345,70 @@ Stage-1 YAML pipeline.
   - Once miner is filled, it will return to the nearest base to offload the harvested resources, then after a brief delay, relaunch to harvest again, either the same rock, or if it is depleted, the next eligible helium-3 asteroid according to the rules above.
   - If the nearest base is not in the same sector, the miner will navigate to the base across sectors, potentially taking longer to offload resources before resuming harvesting.
   - A miner will not enter a new sector to mine unless the commander tells him to go to that sector to mine (at least once)
-- ☐ **[L]** **Tech paths** — team investment tree unlocking ship upgrades, new classes, and base defenses;
-  the **tree is YAML data** (Stage 1). The UI + research-over-time; credits and per-team gating
-  already exist from Stage 2.
-- ☐ **[XL]** **Base building + constructors** — deployable structures for resource processing; ships land,
-  repair, and rearm at bases.
-  - Generalize bases, so that the mesh to be used is determined by the YAML configuration, similar to hulls for ships
-  - Create multiple base types, defined by yaml: Garrison (default), Outpost, Shipyard, Supremacy Center, Tactical Laboratory, and Expansion Complex, Teleport Receiver, Refinery. Some bases unlock tech tree paths (configurable).
-  - Allow commander to purchase miners and constructors which build bases from the tech tree screen's 'construct' tab
-  - Constructors are ships (utl11.glb in pick_assets - but dont hardcode the usage of this mesh; there will be many configurable models) which are AI controlled like miners. They launch from a garrison only (not outposts), and the types of rock (regolith, uranium, etc) they can build on is configurable based on the type of base bought.
-  - When a constructor is ordered to a compatible asteroid, it navigates there, and will reach a standoff point (similar to a miner), once at the standoff point, it will align itself for a few seconds (configurable), before beginning to *sink into the rock* slowly (fly towards until the constructor is partially embedded into the rock)
-  - From here, a spinning greenish/bluish glowing sphere, with multiple translucent textured layers, will gradually envelop the entire asteroid (for a configurable number of seconds), and the constructor mesh disappears completely
-  - Once the build sphere is done, the configured base appears on the asteroid, fully constructed, and the build effect is removed, leaving the base ready for use, and potentially tech trees unlocked
+- ✅ **[L]** **Tech paths** — shipped 2026-07-14 (proto 36, `tech-tree` branch; handoffs in
+  `.PLAN/tech-paths/PHASE-{A,B,C,D}-HANDOFF.md`). The docked screen is a real three-tab shell
+  (**HANGAR / BUILD / RESEARCH**) over a shared **CommandSidebar** (SectorMapPreview command map +
+  "Your Bases" with live research banners); the hangar's ship picker is a horizontal card strip and
+  the sidebar's launch-base pick is REAL (MsgSpawn carries the base id, server validates+falls back).
+  Research is YAML-authored `Development`s (price + `build-time-seconds` + required/granted techs —
+  the existing factions Core model; NEW `obsoleted-by-techs` field for future tier replacement +
+  `research-slots` per station), streamed as a full catalog in MsgDefs; a **commander** authorizes
+  at a base (`MsgResearch`, or `/research <id>` chat) — per-base **slots + one on-deck queue**
+  (deduct at start AND at queue-reservation; cancel = 100% refund; dead base = loss); completion
+  grants techs/caps and re-resolves unlocks **mid-match** (`Simulation.Research.cs`; per-team
+  `MsgResearchState`, startTick+duration encoded). Stock tree gates the **bomber** behind
+  `heavy-ordnance` and a new **heavy-cannon** behind `cannon-tier-2` (2026-07-18: unresearched
+  items are HIDDEN outright in the hangar/build UI — no greyed `⚿ LOCKED` rows/cards; research
+  makes them appear). The BUILD tab renders the 7 future station types from YAML as
+  placeholders (real gating states, purchase disabled until base building). `tests/StrategyTest`
+  research suite + ContentTest catalog checks. *Deferred: stat-modifier developments
+  (AttributeModifiers), per-site base types for slots, authored obsoleted-by content, hull unlock
+  chips (ShipClassDef has no wire tech refs).*
+- ◐ **[XL]** **Base building + constructors** — MVP shipped 2026-07-14 (proto 37): the **Outpost** is
+  buildable end-to-end; the other station types are one YAML edit away (see below). Bases are now
+  **per-type data** like ship hulls — `BaseDef.ModelName` selects the GLB (server collision + client
+  mesh, mirroring `ShipClassDef`), `BaseSite.BaseTypeId` rides the wire, and `World.CreateBase`
+  appends a base at runtime (growable `BaseHealth`/`ResearchByBase`, index-parallel). A **constructor**
+  is an AI drone (`ShipKind.Constructor`, `Simulation.Constructors.cs`) modeled on the miner: bought
+  from the docked **Build tab** bound to a station type (commander-gated `MsgBuildConstructor`, charges
+  the station price), launched from a **garrison** (win-condition base) only, F3-ordered to a
+  compatible rock (reuses the miner order plumbing; stock outpost → **Regolith**), then it navigates,
+  aligns, **sinks** into the rock, and a spinning greenish-blue **build sphere** (`BuildSphere.cs`,
+  streamed via `MsgConstructorBuilds`) envelops the asteroid over the station's `build-time-seconds`
+  before the base appears fully constructed (reveals via the fog log / a fog-off broadcast) and grants
+  its capabilities. **Win condition reworked**: a per-type `WinCondition` flag (= the `start` ability,
+  garrison-only) — a team loses only when ALL its win-condition bases die, so a destroyed outpost never
+  ends the match. `tests/ConstructorTest` covers the full loop + the rock-class gate + win-condition.
+  *Deferred:* docking/repair/rearm at outposts (no dock faces on Outpost.glb — sphere/convex collision
+  only); the 6 other station types (add `base-type-id` + `model-name` + `build-on-rock-class` to
+  `stations.yaml` — no code); cap-revoke when a granting base is destroyed (grants are additive for the
+  match); CommandSidebar build banner; per-site research slots; live visual sign-off of the sphere.
+  - ✅ Generalize bases so the mesh is YAML config (`model-name`), like ship hulls — not hardcoded.
+  - ◐ Multiple base types by YAML (Garrison + Outpost live; Shipyard/Supremacy/Tactical-Lab/Expansion/
+    Teleport-Receiver/Refinery are authored placeholders, buildable via YAML). Bases grant caps/tech.
+  - ✅ Commander buys constructors from the docked Build tab (miners stay on `/buyminer`).
+  - ✅ Constructors are AI drones (`utl11.glb`, not hardcoded), launch from a garrison, buildable rock
+    class configurable per base type.
+  - ✅ Ordered to a compatible asteroid → navigate → standoff → align (configurable) → sink in.
+  - ✅ Spinning greenish/blue translucent multi-layer sphere envelops the asteroid over a configurable
+    time; the constructor mesh vanishes (server despawns it at completion, sphere covers it).
+  - ✅ Base appears fully constructed on the asteroid; build effect removed; tech paths unlocked.
+- ✅ **[L]** **Allegiance Stub tech tree**  — Take a thin slice of the allegiance tech tree by implementing SOME of iron coalitions ships, bases, weapons, research etc
+  - Ships: 
+    - Starting: Scout, Lt Interceptor
+    - Supremacy Center: Enh. Fighter and Adv. Fighter upgrades
+    - Basic: Bomber (Must research before launching)
+    - Shipyard: Devastator
+  - Weapons: 
+    - Gatling Gun (1, 2, and 3), (for scouts, fighters, and bombers)
+    - Nanite (inverse damage)
+    - Mini-Gun (for interceptors)
+  - Bases:
+    - Garrison -> Starbase
+    - Outpost -> Heavy Outpost (each has to be upgraded?)
+    - Supremacy Center -> Adv. Supremacy Center
+    - Shipyard
 - ☐ **[L]** Update plan to include multiple teams; each map only supports a certain number of teams, so this is a constraint that must be reflected in the plan. Plan should include a richer 'game lobby' (as opposed to server lobby) experience; allowing users to select or join teams before the match starts. First person on a perspective team (and not on NOAT/not on a team) can configure the number of teams (2-6 for now).
-- ☐ **[M]** **Mutinees** — A player can stage a mutiny on a team, all other players (except commander) can vote to depose the commander; if the vote passes, the mutineer becomes the new commander.
 - ☐ **[XL]** **Runtime asset streaming (client-patchless content)** — the client downloads meshes/textures/
   audio it lacks from the game server into a temp cache, so a server can define an entire faction
   (or new ship/weapon) that clients render **without installing a patch**. Defs already stream
@@ -414,6 +473,13 @@ Not stage-bound — done when convenient or when a stage needs them.
 ## Deep backlog
 
 - ☐ **[L]** **Replay system** — tick log or time-travel query playback.
-- ☐ **[M]** **.NET 10 upgrade** — upgrade from .NET 8 to 10 for perf.
 - ☐ **[M]** **Fireteam support** — sub-teams of 2-6 players that can privately chat. Commanders can
   assign players to fireteams and issue orders to specific fireteams.
+- ☐ **[M]** **Mutinees** — A player can stage a mutiny on a team, all other players (except commander) can vote to depose the commander; if the vote passes, the mutineer becomes the new commander.
+- ☐ **[L]** **Ship salvage & pickups** — destroyed ships drop expendables (ammo / booster fuel / guns / missiles / mines)
+  to fly over and collect; ties into the Stage-2 economy.
+  - When a ship is destroyed, there should be a chance that it drops whatever expendable or weapon that was equipped/not consumed, flying out in a random direction until it comes to rest.
+  - Meshes for various dropped items should match GLB visual representation, or if none are available, pick an asset from the pick-assets folder. Ask me for each missing asset.
+  - The dropped item should be able to be picked up by a ship flying over it, if the ship has the capacity to carry it.
+  - If the ship does not have capacity, the item can bounce off harmlessly.
+  - If the item is in-motion, it should collision detect with asteroids and bases

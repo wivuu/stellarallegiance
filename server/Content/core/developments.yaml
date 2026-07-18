@@ -1,0 +1,291 @@
+# Developments — team research orders. Each is bought + built-over-time at a research-capable base
+# (Simulation.Research); on completion it grants its techs to the whole team. These are v1
+# UNLOCK-ONLY developments: tech-only: true, no `attributes:` block (no stat modifiers yet), so they
+# exist purely to flip techs on. `group:` clusters them in the client Research tab.
+#
+# Iron Coalition weapon/hull research (Phase 2, PCore014.igc). Prices are IGC ×0.06; build-times are
+# scaled in line with the existing dev magnitudes (150→30s, 300→60s, 600→120s). Research homing
+# (plan Adaptation §1): the IGC Expansion base is absent from the slice, so Mini-Gun tiers home at the
+# Garrison — Mini-Gun 2 needs only `base` (researchable at start), Mini-Gun 3 behind garrison-str.
+# Gat/AutoCan 2 require supremacy-1, Gat/AutoCan 3 require supremacy-adv (granted by the Supremacy
+# base tiers in Phase 3/4) — until then those tiers show truthfully LOCKED.
+developments:
+  # ---- Hull unlock (researchable from match start) ----
+  - id: dev-bomber
+    name: Bomber Doctrine
+    description: "Certify the team for the assault bomber and its base-cracking ordnance."
+    group: WEAPONS
+    price: 600
+    build-time-seconds: 120
+    tech-only: true
+    required-capabilities: [base]
+    granted-techs: [bomber]
+
+  # ---- PW Gat Gun line (tier 2 behind supremacy-1, tier 3 behind supremacy-adv + gat-2) ----
+  - id: dev-gat-2
+    name: PW Gat Gun 2
+    description: "Uprate the Gat Gun line to tier 2."
+    group: WEAPONS
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [supremacy-1]
+    granted-techs: [gat-2]
+  - id: dev-gat-3
+    name: PW Gat Gun 3
+    description: "Uprate the Gat Gun line to tier 3."
+    group: WEAPONS
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [supremacy-adv, gat-2]
+    granted-techs: [gat-3]
+
+  # ---- PW Mini-Gun line (homed at the Garrison: tier 2 needs only `base`, tier 3 behind garrison-str) ----
+  - id: dev-minigun-2
+    name: PW Mini-Gun 2
+    description: "Uprate the Mini-Gun line to tier 2."
+    group: WEAPONS
+    price: 300
+    build-time-seconds: 60
+    tech-only: true
+    required-capabilities: [base]
+    granted-techs: [minigun-2]
+  - id: dev-minigun-3
+    name: PW Mini-Gun 3
+    description: "Uprate the Mini-Gun line to tier 3."
+    group: WEAPONS
+    price: 300
+    build-time-seconds: 60
+    tech-only: true
+    required-techs: [garrison-str, minigun-2]
+    granted-techs: [minigun-3]
+
+  # ---- PW AutoCan line (tier 2 behind supremacy-1, tier 3 behind supremacy-adv + autocan-2) ----
+  - id: dev-autocan-2
+    name: PW AutoCan 2
+    description: "Uprate the AutoCannon line to tier 2."
+    group: WEAPONS
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [supremacy-1]
+    granted-techs: [autocan-2]
+  - id: dev-autocan-3
+    name: PW AutoCan 3
+    description: "Uprate the AutoCannon line to tier 3."
+    group: WEAPONS
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [supremacy-adv, autocan-2]
+    granted-techs: [autocan-3]
+
+  # ---- Station upgrades (Phase 4) — each grants a tier tech that swaps the HOSTING base in place ----
+  # Authored LAST so the weapon/hull dev wire indices above stay stable. upgrade-scope: single (plan
+  # Adaptation §2): the physical base swap targets ONLY the base the research completed at (each team
+  # owns <=1 of each type anyway). The tech grant is still team-wide. ResearchOpStart rejects queuing
+  # one of these at a base that isn't the from-type of its chain.
+  - id: dev-upgrade-garrison
+    name: Upgrade Garrison
+    description: "Structurally reinforce this garrison — more armor, same headquarters role. Unlocks the top Mini-Gun tier."
+    group: UPGRADES
+    price: 720
+    build-time-seconds: 144
+    tech-only: true
+    upgrade-scope: single
+    required-capabilities: [base]
+    granted-techs: [garrison-str]
+  - id: dev-upgrade-supremacy
+    name: Upgrade Supremacy
+    description: "Advance this Supremacy Center to its top tier — opens the top gun tier and the Adv Fighter."
+    group: UPGRADES
+    price: 1800
+    build-time-seconds: 360
+    tech-only: true
+    upgrade-scope: single
+    required-techs: [supremacy-1]
+    granted-techs: [supremacy-adv]
+  - id: dev-upgrade-heavy-class
+    name: Upgrade Heavy Class
+    description: "Convert this Shipyard to a dry dock and certify heavy-class construction — the Devastator's gate."
+    group: UPGRADES
+    price: 1440
+    build-time-seconds: 288
+    tech-only: true
+    upgrade-scope: single
+    required-techs: [shipyard-1]
+    granted-techs: [heavy-class, shipyard-dry]   # unlocks heavy hulls AND upgrades the shipyard tier
+
+  # ---- ER Nanite line (Phase 5, healing gun) — homed at the Garrison like the Mini-Gun line: tier 2
+  # needs only `base` (researchable from match start), tier 3 behind garrison-str. Authored at the VERY
+  # END (indices 10/11) so the Phase-2/4 weapon + station-upgrade dev wire indices above stay stable
+  # (StrategyTest drives research ops by dev index). ----
+  - id: dev-nanite-2
+    name: ER Nanite 2
+    description: "Uprate the repair-nanite line to tier 2 — a stronger hull-restoring beam."
+    group: WEAPONS
+    price: 300
+    build-time-seconds: 60
+    tech-only: true
+    required-capabilities: [base]
+    granted-techs: [nanite-2]
+  - id: dev-nanite-3
+    name: ER Nanite 3
+    description: "Uprate the repair-nanite line to tier 3 — the fastest field hull-restore."
+    group: WEAPONS
+    price: 300
+    build-time-seconds: 60
+    tech-only: true
+    required-techs: [garrison-str, nanite-2]
+    granted-techs: [nanite-3]
+
+  # ---- Outpost upgrade (station upgrade, single-scope). Appended at the VERY END so every dev wire
+  # index above stays stable (StrategyTest drives research ops by dev index). group: UPGRADES clusters
+  # it with the other station-upgrade devs in the client Research tab regardless of file order. The
+  # from→to swap (Outpost → Outpost (Hvy)) is derived by the sim from the granted tech vs the heavy
+  # outpost's required-techs, and ResearchOpStart rejects queuing it at a base that isn't an Outpost. ----
+  - id: dev-upgrade-outpost
+    name: Upgrade Outpost
+    description: "Reinforce this Outpost to its heavy tier in place — tougher armor and longer sight."
+    group: UPGRADES
+    price: 360
+    build-time-seconds: 72
+    tech-only: true
+    upgrade-scope: single
+    required-capabilities: [base]
+    granted-techs: [outpost-hvy]
+
+  # ---- Iron Coalition ordnance research (Phase 6, PCore014.igc). Appended at the VERY END
+  # (indices 13-26) so every dev wire index above stays stable (StrategyTest drives research ops by
+  # dev index). All group: WEAPONS, tech-only, each granting its same-named tech. Missiles/chaff/
+  # probes price 150cr/30s, mines 300cr/60s (IGC 2500/5000 x0.06, matching the gun-dev price points).
+  # Research homing (missile/anti-base lines are IGC-faithful at Supremacy; mine/chaff are re-homed
+  # to the Garrison — same precedent as the Mini-Gun line — because the IGC Expansion base that hosts
+  # them in the original game is absent from this slice). ----
+  - id: dev-seeker-2
+    name: MRM Seeker 2
+    description: "Uprate the MRM Seeker line to tier 2."
+    group: WEAPONS
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [supremacy-1]
+    granted-techs: [seeker-2]
+  - id: dev-seeker-3
+    name: MRM Seeker 3
+    description: "Uprate the MRM Seeker line to tier 3."
+    group: WEAPONS
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [supremacy-adv, seeker-2]
+    granted-techs: [seeker-3]
+  - id: dev-quickfire-2
+    name: MRM Quickfire 2
+    description: "Uprate the MRM Quickfire line to tier 2."
+    group: WEAPONS
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [supremacy-1]
+    granted-techs: [quickfire-2]
+  - id: dev-quickfire-3
+    name: MRM Quickfire 3
+    description: "Uprate the MRM Quickfire line to tier 3."
+    group: WEAPONS
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [supremacy-adv, quickfire-2]
+    granted-techs: [quickfire-3]
+  - id: dev-dumbfire-2
+    name: SRM Dumbfire 2
+    description: "Uprate the SRM Dumbfire line to tier 2."
+    group: WEAPONS
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [supremacy-1]
+    granted-techs: [dumbfire-2]
+  - id: dev-dumbfire-3
+    name: SRM Dumbfire 3
+    description: "Uprate the SRM Dumbfire line to tier 3."
+    group: WEAPONS
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [supremacy-adv, dumbfire-2]
+    granted-techs: [dumbfire-3]
+  - id: dev-anti-base-2
+    name: SRM Anti-Base 2
+    description: "Uprate the SRM Anti-Base line to tier 2."
+    group: WEAPONS
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [supremacy-1]
+    granted-techs: [anti-base-2]
+  - id: dev-anti-base-3
+    name: SRM Anti-Base 3
+    description: "Uprate the SRM Anti-Base line to tier 3."
+    group: WEAPONS
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [supremacy-adv, anti-base-2]
+    granted-techs: [anti-base-3]
+  - id: dev-mine-2
+    name: Prox Mine 2
+    description: "Uprate the Prox Mine line to tier 2."
+    group: WEAPONS
+    price: 300
+    build-time-seconds: 60
+    tech-only: true
+    required-capabilities: [base]
+    granted-techs: [mine-2]
+  - id: dev-mine-3
+    name: Prox Mine 3
+    description: "Uprate the Prox Mine line to tier 3."
+    group: WEAPONS
+    price: 300
+    build-time-seconds: 60
+    tech-only: true
+    required-techs: [garrison-str, mine-2]
+    granted-techs: [mine-3]
+  - id: dev-chaff-2
+    name: Counter 2
+    description: "Uprate the Counter chaff line to tier 2."
+    group: WEAPONS
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-capabilities: [base]
+    granted-techs: [chaff-2]
+  - id: dev-chaff-3
+    name: Counter 3
+    description: "Uprate the Counter chaff line to tier 3."
+    group: WEAPONS
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [garrison-str, chaff-2]
+    granted-techs: [chaff-3]
+  - id: dev-probe-2
+    name: EWS Probe 2
+    description: "Uprate the EWS Probe line to tier 2."
+    group: WEAPONS
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [supremacy-1]
+    granted-techs: [probe-2]
+  - id: dev-probe-3
+    name: EWS Probe 3
+    description: "Uprate the EWS Probe line to tier 3."
+    group: WEAPONS
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [supremacy-adv, probe-2]
+    granted-techs: [probe-3]

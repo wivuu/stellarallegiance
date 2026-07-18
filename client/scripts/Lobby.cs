@@ -753,6 +753,8 @@ public partial class Lobby : Control
 
         if ((k.Keycode == Key.Enter || k.Keycode == Key.KpEnter) && _commsInput.HasFocus())
         {
+            // Match the SEND button (a ChamferButton) so Enter-to-send clicks like every other button.
+            SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
             OnCommsSubmit(_commsInput.Text);
             GetViewport().SetInputAsHandled();
         }

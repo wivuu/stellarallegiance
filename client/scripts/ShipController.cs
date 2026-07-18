@@ -37,6 +37,7 @@ public partial class ShipController : Node
 
     private ConnectionManager _cm = null!;
     private WorldRenderer _world = null!;
+    private DefRegistry? _defs; // sibling; hardpoint layouts for the MsgSpawn weapon-override tail
 
     // Phase-1b: when GameNetClient is active (SIM_URI set), spawn + input go over the
     // native sim socket instead of STDB reducers; everything else (prediction, defs,
@@ -130,6 +131,8 @@ public partial class ShipController : Node
 
     private bool _autoFly;
     private bool _autoJoined; // autofly QuickJoins (team + ready) once on connect
+    private bool _hangarDemo; // --hangar-demo: QuickJoin only; the hangar harness drives spawning
+    private double _hangarDemoElapsed; // failsafe clock — quit if the demo never completes
     private bool _selfTestDone; // autofly fires one divergence injection
     private bool _combatTest; // --combat-test: fly straight + fire (head-on damage check)
     private bool _warpTest; // --warp-test: mine-drop run, then manual-steer into the sector's aleph (warp smoke)
@@ -153,6 +156,7 @@ public partial class ShipController : Node
     {
         _cm = GetNode<ConnectionManager>("../ConnectionManager");
         _world = GetNode<WorldRenderer>("../WorldRenderer");
+        _defs = GetNodeOrNull<DefRegistry>("../DefRegistry");
 
         if (int.TryParse(OS.GetEnvironment("STDB_LEAD"), out var lead))
         {
@@ -200,6 +204,12 @@ public partial class ShipController : Node
                 _warpTest = true;
             }
         }
+        // --hangar-demo drives the docked screen itself; it only needs the QuickJoin
+        // (team + ready) so the match starts and the mandatory spawn hangar opens. It is a
+        // UI-harness flag (after `--`, GetCmdlineUserArgs) like --ui-shot — see ShipLoadout.
+        foreach (var a in OS.GetCmdlineUserArgs())
+            if (a.StartsWith("--hangar-demo="))
+                _hangarDemo = true;
         // Headless runs are otherwise uncapped: _Process spins as fast as possible,
         // flooding ApplyInput and racing the prediction far ahead of the 20 Hz
         // server, which inflates the prediction lead. Cap to a realistic display
@@ -209,6 +219,8 @@ public partial class ShipController : Node
             Engine.MaxFps = 60;
             _spawnRequest = autoClass; // autofly flies Scout, or Fighter with --fighter
         }
+        if (_hangarDemo)
+            Engine.MaxFps = 60;
     }
 
     public override void _ExitTree()
@@ -358,11 +370,30 @@ public partial class ShipController : Node
         // launching") and the lobby ready-up, so QuickJoin once on connect — take a side (BLUE) then
         // ready up to drive the match to Active before requesting a ship. Run the server with
         // --autostart for a perpetual match (this readies straight through it).
-        if (_autoFly && connected && !_autoJoined)
+        if ((_autoFly || _hangarDemo) && connected && !_autoJoined)
         {
             _net?.SetTeam(0);
             _net?.SetReady(true);
             _autoJoined = true;
+        }
+
+        // --hangar-demo: the Lobby's auto-deploy edge (Lobby→Active) can lose the race against
+        // our own team-set round-trip, so raise deploy intent ourselves once the match is live —
+        // the Hud then opens the mandatory spawn hangar and the harness drives it. A hard
+        // failsafe quits the process if the demo somehow never completes (never hang a window).
+        if (_hangarDemo)
+        {
+            if (connected && !hasShip && _world.Phase == MatchPhase.Active && !Hud.DeployRequested)
+            {
+                GD.Print("[hangar-demo] match active — requesting deploy");
+                GetNodeOrNull<Hud>("../Hud")?.RequestDeploy();
+            }
+            _hangarDemoElapsed += delta;
+            if (_hangarDemoElapsed > 90)
+            {
+                GD.Print("HANGAR_DEMO_TIMEOUT: quitting (demo never completed)");
+                GetTree().Quit();
+            }
         }
 
         HandleMouseCapture(hasShip);
@@ -416,7 +447,15 @@ public partial class ShipController : Node
                 var hold = _autoFly
                     ? new (uint cargoId, byte count)[] { (2u, (byte)3), (3u, (byte)1), (4u, (byte)1) }
                     : LoadoutState.Shared.CargoFor((byte)cls);
-                _net?.RequestSpawn((byte)cls, hold);
+                // v36: carry the hangar sidebar's launch-base pick (0 = server default; the
+                // server validates friendly+alive and silently falls back). The weapon-slot
+                // override tail rides alongside (autofly sends none — authored loadout keeps the
+                // headless smoke deterministic); the server echoes the accepted loadout back on
+                // MsgShipLoadout.
+                var mounts = !_autoFly && _defs?.GetHardpoints((byte)cls) is { } hps
+                    ? LoadoutState.Shared.WeaponOverridesFor((byte)cls, hps)
+                    : null;
+                _net?.RequestSpawn((byte)cls, hold, LoadoutState.Shared.SelectedBaseId, mounts);
                 _spawnPending = true;
                 _spawnRetry = 1.0;
                 SpawnHint = null;
@@ -472,7 +511,10 @@ public partial class ShipController : Node
         // ShipInput so the server integrates the same boost the client predicted (no
         // reconcile storm), and still drives the engine glow. Autofly pins it on so
         // headless runs exercise the boost + exhaust path.
-        bool boost = _autoFly || (!Chat.Capturing && !SectorOverview.Active && !ShipLoadout.Active && Input.IsActionPressed("afterburner"));
+        // Gate on a captured cursor too: freeing the mouse (Esc → command mode, or the escape
+        // menu) means the pilot isn't flying, so a held Shift shouldn't keep the burner lit.
+        bool boost = _autoFly || (Input.MouseMode == Input.MouseModeEnum.Captured
+            && !Chat.Capturing && !SectorOverview.Active && !ShipLoadout.Active && Input.IsActionPressed("afterburner"));
         _input.Boost = boost;
         // While the server flies us the boost decision is the server's; PredictionController drives the
         // plume from the authoritative AbPower instead (feeding the local key here would fight it).
@@ -554,7 +596,7 @@ public partial class ShipController : Node
             // Skip local prediction while the server flies us; snapshots drive the render instead.
             if (!apActive)
                 foreach (var shot in pc.Step(_input, _predTick))
-                    _world.SpawnLocalBolt(shot.Pos, shot.Vel, shot.Dir, shot.LifeSec, shot.BoltRadius, shot.BoltLength);
+                    _world.SpawnLocalBolt(shot.Pos, shot.Vel, shot.Dir, shot.LifeSec, shot.BoltRadius, shot.BoltLength, shot.IsHeal);
         }
 
         // T5 divergence injection (debug). Press P to force a misprediction and

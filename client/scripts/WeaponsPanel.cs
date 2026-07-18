@@ -65,14 +65,18 @@ public partial class WeaponsPanel : Control
             QueueRedraw();
     }
 
-    // Distinct weapons on the local ship's class, in hardpoint order, deduped by WeaponId.
+    // Distinct weapons the local ship ACTUALLY mounts (its effective loadout, not the class
+    // default — an emptied/swapped slot shows what really launched), in hardpoint order,
+    // deduped by WeaponId.
     private void BuildWeapons(PredictionController? local)
     {
         _weapons.Clear();
         if (local == null || local.IsPod)
             return;
-        foreach (var (_, weapon) in _defs.WeaponMounts((byte)local.Class))
+        foreach (var (_, weapon) in _defs.SlotsForShip((byte)local.Class, local.LoadoutIds))
         {
+            if (weapon is null)
+                continue; // empty slot — nothing to read out
             bool seen = false;
             foreach (var w in _weapons)
                 if (w.WeaponId == weapon.WeaponId)
@@ -201,6 +205,36 @@ public partial class WeaponsPanel : Control
         return null;
     }
 
+    // The researched tier's display name for a dispenser row. Cargo stays one tier-neutral item per
+    // line (the def found by CargoId is always tier 1) while research upgrades what actually fires —
+    // Simulation.SeedDispenserAmmo walks the same successor chain server-side — so the row names the
+    // LIVE tier. The pack/ammo math stays on the tier-1 def (it owns the CargoId).
+    private string MigratedDispenserName(WeaponDef disp)
+    {
+        byte team = _net.MyTeam;
+        uint id = disp.WeaponId;
+        for (int guard = 0; guard < 8; guard++)
+        {
+            if (_defs.GetWeapon(id) is not WeaponDef w
+                || w.SucceededByWeaponId == uint.MaxValue
+                || w.ObsoletedByTechIdx.Length == 0
+                || _defs.GetWeapon(w.SucceededByWeaponId) is not WeaponDef next
+                || next.Mass > w.Mass) // mass guard: matches the server's payload-safe migration
+                break;
+            bool owns = false;
+            foreach (ushort t in w.ObsoletedByTechIdx)
+                if (_world.TeamOwnsTech(team, t))
+                {
+                    owns = true;
+                    break;
+                }
+            if (!owns)
+                break;
+            id = w.SucceededByWeaponId;
+        }
+        return _defs.GetWeapon(id) is WeaponDef live ? live.Name : disp.Name;
+    }
+
     // One dispenser row: "[key]  NAME  <pack-pips>  NN  READY/EMPTY". `ammo` is the local ship's
     // authoritative TOTAL charge count (LocalChaffAmmo / LocalMineAmmo); dispensers are loaded in
     // packs of `ChargesPerPack`, so the pips show PACKS still holding a charge (bounded, readable)
@@ -227,7 +261,7 @@ public partial class WeaponsPanel : Control
         float clusterLeft = DrawPips(pipsRight, mid, packs, System.Math.Max(packs, 1));
 
         float nameX = left + 26f;
-        DrawString(UiFonts.Saira, new Vector2(nameX, mid + 4f), disp.Name.ToUpperInvariant(), HorizontalAlignment.Left, Mathf.Max(24f, clusterLeft - 8f - nameX), 12, DesignTokens.Text2);
+        DrawString(UiFonts.Saira, new Vector2(nameX, mid + 4f), MigratedDispenserName(disp).ToUpperInvariant(), HorizontalAlignment.Left, Mathf.Max(24f, clusterLeft - 8f - nameX), 12, DesignTokens.Text2);
     }
 
     // One secondary weapon row: "[n]  NAME  <pips|bar>  STATE".
@@ -301,14 +335,16 @@ public partial class WeaponsPanel : Control
         DrawStringRight(mono, rightAnchor, txt, 10, pulse ? Pulsed(col) : col);
     }
 
-    // Fire-cadence readiness for a bolt gun, 0..1 (1 = READY). Mirrors the predictor's fire gate:
-    // charged = elapsed ticks since the last shot / the mount's fire interval. Before any def loads
-    // (FireIntervalTicks 0) or before the first shot, it reads ready.
+    // Fire-cadence readiness for a bolt gun, 0..1 (1 = READY). Mirrors the predictor's per-mount
+    // fire gate (mixed loadouts: each weapon cools down on its own interval, so read THIS
+    // weapon's latest fire tick). Before any def loads (FireIntervalTicks 0) or before the first
+    // shot, it reads ready.
     private static float BoltReadyFrac(PredictionController local, WeaponDef gun)
     {
         if (gun.FireIntervalTicks == 0)
             return 1f;
-        uint elapsed = local.ClientTick >= local.LastFireTick ? local.ClientTick - local.LastFireTick : 0u;
+        uint last = local.LastFireTickFor(gun.WeaponId);
+        uint elapsed = local.ClientTick >= last ? local.ClientTick - last : 0u;
         return Mathf.Clamp((float)elapsed / gun.FireIntervalTicks, 0f, 1f);
     }
 

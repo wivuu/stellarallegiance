@@ -1,0 +1,27 @@
+# Iron Coalition — the single playable faction (Stage-1 = one bundle; both teams play it). Seeds the
+# team's owned tech/capability state, names the lifepod + start base, and carries the faction-level
+# stat multipliers (base-attributes) imported from Allegiance's PCore014.igc GAS block.
+#
+# Economy (Stage-2, tunable): each team starts a match with bonus-money credits and earns income-money
+# credits per paycheck (every Simulation.PaycheckTicks = 1200 ticks = 1 min at 20 Hz). Iron's IGC
+# income/bonus modifier is -0.125 (×0.875): 1000 → 875, 100 → 87.5 ≈ 88.
+id: iron-coalition
+name: Iron Coalition
+base-capabilities: [base]
+bonus-money: 875     # 1000 × 0.875 (IGC -0.125 income/bonus modifier)
+income-money: 88     # 100 × 0.875 = 87.5, rounded
+lifepod-hull-id: pod
+initial-station-id: garrison
+
+# Faction-level team-wide stat multipliers (GAS), kebab-case GameAttribute names. Verified from
+# PCore014.igc (see .claude/plans/keen-juggling-pascal.md "Verified source data"). Multiplicative,
+# neutral at 1.0. Resolved per-team into the sim's TeamAttr cache (faction base × completed devs).
+base-attributes:
+  max-armor-station: 1.15   # bases 15% tougher
+  max-shield-station: 1.15  # INERT — bases carry no shields (authored for fidelity, no consumer)
+  signature: 0.85           # 15% harder to detect
+  max-energy: 1.2           # INERT — no ship energy model (authored for fidelity, no consumer)
+  mining-rate: 0.85         # mines 15% slower
+  mining-capacity: 0.75     # 25% smaller ore holds
+  gun-damage: 1.1           # +10% gun damage
+  missile-damage: 1.1       # +10% missile damage

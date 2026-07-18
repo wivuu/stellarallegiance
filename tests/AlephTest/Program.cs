@@ -47,6 +47,7 @@ const uint EmptySector = 999;
 Simulation BootSim(ulong seed)
 {
     var content = ContentLoader.Load(stockPath, worldPath);
+    content.Start.BaseTechs.Add("supremacy-1"); // unlock the Enh Fighter hull (gated since Phase 4) — duel targets use it
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
     var sim = new Simulation(world, content);
     sim.PigsEnabled = false;
@@ -124,7 +125,10 @@ const int BurstTicks = 30;
     const float TgtRange = 300f;
     const float GateZ = 150f;
     var sim = BootSim(seed: 3);
-    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassFighter);
+    // No stock hull mounts a seeker by default (and the fighter's gun-typed mounts don't take
+    // racks) — arm a scout's untyped empty hp 1 with one so the shooter has a seeker to dumbfire.
+    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassScout,
+        cargo: System.Array.Empty<(uint, byte)>(), 0, new (byte, uint)[] { (1, 3u) });
     sim.EnqueueJoin(2, team: 1, cls: FlightModel.ClassFighter);
     sim.Step();
     var shooter = sim.Ships.First(s => s.OwnerClientId == 1);

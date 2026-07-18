@@ -18,10 +18,34 @@
 # (client EngineGlow plume) and trail-color (RRGGBB[AA] hex). CoreValidator refuses to boot a launcher
 # whose missile leaves any of these unauthored. can-damage-base (omit-when-default false) flags a
 # warhead as able to damage bases (a base is a lockable target only for such a weapon).
+#
+# Iron Coalition ordnance import (Phase 6, PCore014.igc) — full replacement of the placeholder
+# AI-invented expendables (seeker-missile/dart-missile/anti-base-torpedo/proximity-mine/
+# sensor-decoy/recon-probe). The IGC Iron Coalition extraction (.claude/skills/igc-format
+# igc_parser.py --iron-slice, D8 offsets) is the source of truth for what should be available; every
+# stat below is translated through OUR-MAGNITUDE anchors × IGC RATIOS (keep-our-magnitudes, not
+# IGC-literal):
+#   - Missiles anchor `seeker-missile` -> `mrm-seeker-1` (power x0.75, lock-time x0.75, accel x2/3,
+#     turn-rate ~x83.3 deg per IGC rad/s).
+#   - Mines anchor `proximity-mine` -> `prox-mine-1` (power x0.15, cloud-radius x0.8, lifespan =
+#     IGC endurance x0.03).
+#   - Chaff anchors `sensor-decoy` -> `counter-1` (chaff-strength x2/3).
+#   - Probes anchor `recon-probe` -> `ews-probe-1` (sight-radius x9.6).
+# Judgment calls (not straight anchor math): MRM Quickfire turn-rate capped 120/160/200 deg/s (the
+# raw IGC 6/8/10 rad/s would out-turn every ship in the game); Quickfire fire-interval-ticks floored
+# at 10 in launchers.yaml (the IGC 0.25s load time would be a DPS hose). SRM Anti-Base keeps our
+# LOCK-BASED siege identity (lock-time 3.0s / lock-angle 0.35 / max-lock 1500 / chaff-resistance 2.5)
+# rather than the IGC instant-lock (lockTime 0 in the record) — siege orders/PIG siege/MissileTest are
+# all lock-based; its power IS authored IGC-faithful (300/375/375 — a garrison falls in ~7 tier-1 hits
+# vs 11 pre-import). SRM Dumbfire (`srm-dumbfire-*`) is a normal GUIDED missile with a quick lock
+# (0.5/0.4/0.3s) and a low turn-rate (67 deg/s, IGC 0.80 rad/s) — NOT an unguided path; the IGC
+# lockTime 0 means "instant lock", not "no lock". IGC blast/width fields are 0 on every missile
+# record — we keep our own per-role fuse-width/blast-power/blast-radius values.
 missiles:
-  # Seeker (weapon-id 3 rack): slow, hard-hitting, patient tracker.
-  - id: seeker-missile
-    name: Seeker Missile
+  # MRM Seeker 1/2/3 (weapon-ids 3/18/19 rack): slow, hard-hitting, patient tracker. The anchor
+  # missile for the whole expendable translation (seeker-missile -> mrm-seeker-1).
+  - id: mrm-seeker-1
+    name: MRM Seeker 1
     description: Lock-on ordnance. Fired from the hold.
     mass: 4
     lifespan: 8
@@ -38,56 +62,264 @@ missiles:
     direct-hit-multiplier: 1.5
     blast-power: 30     # splash at the detonation point
     blast-radius: 25    # splash cutoff, u
-    model-name: mis09
+    model-name: mis06
     trail-lifetime: 0.7
     trail-scale: 0.45
     trail-color: "ffc890ff"  # warm booster plume
+  - id: mrm-seeker-2
+    name: MRM Seeker 2
+    description: Lock-on ordnance. Fired from the hold.
+    mass: 4
+    lifespan: 8
+    initial-speed: 90
+    acceleration: 40
+    max-speed: 220
+    turn-rate: 95
+    lock-time: 1.1
+    lock-angle: 0.5
+    max-lock: 1200
+    chaff-resistance: 1.25
+    power: 45
+    width: 1
+    direct-hit-multiplier: 1.5
+    blast-power: 30
+    blast-radius: 25
+    model-name: mis06
+    trail-lifetime: 0.7
+    trail-scale: 0.45
+    trail-color: "ffc890ff"
+  - id: mrm-seeker-3
+    name: MRM Seeker 3
+    description: Lock-on ordnance. Fired from the hold.
+    mass: 4
+    lifespan: 9
+    initial-speed: 90
+    acceleration: 40
+    max-speed: 220
+    turn-rate: 109
+    lock-time: 0.75
+    lock-angle: 0.75
+    max-lock: 1200
+    chaff-resistance: 1.5
+    power: 56
+    width: 1
+    direct-hit-multiplier: 1.5
+    blast-power: 37
+    blast-radius: 25
+    model-name: mis06
+    trail-lifetime: 0.7
+    trail-scale: 0.45
+    trail-color: "ffc890ff"
 
-  # Dart (weapon-id 4 rack): fast, weak, barely tracks — a harasser.
-  - id: dart-missile
-    name: Dart Missile
-    description: Fast fire-and-forget dart. Barely tracks.
+  # MRM Quickfire 1/2/3 (weapon-ids 4/20/21 rack): fast, weak, barely tracks — a harasser (the
+  # dart-missile analog). Turn-rate is capped WELL below the raw IGC 6/8/10 rad/s conversion (would
+  # out-turn every ship); fire cadence is floored in launchers.yaml (raw IGC load time is a DPS hose).
+  - id: mrm-quickfire-1
+    name: MRM Quickfire 1
+    description: Fast fire-and-forget harasser missile. Barely tracks.
     mass: 3
     lifespan: 5
     initial-speed: 180
-    acceleration: 80
+    acceleration: 52
     max-speed: 320
-    turn-rate: 30       # deg/s — sluggish guidance
-    lock-time: 1.0
-    lock-angle: 0.4
+    turn-rate: 120      # deg/s — capped (see header)
+    lock-time: 0.25
+    lock-angle: 0.25
     max-lock: 1000
-    chaff-resistance: 0.5  # a cheap harasser is easily decoyed
-    power: 18
+    chaff-resistance: 0.9  # a cheap harasser is easily decoyed
+    power: 30
     width: 2
     direct-hit-multiplier: 1.25
-    blast-power: 10     # thin splash — a harasser, not a bomber
+    blast-power: 17     # thin splash — a harasser, not a bomber
     blast-radius: 12
-    model-name: mis01
+    model-name: mis08
     trail-lifetime: 0.4
     trail-scale: 0.3
     trail-color: "aaccffcc"  # cool, thin plume
+  - id: mrm-quickfire-2
+    name: MRM Quickfire 2
+    description: Fast fire-and-forget harasser missile. Barely tracks.
+    mass: 3
+    lifespan: 5
+    initial-speed: 180
+    acceleration: 57
+    max-speed: 320
+    turn-rate: 160
+    lock-time: 0.15
+    lock-angle: 0.25
+    max-lock: 1000
+    chaff-resistance: 1.15
+    power: 34
+    width: 2
+    direct-hit-multiplier: 1.25
+    blast-power: 19
+    blast-radius: 12
+    model-name: mis08
+    trail-lifetime: 0.4
+    trail-scale: 0.3
+    trail-color: "aaccffcc"
+  - id: mrm-quickfire-3
+    name: MRM Quickfire 3
+    description: Fast fire-and-forget harasser missile. Barely tracks.
+    mass: 3
+    lifespan: 5
+    initial-speed: 180
+    acceleration: 63
+    max-speed: 320
+    turn-rate: 200
+    lock-time: 0.1
+    lock-angle: 0.37
+    max-lock: 1000
+    chaff-resistance: 1.4
+    power: 38
+    width: 2
+    direct-hit-multiplier: 1.25
+    blast-power: 21
+    blast-radius: 12
+    model-name: mis08
+    trail-lifetime: 0.4
+    trail-scale: 0.3
+    trail-color: "aaccffcc"
 
-  # Anti-base torpedo (weapon-id 5 rack): heavy siege ordnance, barely steers, hits stations hard.
-  - id: anti-base-torpedo
-    name: Anti-Base Torpedo
-    description: Heavy siege torpedo. Locks onto enemy stations.
+  # SRM Dumbfire 1/2/3 (weapon-ids 24/25/26 rack, new line): a normal GUIDED missile with a QUICK
+  # lock and a LOW turn-rate — in Allegiance a "dumbfire" gets a near-instant lock but barely steers,
+  # it is not an unguided weapon. Short max-lock (close-range brawler ordnance).
+  - id: srm-dumbfire-1
+    name: SRM Dumbfire 1
+    description: Quick-lock, low-turn missile. Short-range punch.
+    mass: 4
+    lifespan: 5
+    initial-speed: 120
+    acceleration: 67
+    max-speed: 260
+    turn-rate: 67       # deg/s — low steer (IGC 0.80 rad/s)
+    lock-time: 0.5      # quick lock
+    lock-angle: 0.5
+    max-lock: 800       # short-range
+    chaff-resistance: 1.0
+    power: 75
+    width: 2
+    direct-hit-multiplier: 1.5
+    blast-power: 50
+    blast-radius: 25
+    model-name: mis05
+    trail-lifetime: 0.6
+    trail-scale: 0.5
+    trail-color: "ffb060ff"
+  - id: srm-dumbfire-2
+    name: SRM Dumbfire 2
+    description: Quick-lock, low-turn missile. Short-range punch.
+    mass: 4
+    lifespan: 6
+    initial-speed: 120
+    acceleration: 67
+    max-speed: 260
+    turn-rate: 67
+    lock-time: 0.4
+    lock-angle: 0.5
+    max-lock: 800
+    chaff-resistance: 1.0
+    power: 94
+    width: 2
+    direct-hit-multiplier: 1.5
+    blast-power: 63
+    blast-radius: 25
+    model-name: mis05
+    trail-lifetime: 0.6
+    trail-scale: 0.5
+    trail-color: "ffb060ff"
+  - id: srm-dumbfire-3
+    name: SRM Dumbfire 3
+    description: Quick-lock, low-turn missile. Short-range punch.
+    mass: 4
+    lifespan: 6
+    initial-speed: 120
+    acceleration: 67
+    max-speed: 260
+    turn-rate: 67
+    lock-time: 0.3
+    lock-angle: 0.5
+    max-lock: 800
+    chaff-resistance: 1.0
+    power: 113
+    width: 2
+    direct-hit-multiplier: 1.5
+    blast-power: 75
+    blast-radius: 25
+    model-name: mis05
+    trail-lifetime: 0.6
+    trail-scale: 0.5
+    trail-color: "ffb060ff"
+
+  # SRM Anti-Base 1/2/3 (weapon-ids 5/22/23 rack): heavy siege ordnance, barely steers, hits stations
+  # hard — the ONLY can-damage-base warhead line, so a hull carrying it is the match-ender. Keeps our
+  # lock-based siege identity (see header); power is IGC-faithful (300/375/375).
+  - id: srm-anti-base-1
+    name: SRM Anti-Base 1
+    description: Heavy siege ordnance. Locks onto enemy stations.
     mass: 6
     lifespan: 12
     initial-speed: 60
-    acceleration: 25
+    acceleration: 40
     max-speed: 140
-    turn-rate: 25        # deg/s — barely steers; meant for a static target
+    turn-rate: 15        # deg/s — barely steers; meant for a static target
     lock-time: 3.0
     lock-angle: 0.35
     max-lock: 1500
     chaff-resistance: 2.5  # heavy siege guidance barely notices chaff
-    power: 200
+    power: 300
     width: 1             # minimal fuse margin — vs the base it's ignored anyway (exact hull contact)
     direct-hit-multiplier: 1.0
-    blast-power: 40      # splashes defenders near the impact, never the base
+    blast-power: 60      # splashes defenders near the impact, never the base
     blast-radius: 30
     can-damage-base: true
-    model-name: mis09    # reuse existing GLB until a torpedo model lands
+    model-name: mis11
+    trail-lifetime: 1.0
+    trail-scale: 0.6
+    trail-color: "ff9060ff"
+  - id: srm-anti-base-2
+    name: SRM Anti-Base 2
+    description: Heavy siege ordnance. Locks onto enemy stations.
+    mass: 6
+    lifespan: 12
+    initial-speed: 60
+    acceleration: 40
+    max-speed: 140
+    turn-rate: 15
+    lock-time: 3.0
+    lock-angle: 0.35
+    max-lock: 1500
+    chaff-resistance: 2.5
+    power: 375
+    width: 1
+    direct-hit-multiplier: 1.0
+    blast-power: 75
+    blast-radius: 30
+    can-damage-base: true
+    model-name: mis11
+    trail-lifetime: 1.0
+    trail-scale: 0.6
+    trail-color: "ff9060ff"
+  - id: srm-anti-base-3
+    name: SRM Anti-Base 3
+    description: Heavy siege ordnance. Locks onto enemy stations.
+    mass: 6
+    lifespan: 12
+    initial-speed: 60
+    acceleration: 40
+    max-speed: 140
+    turn-rate: 15
+    lock-time: 3.0
+    lock-angle: 0.35
+    max-lock: 1500
+    chaff-resistance: 2.5
+    power: 375
+    width: 1
+    direct-hit-multiplier: 1.0
+    blast-power: 75
+    blast-radius: 30
+    can-damage-base: true
+    model-name: mis11
     trail-lifetime: 1.0
     trail-scale: 0.6
     trail-color: "ff9060ff"
@@ -99,25 +331,53 @@ mines:
   # SCALED BY ITS OWN SPEED (mines are static, so a fast plow-through hurts and a near-stationary ship
   # takes ~0), every tick, for the field's lifespan. One deploy costs ONE mine-cargo unit regardless of
   # cloud-count (the meshes are decoration, not per-mine ammo). model-name is the GLB the client
-  # instances per visual mine (assets/mines/<name>.glb).
-  - id: proximity-mine
-    name: Proximity Mine
+  # instances per visual mine (assets/mines/<name>.glb). Tier 1 anchors `proximity-mine` (IGC power
+  # x0.15, cloud-radius x0.8, lifespan = IGC endurance x0.03); tiers 2/3 author NO cargo-id/glyph/
+  # charges-per-pack — the hangar keeps ONE tier-neutral cargo row per line (Prox Mine), and the
+  # server resolves the fired tier from owned techs at spawn (Simulation.SeedDispenserAmmo).
+  - id: prox-mine-1
+    name: Prox Mine
     description: Dropped behind the ship; arms after 1s.
     cargo-id: 2
     mass: 1             # payload cost per PACK (one hangar count = one pack)
     charges-per-pack: 1 # fields deployable from one loaded pack (one field per press)
     glyph: "◈"
-    model-name: acs41    # GLB instanced per visual mine (assets/mines/acs41.glb)
+    model-name: dn_ptminprx  # GLB instanced per visual mine (assets/mines/dn_ptminprx.glb)
     lifespan: 60         # field lifetime, s
     power: 60            # damage-PER-SECOND at reference speed, scaled by the victim's speed
     cloud-radius: 80     # radius the field scatters its mines within AND the lethal sphere radius, u (tight, dense cluster)
     cloud-count: 64      # mine meshes scattered per deploy — cosmetic density (<= 64)
     arm-delay: 1         # seconds before the field arms
     signature: 1.0       # radar signature enemies detect the ARMED field at (arming fields are silent)
+  - id: prox-mine-2
+    name: Prox Mine 2
+    description: Dropped behind the ship; arms after 1s.
+    mass: 1
+    model-name: dn_ptminprx
+    lifespan: 75
+    power: 75
+    cloud-radius: 80
+    cloud-count: 64
+    arm-delay: 1
+    signature: 1.0
+  - id: prox-mine-3
+    name: Prox Mine 3
+    description: Dropped behind the ship; arms after 1s.
+    mass: 1
+    model-name: dn_ptminprx
+    lifespan: 90
+    power: 90
+    cloud-radius: 100
+    cloud-count: 64
+    arm-delay: 1
+    signature: 1.0
 
 chaffs:
-  - id: sensor-decoy
-    name: Countermeasures
+  # Anchors `sensor-decoy` -> `counter-1` (IGC chaff-strength x2/3), IGC-exact model (acs40). Tiers
+  # 2/3 author NO cargo-id/glyph/charges-per-pack (see mines: comment above — same tier-neutral-cargo
+  # / server-resolved-tier design).
+  - id: counter-1
+    name: Counter
     description: Fakes the ship's signature for pursuers.
     cargo-id: 3
     mass: 1              # payload cost per PACK (one hangar count = one pack)
@@ -127,6 +387,22 @@ chaffs:
     lifespan: 3          # puff lifetime, s
     chaff-strength: 1.0  # decoy strength vs a missile's chaff-resistance
     decoy-radius: 60     # u within which a missile can be lured onto this puff
+  - id: counter-2
+    name: Counter 2
+    description: Fakes the ship's signature for pursuers.
+    mass: 1
+    model-name: acs40
+    lifespan: 3
+    chaff-strength: 1.5
+    decoy-radius: 60
+  - id: counter-3
+    name: Counter 3
+    description: Fakes the ship's signature for pursuers.
+    mass: 1
+    model-name: acs40
+    lifespan: 3
+    chaff-strength: 2.25
+    decoy-radius: 60
 
 probes:
   # A deployed, destructible sensor buoy: grants its owning team a vision sphere (sight-radius)
@@ -135,18 +411,56 @@ probes:
   # far away enemies radar-detect it). model-name is the GLB the client instances per deployed
   # probe (assets/probes/<name>.glb); model-size is the visual normalization length in u. mass is
   # authored low (not the "realistic" heavier value) so a single pack fits inside the scout's
-  # existing payload-capacity alongside its other cargo.
-  - id: recon-probe
-    name: Recon Probe
+  # existing payload-capacity alongside its other cargo. Anchors `recon-probe` -> `ews-probe-1`
+  # (IGC sight-radius x9.6). Tiers 2/3 author NO cargo-id/glyph/charges-per-pack (see mines: comment
+  # above — same tier-neutral-cargo / server-resolved-tier design).
+  - id: ews-probe-1
+    name: EWS Probe
     description: Deployable sensor buoy. Destructible; expires after 10 minutes.
     cargo-id: 4
     mass: 2              # payload cost per PACK (one hangar count = one pack)
     charges-per-pack: 2 # probes deployable from one loaded pack (one probe per press)
     glyph: "◉"
-    model-name: acs64    # GLB the client instances per deployed probe (assets/probes/acs64.glb)
+    model-name: utl23    # GLB the client instances per deployed probe (assets/probes/utl23.glb)
     model-size: 4.0      # u visual normalization length (was a hardcoded 1.2 client-side)
     lifespan: 1200        # seconds before the deployed probe expires
     sight-radius: 4800   # u radius of the team vision sphere the probe grants while alive
     hit-points: 25        # ~2 fighter twin-gun volleys or 2 bomber bolts; 0 = invulnerable
     hit-radius: 12       # u server hit sphere for bolts/blasts (generous vs the visual, feels fair)
     signature: 1.0       # radar signature enemies detect the deployed probe at
+  - id: ews-probe-2
+    name: EWS Probe 2
+    description: Deployable sensor buoy. Destructible; expires after 10 minutes.
+    mass: 2
+    model-name: utl23
+    model-size: 4.0
+    lifespan: 1200
+    sight-radius: 5760
+    hit-points: 25
+    hit-radius: 12
+    signature: 0.83
+  - id: ews-probe-3
+    name: EWS Probe 3
+    description: Deployable sensor buoy. Destructible; expires after 10 minutes.
+    mass: 2
+    model-name: utl23
+    model-size: 4.0
+    lifespan: 1200
+    sight-radius: 6720
+    hit-points: 25
+    hit-radius: 12
+    signature: 0.67
+
+fuels:
+  # Auxiliary afterburner fuel carried in the hold. Pure cargo (nothing is fired or deployed):
+  # when a fuel-modeled hull's tank hits 0 while boost is held, one charge auto-loads and the
+  # tank refills by fuel-per-charge, clamped to the hull's max-fuel — overshoot is wasted, so a
+  # value >= every tank means "full refill". Single tier, no launcher, no tech gate.
+  - id: fuel-pod-1
+    name: Fuel Pod
+    description: Reserve afterburner fuel. Auto-loads when the tank runs dry.
+    cargo-id: 5
+    mass: 1               # payload cost per PACK (one hangar count = one pack)
+    charges-per-pack: 1   # one refill per pack
+    glyph: "◒"            # geometric like the other cargo glyphs (◈ ◇ ◉) — HUD font has no emoji
+    fuel-per-charge: 999  # >= every tank => full refill (clamped to max-fuel); lower for partials

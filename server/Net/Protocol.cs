@@ -33,7 +33,7 @@ public static class Protocol
 
     // Fixed serialized size of one quantized snapshot ship record (see WriteShip). Lets the
     // hub stride the per-tick record scratch and size pooled frames without a MemoryStream.
-    public const int ShipRecordSize = 56;
+    public const int ShipRecordSize = 57;
 
     // Fixed serialized size of one in-flight guided-missile record (see WriteMissile). The hub
     // strides a second per-tick scratch by this, mirroring the ship-record scratch.
@@ -63,7 +63,7 @@ public static class Protocol
     public const byte MsgHello = 1;
     public const byte MsgInput = 2; // u32 tick, f32 thrust/strafeX/strafeY/yaw/pitch/roll, u8 flags
     public const byte MsgPing = 3; // u32 nonce (echoed back as MsgPong for RTT/adaptive-lead)
-    public const byte MsgSpawn = 4; // u8 cls — request to spawn this class (honored only while Active)
+    public const byte MsgSpawn = 4; // u8 cls, u64 launchBaseId (0 = server default; v36), u8 nCargo, nCargo x (u32 cargoId, u8 count), u8 nMounts, nMounts x (u8 hpIndex, u32 weaponId) — request to spawn this class (honored only while Active). Mount tail: only OVERRIDDEN weapon slots (hardpoint Index + weapon id; u32.Max = leave the slot empty); absent/empty tail = authored loadout. Old frames without the tail parse as zero overrides.
     public const byte MsgSetTeam = 5; // u8 team — pick a side in the lobby
     public const byte MsgSetReady = 6; // u8 ready (0/1) — toggle ready in the lobby
     public const byte MsgChat = 7; // u8 scope (0 all, 1 team), u16 len, utf8 text
@@ -72,6 +72,10 @@ public static class Protocol
     public const byte MsgSetMap = 10; // u16 len, utf8 mapName — host picks the next map (server enforces host-only)
     public const byte MsgSetAutopilot = 11; // u8 mode(0 off/1 on), u8 kind(0 ship/1 base/2 rock/3 waypoint), u64 id, u32 sector, 3x f32 pos — engage/disengage autopilot (27-byte frame incl. type byte)
     public const byte MsgOrder = 12; // u64 subjectShipId, u8 targetKind(0 ship/1 base/2 rock/3 point/4 sector/255 clear), u64 targetId, u32 sector, 3x f32 pos — command a friendly ship (34-byte frame incl. type byte). Verb inferred server-side from target kind+team; human subjects become advisory chat directives, AI subjects execute (commander-only). Kind 4 ignores pos: pigs hold just inside the entry aleph, miners prospect-patrol the sector until helium-3 is found.
+    public const byte MsgResearch = 13; // u8 op (0 start-or-queue, 1 cancel-active, 2 cancel-on-deck), u64 baseId, u16 devIndex — commander research order at a friendly base (12-byte frame incl. type byte; v36). Hub-gated by CommanderOrWarn; results come back as system chat + the next MsgResearchState.
+    public const byte MsgBuildConstructor = 14; // u8 stationTypeId (BaseTypeId to build), u64 launchBaseId (0 = team default garrison) — commander buys a constructor drone that will build this station type (v37). Hub-gated by CommanderOrWarn; launches from a WinCondition base only. Order it to a rock via MsgOrder.
+    public const byte MsgConstructorCancel = 15; // u64 constructorId — commander cancels a STILL-PRODUCING constructor (refunds the station price) (v38). Hub-gated by CommanderOrWarn. A launched drone is managed via MsgOrder, not this.
+    public const byte MsgBuyMiner = 16; // u64 launchBaseId (0 = team default garrison) — commander buys a mining drone (replaces the old /buyminer chat command). The miner joins that garrison's build pipeline; team inferred server-side; Hub-gated by CommanderOrWarn. Cap/cost/phase/queue/kill-switch validated on the sim thread (Simulation.TryBuyMiner); results come back as team-scoped MinerNoticesThisStep chat + the MsgTeamState miner-count tail.
 
     // server -> client
     public const byte MsgWelcome = 1; // u32 clientId, u8 team, u32 tick, f32 dt, u8 tokenLen+token, statics (sectors/bases/asteroids/alephs)
@@ -83,16 +87,18 @@ public static class Protocol
     public const byte MsgDefs = 7; // full content defs (ship classes/weapons/cargo items/bases/world cfg) — sent once after Welcome
     public const byte MsgLobbyState = 8; // u8 phase, u8 winner, u8 count, count x lobby entry
     public const byte MsgChatRelay = 9; // u8 scope (0 all, 1 team, 2 commander order directive — team-scoped, gold on the client), u8 fromTeam, str name, str text
-    public const byte MsgTeamState = 10; // u8 count, count x (u8 team, i32 credits, i32 score, u8 nUnlocked, nUnlocked x u8 classId) — low-rate per-team economy
+    public const byte MsgTeamState = 10; // u8 count, count x (u8 team, i32 credits, i32 score, u8 nUnlocked, nUnlocked x u8 classId, u16 nOwnedTechs, n x u16 techIdx, u8 nOwnedCaps, n x u8 cap, u8 discoveredRockClasses (v42), u8 minerCount, u8 minerCap, u8 buildQueueLimit (build-pipeline tail)) — low-rate per-team economy (+ owned techs/caps, v36)
     public const byte MsgMissiles = 11; // u32 tick, u8 count, count x MissileRecord — in-flight guided missiles (AOI-filtered)
     public const byte MsgMissileGone = 12; // u64 id, u8 reason (0 expired, 1 impact), u16 sector, 3x i16 pos — missile detonation/expiry FX
     public const byte MsgMinefields = 13; // u16 anchorSector, u8 count, count x MinefieldRecord — the client anchor-sector's fields (on change, coarse keepalive, or anchor-sector change)
     public const byte MsgMineGone = 14; // u64 fieldId, u8 mineIndex, u8 reason, u16 sector, 3x i16 pos — per-mine pop FX
     public const byte MsgChaff = 15; // u64 id, u8 team, u16 sector, 3x i16 pos, 3x f16 vel, u32 weaponId — one-shot chaff spawn broadcast
+
     // Fog of war (WP3), per-team. MsgReveal streams newly-scouted statics (same record encodings as
     // Welcome); MsgContacts streams the team's last-known enemy ghost set + its radar-detected id list.
     public const byte MsgReveal = 16; // u8 nBases x BaseStatic, u16 nRocks x RockStatic, u8 nAlephs x AlephStatic, u8 nSectors x SectorStatic
     public const byte MsgContacts = 17; // u8 nGhosts x GhostRecord, u8 nRadar x u64 — full reconcile per frame
+
     // Deployable recon probes (WP5). Per-team COMPLETE visible set (own probes + enemy probes the
     // team can radar-detect; fog off = all): the client reconciles by omission. Gone is broadcast.
     public const byte MsgProbes = 18; // u8 count x ProbeRecord — minefield-style cadence (on change + coarse keepalive)
@@ -101,6 +107,11 @@ public static class Protocol
     public const byte MsgReject = 21; // u8 code (1 = bad secret) — join refused; sent right before the transport closes so the client learns WHY across BOTH transports (a WebRTC DataChannel close carries no reason)
     public const byte MsgRockUpdate = 22; // u8 count, count x (u64 id, f32 currentRadius, u8 orePct) — live rock shrink deltas (mining), on-change; fog-on = discovered rocks only. See BuildRockUpdates.
     public const byte MsgMinerTargets = 23; // u8 count, count x (u64 shipId, u64 rockId) — which rock each actively-mining miner is harvesting, so the client's mining beam aims true (not a nearest-rock guess). Broadcast; rendering is naturally gated by ship+rock visibility. See BuildMinerTargets.
+    public const byte MsgResearchState = 24; // u8 nBases, n x (u64 baseId, u8 nActive x (u16 devIdx, u32 startTick, u32 durationTicks), u8 hasOnDeck, ?u16 onDeckDevIdx) — PER-TEAM research orders at the team's bases (v36). Progress derives client-side from startTick+duration vs the live tick, so the frame only changes on start/complete/cancel/promote (sent on change + coarse keepalive). See BuildResearchStateFor.
+    public const byte MsgConstructorBuilds = 25; // u8 count, count x (u64 shipId, u64 rockId, u8 phase (0 align, 1 sink, 2 build), f16 progress 0..1) — each constructor drone actively aligning/sinking/building on a rock, so the client drives the build-sphere VFX (v37). Broadcast; rendering gated by ship+rock visibility. See BuildConstructorBuilds.
+    public const byte MsgConstructorState = 26; // u8 count, count x (u64 id, u8 stationTypeId, u8 state (0 producing/1 idle/2 to-rock/3 move/4 align/5 sink/6 build/8 queued), u32 startTick, u32 durationTicks, u64 targetId, bool producesMiner, u64 launchBaseId) — PER-TEAM build roster for the Build tab: producing (start/duration → progress bar + cancel), queued (untimed, 0% — waiting for a build slot at launchBaseId), and launched drones (status). launchBaseId groups a garrison's build pipeline for the queue-full gray-out. Progress derives client-side from startTick+duration (v38). On change + coarse keepalive. See BuildConstructorState.
+    public const byte MsgRockGone = 27; // u8 count, count x u64 rockId — rocks fully despawned this step (a constructor's finished base consumed the asteroid). Broadcast, reliable; the client deletes its rock node + collision. See BuildRockGone.
+    public const byte MsgShipLoadout = 28; // u8 count, count x (u64 shipId, u8 nSlots, nSlots x u32 weaponId) — per-barrel EFFECTIVE weapon ids (hardpoint declaration order; u32.Max = emptied slot) for every ship flying a NON-authored loadout. Full table, reconcile-by-omission: a ship absent from the frame flies its authored class loadout. Broadcast, reliable, on change + coarse keepalive (empty frames still sent so stale entries prune). Doubles as the owner's authoritative echo. See BuildShipLoadouts.
 
     public const byte FlagFiring = 1;
     public const byte FlagBoost = 2;
@@ -117,7 +128,7 @@ public static class Protocol
     public const byte ShipFlagAutopilot = 16; // server-steered autopilot engaged on this ship — the owning client suspends its own-ship prediction and renders from authoritative snapshots
     public const byte ShipFlagMiner = 32; // AI mining ship (ShipKind.Miner) — HUD tags it a MINER; PIG brain never touches it
     public const byte ShipFlagMining = 64; // that miner is actively moving ore this tick (ShipSim.IsHarvesting) — HUD "MINING" state
-    public const byte ShipFlagConstructor = 128; // RESERVED (ShipKind.Constructor) — never emitted yet; kept so the role round-trips end-to-end
+    public const byte ShipFlagConstructor = 128; // AI base-builder drone (ShipKind.Constructor) — HUD tags it CONSTRUCTOR; PIG brain never touches it
 
     public static void WriteVec3(BinaryWriter w, Vec3 v)
     {
@@ -132,7 +143,7 @@ public static class Protocol
     //   3x f16 vel | 3x f16 angvel | f16 abpower | f16 fuel | f16 health | f16 shield
     //   u32 lastInputTick | u32 lastFireTick
     //   u8 missileAmmo | u8 lockState (bit7 = locked, bits0-6 = lock progress 0..100)
-    //   u8 chaffAmmo | u8 mineAmmo | u8 probeAmmo
+    //   u8 chaffAmmo | u8 mineAmmo | u8 probeAmmo | u8 fuelPodAmmo
     // Flags byte also carries the being-locked threat bits (ShipFlagLockingMe/LockedMe) from
     // ShipSim.ThreatLockState — the target always gets its own record, so it costs no AOI work.
     public static void WriteShip(Span<byte> dst, Simulation.ShipSim s)
@@ -212,7 +223,8 @@ public static class Protocol
         dst[o++] = s.ChaffAmmo;
         dst[o++] = s.MineAmmo;
         dst[o++] = s.ProbeAmmo;
-        // o == ShipRecordSize (56)
+        dst[o++] = s.FuelPodAmmo;
+        // o == ShipRecordSize (57)
     }
 
     // Serialize one in-flight missile record (exactly MissileRecordSize bytes) into dst. Layout:
@@ -400,14 +412,15 @@ public static class Protocol
 
     // One base static record (used by Welcome + MsgReveal — byte-identical output, load-bearing).
     // Layout: u64 id | u8 team | u32 sector | 3x f32 pos | f32 radius | f32 health.
-    private static void WriteBaseStatic(BinaryWriter w, in World.BaseSite b, float health)
+    private static void WriteBaseStatic(BinaryWriter w, World world, in World.BaseSite b, float health)
     {
         w.Write(b.Id);
         w.Write(b.Team);
         w.Write(b.SectorId);
         WriteVec3(w, b.Pos);
-        w.Write(World.BaseRadius);
+        w.Write(world.BaseRadiusOf(b.BaseTypeId)); // per-type radius (was the World.BaseRadius constant; v37)
         w.Write(health);
+        w.Write(b.BaseTypeId); // v37: which base type (mesh/def), appended after health for byte-stability
     }
 
     // One asteroid static record (Welcome + MsgReveal). Cosmetic shape: variant index into
@@ -449,6 +462,7 @@ public static class Protocol
     // Fixed serialized size of one live rock-update record (see BuildRockUpdates): u64 id | f32
     // currentRadius | u8 orePct. Lets the client stride a MsgRockUpdate body.
     public const int RockUpdateRecordSize = 8 + 4 + 1; // 13
+
     // Max rock-update records per MsgRockUpdate frame — well under the u8 count prefix so a batch of
     // changed rocks can never overflow it (chunked into successive frames, minefield-style).
     public const int RockUpdateMaxPerFrame = 255;
@@ -480,6 +494,31 @@ public static class Protocol
             frames.Add(buf);
         }
         return frames;
+    }
+
+    // Rock DESPAWN broadcast (MsgRockGone): the ids of rocks fully removed this step (a constructor's
+    // finished base consumed the asteroid). One frame, count capped at the u8 prefix — at most a handful
+    // of bases complete on any tick, so a single frame always suffices. Returns null when nothing was
+    // removed (no frame to send). Broadcast to all: an id a client never had is a harmless client-side
+    // no-op, and a rock's disappearance leaks nothing (the base that replaces it reveals normally).
+    public static byte[]? BuildRockGone(IReadOnlyCollection<ulong> ids)
+    {
+        if (ids.Count == 0)
+            return null;
+        int count = Math.Min(ids.Count, 255);
+        var buf = new byte[2 + count * 8];
+        buf[0] = MsgRockGone;
+        buf[1] = (byte)count;
+        int o = 2,
+            n = 0;
+        foreach (ulong id in ids)
+        {
+            if (n++ >= count)
+                break;
+            BitConverter.TryWriteBytes(buf.AsSpan(o), id);
+            o += 8;
+        }
+        return buf;
     }
 
     // Fixed serialized size of one miner-target record (see BuildMinerTargets): u64 shipId | u64 rockId.
@@ -514,12 +553,119 @@ public static class Protocol
         return buf;
     }
 
+    // Per-ship weapon-mount table (MsgShipLoadout): one record per ship flying a NON-authored
+    // loadout — its EFFECTIVE per-barrel weapon ids in hardpoint declaration order (u32.Max =
+    // an emptied slot). Ships on the authored class loadout are OMITTED (clients derive their
+    // mounts from the streamed class def), which keeps the frame tiny and makes pruning free:
+    // the client replaces its whole cache per frame. Always returns a frame (count may be 0) so
+    // a stale entry prunes even when the last override ship leaves. Broadcast + reliable; the
+    // owner's copy doubles as the authoritative echo of what the server accepted at spawn.
+    public static byte[] BuildShipLoadouts(Simulation sim)
+    {
+        List<Simulation.ShipSim>? rows = null;
+        foreach (var s in sim.Ships)
+            if (s.MountWeaponIds is not null && rows?.Count is null or < 255)
+                (rows ??= new()).Add(s);
+        int size = 2;
+        if (rows is not null)
+            foreach (var s in rows)
+                size += 8 + 1 + 4 * s.MountWeaponIds!.Length;
+        var buf = new byte[size];
+        buf[0] = MsgShipLoadout;
+        buf[1] = (byte)(rows?.Count ?? 0);
+        int o = 2;
+        if (rows is not null)
+            foreach (var s in rows)
+            {
+                BitConverter.TryWriteBytes(buf.AsSpan(o), s.ShipId);
+                o += 8;
+                var ids = s.MountWeaponIds!;
+                buf[o++] = (byte)ids.Length;
+                foreach (uint id in ids)
+                {
+                    BitConverter.TryWriteBytes(buf.AsSpan(o), id);
+                    o += 4;
+                }
+            }
+        return buf;
+    }
+
+    // Fixed serialized size of one constructor-build record: u64 shipId | u64 rockId | u8 phase | f16 progress.
+    public const int ConstructorBuildRecordSize = 8 + 8 + 1 + 2; // 19
+
+    // Each constructor drone actively aligning/sinking/building on a rock (MsgConstructorBuilds), so the
+    // client drives the build-sphere VFX enveloping that asteroid. Broadcast like MsgMinerTargets — a
+    // receiver that can't see the ship or the rock renders nothing. Null when nobody is building (v37).
+    // ~1.5s at 20 Hz: keep emitting 0-count frames this long after the last active build so the lossy
+    // client is guaranteed to see the drop and fade the sphere out.
+    private const uint ConstructorBuildEmptyGraceTicks = 30;
+
+    public static byte[]? BuildConstructorBuilds(Simulation sim)
+    {
+        var rows = sim.ConstructorBuildsView();
+        if (rows.Count == 0)
+        {
+            // Silent once the grace window since the last activity has passed.
+            if (sim.Tick - sim.LastConstructorBuildTick > ConstructorBuildEmptyGraceTicks)
+                return null;
+            return new[] { MsgConstructorBuilds, (byte)0 };
+        }
+        sim.LastConstructorBuildTick = sim.Tick;
+        int count = Math.Min(rows.Count, 255);
+        var buf = new byte[2 + count * ConstructorBuildRecordSize];
+        buf[0] = MsgConstructorBuilds;
+        buf[1] = (byte)count;
+        int o = 2;
+        for (int i = 0; i < count; i++)
+        {
+            var r = rows[i];
+            BitConverter.TryWriteBytes(buf.AsSpan(o), r.ShipId);
+            o += 8;
+            BitConverter.TryWriteBytes(buf.AsSpan(o), r.RockId);
+            o += 8;
+            buf[o++] = r.Phase;
+            BitConverter.TryWriteBytes(buf.AsSpan(o), WireQuant.PackHalf(r.Progress));
+            o += 2;
+        }
+        return buf;
+    }
+
+    // A broadcast one-slice MsgReveal carrying just the given base ids as statics (0 rocks/alephs/
+    // sectors) — the FOG-OFF path for a mid-match base (a new constructor-built base): fog-on streams
+    // it through the per-team reveal log instead. Null when the id list is empty. Reuses WriteBaseStatic
+    // so a broadcast reveal is byte-identical to a fog-on one. (v37)
+    public static byte[]? BuildBaseReveal(World world, IReadOnlyList<ulong> baseIds)
+    {
+        if (baseIds.Count == 0)
+            return null;
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+        w.Write(MsgReveal);
+        // Count only the ids that resolve to a live base index.
+        var idx = new List<int>();
+        for (int i = 0; i < world.Bases.Count; i++)
+            if (baseIds.Contains(world.Bases[i].Id))
+                idx.Add(i);
+        w.Write((byte)idx.Count);
+        foreach (int i in idx)
+            WriteBaseStatic(w, world, world.Bases[i], world.BaseHealth[i]);
+        w.Write((ushort)0); // rocks
+        w.Write((byte)0); // alephs
+        w.Write((byte)0); // sectors
+        w.Flush();
+        return ms.ToArray();
+    }
+
     // Fog-filtered rock-update frames for one team: only rocks the team has DISCOVERED, so an enemy
     // mining an unscouted rock never leaks its shrink. A rock discovered LATER carries its current
     // radius/orePct in the MsgReveal static record, so nothing is missed. vision == null (a NoTeam
     // spectator) ⇒ no frames. Read on the quiescent sim thread (ClientHub.AfterStep), same as the
     // other per-team fog builders. Kept next to BuildRockUpdates so the fog test can exercise it directly.
-    public static List<byte[]> BuildRockUpdatesFor(World world, Simulation.TeamVision? vision, IReadOnlyCollection<ulong> changedIds)
+    public static List<byte[]> BuildRockUpdatesFor(
+        World world,
+        Simulation.TeamVision? vision,
+        IReadOnlyCollection<ulong> changedIds
+    )
     {
         if (vision is null || changedIds.Count == 0)
             return new List<byte[]>();
@@ -579,7 +725,7 @@ public static class Protocol
             WriteColor(w, sun.Color);
             w.Write(sun.Energy ?? -1f);
             w.Write(sun.Ambient ?? -1f); // ambient/fill light energy; -1 sentinel = client default
-            w.Write(sun.Size ?? -1f);    // visible disc world-space width; -1 sentinel = client default
+            w.Write(sun.Size ?? -1f); // visible disc world-space width; -1 sentinel = client default
         }
 
         // --- Nebula override ---
@@ -695,7 +841,7 @@ public static class Protocol
 
             w.Write((ushort)world.Bases.Count);
             for (int i = 0; i < world.Bases.Count; i++)
-                WriteBaseStatic(w, world.Bases[i], world.BaseHealth[i]);
+                WriteBaseStatic(w, world, world.Bases[i], world.BaseHealth[i]);
 
             w.Write((uint)world.Asteroids.Count);
             foreach (var a in world.Asteroids)
@@ -744,7 +890,7 @@ public static class Protocol
                     if (!vision.DiscoveredBases.Contains(b.Id))
                         continue;
                     float h = vision.LastKnownBaseHealth.TryGetValue(b.Id, out var lk) ? lk : world.BaseHealth[i];
-                    WriteBaseStatic(w, b, h);
+                    WriteBaseStatic(w, world, b, h);
                 }
 
                 int rockCount = 0;
@@ -853,7 +999,7 @@ public static class Protocol
         {
             var b = world.Bases[idx];
             float h = vision.LastKnownBaseHealth.TryGetValue(b.Id, out var lk) ? lk : world.BaseHealth[idx];
-            WriteBaseStatic(w, b, h);
+            WriteBaseStatic(w, world, b, h);
         }
         w.Write((ushort)rockIdx.Count);
         foreach (int idx in rockIdx)
@@ -919,8 +1065,7 @@ public static class Protocol
     }
 
     // Quantize an angle in [-range, range] to a signed 16-bit fraction of range (client mirrors).
-    private static short QuantAngle(float a, float range) =>
-        (short)Math.Clamp(a / range * 32767f, -32767f, 32767f);
+    private static short QuantAngle(float a, float range) => (short)Math.Clamp(a / range * 32767f, -32767f, 32767f);
 
     // Per-team variant of BuildBases (fog on): discovered bases only, remembered (last-known) health.
     // A base damaged/destroyed while unseen keeps its stale value here until the team re-scouts it.
@@ -976,34 +1121,130 @@ public static class Protocol
         return buf;
     }
 
-    // Broadcast per-team economy (credits + score + the per-team unlocked-hull snapshot), same bytes
-    // to every client. Low-rate: built on coarse ticks / on change, NOT in the per-tick snapshot hot
-    // path (see ClientHub.AfterStep). Variable-length — each team appends a count-prefixed list of the
-    // ClassIds it may currently build (Stage-2 unlock gating), which the client reads to predict locks.
-    public static byte[] BuildTeamState(World world)
+    // Broadcast per-team economy (credits + score + the per-team unlocked-hull snapshot + owned
+    // techs/capabilities), same bytes to every client. Low-rate: built on coarse ticks / on change,
+    // NOT in the per-tick snapshot hot path (see ClientHub.AfterStep). Variable-length — each team
+    // appends count-prefixed lists of the ClassIds it may build (Stage-2 unlock gating) and, v36,
+    // the tech indices + CapabilityId bytes it owns (Stage-4 research state on the client).
+    // HashSets are unordered — every list is SORTED here so the frame is byte-deterministic.
+    public static byte[] BuildTeamState(Simulation sim)
     {
+        World world = sim.World;
+        SimServer.Content.ContentSet content = sim.Content;
         var teams = world.TeamStates;
-        int size = 2;
-        foreach (var kv in teams)
-            size += 9 + 1 + kv.Value.UnlockedClasses.Count; // team + credits + score + nUnlocked + classIds
-        var buf = new byte[size];
-        buf[0] = MsgTeamState;
-        buf[1] = (byte)teams.Count;
-        int o = 2;
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+        w.Write(MsgTeamState);
+        w.Write((byte)teams.Count);
         foreach (var kv in teams)
         {
-            buf[o] = kv.Key;
-            o += 1;
-            BitConverter.TryWriteBytes(buf.AsSpan(o), kv.Value.Credits);
-            o += 4;
-            BitConverter.TryWriteBytes(buf.AsSpan(o), kv.Value.Score);
-            o += 4;
-            var unlocked = kv.Value.UnlockedClasses;
-            buf[o] = (byte)unlocked.Count;
-            o += 1;
+            w.Write(kv.Key);
+            w.Write(kv.Value.Credits);
+            w.Write(kv.Value.Score);
+            var unlocked = kv.Value.UnlockedClasses.ToList();
+            unlocked.Sort();
+            w.Write((byte)unlocked.Count);
             foreach (byte cls in unlocked)
-                buf[o++] = cls;
+                w.Write(cls);
+            // Owned techs as catalog indices (a tech string the catalog doesn't know is skipped —
+            // defensive; CoreValidator makes it impossible for authored content).
+            var owned = new List<ushort>();
+            foreach (string id in kv.Value.OwnedTechs)
+                if (content.TechIndexById.TryGetValue(id, out ushort idx))
+                    owned.Add(idx);
+            owned.Sort();
+            w.Write((ushort)owned.Count);
+            foreach (ushort idx in owned)
+                w.Write(idx);
+            var caps = kv.Value.OwnedCapabilities.Select(c => (byte)c).ToList();
+            caps.Sort();
+            w.Write((byte)caps.Count);
+            foreach (byte c in caps)
+                w.Write(c);
+            // RockClass bitmask of asteroid classes this team's fog has revealed (v42) — lets the
+            // Build tab predict the rock-discovery construction gate. 0xFF when fog is off.
+            w.Write(kv.Value.DiscoveredRockClasses);
+            // Live miner count + per-team cap (miner tail) — drives the Build tab's "X / N" miner
+            // card readout. Byte-wide: the cap is a small tunable (default 4).
+            w.Write((byte)sim.MinerCount(kv.Key));
+            w.Write((byte)world.Mining.MaxMinersPerTeam);
+            // Build-pipeline queue depth (build-pipeline tail) — the per-garrison order cap the client
+            // mirrors to gray out the whole Build tab when a garrison's queue is full. World-global
+            // scalar, byte-wide (small tunable, default 4).
+            w.Write((byte)world.Build.QueueLimit);
         }
+        w.Flush();
+        return ms.ToArray();
+    }
+
+    // PER-TEAM research orders at the team's bases (MsgResearchState, v36). Only bases that HAVE
+    // research (active or on-deck) are included — an omitted base means "idle" and the client
+    // reconciles by omission. Progress is encoded as startTick+durationTicks (not remaining), so
+    // the frame is stable between state changes and rides the on-change + coarse cadence.
+    public static byte[] BuildResearchStateFor(World world, byte team)
+    {
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+        w.Write(MsgResearchState);
+        int countPos = (int)ms.Position;
+        w.Write((byte)0); // patched below
+        byte n = 0;
+        for (int i = 0; i < world.Bases.Count && n < 255; i++)
+        {
+            if (world.Bases[i].Team != team)
+                continue;
+            var rs = world.ResearchByBase[i];
+            if (rs.Active.Count == 0 && rs.OnDeck is null)
+                continue;
+            w.Write(world.Bases[i].Id);
+            w.Write((byte)Math.Min(rs.Active.Count, 255));
+            foreach (var (devIdx, start, dur) in rs.Active)
+            {
+                w.Write(devIdx);
+                w.Write(start);
+                w.Write(dur);
+            }
+            w.Write((byte)(rs.OnDeck is null ? 0 : 1));
+            if (rs.OnDeck is ushort queued)
+                w.Write(queued);
+            n++;
+        }
+        w.Flush();
+        var buf = ms.ToArray();
+        buf[countPos] = n;
+        return buf;
+    }
+
+    // PER-TEAM constructor roster (MsgConstructorState, v38): every owned constructor — producing
+    // (start/duration → Build-tab progress bar + cancel) and launched (status). Progress derives
+    // client-side from startTick+durationTicks, so the frame is stable between state changes and rides
+    // the on-change + coarse cadence.
+    public static byte[] BuildConstructorState(Simulation sim, byte team)
+    {
+        var rows = sim.ConstructorStatesView();
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+        w.Write(MsgConstructorState);
+        int countPos = (int)ms.Position;
+        w.Write((byte)0); // patched below
+        byte n = 0;
+        foreach (var r in rows)
+        {
+            if (r.Team != team || n >= 255)
+                continue;
+            w.Write(r.Id);
+            w.Write(r.StationType);
+            w.Write(r.State);
+            w.Write(r.StartTick);
+            w.Write(r.DurationTicks);
+            w.Write(r.TargetId);
+            w.Write(r.ProducesMiner); // miner order in the shared production queue (roster shows "MINER DRONE")
+            w.Write(r.LaunchBaseId); // the garrison whose build pipeline this order sits in (queue-full gray-out)
+            n++;
+        }
+        w.Flush();
+        var buf = ms.ToArray();
+        buf[countPos] = n;
         return buf;
     }
 
@@ -1048,6 +1289,7 @@ public static class Protocol
             w.Write(h.DirY);
             w.Write(h.DirZ);
             w.Write(h.WeaponId);
+            w.Write((byte)h.Mount); // mount-type restriction (WeaponMountKind), after WeaponId
         }
     }
 
@@ -1099,6 +1341,7 @@ public static class Protocol
             w.Write(s.Cost);
             w.Write(s.PayloadCapacity);
             w.Write(s.OreCapacity); // mining ore hold (0 = not a miner); client tags MINER hulls + shows capacity
+            w.Write(s.OrderTimeSeconds); // miner order→launch production delay (seconds; 0 = instant)
             w.Write(s.FactionId);
             WriteHardpoints(w, s.Hardpoints);
             // Default consumable hold (authored order): u8 count, then n x (u32 cargoId, u8 count).
@@ -1108,6 +1351,10 @@ public static class Protocol
                 w.Write(c.CargoId);
                 w.Write(c.Count);
             }
+            w.Write(s.IsConstructor); // v37: constructor chassis (hidden from the buy menu, like miners)
+            // Hull tech-gate (v43), streamed LAST in the ship block (append-only). Display-only: lets
+            // the hangar's locked hull card + Research UNLOCKS name the gate. Reader mirrors.
+            WriteTechList(w, s.RequiredTechIdx);
         }
 
         var weapons = content.Weapons;
@@ -1159,6 +1406,15 @@ public static class Protocol
             // ProbeHitPoints/ProbeSignature stay server-only (deliberately not written).
             w.Write(wp.ProbeHitRadius);
             w.Write(wp.ProbeModelSize);
+            // Tech-path lock state (v36), streamed after ProbeModelSize (append-only convention).
+            WriteTechList(w, wp.RequiredTechIdx);
+            // Healing-gun flag (v40, ER Nanite line), streamed LAST (append-only). Reader mirrors.
+            w.Write(wp.IsHealing);
+            // Weapon-tier succession (v43), streamed after IsHealing (append-only). Reader mirrors:
+            // techs that retire this tier (hangar hides it once owned) + the successor weapon id
+            // (uint.MaxValue = no successor) a loadout migrates to.
+            WriteTechList(w, wp.ObsoletedByTechIdx);
+            w.Write(wp.SucceededByWeaponId);
         }
 
         var cargoItems = content.CargoItems;
@@ -1171,6 +1427,7 @@ public static class Protocol
             w.Write(c.Mass);
             w.Write(c.ChargesPerPack);
             WriteString(w, c.Description);
+            w.Write(c.FuelPerCharge); // v35: 0 = not a fuel item
         }
 
         var bases = content.Bases;
@@ -1185,6 +1442,14 @@ public static class Protocol
             w.Write(b.VisionSphereRadius);
             w.Write(b.RadarSignature);
             WriteHardpoints(w, b.Hardpoints);
+            // Research slots (v36), streamed after Hardpoints (append-only convention).
+            w.Write(b.ResearchSlots);
+            // Base building (v37), streamed after ResearchSlots. Reader mirrors this order exactly.
+            WriteString(w, b.ModelName);
+            w.Write(b.WinCondition);
+            w.Write(b.BuildRockClass);
+            // Station upgrades (v39): the base-type this base upgrades into (-1 = none). Appended last.
+            w.Write(b.SuccessorBaseTypeId);
         }
 
         var cfg = content.World;
@@ -1197,8 +1462,98 @@ public static class Protocol
         // stays server-side only — deliberately NOT written here.
         w.Write(cfg.FogOfWar);
 
+        // ---- Tech-path catalog (v36), appended LAST so every block above stays byte-stable. ----
+        // Techs stream FIRST and fix the u16 index space every TechList below (and MsgTeamState /
+        // MsgResearchState) references. Reader: GameNetClient.ApplyDefs mirrors this order exactly.
+        var techs = content.Techs;
+        w.Write((ushort)techs.Count);
+        foreach (var t in techs)
+        {
+            WriteString(w, t.Id);
+            WriteString(w, t.Name);
+            WriteString(w, t.Description);
+        }
+        var devs = content.Developments;
+        w.Write((ushort)devs.Count);
+        foreach (var d in devs)
+        {
+            WriteString(w, d.Id);
+            WriteString(w, d.Name);
+            WriteString(w, d.Description);
+            WriteString(w, d.Group);
+            w.Write(d.Price);
+            w.Write(d.BuildTimeSeconds);
+            w.Write(d.TechOnly);
+            WriteTechList(w, d.RequiredTechIdx);
+            WriteTechList(w, d.GrantedTechIdx);
+            WriteTechList(w, d.ObsoletedByTechIdx);
+            WriteCapList(w, d.RequiredCaps);
+            WriteCapList(w, d.GrantedCaps);
+            // Station-upgrade scope (v39): 0 all / 1 single. Appended after the cap lists.
+            w.Write(d.UpgradeScope);
+            // Team-wide stat multipliers (v41): u8 count + (u8 attr, f32 mult) pairs, sorted by attr.
+            WriteAttrList(w, d.Attributes);
+        }
+        var stations = content.StationCatalog;
+        w.Write((ushort)stations.Count);
+        foreach (var s in stations)
+        {
+            WriteString(w, s.Id);
+            WriteString(w, s.Name);
+            WriteString(w, s.Description);
+            w.Write(s.Price);
+            w.Write(s.BuildTimeSeconds);
+            w.Write(s.StationClass);
+            w.Write(s.BaseTypeId); // i16; -1 = catalog-only (Build-tab placeholder)
+            w.Write(s.ResearchSlots);
+            w.Write(s.BuildRockClass); // u8; 255 = unset (v37)
+            w.Write(s.AlignTimeSeconds); // i32; constructor align dwell for this station (v38)
+            WriteTechList(w, s.RequiredTechIdx);
+            WriteTechList(w, s.GrantedTechIdx);
+            WriteTechList(w, s.ObsoletedByTechIdx);
+            WriteCapList(w, s.RequiredCaps);
+            WriteCapList(w, s.GrantedCaps);
+            // Station upgrades (v39): the base-type this station upgrades into (-1 = none). Appended last.
+            w.Write(s.SuccessorBaseTypeId);
+        }
+
+        // ---- Faction identity + team-wide stat multipliers (v41), appended LAST. ----
+        // The single faction's display name + GAS block. The name enables an "Iron Coalition" identity
+        // display; the attributes stream for client visibility (the SIM resolves its per-team TeamAttr
+        // cache from Content.Catalog directly, not this block). Sorted by attr byte for determinism.
+        var start = content.Start;
+        WriteString(w, start.FactionName);
+        WriteAttrList(w, start.BaseAttributes);
+
         w.Flush();
         return ms.ToArray();
+    }
+
+    // A count-prefixed stat-multiplier list: u8 n, then n x (u8 attr, f32 mult) — mirror in ApplyDefs.
+    private static void WriteAttrList(BinaryWriter w, StellarAllegiance.Shared.AttrMod[] mods)
+    {
+        w.Write((byte)mods.Length);
+        foreach (var m in mods)
+        {
+            w.Write(m.Attr);
+            w.Write(m.Mult);
+        }
+    }
+
+    // A count-prefixed tech-index list: u8 n, then n x u16 index into the streamed tech catalog.
+    private static void WriteTechList(BinaryWriter w, ushort[] idx)
+    {
+        w.Write((byte)idx.Length);
+        foreach (ushort i in idx)
+            w.Write(i);
+    }
+
+    // A count-prefixed capability list: u8 n, then n x u8 CapabilityId byte.
+    private static void WriteCapList(BinaryWriter w, byte[] caps)
+    {
+        w.Write((byte)caps.Length);
+        foreach (byte c in caps)
+            w.Write(c);
     }
 
     // The lobby roster + match phase, broadcast whenever it changes (join/leave/team/ready/
@@ -1245,9 +1600,7 @@ public static class Protocol
     // The server's available-maps catalog: name + metadata + a thumbnail sector/base layout per map.
     // Static for the server's lifetime, so it's sent ONCE right after Defs (not on every lobby change).
     // The client mirrors this reader in GameNetClient.ApplyMapList.
-    public static byte[] BuildMapList(
-        System.Collections.Generic.IReadOnlyList<SimServer.Content.MapCatalogEntry> maps
-    )
+    public static byte[] BuildMapList(System.Collections.Generic.IReadOnlyList<SimServer.Content.MapCatalogEntry> maps)
     {
         using var ms = new MemoryStream();
         using var w = new BinaryWriter(ms);

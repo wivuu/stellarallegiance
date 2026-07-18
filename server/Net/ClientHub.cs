@@ -579,30 +579,60 @@ public sealed class ClientHub
                         _sim.EnqueueReclaim(client.Id, reconnectToken);
                     break;
                 }
-                case Protocol.MsgSpawn when count >= 2:
+                case Protocol.MsgSpawn when count >= 10:
                 {
                     // Spawn the chosen class — honored only while a match is live. The team
-                    // comes from the lobby (authoritative), not the client. The optional consumable
-                    // hold rides after the class: [4][cls][nCargo][nCargo x (u32 cargoId, u8 count)].
-                    // A bare length-2 frame carries no cargo (the sim seeds the hull default).
+                    // comes from the lobby (authoritative), not the client. Layout:
+                    // [4][cls][u64 launchBaseId][nCargo][nCargo x (u32 cargoId, u8 count)]
+                    // [nMounts][nMounts x (u8 hpIndex, u32 weaponId)] — the mount tail is the
+                    // hangar's weapon-slot overrides (u32.Max = leave empty); it's optional, so
+                    // a frame ending after the cargo block parses as zero overrides.
+                    // launchBaseId 0 = server default base; the sim validates friendly+alive and
+                    // falls back silently. A bare length-10 frame carries no cargo (hull default).
                     byte cls = buffer[1];
-                    if (cls > 2)
+                    // Def-driven class gate (was a hardcoded `cls > 2 -> scout` clamp): unknown
+                    // hulls, the pod, and miner drones are dropped to scout; the lock/cost gate
+                    // (TryReserveSpawn) still decides whether the spawn actually happens.
+                    if (!_sim.IsPlayerSpawnableClass(cls))
                         cls = 0;
+                    ulong launchBaseId = BitConverter.ToUInt64(buffer, 2);
                     (uint cargoId, byte count)[] cargo = System.Array.Empty<(uint, byte)>();
-                    if (count >= 3)
+                    (byte hpIndex, uint weaponId)[] mounts = System.Array.Empty<(byte, uint)>();
+                    if (count >= 11)
                     {
-                        int nCargo = buffer[2];
-                        int o = 3;
-                        if (nCargo > 0 && count >= o + nCargo * 5)
+                        int nCargo = buffer[10];
+                        int o = 11;
+                        if (count >= o + nCargo * 5)
                         {
-                            cargo = new (uint, byte)[nCargo];
-                            for (int i = 0; i < nCargo; i++)
+                            if (nCargo > 0)
                             {
-                                uint cargoId = BitConverter.ToUInt32(buffer, o);
-                                o += 4;
-                                byte cnt = buffer[o];
-                                o += 1;
-                                cargo[i] = (cargoId, cnt);
+                                cargo = new (uint, byte)[nCargo];
+                                for (int i = 0; i < nCargo; i++)
+                                {
+                                    uint cargoId = BitConverter.ToUInt32(buffer, o);
+                                    o += 4;
+                                    byte cnt = buffer[o];
+                                    o += 1;
+                                    cargo[i] = (cargoId, cnt);
+                                }
+                            }
+                            // Optional mount-override tail (bounds-checked like the cargo block;
+                            // a malformed tail is ignored, not a protocol error).
+                            if (count >= o + 1)
+                            {
+                                int nMounts = buffer[o++];
+                                if (nMounts > 0 && count >= o + nMounts * 5)
+                                {
+                                    mounts = new (byte, uint)[nMounts];
+                                    for (int i = 0; i < nMounts; i++)
+                                    {
+                                        byte hpIndex = buffer[o];
+                                        o += 1;
+                                        uint weaponId = BitConverter.ToUInt32(buffer, o);
+                                        o += 4;
+                                        mounts[i] = (hpIndex, weaponId);
+                                    }
+                                }
                             }
                         }
                     }
@@ -616,7 +646,7 @@ public sealed class ClientHub
                             break;
                         }
                         client.Team = team;
-                        _sim.EnqueueJoin(client.Id, team, cls, cargo);
+                        _sim.EnqueueJoin(client.Id, team, cls, cargo, launchBaseId, mounts);
                     }
                     break;
                 }
@@ -768,6 +798,60 @@ public sealed class ClientHub
                     HandleOrder(client, subject, targetKind, targetId, sector, pos);
                     break;
                 }
+                case Protocol.MsgResearch when count >= 12:
+                {
+                    // Commander research order: [13][u8 op][u64 baseId][u16 devIndex] (v36).
+                    // Commander-gated HERE (the commander-buy pattern); validated + applied on the
+                    // sim thread (Simulation.Research). Results come back as system chat + the
+                    // next MsgResearchState frame.
+                    if (CommanderOrWarn(client) is byte cmdTeam)
+                    {
+                        byte op = buffer[1];
+                        ulong baseId = BitConverter.ToUInt64(buffer, 2);
+                        ushort devIndex = BitConverter.ToUInt16(buffer, 10);
+                        _sim.EnqueueResearchOp(client.Id, cmdTeam, op, baseId, devIndex);
+                    }
+                    break;
+                }
+                case Protocol.MsgBuildConstructor when count >= 10:
+                {
+                    // Commander buys a constructor bound to a station type:
+                    // [14][u8 stationTypeId][u64 launchBaseId] (v37). Commander-gated HERE (the
+                    // commander-buy pattern); validated + applied on the sim thread. Results come back as
+                    // team-scoped ConstructorNoticesThisStep chat.
+                    if (CommanderOrWarn(client) is byte cmdTeam)
+                    {
+                        byte stationType = buffer[1];
+                        ulong launchBaseId = BitConverter.ToUInt64(buffer, 2);
+                        _sim.EnqueueConstructorBuy(cmdTeam, stationType, launchBaseId);
+                    }
+                    break;
+                }
+                case Protocol.MsgConstructorCancel when count >= 9:
+                {
+                    // Commander cancels a still-producing constructor: [15][u64 constructorId] (v38).
+                    // Commander-gated HERE; refund applied on the sim thread.
+                    if (CommanderOrWarn(client) is byte cancTeam)
+                    {
+                        ulong constructorId = BitConverter.ToUInt64(buffer, 1);
+                        _sim.EnqueueConstructorCancel(cancTeam, constructorId);
+                    }
+                    break;
+                }
+                case Protocol.MsgBuyMiner when count >= 9:
+                {
+                    // Commander buys a mining drone: [16][u64 launchBaseId] (the docked garrison, so the
+                    // miner joins THAT garrison's build pipeline; 0 = default garrison). Replaces the old
+                    // /buyminer chat command. Commander-gated HERE; cap/cost/phase/queue/kill-switch
+                    // validated on the sim thread (TryBuyMiner). Results come back as team-scoped
+                    // MinerNoticesThisStep chat.
+                    if (CommanderOrWarn(client) is byte minerTeam)
+                    {
+                        ulong launchBaseId = BitConverter.ToUInt64(buffer, 1);
+                        _sim.EnqueueMinerBuy(minerTeam, launchBaseId);
+                    }
+                    break;
+                }
                 case Protocol.MsgPing when count >= 1 + 4:
                 {
                     // Bounce the nonce straight back through the outbound channel — the same
@@ -781,8 +865,8 @@ public sealed class ClientHub
     }
 
     // In-game slash commands (text starting with '/'). Consumed here, never relayed as chat.
-    // /pigs toggles AI drone spawns; /buyminer buys the team a mining drone (thread-safe enqueue
-    // — results come back as team-scoped MinerNoticesThisStep chat).
+    // /pigs toggles AI drone spawns. (Miner buying moved from /buyminer to the MsgBuyMiner Build-tab
+    // button — commander-gated, results come back as team-scoped MinerNoticesThisStep chat.)
     private void HandleCommand(Client client, string text)
     {
         var parts = text[1..].Split((char[]?)null, 2, StringSplitOptions.RemoveEmptyEntries);
@@ -804,10 +888,78 @@ public sealed class ClientHub
                 SystemAll(client, $"AI drones turned {(on ? "ON" : "OFF")} by {_players.NameOf(client.Id)}");
                 break;
             }
-            case "buyminer":
+            case "buildconstructor":
+            case "build":
             {
+                // Commander buys a constructor bound to a station type (commander-gated chat seam;
+                // the Build tab sends MsgBuildConstructor directly). /build <station-id> (e.g. outpost);
+                // bare /build lists the buildable stations. Order it to a rock via F3 after it launches.
                 if (CommanderOrWarn(client) is byte team)
-                    _sim.EnqueueMinerBuy(team); // cap/charge/phase checks answer via miner notices
+                {
+                    // Constructor-buildable runtime stations only: exclude the garrison (0) and the
+                    // upgrade tiers (runtime base-type-id but no build-on-rock-class — reached via research).
+                    var runtime = _sim.Content.StationCatalog.Where(s => s.BaseTypeId >= 1 && s.BuildRockClass != 255);
+                    if (arg.Length == 0)
+                    {
+                        SystemTo(client, "Buildable: " + string.Join(", ", runtime.Select(s => s.Id)));
+                        break;
+                    }
+                    var match = runtime.FirstOrDefault(s => string.Equals(s.Id, arg, StringComparison.OrdinalIgnoreCase));
+                    if (match is null)
+                        SystemTo(client, $"No buildable station '{arg}'.");
+                    else
+                        _sim.EnqueueConstructorBuy(team, (byte)match.BaseTypeId, 0);
+                }
+                break;
+            }
+            case "constructors":
+            {
+                int n = _sim.ConstructorCount(client.Team);
+                SystemTo(client, $"Active constructors on your team: {n}.");
+                break;
+            }
+            case "research":
+            {
+                // Commander research by development id (a commander-gated chat seam; the
+                // Research tab UI sends MsgResearch directly). Bare /research lists the catalog.
+                // The order targets the team's FIRST alive base — base-specific starts come from
+                // the UI, where the sidebar picks the base.
+                if (arg.Length == 0)
+                {
+                    var names = _sim.Content.Developments.Select(d => d.Id);
+                    SystemTo(client, _sim.Content.Developments.Count == 0
+                        ? "No developments in this server's catalog."
+                        : $"Usage: /research <id>. Catalog: {string.Join(", ", names)}");
+                    break;
+                }
+                if (CommanderOrWarn(client) is not byte rTeam)
+                    break;
+                int devIdx = -1;
+                for (int i = 0; i < _sim.Content.Developments.Count; i++)
+                    if (string.Equals(_sim.Content.Developments[i].Id, arg, StringComparison.OrdinalIgnoreCase))
+                    {
+                        devIdx = i;
+                        break;
+                    }
+                if (devIdx < 0)
+                {
+                    SystemTo(client, $"Unknown development '{arg}' — /research lists the catalog.");
+                    break;
+                }
+                ulong baseId = 0;
+                var world = _sim.World;
+                for (int i = 0; i < world.Bases.Count; i++)
+                    if (world.Bases[i].Team == rTeam && world.BaseHealth[i] > 0f)
+                    {
+                        baseId = world.Bases[i].Id;
+                        break;
+                    }
+                if (baseId == 0)
+                {
+                    SystemTo(client, "Your team has no base to research at.");
+                    break;
+                }
+                _sim.EnqueueResearchOp(client.Id, rTeam, Simulation.ResearchOpStart, baseId, (ushort)devIdx);
                 break;
             }
             case "commander":
@@ -855,7 +1007,7 @@ public sealed class ClientHub
     }
 
     // The sender's team when they are its COMMANDER, or null + a warn naming who is. Gates the
-    // AI-authority seams (/buyminer, MsgOrder with an AI subject).
+    // AI-authority seams (MsgBuyMiner, MsgOrder with an AI subject).
     private byte? CommanderOrWarn(Client client)
     {
         if (TeamOrWarn(client) is not byte team)
@@ -1105,6 +1257,18 @@ public sealed class ClientHub
         foreach (var (team, msg) in _sim.MinerNoticesThisStep)
             SystemToTeam(team, msg);
 
+        // Constructor / base-building notices (same team-scoped contract).
+        foreach (var (team, msg) in _sim.ConstructorNoticesThisStep)
+            SystemToTeam(team, msg);
+
+        // Research notices (same accumulate-in-Step contract): team-wide announcements
+        // (started/complete/cancelled) + issuer-only rejections.
+        foreach (var (team, msg) in _sim.ResearchTeamNoticesThisStep)
+            SystemToTeam(team, msg);
+        foreach (var (cid, msg) in _sim.ResearchNoticesThisStep)
+            if (_clients.TryGetValue(cid, out var rc))
+                SystemTo(rc, msg);
+
         // Commander-order feedback (same accumulate-in-Step contract): issuer-only rejections/acks
         // as system lines, and team-wide GOLD directives (MsgChatRelay scope 2) once the sim has
         // validated an order — so a fog-rejected order never announces to the team.
@@ -1230,9 +1394,26 @@ public sealed class ClientHub
             }
         }
 
-        // Per-team economy (credits/score): same low-rate cadence as bases — on change or coarse
+        // Per-team economy (credits/score/techs): same low-rate cadence as bases — on change or coarse
         // keepalive. Built once, shared to every client (not in the per-tick snapshot hot path).
-        byte[]? teamStateFrame = (_sim.TeamStateChangedThisStep || coarse) ? Protocol.BuildTeamState(_sim.World) : null;
+        byte[]? teamStateFrame = (_sim.TeamStateChangedThisStep || coarse) ? Protocol.BuildTeamState(_sim) : null;
+
+        // Per-ship weapon-mount override table: full-table broadcast on change + coarse keepalive
+        // (reconcile-by-omission — an EMPTY frame still prunes stale entries, so it's always built
+        // on this cadence, never null-skipped). RELIABLE: the spawn-tick frame doubles as the
+        // owner's authoritative loadout echo and must not race the ship's first shot; the frame is
+        // tiny (only non-authored loadouts ride it).
+        byte[]? loadoutFrame = (_sim.LoadoutsChangedThisStep || coarse) ? Protocol.BuildShipLoadouts(_sim) : null;
+
+        // Per-base research orders (v36): PER-TEAM (a team sees only its own bases' research — the
+        // fog-safe choice), on the same on-change + coarse cadence. Built lazily once per team.
+        bool sendResearch = _sim.ResearchChangedThisStep || coarse;
+        Dictionary<byte, byte[]>? researchFramesByTeam = sendResearch ? new() : null;
+
+        // Per-team constructor roster (v38): producing + launched drones for the Build tab, same
+        // on-change + coarse cadence. Built lazily once per team.
+        bool sendConstructor = _sim.ConstructorChangedThisStep || coarse;
+        Dictionary<byte, byte[]>? constructorFramesByTeam = sendConstructor ? new() : null;
 
         // Fog point-visibility for minefields (F10): the enemy-visibility of a field depends only on
         // (field, team), NOT the individual client — so compute it ONCE per team, then reuse for every
@@ -1300,6 +1481,22 @@ public sealed class ClientHub
         // nearest-rock guess). Broadcast, on-change-free (tiny: at most a handful of miners); null when
         // nothing is mining. Rendering is naturally gated by ship+rock visibility, so no fog filtering.
         byte[]? minerTargetsFrame = Protocol.BuildMinerTargets(_sim);
+
+        // Constructor build-sphere stream (v37): each constructor aligning/sinking/building on a rock,
+        // so the client drives the enveloping VFX. Broadcast like miner targets; null when idle.
+        byte[]? constructorBuildsFrame = Protocol.BuildConstructorBuilds(_sim);
+
+        // Fog-off ONLY: a mid-match constructor-built base has no per-team reveal log to ride, so
+        // broadcast a one-slice MsgReveal carrying its static to every client (fog-on streams it via
+        // the per-team reveal cursor in RevealBaseToTeam). Idempotent client-side (InsertBase dedups).
+        byte[]? baseRevealFrame = (!fog && _sim.BasesCreatedThisStep.Count > 0)
+            ? Protocol.BuildBaseReveal(_sim.World, _sim.BasesCreatedThisStep)
+            : null;
+
+        // Rock despawns (a constructor's finished base consumed its asteroid): one reliable broadcast so
+        // every client that has the rock deletes it (node + collision). Fog-agnostic — an unknown id is a
+        // client no-op and a rock vanishing leaks nothing. null when no rock was removed this step.
+        byte[]? rockGoneFrame = Protocol.BuildRockGone(_sim.World.RocksRemovedThisStep);
 
         // Sequential pre-pass: resolve each client's controlled ship (ShipIdOf takes the sim's
         // queue lock — keep it off the parallel path), emit YouAre/Gone/Bases, cache the AOI
@@ -1383,8 +1580,40 @@ public sealed class ClientHub
             if (teamStateFrame is not null)
                 SendLossy(client, OutFrame.Whole(teamStateFrame));
 
+            // Ship weapon-mount table (see the build note above): reliable one-shot per cadence tick.
+            if (loadoutFrame is not null)
+                SendReliable(client, OutFrame.Whole(loadoutFrame));
+
+            // Research orders (v36): per-team, lazy-built once per team; NoTeam spectators get none.
+            if (sendResearch && client.Team <= 1)
+            {
+                if (!researchFramesByTeam!.TryGetValue(client.Team, out var rf))
+                    researchFramesByTeam[client.Team] = rf = Protocol.BuildResearchStateFor(_sim.World, client.Team);
+                SendLossy(client, OutFrame.Whole(rf));
+            }
+
             if (minerTargetsFrame is not null)
                 SendLossy(client, OutFrame.Whole(minerTargetsFrame));
+
+            if (constructorBuildsFrame is not null)
+                SendLossy(client, OutFrame.Whole(constructorBuildsFrame));
+
+            // Constructor roster (v38): per-team, lazy-built once per team; NoTeam spectators get none.
+            if (sendConstructor && client.Team <= 1)
+            {
+                if (!constructorFramesByTeam!.TryGetValue(client.Team, out var cf))
+                    constructorFramesByTeam[client.Team] = cf = Protocol.BuildConstructorState(_sim, client.Team);
+                SendLossy(client, OutFrame.Whole(cf));
+            }
+
+            // Fog-off new-base reveal (reliable — a one-shot static the client must not miss).
+            if (baseRevealFrame is not null)
+                SendReliable(client, OutFrame.Whole(baseRevealFrame));
+
+            // Rock despawn (reliable — a one-shot removal the client must not miss, or a ghost rock
+            // lingers under the finished base). Broadcast to every client regardless of fog.
+            if (rockGoneFrame is not null)
+                SendReliable(client, OutFrame.Whole(rockGoneFrame));
 
             // Fog-on per-team frames. All built lazily (once per team). This whole pre-pass runs on
             // the sim thread with Step() done, so TeamVision reads/drains are safe (quiescent).

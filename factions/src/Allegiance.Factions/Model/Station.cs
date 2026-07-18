@@ -68,4 +68,28 @@ public record Station : Buildable
     public double VisionSphereRadius { get; set; }
     /// <summary>Detection-range multiplier applied to every viewer's range against this base (omitted/0 resolves to 1.0).</summary>
     public double RadarSignature { get; set; }
+
+    /// <summary>
+    /// How many research orders this station may run concurrently. Omit-when-default (serialized
+    /// kebab-case as <c>research-slots</c>); 0 means "default (1)" and is resolved to a single slot at
+    /// projection. Only meaningful for stations that project to a runtime base.
+    /// </summary>
+    public int ResearchSlots { get; set; }
+
+    /// <summary>
+    /// Runtime extension: the asteroid resource-class name (kebab-case, e.g. <c>regolith</c>, matching
+    /// StellarAllegiance's RockClass) a constructor drone may build this station on. Null/empty =
+    /// not constructor-buildable (e.g. the garrison, placed at match start). Distinct from
+    /// <see cref="BuildableOn"/> (the Core AsteroidAbility model, unused by the runtime). Serialized
+    /// kebab-case as <c>build-on-rock-class</c>; projected onto BaseDef/StationCatalogDef.BuildRockClass.
+    /// </summary>
+    public string? BuildOnRockClass { get; set; }
+
+    /// <summary>
+    /// Runtime extension: how long a constructor drone holds nose-locked at the rock's standoff shell
+    /// before creeping in to build THIS station, in seconds. Omit-when-default (serialized kebab-case
+    /// as <c>align-time-seconds</c>); 0 resolves to the stock default at projection. Pairs with the
+    /// inherited <see cref="Buildable.BuildTimeSeconds"/> (how long the build sphere runs).
+    /// </summary>
+    public int AlignTimeSeconds { get; set; }
 }

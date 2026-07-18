@@ -25,6 +25,10 @@
 //   6. Blast splash: an enemy bystander inside BlastRadius takes exactly the inverse-square splash
 //      (BlastPower * (fuse/d)^2, d measured from the reported detonation point); a friendly at the
 //      same offset and an enemy parked outside BlastRadius take nothing.
+//   17. SRM Dumbfire (Iron ordnance import, weapon-id 24): quick-locks in LockTicks==10, then
+//       steers (low turn-rate) onto an off-boresight target and hits it.
+//   18. SRM Dumbfire is non-siege: never locks a base lock id, and an unlocked launch at a base
+//       detonates without damaging it (CanDamageBase is false for the whole line).
 
 using System.Linq;
 using SimServer.Content;
@@ -61,24 +65,35 @@ const uint EmptySector = 999;
 Simulation BootSim(ulong seed)
 {
     var content = ContentLoader.Load(stockPath, worldPath);
+    // The bomber (class 2, the torpedo carrier) is tech-gated behind the `bomber` tech at match start
+    // (StrategyTest's subject); this suite sieges bases with bombers, so seed the tech into the
+    // faction base so StartMatch unlocks class 2.
+    content.Start.BaseTechs.Add("bomber");
+    content.Start.BaseTechs.Add("supremacy-1"); // unlock the Enh Fighter hull (gated since Phase 4)
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
     var sim = new Simulation(world, content);
     sim.PigsEnabled = false;
     sim.MinersEnabled = false; // isolate from the auto-seeded team miner (mirrors PigsEnabled)
     sim.ShieldsEnabled = false; // isolate raw missile/blast damage from shield absorption (ShieldTest covers shields)
+    sim.AttributesEnabled = false; // Phase 6: neutral ×1.0 — this suite asserts pre-multiplier missile/base damage
     sim.FogEnabled = false; // isolate lock mechanics from the fog radar-visibility gate (FogTest covers fog); vision is a 2 Hz async pass this suite never waits on
 
     sim.StartMatch(); // Lobby -> Active: resolves team unlocks + seeds economy, so spawns are allowed
     return sim;
 }
 
-// Spawn two enemy fighters (class 1 — the only hull with a missile mount in the stock bundle),
-// reposition them nose-to-nose in the empty sector well inside LockRange, and return the seeker
-// missile's projected WeaponDef (weapon-id 3) alongside the two ShipSims.
+// Spawn a seeker-armed attacker vs an enemy fighter. The Iron Coalition fighter is an all-gun
+// hull whose gun-typed mounts no longer take racks (mount-type gate), so the attacker is a SCOUT
+// carrying a seeker rack (weapon-id 3) on its untyped empty hardpoint 1, with the old default 2
+// sensor-decoy hold — so the lock/launch scenarios below still have a seeker to fire. Reposition
+// them nose-to-nose in the empty sector well inside LockRange, and return the seeker missile's
+// projected WeaponDef (weapon-id 3) alongside the two ShipSims.
 (Simulation sim, Simulation.ShipSim attacker, Simulation.ShipSim target, WeaponDef seeker) SetupDuel(ulong seed)
 {
     var sim = BootSim(seed);
-    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassFighter);
+    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassScout,
+        cargo: new (uint, byte)[] { (3u, 2) },        // 2 sensor-decoy (old default hold)
+        mounts: new (byte, uint)[] { (1, 3u) });      // scout hp index 1 = seeker rack
     sim.EnqueueJoin(2, team: 1, cls: FlightModel.ClassFighter);
     sim.Step(); // tick 1: DrainQueues -> ProcessRespawns spawns both ships this very step
 
@@ -602,7 +617,7 @@ void PositionNoseOnBase(Simulation.ShipSim ship, Vec3 basePos, float standoff = 
         $"base health bookkeeping wrong ({healthBefore} -> {healthAfterRack}, {healthDeltas.Count} impacts logged)"
     );
 
-    // One rack (6 x 200 = 1200) doesn't fully deplete a base carrying more HP (garrison MaxArmor
+    // One rack (6 x 300 = 1800) doesn't fully deplete a base carrying more HP (garrison MaxArmor
     // 2000) — rejoin a second bomber, nose-aligned the same way, and dumbfire (no lock needed: a
     // straight, nose-on shot already flies dead-on at the base) until it falls, so the match-end
     // assertion below is reachable rather than merely hoped-for.
@@ -630,14 +645,18 @@ void PositionNoseOnBase(Simulation.ShipSim ship, Vec3 basePos, float standoff = 
     );
 }
 
-// ---- 8. Non-siege: a fighter's seeker rack can never lock a base --------------------------------
+// ---- 8. Non-siege: a seeker rack can never lock a base ------------------------------------------
 {
     var sim = BootSim(seed: 102);
-    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassFighter);
+    // No hull mounts a seeker by default — arm a scout's empty missile-typed hp1 with one (the
+    // fighter's gun mounts no longer take racks) so this scenario actually exercises a seeker-vs-base lock.
+    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassScout,
+        cargo: new (uint, byte)[] { (3u, 2) },
+        mounts: new (byte, uint)[] { (1, 3u) });
     sim.Step();
-    var fighter = sim.Ships.First(s => s.OwnerClientId == 1);
-    int baseIdx = sim.World.Bases.FindIndex(b => b.Team != fighter.Team);
-    PositionNoseOnBase(fighter, sim.World.Bases[baseIdx].Pos);
+    var ship = sim.Ships.First(s => s.OwnerClientId == 1);
+    int baseIdx = sim.World.Bases.FindIndex(b => b.Team != ship.Team);
+    PositionNoseOnBase(ship, sim.World.Bases[baseIdx].Pos);
 
     var seeker = sim.Content.Weapons.First(w => w.WeaponId == 3);
     ulong lockId = GameContent.BaseLockId(sim.World.Bases[baseIdx].Id);
@@ -645,36 +664,40 @@ void PositionNoseOnBase(Simulation.ShipSim ship, Vec3 basePos, float standoff = 
     bool everLocked = false;
     for (uint i = 0; i < seeker.LockTicks * 2; i++)
     {
-        fighter.HeldInput = new ShipInputState { LockTargetId = lockId };
+        ship.HeldInput = new ShipInputState { LockTargetId = lockId };
         sim.Step();
-        if (fighter.Locked)
+        if (ship.Locked)
             everLocked = true;
     }
     Check(
-        !everLocked && !fighter.Locked && fighter.LockProgress == 0,
-        "a fighter's seeker (non-siege weapon) never locks a base lock id",
-        $"fighter unexpectedly progressed/latched a base lock (everLocked={everLocked}, locked={fighter.Locked}, progress={fighter.LockProgress})"
+        !everLocked && !ship.Locked && ship.LockProgress == 0,
+        "a seeker (non-siege weapon) never locks a base lock id",
+        $"ship unexpectedly progressed/latched a base lock (everLocked={everLocked}, locked={ship.Locked}, progress={ship.LockProgress})"
     );
 }
 
 // ---- 9. Non-siege: a dumbfired seeker detonates on the base hull but deals no base damage --------
 {
     var sim = BootSim(seed: 103);
-    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassFighter);
+    // Arm a scout's empty missile-typed hp1 with the seeker (see scenario 8) so it actually has
+    // something to dumbfire — no stock hull mounts one by default.
+    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassScout,
+        cargo: new (uint, byte)[] { (3u, 2) },
+        mounts: new (byte, uint)[] { (1, 3u) });
     sim.Step();
-    var fighter = sim.Ships.First(s => s.OwnerClientId == 1);
-    int baseIdx = sim.World.Bases.FindIndex(b => b.Team != fighter.Team);
-    PositionNoseOnBase(fighter, sim.World.Bases[baseIdx].Pos);
+    var ship = sim.Ships.First(s => s.OwnerClientId == 1);
+    int baseIdx = sim.World.Bases.FindIndex(b => b.Team != ship.Team);
+    PositionNoseOnBase(ship, sim.World.Bases[baseIdx].Pos);
 
     var seeker = sim.Content.Weapons.First(w => w.WeaponId == 3);
     float baseHealthBefore = sim.World.BaseHealth[baseIdx];
 
-    fighter.HeldInput = new ShipInputState { Firing2 = true }; // no lock -> dumbfire, straight at the base
+    ship.HeldInput = new ShipInputState { Firing2 = true }; // no lock -> dumbfire, straight at the base
     sim.Step();
     Check(sim.Missiles.Count == 1, "dumbfire seeker launched toward the base", $"expected 1 missile, found {sim.Missiles.Count}");
     ulong dumbId = sim.Missiles[0].MissileId;
     Check(sim.Missiles[0].TargetShipId == 0, "dumbfire seeker carries no target (unguided)", $"dumbfire seeker has target {sim.Missiles[0].TargetShipId}");
-    fighter.HeldInput = new ShipInputState { Firing2 = false };
+    ship.HeldInput = new ShipInputState { Firing2 = false };
 
     bool impactSeen = false;
     byte impactReason = 255;
@@ -1175,6 +1198,148 @@ void DockAtOwnBase(Simulation sim, Simulation.ShipSim ship)
         same && r1.chaff.Count > 0,
         $"two fresh sims replay the chaff-drop script bit-identically ({r1.flight.Count} flight, {r1.chaff.Count} chaff samples)",
         "chaff-drop replay diverged between two fresh Simulation runs (determinism broken)"
+    );
+}
+
+// ==== SRM Dumbfire (Iron ordnance import, weapon-id 24) ==========================================
+//
+// A quick-lock (0.5s -> 10 ticks), low-turn-rate (67 deg/s) GUIDED missile — NOT an unguided fire
+// mode (user decision #5: "dumbfire" here names a missile TYPE, an in-Allegiance near-instant-lock
+// short-range brawler round, not the legacy "Firing2 without a completed lock" path scenario 5
+// exercises on the seeker). These scenarios prove it locks fast, actually STEERS to correct an
+// off-boresight target within its low turn budget, and — like every non-anti-base missile — can
+// never lock or damage a base.
+
+// Join a scout carrying the dumbfire rack on its untyped empty hp index 1 (same override
+// convention as SetupDuel — the fighter's gun-typed mounts don't take racks) and park it
+// nose-to-nose with an enemy fighter.
+(Simulation sim, Simulation.ShipSim attacker, Simulation.ShipSim target, WeaponDef dumbfire) SetupDumbfireDuel(ulong seed, Vec3 targetPos)
+{
+    var sim = BootSim(seed);
+    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassScout,
+        cargo: new (uint, byte)[] { (3u, 2) },
+        mounts: new (byte, uint)[] { (1, 24u) }); // scout hp index 1 = dumbfire rack (weapon-id 24)
+    sim.EnqueueJoin(2, team: 1, cls: FlightModel.ClassFighter);
+    sim.Step();
+
+    var attacker = sim.Ships.First(s => s.OwnerClientId == 1);
+    var target = sim.Ships.First(s => s.OwnerClientId == 2);
+
+    attacker.SectorId = EmptySector;
+    attacker.State.Pos = new Vec3(0f, 0f, 0f);
+    attacker.State.Vel = new Vec3(0f, 0f, 0f);
+    attacker.State.Rot = Quat.Identity;
+    attacker.State.AngVel = new Vec3(0f, 0f, 0f);
+
+    target.SectorId = EmptySector;
+    target.State.Pos = targetPos;
+    target.State.Vel = new Vec3(0f, 0f, 0f);
+    target.State.Rot = Quat.Identity;
+    target.State.AngVel = new Vec3(0f, 0f, 0f);
+
+    var dumbfire = sim.Content.Weapons.First(w => w.WeaponId == 24);
+    return (sim, attacker, target, dumbfire);
+}
+
+// ---- 17. Dumbfire: quick lock (10 ticks) then low-turn-rate steering onto an off-boresight target --
+{
+    // Target sits 80u off the attacker's +Z boresight at the same 300u range scenario 1 uses — well
+    // within a 67 deg/s turn budget over the missile's flight (unlike scenario 5's 400u/no-lock miss),
+    // so a genuinely GUIDED round must visibly steer (pick up lateral velocity) to connect.
+    var (sim, attacker, target, dumbfire) = SetupDumbfireDuel(seed: 17, targetPos: new Vec3(80f, 0f, 300f));
+    Check(
+        dumbfire.LockTicks == 10 && !dumbfire.CanDamageBase,
+        $"dumbfire rack quick-locks in {dumbfire.LockTicks} ticks (0.5s) and is not a siege weapon",
+        $"dumbfire content wrong (lockTicks {dumbfire.LockTicks}, canDamageBase {dumbfire.CanDamageBase})"
+    );
+
+    var mis = LockAndFire(sim, attacker, target.ShipId, dumbfire);
+    ulong missileId = mis.MissileId;
+    Check(
+        mis.WeaponId == 24 && mis.TargetShipId == target.ShipId,
+        "dumbfire launch carries weapon-id 24, locked onto the off-boresight target",
+        $"dumbfire launch wrong (weapon {mis.WeaponId}, target {mis.TargetShipId})"
+    );
+
+    float healthBeforeImpact = target.Health;
+    bool steered = false;
+    bool impactSeen = false;
+    byte impactReason = 255;
+    for (uint i = 0; i < dumbfire.ProjectileLifeTicks + 5 && !impactSeen; i++)
+    {
+        sim.Step();
+        var m = FindMissile(sim, missileId);
+        if (m is not null && MathF.Abs(m.Vel.X) > 1e-3f)
+            steered = true; // proves guidance is actually correcting heading (a dumbfire launch is NOT dead-straight)
+        foreach (var g in sim.MissileGoneThisStep)
+            if (g.id == missileId)
+            {
+                impactSeen = true;
+                impactReason = g.reason;
+            }
+    }
+    Check(steered, "the guided dumbfire round steers off its launch axis to correct onto the target (low turn-rate still tracks)", "dumbfire round never picked up lateral velocity — flew dead-straight like an unguided round");
+    Check(impactSeen && impactReason == 1, $"dumbfire round tracks the off-boresight target to impact (gone-reason 1), got {impactReason}", $"dumbfire round never impacted the off-boresight target (impactSeen={impactSeen}, reason={impactReason})");
+    float directDamage = dumbfire.Damage * dumbfire.DirectHitMult;
+    Check(
+        target.Health == healthBeforeImpact - directDamage,
+        $"target took exactly Damage * DirectHitMult = {directDamage}",
+        $"target health wrong after dumbfire impact: {healthBeforeImpact} -> {target.Health}, expected {healthBeforeImpact - directDamage}"
+    );
+}
+
+// ---- 18. Dumbfire is non-siege: never locks a base, and an unlocked launch leaves BaseHealth alone --
+{
+    var sim = BootSim(seed: 18);
+    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassScout,
+        cargo: new (uint, byte)[] { (3u, 2) },
+        mounts: new (byte, uint)[] { (1, 24u) });
+    sim.Step();
+    var ship = sim.Ships.First(s => s.OwnerClientId == 1);
+    int baseIdx = sim.World.Bases.FindIndex(b => b.Team != ship.Team);
+    PositionNoseOnBase(ship, sim.World.Bases[baseIdx].Pos);
+
+    var dumbfire = sim.Content.Weapons.First(w => w.WeaponId == 24);
+    ulong lockId = GameContent.BaseLockId(sim.World.Bases[baseIdx].Id);
+
+    bool everLocked = false;
+    for (uint i = 0; i < dumbfire.LockTicks * 2; i++)
+    {
+        ship.HeldInput = new ShipInputState { LockTargetId = lockId };
+        sim.Step();
+        if (ship.Locked)
+            everLocked = true;
+    }
+    Check(
+        !everLocked && !ship.Locked && ship.LockProgress == 0,
+        "a dumbfire rack (non-siege weapon) never locks a base lock id",
+        $"dumbfire unexpectedly progressed/latched a base lock (everLocked={everLocked}, locked={ship.Locked}, progress={ship.LockProgress})"
+    );
+
+    float baseHealthBefore = sim.World.BaseHealth[baseIdx];
+    ship.HeldInput = new ShipInputState { Firing2 = true }; // no lock -> unguided launch, straight at the base
+    sim.Step();
+    Check(sim.Missiles.Count == 1, "unlocked dumbfire launched toward the base", $"expected 1 missile, found {sim.Missiles.Count}");
+    ulong dumbId = sim.Missiles[0].MissileId;
+    ship.HeldInput = new ShipInputState { Firing2 = false };
+
+    bool impactSeen = false;
+    byte impactReason = 255;
+    for (uint i = 0; i < dumbfire.ProjectileLifeTicks + 5 && !impactSeen; i++)
+    {
+        sim.Step();
+        foreach (var g in sim.MissileGoneThisStep)
+            if (g.id == dumbId)
+            {
+                impactSeen = true;
+                impactReason = g.reason;
+            }
+    }
+    Check(impactSeen && impactReason == 1, $"dumbfire round detonates on the base hull (gone-reason 1), got {impactReason}", $"dumbfire round never impacted (impactSeen={impactSeen}, reason={impactReason})");
+    Check(
+        sim.World.BaseHealth[baseIdx] == baseHealthBefore,
+        "the dumbfire's base impact leaves BaseHealth unchanged (non-siege weapon, CanDamageBase false)",
+        $"BaseHealth changed from a non-siege dumbfire impact ({baseHealthBefore} -> {sim.World.BaseHealth[baseIdx]})"
     );
 }
 

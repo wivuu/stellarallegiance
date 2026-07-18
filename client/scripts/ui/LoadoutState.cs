@@ -5,14 +5,15 @@ using StellarAllegiance.Shared;
 namespace StellarAllegiance.Ui;
 
 // =====================================================================
-//  LoadoutState.cs — CLIENT-LOCAL HANGAR LOADOUT MODEL (skeleton)
+//  LoadoutState.cs — CLIENT-LOCAL HANGAR LOADOUT MODEL
 //
-//  Holds the hangar screen's weapon assignments and cargo counts. This state is
-//  COSMETIC-ONLY today: the sim still spawns ships with the authored
-//  HardpointDef.WeaponId, and nothing here is sent over the wire. It exists so the
-//  loadout UI has a real interaction model to build against before the server side
-//  lands (MsgSetLoadout + per-ship mounts — see the hangar plan's future-work notes).
-//  Must never mutate DefRegistry (its WeaponMounts cache feeds prediction).
+//  Holds the hangar screen's weapon assignments and cargo counts — the request side of the
+//  loadout seam. RequestSpawn ships both halves on MsgSpawn (cargo counts + the weapon-slot
+//  override tail from WeaponOverridesFor); the server validates, spawns the ship with the
+//  accepted loadout, and echoes the effective per-barrel weapon ids back on MsgShipLoadout.
+//  ExpectedEffectiveIds seeds own-ship prediction optimistically until that echo lands (it
+//  matches unless the server rejected the request). Must never mutate DefRegistry (its
+//  mount caches feed prediction).
 // =====================================================================
 public sealed class LoadoutState
 {
@@ -20,6 +21,10 @@ public sealed class LoadoutState
     // single source RequestSpawn reads (the counts ride MsgSpawn to the server). Per-class state, so
     // one instance covers every hull.
     public static readonly LoadoutState Shared = new();
+
+    // The base the pilot has picked to launch from in the docked screen's CommandSidebar. 0 = server
+    // default (Phase A is display-only — RequestSpawn still ignores this; Phase B wires it into MsgSpawn).
+    public ulong SelectedBaseId;
 
     // Classes whose default hold has been seeded from ShipClassDef.DefaultCargo (once each, so a
     // later edit isn't stomped by a re-seed).
@@ -32,6 +37,14 @@ public sealed class LoadoutState
     // classId -> (CargoItemDef.CargoId -> count). Counts are local until MsgSetLoadout lands;
     // the items themselves are streamed defs (DefRegistry.AllCargoItems).
     private readonly Dictionary<byte, Dictionary<uint, int>> _cargo = new();
+
+    // True while replaying authored defaults (SeedDefaults) or re-hydrating from disk (Load) — those
+    // aren't the pilot's choices, so they must not write back through to UserPrefs. Only genuine user
+    // edits (Assign / SetCargoCount / ResetClass called from the hangar UI) persist.
+    private bool _suppressPersist;
+
+    // Whether Load has already re-hydrated the saved loadouts this session (guards the one-shot).
+    private bool _hydrated;
 
     // The weapon currently shown in a slot: the player's override if one exists, else the
     // hull's authored weapon. An authored default of HardpointDef.NoWeapon (the GLB-merge
@@ -52,13 +65,50 @@ public sealed class LoadoutState
         if (!_weaponOverrides.TryGetValue(classId, out var slots))
             _weaponOverrides[classId] = slots = new Dictionary<byte, uint?>();
         slots[hpIndex] = weaponId;
+        PersistClass(classId);
     }
 
-    // RESET: back to the authored loadout and an empty hold.
+    // The MsgSpawn mount tail for a class: ONLY the slots whose current assignment differs from
+    // the authored default, as (hardpoint Index, weaponId) pairs — an emptied slot rides as
+    // HardpointDef.NoWeapon. A slot toggled back to its authored weapon is omitted (nothing to
+    // override), so a pristine hangar sends an empty tail and spawns the pure authored loadout.
+    public (byte hpIndex, uint weaponId)[] WeaponOverridesFor(byte classId, IReadOnlyList<HardpointDef> hardpoints)
+    {
+        if (!_weaponOverrides.TryGetValue(classId, out var slots) || slots.Count == 0)
+            return Array.Empty<(byte, uint)>();
+        List<(byte, uint)>? list = null;
+        foreach (HardpointDef hp in hardpoints)
+        {
+            if (hp.Kind != HardpointKind.Weapon || !slots.TryGetValue(hp.Index, out uint? w))
+                continue;
+            uint? authored = hp.WeaponId == HardpointDef.NoWeapon ? null : hp.WeaponId;
+            if (w == authored)
+                continue; // back on the authored default — no override to send
+            (list ??= new()).Add((hp.Index, w ?? HardpointDef.NoWeapon));
+        }
+        return list?.ToArray() ?? Array.Empty<(byte, uint)>();
+    }
+
+    // The per-barrel effective weapon ids this hangar state EXPECTS the server to accept —
+    // every Weapon-kind hardpoint in declaration order (the barrel order ClassMuzzles / the
+    // MsgShipLoadout echo use), HardpointDef.NoWeapon for empty slots. Seeds own-ship
+    // prediction at spawn; the authoritative echo replaces it if the server rejected anything.
+    public uint[] ExpectedEffectiveIds(byte classId, IReadOnlyList<HardpointDef> hardpoints)
+    {
+        var list = new List<uint>();
+        foreach (HardpointDef hp in hardpoints)
+            if (hp.Kind == HardpointKind.Weapon)
+                list.Add(AssignedWeapon(classId, hp) ?? HardpointDef.NoWeapon);
+        return list.ToArray();
+    }
+
+    // RESET: back to the authored loadout and an empty hold. Also drops the persisted snapshot so a
+    // reset class doesn't come back customized after a restart.
     public void ResetClass(byte classId)
     {
         _weaponOverrides.Remove(classId);
         _cargo.Remove(classId);
+        PersistClass(classId); // both dicts now empty for the class → erases its disk rows
     }
 
     // ---- Cargo (consumables) ----------------------------------------------
@@ -73,6 +123,7 @@ public sealed class LoadoutState
         if (!_cargo.TryGetValue(classId, out var hold))
             _cargo[classId] = hold = new Dictionary<uint, int>();
         hold[itemId] = Math.Max(0, count);
+        PersistClass(classId);
     }
 
     // Seed a class's hold from its authored DefaultCargo the first time it's shown, so the hangar
@@ -83,8 +134,130 @@ public sealed class LoadoutState
             return;
         if (def.DefaultCargo is null)
             return;
-        foreach (var c in def.DefaultCargo)
-            SetCargoCount(classId, c.CargoId, c.Count);
+        // Seeding authored defaults is not a pilot edit — don't write it back to disk (that would
+        // freeze today's defaults and shadow a future content update to the default hold).
+        bool prev = _suppressPersist;
+        _suppressPersist = true;
+        try
+        {
+            foreach (var c in def.DefaultCargo)
+                SetCargoCount(classId, c.CargoId, c.Count);
+        }
+        finally
+        {
+            _suppressPersist = prev;
+        }
+    }
+
+    // ---- Cross-session persistence -----------------------------------------
+    // In-session this whole object is the process-wide LoadoutState.Shared, so edits already survive
+    // hangar open/close and docking. These methods extend that to disk via UserPrefs so a customized
+    // loadout also survives an app restart. Storage is a complete per-class SNAPSHOT (all overrides +
+    // the whole hold), rewritten on every edit, so disk always mirrors the live state for that class.
+
+    // Persist one class's current customization. No-op while seeding/hydrating (see _suppressPersist).
+    private void PersistClass(byte classId)
+    {
+        if (_suppressPersist)
+            return;
+
+        // Weapons: flat [hpIndex, weaponId, ...]; an emptied slot (null) rides as NoWeapon.
+        long[] weapons = Array.Empty<long>();
+        if (_weaponOverrides.TryGetValue(classId, out var slots) && slots.Count > 0)
+        {
+            weapons = new long[slots.Count * 2];
+            int i = 0;
+            foreach (var kv in slots)
+            {
+                weapons[i++] = kv.Key;
+                weapons[i++] = kv.Value ?? HardpointDef.NoWeapon;
+            }
+        }
+        UserPrefs.SetLoadoutWeapons(classId, weapons);
+
+        // Cargo: flat [cargoId, count, ...]; positive counts only.
+        long[] cargo = Array.Empty<long>();
+        if (_cargo.TryGetValue(classId, out var hold))
+        {
+            var list = new List<long>(hold.Count * 2);
+            foreach (var kv in hold)
+                if (kv.Value > 0)
+                {
+                    list.Add(kv.Key);
+                    list.Add(kv.Value);
+                }
+            cargo = list.ToArray();
+        }
+        UserPrefs.SetLoadoutCargo(classId, cargo);
+    }
+
+    // Re-hydrate the saved per-class loadouts from disk, VALIDATING every id against the streamed
+    // defs — a saved weapon/cargo/slot this match doesn't offer (different faction or map, or a
+    // content update that removed it) is silently dropped rather than poisoning the hold. A class
+    // that restores any saved entry is marked already-seeded so SeedDefaults won't overwrite the
+    // restored hold with authored defaults. One-shot; call once defs have landed, before the first
+    // SelectShip. `defs` is the global-namespace DefRegistry (the client's mirror of streamed content).
+    public void Load(DefRegistry defs)
+    {
+        if (_hydrated || defs is null)
+            return;
+        _hydrated = true;
+
+        bool prev = _suppressPersist;
+        _suppressPersist = true; // hydration isn't an edit — don't echo it straight back to disk
+        try
+        {
+            foreach (ShipClassDef ship in defs.BuildableShips())
+            {
+                byte classId = ship.ClassId;
+                List<HardpointDef>? hardpoints = defs.GetHardpoints(classId);
+                bool restored = false;
+
+                long[] weapons = UserPrefs.GetLoadoutWeapons(classId);
+                for (int i = 0; i + 1 < weapons.Length; i += 2)
+                {
+                    byte hpIndex = (byte)weapons[i];
+                    uint weaponId = (uint)weapons[i + 1];
+                    if (hardpoints is null || FindWeaponSlot(hardpoints, hpIndex) is not HardpointDef hp)
+                        continue; // slot no longer exists on this hull
+                    if (weaponId != HardpointDef.NoWeapon)
+                    {
+                        if (defs.GetWeapon(weaponId) is not WeaponDef w)
+                            continue; // weapon isn't in this match's content
+                        if (!Compatible(hp, w))
+                            continue; // saved before the slot's mount type restricted it
+                    }
+                    Assign(classId, hpIndex, weaponId == HardpointDef.NoWeapon ? (uint?)null : weaponId);
+                    restored = true;
+                }
+
+                long[] cargo = UserPrefs.GetLoadoutCargo(classId);
+                for (int i = 0; i + 1 < cargo.Length; i += 2)
+                {
+                    uint cargoId = (uint)cargo[i];
+                    int count = (int)cargo[i + 1];
+                    if (count <= 0 || defs.GetCargoItem(cargoId) is null)
+                        continue; // item isn't in this match's content
+                    SetCargoCount(classId, cargoId, count);
+                    restored = true;
+                }
+
+                if (restored)
+                    _seeded.Add(classId); // keep the restored hold; skip authored-default seeding
+            }
+        }
+        finally
+        {
+            _suppressPersist = prev;
+        }
+    }
+
+    private static HardpointDef? FindWeaponSlot(List<HardpointDef> hardpoints, byte hpIndex)
+    {
+        foreach (HardpointDef hp in hardpoints)
+            if (hp.Kind == HardpointKind.Weapon && hp.Index == hpIndex)
+                return hp;
+        return null;
     }
 
     // The class's current hold as (cargoId, count) pairs (positive counts only) — the array
@@ -129,8 +302,11 @@ public sealed class LoadoutState
         return used;
     }
 
-    // Whether a weapon fits a hardpoint. Today every streamed weapon is a Bolt and every
-    // Weapon-kind mount accepts it; the future rule adds category (primary/missile/utility)
-    // and size (S/M/L) fields on both sides — see the design's compatibility model.
-    public static bool Compatible(HardpointDef hp, WeaponDef w) => hp.Kind == HardpointKind.Weapon;
+    // Whether a weapon fits a hardpoint: the streamed mount type decides (a gun mount takes guns,
+    // a missile mount takes racks, an untyped mount takes either; dispensers never mount). The
+    // rule itself is shared/HardpointDef.MountAccepts, and hp.Mount is resolved server-side at
+    // projection (hulls.yaml `mount:`, else derived from the authored weapon) — so this filter and
+    // the server's ResolveLoadout gate can never disagree.
+    public static bool Compatible(HardpointDef hp, WeaponDef w) =>
+        hp.Kind == HardpointKind.Weapon && HardpointDef.MountAccepts(hp.Mount, w.Kind);
 }

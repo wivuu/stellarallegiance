@@ -40,4 +40,11 @@ public record Weapon : Part
 
     /// <summary>True if this weapon's shots/warheads apply damage to bases (station siege ordnance).</summary>
     public bool CanDamageBase { get; set; }
+
+    /// <summary>
+    /// True if this weapon's shots HEAL rather than damage: a bolt striking a same-team ship restores
+    /// hull (clamped to max, shields untouched); an enemy hit does nothing. The ER Nanite gun line.
+    /// Mutually exclusive with <see cref="CanDamageBase"/> (a healing shot never sieges a base).
+    /// </summary>
+    public bool IsHealing { get; set; }
 }

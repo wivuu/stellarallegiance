@@ -101,6 +101,15 @@ public partial class SectorOverview : Node3D
     private readonly System.Collections.Generic.Dictionary<ulong, (uint Sector, Vector3 Pos)> _orderedPoints = new();
     private readonly System.Collections.Generic.List<(Vector2 ship, Vector2 point, bool line, bool glyph)> _orderMarkerDraws = new();
 
+    // A CONSTRUCTOR or MINER subject → the rock id it was ordered to (build a base on / mine).
+    // Recorded when a rock order is SENT (client-side intent, like _orderedPoints, and mutually
+    // exclusive with it), and drawn as a yellow "BUILD" (constructor) or "MINE" (miner) waypoint
+    // pointing from the drone to that rock while it's selected. Dropped once the order is fulfilled —
+    // construction begins (IsRockUnderConstruction) or the miner's beam lands on the ordered rock
+    // (IsMinerHarvesting) — or the subject/rock is gone.
+    private readonly System.Collections.Generic.Dictionary<ulong, ulong> _orderedRocks = new();
+    private readonly System.Collections.Generic.List<(Vector2 ship, Vector2 rock, bool shipOn, bool rockBehind, bool build)> _rockMarkerDraws = new();
+
     private Control _selBox = null!; // rubber-band selection rectangle while left-dragging
     private Vector2 _boxEnd; // current cursor corner of the box (anchor = _leftPressPos)
 
@@ -178,7 +187,10 @@ public partial class SectorOverview : Node3D
             Visible = false,
             HorizontalAlignment = HorizontalAlignment.Center,
             AnchorRight = 1f,
-            OffsetTop = 46f,
+            AnchorTop = 1f,
+            AnchorBottom = 1f,
+            OffsetTop = -46f,
+            OffsetBottom = -14f,
             Text = "SECTOR MAP — drag box-select · shift-click add · right-drag / arrows orbit · shift-drag / mid-drag pan · wheel zoom · click select · right-click command / engage · F3 to exit",
         };
         _hint.AddThemeFontSizeOverride("font_size", 18);
@@ -238,6 +250,72 @@ public partial class SectorOverview : Node3D
             _selMarker.DrawString(UiFonts.Mono, point + new Vector2(-tw * 0.5f, -r - 4f), tag,
                 HorizontalAlignment.Left, -1, 9, gold);
         }
+
+        // Yellow rock-order waypoints for selected constructors/miners: a diamond + "BUILD"/"MINE" tag
+        // over the rock when it's on screen, or an edge arrow pointing the way when it's off-screen /
+        // behind — the same on-screen/edge treatment the flight-HUD nav waypoint uses. A faint leader
+        // line ties it back to the drone whenever the drone is itself drawable.
+        Vector2 vp = _selMarker.Size;
+        var rockOnScreen = new Rect2(Vector2.Zero, vp).Grow(-RockEdgeMargin);
+        Color yellow = DesignTokens.CmdrGold;
+        foreach (var (ship, rock, shipOn, rockBehind, build) in _rockMarkerDraws)
+        {
+            if (!rockBehind && rockOnScreen.HasPoint(rock))
+            {
+                if (shipOn)
+                    _selMarker.DrawLine(ship, rock, new Color(yellow, 0.35f), 1f);
+                var top = rock + new Vector2(0f, -r);
+                var right = rock + new Vector2(r, 0f);
+                var bottom = rock + new Vector2(0f, r);
+                var left = rock + new Vector2(-r, 0f);
+                _selMarker.DrawLine(top, right, yellow, 1.75f, true);
+                _selMarker.DrawLine(right, bottom, yellow, 1.75f, true);
+                _selMarker.DrawLine(bottom, left, yellow, 1.75f, true);
+                _selMarker.DrawLine(left, top, yellow, 1.75f, true);
+                _selMarker.DrawCircle(rock, r * 0.28f, yellow);
+                string mtag = build ? "BUILD" : "MINE";
+                float mtw = UiFonts.Mono.GetStringSize(mtag, HorizontalAlignment.Left, -1, 9).X;
+                _selMarker.DrawString(UiFonts.Mono, rock + new Vector2(-mtw * 0.5f, -r - 4f), mtag,
+                    HorizontalAlignment.Left, -1, 9, yellow);
+            }
+            else
+            {
+                Vector2 edge = ClampToViewportEdge(rock, vp, out Vector2 dir);
+                if (shipOn)
+                    _selMarker.DrawLine(ship, edge, new Color(yellow, 0.3f), 1f);
+                DrawEdgeArrow(edge, dir, yellow);
+            }
+        }
+    }
+
+    private const float RockEdgeMargin = 40f; // off-screen rock-order-arrow inset from the viewport edge (px)
+
+    // The point on the RockEdgeMargin-inset rectangle along the ray from center toward sp, plus the
+    // outward unit direction — mirrors TargetMarkers.ClampToEdge so the rock-order arrow pins like the HUD's.
+    private static Vector2 ClampToViewportEdge(Vector2 sp, Vector2 view, out Vector2 dir)
+    {
+        Vector2 center = view * 0.5f;
+        dir = sp - center;
+        if (dir.LengthSquared() < 1e-4f)
+            dir = Vector2.Down;
+        dir = dir.Normalized();
+        Vector2 half = center - new Vector2(RockEdgeMargin, RockEdgeMargin);
+        float scale = Mathf.Min(half.X / Mathf.Max(Mathf.Abs(dir.X), 1e-4f), half.Y / Mathf.Max(Mathf.Abs(dir.Y), 1e-4f));
+        return center + dir * scale;
+    }
+
+    // A filled triangle at p pointing along dir (unit).
+    private void DrawEdgeArrow(Vector2 p, Vector2 dir, Color color)
+    {
+        const float sz = 10f;
+        Vector2 perp = new(-dir.Y, dir.X);
+        var poly = new[]
+        {
+            p + dir * sz,
+            p - dir * sz * 0.5f + perp * sz * 0.6f,
+            p - dir * sz * 0.5f - perp * sz * 0.6f,
+        };
+        _selMarker.DrawColoredPolygon(poly, color);
     }
 
     private void DrawSelectionBox()
@@ -324,6 +402,8 @@ public partial class SectorOverview : Node3D
 
         _selMarkerDraws.Clear();
         _orderMarkerDraws.Clear();
+        _rockMarkerDraws.Clear();
+        Vector2 vp = GetViewport().GetVisibleRect().Size;
         ulong ownId = _world.LocalShip?.ShipId ?? 0;
         for (int i = _selection.Count - 1; i >= 0; i--)
         {
@@ -359,11 +439,35 @@ public partial class SectorOverview : Node3D
                     cam.UnprojectPosition(wPos),
                     true,
                     false));
+            // Rock-order waypoint: a selected CONSTRUCTOR (ordered to build on a rock) or MINER
+            // (ordered to mine one) gets a yellow diamond (or an edge arrow, when the rock is
+            // off-screen/behind) pointing the way, plus a leader line from the drone. Dropped once
+            // the order is fulfilled — construction begins, or the miner's beam lands on the ordered
+            // rock — or the subject stops being a constructor/miner. Anchored on the rock, so it
+            // draws even while the drone itself is off-screen.
+            if (_orderedRocks.TryGetValue(id, out ulong orderedRockId))
+            {
+                var subject = _world.FriendlyShipById(id);
+                bool build = subject is { IsConstructor: true };
+                bool fulfilled = build
+                    ? _world.IsRockUnderConstruction(orderedRockId)
+                    : _world.IsMinerHarvesting(id, orderedRockId);
+                if (fulfilled || subject is not ({ IsConstructor: true } or { IsMiner: true }))
+                    _orderedRocks.Remove(id);
+                else if (TryResolveRock(orderedRockId, out Vector3 rockPos))
+                {
+                    bool rockBehind = cam.IsPositionBehind(rockPos);
+                    Vector2 rsp = cam.UnprojectPosition(rockPos);
+                    if (rockBehind)
+                        rsp = vp - rsp; // flip a behind-camera point to the opposite side for edge-clamping
+                    _rockMarkerDraws.Add((shipDrawable ? cam.UnprojectPosition(pos) : Vector2.Zero, rsp, shipDrawable, rockBehind, build));
+                }
+            }
             if (!shipDrawable)
                 continue; // still selected, just not drawable this frame
             _selMarkerDraws.Add((cam.UnprojectPosition(pos), commandable ? DesignTokens.CmdrGold : DesignTokens.TeamAccent));
         }
-        _selMarker.Visible = _selMarkerDraws.Count > 0 || _orderMarkerDraws.Count > 0;
+        _selMarker.Visible = _selMarkerDraws.Count > 0 || _orderMarkerDraws.Count > 0 || _rockMarkerDraws.Count > 0;
         if (_selMarker.Visible)
             _selMarker.QueueRedraw();
     }
@@ -485,6 +589,21 @@ public partial class SectorOverview : Node3D
         return false;
     }
 
+    // Resolve a raw rock id to its world position via the same view-filtered accessor the pick uses
+    // (sectors are origin-centered, so this is only valid — and only returns true — while the rock's
+    // sector is the one on screen). Used to place the yellow rock-order waypoint.
+    private bool TryResolveRock(ulong rockId, out Vector3 pos)
+    {
+        foreach (var (id, node) in _world.AsteroidsInView())
+            if (id == rockId)
+            {
+                pos = node.GlobalPosition;
+                return true;
+            }
+        pos = default;
+        return false;
+    }
+
     // Rebuild the yellow altitude stems from the live entity positions. One vertical line
     // per ship/base from its world position to its foot on the grid plane (Y = sector
     // center Y), plus a small cross at the foot so the base point reads where it meets the
@@ -493,8 +612,8 @@ public partial class SectorOverview : Node3D
     private void RebuildStems()
     {
         _stemPoints.Clear();
-        if (_world.LocalShip != null)
-            _stemPoints.Add(_world.LocalShip.GlobalPosition);
+        if (TryLocalShip(out _, out var localPos))
+            _stemPoints.Add(localPos);
         foreach (var s in _world.FriendlyShips())
             _stemPoints.Add(s.GlobalPosition);
         foreach (var s in _world.EnemyShips())
@@ -545,6 +664,14 @@ public partial class SectorOverview : Node3D
             Close();
         else
             Open();
+    }
+
+    // Open the sector map from outside the F3 poll (e.g. the docked shell's MAP button). No-op if
+    // it's already up or there's no sector data yet — same guards as the F3 toggle / Open().
+    public static void RequestOpen()
+    {
+        if (!Active)
+            _instance?.Open();
     }
 
     private void Open()
@@ -651,16 +778,13 @@ public partial class SectorOverview : Node3D
 
         switch (@event)
         {
-            // Esc from the map: pop the flight escape menu ON TOP of the map. ShipController's Esc
-            // handler is gated off while the map owns input, so we mirror it here. The map stays
-            // Active (and frozen — see _Process / the EscapeMenu.Active guard above), so closing the
-            // menu drops back into the map, not straight into flight. Cursor is already free.
+            // Esc from the map: exit F3 (same as toggling F3 off), dropping back to flight / the
+            // docked shell. Cancel any live drag first so a stale box/orbit gesture can't resume,
+            // then close. (The escape menu is still reachable with Esc once the map is closed.)
             case InputEventKey { Keycode: Key.Escape, Pressed: true, Echo: false }:
-                // Cancel any live drag first — the menu swallows the mouse release, and a stale
-                // box/orbit drag must not resume when the menu closes.
                 _orbitDrag = _panDrag = _boxSelecting = _boxDragging = false;
                 _selBox.Visible = false;
-                EscapeMenu.Open(this, EscapeMenu.Context.Flight);
+                Close();
                 GetViewport().SetInputAsHandled();
                 break;
 
@@ -787,8 +911,8 @@ public partial class SectorOverview : Node3D
     }
 
     // Resolve a map click in the VIEWED sector. Minimap keeps precedence: a LEFT click on a
-    // minimap sector retargets the view (same as a left press); a RIGHT click on one with a
-    // command group selected orders the group to that sector instead.
+    // minimap sector retargets the view (same as a left press); a RIGHT click on one orders units
+    // to that sector — the selected command group if any, otherwise our own ship (autopilot + idle).
     //
     // LEFT click: SELECT whatever was hit (any entity — friendly, enemy, base, rock; an entity
     // hit also sets the Tab focus); a miss just DESELECTS — left click never drops waypoints
@@ -808,13 +932,15 @@ public partial class SectorOverview : Node3D
         ulong ownId = _world.LocalShip?.ShipId ?? 0;
 
         // Minimap precedence (covers the right-click path; left already gated on press).
-        // LEFT click on a sector node views it; RIGHT click with a selection sends it there:
+        // LEFT click on a sector node views it; RIGHT click sends units there:
         //   - teammates get a SECTOR order (targetKind 4): combat drones go through the aleph and
         //     hold just inside (never a run at the sector center), miners prospect-patrol the sector
         //     until helium-3 turns up. No CMD waypoint marker is recorded — the stop point is decided
         //     server-side (wherever the unit enters), so any client-drawn diamond would lie.
         //   - our own ship gets the autopilot analog (OrderOwnShipToSector): a cross-sector nav
-        //     waypoint that multi-hops the gates there and warps through.
+        //     waypoint that multi-hops the gates there and warps through, then idles on arrival.
+        //     This is the path taken with NOTHING selected — the common "send me over there" case —
+        //     so a right-click on a sector commands the ship rather than just changing the view.
         _minimap ??= GetNodeOrNull<Minimap>("../Hud/Minimap");
         if (_minimap != null && _minimap.TryClickSector(point, out uint mapSector))
         {
@@ -830,14 +956,26 @@ public partial class SectorOverview : Node3D
                         {
                             _net.SendOrder(subject, targetKind: 4, targetId: 0, sector: mapSector, pos: Vector3.Zero);
                             _orderedPoints.Remove(subject); // supersedes any earlier point order
+                            _orderedRocks.Remove(subject); // ...and any rock intent
                         }
                     if (ownSelected)
                         OrderOwnShipToSector(mapSector);
                     return;
                 }
+                // Nothing selected but LAUNCHED: a right-click sends our OWN ship to autopilot to that
+                // sector and idle on arrival (OrderOwnShipToSector's kind-3 cross-sector waypoint at the
+                // sector centre). It deliberately does NOT retarget the F3 view — viewing a sector is the
+                // LEFT-click gesture (TryMinimapClick on press). Pre-launch / spectating (no own ship)
+                // falls through to SwitchView so the map is still explorable by right-click.
+                if (ownId != 0)
+                {
+                    OrderOwnShipToSector(mapSector);
+                    return;
+                }
             }
-            // A non-engage minimap click only retargets the F3 view; in cursor-free flight the map
-            // isn't open, so a left-click there does nothing (orders go through the engage path above).
+            // A LEFT (non-engage) minimap click, or a RIGHT click while not launched, only retargets the
+            // F3 view; in cursor-free flight the map isn't open, so a left-click there does nothing
+            // (orders go through the engage path above).
             if (Active)
                 SwitchView(mapSector);
             return;
@@ -893,6 +1031,14 @@ public partial class SectorOverview : Node3D
                 {
                     _net.SendOrder(subject, kind, id, sector: 0, pos: Vector3.Zero);
                     _orderedPoints.Remove(subject); // an entity target supersedes any goto point
+                    // A rock order on a constructor ("build here") or miner ("mine here"): remember
+                    // the rock so a yellow BUILD/MINE waypoint points the way while it's selected.
+                    // Any other entity target (or other subject type) clears the rock intent.
+                    if (kind == 2
+                        && _world.FriendlyShipById(subject) is { IsConstructor: true } or { IsMiner: true })
+                        _orderedRocks[subject] = id;
+                    else
+                        _orderedRocks.Remove(subject);
                 }
             }
             else if (TryGridPoint(cam, point, out Vector3 world))
@@ -900,6 +1046,7 @@ public partial class SectorOverview : Node3D
                 {
                     _net.SendOrder(subject, targetKind: 3, targetId: 0, sector: _world.ViewSector, pos: world);
                     _orderedPoints[subject] = (_world.ViewSector, world);
+                    _orderedRocks.Remove(subject); // a goto point supersedes any rock intent
                 }
             // Fan the same click out to our own ship (autopilot, not a MsgOrder) when it rides along.
             if (ownId != 0 && _selection.Contains(ownId))
@@ -1096,64 +1243,59 @@ public partial class SectorOverview : Node3D
     // FocusedId-encoded id (raw ship / BaseLockId / AsteroidFocusId).
     private bool TryPickEntity(Camera3D cam, Vector2 point, out ulong encoded)
     {
-        encoded = 0;
-        float bestD2 = PickRadiusPx * PickRadiusPx;
+        // Normalised pick: each candidate is a hit when the click lands inside its screen threshold
+        // (score < 1), and the smallest score wins so a dead-centre hit beats a glancing one. Point
+        // targets (ships/bases) use the flat PickRadiusPx. Asteroids instead scale the threshold to
+        // their on-screen disc (AsteroidPickRadiusPx) so a click anywhere on a large or nearby rock's
+        // visible surface still resolves to the rock — rather than missing the fixed 24px centre test
+        // and falling through to the grid plane, which plants the waypoint on empty space behind it.
+        float bestScore = 1f;
+        ulong best = 0;
+
+        void Consider(Vector3 worldPos, ulong id, float thresholdPx)
+        {
+            if (cam.IsPositionBehind(worldPos))
+                return;
+            float d2 = (cam.UnprojectPosition(worldPos) - point).LengthSquared();
+            float score = d2 / (thresholdPx * thresholdPx);
+            if (score < bestScore)
+            {
+                bestScore = score;
+                best = id;
+            }
+        }
 
         foreach (var e in _world.FriendlyShips())
-        {
-            if (cam.IsPositionBehind(e.GlobalPosition))
-                continue;
-            float d2 = (cam.UnprojectPosition(e.GlobalPosition) - point).LengthSquared();
-            if (d2 < bestD2)
-            {
-                bestD2 = d2;
-                encoded = e.ShipId;
-            }
-        }
-        if (TryLocalShip(out ulong localId, out Vector3 localPos) && !cam.IsPositionBehind(localPos))
-        {
-            float d2 = (cam.UnprojectPosition(localPos) - point).LengthSquared();
-            if (d2 < bestD2)
-            {
-                bestD2 = d2;
-                encoded = localId;
-            }
-        }
+            Consider(e.GlobalPosition, e.ShipId, PickRadiusPx);
+        if (TryLocalShip(out ulong localId, out Vector3 localPos))
+            Consider(localPos, localId, PickRadiusPx);
         foreach (var e in _world.EnemyShips())
-        {
-            if (cam.IsPositionBehind(e.GlobalPosition))
-                continue;
-            float d2 = (cam.UnprojectPosition(e.GlobalPosition) - point).LengthSquared();
-            if (d2 < bestD2)
-            {
-                bestD2 = d2;
-                encoded = e.ShipId;
-            }
-        }
+            Consider(e.GlobalPosition, e.ShipId, PickRadiusPx);
         foreach (var (id, pos, _) in _world.AllVisibleBases())
-        {
-            if (cam.IsPositionBehind(pos))
-                continue;
-            float d2 = (cam.UnprojectPosition(pos) - point).LengthSquared();
-            if (d2 < bestD2)
-            {
-                bestD2 = d2;
-                encoded = GameContent.BaseLockId(id);
-            }
-        }
+            Consider(pos, GameContent.BaseLockId(id), PickRadiusPx);
         foreach (var (id, node) in _world.AsteroidsInView())
-        {
-            Vector3 pos = node.GlobalPosition;
-            if (cam.IsPositionBehind(pos))
-                continue;
-            float d2 = (cam.UnprojectPosition(pos) - point).LengthSquared();
-            if (d2 < bestD2)
-            {
-                bestD2 = d2;
-                encoded = GameContent.AsteroidFocusId(id);
-            }
-        }
+            Consider(node.GlobalPosition, GameContent.AsteroidFocusId(id), AsteroidPickRadiusPx(cam, node.GlobalPosition, id));
+
+        encoded = best;
         return encoded != 0;
+    }
+
+    // Screen-space pick radius (px) for an asteroid: the on-screen radius of its visible disc, floored
+    // at PickRadiusPx so tiny/distant rocks stay clickable. Projects a point on the rock's surface
+    // (offset along the camera's right axis, which maps to the disc radius regardless of view angle)
+    // and measures its pixel distance from the projected centre. CurrentRadius is the live mined size;
+    // the server already folds the special-rock oversize into it, so it matches the rendered node.
+    private float AsteroidPickRadiusPx(Camera3D cam, Vector3 center, ulong id)
+    {
+        float worldRadius = 0f;
+        if (_world.GetAsteroid(id) is { } row)
+            worldRadius = row.CurrentRadius > 0f ? row.CurrentRadius : row.Radius;
+        if (worldRadius <= 0f || cam.IsPositionBehind(center))
+            return PickRadiusPx;
+        Vector3 right = cam.GlobalTransform.Basis.X.Normalized();
+        Vector2 cScreen = cam.UnprojectPosition(center);
+        Vector2 eScreen = cam.UnprojectPosition(center + right * worldRadius);
+        return Mathf.Max(PickRadiusPx, (eScreen - cScreen).Length());
     }
 
     // Intersect the camera ray through the click point with the sector's grid plane (Y = sector

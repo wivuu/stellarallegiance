@@ -54,4 +54,30 @@ public class ResolutionTests
         Assert.DoesNotContain(buildables, b => b.Id == "dev-mining");
         Assert.True(BuildableResolver.IsObsolete(core.Developments.Single(d => d.Id == "dev-mining"), reachable));
     }
+
+    // Successor semantics: an item with obsoleted-by-techs is offered until the team owns ANY listed
+    // tech, at which point it drops out of the catalog while its successor (gated on that same tech)
+    // appears — the tier-1 -> tier-2 gun swap.
+    [Fact]
+    public void GetBuildables_RetiresItemOnceObsoletedByTechIsOwned()
+    {
+        var core = new Core
+        {
+            Techs = { new Tech { Id = "cannon-tier-2", Name = "Class-2 Cannons" } },
+            Weapons =
+            {
+                new Weapon { Id = "gun-t1", Name = "Cannon I", ObsoletedByTechs = new TechSet(new[] { "cannon-tier-2" }) },
+                new Weapon { Id = "gun-t2", Name = "Cannon II", RequiredTechs = new TechSet(new[] { "cannon-tier-2" }) },
+            },
+        };
+
+        var before = BuildableResolver.GetBuildables(core, new TechState(new TechSet(), new CapabilitySet()));
+        Assert.Contains(before, b => b.Id == "gun-t1");        // offered while the tech is unowned
+        Assert.DoesNotContain(before, b => b.Id == "gun-t2");  // successor still gated
+
+        var after = BuildableResolver.GetBuildables(
+            core, new TechState(new TechSet(new[] { "cannon-tier-2" }), new CapabilitySet()));
+        Assert.DoesNotContain(after, b => b.Id == "gun-t1");   // retired by the owned successor tech
+        Assert.Contains(after, b => b.Id == "gun-t2");         // successor now available
+    }
 }

@@ -65,6 +65,9 @@ public sealed class MapSectorDef
     /// <summary>Optional per-sector override of the count of RARE special rocks (Carbonaceous/Silicon/Uranium); 0 → none, and an authored value bypasses the home-special-chance roll. World seeding default otherwise.</summary>
     public int? SpecialCount { get; set; }
 
+    /// <summary>Optional per-sector override of the special-class weights — which class each special rock becomes (e.g. carbonaceous 1 / silicon 0 / uranium 0 guarantees Carbonaceous here). Omitted inherits the world seeding default. Composes with special-count (count = how many, weights = which class).</summary>
+    public SpecialWeightsDef? SpecialWeights { get; set; }
+
     /// <summary>Optional per-sector multiplier on the per-He3-rock ore capacity here.</summary>
     public double? OreRichnessMult { get; set; }
 
@@ -239,6 +242,10 @@ public static class MapLoader
                     AsteroidDensityMult = F(s.AsteroidDensity),
                     He3Count = he3,
                     SpecialCount = s.SpecialCount,
+                    // Which special CLASS this sector's specials become (null → world default).
+                    // Validated (non-negative, at least one positive) via the shared world-loader parse.
+                    SpecialWeights = WorldLoader.ParseSpecialWeights(
+                        s.SpecialWeights, $"map '{map.Name}' sector {s.Id}: special-weights"),
                     OreRichnessMult = F(s.OreRichnessMult),
                     // Ore-capacity band resolves sector → map → world: a sector's own bound wins,
                     // else the map-wide default, else (null here) the world ore-capacity-min/max in

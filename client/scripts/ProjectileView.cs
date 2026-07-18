@@ -51,6 +51,10 @@ public partial class ProjectileView : Node3D
     public bool ImpactAtExpiry { get; set; }
     public uint Sector { get; set; }
 
+    // True = this bolt is a healing (ER Nanite) tracer: the client tints the impact spark green and
+    // skips the shield-bubble flash (a heal bypasses the target's shield). Set once at spawn.
+    public bool IsHeal { get; set; }
+
     public void Initialize(
         Vector3 pos,
         Vector3 vel,

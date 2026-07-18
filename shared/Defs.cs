@@ -38,6 +38,21 @@ namespace StellarAllegiance.Shared
         Cockpit, // eye point for the first-person camera (client-only; the sim never reads it)
     }
 
+    // What weapon category a Weapon hardpoint accepts in the hangar. Resolved server-side at
+    // projection (authored `mount:` in hulls.yaml, else derived from the bound weapon: rack ->
+    // Missile, gun -> Gun; an UNAUTHORED empty mesh mount -> NonMountable) and streamed on the
+    // HardpointDef, so the hangar filter and the server's ResolveLoadout gate read the SAME value.
+    // Declaration order fixes the wire byte, so it is APPEND-ONLY.
+    public enum WeaponMountKind : byte
+    {
+        Any, // unrestricted: accepts any hardpoint-mountable weapon (gun or missile rack)
+        Gun, // guns (Bolt) only
+        Missile, // missile racks only
+        NonMountable, // not a loadout slot: accepts nothing, HIDDEN in the hangar. The default a
+        // mesh HP_Weapon node gets when hulls.yaml doesn't author it — an empty,
+        // ASSIGNABLE mount requires an authored entry (`mount: any|gun|missile`).
+    }
+
     // Off* is the local offset from the hull origin; Dir* is the local forward (e.g. +Z
     // muzzle, −Z nozzle in this codebase's +Z-forward convention). WeaponId is meaningful
     // only for Kind == Weapon.
@@ -57,6 +72,22 @@ namespace StellarAllegiance.Shared
             DirY,
             DirZ;
         public uint WeaponId; // Weapon hardpoints only; NoWeapon = empty mount; 0 otherwise
+        public WeaponMountKind Mount; // Weapon hardpoints only; which weapon category fits here
+
+        // THE mount-compatibility rule, shared so the hangar UI (LoadoutState.Compatible) and the
+        // server's ResolveLoadout accept exactly the same swaps: dispensers never mount on a
+        // hardpoint (they ride cargo — D8), a NonMountable mount takes nothing at all (it isn't a
+        // loadout slot), and a typed mount only takes its own category. A missile on a gun mount
+        // (or a gun on a missile mount) is rejected on both sides.
+        public static bool MountAccepts(WeaponMountKind mount, WeaponKind kind) =>
+            (kind == WeaponKind.Bolt || kind == WeaponKind.Missile)
+            && mount switch
+            {
+                WeaponMountKind.Gun => kind == WeaponKind.Bolt,
+                WeaponMountKind.Missile => kind == WeaponKind.Missile,
+                WeaponMountKind.NonMountable => false,
+                _ => true,
+            };
     }
 
     // One per ship class. ClassId is a raw byte (independent of the ShipClass enum) so new
@@ -67,14 +98,17 @@ namespace StellarAllegiance.Shared
     {
         public byte ClassId;
         public string Name = "";
+
         // Presentation flavor authored per-hull (streamed, not baked): the hangar's icon glyph,
         // role tag, and blurb. Empty = the client falls back to a generic cosmetic default.
         public string Glyph = "";
         public string Role = "";
         public string Description = "";
+
         // GLB the client loads for this hull (res://assets/ships/<ModelName>.glb). Empty = the
         // procedural placeholder silhouette. Authored, so a new hull ships its own mesh patchless.
         public string ModelName = "";
+
         // Longest local axis (world units) the loaded hull is uniform-scaled to — the silhouette
         // length the client normalizes the GLB to and sizes the engine glow / loadout camera off.
         public float ModelLength;
@@ -93,12 +127,14 @@ namespace StellarAllegiance.Shared
         public float AbAccel,
             AbOnRate,
             AbOffRate;
+
         // 0 max-fuel = unmodeled (unlimited boost); 0 recharge = dock-only (relaunch refills).
         public float MaxFuel;
         public float AbFuelDrain,
             AbFuelRecharge;
 
         public float MaxHull; // starting/spawn hull
+
         // Regenerating energy shield layered over hull (all 0 = no shield). Depleted before hull;
         // overflow spills to hull. Recharge (points/sec) resumes ShieldDelaySec after the last hit.
         public float ShieldCapacity;
@@ -114,6 +150,7 @@ namespace StellarAllegiance.Shared
         public float VisionConeAngleDeg;
         public float VisionSphereRadius;
         public float RadarSignature;
+
         // Additive radar-signature bias projected from authored equipment (Hull.Signature + the
         // default loadout's Part.Signature sum), in RadarSignature units (default 0 = neutral).
         // Server-side fog input only — Protocol.BuildDefs deliberately does NOT write it (the
@@ -123,12 +160,21 @@ namespace StellarAllegiance.Shared
         public int Cost; // credits to build this hull (Buildable.Price); default 0 = free
         public float PayloadCapacity; // payload budget: mounted weapon Mass + cargo hold; 0 = no hold
         public float OreCapacity; // mining ore hold (He3 units) a miner fills + offloads; 0 = not a miner. Streamed in Protocol.BuildDefs (after PayloadCapacity).
+        public int OrderTimeSeconds; // miner production delay: seconds from ORDERING this hull to it launching (constructor-Producing analogue); 0 = instant. Streamed after OreCapacity.
+        public bool IsConstructor; // v37: a constructor drone chassis (builds bases). Server-only (NOT streamed — client uses ShipFlagConstructor); projected from HullAbility.IsBuilder.
         public List<HardpointDef> Hardpoints = new();
         public uint FactionId; // reserved (per-team content); default 0
 
         // Default consumable hold this hull spawns with (authored order). The hangar seeds its
         // stepper counts from this; MsgSpawn rides the chosen counts back to the server.
         public List<CargoLoadDef> DefaultCargo = new();
+
+        // Techs (indices into the streamed tech catalog) a team must own before this hull may be
+        // built — mirrors WeaponDef.RequiredTechIdx. Server-authoritative gating lives in
+        // BuildableResolver; this is streamed purely so the hangar's locked hull card + the Research
+        // UNLOCKS list can NAME the gate ("REQUIRES SUPREMACY FIELDED") instead of a bare boolean.
+        // Streamed at the tail of the ship block in Protocol.BuildDefs (v43).
+        public ushort[] RequiredTechIdx = System.Array.Empty<ushort>();
     }
 
     // How a weapon behaves when fired. A byte (wire-safe) and APPEND-ONLY, like HardpointKind.
@@ -137,7 +183,7 @@ namespace StellarAllegiance.Shared
         Bolt, // instant analytic ray-cast bolt
         Missile, // guided homing missile (projected from a Launcher + its missile expendable)
         Mine, // proximity mine dispenser (projected from a Launcher + its mine expendable)
-        Chaff, // sensor-decoy dispenser (projected from a Launcher + its chaff expendable)
+        Chaff, // decoy dispenser (projected from a Launcher + its chaff expendable)
         Probe, // deployable vision-sphere dispenser (projected from a Launcher + its probe expendable); APPEND-ONLY, never reorder
     }
 
@@ -188,6 +234,7 @@ namespace StellarAllegiance.Shared
         public byte MineCloudCount; // mine: mines scattered per deploy (<= 64, seed-based aliveMask)
         public uint MineArmTicks; // mine: sim ticks before the field arms (round(arm-delay*20))
         public float MineTriggerRadius; // mine: u proximity radius each armed mine triggers within
+
         // Radar signature of the deployed field (0 authored -> 1.0 at projection). SERVER-ONLY —
         // BuildDefs skips it (detection is server-authoritative; the client never reads signatures;
         // FogEyeballMultiplier / ProbeSignature precedent).
@@ -217,6 +264,29 @@ namespace StellarAllegiance.Shared
         public float ProbeSignature; // radar signature of the deployed probe (0 authored -> 1.0 at projection)
         public float ProbeHitRadius; // server hit-sphere radius for bolts/blasts vs the probe, u
         public float ProbeModelSize; // client visual normalization length, u (0 = client guard default)
+
+        // Techs (indices into the streamed tech catalog) a team must own before this weapon may be
+        // equipped/bought — the hangar arsenal's lock state (Stage-4 tech paths). Streamed LAST
+        // (after ProbeModelSize) so every block above stays byte-stable (v36).
+        public ushort[] RequiredTechIdx = System.Array.Empty<ushort>();
+
+        // True = this gun HEALS instead of damages: a bolt hitting a same-team ship restores hull
+        // (clamped to max; shields untouched), an enemy hit is a no-op. The ER Nanite line. Drives
+        // the sim heal branch (ResolveDueShots) and the client's green bolt/spark tint. Streamed LAST
+        // (after RequiredTechIdx) so every block above stays byte-stable (v40).
+        public bool IsHealing;
+
+        // Techs whose ownership OBSOLETES this weapon tier — once the team owns any of them the tier
+        // is superseded, so the hangar hides it from the arsenal and loadouts referencing it migrate
+        // to SucceededByWeaponId. Empty = a top-tier (never obsoleted) weapon. Streamed after
+        // IsHealing so every block above stays byte-stable (v43).
+        public ushort[] ObsoletedByTechIdx = System.Array.Empty<ushort>();
+
+        // The next-tier weapon this one upgrades into when obsoleted (ObsoletedByTechIdx owned).
+        // uint.MaxValue (NoWeapon) = no successor. Both peers walk the chain (Simulation.ResolveLoadout
+        // server-side, ShipLoadout client-side) so a saved Gat Gun 1 becomes Gat Gun 2 once gat-2 is
+        // owned. Streamed after ObsoletedByTechIdx (v43).
+        public uint SucceededByWeaponId = uint.MaxValue;
     }
 
     // One entry in a hull's default consumable hold — an item id + a count. Mirrors the authored
@@ -229,7 +299,8 @@ namespace StellarAllegiance.Shared
 
     // One per runtime cargo item (an expendable the hangar can stock in a ship's hold).
     // CargoId is the stable wire id an authored expendable carries (Expendable.CargoId).
-    // Cargo is hangar/UI-side today — the sim doesn't consume these yet (Stage 2 consumables).
+    // Dispenser items are consumed through the per-kind ammo bytes (SeedDispenserAmmo);
+    // fuel items auto-consume when the tank empties mid-boost.
     public sealed class CargoItemDef
     {
         public uint CargoId;
@@ -238,6 +309,7 @@ namespace StellarAllegiance.Shared
         public float Mass; // payload units per PACK carried (one hangar count = one pack)
         public byte ChargesPerPack = 1; // charges dispensed per loaded pack (one per press); >=1
         public string Description = "";
+        public float FuelPerCharge; // afterburner fuel restored per consumed charge; 0 = not a fuel item
     }
 
     // One per base type.
@@ -255,11 +327,134 @@ namespace StellarAllegiance.Shared
         public float RadarSignature;
 
         public List<HardpointDef> Hardpoints = new();
+
+        // Concurrent research orders a base of this type can run at once (Stage-4 tech paths).
+        // Authored per station (`research-slots`), resolved to >= 1 at projection. Streamed LAST
+        // in the BaseDef block (after Hardpoints) so the fields above stay byte-stable (v36).
+        public byte ResearchSlots = 1;
+
+        // ---- Base building (v37), streamed after ResearchSlots (append-only convention) ----------
+        // The GLB the client loads for this base type (res://assets/bases/<ModelName>.glb) and the
+        // server reads for collision — mirrors ShipClassDef.ModelName. Empty => procedural sphere.
+        public string ModelName = "";
+
+        // Win-condition base ("headquarters"): a team loses when ALL its WinCondition bases are
+        // destroyed. Garrisons are WinCondition; forward structures (outpost, …) are not. Projected
+        // from the station's `start` ability (only the garrison carries it).
+        public bool WinCondition;
+
+        // The asteroid class a constructor may build this base on (RockClass byte). Only meaningful
+        // for constructor-built forward bases; the garrison authors none (built at match start).
+        // 255 = unset (not constructor-buildable).
+        public byte BuildRockClass = 255;
+
+        // ---- Station upgrades (v39) -------------------------------------------------------------
+        // The base type this base UPGRADES INTO (its successor tier); -1 = no successor. Resolved at
+        // projection from the station's `successor-station-id`. A station-upgrade development whose
+        // granted tech unlocks the successor tier swaps a hosting base's type to this id (in place).
+        // Streamed LAST in the BaseDef block (append-only).
+        public short SuccessorBaseTypeId = -1;
+    }
+
+    // ---- Tech-path catalog defs (Stage-4 research), streamed in MsgDefs after the world config ----
+    //
+    // Techs are referenced BY INDEX into the streamed tech list (u16), not by string id, everywhere
+    // a requirement/grant list rides the wire (defs, team state, research state). The index order is
+    // the authored Core.Techs list order — deterministic on both peers by construction.
+
+    // Mirror of the factions library's closed Capability enum (Allegiance.Factions.Model.Capability),
+    // as the wire byte. APPEND-ONLY and must match the library's declaration order — the projection
+    // casts between them (shared/ deliberately does not reference the authoring library).
+    public enum CapabilityId : byte
+    {
+        Base = 0,
+        ShipyardAllowed = 1,
+        ExpansionAllowed = 2,
+        TacticalAllowed = 3,
+        SupremacyAllowed = 4,
+    }
+
+    // One team-wide stat multiplier: (GameAttribute byte, multiplier). Mirrors the factions library's
+    // GameAttribute enum id (append-only, wire byte) × its double multiplier carried as f32. Neutral at
+    // 1.0; a faction's base-attributes and a development's attributes stream as sorted AttrMod[] arrays.
+    public readonly record struct AttrMod(byte Attr, float Mult);
+
+    // One research-tree tech node (a pure catalog identity techs/developments reference).
+    public sealed class TechDef
+    {
+        public string Id = ""; // stable authored id ("heavy-ordnance")
+        public string Name = "";
+        public string Description = "";
+    }
+
+    // One researchable development (the research-tree PURCHASE: price + wall-clock time + grants).
+    public sealed class DevelopmentDef
+    {
+        public string Id = "";
+        public string Name = "";
+        public string Description = "";
+        public string Group = ""; // research-tab cluster label ("WEAPONS"); empty = client bucket fallback
+        public int Price; // credits, deducted when research starts (or is queued — reservation)
+        public int BuildTimeSeconds; // wall seconds to complete (sim runs it in ticks)
+        public bool TechOnly; // obsolete once its grants are owned (never shows as "done" inventory)
+        public ushort[] RequiredTechIdx = System.Array.Empty<ushort>();
+        public ushort[] GrantedTechIdx = System.Array.Empty<ushort>();
+        public ushort[] ObsoletedByTechIdx = System.Array.Empty<ushort>();
+        public byte[] RequiredCaps = System.Array.Empty<byte>(); // CapabilityId bytes
+        public byte[] GrantedCaps = System.Array.Empty<byte>();
+
+        // Station upgrade (v39): which of the team's matching bases this development physically upgrades
+        // on completion — 0 = all (default), 1 = single (only the hosting base). Mirrors the library
+        // UpgradeScope enum byte. Meaningful only for a development that grants a station-tier tech.
+        public byte UpgradeScope;
+        public const byte UpgradeScopeAll = 0;
+        public const byte UpgradeScopeSingle = 1;
+
+        // Team-wide stat multipliers this development grants while owned (v41). Sorted by attr byte for
+        // deterministic wire bytes. Slice devs are all tech-only ⇒ empty; the client renders any present
+        // entries as readable effect lines ("Gun damage +10%").
+        public AttrMod[] Attributes = System.Array.Empty<AttrMod>();
+    }
+
+    // One station CATALOG entry — every authored station, including future structures that have no
+    // runtime base projection yet (BaseTypeId -1). The Build tab renders these; the Research tab
+    // reads their grants for "what unlocks this" displays. Distinct from BaseDef (the runtime
+    // sim/wire base model): a catalog entry is presentation + gating data only.
+    public sealed class StationCatalogDef
+    {
+        public string Id = "";
+        public string Name = "";
+        public string Description = "";
+        public int Price;
+        public int BuildTimeSeconds;
+        public byte StationClass; // factions StationClass enum byte (Starbase=0, Garrison=1, Shipyard=2, ...)
+        public short BaseTypeId = -1; // runtime wire base-type id; -1 = catalog-only (not buildable/spawnable)
+        public byte ResearchSlots; // resolved (>= 1) for runtime bases; authored raw otherwise
+        public byte BuildRockClass = 255; // RockClass a constructor builds this on; 255 = unset (v37)
+
+        // Constructor align dwell for THIS station (seconds at the standoff shell before creeping in),
+        // resolved (> 0) at projection from stations.yaml `align-time-seconds` (v38). Pairs with
+        // BuildTimeSeconds = how long the build sphere runs once the drone is embedded.
+        public int AlignTimeSeconds = 5;
+        public ushort[] RequiredTechIdx = System.Array.Empty<ushort>();
+        public ushort[] GrantedTechIdx = System.Array.Empty<ushort>();
+        public ushort[] ObsoletedByTechIdx = System.Array.Empty<ushort>();
+        public byte[] RequiredCaps = System.Array.Empty<byte>();
+        public byte[] GrantedCaps = System.Array.Empty<byte>();
+
+        // Station upgrades (v39): the base type this station upgrades into (its successor tier); -1 =
+        // no successor. Resolved at projection from `successor-station-id`. Streamed after GrantedCaps.
+        public short SuccessorBaseTypeId = -1;
     }
 
     // How a sector's asteroids are distributed. Field = shallow disc filling toward the edge;
     // Belt = annular ring; None = no rocks. Replaces the old per-sector-id field/belt hardcoding.
-    public enum AsteroidKind { None, Field, Belt }
+    public enum AsteroidKind
+    {
+        None,
+        Field,
+        Belt,
+    }
 
     // Resource class assigned to each asteroid at world-gen (World.RockOre). Only Helium3 is
     // harvestable today (miners fill their ore hold from He3 rocks). Regolith is the COMMON class —
@@ -269,7 +464,52 @@ namespace StellarAllegiance.Shared
     // wire), so never reorder or remove a member; new classes append after the highest value.
     public enum RockClass : byte
     {
-        Carbonaceous = 0, Silicon = 1, Uranium = 2, Helium3 = 3, Regolith = 4,
+        Carbonaceous = 0,
+        Silicon = 1,
+        Uranium = 2,
+        Helium3 = 3,
+        Regolith = 4,
+    }
+
+    // Relative weights for which SPECIAL class (Carbonaceous/Silicon/Uranium) a seeded special rock
+    // becomes. A weight is a relative share, not a probability — [1,1,1] and [2,2,2] both mean "equal
+    // thirds". A zero weight excludes that class entirely; at least one must be positive (enforced at
+    // content load). Authorable as the world seeding default (world.yaml `seeding.special-weights`)
+    // and overridable per sector in a map (`sectors[].special-weights`), so an author can guarantee a
+    // class (e.g. carbonaceous 1 / silicon 0 / uranium 0) or bias the mix. Server-side only — the
+    // resolved class byte is what streams, never these weights.
+    public sealed class SpecialWeights
+    {
+        public float Carbonaceous = 1f;
+        public float Silicon = 1f;
+        public float Uranium = 1f;
+
+        // A distribution is usable iff some class carries a positive share.
+        public bool AnyPositive => Carbonaceous > 0f || Silicon > 0f || Uranium > 0f;
+
+        // Equal positive shares reproduce the historical `hash % 3` draw EXACTLY, so an un-authored
+        // (default) world/sector keeps every existing pinned seed's rock classes — and thus their
+        // class-derived mesh variants / oversize radius — byte-identical.
+        private bool IsLegacyUniform => Carbonaceous == Silicon && Silicon == Uranium && Carbonaceous > 0f;
+
+        // Pick a special class deterministically from a rock's per-rock hash. Uniform → legacy hash%3.
+        // Otherwise a cumulative-weight draw over a fixed integer quantization: pure integer math from
+        // the hash (no floating-point non-determinism, no shared-RNG draw), so the layout stays
+        // byte-identical for a seed. A zero-weight class gets a zero-width bucket and is never chosen.
+        public RockClass Pick(ulong hash)
+        {
+            if (IsLegacyUniform)
+                return (RockClass)(byte)(hash % 3);
+            const long Scale = 1_000_000;
+            long wc = (long)(Carbonaceous * Scale);
+            long ws = (long)(Silicon * Scale);
+            long wu = (long)(Uranium * Scale);
+            long sum = wc + ws + wu; // > 0 guaranteed by AnyPositive validation at load
+            long r = (long)(hash % (ulong)sum);
+            return r < wc ? RockClass.Carbonaceous
+                : r < wc + ws ? RockClass.Silicon
+                : RockClass.Uranium;
+        }
     }
 
     // A team's home base (garrison) in a sector. The SET of garrisons across a map's sectors
@@ -304,13 +544,19 @@ namespace StellarAllegiance.Shared
         // Optional per-sector rock-class overrides (null → the world-level WorldSeedingTuning
         // default). He3Count pins this sector's guaranteed He3 rock count exactly; SpecialCount
         // overrides how many RARE special rocks (Carbonaceous/Silicon/Uranium) this sector gets
-        // (0 → none — an authored value also bypasses the home-special-chance roll);
+        // (0 → none — an authored value also bypasses the home-special-chance roll); SpecialWeights
+        // overrides which special CLASS each of those rocks becomes (null → world default);
         // OreRichnessMult scales the per-rock He3 capacity here.
         // OreCapacityMin/Max override the per-He3-rock capacity band this sector clamps to (null →
         // the map/world-level WorldMiningTuning bound). Server-side only — resolved during World's
         // ore-assignment pass.
         public int? He3Count;
         public int? SpecialCount;
+
+        // Optional per-sector override of the special-class weights (which class each special rock
+        // becomes). Null → the world seeding default (WorldSeedingTuning.SpecialWeights). Composes
+        // with SpecialCount: count = how many special rocks, weights = which class each is.
+        public SpecialWeights? SpecialWeights;
         public float? OreRichnessMult;
         public float? OreCapacityMin;
         public float? OreCapacityMax;
@@ -340,13 +586,13 @@ namespace StellarAllegiance.Shared
     // Streamed. Drives the client's directional sun light + volumetric god-ray shafts.
     public sealed class SectorSun
     {
-        public float? Azimuth;   // degrees around +Y; null → client keeps its static light direction
+        public float? Azimuth; // degrees around +Y; null → client keeps its static light direction
         public float? Elevation; // degrees above the sector plane
-        public Vec3? Color;      // linear rgb; null → client default warm tint
-        public float? Energy;    // directional-light energy; null → client default
-        public float? Ambient;   // ambient (fill) light energy for the whole sector; null → client default
-        public float? Size;      // visible sun disc's world-space quad width; null → client default (900)
-        public float GodRays;    // 0..1 screen-space light-shaft strength (0 = no god rays)
+        public Vec3? Color; // linear rgb; null → client default warm tint
+        public float? Energy; // directional-light energy; null → client default
+        public float? Ambient; // ambient (fill) light energy for the whole sector; null → client default
+        public float? Size; // visible sun disc's world-space quad width; null → client default (900)
+        public float GodRays; // 0..1 screen-space light-shaft strength (0 = no god rays)
     }
 
     // Streamed. Optional override of the client's sector-id-seeded nebula backdrop.
@@ -369,12 +615,13 @@ namespace StellarAllegiance.Shared
     public sealed class SectorDust
     {
         public float Amount = 0.6f; // 0..1 "how dusty" — coverage/count/thickness/vision, all relative
+
         // 0..1 how heavily the dust attenuates RADAR/vision, decoupled from the visual `Amount`: it
         // scales the sightline shortening (0 = dust you can see straight through, 1 = full attenuation
         // for this Amount). Default 1 = the legacy behaviour where Amount alone drove radar impact.
         public float Opacity = 1f;
-        public Vec3? Color;         // dust albedo; null → client default
-        public uint? Seed;          // optional; null → derived from world seed ^ sector id
+        public Vec3? Color; // dust albedo; null → client default
+        public uint? Seed; // optional; null → derived from world seed ^ sector id
     }
 
     // World-scale knobs consumed by MAP SEEDING, not the per-tick sim. SectorScale
@@ -431,6 +678,7 @@ namespace StellarAllegiance.Shared
         public float BoostSignatureMult = 1f;
         public float ShieldSignatureMult = 1f;
         public float DustSignatureMult = 1f;
+
         // Safety rails on the multiplicative stack: the effective signature is clamped to
         // [(base+bias)×Min, (base+bias)×Max] so extreme knob stacking can't make a ship invisible
         // or beacon-loud beyond tuning intent.
@@ -450,15 +698,17 @@ namespace StellarAllegiance.Shared
         public float RockRadarSignature = 2f;
 
         // Server-side sim tuning blocks (world.yaml `ai:` / `combat:` / `mechanics:` /
-        // `seeding:` / `mining:`). NONE of these ride the wire — Protocol.BuildDefs deliberately
-        // skips them (drones/damage/seeding/mining are server-authoritative; the client only sees
-        // their results). The field initializers below ARE the stock values: projection only
+        // `seeding:` / `mining:` / `constructor:`). NONE of these ride the wire — Protocol.BuildDefs
+        // deliberately skips them (drones/damage/seeding/mining are server-authoritative; the client
+        // only sees their results). The field initializers below ARE the stock values: projection only
         // overrides the knobs an author actually wrote, so an omitted block or field means "stock".
         public WorldAiTuning Ai = new();
         public WorldCombatTuning Combat = new();
         public WorldMechanicsTuning Mechanics = new();
         public WorldSeedingTuning Seeding = new();
         public WorldMiningTuning Mining = new();
+        public WorldConstructorTuning Constructor = new();
+        public WorldBuildTuning Build = new();
     }
 
     // PIG drone AI tuning (world.yaml `ai:`). Server-side only — clients never simulate
@@ -525,6 +775,7 @@ namespace StellarAllegiance.Shared
         public float CollisionDamageScale = 0.6f; // ship-vs-static damage scale
         public float ShipShipDamageScale = 1.2f;
         public float MaxCollisionDamage = 30f;
+
         // Below this closing normal speed (m/s) a collision is a harmless kiss: bounce, no damage.
         public float CollisionDamageMinSpeed = 4f;
 
@@ -539,6 +790,7 @@ namespace StellarAllegiance.Shared
     public sealed class WorldMechanicsTuning
     {
         public float AlephTriggerRadius = 18f; // distance from a gate mouth at which a ship warps
+
         // (also the radius of the solid gate-mouth sphere that absorbs bolts/missiles — see FireBolt)
         public float WarpExitOffset = 60f; // how far beyond the destination mouth a ship exits
         public float WarpExitJitter = 0.12f; // per-axis random spread on the exit cone
@@ -579,6 +831,16 @@ namespace StellarAllegiance.Shared
         public float BaseOuterFrac = 0.3f;
         public float BaseYJitter = 80f;
 
+        // ---- Minimum spawn spacing (enforced by rejection sampling at world-gen; a rock that
+        // can't fit after a fixed number of attempts is dropped, so layouts stay per-seed
+        // deterministic) ----
+
+        // Minimum surface-to-surface gap between any two rocks, world units (0 = allow overlap).
+        public float RockMinGap = 8f;
+
+        // Minimum gap between a rock's surface and a base's collision sphere, world units (0 = off).
+        public float BaseClearance = 250f;
+
         // ---- Rock-class seeding (which rocks become He3 / special at world-gen) ----
 
         // Guaranteed He3 rocks per ordinary sector (clamped to the sector's actual rock count).
@@ -602,6 +864,12 @@ namespace StellarAllegiance.Shared
         // garrison sector from a deterministic per-sector sub-RNG (same world seed → same outcome).
         // A map-authored per-sector special-count bypasses the roll entirely.
         public float HomeSpecialChance = 0f;
+
+        // Relative weights deciding which special CLASS each seeded special rock becomes
+        // (Carbonaceous/Silicon/Uranium). Default is uniform (equal thirds) — the historical behavior.
+        // A map may override this per sector (WorldSectorConfig.SpecialWeights). world.yaml
+        // `seeding.special-weights` sets this default. Independent of SpecialPerSector (how MANY).
+        public SpecialWeights SpecialWeights = new();
 
         // The rare special rocks (Carbonaceous/Silicon/Uranium — NOT He3) are landmark-sized: their spawn
         // radius (collision + visual) is multiplied by this so they stand out from the common field. 1 =
@@ -643,6 +911,45 @@ namespace StellarAllegiance.Shared
         public float RetreatHealthFrac = 0.8f;
     }
 
+    // Constructor / base-building tuning (world.yaml `constructor:`) — the drone-wide beats of the
+    // build sequence. Server-side only, never streamed (same contract as ai/combat/mechanics/mining).
+    // The initializers ARE the stock values; an omitted block/field means "stock". Durations are
+    // seconds, speeds world-units/second. The PER-STATION beats live on StationCatalogDef instead:
+    // AlignTimeSeconds (dwell at the standoff shell) and BuildTimeSeconds (build-sphere duration).
+    public sealed class WorldConstructorTuning
+    {
+        public float ProductionSeconds = 20f; // garrison production dwell after purchase, before launch
+
+        // Creep speeds for the two slow legs of the build approach. These COMMAND a speed (throttle =
+        // speed/hull-max), so they tune the visual pace directly — the travel legs (ToRock/MoveTo) still
+        // fly at full hull speed.
+        public float ApproachSpeed = 8f; // standoff shell -> surface contact (meshes touching)
+        public float SinkSpeed = 3f; // surface contact -> embedded at SinkDepthFrac
+
+        public float Standoff = 60f; // extra reach past the rock surface where ToRock "arrives" (align shell)
+
+        // How deep the drone embeds, as the fraction of the rock radius it descends BELOW the surface
+        // (stop shell at radius x (1 - frac) from center). Deep enough that the hull slips fully under
+        // the surface and the rock itself occludes it.
+        public float SinkDepthFrac = 0.65f;
+
+        // Backstop: if the embed creep stalls (wedged on a weird hull, avoidance fighting the creep),
+        // force the build to start after this long in the Sinking phase anyway.
+        public float SinkBackstopSeconds = 30f;
+    }
+
+    // Build-pipeline tuning (world.yaml `build:`) — the per-garrison order queue shared by constructor
+    // AND miner purchases from the docked Build tab. Ordered items sit QUEUED at 0% until a build slot
+    // frees, then count down (Producing) and launch. Replaces the old per-base constructor cap; the
+    // live-drone fleet cap (mining.max-miners-per-team) is a SEPARATE gate. QueueLimit is streamed to
+    // the client (Build-tab gray-out); ParallelLimit is server-only (drives promotion). Defaults 4/4
+    // preserve the prior constructor throughput. The initializers ARE the stock values.
+    public sealed class WorldBuildTuning
+    {
+        public int ParallelLimit = 4; // ordered items a garrison BUILDS at once (1 = strictly one at a time)
+        public int QueueLimit = 4; // total ordered (building + queued) a garrison may hold before the Build tab locks
+    }
+
     // Stable content IDENTIFIERS the engine branches on. These are NOT tunable content — the actual
     // stat values (ships/weapons/bases/world) are authored in the YAML content bundle and loaded at
     // boot (server/Content/ContentLoader), never hardcoded here. These ids are reserved conventions
@@ -665,8 +972,11 @@ namespace StellarAllegiance.Shared
         // LockTargetId / MissileSim.TargetShipId carry a base reference through the existing u64 wire
         // fields with no new message fields.
         public const ulong BaseLockFlag = 1UL << 63;
+
         public static bool IsBaseLock(ulong id) => (id & BaseLockFlag) != 0;
+
         public static ulong BaseLockId(ulong baseId) => BaseLockFlag | baseId;
+
         public static ulong BaseIdOf(ulong lockId) => lockId & ~BaseLockFlag;
 
         // Asteroid focus id encoding — mirrors the BaseLock scheme one bit down. Rock ids and
@@ -675,8 +985,11 @@ namespace StellarAllegiance.Shared
         // navigation-only marker (asteroids are never missile-lock targets); the focus->LockTargetId
         // path strips a rock-encoded id to 0 so it never reaches the missile lock system.
         public const ulong AsteroidFocusFlag = 1UL << 62;
+
         public static bool IsAsteroidFocus(ulong id) => (id & AsteroidFocusFlag) != 0;
+
         public static ulong AsteroidFocusId(ulong asteroidId) => AsteroidFocusFlag | asteroidId;
+
         public static ulong AsteroidIdOf(ulong focusId) => focusId & ~AsteroidFocusFlag;
     }
 }

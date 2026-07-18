@@ -141,10 +141,17 @@ seeding:
   base-inner-frac: 0.14      # garrison radial band, as fractions of the sector radius
   base-outer-frac: 0.30
   base-y-jitter: 80          # garrison vertical jitter (y drawn in ± half this)
+  rock-min-gap: 8            # min surface-to-surface gap between any two rocks (0 = allow overlap)
+  base-clearance: 250        # min gap between a rock's surface and a base's collision sphere (0 = off)
   he3-per-sector: 4          # guaranteed He3 rocks per ordinary (non-home) sector
   he3-per-home-sector: 2     # a team's HOME (garrison) sector is leaner: exactly 2 He3 rocks
   special-per-sector: 1      # RARE special rocks per sector; everything else is common Regolith
   home-special-chance: 0.0   # chance a HOME sector gets its specials at all (0 = never; per-seed roll)
+  # special-weights: which CLASS each special rock becomes (relative shares, not probabilities — a 0
+  # excludes that class, at least one must be > 0). Omitted → uniform thirds (the default below). A
+  # map may override this PER SECTOR (sectors[].special-weights) to guarantee/bias a class — e.g.
+  # carbonaceous:1 silicon:0 uranium:0 forces Carbonaceous (the class the Supremacy Center builds on).
+  # special-weights: { carbonaceous: 1, silicon: 1, uranium: 1 }
   special-rock-radius-mult: 3 # landmark sizing for the rare specials (1 = no change)
 
 # Mining + ore economy: how the AI miner economy is tuned and how much ore a He3 rock holds (which
@@ -164,3 +171,27 @@ mining:
   shrink-floor-frac: 0.4        # a fully-mined rock shrinks toward this fraction of its spawn radius
   miner-standoff: 50            # harvest range from a target rock's surface, world units
   retreat-health-frac: 0.8      # hull fraction below which a miner abandons mining and returns to base
+
+# Constructor / base-building tuning: the drone-wide beats of the build sequence. The PER-STATION
+# beats live in stations.yaml on each buildable station: align-time-seconds (dwell nose-locked at
+# the standoff shell before creeping in) and build-time-seconds (how long the build sphere runs).
+# Build sequence: ToRock (full speed) -> Aligning (align-time-seconds, holding at standoff) ->
+# Approaching (approach-speed creep until the hull TOUCHES the rock) -> Sinking (sink-speed creep
+# until embedded sink-depth-frac below the surface; the build sphere emerges from the rock center
+# here) -> Building (build-time-seconds; sphere envelops the rock) -> base appears, drone consumed.
+constructor:
+  production-seconds: 20        # garrison production dwell after purchase, before the drone launches
+  approach-speed: 8             # creep speed standoff -> surface contact, world units/second
+  sink-speed: 3                 # creep speed surface contact -> embedded, world units/second
+  standoff: 60                  # extra reach past the rock surface where ToRock "arrives" (align shell)
+  sink-depth-frac: 0.65         # embed depth: fraction of the rock radius below the surface
+  sink-backstop-seconds: 30     # force the build to start if the embed creep stalls this long
+
+# Build pipeline: the PER-GARRISON order queue shared by constructor AND miner purchases from the
+# docked Build tab. Ordered items sit QUEUED at 0% until a build slot frees, then count down and
+# launch; a launched constructor has left the pipeline (frees its slot). This replaces the old
+# constructor.max-constructors-per-base cap. The live-miner fleet cap (mining.max-miners-per-team)
+# is a SEPARATE gate. Set parallel-limit:1 queue-limit:2 for "build one at a time, queue one more".
+build:
+  parallel-limit: 1  # ordered items a garrison builds at once (1 = strictly one at a time)
+  queue-limit: 2     # total ordered (building + queued) before the Build tab locks

@@ -1,0 +1,112 @@
+# Techs — named research-tree nodes a team can OWN (distinct from the closed Capability enum the
+# engine branches on). A tech is flipped on by completing a Development that grants it (see
+# developments.yaml), or by completing a Station that grants it (stations.yaml granted-techs); items
+# then gate on it via required-techs. These are v1 unlock-only nodes: owning the tech opens
+# buildables, it carries no stat modifier of its own.
+#
+# Iron Coalition tech tree (Phase 2, PCore014.igc). Some nodes are FORWARD-DECLARED for later phases
+# (their granting base/dev doesn't exist yet) — the gun/hull items that require them stay truthfully
+# locked until Phase 3/4 lands the base that grants the tech. That is intentional and legal
+# (CoreValidator only requires a referenced tech to exist in this catalog, not to be reachable).
+techs:
+  # ---- Weapon research (granted by developments.yaml) ----
+  - id: gat-2
+    name: PW Gat Gun 2
+    description: "Uprated Gat Gun fire-control — the mid-tier of the all-round gun line."
+  - id: gat-3
+    name: PW Gat Gun 3
+    description: "Top-tier Gat Gun tuning — the hardest-hitting of the all-round gun line."
+  - id: minigun-2
+    name: PW Mini-Gun 2
+    description: "Uprated Mini-Gun — faster, harder-hitting rapid fire."
+  - id: minigun-3
+    name: PW Mini-Gun 3
+    description: "Top-tier Mini-Gun — the fleet's fastest sustained gun."
+  - id: autocan-2
+    name: PW AutoCan 2
+    description: "Uprated AutoCannon — heavier assault rounds for the bomber line."
+  - id: autocan-3
+    name: PW AutoCan 3
+    description: "Top-tier AutoCannon — the heaviest gun rounds in the arsenal."
+  - id: nanite-2
+    name: ER Nanite 2
+    description: "Uprated repair nanites — a stronger hull-restoring beam for the support gun line."
+  - id: nanite-3
+    name: ER Nanite 3
+    description: "Top-tier repair nanites — the fastest field hull-restore in the arsenal."
+
+  # ---- Hull research ----
+  - id: bomber
+    name: Bomber Doctrine
+    description: "Clears the team to field the assault bomber and its base-cracking ordnance."
+
+  # ---- Forward-declared base/tier techs (granted by station tiers in Phase 3/4) ----
+  - id: supremacy-1
+    name: Supremacy Fielded
+    description: "Granted when the team raises a Supremacy base — opens the supremacy gun/hull tier."
+  - id: supremacy-adv
+    name: Supremacy (Adv)
+    description: "Granted by the upgraded Supremacy (Adv) base — opens the top gun tier and the Adv Fighter."
+  - id: garrison-str
+    name: Garrison (Str)
+    description: "Granted by the upgraded Garrison (Str) — opens the top-tier Mini-Gun research."
+  - id: shipyard-1
+    name: Shipyard Fielded
+    description: "Granted when the team raises a Shipyard — opens capital-ship servicing."
+  - id: shipyard-dry
+    name: Shipyard (Dry)
+    description: "Granted by the upgraded Shipyard (Dry) — required to field the heavy capital hull."
+  - id: heavy-class
+    name: Heavy Class Certification
+    description: "Certifies the team for capital-class construction — the Devastator's gate."
+
+  # Outpost upgrade tier (granted by dev-upgrade-outpost, swaps the hosting Outpost to Outpost (Hvy)).
+  - id: outpost-hvy
+    name: Outpost (Hvy)
+    description: "Granted by upgrading an Outpost — reinforces this forward base to its heavy tier."
+
+  # ---- Iron Coalition ordnance research (Phase 6, PCore014.igc; granted by developments.yaml) ----
+  # Appended at the tail (indices 16-29) — wire indices are list order, so nothing above this line
+  # may ever be reordered.
+  - id: seeker-2
+    name: MRM Seeker 2
+    description: "Uprated MRM Seeker guidance — the mid-tier of the seeker missile line."
+  - id: seeker-3
+    name: MRM Seeker 3
+    description: "Top-tier MRM Seeker — the hardest-hitting seeker in the arsenal."
+  - id: quickfire-2
+    name: MRM Quickfire 2
+    description: "Uprated MRM Quickfire — faster, harder-hitting harasser missiles."
+  - id: quickfire-3
+    name: MRM Quickfire 3
+    description: "Top-tier MRM Quickfire — the fleet's fastest missile line."
+  - id: dumbfire-2
+    name: SRM Dumbfire 2
+    description: "Uprated SRM Dumbfire — quicker lock, heavier punch."
+  - id: dumbfire-3
+    name: SRM Dumbfire 3
+    description: "Top-tier SRM Dumbfire — the hardest-hitting quick-lock missile in the arsenal."
+  - id: anti-base-2
+    name: SRM Anti-Base 2
+    description: "Uprated SRM Anti-Base torpedo — heavier siege ordnance."
+  - id: anti-base-3
+    name: SRM Anti-Base 3
+    description: "Top-tier SRM Anti-Base torpedo — the hardest-hitting siege ordnance in the arsenal."
+  - id: mine-2
+    name: Prox Mine 2
+    description: "Uprated Prox Mine — a stronger, longer-lived minefield."
+  - id: mine-3
+    name: Prox Mine 3
+    description: "Top-tier Prox Mine — the fleet's most lethal minefield."
+  - id: chaff-2
+    name: Counter 2
+    description: "Uprated Counter chaff — a stronger decoy signature."
+  - id: chaff-3
+    name: Counter 3
+    description: "Top-tier Counter chaff — the fleet's strongest decoy."
+  - id: probe-2
+    name: EWS Probe 2
+    description: "Uprated EWS Probe — a longer vision radius."
+  - id: probe-3
+    name: EWS Probe 3
+    description: "Top-tier EWS Probe — the fleet's longest-ranged sensor buoy."

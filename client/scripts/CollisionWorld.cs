@@ -17,8 +17,7 @@ public sealed class CollisionWorld
     // Cached authored-unit models, built once per asteroid variant / for the base. A null entry
     // marks a GLB that couldn't be read (→ sphere fallback), so we don't retry.
     private readonly Dictionary<string, SimModel?> _variantModels = new();
-    private SimModel? _baseModel;
-    private bool _baseLoaded;
+    private readonly Dictionary<string, SimModel?> _baseModels = new(); // v37: per-base-type mesh cache
 
     // Per-sector static bodies. We keep the SPAWN pose plus each rock's tumble (axis/speed) and
     // compose the live rotation at query time, so the predicted hull spins in lockstep with the
@@ -40,6 +39,15 @@ public sealed class CollisionWorld
     // only probes this client can see are here, so a fully-fogged enemy probe is a small predict-miss
     // the server reconciles — acceptable for an object you can't see anyway.
     private readonly Dictionary<uint, Dictionary<ulong, Collide.StaticBody>> _probes = new();
+
+    // Growing base-construction shells (Simulation.Constructors.cs build spheres) that are currently
+    // SOLID (their Building phase). Like probes these are DYNAMIC — created/grown/removed mid-match by
+    // WorldRenderer.UpdateBuildSpheres, keyed sector→rockId — so the local ship predicts the same bounce
+    // the server enforces (ResolveBuildSphereCollisions) instead of sinking into the shell. A sphere
+    // matching a rock the client can't see is a small predict-miss the server reconciles; anchored on
+    // the rock, whose sector never changes for the life of a build, so _sphereSector never goes stale.
+    private readonly Dictionary<uint, Dictionary<ulong, Collide.StaticBody>> _buildSpheres = new();
+    private readonly Dictionary<ulong, uint> _sphereSector = new(); // rockId → sector (for removal)
 
     // Bodies in a sector with their rotation advanced to sim time t (seconds = tick * FlightModel.Dt).
     public IReadOnlyList<Collide.StaticBody> BodiesIn(uint sector, float t)
@@ -63,7 +71,34 @@ public sealed class CollisionWorld
         if (_probes.TryGetValue(sector, out var probes))
             foreach (var b in probes.Values)
                 outBuf.Add(b);
+        if (_buildSpheres.TryGetValue(sector, out var spheres))
+            foreach (var b in spheres.Values)
+                outBuf.Add(b);
         return outBuf;
+    }
+
+    // Add/update a solid build-sphere barrier for a rock under construction (idempotent per rock id; a
+    // radius update just replaces the body). Radius is the client's rendered phase-2 envelop, matching
+    // the server's ConstructorBuildSphereRadius so prediction and authority agree.
+    public void SetBuildSphere(uint sector, ulong rockId, Vec3 center, float radius)
+    {
+        if (radius <= 0f)
+        {
+            RemoveBuildSphere(rockId);
+            return;
+        }
+        if (!_buildSpheres.TryGetValue(sector, out var m))
+            _buildSpheres[sector] = m = new Dictionary<ulong, Collide.StaticBody>();
+        m[rockId] = Collide.StaticBody.BuildSphere(center, radius);
+        _sphereSector[rockId] = sector;
+    }
+
+    // Drop a build-sphere barrier (construction finished/cancelled). No-op for an unknown rock id.
+    public void RemoveBuildSphere(ulong rockId)
+    {
+        if (_sphereSector.TryGetValue(rockId, out uint sector) && _buildSpheres.TryGetValue(sector, out var m))
+            m.Remove(rockId);
+        _sphereSector.Remove(rockId);
     }
 
     // A deployed probe is on-screen at a fixed position; add it as a solid sphere of its combat hit
@@ -88,6 +123,8 @@ public sealed class CollisionWorld
         _src.Clear();
         _live.Clear();
         _probes.Clear();
+        _buildSpheres.Clear();
+        _sphereSector.Clear();
         _rockRefs.Clear();
         _shipHulls.Clear(); // a world rebuild may stream retuned defs (ModelName/ModelLength)
     }
@@ -139,18 +176,37 @@ public sealed class CollisionWorld
         }
     }
 
-    public void AddBase(StellarAllegiance.Net.Base row)
+    // Fully drop a rock from local prediction (a finished constructor base consumed the asteroid). The
+    // per-sector body list is index-addressed by RockRef.Index, so compacting it would reindex every
+    // other rock's ref — instead neutralize this rock's slot to a zero-radius sphere (never the deepest
+    // contact, so it can't bounce the ship) and forget its ref. The base that replaces it brings its own
+    // collision. No-op for an unknown id (a rock this client never had).
+    public void RemoveAsteroid(ulong id)
+    {
+        if (!_rockRefs.TryGetValue(id, out var rr))
+            return;
+        if (_src.TryGetValue(rr.Sector, out var list) && rr.Index < list.Count)
+            list[rr.Index] = new Entry(Collide.StaticBody.AsteroidSphere(rr.Center, 0f), default, 0f);
+        _rockRefs.Remove(id);
+    }
+
+    public void AddBase(DefRegistry defs, StellarAllegiance.Net.Base row)
     {
         var list = BodyList(row.SectorId);
         var center = new Vec3(row.PosX, row.PosY, row.PosZ);
-        SimModel? model = BaseModel();
+        // v37: per-base-type mesh + radius (mirrors the server's World.LoadBaseModel), so an outpost
+        // predicts its own hull, not the garrison's. Falls back to the garrison model/radius.
+        BaseDef? def = defs.GetBaseDef(row.BaseTypeId);
+        string modelName = string.IsNullOrEmpty(def?.ModelName) ? "garrison" : def!.ModelName;
+        float radius = def is { Radius: > 0f } ? def.Radius : CollisionConfig.BaseRadius;
+        SimModel? model = BaseModel(modelName);
         if (model is null || model.LongestAxis <= 1e-3f)
         {
-            list.Add(new Entry(Collide.StaticBody.BaseSphere(center, CollisionConfig.BaseRadius, row.Team), default, 0f));
+            list.Add(new Entry(Collide.StaticBody.BaseSphere(center, radius, row.Team), default, 0f));
             return;
         }
         // World scale: the client renders the base via NormalizeLongestAxis(radius*2); bake the same.
-        float ws = CollisionConfig.BaseRadius * 2f / model.LongestAxis;
+        float ws = radius * 2f / model.LongestAxis;
         ConvexHull hull = model.Hull.Scaled(ws);
         // Authored compound sub-hulls, world-scaled exactly like the server's World.LoadBase (same GLB
         // bytes → same ConvexHull.Build per part → bit-identical hulls). Partless bases: model.Hulls
@@ -248,39 +304,46 @@ public sealed class CollisionWorld
         return model;
     }
 
-    private SimModel? BaseModel()
+    private SimModel? BaseModel(string modelName)
     {
-        if (!_baseLoaded)
-        {
-            // Correct the base mesh's authored +90°-off orientation with the SAME rotation the server
-            // bakes (World.LoadBase) and the visual renders (BaseModelLoader), so the predicted hull +
-            // docking faces stay bit-identical to the server's and aligned with the rendered base.
-            _baseModel = LoadGlb("res://assets/bases/garrison.glb", CollisionConfig.BaseModelRotation);
-            _baseLoaded = true;
-        }
-        return _baseModel;
+        if (_baseModels.TryGetValue(modelName, out var cached))
+            return cached;
+        // Correct the base mesh's authored +90°-off orientation with the SAME rotation the server
+        // bakes (World.LoadBaseModel) and the visual renders (BaseModelLoader), so the predicted hull +
+        // docking faces stay bit-identical to the server's and aligned with the rendered base.
+        var model = LoadGlb($"res://assets/bases/{modelName}.glb", CollisionConfig.BaseModelRotation);
+        _baseModels[modelName] = model;
+        return model;
     }
 
     // Read the raw .glb bytes from res:// and build the shared SimModel (same path the server takes
     // from disk). Returns null if the file can't be read so the caller falls back to a sphere.
     // ponytail: needs the raw .glb included in exported builds (export filter); editor reads it from
     // disk fine. If a build ships without it, collision degrades to spheres, not a crash.
+    //
+    // AssetPreloader builds the asteroid-variant models OFF-THREAD at startup; a hit skips the
+    // QuickHull rebuild (~60ms per variant, previously on the join frame). The shared cache is
+    // safe because the pre-rotation is a pure function of the path's category (only bases pass
+    // CollisionConfig.BaseModelRotation, and every base load comes through here with it). A build
+    // done here is stored back so a world rebuild's fresh CollisionWorld reuses it too.
     private static SimModel? LoadGlb(string resPath, Quat pre = default)
     {
+        if (AssetPreloader.TryGetSimModel(resPath, out SimModel? warm))
+            return warm;
         byte[] bytes = FileAccess.GetFileAsBytes(resPath);
+        SimModel? model = null;
         if (bytes is null || bytes.Length == 0)
-        {
             Log.Warn($"[CollisionWorld] could not read {resPath} — sphere-collision fallback");
-            return null;
-        }
-        try
-        {
-            return SimModel.FromGlb(bytes, resPath, pre);
-        }
-        catch (System.Exception e)
-        {
-            Log.Warn($"[CollisionWorld] failed to build hull for {resPath}: {e.Message}");
-            return null;
-        }
+        else
+            try
+            {
+                model = SimModel.FromGlb(bytes, resPath, pre);
+            }
+            catch (System.Exception e)
+            {
+                Log.Warn($"[CollisionWorld] failed to build hull for {resPath}: {e.Message}");
+            }
+        AssetPreloader.StoreSimModel(resPath, model);
+        return model;
     }
 }

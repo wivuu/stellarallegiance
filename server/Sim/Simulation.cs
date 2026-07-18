@@ -33,6 +33,7 @@ public sealed partial class Simulation
     private readonly float PodEjectSpin; // rad/s initial tumble (decays via angular drag)
     private readonly WorldMechanicsTuning _mech; // gate/warp knobs read at their use sites
     private readonly WorldCombatTuning _combat; // collision damage + boundary hazard
+
     // Mining tuning reads through the LIVE World (not a ctor-cached copy): the world owns the knob
     // set it seeded ore with, and StartMatch may swap in a fresh World — harvest rate/standoff must
     // follow it (and a test world's custom knobs must actually drive the sim).
@@ -137,26 +138,60 @@ public sealed partial class Simulation
         s.Health -= dmg;
     }
 
-    // A class's primary GUN — the first Bolt-kind muzzle, or the Scout gun if the hull carries no
-    // bolt weapon (missile racks are ignored). Drives the PIG threat heuristic + the gun cadence
-    // gate; single-sourced from the same muzzles/defs the sim fires from.
+    // Nanite heal: a healing bolt hitting a same-team ship restores hull only. Shields are never
+    // touched (no ShieldDamageTick stamp, no shield pool change) and the hull is clamped to the
+    // hull's max (HullFor). The health stream carries the new value to clients like any other change,
+    // so the HUD shows the bar rise naturally — no separate wire event. Enemy hits never reach here
+    // (FireBolt only targets same-team ships for a healing weapon); self-hits are excluded there too.
+    private void ApplyHeal(ShipSim s, float power)
+    {
+        if (power <= 0f)
+            return;
+        float max = HullFor(s.IsPod ? GameContent.PodClassId : s.Class);
+        s.Health = MathF.Min(s.Health + power, max);
+    }
+
+    // The EFFECTIVE weapon id at a ship's weapon-hardpoint barrel: the spawn-validated override
+    // when one exists, else the authored class default. THE read seam for every armed-mount
+    // consumer (TryFire, MissileMountFor(ship), the loadout wire table).
+    private uint WeaponIdAt(ShipSim s, int barrel) =>
+        s.MountWeaponIds is { } m && barrel < m.Length ? m[barrel] : ClassMuzzles[s.Class][barrel].WeaponId;
+
+    // A class's AUTHORED primary gun — the first Bolt-kind muzzle, or the Scout gun if the hull
+    // carries no bolt weapon (missile racks are ignored). Class-based by design: it only drives
+    // the PIG threat heuristic (bots always fly authored loadouts, and a rough per-class damage
+    // guess is fine for an enemy that may have swapped guns).
     private WeaponDef PrimaryWeapon(byte cls)
     {
         var m = cls < ClassMuzzles.Length ? ClassMuzzles[cls] : System.Array.Empty<Muzzle>();
         foreach (var mz in m)
-            if (WeaponDefs.TryGetValue(mz.WeaponId, out var wd) && wd.Kind == WeaponKind.Bolt)
-                return wd;
+            if (WeaponDefs.TryGetValue(mz.WeaponId, out var wd) && wd.Kind == WeaponKind.Bolt && !wd.IsHealing)
+                return wd; // a healing gun (ER Nanite) is never a threat weapon — skip it
         return WeaponDefs[GameContent.ScoutWeaponId];
     }
 
-    // The first missile mount for a class + its projected WeaponDef, or null if the hull has none.
-    // Used to init a spawn's ammo and by TryFireMissile/UpdateLock (the missile launch/lock path).
+    // The first AUTHORED missile mount for a class + its projected WeaponDef, or null if the hull
+    // has none. Class-based: the PIG spawn/heuristic path only (bots fly authored loadouts).
+    // Player paths (ammo seeding, TryFireMissile, UpdateLock, siege orders) use the ship-aware
+    // overload below so an emptied/swapped rack is honored.
     private (Muzzle mount, WeaponDef w)? MissileMountFor(byte cls)
     {
         var mounts = cls < ClassMissileMounts.Length ? ClassMissileMounts[cls] : System.Array.Empty<Muzzle>();
         if (mounts.Length == 0)
             return null;
         return (mounts[0], WeaponDefs[mounts[0].WeaponId]);
+    }
+
+    // The first EFFECTIVE Missile-kind mount for this ship (per-ship loadout aware) + its def, or
+    // null when the hull authors no rack / every rack slot was emptied. The returned Muzzle carries
+    // the effective weapon id; its geometry is the class table's (overrides never move a mount).
+    private (Muzzle mount, WeaponDef w)? MissileMountFor(ShipSim s)
+    {
+        var muzzles = s.Class < ClassMuzzles.Length ? ClassMuzzles[s.Class] : System.Array.Empty<Muzzle>();
+        for (int barrel = 0; barrel < muzzles.Length; barrel++)
+            if (WeaponDefs.TryGetValue(WeaponIdAt(s, barrel), out var wd) && wd.Kind == WeaponKind.Missile)
+                return (new Muzzle(muzzles[barrel].Off, muzzles[barrel].Dir, wd.WeaponId), wd);
+        return null;
     }
 
     // Flight stats for a class, derived from the LOADED def (authored in YAML) via the SAME path the
@@ -178,17 +213,32 @@ public sealed partial class Simulation
         public uint SectorId;
         public ShipState State; // shared FlightModel state (pos/vel/rot/angvel/mass/ab)
         public float Health;
+
         // Regenerating energy shield layered over Health. Shield absorbs damage first (overflow spills
         // to hull); ShieldDamageTick stamps the last tick it took damage, gating the recharge delay.
         // 0 capacity (per the class def) = no shield. Set full at spawn; recharged in the Step sweep.
         public float Shield;
         public uint ShieldDamageTick;
+
         // Additive radar-signature bias (SignatureModel.Bias) — the per-ship equipment/loadout/
         // ability seam a future fitting or cloak system mutates live. Seeded at spawn from the
         // class def's projected SignatureBias (hull + default-loadout sum); 0 = neutral.
         public float SigBias;
         public uint LastInputTick;
         public uint LastFireTick;
+
+        // ---- Per-ship weapon loadout (hangar mount overrides, validated at spawn) ----
+        // MountWeaponIds[barrel] = the EFFECTIVE weapon id at that weapon-hardpoint barrel
+        // (HardpointDef.NoWeapon = deliberately-empty slot); null = the authored class default
+        // (PIGs/pods/miners always null). Geometry always comes from ClassMuzzles — an override
+        // swaps WHAT a mount fires, never WHERE it sits. Read through WeaponIdAt.
+        public uint[]? MountWeaponIds;
+
+        // Per-mount gun cadence gates (FireCadence.MountFires), lazily sized to the class muzzle
+        // array in TryFire. LastFireTick stays the wire stamp "some gun fired this tick"; clients
+        // derive WHICH mounts from the same shared rule, so these never go on the wire.
+        public uint[]? MountLastFire;
+
         public ShipInputState HeldInput; // replayed on ticks with no exact-stamped input
         public bool Alive;
         public uint RespawnAtTick; // when !Alive
@@ -213,6 +263,7 @@ public sealed partial class Simulation
         // AI ore miner (Kind == ShipKind.Miner) live hold: He3 units, 0..the class def's OreCapacity.
         // HarvestStep fills it, an offload drains it.
         public float Ore;
+
         // True on the ticks a miner actually moved ore this step (drives ShipFlagMining on the wire so
         // clients can tag the drone as actively harvesting). Set/cleared per tick in MinerExecute.
         public bool IsHarvesting;
@@ -263,6 +314,11 @@ public sealed partial class Simulation
         public byte ProbeAmmo;
         public uint LastProbeTick;
         public uint ProbeWeaponId;
+
+        // ---- Fuel-pod reserve (0 on hulls carrying no fuel cargo). No dispenser/weapon and no
+        // input: a charge auto-consumes in Pass A when the tank empties while boost is held. ----
+        public byte FuelPodAmmo; // charges left (packs × ChargesPerPack, capped 255)
+        public float FuelPodFuelPerCharge; // tank refill per consumed charge (clamped to MaxFuel)
 
         // Last tick this ship spawned a minefield hit-FX ping (rate-limits the client's small
         // explosion + pop while it sits inside a lethal field — StepMines throttles off this).
@@ -337,7 +393,14 @@ public sealed partial class Simulation
     // fresh (possibly empty) frame promptly instead of only on the coarse cadence. Cleared at top of Step.
     public bool MinefieldsChangedThisStep { get; private set; }
 
-    private readonly record struct PendingShot(ulong TargetShipId, int BaseIndex, float Damage, float ShieldMult, ulong TargetProbeId = 0);
+    private readonly record struct PendingShot(
+        ulong TargetShipId,
+        int BaseIndex,
+        float Damage,
+        float ShieldMult,
+        ulong TargetProbeId = 0,
+        bool Heal = false
+    );
 
     // Settable (not readonly) so a map switch can swap in a fresh arena at match start (StartMatch,
     // sim thread). Reads across the sim keep working — it's a reference field, reassignment is atomic.
@@ -355,10 +418,19 @@ public sealed partial class Simulation
 
     // Inputs/joins from socket threads, drained by the sim thread each step.
     private readonly Queue<(int clientId, uint tick, ShipInputState input)> _inputQueue = new();
+
     // Player autopilot engage/disengage requests (MsgSetAutopilot), drained alongside the input queue.
     private readonly Queue<(int clientId, byte mode, byte kind, ulong id, uint sector, Vec3 pos)> _autopilotQueue = new();
-    private readonly Queue<(int clientId, byte team, byte cls, (uint cargoId, byte count)[] cargo)> _joinQueue = new();
+    private readonly Queue<(
+        int clientId,
+        byte team,
+        byte cls,
+        (uint cargoId, byte count)[] cargo,
+        ulong launchBaseId,
+        (byte hpIndex, uint weaponId)[] mounts
+    )> _joinQueue = new();
     private readonly Queue<int> _leaveQueue = new();
+
     // Unexpected-drop detach (park the ship for the grace window) and reconnect reclaim (hand it
     // back to the returning connection), both keyed by the connection's reconnect token.
     private readonly Queue<(int clientId, string token)> _detachQueue = new();
@@ -381,9 +453,12 @@ public sealed partial class Simulation
     // across combat->pod->respawn, so the hub re-sends YouAre whenever this ship flips.
     private readonly Dictionary<int, ShipSim> _byClient = new();
 
-    // Remembered join class/team/cargo per connected client, so a respawn re-creates the same ship
-    // with the same validated consumable hold.
-    private readonly Dictionary<int, (byte team, byte cls, (uint cargoId, byte count)[] cargo)> _clientInfo = new();
+    // Remembered join class/team/cargo/mounts per connected client, so a respawn re-creates the
+    // same ship with the same validated consumable hold AND weapon-slot overrides.
+    private readonly Dictionary<
+        int,
+        (byte team, byte cls, (uint cargoId, byte count)[] cargo, ulong launchBaseId, (byte hpIndex, uint weaponId)[] mounts)
+    > _clientInfo = new();
 
     // Chaff/mine dispenser WeaponDefs keyed by the cargo id they consume (D8 — dispensers are not
     // hardpoint-mounted; a spawn's cargo id names which dispenser its ammo feeds). Cargo item mass
@@ -391,6 +466,7 @@ public sealed partial class Simulation
     private readonly Dictionary<uint, WeaponDef> _dispenserByCargo = new();
     private readonly Dictionary<uint, float> _cargoMass = new();
     private readonly Dictionary<uint, byte> _chargesPerPack = new(); // dispenser ammo = packs × this
+    private readonly Dictionary<uint, float> _fuelPerCharge = new(); // fuel cargo: tank refill per charge
 
     // Clients with no live ship and a scheduled respawn tick (set when a player pod resolves).
     private readonly Dictionary<int, uint> _clientRespawn = new();
@@ -470,6 +546,12 @@ public sealed partial class Simulation
     // the hub streams a fresh TeamState frame promptly instead of waiting on the coarse cadence.
     public bool TeamStateChangedThisStep { get; private set; }
 
+    // Set whenever the MsgShipLoadout table changed this step (a ship with mount overrides spawned
+    // or left), so the hub streams a fresh frame promptly; the coarse keepalive heals late joiners.
+    // Ships flying the authored class loadout are OMITTED from the table (clients fall back to the
+    // class default), so authored-only spawns don't touch this.
+    public bool LoadoutsChangedThisStep { get; private set; }
+
     // Latches once a match has been touched (base damaged / ended); cleared when a match
     // (re)starts or returns to the lobby. IsIdle reads it so the empty-server reset knows
     // whether the sim still has a live/finished match to tear down.
@@ -535,6 +617,8 @@ public sealed partial class Simulation
         {
             _cargoMass[c.CargoId] = c.Mass;
             _chargesPerPack[c.CargoId] = System.Math.Max((byte)1, c.ChargesPerPack);
+            if (c.FuelPerCharge > 0f)
+                _fuelPerCharge[c.CargoId] = c.FuelPerCharge; // fuel cargo — no dispenser WeaponDef
         }
 
         // PIG lead-prediction constants off the scout gun (all server weapons share these today).
@@ -555,11 +639,30 @@ public sealed partial class Simulation
     // ---- Thread-safe intake (called from socket tasks) -------------------
 
     // Join with an explicit consumable hold (chaff/mine counts from MsgSpawn). Empty cargo ⇒ the
-    // hull's authored DefaultCargo is seeded at spawn.
-    public void EnqueueJoin(int clientId, byte team, byte cls, (uint cargoId, byte count)[] cargo)
+    // hull's authored DefaultCargo is seeded at spawn. launchBaseId picks the friendly base to
+    // launch from (v36 hangar sidebar); 0/invalid ⇒ the first team base (legacy behavior).
+    // `mounts` = the hangar's weapon-slot overrides ((hardpoint Index, weaponId) pairs; weaponId
+    // HardpointDef.NoWeapon = deliberately empty); empty ⇒ the authored class loadout.
+    public void EnqueueJoin(
+        int clientId,
+        byte team,
+        byte cls,
+        (uint cargoId, byte count)[] cargo,
+        ulong launchBaseId = 0,
+        (byte hpIndex, uint weaponId)[]? mounts = null
+    )
     {
         lock (_qLock)
-            _joinQueue.Enqueue((clientId, team, cls, cargo ?? System.Array.Empty<(uint, byte)>()));
+            _joinQueue.Enqueue(
+                (
+                    clientId,
+                    team,
+                    cls,
+                    cargo ?? System.Array.Empty<(uint, byte)>(),
+                    launchBaseId,
+                    mounts ?? System.Array.Empty<(byte, uint)>()
+                )
+            );
     }
 
     // Compat overload (no cargo): the hull's DefaultCargo is used. Kept for tests / callers that
@@ -632,12 +735,20 @@ public sealed partial class Simulation
         JustEnded = false;
         BasesChangedThisStep = false;
         TeamStateChangedThisStep = false;
+        LoadoutsChangedThisStep = false;
         // Live rock shrink deltas accumulate on World across a step; clear alongside the other
         // change flags so a later wire stream drains only this step's changed rocks (nothing yet).
         World.RocksChangedThisStep.Clear();
+        World.RocksRemovedThisStep.Clear(); // rock despawns (constructor completions) drained by the hub
         MinerNoticesThisStep.Clear();
+        ConstructorNoticesThisStep.Clear();
+        BasesCreatedThisStep.Clear();
         OrderNoticesThisStep.Clear();
         OrderDirectivesThisStep.Clear();
+        ResearchChangedThisStep = false;
+        ResearchNoticesThisStep.Clear();
+        ResearchTeamNoticesThisStep.Clear();
+        ConstructorChangedThisStep = false;
 
         DrainQueues(tick);
         ExpireHeldOrphans(tick);
@@ -659,11 +770,15 @@ public sealed partial class Simulation
         {
             PigBrainStep(tick); // 5 Hz AI decisions + squad lifecycle (Simulation.Pig.cs)
             MinerBrainStep(tick); // 5 Hz miner lifecycle + rock/base targeting (Simulation.Mining.cs)
+            ConstructorBrainStep(tick); // 5 Hz constructor build lifecycle (Simulation.Constructors.cs)
             AccrueTeamCredits(tick); // Stage-2: flat per-team credit paycheck every PaycheckTicks
+            ResearchStep(tick); // Stage-4: per-base research progress + on-deck promotion (Simulation.Research.cs)
             // Fog of war: 2 Hz per-team vision (apply previous kick + kick next, Simulation.Vision.cs).
             // Off the sim tick's critical path — only ever delays the NEXT vision result, never a tick.
             if (FogEnabled && tick % VisionEvery == 0)
-                VisionStep(tick);
+                VisionStep(tick); // commits deferred rock removals at its worker join
+            else if (!FogEnabled)
+                CommitPendingRockRemovals(); // no vision worker → safe to mutate the rock grid now
         }
         ResolveDueShots(tick);
         RebuildShipGrid();
@@ -680,6 +795,23 @@ public sealed partial class Simulation
         {
             var input = InputFor(s, tick);
             var stats = StatsFor(s.Class, s.IsPod);
+            // Fuel-pod auto-load: Integrate's afterburner gate reads PRE-tick fuel (the tick that
+            // empties the tank still burns), so refilling here — on the first tick the tank sits
+            // empty while boost is held — keeps the afterburner lit with no gap and no AbPower
+            // decay. Server-side only; FlightModel.Integrate stays untouched (PIG determinism).
+            // The client mirrors this rule in PredictionController.
+            if (
+                !s.IsPod
+                && s.FuelPodAmmo > 0
+                && input.Boost
+                && stats.MaxFuel > 0f
+                && stats.AbThrust > 0f
+                && s.State.Fuel <= 0f
+            )
+            {
+                s.FuelPodAmmo--;
+                s.State.Fuel = MathF.Min(stats.MaxFuel, s.FuelPodFuelPerCharge);
+            }
             s.State = FlightModel.Integrate(s.State, input, stats);
             s.LastInputTick = tick;
             // Pods are unarmed — only an armed combat ship fires / locks / dispenses.
@@ -735,9 +867,14 @@ public sealed partial class Simulation
         {
             float over = s.State.Pos.Length() - World.SectorRadius(s.SectorId);
             if (over > 0f)
-                ApplyDamage(s, MathF.Min(_combat.BoundaryBaseDps + over * _combat.BoundaryRampDps, _combat.BoundaryMaxDps) * dt, tick);
+                ApplyDamage(
+                    s,
+                    MathF.Min(_combat.BoundaryBaseDps + over * _combat.BoundaryRampDps, _combat.BoundaryMaxDps) * dt,
+                    tick
+                );
 
             ResolveAsteroidCollisions(s);
+            ResolveBuildSphereCollisions(s); // solid, growing base-construction shells
             ResolveDeployableCollisions(s, tick); // solid deployables (recon probes today)
 
             // Bases in this ship's sector: an ENEMY base is solid (bounce); your OWN base is
@@ -750,7 +887,7 @@ public sealed partial class Simulation
                     continue;
                 if (b.Team != s.Team)
                 {
-                    ResolveBaseCollision(s, b.Pos); // enemy base: fully solid hull
+                    ResolveBaseCollision(s, b.Pos, b.BaseTypeId); // enemy base: fully solid hull
                     continue;
                 }
                 // Own base: with a loaded hull you dock ONLY by flying your ship into a rectangular
@@ -758,9 +895,16 @@ public sealed partial class Simulation
                 // the rest of the base is a solid hull that bounces you. Without a model, fall back to
                 // the legacy core-sphere dock so docking can't break.
                 Vec3 d = s.State.Pos - b.Pos;
-                if (World.BaseHull is not null)
+                if (World.BaseHullOf(b.BaseTypeId) is not null)
                 {
-                    if (Collide.IntersectsDockFace(d, World.BaseDockFaces, World.DockFaceDepth, World.ShipRadius))
+                    if (
+                        Collide.IntersectsDockFace(
+                            d,
+                            World.BaseDockFacesOf(b.BaseTypeId),
+                            World.DockFaceDepth,
+                            World.ShipRadius
+                        )
+                    )
                     {
                         // Intersected a rectangular docking door. Miners never enter DockShip
                         // (it refunds PaidCost + rebinds the client) — they offload instead.
@@ -775,12 +919,20 @@ public sealed partial class Simulation
                     // sub-hulls, resolved through the shared Collide.SphereVsBody kernel so the client
                     // predicts the identical bounce (same contact-selection rule — deepest wins). A
                     // partless base collapses to the single merged hull, matching the old behaviour.
-                    if (Collide.SphereVsBody(s.State.Pos, World.ShipRadius, BaseBody(b.Pos), out Vec3 bn, out float bpen))
+                    if (
+                        Collide.SphereVsBody(
+                            s.State.Pos,
+                            World.ShipRadius,
+                            BaseBody(b.Pos, b.BaseTypeId),
+                            out Vec3 bn,
+                            out float bpen
+                        )
+                    )
                         BounceShip(s, bn, bpen);
                 }
                 else
                 {
-                    float dockR = World.BaseRadius * DockRadiusFrac;
+                    float dockR = World.BaseRadiusOf(b.BaseTypeId) * DockRadiusFrac;
                     if (d.LengthSquared() <= dockR * dockR)
                     {
                         if (s.IsMiner)
@@ -845,9 +997,10 @@ public sealed partial class Simulation
         {
             while (_joinQueue.Count > 0)
             {
-                var (cid, team, cls, cargo) = _joinQueue.Dequeue();
-                // Remember the slot (team/cls/hold) and spawn this very step (ProcessRespawns, tick now).
-                _clientInfo[cid] = (team, cls, cargo);
+                var (cid, team, cls, cargo, launchBase, mounts) = _joinQueue.Dequeue();
+                // Remember the slot (team/cls/hold/launch base/mount overrides) and spawn this
+                // very step (ProcessRespawns, tick now).
+                _clientInfo[cid] = (team, cls, cargo, launchBase, mounts);
                 _clientRespawn[cid] = tick;
             }
             while (_leaveQueue.Count > 0)
@@ -878,8 +1031,7 @@ public sealed partial class Simulation
             while (_reclaimQueue.Count > 0)
             {
                 var (newCid, token) = _reclaimQueue.Dequeue();
-                if (_heldOrphans.Remove(token, out var orphan)
-                    && _byClient.Remove(orphan.oldClientId, out var ship))
+                if (_heldOrphans.Remove(token, out var orphan) && _byClient.Remove(orphan.oldClientId, out var ship))
                 {
                     ship.OwnerClientId = newCid;
                     _byClient[newCid] = ship;
@@ -936,14 +1088,22 @@ public sealed partial class Simulation
                 ship.ApDockPhaseTick = tick;
             }
             DrainMinerQueues(tick); // miner buys (Simulation.Mining.cs)
+            DrainConstructorQueues(tick); // constructor buys (Simulation.Constructors.cs)
             DrainCommandOrders(); // commander orders for AI vessels (Simulation.Orders.cs)
+            DrainResearchOps(tick); // commander research start/cancel/queue (Simulation.Research.cs)
         }
     }
 
     // Restore a fresh lobby on an empty server (called from the sim loop a grace period after
     // the last client leaves). Tears the match down to a clean idle Lobby so the next handoff
-    // readies up afresh, and the server sits idle until then.
-    public void ResetMatch() => ReturnToLobby();
+    // readies up afresh, and the server sits idle until then. A live match cut short this way
+    // gets its "match ended" log here — the normal win path logs via the result sink instead.
+    public void ResetMatch()
+    {
+        if (Phase == PhaseActive)
+            Log.MatchEnded(_log);
+        ReturnToLobby();
+    }
 
     // Lobby -> Active. Refills bases, clears the win state and any in-flight shot so a stale
     // resolution can't bleed into the new match. Players spawn on demand (MsgSpawn) once Active.
@@ -971,17 +1131,30 @@ public sealed partial class Simulation
         var nextWorld = BuildMatchWorld?.Invoke();
         if (nextWorld != null)
             World = nextWorld;
-        Array.Fill(World.BaseHealth, World.BaseMaxHealth);
-        BasesChangedThisStep = true;
         Phase = PhaseActive;
         Winner = NoWinner;
         _matchDirty = false;
         foreach (var ring in _shotRing)
             ring.Clear();
-        // Fresh economy each match: reset every team to its starting credits + base unlocks.
+        // Fresh economy each match: reset every team to its starting credits + base unlocks. SEEDED
+        // BEFORE ResetMatchBases (v41): the team attr cache resolves off the freshly-seeded OwnedTechs,
+        // so ResetMatchBases stamps base health with the correct Iron ×1.15 station-armor factor.
         World.SeedEconomy(Content.Start);
+        RecomputeTeamAttributes();
+        World.ResetMatchBases();
+        BasesChangedThisStep = true;
+        // Fresh research slate too. A map swap already brought a fresh World (fresh ResearchByBase),
+        // but StartMatch may REUSE the world (BuildMatchWorld null / same map in tests) — clear
+        // explicitly so a previous match's in-flight research never bleeds into the new one.
+        foreach (var rs in World.ResearchByBase)
+        {
+            rs.Active.Clear();
+            rs.OnDeck = null;
+        }
+        ResearchChangedThisStep = true;
         ResolveTeamUnlocks();
         SeedMinerSlots(Tick); // one free miner slot per team, on the fresh economy + world
+        DespawnAllConstructors(); // constructors are bought, never seeded — clear any from a prior match
         ResetVision(); // clear/reseed per-team fog vision, drain any in-flight compute (Simulation.Vision.cs)
         TeamStateChangedThisStep = true;
         Log.MatchStarted(_log);
@@ -992,18 +1165,61 @@ public sealed partial class Simulation
     }
 
     // Resolve each team's buildable hulls from its owned techs/capabilities (the Stage-2 unlock hook,
-    // riding the library's forward-closure so it stays correct when Stage-4 grants techs mid-match).
-    // Runs at match start — Stage-2 teams don't gain techs mid-match and spawns only happen while
-    // Active. The spawn gate (TryReserveSpawn) and the wire snapshot both read the resulting set.
+    // riding the library's forward-closure). Runs at match start AND whenever research completes
+    // (Simulation.Research.CompleteResearch) — teams DO gain techs mid-match now (Stage 4).
+    // The spawn gate (TryReserveSpawn) and the wire snapshot both read the resulting set.
     private void ResolveTeamUnlocks()
     {
         foreach (var ts in World.TeamStates.Values)
-            ts.UnlockedClasses = Allegiance.Factions.Resolution.BuildableResolver
-                .GetBuildables(Content.Catalog, ts.OwnedTechs, ts.OwnedCapabilities)
+            ts.UnlockedClasses = Allegiance
+                .Factions.Resolution.BuildableResolver.GetBuildables(Content.Catalog, ts.OwnedTechs, ts.OwnedCapabilities)
                 .OfType<Allegiance.Factions.Model.Hull>()
                 .Where(h => h.ClassId is not null)
                 .Select(h => h.ClassId!.Value)
                 .ToHashSet();
+    }
+
+    // ---- Faction-level team-wide stat multipliers (v41) --------------------------------------------
+    // Test kill-switch (mirrors ShieldsEnabled/MinersEnabled): default on so real matches carry the Iron
+    // Coalition GAS. Suites that assert absolute pre-multiplier damage/health/mining numbers flip it off
+    // before StartMatch to run through the neutral ×1.0 path (RecomputeTeamAttributes clears the World
+    // cache). AttributesEnabledDefault lets a suite that builds many sims neutralize them all with one
+    // top-of-file line instead of per-sim; production never touches either (stays true).
+    public static bool AttributesEnabledDefault = true;
+    public bool AttributesEnabled = AttributesEnabledDefault;
+
+    private static readonly int AttrCount = System.Enum.GetValues<Allegiance.Factions.Model.GameAttribute>().Length;
+
+    // The team's resolved multiplier for one attribute (1.0 when unseeded/disabled). ALL consumption
+    // (gun/missile damage, station armor, signature, mining) goes through this single accessor.
+    private float TeamAttr(byte team, Allegiance.Factions.Model.GameAttribute a) => World.TeamAttr(team, (int)a);
+
+    // Rebuild every team's resolved multiplier cache = faction base-attributes × each COMPLETED
+    // development (a dev counts as completed when the team owns all its granted techs — the same proxy
+    // MaybePreUpgradeSpawnedBase uses). Uses the library AttributeResolver so the multiplicative combine
+    // has ONE implementation. Called at match start (fresh economy ⇒ faction-base only) and on research
+    // completion. INTENTIONALLY UNCONSUMED attrs resolved into the cache but with no sim consumer:
+    // MaxShieldStation + MaxEnergy (no station-shield / ship-energy model). A mid-match dev that changed
+    // MaxArmorStation would NOT retro-rescale live base health (slice devs carry no attributes — noted).
+    private void RecomputeTeamAttributes()
+    {
+        if (!AttributesEnabled)
+        {
+            World.ClearTeamAttributes();
+            return;
+        }
+        var faction = Content.Catalog.Factions.Single();
+        var devs = Content.Catalog.Developments;
+        foreach (var (team, ts) in World.TeamStates)
+        {
+            bool Completed(Allegiance.Factions.Model.Development d) =>
+                d.GrantedTechs.Count > 0 && d.GrantedTechs.All(t => ts.OwnedTechs.Contains(t));
+            var resolved = Allegiance.Factions.Resolution.AttributeResolver.Resolve(faction, devs.Where(Completed));
+            var arr = new float[AttrCount];
+            for (int i = 0; i < arr.Length; i++)
+                arr[i] = (float)resolved.Get((Allegiance.Factions.Model.GameAttribute)i);
+            World.SetTeamAttributes(team, arr);
+        }
     }
 
     // -> Lobby. Tears down every ship (players + drones), refills bases, clears the win state
@@ -1041,7 +1257,7 @@ public sealed partial class Simulation
         // Held orphans' ships were just torn down by the _order loop above; drop the stale tokens
         // so a reconnect mid-grace can't try to reclaim a ship that no longer exists.
         _heldOrphans.Clear();
-        Array.Fill(World.BaseHealth, World.BaseMaxHealth);
+        World.ResetMatchBases();
         BasesChangedThisStep = true;
         Phase = PhaseLobby;
         Winner = NoWinner;
@@ -1056,7 +1272,15 @@ public sealed partial class Simulation
 
     // Spawn a combat ship for a connected client at its team base, facing the sector center
     // and launched clear of the base sphere (mirrors the module's SpawnShip).
-    private ShipSim SpawnCombatShip(int clientId, byte team, byte cls, uint tick, (uint cargoId, byte count)[] cargo)
+    private ShipSim SpawnCombatShip(
+        int clientId,
+        byte team,
+        byte cls,
+        uint tick,
+        (uint cargoId, byte count)[] cargo,
+        ulong launchBaseId = 0,
+        (byte hpIndex, uint weaponId)[]? mounts = null
+    )
     {
         var s = new ShipSim
         {
@@ -1066,21 +1290,27 @@ public sealed partial class Simulation
             Class = cls,
             Alive = true,
         };
-        PlaceAtBase(s, World.ShipRadius, tick);
+        PlaceAtBase(s, World.ShipRadius, tick, ResolveLaunchBase(team, launchBaseId));
         s.State.Mass = StatsFor(cls, false).Mass;
         s.State.Fuel = StatsFor(cls, false).MaxFuel; // dock-refill: dock despawns, relaunch = full tank
         s.Health = HullFor(cls);
         s.Shield = ShieldsEnabled ? ShieldCapacityFor(s) : 0f; // full shield at spawn; relaunch = full recharge
         s.ShieldDamageTick = 0;
         s.SigBias = ShieldDefFor(s).SignatureBias; // projected default-loadout signature bias
+        // Validate the hangar's weapon-slot overrides + consumable hold as ONE loadout (they share
+        // PayloadCapacity); any invalid piece reverts BOTH to the authored defaults (logged).
+        var (mountIds, hold) = ResolveLoadout(team, cls, mounts, cargo);
+        s.MountWeaponIds = mountIds;
+        if (mountIds is not null)
+            LoadoutsChangedThisStep = true; // MsgShipLoadout table gains a row this step
 
-        if (MissileMountFor(cls) is (_, WeaponDef mw)) // full magazine at spawn (no rearm yet)
+        if (MissileMountFor(s) is (_, WeaponDef mw)) // full magazine at spawn (no rearm yet); an emptied rack seeds 0
             s.MissileAmmo = mw.MagazineSize;
         // D7: remember what the team paid for this hull (TryReserveSpawn just deducted it) so a
         // voluntary dock can refund it. PIGs/pods never go through here, so they keep PaidCost 0.
         s.PaidCost = ShipDefs.TryGetValue(cls, out var cd) ? cd.Cost : 0;
         // D6/D9: seed the chaff/mine dispenser ammo from the validated spawn cargo (empty ⇒ hull default).
-        SeedDispenserAmmo(s, cls, cargo);
+        SeedDispenserAmmo(s, hold);
         _ships[s.ShipId] = s;
         _order.Add(s);
         if (clientId >= 0)
@@ -1088,17 +1318,28 @@ public sealed partial class Simulation
         return s;
     }
 
-    // Validate a requested consumable hold and seed the ship's dispenser ammo/weapon-ids from it.
-    // A cargo id must resolve to a Chaff/Mine dispenser WeaponDef, and mounted-weapon mass + the
-    // hold's mass must fit PayloadCapacity — otherwise the whole request is rejected (logged) and the
-    // hull's authored DefaultCargo is used instead.
-    private void SeedDispenserAmmo(ShipSim s, byte cls, (uint cargoId, byte count)[] cargo)
+    // Seed the ship's dispenser ammo/weapon-ids from an ALREADY-VALIDATED hold (ResolveLoadout).
+    private void SeedDispenserAmmo(ShipSim s, (uint cargoId, byte count)[] chosen)
     {
-        var chosen = ResolveCargo(cls, cargo);
+        World.TeamStates.TryGetValue(s.Team, out var teamState);
         foreach (var (cargoId, count) in chosen)
         {
+            // Fuel cargo has no dispenser WeaponDef and no tier chain — it seeds the auto-load
+            // reserve directly (consumed in Pass A when the tank empties mid-boost).
+            if (_fuelPerCharge.TryGetValue(cargoId, out float perCharge))
+            {
+                byte fuelPackSize = _chargesPerPack.TryGetValue(cargoId, out var fpk) ? fpk : (byte)1;
+                s.FuelPodAmmo = (byte)System.Math.Min(255, s.FuelPodAmmo + count * fuelPackSize);
+                s.FuelPodFuelPerCharge = perCharge;
+                continue;
+            }
             if (!_dispenserByCargo.TryGetValue(cargoId, out var w))
                 continue;
+            // Cargo stays one tier-neutral item per line (ids never change); the FIRED tier is the
+            // team's researched successor — walk the same chain mounted racks migrate through.
+            uint upgraded = MigrateWeaponTier(teamState, w.WeaponId);
+            if (upgraded != w.WeaponId && WeaponDefs.TryGetValue(upgraded, out var uw))
+                w = uw;
             // `count` is the loaded PACK count; each pack holds ChargesPerPack charges and one charge
             // is spent per gated press. Total charges = packs × pack-size, clamped to the wire byte.
             byte packSize = _chargesPerPack.TryGetValue(cargoId, out var pk) ? pk : (byte)1;
@@ -1121,38 +1362,176 @@ public sealed partial class Simulation
         }
     }
 
-    // Resolve the hold to seed: the requested cargo if it's valid (all ids are dispenser cargo AND
-    // mounted-weapon mass + hold mass ≤ PayloadCapacity), else the hull's authored DefaultCargo.
-    private (uint cargoId, byte count)[] ResolveCargo(byte cls, (uint cargoId, byte count)[] requested)
+    // Resolve a spawn request's weapon-slot overrides + consumable hold into the loadout to seed.
+    // The two halves share PayloadCapacity, so they validate as ONE request: every override must
+    // name a real Weapon-kind hardpoint and either empty it (NoWeapon) or mount a team-tech-owned
+    // weapon the mount's TYPE accepts (HardpointDef.MountAccepts — a gun mount takes guns, a
+    // missile mount takes racks, an untyped mount takes either; dispensers never mount); every
+    // cargo id must be dispenser cargo; and the EFFECTIVE mount mass + hold mass must fit
+    // PayloadCapacity. Any failure rejects the whole request (logged) back to the authored loadout
+    // (null mounts = class default) — only a hacked/buggy client hits this, the hangar UI gates
+    // mount type, capacity and tech before sending.
+    private (uint[]? mountIds, (uint cargoId, byte count)[] cargo) ResolveLoadout(
+        byte team,
+        byte cls,
+        (byte hpIndex, uint weaponId)[]? mounts,
+        (uint cargoId, byte count)[] requested
+    )
     {
         ShipDefs.TryGetValue(cls, out var def);
-        (uint, byte)[] fallback = def is null
+        (uint, byte)[] fallbackCargo = def is null
             ? System.Array.Empty<(uint, byte)>()
             : def.DefaultCargo.Select(c => (c.CargoId, c.Count)).ToArray();
-        if (requested is null || requested.Length == 0)
-            return fallback;
+        bool wantMounts = mounts is { Length: > 0 } && def is not null;
+        bool wantCargo = requested is { Length: > 0 };
+
+        World.TeamStates.TryGetValue(team, out var ts);
+
+        // Effective per-barrel weapon ids: authored muzzles, then overrides applied by hardpoint Index
+        // (mapped to barrel = position among the class's Weapon-kind hardpoints — the same declaration
+        // order ClassMuzzles/the client's slot list use; Index is NOT assumed to equal position), then
+        // a team-wide TIER MIGRATION (a researched gun tier auto-replaces the ones it obsoletes). The
+        // migration runs even on a pure authored spawn, so a quick-launch also flies the current tier.
+        var muzzles = cls < ClassMuzzles.Length ? ClassMuzzles[cls] : System.Array.Empty<Muzzle>();
+        uint[] effective = new uint[muzzles.Length];
+        for (int i = 0; i < muzzles.Length; i++)
+            effective[i] = muzzles[i].WeaponId;
+
+        if (wantMounts)
+        {
+            var barrelByIndex = new Dictionary<byte, int>();
+            var mountByIndex = new Dictionary<byte, WeaponMountKind>();
+            int barrel = 0;
+            foreach (var h in def!.Hardpoints)
+                if (h.Kind == HardpointKind.Weapon)
+                {
+                    barrelByIndex[h.Index] = barrel++;
+                    mountByIndex[h.Index] = h.Mount;
+                }
+            foreach (var (hpIndex, weaponId) in mounts!)
+            {
+                if (!barrelByIndex.TryGetValue(hpIndex, out int b))
+                {
+                    Log.SpawnMountInvalid(_log, hpIndex, weaponId, cls);
+                    return (null, fallbackCargo);
+                }
+                if (weaponId == HardpointDef.NoWeapon)
+                {
+                    effective[b] = HardpointDef.NoWeapon; // deliberately-empty slot
+                    continue;
+                }
+                if (
+                    !WeaponDefs.TryGetValue(weaponId, out var w) || !HardpointDef.MountAccepts(mountByIndex[hpIndex], w.Kind)
+                )
+                {
+                    // Unknown, a dispenser (D8: not mountable), or the wrong category for this
+                    // mount's type (missile on a gun mount / gun on a missile mount).
+                    Log.SpawnMountInvalid(_log, hpIndex, weaponId, cls);
+                    return (null, fallbackCargo);
+                }
+                foreach (ushort t in w.RequiredTechIdx)
+                    if (ts is null || t >= Content.Techs.Count || !ts.OwnedTechs.Contains(Content.Techs[t].Id))
+                    {
+                        Log.SpawnMountTechLocked(_log, weaponId, team);
+                        return (null, fallbackCargo);
+                    }
+                effective[b] = weaponId;
+            }
+        }
+
+        // Weapon-tier migration (server-authoritative twin of ShipLoadout.MigrateTier): advance each
+        // barrel up its successor chain while an owned tech obsoletes it. A researched gat-2 upgrades a
+        // Gat Gun 1 mount — authored default OR saved override — to Gat Gun 2 at spawn. `migrated` flags
+        // a pure authored spawn that changed, so it still gets a MsgShipLoadout row (others see tier-2).
+        bool migrated = false;
+        for (int i = 0; i < effective.Length; i++)
+        {
+            if (effective[i] == HardpointDef.NoWeapon)
+                continue;
+            uint up = MigrateWeaponTier(ts, effective[i]);
+            if (up != effective[i])
+            {
+                effective[i] = up;
+                migrated = true;
+            }
+        }
+
+        // Cargo: an empty request normally means "hull default" (legacy quick-launch, no hangar
+        // visit) — but WITH mount overrides it means a deliberately EMPTY hold: overrides only
+        // come from the hangar, which always ships its real (possibly zero) hold counts, and
+        // silently re-adding the default cargo could push a legal gun swap over PayloadCapacity.
+        var cargo =
+            wantCargo ? requested
+            : wantMounts ? System.Array.Empty<(uint, byte)>()
+            : fallbackCargo;
+
+        // Nothing customized AND no tier migrated AND default cargo ⇒ the pure authored spawn (already
+        // boot-validated to fit capacity): keep the null fast path so it flies ClassMuzzles with no row.
+        if (!wantMounts && !wantCargo && !migrated)
+            return (null, fallbackCargo);
 
         float used = 0f;
-        if (def is not null)
-            foreach (var h in def.Hardpoints)
-                if (h.Kind == HardpointKind.Weapon && WeaponDefs.TryGetValue(h.WeaponId, out var wm))
-                    used += wm.Mass;
-        foreach (var (cargoId, count) in requested)
+        for (int i = 0; i < effective.Length; i++)
+            if (WeaponDefs.TryGetValue(effective[i], out var wm))
+                used += wm.Mass;
+        foreach (var (cargoId, count) in cargo)
         {
-            if (!_dispenserByCargo.ContainsKey(cargoId))
+            bool isFuel = _fuelPerCharge.ContainsKey(cargoId);
+            if (wantCargo && !isFuel && !_dispenserByCargo.ContainsKey(cargoId))
             {
                 Log.SpawnCargoNotDispenser(_log, cargoId);
-                return fallback;
+                return (null, fallbackCargo);
+            }
+            // Fuel pods on a hull with no fuel model would be dead cargo — reject like any other
+            // invalid request (the hangar hides the row, so only a hacked/buggy client sends this).
+            if (isFuel && count > 0 && (def is null || def.MaxFuel <= 0f))
+            {
+                Log.SpawnFuelCargoOnFuellessHull(_log, cargoId, cls);
+                return (null, fallbackCargo);
             }
             used += count * (_cargoMass.TryGetValue(cargoId, out var m) ? m : 0f);
         }
         float cap = def?.PayloadCapacity ?? 0f;
         if (used > cap)
         {
-            Log.SpawnCargoPayloadExceeds(_log, used, cap);
-            return fallback;
+            Log.SpawnLoadoutPayloadExceeds(_log, used, cap);
+            return (null, fallbackCargo);
         }
-        return requested;
+        return (effective, cargo);
+    }
+
+    // Walk the weapon-tier successor chain for a team: while the current weapon is obsoleted by a tech
+    // the team owns and names a successor NO HEAVIER than itself, advance to that successor. A
+    // researched tier auto-replaces the guns it obsoletes at spawn. The mass guard keeps a boot-valid
+    // loadout within PayloadCapacity (a heavier successor is left for the player to mount explicitly).
+    // Bounded by the chain length (guard caps a malformed cycle). This is the authoritative twin of
+    // the client's ShipLoadout.MigrateTier display helper.
+    private uint MigrateWeaponTier(World.TeamState? ts, uint weaponId)
+    {
+        if (ts is null)
+            return weaponId;
+        for (int guard = 0; guard < 8; guard++)
+        {
+            if (
+                !WeaponDefs.TryGetValue(weaponId, out var w)
+                || w.SucceededByWeaponId == uint.MaxValue
+                || w.ObsoletedByTechIdx.Length == 0
+                || !WeaponDefs.TryGetValue(w.SucceededByWeaponId, out var next)
+                || next.Mass > w.Mass
+            )
+                return weaponId;
+            bool owns = false;
+            foreach (ushort t in w.ObsoletedByTechIdx)
+                if (t < Content.Techs.Count && ts.OwnedTechs.Contains(Content.Techs[t].Id))
+                {
+                    owns = true;
+                    break;
+                }
+            if (!owns)
+                return weaponId;
+            weaponId = w.SucceededByWeaponId;
+        }
+        return weaponId;
     }
 
     // Position a ship just outside its team base, launched out of one of the base's DOCKING-EXIT
@@ -1165,10 +1544,12 @@ public sealed partial class Simulation
     {
         Vec3 basePos = default;
         uint sector = World.DefaultSector;
+        byte baseType = 0;
         if (at is World.BaseSite site)
         {
             basePos = site.Pos;
             sector = site.SectorId;
+            baseType = site.BaseTypeId;
         }
         else
             foreach (var b in World.Bases)
@@ -1176,20 +1557,22 @@ public sealed partial class Simulation
                 {
                     basePos = b.Pos;
                     sector = b.SectorId;
+                    baseType = b.BaseTypeId;
                     break;
                 }
 
         Vec3 outward;
         Quat rot;
         Vec3 spawnPos;
-        if (World.BaseHull is not null)
+        var exits = World.BaseExitsOf(baseType);
+        if (World.BaseHullOf(baseType) is not null && exits.Length > 0)
         {
             // Catapult out of a docking bay picked at random among the base's DockingExit
             // hardpoints: the ship first appears at the hardpoint pushed warp-exit-offset (plus
             // `clearance`) along the launch axis — the opposite of the node's inward-pointing
             // forward. (Any residual overlap with the bay is a benign outward pop — ApplyBounce
             // never damages a ship already moving outward.)
-            var exit = World.BaseExits[_rng.Next(World.BaseExits.Length)];
+            var exit = exits[_rng.Next(exits.Length)];
             outward = exit.Dir;
             rot = LookRotationZ(outward);
             spawnPos = basePos + exit.Pos + outward * (clearance + _mech.WarpExitOffset);
@@ -1200,7 +1583,7 @@ public sealed partial class Simulation
             outward = dirLen > 1e-3f ? basePos * (-1f / dirLen) : new Vec3(0f, 0f, 1f);
             float yaw = MathF.Atan2(-basePos.X, -basePos.Z);
             rot = new Quat(0f, MathF.Sin(yaw * 0.5f), 0f, MathF.Cos(yaw * 0.5f));
-            spawnPos = basePos + outward * (World.BaseRadius + clearance);
+            spawnPos = basePos + outward * (World.BaseRadiusOf(baseType) + clearance);
         }
 
         s.SectorId = sector;
@@ -1214,6 +1597,7 @@ public sealed partial class Simulation
             AbPower = 0f,
         };
         s.LastFireTick = 0;
+        s.MountLastFire = null; // per-mount cadence gates restart with the fresh LastFireTick
         s.LastInputTick = tick;
         s.Alive = true;
     }
@@ -1238,7 +1622,7 @@ public sealed partial class Simulation
             if (_byClient.ContainsKey(cid))
                 continue; // already flying
             // A miner hull is a team drone, never a player ship: a MsgSpawn asking for it is
-            // dropped like a locked class (buy one with /buyminer instead). Guards the sim even
+            // dropped like a locked class (buy one from the Build tab instead). Guards the sim even
             // when a client fails to hide ore hulls from its hangar.
             if (IsMinerClass(info.cls))
                 continue;
@@ -1247,16 +1631,47 @@ public sealed partial class Simulation
             // re-spamming a request it can predict will fail.
             if (TryReserveSpawn(info.team, info.cls) != SpawnDecision.Allowed)
                 continue;
-            SpawnCombatShip(cid, info.team, info.cls, tick, info.cargo);
+            SpawnCombatShip(cid, info.team, info.cls, tick, info.cargo, info.launchBaseId, info.mounts);
         }
     }
 
-    public enum SpawnDecision { Allowed, Locked, TooPoor }
+    // Resolve a client-picked launch base id to a validated friendly, alive base site — anything
+    // else (0, unknown id, enemy base, dead base) silently falls back to the default first-team-base
+    // pick inside PlaceAtBase (null).
+    private World.BaseSite? ResolveLaunchBase(byte team, ulong launchBaseId)
+    {
+        if (launchBaseId == 0)
+            return null;
+        for (int i = 0; i < World.Bases.Count; i++)
+        {
+            var b = World.Bases[i];
+            if (b.Id == launchBaseId)
+                return (b.Team == team && World.BaseHealth[i] > 0f) ? b : null;
+        }
+        return null;
+    }
+
+    // A class id a PLAYER may request via MsgSpawn: a known hull def that isn't the pod or a miner
+    // drone. Replaces the hub's old hardcoded `cls > 2 -> scout` clamp (v36), so researched hulls
+    // with any class id can spawn once unlocked (TryReserveSpawn still gates lock/cost).
+    public bool IsPlayerSpawnableClass(byte cls) =>
+        cls != GameContent.PodClassId && !IsMinerClass(cls) && !IsConstructorClass(cls) && ShipDefs.ContainsKey(cls);
+
+    // A constructor drone chassis (HullAbility.IsBuilder projected to ShipClassDef.IsConstructor):
+    // AI-owned, bought from the Build tab, never a personal spawn.
+    public bool IsConstructorClass(byte cls) => ShipDefs.TryGetValue(cls, out var d) && d.IsConstructor;
+
+    public enum SpawnDecision
+    {
+        Allowed,
+        Locked,
+        TooPoor,
+    }
 
     // Authoritative spawn gate + charge (the buy seam): reject if the requested hull is locked for
     // this team or it can't afford the cost, otherwise deduct the cost and allow. Deduct and check
     // happen at the same authoritative moment (spawn time), so credits checked == credits charged.
-    // Authority for a PLAYER's own hull stays any-player-spends; team-drone buys (/buyminer) are
+    // Authority for a PLAYER's own hull stays any-player-spends; team-drone buys (MsgBuyMiner) are
     // commander-gated upstream at the hub (ClientHub.CommanderOrWarn) before they reach this seam.
     public SpawnDecision TryReserveSpawn(byte team, byte cls)
     {
@@ -1282,6 +1697,8 @@ public sealed partial class Simulation
             return PigExecute(s, tick);
         if (s.IsMiner)
             return MinerExecute(s, tick); // server-driven drone: no input ring, no autopilot flags
+        if (s.Kind == ShipKind.Constructor)
+            return ConstructorExecute(s, tick); // server-driven build drone (Simulation.Constructors.cs)
 
         int slot = (int)(tick % InputRingSize);
         if (s.InputRingTick[slot] == tick)
@@ -1336,11 +1753,13 @@ public sealed partial class Simulation
     private const float ApDockHullMargin = 10f; // padding added to BaseRadius for the LOS/detour sphere
     private const float ApDockLosSlack = 35f; // endSlack in the LOS test — excuses the terminal door pocket
     private const float ApDockDetourStepRad = 0.6f; // per-tick azimuth advance of the orbit carrot (rad)
+
     // MUST exceed ApBrakeMargin (16): the Transit clear-line ApproachPoint brakes to rest ~ApBrakeMargin
     // short of the standoff point, so a capture radius below that margin is a dead zone the ship can
     // never enter — Transit would park just outside it and never promote to Align/Creep (the maneuver
     // would only ever dock by sliding into the door during Transit, never via the intended align+creep).
     private const float ApDockCapture = 20f; // within this of the standoff point promotes Transit -> Align
+
     // Outer axis-acquire point for Transit: far enough out that (unlike the standoff point, which may
     // sit inside a recessed door pocket WITHIN the padded sphere) it clears the padded base sphere with
     // margin, so the straight-in leg's LOS test doesn't flap on small lateral drift.
@@ -1367,15 +1786,28 @@ public sealed partial class Simulation
         Quat myRot = s.State.Rot;
         Vec3 myVel = s.State.Vel;
         var stats = StatsFor(s.Class, s.IsPod);
-        Func<Vec3, Vec3, Vec3> avoid = (p, d) => PigAvoidAsteroids(s.SectorId, p, d);
+        // Rocks + base hulls (bases are solid to every ship — see AvoidObstacles). avoidBaseId is set
+        // by the base leg (ApKind 1) below so avoidance never steers the nose off the very base being
+        // flown at — the dock maneuver / arrival stop shell owns that base's clearance.
+        ulong avoidBaseId = 0;
+        Vec3 Avoid(Vec3 p, Vec3 d) => AvoidObstacles(s.SectorId, p, d, excludeBaseId: avoidBaseId);
 
         // Physics-based approach steer to `point`, coming to rest `stopDistance` from it (see
         // AutoSteer.ApproachPoint / StoppingDistance). Replaces the PIG combat schedule (AttackPoint),
         // whose coast/reverse thresholds overshot a max-speed approach and rammed the target.
         ShipInputState Approach(Vec3 point, float stopDistance, float margin) =>
             AutoSteer.ApproachPoint(
-                myPos, myRot, myVel, point, stopDistance,
-                stats.MaxSpeed, stats.Accel, stats.BackMult, PigTurnGain, margin, avoid
+                myPos,
+                myRot,
+                myVel,
+                point,
+                stopDistance,
+                stats.MaxSpeed,
+                stats.Accel,
+                stats.BackMult,
+                PigTurnGain,
+                margin,
+                Avoid
             );
 
         // Fly to a point that lives in `destSector`: if it's another sector, steer to the next-hop aleph
@@ -1390,7 +1822,7 @@ public sealed partial class Simulation
                 return false;
             if (World.NextGateTo(s.SectorId, destSector) is World.Gate gate)
             {
-                input = AutoSteer.SteerToPoint(myPos, myRot, gate.Pos, PigTurnGain, 1f, avoid);
+                input = AutoSteer.SteerToPoint(myPos, myRot, gate.Pos, PigTurnGain, 1f, Avoid);
                 return true;
             }
             s.ApEngaged = false; // unreachable (no route to the destination sector) — disengage
@@ -1401,10 +1833,12 @@ public sealed partial class Simulation
         {
             case 0: // ship — follow at standoff indefinitely; never auto-fire
             {
-                if (!_ships.TryGetValue(s.ApTargetId, out var tgt)
+                if (
+                    !_ships.TryGetValue(s.ApTargetId, out var tgt)
                     || !tgt.Alive
                     || tgt.ShipId == s.ShipId
-                    || (FogEnabled && !TeamRadarSees(s.Team, tgt.ShipId)))
+                    || (FogEnabled && !TeamRadarSees(s.Team, tgt.ShipId))
+                )
                 {
                     s.ApEngaged = false;
                     return default;
@@ -1425,6 +1859,7 @@ public sealed partial class Simulation
                     s.ApEngaged = false;
                     return default;
                 }
+                avoidBaseId = eb.Id; // the destination base — its clearance belongs to the dock/arrival logic
                 if (eb.SectorId != s.SectorId)
                 {
                     if (CrossSector(eb.SectorId, out var xin))
@@ -1438,15 +1873,22 @@ public sealed partial class Simulation
                     // without either (modelless base / no doors) keep the legacy full-thrust SteerToPoint
                     // at the aggregate door centre (or the base centre for a modelless base) — it bounces/
                     // slides into the door and still docks, just crudely. Preserved EXACTLY as before.
-                    if (World.BaseDockFaces.Length == 0 || World.BaseHull is null)
+                    // Geometry MUST be per-base-type: a newly-built outpost is a different BaseTypeId than
+                    // the home garrison, and the dock trigger (see IntersectsDockFace ~L775) tests the
+                    // OUTPOST's own door face. Reading the global (garrison-only) door/hull here aimed the
+                    // ship at a phantom door pinned at the outpost's position, so the capture never fired.
+                    if (World.BaseDockFacesOf(eb.BaseTypeId).Length == 0 || World.BaseHullOf(eb.BaseTypeId) is null)
                     {
-                        Vec3 aim = World.BaseHull is not null ? eb.Pos + World.BaseDoorCenter : eb.Pos;
-                        return AutoSteer.SteerToPoint(myPos, myRot, aim, PigTurnGain, 1f, avoid);
+                        Vec3 aim = World.BaseHullOf(eb.BaseTypeId) is not null
+                            ? eb.Pos + World.BaseDoorCenterOf(eb.BaseTypeId)
+                            : eb.Pos;
+                        return AutoSteer.SteerToPoint(myPos, myRot, aim, PigTurnGain, 1f, Avoid);
                     }
-                    return DockApproach(s, tick, eb, stats, avoid);
+                    return DockApproach(s, tick, eb, stats, Avoid);
                 }
-                var input = Approach(eb.Pos, World.BaseRadius + PigStandoff, ApBrakeMargin);
-                if (Arrived(myPos, s.State.Vel, eb.Pos, World.BaseRadius + PigStandoff * 1.2f))
+                float hostileR = World.BaseRadiusOf(eb.BaseTypeId); // per-type — enemy base need not be a garrison
+                var input = Approach(eb.Pos, hostileR + PigStandoff, ApBrakeMargin);
+                if (Arrived(myPos, s.State.Vel, eb.Pos, hostileR + PigStandoff * 1.2f))
                     s.ApEngaged = false;
                 return input;
             }
@@ -1486,13 +1928,25 @@ public sealed partial class Simulation
     // Guards re-validate geometry EVERY tick and demote back to Transit on drift / bad alignment /
     // timeout, so a hull bounce or overshoot self-heals rather than wedging a phase. Preconditions
     // (checked by the caller): same sector as `eb`, BaseDockFaces non-empty, BaseHull present.
-    private ShipInputState DockApproach(ShipSim s, uint tick, World.BaseSite eb, ShipStats stats, Func<Vec3, Vec3, Vec3> avoid)
+    private ShipInputState DockApproach(
+        ShipSim s,
+        uint tick,
+        World.BaseSite eb,
+        ShipStats stats,
+        Func<Vec3, Vec3, Vec3> avoid
+    )
     {
         Vec3 myPos = s.State.Pos;
         Quat myRot = s.State.Rot;
         Vec3 myVel = s.State.Vel;
         Vec3 angVel = s.State.AngVel; // ship-local turn rates (X=pitch,Y=yaw,Z=roll) — the frame FaceAndRollAnticipated expects
-        DockFace[] faces = World.BaseDockFaces;
+        // Per-base-type geometry: `eb` may be an outpost/refinery, NOT the home garrison (typeId 0), and
+        // every consumer below (door faces, hull-clearance radius) must match the type the dock trigger
+        // tests. The global World.BaseDockFaces/BaseRadius are garrison-only aliases — using them here
+        // parked non-garrison bases at a phantom door.
+        byte baseType = eb.BaseTypeId;
+        DockFace[] faces = World.BaseDockFacesOf(baseType);
+        float baseRadius = World.BaseRadiusOf(baseType);
 
         // Conservative per-axis angular-accel budgets for the anticipation profile: the at-rest
         // TorqueMultiplier (0.5) times turnTorque/mass — i.e. the slew cap FlightModel.Integrate applies
@@ -1512,9 +1966,19 @@ public sealed partial class Simulation
             {
                 Vec3 up = DockUpAxis(f, myRot);
                 var input = AutoSteer.FaceAndRollAnticipated(
-                    myPos, myRot, angVel, doorW, up,
-                    stats.MaxRatePitchRad, stats.MaxRateYawRad, stats.MaxRateRollRad,
-                    angAccelPitch, angAccelYaw, angAccelRoll, ApDockRollGain, 0f
+                    myPos,
+                    myRot,
+                    angVel,
+                    doorW,
+                    up,
+                    stats.MaxRatePitchRad,
+                    stats.MaxRateYawRad,
+                    stats.MaxRateRollRad,
+                    angAccelPitch,
+                    angAccelYaw,
+                    angAccelRoll,
+                    ApDockRollGain,
+                    0f
                 );
 
                 // Facing = nose (local +Z) alignment with the direction to the door; roll error read from
@@ -1530,8 +1994,10 @@ public sealed partial class Simulation
                     s.ApDockPhase = 2; // aligned — creep in
                     s.ApDockPhaseTick = tick;
                 }
-                else if ((pstand - myPos).LengthSquared() > (2f * ApDockCapture) * (2f * ApDockCapture)
-                    || tick - s.ApDockPhaseTick > ApDockAlignTimeout)
+                else if (
+                    (pstand - myPos).LengthSquared() > (2f * ApDockCapture) * (2f * ApDockCapture)
+                    || tick - s.ApDockPhaseTick > ApDockAlignTimeout
+                )
                 {
                     s.ApDockPhase = 0; // drifted off the standoff point or stuck oscillating — re-approach
                     s.ApDockPhaseTick = tick;
@@ -1545,9 +2011,19 @@ public sealed partial class Simulation
                 // as the nose reaches the door — the ship keeps a valid heading right up to the trigger.
                 Vec3 creepAim = doorW + f.Normal * World.DockFaceDepth;
                 var input = AutoSteer.FaceAndRollAnticipated(
-                    myPos, myRot, angVel, creepAim, up,
-                    stats.MaxRatePitchRad, stats.MaxRateYawRad, stats.MaxRateRollRad,
-                    angAccelPitch, angAccelYaw, angAccelRoll, ApDockRollGain, ApDockCreepThrottle
+                    myPos,
+                    myRot,
+                    angVel,
+                    creepAim,
+                    up,
+                    stats.MaxRatePitchRad,
+                    stats.MaxRateYawRad,
+                    stats.MaxRateRollRad,
+                    angAccelPitch,
+                    angAccelYaw,
+                    angAccelRoll,
+                    ApDockRollGain,
+                    ApDockCreepThrottle
                 );
 
                 Vec3 fwd = myRot.Rotate(new Vec3(0f, 0f, 1f));
@@ -1563,10 +2039,12 @@ public sealed partial class Simulation
                 float latV = MathF.Abs(lateral.X * f.V.X + lateral.Y * f.V.Y + lateral.Z * f.V.Z);
                 bool outsideCorridor = latU > f.Eu + World.ShipRadius || latV > f.Ev + World.ShipRadius;
 
-                if (outsideCorridor
+                if (
+                    outsideCorridor
                     || facingDot < ApDockCreepFacingDot
                     || (doorW - myPos).Length() > 2f * ApDockStandoff
-                    || tick - s.ApDockPhaseTick > ApDockCreepTimeout)
+                    || tick - s.ApDockPhaseTick > ApDockCreepTimeout
+                )
                 {
                     s.ApDockPhase = 0; // fell out of the corridor / faced away / drifted / timed out — re-approach
                     s.ApDockPhaseTick = tick;
@@ -1591,8 +2069,7 @@ public sealed partial class Simulation
                 float alongT = relT.X * f.Normal.X + relT.Y * f.Normal.Y + relT.Z * f.Normal.Z;
                 Vec3 latT = relT - f.Normal * alongT;
                 float gap = -alongT; // distance OUTSIDE the door plane (negative = past/inside it)
-                bool onAxis = gap > ApDockStandoff * 0.8f
-                    && latT.Length() < MathF.Max(f.Eu, f.Ev) + ApDockAxisSlop;
+                bool onAxis = gap > ApDockStandoff * 0.8f && latT.Length() < MathF.Max(f.Eu, f.Ev) + ApDockAxisSlop;
 
                 ShipInputState input;
                 if (onAxis)
@@ -1603,27 +2080,44 @@ public sealed partial class Simulation
                     float distP = (pstand - myPos).Length();
                     float vAllow = AutoSteer.MaxArrestableSpeed(
                         MathF.Max(0f, distP - ApDockDescentMargin),
-                        stats.MaxSpeed, stats.Accel, stats.BackMult
+                        stats.MaxSpeed,
+                        stats.Accel,
+                        stats.BackMult
                     );
                     float throttle = MathF.Min(ApDockDescentMaxThrottle, vAllow / stats.MaxSpeed);
                     input = AutoSteer.FaceAndRollAnticipated(
-                        myPos, myRot, angVel, doorW, DockUpAxis(f, myRot),
-                        stats.MaxRatePitchRad, stats.MaxRateYawRad, stats.MaxRateRollRad,
-                        angAccelPitch, angAccelYaw, angAccelRoll, ApDockRollGain, throttle
+                        myPos,
+                        myRot,
+                        angVel,
+                        doorW,
+                        DockUpAxis(f, myRot),
+                        stats.MaxRatePitchRad,
+                        stats.MaxRateYawRad,
+                        stats.MaxRateRollRad,
+                        angAccelPitch,
+                        angAccelYaw,
+                        angAccelRoll,
+                        ApDockRollGain,
+                        throttle
                     );
                 }
                 else
                 {
                     Vec3 goal = doorW - f.Normal * ApDockOuterStandoff;
-                    float sphereR = World.BaseRadius + ApDockHullMargin;
+                    float sphereR = baseRadius + ApDockHullMargin;
                     if (AutoSteer.SegmentEntersSphere(myPos, goal, eb.Pos, sphereR, ApDockLosSlack))
                     {
                         // Goal is behind the base hull: steer a live-recomputed carrot around the
                         // clearance ring instead of driving straight through the structure.
-                        float ring = World.BaseRadius + ApDockClearance;
+                        float ring = baseRadius + ApDockClearance;
                         Vec3 carrot = AutoSteer.OrbitWaypoint(
-                            myPos, goal, eb.Pos, ring, ApDockDetourStepRad,
-                            new Vec3(0f, 1f, 0f), new Vec3(1f, 0f, 0f)
+                            myPos,
+                            goal,
+                            eb.Pos,
+                            ring,
+                            ApDockDetourStepRad,
+                            new Vec3(0f, 1f, 0f),
+                            new Vec3(1f, 0f, 0f)
                         );
                         carrot = ClampInsideSector(carrot, s.SectorId); // bases hug the sector edge — keep the arc off the eroding boundary
                         // Speed governor on the arc: command the highest speed the brake model can
@@ -1635,7 +2129,9 @@ public sealed partial class Simulation
                         float distToGoal = (goal - myPos).Length();
                         float vAllow = AutoSteer.MaxArrestableSpeed(
                             MathF.Max(0f, distToGoal - ApBrakeMargin),
-                            stats.MaxSpeed, stats.Accel, stats.BackMult
+                            stats.MaxSpeed,
+                            stats.Accel,
+                            stats.BackMult
                         );
                         float throttle = MathF.Min(1f, vAllow / stats.MaxSpeed);
                         input = AutoSteer.SteerToPoint(myPos, myRot, carrot, PigTurnGain, throttle, avoid);
@@ -1644,14 +2140,25 @@ public sealed partial class Simulation
                     {
                         // Clear line to the axis point: physics-braked approach (avoidance included).
                         input = AutoSteer.ApproachPoint(
-                            myPos, myRot, myVel, goal, 0f,
-                            stats.MaxSpeed, stats.Accel, stats.BackMult, PigTurnGain, ApBrakeMargin, avoid
+                            myPos,
+                            myRot,
+                            myVel,
+                            goal,
+                            0f,
+                            stats.MaxSpeed,
+                            stats.Accel,
+                            stats.BackMult,
+                            PigTurnGain,
+                            ApBrakeMargin,
+                            avoid
                         );
                     }
                 }
 
-                if ((pstand - myPos).LengthSquared() <= ApDockCapture * ApDockCapture
-                    && myVel.LengthSquared() < ApDockCaptureSpeedSq)
+                if (
+                    (pstand - myPos).LengthSquared() <= ApDockCapture * ApDockCapture
+                    && myVel.LengthSquared() < ApDockCaptureSpeedSq
+                )
                 {
                     s.ApDockPhase = 1; // arrived + settled at the standoff point — align to the door
                     s.ApDockPhaseTick = tick;
@@ -1671,8 +2178,9 @@ public sealed partial class Simulation
             return s.ApDockDoor; // already chosen — keep it for the whole engagement
 
         Vec3 myPos = s.State.Pos;
-        float sphereR = World.BaseRadius + ApDockHullMargin;
-        float detourPenalty = MathF.PI * (World.BaseRadius + ApDockClearance); // ~half-ring arc cost
+        float baseRadius = World.BaseRadiusOf(eb.BaseTypeId); // per-type — eb may be a non-garrison base
+        float sphereR = baseRadius + ApDockHullMargin;
+        float detourPenalty = MathF.PI * (baseRadius + ApDockClearance); // ~half-ring arc cost
         int best = 0;
         float bestCost = float.MaxValue;
         for (int i = 0; i < faces.Length; i++)
@@ -1728,6 +2236,8 @@ public sealed partial class Simulation
         s.ApEngaged = false; // autopilot never survives the ship it was flying
         if (s.IsMiner)
             KillMiner(s, tick); // slot dies with the drone — no pod, repurchase only
+        else if (s.Kind == ShipKind.Constructor)
+            KillConstructor(s, tick); // slot dies with the drone — no pod, repurchase only
         else if (s.IsPod)
             KillPod(s, tick);
         else if (s.IsPig)
@@ -1805,8 +2315,13 @@ public sealed partial class Simulation
         // is a net-free full rearm/repair. Only real player hulls that actually paid (PaidCost>0)
         // refund — pods never inherit PaidCost via MakePod and PIGs pay nothing, so death refunds
         // nothing. Capped at exactly what was paid (zeroed after) → no exploit.
-        if (!s.IsPod && !s.IsPig && s.OwnerClientId >= 0 && s.PaidCost > 0
-            && World.TeamStates.TryGetValue(s.Team, out var ts))
+        if (
+            !s.IsPod
+            && !s.IsPig
+            && s.OwnerClientId >= 0
+            && s.PaidCost > 0
+            && World.TeamStates.TryGetValue(s.Team, out var ts)
+        )
         {
             ts.Credits += s.PaidCost;
             s.PaidCost = 0;
@@ -1838,6 +2353,8 @@ public sealed partial class Simulation
         _ships.Remove(s.ShipId);
         _order.Remove(s);
         DeathsThisStep.Add((s.ShipId, GoneDestroyed));
+        if (s.MountWeaponIds is not null)
+            LoadoutsChangedThisStep = true; // MsgShipLoadout table shrinks — reconcile-by-omission
     }
 
     // Reap held orphans whose reconnect window has elapsed: the player never came back, so the
@@ -1875,6 +2392,8 @@ public sealed partial class Simulation
                 _ships.Remove(s.ShipId);
                 _order.Remove(s);
                 DeathsThisStep.Add((s.ShipId, s.GoneReason));
+                if (s.MountWeaponIds is not null)
+                    LoadoutsChangedThisStep = true; // MsgShipLoadout table shrinks — reconcile-by-omission
             }
             _toRemove.Clear();
         }
@@ -1906,42 +2425,29 @@ public sealed partial class Simulation
         if (muzzles.Length == 0)
             return; // no authored weapon hardpoint ⇒ this hull doesn't fire (e.g. a pod)
 
-        // Primary fire is the GUNS: one cadence per ship, gated off the first Bolt muzzle's weapon
-        // (missile racks have their own cadence in TryFireMissile). A hull with no gun (only racks)
-        // has nothing to fire here. Per-weapon cadence arrives with mixed loadouts (Stage 2).
-        // TryGetValue skips an empty/unbound mount (WeaponId == HardpointDef.NoWeapon never
-        // resolves) — same guard every other muzzle consumer uses (PrimaryWeapon, ClassMissileMounts).
-        WeaponDef? primary = null;
-        foreach (var mz in muzzles)
-            if (WeaponDefs.TryGetValue(mz.WeaponId, out var pwd) && pwd.Kind == WeaponKind.Bolt)
-            {
-                primary = pwd;
-                break;
-            }
-        if (primary is null)
-            return; // no gun on this hull — primary fire is a no-op (missiles fire via Firing2)
-        if (tick - ship.LastFireTick < primary.FireIntervalTicks && ship.LastFireTick != 0)
-            return;
-        ship.LastFireTick = tick;
-
-        // One shot per muzzle, in hardpoint order (the Fighter's twin cannons fire together). Each
-        // muzzle fires its own weapon, dispatched by kind. IMPORTANT: the loop still visits missile
-        // mounts and KEEPS the hardpoint-array index as `barrel` (the per-barrel spread seed) — it
-        // just skips firing a bolt for them. The client's SpawnBoltFor mirrors this exactly so the
-        // gun barrel seeds stay aligned on both sides regardless of where racks sit in the array.
+        // Primary fire is the GUNS, and each gun mount gates on its OWN cadence (mixed loadouts):
+        // FireCadence.MountFires is THE shared eligibility rule — the client derives WHICH mounts
+        // fired at a replicated LastFireTick by replaying it against a per-ship shadow, so the
+        // wire carries no per-mount data. TryGetValue skips an empty/unbound mount (WeaponId ==
+        // HardpointDef.NoWeapon never resolves); missile racks have their own cadence in
+        // TryFireMissile. IMPORTANT: the loop still visits every weapon hardpoint and KEEPS the
+        // array index as `barrel` (the per-barrel spread seed) — skipped slots consume their
+        // index, so gun seeds stay aligned with the client (SpawnBoltFor/PredictionController)
+        // regardless of where racks or emptied slots sit in the array.
+        bool fired = false;
         for (byte barrel = 0; barrel < muzzles.Length; barrel++)
         {
-            if (!WeaponDefs.TryGetValue(muzzles[barrel].WeaponId, out var w))
-                continue; // empty/unbound mount (NoWeapon) — assignable slot, nothing to fire
-            switch (w.Kind)
-            {
-                case WeaponKind.Bolt:
-                    FireBolt(ship, tick, w, muzzles[barrel], barrel);
-                    break;
-                case WeaponKind.Missile:
-                    break; // racks are fired by Firing2 (TryFireMissile), not primary fire
-            }
+            if (!WeaponDefs.TryGetValue(WeaponIdAt(ship, barrel), out var w) || w.Kind != WeaponKind.Bolt)
+                continue; // empty/unbound mount, or a rack (fired by Firing2, not primary fire)
+            ship.MountLastFire ??= new uint[muzzles.Length];
+            if (!FireCadence.MountFires(tick, ship.MountLastFire[barrel], w.FireIntervalTicks))
+                continue;
+            ship.MountLastFire[barrel] = tick;
+            FireBolt(ship, tick, w, muzzles[barrel], barrel);
+            fired = true;
         }
+        if (fired)
+            ship.LastFireTick = tick; // wire stamp: "a gun fired this tick" — clients derive which
     }
 
     // Cast one bolt from a single muzzle: spawn it at the hardpoint, walk the spatial grid for the
@@ -1968,9 +2474,17 @@ public sealed partial class Simulation
                 var b = World.Bases[i];
                 if (b.SectorId != ship.SectorId || b.Team == ship.Team)
                     continue;
-                bool hit = World.BaseHull is not null
-                    ? BaseHullsRayEntry(b.Pos, mp, mv, World.ProjectileRadius, bestT, out float t)
-                    : FirstEntryTime(mp, mv, b.Pos, default, World.BaseRadius + World.ProjectileRadius, bestT, out t);
+                bool hit = World.BaseHullOf(b.BaseTypeId) is not null
+                    ? BaseHullsRayEntry(b.Pos, b.BaseTypeId, mp, mv, World.ProjectileRadius, bestT, out float t)
+                    : FirstEntryTime(
+                        mp,
+                        mv,
+                        b.Pos,
+                        default,
+                        World.BaseRadiusOf(b.BaseTypeId) + World.ProjectileRadius,
+                        bestT,
+                        out t
+                    );
                 if (hit && t < bestT)
                 {
                     bestT = t;
@@ -1988,7 +2502,13 @@ public sealed partial class Simulation
             {
                 foreach (var s in shipsInCell)
                 {
-                    if (s.Team == ship.Team || !s.Alive)
+                    if (!s.Alive)
+                        continue;
+                    // A HEALING gun (ER Nanite) targets SAME-team ships (to heal them) and skips the
+                    // shooter itself; a normal gun targets the ENEMY and skips friendlies. Enemy hits by
+                    // a heal bolt are a pure client-side spark (zero server effect), so the server simply
+                    // never targets them here — the heal path can only ever resolve on a friendly.
+                    if (w.IsHealing ? (s.Team != ship.Team || s.ShipId == ship.ShipId) : s.Team == ship.Team)
                         continue;
                     var body = World.ShipHull(s.Class, s.IsPod);
                     if (body is World.ShipBody sb)
@@ -2091,7 +2611,7 @@ public sealed partial class Simulation
         // Deployed enemy probes are destructible: a stationary hit-sphere scan (probes are few and
         // not in the ship grid, so a linear scan is cheap and stays replay-deterministic in list
         // order). A closer probe hit wins and clears any ship/base target.
-        for (int i = 0; i < _probes.Count; i++)
+        for (int i = 0; i < _probes.Count && !w.IsHealing; i++) // a healing gun never targets enemy probes
         {
             var p = _probes[i];
             if (p.SectorId != ship.SectorId || p.Team == ship.Team || p.Health <= 0f)
@@ -2109,7 +2629,13 @@ public sealed partial class Simulation
         if (targetShip != 0 || targetBase >= 0 || targetProbe != 0)
         {
             uint resolveTicks = Math.Max(1u, (uint)MathF.Ceiling(bestT / FlightModel.Dt));
-            _shotRing[(tick + resolveTicks) % ShotRingSize].Add(new PendingShot(targetShip, targetBase, w.Damage, w.ShieldMult, targetProbe));
+            // GunDamage (v41): scale by the shooter team's faction multiplier. Applies to healing bolts
+            // too — Iron's better guns heal harder (ApplyHeal reads this same Damage field as heal power),
+            // consistent + simpler than a separate heal path. Bakes into PendingShot so the base-damage
+            // path (ApplyBaseDamage via shot.Damage) inherits it as well.
+            float dmg = w.Damage * TeamAttr(ship.Team, Allegiance.Factions.Model.GameAttribute.GunDamage);
+            _shotRing[(tick + resolveTicks) % ShotRingSize]
+                .Add(new PendingShot(targetShip, targetBase, dmg, w.ShieldMult, targetProbe, w.IsHealing));
         }
     }
 
@@ -2121,8 +2647,8 @@ public sealed partial class Simulation
     // Progress reaching LockTicks latches Locked. Also bakes the wire LockState byte.
     private void UpdateLock(ShipSim ship, in ShipInputState input, uint tick)
     {
-        if (MissileMountFor(ship.Class) is not (_, WeaponDef w))
-            return; // no launcher on this hull — never locks
+        if (MissileMountFor(ship) is not (_, WeaponDef w))
+            return; // no effective launcher on this ship (none authored, or rack emptied) — never locks
 
         ship.LockTargetId = input.LockTargetId; // mirror the client's requested target
         bool valid = false;
@@ -2131,10 +2657,7 @@ public sealed partial class Simulation
         {
             // Base lock: only a CanDamageBase weapon may lock a base at all (D3); otherwise
             // reuse the exact same range/cone test as a ship target, aimed at the base's pos.
-            if (
-                w.CanDamageBase
-                && TryGetLockableBase(input.LockTargetId, ship.Team, ship.SectorId, out int bi)
-            )
+            if (w.CanDamageBase && TryGetLockableBase(input.LockTargetId, ship.Team, ship.SectorId, out int bi))
             {
                 Vec3 to = World.Bases[bi].Pos - ship.State.Pos;
                 float d = to.Length();
@@ -2204,8 +2727,8 @@ public sealed partial class Simulation
     // iterates _order, not _missiles).
     private void TryFireMissile(ShipSim ship, uint tick)
     {
-        if (MissileMountFor(ship.Class) is not (Muzzle mount, WeaponDef w))
-            return;
+        if (MissileMountFor(ship) is not (Muzzle mount, WeaponDef w))
+            return; // no effective rack (none authored, or emptied in the hangar)
         if (ship.MissileAmmo == 0)
             return;
         if (ship.LastMissileTick != 0 && tick - ship.LastMissileTick < w.FireIntervalTicks)
@@ -2328,9 +2851,9 @@ public sealed partial class Simulation
                 var b = World.Bases[bi];
                 if (b.SectorId != mis.SectorId || b.Team == mis.Team)
                     continue; // friendly bases are non-colliding, matching bolts
-                bool bhit = World.BaseHull is not null
-                    ? BaseHullsRayEntry(b.Pos, mp, vel, 0f, bestT, out float bt)
-                    : FirstEntryTime(mp, vel, b.Pos, default, World.BaseRadius, bestT, out bt);
+                bool bhit = World.BaseHullOf(b.BaseTypeId) is not null
+                    ? BaseHullsRayEntry(b.Pos, b.BaseTypeId, mp, vel, 0f, bestT, out float bt)
+                    : FirstEntryTime(mp, vel, b.Pos, default, World.BaseRadiusOf(b.BaseTypeId), bestT, out bt);
                 if (bhit && bt < bestT)
                 {
                     bestT = bt;
@@ -2359,7 +2882,17 @@ public sealed partial class Simulation
                                 continue;
                             Vec3 vrel = vel - s.State.Vel;
                             if (
-                                HullRayEntry(sb.Hull, s.State.Pos, s.State.Rot, 1f, mp, vrel, w.ProjectileRadius, bestT, out float th)
+                                HullRayEntry(
+                                    sb.Hull,
+                                    s.State.Pos,
+                                    s.State.Rot,
+                                    1f,
+                                    mp,
+                                    vrel,
+                                    w.ProjectileRadius,
+                                    bestT,
+                                    out float th
+                                )
                                 && th < bestT
                             )
                             {
@@ -2393,7 +2926,17 @@ public sealed partial class Simulation
                             continue;
                         float r = World.RockCurrentRadius(a.Id) * World.AsteroidCollisionScale + w.ProjectileRadius;
                         bool hit = World.RockBodies.TryGetValue(a.Id, out var rbody)
-                            ? HullRayEntry(rbody.Hull, a.Pos, rbody.Rot, rbody.Scale, mp, vel, w.ProjectileRadius, bestT, out float t)
+                            ? HullRayEntry(
+                                rbody.Hull,
+                                a.Pos,
+                                rbody.Rot,
+                                rbody.Scale,
+                                mp,
+                                vel,
+                                w.ProjectileRadius,
+                                bestT,
+                                out float t
+                            )
                             : FirstEntryTime(mp, vel, a.Pos, default, r, bestT, out t);
                         if (hit && t < bestT)
                         {
@@ -2427,10 +2970,13 @@ public sealed partial class Simulation
             if (detonate)
             {
                 Vec3 hitPos = mp + vel * bestT;
+                // MissileDamage (v41): scale the warhead by the firing team's faction multiplier (direct
+                // hit + base hit here; the splash inherits it inside ApplyBlast off the same mis.Team).
+                float md = TeamAttr(mis.Team, Allegiance.Factions.Model.GameAttribute.MissileDamage);
                 if (hitShip != 0 && _ships.TryGetValue(hitShip, out var victim) && victim.Alive)
-                    ApplyDamage(victim, w.Damage * w.DirectHitMult, tick, w.ShieldMult); // end-of-step death pass resolves 0 health
+                    ApplyDamage(victim, w.Damage * w.DirectHitMult * md, tick, w.ShieldMult); // end-of-step death pass resolves 0 health
                 else if (hitBase >= 0 && w.CanDamageBase)
-                    ApplyBaseDamage(hitBase, w.Damage * w.DirectHitMult, tick); // blast never touches the base
+                    ApplyBaseDamage(hitBase, w.Damage * w.DirectHitMult * md, tick); // blast never touches the base
                 ApplyBlast(mis.Team, w, hitPos, hitShip, shipGrid, tick, mis.SectorId);
                 MissileGoneThisStep.Add((mis.MissileId, 1, mis.SectorId, hitPos)); // impact
                 (remove ??= new()).Add(mis);
@@ -2457,11 +3003,22 @@ public sealed partial class Simulation
     // (it already took Damage * DirectHitMult); friendlies/pods never take splash, matching the
     // sweep's no-friendly-fire rule. Grid cube query keeps this off the O(ships) path; fixed
     // dx/dy/dz iteration order + one damage write per ship keeps it deterministic.
-    private void ApplyBlast(byte team, WeaponDef w, Vec3 hitPos, ulong directHitShip, Dictionary<(int, int, int), List<ShipSim>>? shipGrid, uint tick, uint sector)
+    private void ApplyBlast(
+        byte team,
+        WeaponDef w,
+        Vec3 hitPos,
+        ulong directHitShip,
+        Dictionary<(int, int, int), List<ShipSim>>? shipGrid,
+        uint tick,
+        uint sector
+    )
     {
         if (w.BlastRadius <= 0f || w.BlastPower <= 0f)
             return;
         float fuseR = w.ProjectileRadius;
+        // MissileDamage (v41): the splash inherits the firing team's faction multiplier (same factor the
+        // direct hit applied), so a whole detonation scales consistently.
+        float md = TeamAttr(team, Allegiance.Factions.Model.GameAttribute.MissileDamage);
 
         // Enemy probes within the blast take splash too (same inverse-square falloff), so a missile
         // detonation is a valid probe counter. Probes aren't gridded — a linear scan (few probes) in
@@ -2476,7 +3033,7 @@ public sealed partial class Simulation
             if (d > w.BlastRadius)
                 continue;
             float f = d <= fuseR ? 1f : (fuseR / d) * (fuseR / d);
-            DamageProbe(p, w.BlastPower * f, tick);
+            DamageProbe(p, w.BlastPower * f * md, tick);
         }
 
         if (shipGrid is null)
@@ -2488,22 +3045,22 @@ public sealed partial class Simulation
         int z0 = World.CellOf(hitPos.Z - w.BlastRadius),
             z1 = World.CellOf(hitPos.Z + w.BlastRadius);
         for (int cx = x0; cx <= x1; cx++)
-            for (int cy = y0; cy <= y1; cy++)
-                for (int cz = z0; cz <= z1; cz++)
-                {
-                    if (!shipGrid.TryGetValue((cx, cy, cz), out var shipsInCell))
-                        continue;
-                    foreach (var s in shipsInCell)
-                    {
-                        if (s.Team == team || !s.Alive || s.IsPod || s.ShipId == directHitShip)
-                            continue;
-                        float d = (s.State.Pos - hitPos).Length();
-                        if (d > w.BlastRadius)
-                            continue;
-                        float falloff = d <= fuseR ? 1f : (fuseR / d) * (fuseR / d);
-                        ApplyDamage(s, w.BlastPower * falloff, tick, w.ShieldMult); // end-of-step death pass resolves 0 health
-                    }
-                }
+        for (int cy = y0; cy <= y1; cy++)
+        for (int cz = z0; cz <= z1; cz++)
+        {
+            if (!shipGrid.TryGetValue((cx, cy, cz), out var shipsInCell))
+                continue;
+            foreach (var s in shipsInCell)
+            {
+                if (s.Team == team || !s.Alive || s.IsPod || s.ShipId == directHitShip)
+                    continue;
+                float d = (s.State.Pos - hitPos).Length();
+                if (d > w.BlastRadius)
+                    continue;
+                float falloff = d <= fuseR ? 1f : (fuseR / d) * (fuseR / d);
+                ApplyDamage(s, w.BlastPower * falloff * md, tick, w.ShieldMult); // end-of-step death pass resolves 0 health
+            }
+        }
     }
 
     // Rotate unit `dir` toward unit `desired` by at most `maxRad`. Linear blend + renormalize (a
@@ -2524,23 +3081,66 @@ public sealed partial class Simulation
         return n > 1e-6f ? blended * (1f / n) : desired;
     }
 
-    // Apply damage to a base (health floor at 0), flag it as changed/dirty, and — the first time
-    // it drops to 0 — latch the match end (winner = the OTHER team, i.e. the side that destroyed
-    // it) and schedule the return-to-lobby. Shared by the bolt path (ResolveDueShots) and missile
-    // detonation (StepMissiles) so both apply base damage identically.
+    // The BaseDef for a live base's type (garrison 0, outpost 1, …); null if the content has none.
+    private ContentBaseLookup? _baseDefByType;
+
+    private sealed class ContentBaseLookup
+    {
+        public readonly Dictionary<byte, BaseDef> ByType = new();
+    }
+
+    private BaseDef? BaseDefForType(byte typeId)
+    {
+        if (_baseDefByType is null)
+        {
+            _baseDefByType = new ContentBaseLookup();
+            foreach (var d in Content.Bases)
+                _baseDefByType.ByType[d.BaseTypeId] = d;
+        }
+        return _baseDefByType.ByType.TryGetValue(typeId, out var def) ? def : null;
+    }
+
+    // A base type is a win-condition ("headquarters") base when its def carries WinCondition (the
+    // `start` ability — only the garrison, in stock content). A team loses when ALL its WinCondition
+    // bases are destroyed; a forward base (outpost) at 0 HP never ends the match.
+    private bool IsWinConditionBase(byte typeId) => BaseDefForType(typeId)?.WinCondition ?? false;
+
+    // Does `team` still hold a live WinCondition base (optionally excluding one index)?
+    private bool TeamHasAliveWinBase(byte team, int excludeIndex)
+    {
+        for (int i = 0; i < World.Bases.Count; i++)
+            if (
+                i != excludeIndex
+                && World.Bases[i].Team == team
+                && World.BaseHealth[i] > 0f
+                && IsWinConditionBase(World.Bases[i].BaseTypeId)
+            )
+                return true;
+        return false;
+    }
+
+    // Apply damage to a base (health floor at 0), flag it as changed/dirty, and — when a team's LAST
+    // win-condition (headquarters) base drops to 0 — latch the match end (winner = the OTHER team) and
+    // schedule the return-to-lobby. Destroying a forward base (outpost) removes it from play but never
+    // ends the match. Shared by the bolt path (ResolveDueShots) and missile detonation (StepMissiles).
     private void ApplyBaseDamage(int baseIndex, float damage, uint tick)
     {
+        bool wasAlive = World.BaseHealth[baseIndex] > 0f;
         float hp = MathF.Max(0f, World.BaseHealth[baseIndex] - damage);
         World.BaseHealth[baseIndex] = hp;
         BasesChangedThisStep = true;
         _matchDirty = true;
-        if (hp <= 0f && Phase != PhaseEnded)
+        if (hp <= 0f && wasAlive && Phase != PhaseEnded)
         {
             byte loser = World.Bases[baseIndex].Team;
-            Winner = (byte)(loser == 0 ? 1 : 0);
-            Phase = PhaseEnded;
-            JustEnded = true;
-            _returnToLobbyAtTick = tick + EndedToLobbyTicks;
+            // Only the loss of a team's FINAL win-condition base ends the match.
+            if (IsWinConditionBase(World.Bases[baseIndex].BaseTypeId) && !TeamHasAliveWinBase(loser, baseIndex))
+            {
+                Winner = (byte)(loser == 0 ? 1 : 0);
+                Phase = PhaseEnded;
+                JustEnded = true;
+                _returnToLobbyAtTick = tick + EndedToLobbyTicks;
+            }
         }
     }
 
@@ -2580,9 +3180,14 @@ public sealed partial class Simulation
             }
             else if (_ships.TryGetValue(shot.TargetShipId, out var s) && s.Alive)
             {
-                // Apply damage only; the end-of-step death/dock pass detects 0 health and
-                // ejects the pod / frees the slot — one death path, like the module.
-                ApplyDamage(s, shot.Damage, tick, shot.ShieldMult);
+                if (shot.Heal)
+                    // ER Nanite: FireBolt only ever queues a heal shot against a same-team ship, so
+                    // restore hull here (clamp/no-shield inside ApplyHeal). Damage is the heal power.
+                    ApplyHeal(s, shot.Damage);
+                else
+                    // Apply damage only; the end-of-step death/dock pass detects 0 health and
+                    // ejects the pod / frees the slot — one death path, like the module.
+                    ApplyDamage(s, shot.Damage, tick, shot.ShieldMult);
             }
         }
         due.Clear();
@@ -2733,6 +3338,11 @@ public sealed partial class Simulation
 
     private void ResolveAsteroidCollisions(ShipSim s)
     {
+        // A constructor deliberately sinks into and embeds in its target rock during the build phases;
+        // resolving that penetration would shove it back out every tick (the visible flicker). Skip
+        // collision with just that one rock while it's aligning/sinking/building on it.
+        ulong ignoreRock = s.Kind == ShipKind.Constructor ? ConstructorEmbeddedRock(s) : 0;
+
         var grid = World.RockGrid(s.SectorId);
         int cx = World.CellOf(s.State.Pos.X),
             cy = World.CellOf(s.State.Pos.Y),
@@ -2745,6 +3355,8 @@ public sealed partial class Simulation
                 continue;
             foreach (var a in cell)
             {
+                if (a.Id == ignoreRock)
+                    continue;
                 // Cheap bounding-sphere reject at the SPAWN radius (conservative — rocks only shrink,
                 // so this never skips a real contact), then the convex hull if this rock has one — else
                 // the legacy sphere sized to the rock's CURRENT (mined-down) surface.
@@ -2769,15 +3381,15 @@ public sealed partial class Simulation
     // Bounce a ship off a base: the loaded compound world hull if present, else the legacy radius
     // sphere. Runs through the shared Collide.SphereVsBody kernel over the authored sub-hulls (deepest
     // contact = one BounceShip), so an enemy base bounces exactly as the client predicts it.
-    private void ResolveBaseCollision(ShipSim s, Vec3 center)
+    private void ResolveBaseCollision(ShipSim s, Vec3 center, byte baseTypeId)
     {
-        if (World.BaseHull is not null)
+        if (World.BaseHullOf(baseTypeId) is not null)
         {
-            if (Collide.SphereVsBody(s.State.Pos, World.ShipRadius, BaseBody(center), out Vec3 n, out float pen))
+            if (Collide.SphereVsBody(s.State.Pos, World.ShipRadius, BaseBody(center, baseTypeId), out Vec3 n, out float pen))
                 BounceShip(s, n, pen);
         }
         else
-            ResolveStaticCollision(s, center, World.BaseRadius);
+            ResolveStaticCollision(s, center, World.BaseRadiusOf(baseTypeId));
     }
 
     // The base as a shared compound StaticBody at `center`: `BaseHull` is the merged shrink-wrap (kept
@@ -2785,18 +3397,24 @@ public sealed partial class Simulation
     // kernel actually resolves against. Team/discs are irrelevant to SphereVsBody (it never gates on
     // them — dock carve-out is handled by the caller), so a fixed team/the discs are passed for shape.
     // Callers guard World.BaseHull is not null first.
-    private Collide.StaticBody BaseBody(Vec3 center) =>
-        Collide.StaticBody.BaseHull(World.BaseHull!, World.BaseSubHulls, center, 0, World.BaseDockFaces);
+    private Collide.StaticBody BaseBody(Vec3 center, byte baseTypeId) =>
+        Collide.StaticBody.BaseHull(
+            World.BaseHullOf(baseTypeId)!,
+            World.BaseSubHullsOf(baseTypeId),
+            center,
+            0,
+            World.BaseDockFacesOf(baseTypeId)
+        );
 
     // Min-entry-t of a ray (mp + mv·t) across the base's authored sub-hulls (world-scaled, identity
     // frame), the ray analogue of SphereVsBody: the CLOSEST sub-hull surface stops the bolt/missile, so
     // a shot threading a gap between parts passes through exactly as the client renders it. Reuses
     // HullRayEntry per part; the caller's `bestT` plumbing still picks the closest target overall.
-    private bool BaseHullsRayEntry(Vec3 center, Vec3 mp, Vec3 mv, float margin, float maxT, out float t)
+    private bool BaseHullsRayEntry(Vec3 center, byte baseTypeId, Vec3 mp, Vec3 mv, float margin, float maxT, out float t)
     {
         t = maxT;
         bool hit = false;
-        var subs = World.BaseSubHulls;
+        var subs = World.BaseSubHullsOf(baseTypeId);
         for (int i = 0; i < subs.Length; i++)
             if (HullRayEntry(subs[i], center, Quat.Identity, 1f, mp, mv, margin, t, out float th) && th < t)
             {
@@ -2845,7 +3463,14 @@ public sealed partial class Simulation
         if (radius <= 0f)
             return 0f;
         if (
-            Collide.ResolveStaticSphere(ref s.State, World.ShipRadius, center, radius, World.CollisionRestitution, out float vn)
+            Collide.ResolveStaticSphere(
+                ref s.State,
+                World.ShipRadius,
+                center,
+                radius,
+                World.CollisionRestitution,
+                out float vn
+            )
             && vn < 0f
         )
         {
@@ -2905,7 +3530,16 @@ public sealed partial class Simulation
     // shared kinematic (Collide.ResolveStaticSphere) + server-only collision damage.
     private void ResolveStaticCollision(ShipSim s, Vec3 center, float radius)
     {
-        if (!Collide.ResolveStaticSphere(ref s.State, World.ShipRadius, center, radius, World.CollisionRestitution, out float vn))
+        if (
+            !Collide.ResolveStaticSphere(
+                ref s.State,
+                World.ShipRadius,
+                center,
+                radius,
+                World.CollisionRestitution,
+                out float vn
+            )
+        )
             return;
         s.LastCollisionTick = _tick;
         if (vn < 0f)
@@ -2916,9 +3550,7 @@ public sealed partial class Simulation
     // the authored collision-damage-min-speed it's a harmless kiss: 0 damage (the bounce still ran). Above it,
     // scaled and capped at max-collision-damage. Shared by ship-ship, hull, and sphere-fallback bounces.
     private float CollisionDamage(float closingSpeed, float scale) =>
-        closingSpeed > _combat.CollisionDamageMinSpeed
-            ? MathF.Min(closingSpeed * scale, _combat.MaxCollisionDamage)
-            : 0f;
+        closingSpeed > _combat.CollisionDamageMinSpeed ? MathF.Min(closingSpeed * scale, _combat.MaxCollisionDamage) : 0f;
 
     // ---- Warp (module TryWarp): emerge out the partner mouth toward the dest sector
     // center, jittered by a small random cone so successive ships fan out instead of

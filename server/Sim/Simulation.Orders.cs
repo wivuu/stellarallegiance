@@ -133,8 +133,9 @@ public sealed partial class Simulation
                 miner = m;
                 break;
             }
-        bool combatPig = miner is null && ship.IsPig && !ship.IsPod;
-        if (!combatPig && miner is null)
+        ConstructorSlot? ctor = miner is null ? ConstructorSlotFor(ship) : null;
+        bool combatPig = miner is null && ctor is null && ship.IsPig && !ship.IsPod;
+        if (!combatPig && miner is null && ctor is null)
         {
             // Human ships never reach the sim (the hub turns them into advisory directives); this
             // covers races (roster changed mid-flight) and malformed ids.
@@ -163,6 +164,8 @@ public sealed partial class Simulation
                         GoHome(mp, mlive, remember: false);
                 }
             }
+            if (ctor is ConstructorSlot cc)
+                ClearConstructorOrder(cc);
             Notice($"{DescribeAi(ship, miner)} released to autonomy.");
             return;
         }
@@ -170,6 +173,12 @@ public sealed partial class Simulation
         if (miner is MinerSlot ms)
         {
             ApplyMinerCommandOrder(cid, issuer, team, ms, targetKind, targetId, sector, pos);
+            return;
+        }
+
+        if (ctor is ConstructorSlot cs)
+        {
+            ApplyConstructorCommandOrder(cid, issuer, team, cs, targetKind, targetId, sector, pos);
             return;
         }
 
@@ -220,7 +229,7 @@ public sealed partial class Simulation
                     _pigOrders[subject] = new PigOrder { Kind = OrderAttackBase, TargetBaseId = targetId };
                     // Accepted regardless of loadout, but tell the commander when the hull can't
                     // actually hurt a base (it will harass the airspace instead).
-                    if (!(MissileMountFor(ship.Class) is (_, WeaponDef mw) && mw.CanDamageBase))
+                    if (!(MissileMountFor(ship) is (_, WeaponDef mw) && mw.CanDamageBase))
                         Notice($"{subjectName} has no base-damaging weapon — it will only harass the defenses.");
                     Directive($"{subjectName}: attack the {World.SectorName(b.SectorId)} base");
                 }
@@ -230,7 +239,7 @@ public sealed partial class Simulation
                     {
                         Kind = OrderGoto,
                         Sector = b.SectorId,
-                        Pos = StandoffNear(b.Pos, ship, World.BaseRadius * 1.5f),
+                        Pos = StandoffNear(b.Pos, ship, World.BaseRadiusOf(b.BaseTypeId) * 1.5f),
                     };
                     Directive($"{subjectName}: hold at the {World.SectorName(b.SectorId)} base");
                 }
@@ -531,7 +540,7 @@ public sealed partial class Simulation
                     Px = b.Pos.X,
                     Py = b.Pos.Y,
                     Pz = b.Pos.Z,
-                    Radius = World.BaseRadius,
+                    Radius = World.BaseRadiusOf(b.BaseTypeId),
                     TargetBaseLockId = GameContent.BaseLockId(b.Id),
                 };
             }

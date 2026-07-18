@@ -83,7 +83,7 @@ public static class BaseModelLoader
         float radius = def?.Radius ?? FallbackRadius;
 
         var root = new Node3D { Name = "BaseModel" };
-        glbHull = LoadHull(radius);
+        glbHull = LoadHull(radius, def?.ModelName);
         Node3D hull = glbHull ?? BuildPlaceholderSphere(radius, mat);
         root.AddChild(hull);
 
@@ -146,13 +146,15 @@ public static class BaseModelLoader
         return root;
     }
 
-    // Load `res://assets/bases/base.glb` and ready it as a hull: scaled so its longest axis spans
-    // the def diameter (it visually replaces the radius-sized sphere), keeping the GLB's own baked
-    // PBR materials (friend/foe reads from the HUD, not a hull tint). Null when no asset exists,
-    // so Build falls back to the procedural sphere.
-    private static Node3D? LoadHull(float radius)
+    // Load `res://assets/bases/<modelName>.glb` and ready it as a hull: scaled so its longest axis
+    // spans the def diameter (it visually replaces the radius-sized sphere), keeping the GLB's own
+    // baked PBR materials (friend/foe reads from the HUD, not a hull tint). Null when no asset exists
+    // (empty modelName or missing GLB), so Build falls back to the procedural sphere. v37: the mesh is
+    // per-base-type (mirrors ShipModelLoader), not hardcoded to the garrison.
+    private static Node3D? LoadHull(float radius, string? modelName)
     {
-        Node3D? hull = GlbLoader.Load("res://assets/bases/garrison.glb");
+        string name = string.IsNullOrEmpty(modelName) ? "garrison" : modelName;
+        Node3D? hull = GlbLoader.Load($"res://assets/bases/{name}.glb");
         if (hull == null)
             return null;
         GlbLoader.NormalizeLongestAxis(hull, radius * 2f);

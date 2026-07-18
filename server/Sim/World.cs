@@ -28,6 +28,9 @@ public sealed class World
     public const float BaseRadius = CollisionConfig.BaseRadius;
     public const float DockFaceDepth = CollisionConfig.DockFaceDepth; // docking-door depth window (own base carve-out)
     public readonly float BaseMaxHealth; // win-condition base hull, sourced from the content base def
+    private readonly IReadOnlyList<BaseDef>? _baseDefs; // per-type base defs (mesh/radius); null = garrison-only
+    private ulong _nextBaseId = 1; // stable per-match base id; garrisons seed it, CreateBase extends it
+    public readonly int GarrisonCount; // count of match-start garrisons (all type 0); runtime bases append after
     public const float AsteroidCollisionScale = CollisionConfig.AsteroidCollisionScale;
     public const float CollisionRestitution = CollisionConfig.CollisionRestitution;
     // Collision DAMAGE, boundary hazard, and warp-gate knobs are CONTENT now — authored in
@@ -52,6 +55,15 @@ public sealed class World
     // the shrink helper. Server-side only — like _seed, never streamed.
     public readonly WorldMiningTuning Mining;
 
+    // Constructor/base-building tuning (world.yaml `constructor:`), consumed by the constructor
+    // brain/steering (Simulation.Constructors.cs). Server-side only — like Mining, never streamed.
+    public readonly WorldConstructorTuning Constructor;
+
+    // Build-pipeline tuning (world.yaml `build:`): the per-garrison order queue shared by constructor
+    // and miner purchases (parallel + queue limits). QueueLimit is streamed to the client for the
+    // Build-tab gray-out; ParallelLimit is server-only (drives promotion).
+    public readonly WorldBuildTuning Build;
+
     // Env carries the STREAMED per-sector environment (sun/god-rays + nebula override + dust visual
     // knobs); the seeded dust CLOUDS themselves live in DustClouds. Null Env → legacy backdrop. MapX/
     // MapY (valid when HasMapPos) are the authored 2D map-diagram position, streamed to the client.
@@ -64,7 +76,9 @@ public sealed class World
     // list lock-free, exactly like the rock grid.
     public readonly record struct DustCloud(uint SectorId, Vec3 Pos, float Radius, float Density);
 
-    public readonly record struct BaseSite(ulong Id, byte Team, uint SectorId, Vec3 Pos);
+    // BaseTypeId selects the base's mesh/def/collision (0 = garrison; forward bases built by
+    // constructors carry their station's type). Match-start garrisons are always type 0.
+    public readonly record struct BaseSite(ulong Id, byte Team, uint SectorId, Vec3 Pos, byte BaseTypeId = 0);
 
     // Variant/Rot* are cosmetic only (the sim ignores them) but are drawn from the same DetRng
     // sequence the module uses, so they ride along to the client via the Welcome frame instead
@@ -83,8 +97,28 @@ public sealed class World
     public readonly record struct Gate(ulong Id, uint SectorId, uint DestSectorId, Vec3 Pos, Vec3 PartnerPos);
 
     public readonly List<Sector> Sectors = new();
+    // Bases grow at runtime (v37 base building appends constructor-built bases). Appending never
+    // invalidates an existing index, so BaseHealth/ResearchByBase (indexed like Bases) stay in
+    // lockstep — every consumer iterates `for i < Bases.Count`. Bases are never removed/reordered
+    // (a destroyed base keeps its slot with BaseHealth 0).
     public readonly List<BaseSite> Bases = new();
-    public readonly float[] BaseHealth; // indexed like Bases
+    public readonly List<float> BaseHealth = new(); // indexed like Bases
+
+    // Stage-4 research: one mutable research-order state per base, indexed like Bases. Lives on
+    // World so a match-start world swap resets it for free (StartMatch builds a fresh World).
+    // Mutated ONLY on the sim thread (Simulation.Research.cs).
+    public sealed class BaseResearchState
+    {
+        // In-flight research orders at this base: catalog development index + integer tick window.
+        // Count is capped at the base type's ResearchSlots by the start validation.
+        public readonly List<(ushort DevIndex, uint StartTick, uint DurationTicks)> Active = new();
+
+        // The single on-deck queue slot: starts automatically when an active slot frees. Credits
+        // were already deducted at queue time (reservation), so promotion can never fail on funds.
+        public ushort? OnDeck;
+    }
+
+    public readonly List<BaseResearchState> ResearchByBase = new(); // indexed like Bases
     public readonly List<Rock> Asteroids = new();
     public readonly List<DustCloud> DustClouds = new();
     public readonly List<Gate> Alephs = new();
@@ -127,39 +161,103 @@ public sealed class World
         // rock selection only — a miner freely TRANSITS any sector en route (returning to base is
         // always allowed).
         public HashSet<uint> AuthorizedMiningSectors = new();
+
+        // RockClass bitmask (1 << (byte)RockClass) of asteroid classes this team's fog of war has
+        // revealed at least one rock of. Derived from TeamVision.DiscoveredRocks (monotonic, like the
+        // set itself) at its sim-thread write sites; fog OFF stamps 0xFF at ResetVision. Gates
+        // constructor purchases (TryBuyConstructor) and streams via MsgTeamState so the client Build
+        // tab can predict the lock.
+        public byte DiscoveredRockClasses;
     }
 
     // One TeamState per team byte present in Bases (0 and 1 today). Seeded from the faction snapshot
     // at construction and re-seeded on each match start (SeedEconomy).
     public readonly Dictionary<byte, TeamState> TeamStates = new();
 
-    // Server-side collision/hardpoint models loaded from the shared GLB assets (null when the
-    // assets dir is absent — the sim then falls back to sphere collision). All bases are type 0,
-    // so one world-scaled hull + one bay frame serves them; each rock indexes a per-variant hull.
-    public readonly SimModel? BaseModel;
-    public readonly ConvexHull? BaseHull; // base hull in WORLD units (base is identity-oriented)
-
-    // Authored compound sub-hulls (one per baked COL_ part), world-scaled in the base's identity
-    // frame — the SOLID a ship actually bounces off / a bolt ray-clips against, so collision matches
-    // the visible concave superstructure instead of the merged shrink-wrap. Empty when no base model
-    // loads (sphere fallback). When the GLB carries NO COL_ parts, model.Hulls aliases the merged
-    // hull, so BaseSubHulls is a 1-element array whose sole hull == BaseHull's geometry ⇒ consumers
-    // behave bit-identically to the pre-compound single-hull path.
-    public readonly ConvexHull[] BaseSubHulls;
     // One launch bay per authored HP_DockingExit node: Pos = where a launching ship first appears
     // (the hardpoint, base-local world units), Dir = the launch axis out of the bay (opposite the
     // node's inward forward). A base may author N exits — the sim picks one at random per launch.
     // Always at least one element (a modelless/exitless base gets a single default entry).
     public readonly record struct BaseExit(Vec3 Pos, Vec3 Dir);
-    public readonly BaseExit[] BaseExits;
-    public readonly Vec3 BaseEntryAxis; // mean inward face-normal across doors, for AI aim
-    public readonly Vec3 BaseDoorCenter; // centroid of the door face centres (AI aim target)
 
-    // Rectangular docking DOORS: one DockFace per group of 5 HP_DockingEntrance markers (1 face
-    // marker + 4 boundary markers), in base-local (world-scaled) units offset from the base center.
-    // A base may author N doors. A ship docks ONLY by intersecting one of these bounded faces; the
-    // rest of the base is a solid hull. Parsed by the shared DockFaceParser (same as the client).
-    public readonly DockFace[] BaseDockFaces;
+    // Server-side collision/hardpoint model for ONE base type (v37 — base building generalized bases
+    // to be per-type, like ship hulls). Garrison (type 0) carries the full compound COL_ hull + docking
+    // doors; a constructor-built forward base (outpost) shrink-wraps to a single convex hull with no
+    // doors (sphere/convex collision, no docking). Hull null => sphere fallback at Radius.
+    public sealed class BaseModelData
+    {
+        public SimModel? Model;
+        public ConvexHull? Hull; // base hull in WORLD units (base is identity-oriented)
+        public ConvexHull[] SubHulls = System.Array.Empty<ConvexHull>();
+        public BaseExit[] Exits = System.Array.Empty<BaseExit>();
+        public Vec3 EntryAxis; // mean inward face-normal across doors, for AI aim
+        public Vec3 DoorCenter; // centroid of the door face centres (AI aim target)
+        public DockFace[] DockFaces = System.Array.Empty<DockFace>();
+        public float Radius = BaseRadius; // world-unit collision radius for this type
+        public float MaxHealth; // per-type base hull (from the base def's max-armor); 0 => fall back to World.BaseMaxHealth
+    }
+
+    // Loaded base models keyed by BaseTypeId. Type 0 (garrison) is always present. Populated in the
+    // ctor from the content base defs (per-type ModelName + Radius); a minimal caller with no base
+    // defs falls back to the single garrison model, keeping legacy behavior byte-identical.
+    private readonly Dictionary<byte, BaseModelData> _baseModels = new();
+
+    // Garrison (type 0) model — the fallback for any type not loaded, and the source of the legacy
+    // single-model accessors below (call sites without a base-type context).
+    private BaseModelData Model0 => _baseModels.TryGetValue(0, out var m) ? m : EmptyBaseModel;
+    private static readonly BaseModelData EmptyBaseModel = new();
+
+    public BaseModelData BaseModelFor(byte typeId) =>
+        _baseModels.TryGetValue(typeId, out var m) ? m : Model0;
+
+    // Per-type collision accessors — the call sites that iterate bases resolve by b.BaseTypeId.
+    public ConvexHull? BaseHullOf(byte typeId) => BaseModelFor(typeId).Hull;
+    public ConvexHull[] BaseSubHullsOf(byte typeId) => BaseModelFor(typeId).SubHulls;
+    public BaseExit[] BaseExitsOf(byte typeId) => BaseModelFor(typeId).Exits;
+    public Vec3 BaseDoorCenterOf(byte typeId) => BaseModelFor(typeId).DoorCenter;
+    public Vec3 BaseEntryAxisOf(byte typeId) => BaseModelFor(typeId).EntryAxis;
+    public DockFace[] BaseDockFacesOf(byte typeId) => BaseModelFor(typeId).DockFaces;
+    public float BaseRadiusOf(byte typeId) => BaseModelFor(typeId).Radius;
+
+    // Per-type base max hull. Sourced from the type's projected BaseDef (max-armor); falls back to the
+    // legacy single BaseMaxHealth (garrison, type 0) for a type with no def / no authored health —
+    // mirroring BaseRadiusOf's Model0 fallback so callers without base defs stay byte-identical.
+    public float BaseMaxHealthOf(byte typeId)
+    {
+        var m = BaseModelFor(typeId);
+        return m.MaxHealth > 0f ? m.MaxHealth : BaseMaxHealth;
+    }
+
+    // Team-aware per-type base max hull (v41): the raw per-type max scaled by the team's MaxArmorStation
+    // faction multiplier (TeamAttr; 1.0 when unseeded). Every base-health STAMP/refill site resolves the
+    // owning team so Iron Coalition's tougher bases (×1.15) hold consistently. UpgradeBaseAt's
+    // fraction-of-max rescale stays correct because both old and new max carry the same team factor.
+    public float BaseMaxHealthOf(byte typeId, byte team) =>
+        BaseMaxHealthOf(typeId) * TeamAttr(team, (int)Allegiance.Factions.Model.GameAttribute.MaxArmorStation);
+
+    // ---- Per-team resolved stat multipliers (v41) --------------------------------------------------
+    // A flat float[attrId] cache per team (faction base-attributes × completed developments), populated
+    // by the sim (Simulation.RecomputeTeamAttributes) at match start + on research completion. World owns
+    // it so the team-aware BaseMaxHealthOf can read it; the sim reads it through TeamAttr(team, attr).
+    // Unseeded (empty / pre-match / attributes-disabled tests) ⇒ every attr resolves 1.0 (neutral).
+    private readonly Dictionary<byte, float[]> _teamAttr = new();
+
+    public float TeamAttr(byte team, int attrId) =>
+        _teamAttr.TryGetValue(team, out var a) && (uint)attrId < (uint)a.Length ? a[attrId] : 1f;
+
+    public void SetTeamAttributes(byte team, float[] attrs) => _teamAttr[team] = attrs;
+
+    public void ClearTeamAttributes() => _teamAttr.Clear();
+
+    // Legacy single-model accessors (garrison, type 0) — for call sites without a base-type context
+    // (SelfTest, launch fallback). Behavior byte-identical to the pre-v37 single-model fields.
+    public SimModel? BaseModel => Model0.Model;
+    public ConvexHull? BaseHull => Model0.Hull;
+    public ConvexHull[] BaseSubHulls => Model0.SubHulls;
+    public BaseExit[] BaseExits => Model0.Exits;
+    public Vec3 BaseEntryAxis => Model0.EntryAxis;
+    public Vec3 BaseDoorCenter => Model0.DoorCenter;
+    public DockFace[] BaseDockFaces => Model0.DockFaces;
     public readonly Dictionary<ulong, RockBody> RockBodies = new();
 
     // Per-rock collision body: the variant's authored-space hull plus this rock's world rotation
@@ -224,13 +322,16 @@ public sealed class World
 
     public static int CellOf(float v) => (int)MathF.Floor(v / GridCell);
 
-    public World(ulong seed, WorldConfig cfg, float baseMaxHealth, FactionStart start, IReadOnlyList<ShipClassDef> ships, ILogger? log = null)
+    public World(ulong seed, WorldConfig cfg, float baseMaxHealth, FactionStart start, IReadOnlyList<ShipClassDef> ships, IReadOnlyList<BaseDef>? baseDefs = null, ILogger? log = null)
     {
+        _baseDefs = baseDefs;
         _log = log ?? NullLogger.Instance;
         Seed = seed;
         BaseMaxHealth = baseMaxHealth;
         _seed = cfg.Seeding;
         Mining = cfg.Mining;
+        Constructor = cfg.Constructor;
+        Build = cfg.Build;
         // Live world-scale knobs from the loaded content (the authored world.yaml).
         float sectorScale = cfg.SectorScale;
         float density = cfg.AsteroidDensity;
@@ -273,7 +374,6 @@ public sealed class World
                 break;
             }
         var baseRng = new DetRng(seed ^ 0xB453_BA53_B453_BA53UL);
-        ulong baseId = 1;
         for (int i = 0; i < secCfg.Count; i++)
         {
             var sc = secCfg[i];
@@ -283,7 +383,7 @@ public sealed class World
                 continue;
             float r = RadiusOf(sc.Id);
             Vec3 pos = RandomBasePos(ref baseRng, r * _seed.BaseInnerFrac, r * _seed.BaseOuterFrac, _seed.BaseYJitter);
-            Bases.Add(new BaseSite(baseId++, garrison.Team, sc.Id, pos));
+            Bases.Add(new BaseSite(_nextBaseId++, garrison.Team, sc.Id, pos)); // garrisons are type 0
         }
         if (Bases.Count == 0)
             throw new InvalidOperationException(
@@ -303,8 +403,18 @@ public sealed class World
             throw new InvalidOperationException(
                 $"map declares {teams.Count} garrison team(s) (max id {maxTeam}) — the sim currently "
                     + $"supports {MaxSupportedTeams} teams (ids 0..{MaxSupportedTeams - 1}).");
-        BaseHealth = new float[Bases.Count];
-        Array.Fill(BaseHealth, BaseMaxHealth);
+        for (int i = 0; i < Bases.Count; i++)
+        {
+            // All match-start bases are garrisons (type 0); BaseMaxHealthOf(0) == BaseMaxHealth here
+            // (base models load below, so the fallback returns it) — kept per-type for uniformity. The
+            // v41 team attr cache is empty at ctor ⇒ ×1.0; StartMatch's ResetMatchBases re-stamps once
+            // the sim has seeded it (Iron's ×1.15 lands there, not here — no active match at ctor).
+            BaseHealth.Add(BaseMaxHealthOf(Bases[i].BaseTypeId, Bases[i].Team));
+            ResearchByBase.Add(new BaseResearchState());
+        }
+        // The match-start garrisons (all type 0). ResetMatchBases trims runtime-built bases back to
+        // these on a World-reuse rematch, so a reused World starts each match with only its garrisons.
+        GarrisonCount = Bases.Count;
 
         // One economy state per team (Stage-1 = every team seeds from the single stock faction).
         foreach (var b in Bases)
@@ -367,8 +477,10 @@ public sealed class World
         AssignOre(secCfg);
         AssignVariants();
 
-        // Load the shared GLB collision/hardpoint models (best-effort; falls back to spheres).
-        (BaseModel, BaseHull, BaseSubHulls, BaseExits, BaseEntryAxis, BaseDoorCenter, BaseDockFaces) = LoadBase();
+        // Load the per-type GLB collision/hardpoint models (best-effort; falls back to spheres). Type 0
+        // (garrison) is always loaded — from the content garrison def if present, else the legacy
+        // "garrison"/BaseRadius fallback so a minimal caller (map preview) stays byte-identical.
+        LoadBaseModels();
         LoadRockBodies();
         (_shipHulls, _podHull) = LoadShipBodies(ships);
 
@@ -475,8 +587,10 @@ public sealed class World
                 isHe3[order[k]] = true;
 
             // RARE special rocks: the next `specialCount` ranked rocks (immediately after the He3
-            // block, so He3 and special never collide) become cosmetic special classes. Clamped to the
-            // rocks left after He3, so a small sector never over-allocates. Everything else is common.
+            // block, so He3 and special never collide) become special classes (Carbonaceous/Silicon/
+            // Uranium — no longer cosmetic: rock-class-gated stations like the Supremacy build on
+            // them). Clamped to the rocks left after He3, so a small sector never over-allocates.
+            // Everything else is common.
             // A HOME (garrison) sector only gets its specials when the per-sector chance roll passes
             // (stock home-special-chance is 0 — home fields hold no landmark rock); a map-authored
             // special-count bypasses the roll entirely.
@@ -494,6 +608,10 @@ public sealed class World
             var isSpecial = new bool[n];
             for (int k = he3Count; k < he3Count + specialCount; k++)
                 isSpecial[order[k]] = true;
+
+            // Which special CLASS a selected rock becomes is drawn from the sector's weights (its own
+            // override else the world seeding default). Uniform weights reproduce the legacy hash%3.
+            var specialWeights = sc?.SpecialWeights ?? _seed.SpecialWeights;
 
             float richness = sc?.OreRichnessMult ?? 1f;
             // Capacity band this sector clamps to, resolved sector → map → world. MapLoader.ApplyTo
@@ -523,10 +641,10 @@ public sealed class World
                 else
                 {
                     // Non-He3 rocks carry no ore hold — capacity 0, never shrinks. A selected special
-                    // rock gets one of the three special classes by the same hash (0=Carbonaceous,
-                    // 1=Silicon, 2=Uranium); every other rock is common Regolith.
+                    // rock gets one of the three special classes by the weighted draw over the same
+                    // per-rock hash (default uniform = legacy hash%3); every other rock is Regolith.
                     RockClass cls = isSpecial[i]
-                        ? (RockClass)(byte)(hash[i] % 3)
+                        ? specialWeights.Pick(hash[i])
                         : RockClass.Regolith;
 
                     // Special (rare) rocks are landmark-sized: scale the spawn radius (collision + visual)
@@ -587,6 +705,35 @@ public sealed class World
         // rounding drift: collision scale ∝ radius, so liveScale = SpawnScale · currentRadius/spawn.
         if (spawn > 1e-6f && RockBodies.TryGetValue(id, out var body))
             RockBodies[id] = body with { Scale = body.SpawnScale * (s.CurrentRadius / spawn) };
+    }
+
+    // Rocks fully DESPAWNED this step (base-building consumes the asteroid — RemoveRock). Drained by the
+    // hub into a MsgRockGone broadcast, then cleared at the top of the next Step alongside the other
+    // change flags. Distinct from RocksChangedThisStep (a shrink delta): a removed rock has no size to
+    // stream, only its disappearance.
+    public readonly HashSet<ulong> RocksRemovedThisStep = new();
+
+    // Fully remove a rock from the world (a constructor's finished base consumes the asteroid it sits on).
+    // Drops it from the asteroid list, the spatial grid, the ore + collision-body state, and the id cache,
+    // and records it in RocksRemovedThisStep so the hub tells clients to delete their rock. Idempotent —
+    // an unknown id is a no-op. Sim thread only (mutates the rock lists the sim/hub read).
+    public bool RemoveRock(ulong id)
+    {
+        if (RockById(id) is not Rock r)
+            return false;
+        if (_rockGrid.TryGetValue(r.SectorId, out var grid))
+        {
+            var key = (CellOf(r.Pos.X), CellOf(r.Pos.Y), CellOf(r.Pos.Z));
+            if (grid.TryGetValue(key, out var cell))
+                cell.RemoveAll(x => x.Id == id);
+        }
+        Asteroids.RemoveAll(x => x.Id == id);
+        RockOre.Remove(id);
+        RockBodies.Remove(id);
+        _rockById = null;                 // invalidate the lazy id→Rock cache (rebuilt on next RockById)
+        RocksChangedThisStep.Remove(id);  // a removed rock has no shrink delta to send
+        RocksRemovedThisStep.Add(id);
+        return true;
     }
 
     // Build the all-pairs next-hop table over the aleph gate graph. For every ordered sector pair (S, D)
@@ -739,17 +886,39 @@ public sealed class World
         return new ShipBody(model.Hull.Scaled(ws), model.Hull.BoundingRadius * ws);
     }
 
-    // Base sim-model → world hull + bay frame. The base mesh is authored +90° off about X, so we bake
-    // the same orientation correction the client renders with (CollisionConfig.BaseModelRotation) into
-    // the parsed hull + hardpoints, then uniform-scale via NormalizeLongestAxis(radius*2) as the client
-    // does — so the sim hull, docking doors and launch bays match the rendered, corrected superstructure.
-    private static (SimModel?, ConvexHull?, ConvexHull[], BaseExit[], Vec3, Vec3, DockFace[]) LoadBase()
+    // Populate _baseModels, one BaseModelData per runtime base type. Type 0 (garrison) is always
+    // loaded. From the content base defs when supplied (per-type ModelName + Radius); else the legacy
+    // single "garrison"/BaseRadius model so a minimal caller stays byte-identical. A type whose GLB is
+    // missing keeps a sphere-collision entry (Hull null) at its def radius.
+    private void LoadBaseModels()
+    {
+        if (_baseDefs is { Count: > 0 })
+        {
+            foreach (var def in _baseDefs)
+            {
+                string model = string.IsNullOrEmpty(def.ModelName) ? "garrison" : def.ModelName;
+                var data = LoadBaseModel(model, def.Radius > 0f ? def.Radius : BaseRadius);
+                data.MaxHealth = def.MaxHealth; // per-type hull; BaseMaxHealthOf falls back to BaseMaxHealth if 0
+                _baseModels[def.BaseTypeId] = data;
+            }
+        }
+        // Guarantee a garrison (type 0) entry regardless (legacy/minimal callers).
+        if (!_baseModels.ContainsKey(0))
+            _baseModels[0] = LoadBaseModel("garrison", BaseRadius);
+    }
+
+    // One base type's sim-model → world hull + bay frame. The base mesh is authored +90° off about X,
+    // so we bake the same orientation correction the client renders with (CollisionConfig.BaseModel
+    // Rotation) into the parsed hull + hardpoints, then uniform-scale so the longest axis spans
+    // radius*2 as the client does — so the sim hull, docking doors and launch bays match the rendered,
+    // corrected superstructure. A missing GLB yields a sphere-collision entry (Hull null) at `radius`.
+    private static BaseModelData LoadBaseModel(string modelName, float radius)
     {
         var fallbackExits = new[] { new BaseExit(default, new Vec3(0f, 0f, 1f)) };
-        var model = SimAssets.TryLoad("bases/garrison.glb", CollisionConfig.BaseModelRotation);
+        var model = SimAssets.TryLoad($"bases/{modelName}.glb", CollisionConfig.BaseModelRotation);
         if (model is null)
-            return (null, null, [], fallbackExits, default, default, []);
-        float ws = BaseRadius * 2f / MathF.Max(1e-3f, model.LongestAxis);
+            return new BaseModelData { Exits = fallbackExits, Radius = radius };
+        float ws = radius * 2f / MathF.Max(1e-3f, model.LongestAxis);
         ConvexHull hull = model.Hull.Scaled(ws);
         // World-scale each authored sub-hull the SAME way as the merged hull (identity-oriented base ⇒
         // just uniform scale). Partless models: model.Hulls aliases the merged hull ⇒ one entry whose
@@ -789,7 +958,17 @@ public sealed class World
         Vec3 entryAxis = faces.Length > 0 ? Normalize(normalSum) : exitArr[0].Dir;
         if (entryAxis.LengthSquared() < 0.5f)
             entryAxis = exitArr[0].Dir; // faces' normals canceled (opposed doors) — fall back to a unit axis
-        return (model, hull, subHulls, exitArr, entryAxis, doorCenter, faces);
+        return new BaseModelData
+        {
+            Model = model,
+            Hull = hull,
+            SubHulls = subHulls,
+            Exits = exitArr,
+            EntryAxis = entryAxis,
+            DoorCenter = doorCenter,
+            DockFaces = faces,
+            Radius = radius,
+        };
     }
 
     // Per-rock collision bodies: one cached hull per asteroid variant, instanced by each rock's
@@ -853,6 +1032,45 @@ public sealed class World
         return null;
     }
 
+    // Runtime base creation (v37 base building). APPENDS a new base of `baseTypeId` for `team` at
+    // (sector, pos), full health + a fresh research state — never reorders/removes, so every existing
+    // Bases index stays valid (BaseHealth/ResearchByBase are appended in lockstep). Returns the new
+    // base id. Sim-thread only (called from the constructor build completion). The caller re-resolves
+    // team unlocks (the new base type may grant capabilities) and reveals it to the owning team.
+    public ulong CreateBase(byte team, byte baseTypeId, uint sectorId, Vec3 pos)
+    {
+        ulong id = _nextBaseId++;
+        Bases.Add(new BaseSite(id, team, sectorId, pos, baseTypeId));
+        BaseHealth.Add(BaseMaxHealthOf(baseTypeId, team)); // per-type hull × team factor (v41)
+        ResearchByBase.Add(new BaseResearchState());
+        return id;
+    }
+
+    // Match reset on a REUSED World (StartMatch when no fresh World is built): trim runtime-built
+    // bases back to the original garrisons, refill health, and clear research so the next match starts
+    // clean. (The production path builds a fresh World per match; this covers World reuse in tests.)
+    public void ResetMatchBases()
+    {
+        if (Bases.Count > GarrisonCount)
+        {
+            Bases.RemoveRange(GarrisonCount, Bases.Count - GarrisonCount);
+            BaseHealth.RemoveRange(GarrisonCount, BaseHealth.Count - GarrisonCount);
+            ResearchByBase.RemoveRange(GarrisonCount, ResearchByBase.Count - GarrisonCount);
+        }
+        for (int i = 0; i < BaseHealth.Count; i++)
+        {
+            // Every match-start base is a type-0 garrison (world-gen places only garrisons). A station
+            // upgrade (v39) may have swapped one to a higher tier mid-match — restore it to type 0 so a
+            // reused-World restart starts pristine (health then refills at the type-0 max).
+            if (Bases[i].BaseTypeId != 0)
+                Bases[i] = Bases[i] with { BaseTypeId = 0 };
+            BaseHealth[i] = BaseMaxHealthOf(Bases[i].BaseTypeId, Bases[i].Team); // per-type refill × team factor (v41)
+            ResearchByBase[i].Active.Clear();
+            ResearchByBase[i].OnDeck = null;
+        }
+        _nextBaseId = (ulong)GarrisonCount + 1;
+    }
+
     // TEST SEAM: hand-place an occluder rock into a sector's spatial grid (and the flat list) so the
     // sentinel empty sector 999 can exercise the fog cone-occlusion path — the grid is immutable in
     // production (built once at world-gen), so this must only be called from tests before ticking.
@@ -907,16 +1125,28 @@ public sealed class World
         float maxR = sectorRadius * fillFrac;
         float hY = maxR * flatten;
         int count = (int)MathF.Round(density * areaDensity * MathF.PI * maxR * maxR);
+        var placed = new PlacementGrid(_seed.FieldRockMax, _seed.RockMinGap);
         for (int i = 0; i < count; i++)
         {
-            double ang = rng.NextDouble() * Math.PI * 2.0;
-            double rr = Math.Sqrt(rng.NextDouble()) * maxR; // sqrt → uniform areal density, bounded by maxR
-            float px = (float)(Math.Cos(ang) * rr);
-            float pz = (float)(Math.Sin(ang) * rr);
-            float py = (float)((rng.NextDouble() * 2.0 - 1.0) * hY);
+            // Size FIRST — the fit check needs the radius before a position can be judged.
             float radius = RockRadius(ref rng, _seed.FieldRockMin, _seed.FieldRockMax, _seed.RockSizeSkew);
+            Vec3 pos = default;
+            bool ok = false;
+            for (int attempt = 0; attempt < MaxPlaceAttempts && !ok; attempt++)
+            {
+                double ang = rng.NextDouble() * Math.PI * 2.0;
+                double rr = Math.Sqrt(rng.NextDouble()) * maxR; // sqrt → uniform areal density, bounded by maxR
+                float px = (float)(Math.Cos(ang) * rr);
+                float pz = (float)(Math.Sin(ang) * rr);
+                float py = (float)((rng.NextDouble() * 2.0 - 1.0) * hY);
+                pos = new Vec3(px, py, pz);
+                ok = RockFits(pos, radius, sector, placed);
+            }
+            if (!ok)
+                continue; // crowded pocket — drop rather than overlap (still deterministic per seed)
             var (variant, rx, ry, rz) = NextShape(ref rng);
-            Asteroids.Add(new Rock(id++, sector, new Vec3(px, py, pz), radius, variant, rx, ry, rz));
+            Asteroids.Add(new Rock(id++, sector, pos, radius, variant, rx, ry, rz));
+            placed.Add(pos, radius);
         }
     }
 
@@ -934,17 +1164,105 @@ public sealed class World
         float hY = sectorRadius * flatten;
         float area = MathF.PI * (rOut * rOut - rIn * rIn);
         int count = (int)MathF.Round(density * areaDensity * area);
+        var placed = new PlacementGrid(_seed.BeltRockMax, _seed.RockMinGap);
         for (int i = 0; i < count; i++)
         {
-            double ang = rng.NextDouble() * Math.PI * 2.0;
-            double t = rng.NextDouble();
-            double rr = Math.Sqrt(rIn * rIn + t * (rOut * rOut - rIn * rIn)); // uniform areal density across the annulus
-            float px = (float)(Math.Cos(ang) * rr);
-            float pz = (float)(Math.Sin(ang) * rr);
-            float py = (float)((rng.NextDouble() * 2.0 - 1.0) * hY);
+            // Size FIRST — the fit check needs the radius before a position can be judged.
             float radius = RockRadius(ref rng, _seed.BeltRockMin, _seed.BeltRockMax, _seed.RockSizeSkew);
+            Vec3 pos = default;
+            bool ok = false;
+            for (int attempt = 0; attempt < MaxPlaceAttempts && !ok; attempt++)
+            {
+                double ang = rng.NextDouble() * Math.PI * 2.0;
+                double t = rng.NextDouble();
+                double rr = Math.Sqrt(rIn * rIn + t * (rOut * rOut - rIn * rIn)); // uniform areal density across the annulus
+                float px = (float)(Math.Cos(ang) * rr);
+                float pz = (float)(Math.Sin(ang) * rr);
+                float py = (float)((rng.NextDouble() * 2.0 - 1.0) * hY);
+                pos = new Vec3(px, py, pz);
+                ok = RockFits(pos, radius, sector, placed);
+            }
+            if (!ok)
+                continue; // crowded pocket — drop rather than overlap (still deterministic per seed)
             var (variant, rx, ry, rz) = NextShape(ref rng);
-            Asteroids.Add(new Rock(id++, sector, new Vec3(px, py, pz), radius, variant, rx, ry, rz));
+            Asteroids.Add(new Rock(id++, sector, pos, radius, variant, rx, ry, rz));
+            placed.Add(pos, radius);
+        }
+    }
+
+    // ---- Seeding-time minimum spacing (rock↔rock via seeding.rock-min-gap, rock↔base via
+    // seeding.base-clearance; both surface-to-surface, 0 disables). Candidate positions are
+    // rejection-sampled: a rock re-rolls its position up to MaxPlaceAttempts times and is DROPPED
+    // if it never fits — accepting anyway would reintroduce overlap exactly in the crowded spots
+    // the gap exists to prevent. The fixed attempt loop keeps layouts per-seed deterministic, and
+    // ore classes are assigned AFTER seeding (AssignOre) from the surviving rocks, so drops never
+    // eat into a sector's guaranteed He3/special counts. Caveat: the rare special rocks are
+    // inflated ×SpecialRockRadiusMult after seeding, so an oversized special (≤1/sector) may still
+    // brush a neighbour. At stock knobs the drop rate is ~0. ----
+    private const int MaxPlaceAttempts = 12;
+
+    private bool RockFits(Vec3 pos, float radius, uint sector, PlacementGrid placed)
+    {
+        float clearance = _seed.BaseClearance;
+        if (clearance > 0f)
+            foreach (var b in Bases)
+            {
+                if (b.SectorId != sector)
+                    continue;
+                float need = BaseRadius + radius + clearance;
+                if ((pos - b.Pos).LengthSquared() < need * need)
+                    return false;
+            }
+        float gap = _seed.RockMinGap;
+        return gap <= 0f || !placed.AnyCloserThan(pos, radius, gap);
+    }
+
+    // Already-placed rocks for ONE Seed* call, bucketed into a coarse grid whose cell covers the
+    // worst-case interacting pair (2·rockMax + gap) so a fit check scans only its 3×3×3
+    // neighbourhood even when modded densities balloon rock counts (same broad-phase idea as the
+    // sim's _rockGrid).
+    private sealed class PlacementGrid
+    {
+        private readonly Dictionary<(int, int, int), List<int>> _cells = new();
+        private readonly List<(Vec3 Pos, float Radius)> _placed = new();
+        private readonly float _cell;
+
+        public PlacementGrid(float rockMax, float gap) =>
+            _cell = MathF.Max(2f * rockMax + MathF.Max(gap, 0f), 1f);
+
+        private (int, int, int) KeyOf(Vec3 p) =>
+            (
+                (int)MathF.Floor(p.X / _cell),
+                (int)MathF.Floor(p.Y / _cell),
+                (int)MathF.Floor(p.Z / _cell)
+            );
+
+        public void Add(Vec3 pos, float radius)
+        {
+            var key = KeyOf(pos);
+            if (!_cells.TryGetValue(key, out var cell))
+                _cells[key] = cell = new List<int>();
+            cell.Add(_placed.Count);
+            _placed.Add((pos, radius));
+        }
+
+        public bool AnyCloserThan(Vec3 pos, float radius, float gap)
+        {
+            var (cx, cy, cz) = KeyOf(pos);
+            for (int dx = -1; dx <= 1; dx++)
+                for (int dy = -1; dy <= 1; dy++)
+                    for (int dz = -1; dz <= 1; dz++)
+                    {
+                        if (!_cells.TryGetValue((cx + dx, cy + dy, cz + dz), out var cell))
+                            continue;
+                        foreach (int j in cell)
+                        {
+                            float need = radius + _placed[j].Radius + gap;
+                            if ((pos - _placed[j].Pos).LengthSquared() < need * need)
+                                return true;
+                        }
+                    }
+            return false;
         }
     }
 

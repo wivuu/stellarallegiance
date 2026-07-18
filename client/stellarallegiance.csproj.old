@@ -1,0 +1,30 @@
+<Project Sdk="Godot.NET.Sdk/4.7.0">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Don't spawn the Roslyn shared compiler (VBCSCompiler) daemon. It can
+         inherit the stdout/stderr pipe of Godot's `dotnet publish` during C#
+         export and keep it open after publish exits, leaving Godot blocked
+         forever on a pipe read ("Running dotnet publish" hang). In-process
+         compilation is marginally slower but never wedges the export. -->
+    <UseSharedCompilation>false</UseSharedCompilation>
+    <!-- .NET SDK 10 enables NuGetAudit by default, which downloads and processes
+         vulnerability databases during every restore. For this small project it
+         adds 70 to 140 seconds of wall time and makes Godot's headless export
+         appear to hang at "Running dotnet publish". Disable it here; run
+         dotnet list package with the vulnerable flag to check for CVEs. -->
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../shared/Shared.csproj" />
+    <!-- Pure-managed WebRTC (DataChannels) for joining NAT'd public-lobby servers. Same library
+         as the sim server so the SDP offer/answer handshake interops. Direct ip:port joins still
+         use the built-in WebSocket path. -->
+    <PackageReference Include="SIPSorcery" Version="10.0.11" />
+    <!-- Non-trickle SDP/ICE helpers shared with the sim server (excluded from Shared.csproj,
+         which is dependency-free); compiled in here so both sides serialize candidates identically. -->
+    <Compile Include="../shared/Net/WebRtcSdp.cs" Link="scripts/WebRtcSdp.cs" />
+  </ItemGroup>
+</Project>

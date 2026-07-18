@@ -49,7 +49,12 @@ public partial class GameNetClient : Node
     // only pilot whose orders AI vessels execute; everyone else's are advisory.
     public int Commander0Id { get; private set; } = -1;
     public int Commander1Id { get; private set; } = -1;
-    public int CommanderIdOf(byte team) => team == 0 ? Commander0Id : team == 1 ? Commander1Id : -1;
+
+    public int CommanderIdOf(byte team) =>
+        team == 0 ? Commander0Id
+        : team == 1 ? Commander1Id
+        : -1;
+
     public bool IsCommander => MyTeam is 0 or 1 && CommanderIdOf(MyTeam) == LocalClientId;
 
     // Available maps (from MsgMapList, sent once after Defs). Read by the Lobby sector pane + map
@@ -115,6 +120,7 @@ public partial class GameNetClient : Node
     public byte LocalChaffAmmo { get; private set; }
     public byte LocalMineAmmo { get; private set; }
     public byte LocalProbeAmmo { get; private set; }
+    public byte LocalFuelPodAmmo { get; private set; } // reserve fuel pods (auto-consumed on empty tank mid-boost)
     public byte LocalThreatLock { get; private set; } // 0 none, 1 being locked, 2 locked
 
     // Optional connect credentials. Secret = shared-secret password (env SIM_SECRET, empty =
@@ -202,7 +208,8 @@ public partial class GameNetClient : Node
 
     // ---- Connect-progress plumbing (background task -> main thread) --------
 
-    private void EmitStage(int seq, ConnectionManager.ConnectStage stage) => CallDeferred(nameof(DeliverStage), seq, (int)stage);
+    private void EmitStage(int seq, ConnectionManager.ConnectStage stage) =>
+        CallDeferred(nameof(DeliverStage), seq, (int)stage);
 
     private void DeliverStage(int seq, int stage)
     {
@@ -326,16 +333,29 @@ public partial class GameNetClient : Node
         _tx.Writer.TryWrite(f);
     }
 
-    // Request to spawn the chosen class with a consumable hold (honored server-side only while a
-    // match is Active). Wire: [4][cls][nCargo][nCargo x (u32 cargoId, u8 count)]; a bare [4][cls]
-    // (empty cargo) makes the server seed the hull's default hold.
-    public void RequestSpawn(byte shipClass, (uint cargoId, byte count)[]? cargo = null)
+    // Request to spawn the chosen class with a consumable hold + the hangar's weapon-slot
+    // overrides (honored server-side only while a match is Active). Wire: [4][cls]
+    // [u64 launchBaseId][nCargo][nCargo x (u32 cargoId, u8 count)][nMounts][nMounts x
+    // (u8 hpIndex, u32 weaponId)]. launchBaseId picks the hangar sidebar's launch base (0 =
+    // server default; the server validates friendly+alive and silently falls back). The mount
+    // tail carries ONLY overridden slots (weaponId u32.Max = leave the slot empty); the server
+    // validates (mountable kind, tech owned, payload fits) and falls back to the authored
+    // loadout — the accepted result echoes back on MsgShipLoadout.
+    public void RequestSpawn(
+        byte shipClass,
+        (uint cargoId, byte count)[]? cargo = null,
+        ulong launchBaseId = 0,
+        (byte hpIndex, uint weaponId)[]? mounts = null
+    )
     {
         cargo ??= Array.Empty<(uint, byte)>();
-        var f = new byte[3 + cargo.Length * 5];
+        mounts ??= Array.Empty<(byte, uint)>();
+        var f = new byte[11 + cargo.Length * 5 + 1 + mounts.Length * 5];
         int o = 0;
         f[o++] = 4; // MsgSpawn
         f[o++] = shipClass;
+        BitConverter.TryWriteBytes(f.AsSpan(o), launchBaseId);
+        o += 8;
         f[o++] = (byte)cargo.Length;
         foreach (var (cargoId, count) in cargo)
         {
@@ -343,6 +363,57 @@ public partial class GameNetClient : Node
             o += 4;
             f[o++] = count;
         }
+        f[o++] = (byte)mounts.Length;
+        foreach (var (hpIndex, weaponId) in mounts)
+        {
+            f[o++] = hpIndex;
+            BitConverter.TryWriteBytes(f.AsSpan(o), weaponId);
+            o += 4;
+        }
+        _tx.Writer.TryWrite(f);
+    }
+
+    // Commander research order (MsgResearch=13, v36): op 0 start-or-queue, 1 cancel-active,
+    // 2 cancel-on-deck. Server-side commander gate; feedback returns as system chat + the next
+    // MsgResearchState frame.
+    public void SendResearch(byte op, ulong baseId, ushort devIndex)
+    {
+        var f = new byte[12];
+        f[0] = 13; // MsgResearch
+        f[1] = op;
+        BitConverter.TryWriteBytes(f.AsSpan(2), baseId);
+        BitConverter.TryWriteBytes(f.AsSpan(10), devIndex);
+        _tx.Writer.TryWrite(f);
+    }
+
+    // Commander buys a constructor bound to a station type (v37): [14][u8 stationTypeId][u64 launchBaseId].
+    // launchBaseId 0 = the team's default garrison. The server validates + charges the station price.
+    public void SendBuildConstructor(byte stationTypeId, ulong launchBaseId)
+    {
+        var f = new byte[10];
+        f[0] = 14; // MsgBuildConstructor
+        f[1] = stationTypeId;
+        BitConverter.TryWriteBytes(f.AsSpan(2), launchBaseId);
+        _tx.Writer.TryWrite(f);
+    }
+
+    // Commander cancels a still-producing constructor (refund): [15][u64 constructorId] (v38).
+    public void SendCancelConstructor(ulong constructorId)
+    {
+        var f = new byte[9];
+        f[0] = 15; // MsgConstructorCancel
+        BitConverter.TryWriteBytes(f.AsSpan(1), constructorId);
+        _tx.Writer.TryWrite(f);
+    }
+
+    // Commander buys a mining drone: [16][u64 launchBaseId]. Replaces the old /buyminer chat command.
+    // launchBaseId = the docked garrison, so the miner joins that garrison's build pipeline (0 = team
+    // default). Team inferred server-side; the server validates cap/cost/phase/queue and charges the hull.
+    public void SendBuyMiner(ulong launchBaseId)
+    {
+        var f = new byte[9];
+        f[0] = 16; // MsgBuyMiner
+        BitConverter.TryWriteBytes(f.AsSpan(1), launchBaseId);
         _tx.Writer.TryWrite(f);
     }
 
@@ -549,7 +620,9 @@ public partial class GameNetClient : Node
         try
         {
             // Fetch this server's ICE config (STUN/TURN) and confirm it's still listed.
-            var entry = await Http.GetFromJsonAsync<ServerEntryDto>($"{shareBase}/servers/{sessionId}", ct) ?? throw new Exception("server not found in lobby");
+            var entry =
+                await Http.GetFromJsonAsync<ServerEntryDto>($"{shareBase}/servers/{sessionId}", ct)
+                ?? throw new Exception("server not found in lobby");
             EmitStage(seq, ConnectionManager.ConnectStage.Negotiate); // entry located
 
             var iceServers = ToIceServers(entry.IceServers);
@@ -807,7 +880,112 @@ public partial class GameNetClient : Node
             case 23:
                 ApplyMinerTargets(r);
                 break;
+            case 24:
+                ApplyResearchState(r);
+                break;
+            case 25:
+                ApplyConstructorBuilds(r);
+                break;
+            case 26:
+                ApplyConstructorState(r);
+                break;
+            case 27:
+                ApplyRockGone(r);
+                break;
+            case 28:
+                ApplyShipLoadout(r);
+                break;
         }
+    }
+
+    // MsgShipLoadout: the full per-ship weapon-mount override table — effective per-barrel weapon
+    // ids (hardpoint declaration order; uint.MaxValue = emptied slot) for every ship flying a
+    // NON-authored loadout (reconcile-by-omission: a ship absent from the frame flies its
+    // authored class loadout). Decode and forward whole to WorldRenderer, which owns the
+    // render-side mirror (remote bolt mounts + own-ship prediction loadout).
+    private void ApplyShipLoadout(BinaryReader r)
+    {
+        byte count = r.ReadByte();
+        var table = new List<(ulong shipId, uint[] ids)>(count);
+        for (int i = 0; i < count; i++)
+        {
+            ulong shipId = r.ReadUInt64();
+            int nSlots = r.ReadByte();
+            var ids = new uint[nSlots];
+            for (int s = 0; s < nSlots; s++)
+                ids[s] = r.ReadUInt32();
+            table.Add((shipId, ids));
+        }
+        _world.NetShipLoadouts(table);
+    }
+
+    // MsgRockGone: rocks a finished constructor base consumed. Delete each rock outright (mesh node +
+    // client collision + caches). Unknown ids (a rock this client never had, e.g. still fogged) are a
+    // harmless no-op. The base that replaces the rock arrives via the normal reveal path.
+    private void ApplyRockGone(BinaryReader r)
+    {
+        byte count = r.ReadByte();
+        for (int i = 0; i < count; i++)
+            _world.NetRemoveRock(r.ReadUInt64());
+    }
+
+    // MsgConstructorBuilds (v37): each constructor drone aligning/sinking/building on a rock, driving the
+    // build-sphere VFX. Whole-set replace each frame (a finished/cancelled build drops out). Broadcast —
+    // the renderer only draws a sphere for a rock it can see.
+    private void ApplyConstructorBuilds(BinaryReader r)
+    {
+        byte count = r.ReadByte();
+        var list = new System.Collections.Generic.List<WorldRenderer.ConstructorBuild>(count);
+        for (int i = 0; i < count; i++)
+        {
+            ulong shipId = r.ReadUInt64();
+            ulong rockId = r.ReadUInt64();
+            byte phase = r.ReadByte();
+            float progress = StellarAllegiance.Shared.WireQuant.UnpackHalf(r.ReadUInt16());
+            list.Add(
+                new WorldRenderer.ConstructorBuild
+                {
+                    ShipId = shipId,
+                    RockId = rockId,
+                    Phase = phase,
+                    Progress = progress,
+                }
+            );
+        }
+        _world.NetUpdateConstructorBuilds(list);
+    }
+
+    // MsgConstructorState (v38): PER-TEAM constructor roster (producing + launched) for the Build tab.
+    // Whole-set replace each frame — a retired constructor drops out (reconcile by omission).
+    private void ApplyConstructorState(BinaryReader r)
+    {
+        byte count = r.ReadByte();
+        var list = new System.Collections.Generic.List<WorldRenderer.ConstructorStatus>(count);
+        for (int i = 0; i < count; i++)
+        {
+            ulong id = r.ReadUInt64();
+            byte stationType = r.ReadByte();
+            byte state = r.ReadByte();
+            uint startTick = r.ReadUInt32();
+            uint durationTicks = r.ReadUInt32();
+            ulong targetId = r.ReadUInt64();
+            bool producesMiner = r.ReadBoolean();
+            ulong launchBaseId = r.ReadUInt64();
+            list.Add(
+                new WorldRenderer.ConstructorStatus
+                {
+                    Id = id,
+                    StationTypeId = stationType,
+                    State = state,
+                    StartTick = startTick,
+                    DurationTicks = durationTicks,
+                    TargetId = targetId,
+                    ProducesMiner = producesMiner,
+                    LaunchBaseId = launchBaseId,
+                }
+            );
+        }
+        _world.NetUpdateConstructorState(list);
     }
 
     // MsgMinerTargets: the exact rock each actively-mining miner is harvesting, so the mining beam aims
@@ -906,7 +1084,12 @@ public partial class GameNetClient : Node
             py = r.ReadInt16(),
             pz = r.ReadInt16();
         _missileRows.Remove(id);
-        _world.NetMissileGone(id, reason, sector, new Vec3(WireQuant.UnpackPos(px), WireQuant.UnpackPos(py), WireQuant.UnpackPos(pz)));
+        _world.NetMissileGone(
+            id,
+            reason,
+            sector,
+            new Vec3(WireQuant.UnpackPos(px), WireQuant.UnpackPos(py), WireQuant.UnpackPos(pz))
+        );
     }
 
     // Recon probes visible to our team (mirrors Protocol.WriteProbe): our own probes always, plus any
@@ -977,7 +1160,12 @@ public partial class GameNetClient : Node
             py = r.ReadInt16(),
             pz = r.ReadInt16();
         _probeRows.Remove(id);
-        _world.NetProbeGone(id, reason, sector, new Vec3(WireQuant.UnpackPos(px), WireQuant.UnpackPos(py), WireQuant.UnpackPos(pz)));
+        _world.NetProbeGone(
+            id,
+            reason,
+            sector,
+            new Vec3(WireQuant.UnpackPos(px), WireQuant.UnpackPos(py), WireQuant.UnpackPos(pz))
+        );
     }
 
     // Deployed minefields for this client's anchor sector (mirrors Protocol.WriteMinefield). Minefields
@@ -1055,7 +1243,13 @@ public partial class GameNetClient : Node
             pz = r.ReadInt16();
         if (_minefieldRows.TryGetValue(fieldId, out var mf))
             mf.AliveMask &= ~(1UL << mineIndex);
-        _world.NetMineGone(fieldId, mineIndex, reason, sector, new Vec3(WireQuant.UnpackPos(px), WireQuant.UnpackPos(py), WireQuant.UnpackPos(pz)));
+        _world.NetMineGone(
+            fieldId,
+            mineIndex,
+            reason,
+            sector,
+            new Vec3(WireQuant.UnpackPos(px), WireQuant.UnpackPos(py), WireQuant.UnpackPos(pz))
+        );
     }
 
     // A one-shot chaff spawn (mirrors Protocol.BuildChaff): the renderer animates the puff and ages
@@ -1096,8 +1290,57 @@ public partial class GameNetClient : Node
             var unlocked = new byte[nUnlocked];
             for (int j = 0; j < nUnlocked; j++)
                 unlocked[j] = r.ReadByte();
-            _world.NetUpdateTeamState(team, credits, score, unlocked);
+            // Owned techs (catalog indices) + capabilities (v36; mirror of BuildTeamState).
+            ushort nTechs = r.ReadUInt16();
+            var ownedTechs = new ushort[nTechs];
+            for (int j = 0; j < nTechs; j++)
+                ownedTechs[j] = r.ReadUInt16();
+            byte nCaps = r.ReadByte();
+            var ownedCaps = new byte[nCaps];
+            for (int j = 0; j < nCaps; j++)
+                ownedCaps[j] = r.ReadByte();
+            // Discovered-rock-class bitmask (v42) — the rock-gated construction lock predictor.
+            byte rockClasses = r.ReadByte();
+            // Live miner count + per-team cap (miner tail) — the Build tab's "X / N" miner readout.
+            byte minerCount = r.ReadByte();
+            byte minerCap = r.ReadByte();
+            // Build-pipeline queue depth (build-pipeline tail) — the per-garrison order cap the Build
+            // tab grays out on. World-global scalar, same for every team.
+            byte buildQueueLimit = r.ReadByte();
+            _world.NetUpdateTeamState(
+                team,
+                credits,
+                score,
+                unlocked,
+                ownedTechs,
+                ownedCaps,
+                rockClasses,
+                minerCount,
+                minerCap,
+                buildQueueLimit
+            );
         }
+    }
+
+    // MsgResearchState (v36): PER-TEAM research orders at our team's bases. Bases absent from the
+    // frame are idle — reconcile by omission (replace the whole map each frame).
+    private void ApplyResearchState(BinaryReader r)
+    {
+        byte nBases = r.ReadByte();
+        var map = new Dictionary<ulong, WorldRenderer.BaseResearch>();
+        for (int i = 0; i < nBases; i++)
+        {
+            ulong baseId = r.ReadUInt64();
+            byte nActive = r.ReadByte();
+            var active = new (ushort DevIndex, uint StartTick, uint DurationTicks)[nActive];
+            for (int a = 0; a < nActive; a++)
+                active[a] = (r.ReadUInt16(), r.ReadUInt32(), r.ReadUInt32());
+            ushort? onDeck = null;
+            if (r.ReadByte() != 0)
+                onDeck = r.ReadUInt16();
+            map[baseId] = new WorldRenderer.BaseResearch(active, onDeck);
+        }
+        _world.NetUpdateResearch(map);
     }
 
     // Single source: shared/Net/Wire.cs (the server's Protocol.Version aliases the same
@@ -1285,8 +1528,9 @@ public partial class GameNetClient : Node
             PosY = r.ReadSingle(),
             PosZ = r.ReadSingle(),
         };
-        r.ReadSingle(); // radius (client renders from BaseDef)
+        r.ReadSingle(); // radius (client renders from BaseDef by type)
         row.Health = r.ReadSingle();
+        row.BaseTypeId = r.ReadByte(); // v37: which base type (mesh/def)
         return row;
     }
 
@@ -1407,6 +1651,7 @@ public partial class GameNetClient : Node
                     DirY = r.ReadSingle(),
                     DirZ = r.ReadSingle(),
                     WeaponId = r.ReadUInt32(),
+                    Mount = (WeaponMountKind)r.ReadByte(),
                 }
             );
         return list;
@@ -1452,6 +1697,7 @@ public partial class GameNetClient : Node
             d.Cost = r.ReadInt32();
             d.PayloadCapacity = r.ReadSingle();
             d.OreCapacity = r.ReadSingle(); // mining ore hold (0 = not a miner) — mirror of BuildDefs order
+            d.OrderTimeSeconds = r.ReadInt32(); // miner order→launch delay (seconds; 0 = instant)
             d.FactionId = r.ReadUInt32();
             d.Hardpoints = ReadHardpoints(r);
             // Default consumable hold: u8 count, then n x (u32 cargoId, u8 count).
@@ -1459,6 +1705,10 @@ public partial class GameNetClient : Node
             d.DefaultCargo = new List<CargoLoadDef>(cargoN);
             for (int c = 0; c < cargoN; c++)
                 d.DefaultCargo.Add(new CargoLoadDef { CargoId = r.ReadUInt32(), Count = r.ReadByte() });
+            d.IsConstructor = r.ReadBoolean(); // v37; mirror of BuildDefs — hidden from the buy menu
+            // Hull tech-gate (v43; mirror of BuildDefs — streamed LAST in the ship block). Display-only:
+            // the hangar's locked hull card + Research UNLOCKS name the gate from this.
+            d.RequiredTechIdx = ReadTechList(r);
             ships.Add(d);
         }
 
@@ -1513,6 +1763,13 @@ public partial class GameNetClient : Node
                     // are server-only and never ride the wire).
                     ProbeHitRadius = r.ReadSingle(),
                     ProbeModelSize = r.ReadSingle(),
+                    // Tech-path lock state (v36; mirror of BuildDefs — streamed after ProbeModelSize).
+                    RequiredTechIdx = ReadTechList(r),
+                    // Healing-gun flag (v40, ER Nanite line), read LAST (mirror of BuildDefs).
+                    IsHealing = r.ReadBoolean(),
+                    // Weapon-tier succession (v43; mirror of BuildDefs — read after IsHealing).
+                    ObsoletedByTechIdx = ReadTechList(r),
+                    SucceededByWeaponId = r.ReadUInt32(),
                 }
             );
 
@@ -1528,6 +1785,7 @@ public partial class GameNetClient : Node
                     Mass = r.ReadSingle(),
                     ChargesPerPack = r.ReadByte(),
                     Description = ReadStr(r),
+                    FuelPerCharge = r.ReadSingle(), // v35: 0 = not a fuel item
                 }
             );
 
@@ -1546,6 +1804,14 @@ public partial class GameNetClient : Node
                 RadarSignature = r.ReadSingle(),
             };
             b.Hardpoints = ReadHardpoints(r);
+            // Research slots (v36; mirror of BuildDefs — streamed after Hardpoints).
+            b.ResearchSlots = r.ReadByte();
+            // Base building (v37; mirror of BuildDefs — streamed after ResearchSlots).
+            b.ModelName = ReadStr(r);
+            b.WinCondition = r.ReadBoolean();
+            b.BuildRockClass = r.ReadByte();
+            // Station upgrades (v39; mirror of BuildDefs — appended after BuildRockClass).
+            b.SuccessorBaseTypeId = r.ReadInt16();
             bases.Add(b);
         }
 
@@ -1560,9 +1826,106 @@ public partial class GameNetClient : Node
             FogOfWar = r.ReadBoolean(),
         };
 
-        _defs.Load(ships, weapons, bases, cargoItems, cfg);
-        Log.Print($"[GameNet] defs received — {ships.Count} ship classes, {weapons.Count} weapons, {cargoItems.Count} cargo items, {bases.Count} bases");
+        // ---- Tech-path catalog (v36; mirror of BuildDefs — appended after the world config). ----
+        // Techs come first and fix the u16 index space every TechList (and MsgTeamState /
+        // MsgResearchState) references.
+        var techs = new List<TechDef>();
+        ushort techCount = r.ReadUInt16();
+        for (int i = 0; i < techCount; i++)
+            techs.Add(
+                new TechDef
+                {
+                    Id = ReadStr(r),
+                    Name = ReadStr(r),
+                    Description = ReadStr(r),
+                }
+            );
+        var developments = new List<DevelopmentDef>();
+        ushort devCount = r.ReadUInt16();
+        for (int i = 0; i < devCount; i++)
+            developments.Add(
+                new DevelopmentDef
+                {
+                    Id = ReadStr(r),
+                    Name = ReadStr(r),
+                    Description = ReadStr(r),
+                    Group = ReadStr(r),
+                    Price = r.ReadInt32(),
+                    BuildTimeSeconds = r.ReadInt32(),
+                    TechOnly = r.ReadBoolean(),
+                    RequiredTechIdx = ReadTechList(r),
+                    GrantedTechIdx = ReadTechList(r),
+                    ObsoletedByTechIdx = ReadTechList(r),
+                    RequiredCaps = ReadCapList(r),
+                    GrantedCaps = ReadCapList(r),
+                    UpgradeScope = r.ReadByte(), // v39; mirror of BuildDefs (0 all / 1 single)
+                    Attributes = ReadAttrList(r), // v41; mirror of BuildDefs (sorted by attr byte)
+                }
+            );
+        var stationCatalog = new List<StationCatalogDef>();
+        ushort stationCount = r.ReadUInt16();
+        for (int i = 0; i < stationCount; i++)
+            stationCatalog.Add(
+                new StationCatalogDef
+                {
+                    Id = ReadStr(r),
+                    Name = ReadStr(r),
+                    Description = ReadStr(r),
+                    Price = r.ReadInt32(),
+                    BuildTimeSeconds = r.ReadInt32(),
+                    StationClass = r.ReadByte(),
+                    BaseTypeId = r.ReadInt16(), // -1 = catalog-only (Build-tab placeholder)
+                    ResearchSlots = r.ReadByte(),
+                    BuildRockClass = r.ReadByte(), // v37; mirror of BuildDefs
+                    AlignTimeSeconds = r.ReadInt32(), // v38; constructor align dwell for this station
+                    RequiredTechIdx = ReadTechList(r),
+                    GrantedTechIdx = ReadTechList(r),
+                    ObsoletedByTechIdx = ReadTechList(r),
+                    RequiredCaps = ReadCapList(r),
+                    GrantedCaps = ReadCapList(r),
+                    SuccessorBaseTypeId = r.ReadInt16(), // v39; mirror of BuildDefs (appended last)
+                }
+            );
+
+        // Faction identity + team-wide stat multipliers (v41; mirror of BuildDefs — appended LAST).
+        string factionName = ReadStr(r);
+        AttrMod[] factionAttrs = ReadAttrList(r);
+
+        _defs.Load(ships, weapons, bases, cargoItems, cfg, techs, developments, stationCatalog, factionName, factionAttrs);
+        Log.Print(
+            $"[GameNet] defs received — {ships.Count} ship classes, {weapons.Count} weapons, {cargoItems.Count} cargo items, {bases.Count} bases, {techs.Count} techs, {developments.Count} developments, {stationCatalog.Count} stations"
+        );
         DefsReceived?.Invoke();
+    }
+
+    // A count-prefixed tech-index list (u8 n, n x u16) — mirror of Protocol.WriteTechList.
+    private static ushort[] ReadTechList(BinaryReader r)
+    {
+        byte n = r.ReadByte();
+        var idx = new ushort[n];
+        for (int i = 0; i < n; i++)
+            idx[i] = r.ReadUInt16();
+        return idx;
+    }
+
+    // A count-prefixed stat-multiplier list (u8 n, n x (u8 attr, f32 mult)) — mirror of WriteAttrList.
+    private static AttrMod[] ReadAttrList(BinaryReader r)
+    {
+        byte n = r.ReadByte();
+        var mods = new AttrMod[n];
+        for (int i = 0; i < n; i++)
+            mods[i] = new AttrMod(r.ReadByte(), r.ReadSingle());
+        return mods;
+    }
+
+    // A count-prefixed capability list (u8 n, n x u8) — mirror of Protocol.WriteCapList.
+    private static byte[] ReadCapList(BinaryReader r)
+    {
+        byte n = r.ReadByte();
+        var caps = new byte[n];
+        for (int i = 0; i < n; i++)
+            caps[i] = r.ReadByte();
+        return caps;
     }
 
     private void ApplyLobbyState(BinaryReader r)
@@ -1674,9 +2037,18 @@ public partial class GameNetClient : Node
                 var bases = new List<SectorMapPreview.BaseMark>(baseCount);
                 for (int b = 0; b < baseCount; b++)
                     bases.Add(new SectorMapPreview.BaseMark(r.ReadByte()));
-                sectors.Add(new SectorMapPreview.SectorModel(
-                    id, radius, bases, new List<Vector2>(), string.IsNullOrEmpty(sname) ? null : sname,
-                    mapX, mapY, hasPos));
+                sectors.Add(
+                    new SectorMapPreview.SectorModel(
+                        id,
+                        radius,
+                        bases,
+                        new List<Vector2>(),
+                        string.IsNullOrEmpty(sname) ? null : sname,
+                        mapX,
+                        mapY,
+                        hasPos
+                    )
+                );
             }
             // Aleph gate topology (mirror of Protocol.BuildMapList): sector-id pairs the preview
             // draws as lines between sector nodes.
@@ -1740,8 +2112,13 @@ public partial class GameNetClient : Node
             byte chaffAmmo = r.ReadByte();
             byte mineAmmo = r.ReadByte();
             byte probeAmmo = r.ReadByte();
+            byte fuelPodAmmo = r.ReadByte();
             // Being-locked threat from the flags byte (ShipFlagLockingMe=4, ShipFlagLockedMe=8).
-            byte threatLock = (byte)((flags & 8) != 0 ? 2 : (flags & 4) != 0 ? 1 : 0);
+            byte threatLock = (byte)(
+                (flags & 8) != 0 ? 2
+                : (flags & 4) != 0 ? 1
+                : 0
+            );
 
             _rows.TryGetValue(id, out var prev);
             var row = new Ship
@@ -1763,6 +2140,7 @@ public partial class GameNetClient : Node
                 ChaffAmmo = chaffAmmo,
                 MineAmmo = mineAmmo,
                 ProbeAmmo = probeAmmo,
+                FuelPodAmmo = fuelPodAmmo,
                 ThreatLock = threatLock,
                 SectorId = sector,
             };
@@ -1796,6 +2174,7 @@ public partial class GameNetClient : Node
                 LocalChaffAmmo = chaffAmmo;
                 LocalMineAmmo = mineAmmo;
                 LocalProbeAmmo = probeAmmo;
+                LocalFuelPodAmmo = fuelPodAmmo;
                 LocalThreatLock = threatLock;
             }
             // Mass isn't on the wire: re-derive from the LOADED def (the same content the server

@@ -85,6 +85,102 @@ public class SerializationTests
     }
 
     [Fact]
+    public void UpgradeScope_RoundTripsAsKebabCase()
+    {
+        var dev = new Development { Id = "dev-upgrade", Name = "Upgrade", UpgradeScope = UpgradeScope.Single };
+
+        var yaml = CoreSerializer.Serialize(dev);
+        Assert.Contains("upgrade-scope: single", yaml);   // kebab-cased key + hyphenated enum value
+
+        var reloaded = CoreSerializer.Deserialize<Development>(yaml);
+        Assert.Equal(UpgradeScope.Single, reloaded.UpgradeScope);
+    }
+
+    [Fact]
+    public void UpgradeScope_OmittedWhenDefault()
+    {
+        // Default `all` keeps ordinary (non-upgrade) developments terse.
+        var dev = new Development { Id = "dev-plain", Name = "Plain" };
+
+        Assert.DoesNotContain("upgrade-scope", CoreSerializer.Serialize(dev));
+    }
+
+    [Fact]
+    public void IsHealing_RoundTripsAsKebabCase()
+    {
+        var weapon = new Weapon { Id = "nanite", Name = "Nanite", IsHealing = true };
+
+        var yaml = CoreSerializer.Serialize(weapon);
+        Assert.Contains("is-healing: true", yaml);   // kebab-cased runtime-extension key
+
+        var reloaded = CoreSerializer.Deserialize<Weapon>(yaml);
+        Assert.True(reloaded.IsHealing);
+    }
+
+    [Fact]
+    public void IsHealing_OmittedWhenDefault()
+    {
+        // Default false keeps ordinary (damage) weapons' serialized form unchanged.
+        var weapon = new Weapon { Id = "gun", Name = "Gun" };
+
+        Assert.DoesNotContain("is-healing", CoreSerializer.Serialize(weapon));
+    }
+
+    [Fact]
+    public void ResearchSlotsAndObsoletedByTechs_RoundTripAsKebabCase()
+    {
+        var core = new Core
+        {
+            Stations = { new Station { Id = "lab", Name = "Lab", ResearchSlots = 3 } },
+            Weapons = { new Weapon { Id = "gun", Name = "Gun", ObsoletedByTechs = new TechSet(new[] { "cannon-tier-2" }) } },
+        };
+
+        var yaml = CoreSerializer.Serialize(core);
+        Assert.Contains("research-slots: 3", yaml);       // kebab-cased key
+        Assert.Contains("obsoleted-by-techs:", yaml);     // kebab-cased key
+
+        var reloaded = CoreSerializer.Deserialize(yaml);
+        Assert.Equal(3, reloaded.Stations.Single().ResearchSlots);
+        Assert.Contains("cannon-tier-2", reloaded.Weapons.Single().ObsoletedByTechs);
+    }
+
+    [Fact]
+    public void ResearchSlotsAndObsoletedByTechs_OmittedWhenDefault()
+    {
+        // Omit-when-default/empty keeps ordinary stations and weapons terse (no research-slots: 0 or
+        // empty obsoleted-by-techs noise).
+        var core = new Core
+        {
+            Stations = { new Station { Id = "garrison", Name = "Garrison" } },
+            Weapons = { new Weapon { Id = "gun", Name = "Gun" } },
+        };
+
+        var yaml = CoreSerializer.Serialize(core);
+        Assert.DoesNotContain("research-slots", yaml);
+        Assert.DoesNotContain("obsoleted-by-techs", yaml);
+    }
+
+    [Fact]
+    public void Deserialize_HardpointMountTypeAndEmptyWeaponId()
+    {
+        var hull = CoreSerializer.Deserialize<Hull>(
+            """
+            id: x
+            name: X
+            hardpoints:
+              - { kind: weapon, index: 0, weapon-id: 2 }
+              - { kind: weapon, index: 1, mount: missile }
+              - { kind: weapon, index: 2, weapon-id: 3, mount: any }
+            """);
+
+        Assert.Equal(2u, hull.Hardpoints[0].WeaponId);
+        Assert.Null(hull.Hardpoints[0].Mount); // un-authored: derived from the bound weapon downstream
+        Assert.Null(hull.Hardpoints[1].WeaponId); // typed EMPTY mount: no default weapon bound
+        Assert.Equal(RuntimeMountKind.Missile, hull.Hardpoints[1].Mount);
+        Assert.Equal(RuntimeMountKind.Any, hull.Hardpoints[2].Mount);
+    }
+
+    [Fact]
     public void Deserialize_TechSetIsCaseSensitiveSetOfStrings()
     {
         var hull = CoreSerializer.Deserialize<Hull>(

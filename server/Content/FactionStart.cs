@@ -1,4 +1,5 @@
 using Allegiance.Factions.Model;
+using StellarAllegiance.Shared;
 
 namespace SimServer.Content;
 
@@ -20,13 +21,21 @@ public sealed class FactionStart
     public string LifepodHullId { get; }       // reserved for Phase-5 spawn/eject wiring
     public string InitialStationId { get; }    // reserved for Phase-5 wiring
 
+    // v41 faction identity + team-wide stat multipliers. FactionName streams for a "who am I" display;
+    // BaseAttributes is the faction's GAS block (sorted by attr byte), the base of the sim's per-team
+    // TeamAttr cache (faction base × completed devs). Both also stream in MsgDefs (Protocol.BuildDefs).
+    public string FactionName { get; }
+    public AttrMod[] BaseAttributes { get; }
+
     public FactionStart(
         int startingCredits,
         int incomePerPaycheck,
         TechSet baseTechs,
         CapabilitySet baseCapabilities,
         string lifepodHullId,
-        string initialStationId
+        string initialStationId,
+        string factionName,
+        AttrMod[] baseAttributes
     )
     {
         StartingCredits = startingCredits;
@@ -35,5 +44,7 @@ public sealed class FactionStart
         BaseCapabilities = baseCapabilities;
         LifepodHullId = lifepodHullId;
         InitialStationId = initialStationId;
+        FactionName = factionName;
+        BaseAttributes = baseAttributes;
     }
 }
