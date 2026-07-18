@@ -16,10 +16,11 @@
 #   hull MUST author enough for its default hardpoint weapons — CoreValidator refuses to boot otherwise.
 #   Mount types: a Weapon hardpoint only accepts its own weapon CATEGORY in the hangar (and the
 #   server rejects anything else): a mount binding a gun is gun-typed, one binding a missile rack is
-#   missile-typed, and an unbound mesh mount is untyped (accepts either). Author `mount: gun|missile|any`
-#   on a hardpoint entry to override that derivation — the only way to TYPE an empty mount, since a
-#   mesh HP_Weapon node carries no gun/missile distinction (author the entry with `mount:` and no
-#   weapon-id). CoreValidator refuses a `mount:` that contradicts the bound weapon.
+#   missile-typed. A mesh HP_Weapon node that NO yaml entry binds or types is NON-MOUNTABLE — not a
+#   loadout slot at all: hidden in the hangar, rejected by the server. To expose an EMPTY assignable
+#   mount, author an entry with `mount: gun|missile|any` and no weapon-id (the mesh node carries no
+#   gun/missile distinction, so its type must be authored). `mount:` on a bound entry overrides the
+#   derivation; CoreValidator refuses a `mount:` that contradicts the bound weapon.
 #   Shield (optional, all keys omitted = no shield): shield-capacity is a regenerating energy pool that
 #   absorbs incoming damage BEFORE the hull (overflow from a shield-popping hit spills into the hull the
 #   same tick); shield-recharge is points/second, resuming shield-delay seconds after the last shield hit.
@@ -65,11 +66,13 @@ hulls:
     price: 100
     payload-capacity: 12 # gat 1 + mine 3 + decoy 1 + probe 2 = 7 -> 5 free
     required-capabilities: [base]
-    # fig13 carries HP_Weapon_0 (nose) + HP_Weapon_1 (belly). Bind the nose to PW Gat Gun 1; the belly
-    # mount stays empty (armed consumers skip it). Unclaimed nodes append: Booster_0/1, Thruster_0,
-    # Light_0..2. Cockpit has no mesh node — fully authored here.
+    # fig13 carries HP_Weapon_0 (nose) + HP_Weapon_1 (belly). Bind the nose to PW Gat Gun 1; type the
+    # belly as an EMPTY missile-only mount (no weapon-id -> unarmed by default, but a pilot may fit a
+    # rack there). Geometry inherits mesh HP_Weapon_1. Unclaimed nodes append: Booster_0/1,
+    # Thruster_0, Light_0..2. Cockpit has no mesh node — fully authored here.
     hardpoints:
       - { kind: weapon, index: 0, weapon-id: 0 }   # binds mesh HP_Weapon_0 (PW Gat Gun 1)
+      - { kind: weapon, index: 1, mount: missile } # belly missile hardpoint (empty; inherits mesh HP_Weapon_1)
       - { kind: cockpit, off-y: 0.35, off-z: 0.8, dir-z: 1 }
     default-cargo:
       - { item: prox-mine-1, count: 3 }

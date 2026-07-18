@@ -63,14 +63,17 @@ Check(
     $"stock scout fields wrong (class {scout.ClassId}, mass {scout.Mass}, speed {scout.Speed}, drift {scout.DriftYawDeg})"
 );
 // RAW (pre-merge) YAML shape: the GLB-authoritative merge runs server-side (SimServer's
-// ContentLoader), NOT in CoreSerializer.Load, so here the scout carries only its two AUTHORED
-// entries — the bound cannon (weapon-id 0, geometry inherited from the mesh at merge time) and the
-// fully-authored cockpit. Boosters/thruster/lights/empty-mount are appended later by the merge.
+// ContentLoader), NOT in CoreSerializer.Load, so here the scout carries only its three AUTHORED
+// entries — the bound cannon (weapon-id 0, geometry inherited from the mesh at merge time), the
+// empty missile-typed belly mount (no weapon-id, `mount: missile`), and the fully-authored cockpit.
+// Boosters/thruster/lights are appended later by the merge.
 Check(
-    scout.Hardpoints.Count == 2
+    scout.Hardpoints.Count == 3
         && scout.Hardpoints[0].Kind == RuntimeHardpointKind.Weapon && scout.Hardpoints[0].WeaponId == 0
-        && scout.Hardpoints[1].Kind == RuntimeHardpointKind.Cockpit,
-    "stock scout carries authored hardpoints (bound cannon + cockpit)",
+        && scout.Hardpoints[1].Kind == RuntimeHardpointKind.Weapon && scout.Hardpoints[1].WeaponId is null
+            && scout.Hardpoints[1].Mount == RuntimeMountKind.Missile
+        && scout.Hardpoints[2].Kind == RuntimeHardpointKind.Cockpit,
+    "stock scout carries authored hardpoints (bound cannon + empty missile belly + cockpit)",
     $"stock scout hardpoints wrong (count {scout.Hardpoints.Count})"
 );
 var pod = stock.Hulls.Single(h => h.Id == "pod");

@@ -518,15 +518,20 @@ public static class FactionsContentProjection
             // Null WeaponId = an authored/appended EMPTY weapon mount (non-weapon kinds ignore it).
             WeaponId = h.WeaponId ?? (h.Kind == Factions.RuntimeHardpointKind.Weapon ? HardpointDef.NoWeapon : 0u),
             // Mount type: authored `mount:` wins; else derive from the bound weapon (rack ->
-            // missile mount, gun -> gun mount); an empty mount stays unrestricted. Streamed, so
-            // the hangar filters with the SAME resolved value the server enforces.
+            // missile mount, gun -> gun mount); an UNAUTHORED empty mount (a mesh HP_Weapon node
+            // hulls.yaml never bound or typed) is NonMountable — not a loadout slot, hidden in the
+            // hangar. Author `mount:` to expose an empty mount. Streamed, so the hangar filters
+            // with the SAME resolved value the server's ResolveLoadout enforces. (Non-weapon kinds
+            // carry Any as an inert placeholder — nothing reads their Mount.)
             Mount = h.Mount is Factions.RuntimeMountKind m
                 ? (WeaponMountKind)(byte)m
-                : h.Kind != Factions.RuntimeHardpointKind.Weapon || h.WeaponId is not uint wid
+                : h.Kind != Factions.RuntimeHardpointKind.Weapon
                     ? WeaponMountKind.Any
-                    : rackWeaponIds.Contains(wid)
-                        ? WeaponMountKind.Missile
-                        : WeaponMountKind.Gun,
+                    : h.WeaponId is not uint wid
+                        ? WeaponMountKind.NonMountable
+                        : rackWeaponIds.Contains(wid)
+                            ? WeaponMountKind.Missile
+                            : WeaponMountKind.Gun,
         };
 
 }

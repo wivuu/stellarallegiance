@@ -21,7 +21,7 @@ Archives:
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
 - Faction name "Iron Coalition" is streamed but never displayed.
-- ce5655737898f061b9b1bb74d8ffb6497ecdd0ad attempted to make weapon hardpoints only allow either gun or missile; but currently it does not work - i can assign ER nanite in slot 2 of scout OR a missile
+- Make gun and missile weapon mounts not compatible with all gun and missiles (explore configuration style options in YAML)
 - Booster fuel needed, interceptor starting fuel too low, and we need the ability to add additional fuel to cargo that can load when we run out
 - hulls.yaml:264-266 comment wrongly claims collision is purely ShipRadius — ship-vs-ship uses the full model-length hull, so the Devastator body-blocks on its ~20u silhouette.
 ---

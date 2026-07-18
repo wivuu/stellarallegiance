@@ -50,24 +50,25 @@ Check(
     "loader projected hull build cost (Buildable.Price -> ShipClassDef.Cost)",
     $"hull cost wrong (scout {scout.Cost}, bomber {bomber.Cost})"
 );
-// GLB-authoritative merge: the scout's YAML binds the cannon (HP_Weapon_0) + missile rack
-// (HP_Weapon_1, P2) + cockpit; every unclaimed mesh node appends (by kind byte, then index) —
-// Booster_0/1, Thruster_0, Light_0..2. YAML-declared entries keep their order at the head.
-// fig13 carries HP_Weapon_0 (nose, bound to PW Gat Gun 1) + HP_Weapon_1 (belly, unbound → empty
-// mount) + Booster_0/1 + Thruster_0 + Light_0..2. YAML authors the bound gun + cockpit; everything
-// else appends. Total = gun + cockpit + empty-mount + 2 boosters + thruster + 3 lights = 9.
+// GLB-authoritative merge: the scout's YAML binds the cannon (HP_Weapon_0) + types the belly as an
+// empty missile mount (HP_Weapon_1, P2, no weapon-id) + cockpit; every unclaimed mesh node appends
+// (by kind byte, then index) — Booster_0/1, Thruster_0, Light_0..2. YAML-declared entries keep their
+// order at the head, so hardpoint[1] is the belly weapon (empty) and hardpoint[2] is the cockpit.
+// Total = gun + belly-mount + cockpit + 2 boosters + thruster + 3 lights = 9.
 Check(
     scout.Hardpoints.Count == 9
         && scout.Hardpoints[0].Kind == HardpointKind.Weapon
         && scout.Hardpoints[0].WeaponId == GameContent.ScoutWeaponId
-        && scout.Hardpoints[1].Kind == HardpointKind.Cockpit
+        && scout.Hardpoints[1].Kind == HardpointKind.Weapon
+        && scout.Hardpoints[1].WeaponId == HardpointDef.NoWeapon
+        && scout.Hardpoints[2].Kind == HardpointKind.Cockpit
         && scout.Hardpoints.Count(h => h.Kind == HardpointKind.Booster) == 2
         && scout.Hardpoints.Count(h => h.Kind == HardpointKind.Thruster) == 1
         && scout.Hardpoints.Count(h => h.Kind == HardpointKind.Light) == 3
-        // One armed gun (Gat 1) + one appended empty belly mount.
+        // One armed gun (Gat 1) + one authored empty belly missile mount.
         && scout.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon && h.WeaponId != HardpointDef.NoWeapon) == 1
         && scout.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon) == 2,
-    "merged scout hardpoints (bound Gat 1 + cockpit; appended empty mount/boosters/thruster/lights)",
+    "merged scout hardpoints (bound Gat 1 + authored empty belly mount + cockpit; appended boosters/thruster/lights)",
     $"scout merged hardpoints wrong (count {scout.Hardpoints.Count}, kinds {string.Join(",", scout.Hardpoints.Select(h => h.Kind))})"
 );
 // The GLB is authoritative for geometry: the bound scout cannon inherits its mesh node's position
@@ -112,17 +113,19 @@ Check(
     "loader projected miner ore-capacity (unarmed class-id 4: one empty weapon mount; non-miners project 0)",
     $"miner projection wrong (ore {miner.OreCapacity}, scout ore {scout.OreCapacity}, weapon-hps {minerWeaponHps.Count}, first weapon-id {(minerWeaponHps.Count > 0 ? minerWeaponHps[0].WeaponId.ToString() : "n/a")})"
 );
-// Mount types resolve at projection: a bound gun -> Gun mount, the bound SRM rack -> Missile
-// mount, an unbound mesh-appended mount -> Any (untyped). The hangar filter + ResolveLoadout
-// gate read exactly these streamed values (hulls.yaml `mount:` would override the derivation).
+// Mount types resolve at projection: a bound gun -> Gun mount, the bound SRM rack -> Missile mount,
+// an AUTHORED empty mount takes its `mount:` type (scout belly = Missile), and an UNAUTHORED
+// mesh-appended mount -> NonMountable (the miner's unbound HP_Weapon_0: not a loadout slot, hidden).
+// The hangar filter + ResolveLoadout gate read exactly these streamed values.
 var scoutEmptyHp = scout.Hardpoints.First(h => h.Kind == HardpointKind.Weapon && h.WeaponId == HardpointDef.NoWeapon);
 var bomberRackHp = bomber.Hardpoints.First(h => h.Kind == HardpointKind.Weapon && h.WeaponId == 5);
 Check(
     scout.Hardpoints[0].Mount == WeaponMountKind.Gun
-        && scoutEmptyHp.Mount == WeaponMountKind.Any
-        && bomberRackHp.Mount == WeaponMountKind.Missile,
-    "mount types resolved at projection (bound gun -> Gun, unbound empty -> Any, SRM rack -> Missile)",
-    $"mount types wrong (scout hp0 {scout.Hardpoints[0].Mount}, scout empty {scoutEmptyHp.Mount}, bomber rack {bomberRackHp.Mount})"
+        && scoutEmptyHp.Mount == WeaponMountKind.Missile
+        && bomberRackHp.Mount == WeaponMountKind.Missile
+        && minerWeaponHps[0].Mount == WeaponMountKind.NonMountable,
+    "mount types resolved at projection (bound gun -> Gun, authored empty belly -> Missile, SRM rack -> Missile, unauthored mesh mount -> NonMountable)",
+    $"mount types wrong (scout hp0 {scout.Hardpoints[0].Mount}, scout belly {scoutEmptyHp.Mount}, bomber rack {bomberRackHp.Mount}, miner mount {minerWeaponHps[0].Mount})"
 );
 // Fog-of-war vision (behavior-inert until a later WP): scout carries the longest cone + an
 // explicit stealthy RadarSignature < 1.

@@ -6,9 +6,10 @@
 // fires, and echoes per-ship loadouts correctly.
 //
 // Content facts this suite leans on (server/Content/core — Iron Coalition roster):
-//   Scout (cls 0, payload 12):   weapon hp0 = gat-gun-1 (id 0, mass 1, interval 4); hp1 = EMPTY mount
-//                                 (mesh-appended, UNTYPED — armed by an override with a gun OR a
-//                                 rack). default hold: 3 mine + 1 decoy + 1 probe.
+//   Scout (cls 0, payload 12):   weapon hp0 = gat-gun-1 (id 0, mass 1, interval 4); hp1 = EMPTY belly
+//                                 mount, MISSILE-typed (authored `mount: missile`, no default weapon —
+//                                 armed by an override with a RACK; a gun rejects). default hold:
+//                                 3 mine + 1 decoy + 1 probe.
 //   Fighter (cls 1, payload 20): hp0/hp1/hp2 = gat-gun-1 (id 0, mass 1, interval 4). all-gun, no
 //                                 rack; every mount is GUN-typed (racks reject — scenario 4b).
 //   Bomber (cls 2, payload 20):  hp0/hp3 gat, hp1/hp2 autocan (all gun-typed); hp4 = SRM anti-base
@@ -255,7 +256,7 @@ Simulation.ShipSim Spawn(
     var ship = Spawn(sim, 1, team: 0, cls: FlightModel.ClassScout, mounts: [(0, Nanite1)]);
     Check(
         ship.MountWeaponIds is [Nanite1, NoWeapon],
-        "scout hp0 swapped to ER Nanite 1 (effective [nanite-1, empty]) — any gun fits any weapon mount",
+        "scout hp0 swapped to ER Nanite 1 (effective [nanite-1, empty]) — any gun fits the gun-typed hp0",
         $"nanite swap wrong ([{string.Join(",", ship.MountWeaponIds ?? [])}])"
     );
     for (int i = 0; i < 15; i++)
@@ -308,13 +309,13 @@ Simulation.ShipSim Spawn(
 
 // ---- 4b. Mount-type gate: a mount only takes its own weapon category ----------------------------
 // Mount types resolve at projection from the authored weapon (gun -> gun mount, rack -> missile
-// mount) or hulls.yaml `mount:`; the scout's mesh-appended hp1 is untyped (accepts either, proven
-// by scenarios 2/8/9 above). HardpointDef.MountAccepts is the shared rule the hangar mirrors.
+// mount) or hulls.yaml `mount:`; the scout's belly hp1 is authored MISSILE-typed (accepts racks,
+// proven by scenarios 2/8/9 above). HardpointDef.MountAccepts is the shared rule the hangar mirrors.
 {
     var sim = BootSim(seed: 41, "bomber"); // bomber hull is tech-gated; seed its unlock
 
     // (a) missile rack on a GUN mount: the fighter's hp1 is gun-typed (authored gat-gun-1) — the
-    // same seeker rack that mounts fine on the scout's untyped hp1 whole-request-rejects here.
+    // same seeker rack that mounts fine on the scout's missile-typed hp1 whole-request-rejects here.
     var a = Spawn(sim, 1, team: 0, cls: FlightModel.ClassFighter, mounts: [(1, 3u)]);
     Check(a.MountWeaponIds is null, "missile rack on a gun mount rejects to authored mounts", "rack accepted on a gun mount");
 

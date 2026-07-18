@@ -60,14 +60,16 @@ hardpoints:
 - **`index` ordering matters**: keep guns at the low indices and racks after them, because the
   index is the per-barrel spread-seed the server and client both key off — reordering desyncs the
   spread pattern. Add new mounts at the end.
-- An unbound mesh `HP_Weapon_*` node becomes an **empty mount** (`HardpointDef.NoWeapon`) — valid,
-  just carries nothing. Binding a weapon-id fills it.
+- An unbound mesh `HP_Weapon_*` node that NO yaml entry binds or types becomes **NonMountable** —
+  NOT a loadout slot: hidden in the hangar, rejected by the server. To expose it as an empty
+  ASSIGNABLE mount, author an entry with `mount:` (and no `weapon-id`).
 - **Mount types** (loadout gate): every weapon mount has a type — **gun** (Bolt only), **missile**
-  (racks only), or **any** — enforced identically by the hangar filter and the server's
-  `ResolveLoadout` (`HardpointDef.MountAccepts`). Default derives from the bound weapon (gun →
-  gun mount, rack → missile mount, unbound → any). Author `mount: gun|missile|any` on the entry
-  to override — the only way to type an EMPTY mount (mesh HP_ nodes carry no gun/missile
-  distinction): `- { kind: weapon, index: 1, mount: missile }` (no `weapon-id` = stays empty).
+  (racks only), **any**, or **non-mountable** (accepts nothing, hidden) — enforced identically by
+  the hangar filter and the server's `ResolveLoadout` (`HardpointDef.MountAccepts`). Default derives
+  from the bound weapon (gun → gun mount, rack → missile mount); an UNAUTHORED empty mesh mount →
+  **non-mountable**. Author `mount: gun|missile|any` on the entry to type it — the only way to
+  expose an EMPTY mount (mesh HP_ nodes carry no gun/missile distinction):
+  `- { kind: weapon, index: 1, mount: missile }` (no `weapon-id` = empty, assignable in the hangar).
   A `mount:` contradicting the bound weapon, or a `successor-part-id` that would change a
   weapon's category at tier migration, refuses boot.
 

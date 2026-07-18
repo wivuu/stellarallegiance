@@ -595,6 +595,8 @@ public partial class ShipLoadout : Control
         {
             if (hp.Kind != HardpointKind.Weapon)
                 continue; // engines/thrusters/docking aren't assignable — 3D dots only
+            if (hp.Mount == WeaponMountKind.NonMountable)
+                continue; // unauthored mesh mount: not a loadout slot, hidden (no row, no marker)
             slots++;
             byte hpIndex = hp.Index;
             // Show the CURRENT tier: a saved/authored Gat Gun 1 reads as Gat Gun 2 once the team owns
@@ -652,7 +654,7 @@ public partial class ShipLoadout : Control
         }
         HardpointDef? slot = null;
         foreach (HardpointDef hp in hps)
-            if (hp.Kind == HardpointKind.Weapon && hp.Index == hpIndex)
+            if (hp.Kind == HardpointKind.Weapon && hp.Index == hpIndex && hp.Mount != WeaponMountKind.NonMountable)
                 slot = hp;
         if (slot == null)
         {

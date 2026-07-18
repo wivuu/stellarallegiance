@@ -648,8 +648,8 @@ void PositionNoseOnBase(Simulation.ShipSim ship, Vec3 basePos, float standoff = 
 // ---- 8. Non-siege: a seeker rack can never lock a base ------------------------------------------
 {
     var sim = BootSim(seed: 102);
-    // No hull mounts a seeker by default — arm a scout's untyped empty hp1 with one (the fighter's
-    // gun mounts no longer take racks) so this scenario actually exercises a seeker-vs-base lock.
+    // No hull mounts a seeker by default — arm a scout's empty missile-typed hp1 with one (the
+    // fighter's gun mounts no longer take racks) so this scenario actually exercises a seeker-vs-base lock.
     sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassScout,
         cargo: new (uint, byte)[] { (3u, 2) },
         mounts: new (byte, uint)[] { (1, 3u) });
@@ -679,7 +679,7 @@ void PositionNoseOnBase(Simulation.ShipSim ship, Vec3 basePos, float standoff = 
 // ---- 9. Non-siege: a dumbfired seeker detonates on the base hull but deals no base damage --------
 {
     var sim = BootSim(seed: 103);
-    // Arm a scout's untyped empty hp1 with the seeker (see scenario 8) so it actually has
+    // Arm a scout's empty missile-typed hp1 with the seeker (see scenario 8) so it actually has
     // something to dumbfire — no stock hull mounts one by default.
     sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassScout,
         cargo: new (uint, byte)[] { (3u, 2) },
