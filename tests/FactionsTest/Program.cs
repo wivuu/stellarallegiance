@@ -140,13 +140,13 @@ Check(
     "stock fighter carries booster-fuel stats (max-fuel/ab-fuel-drain/ab-fuel-recharge)",
     $"stock fighter fuel wrong (max {fighter.MaxFuel}, drain {fighter.AbFuelDrain}, recharge {fighter.AbFuelRecharge})"
 );
-var seeker = stock.Missiles.Single(m => m.Id == "seeker-missile");
+var seeker = stock.Missiles.Single(m => m.Id == "mrm-seeker-1");
 Check(
     // The seeker lost its cargo-id/glyph (missiles aren't hangar-stocked consumables — a fighter's
     // payload can't fit mass-4 seekers) and gained a chaff-resistance stat.
     seeker.CargoId == null && seeker.Mass == 4 && string.IsNullOrEmpty(seeker.Glyph)
         && seeker.ChaffResistance == 1.0 && !string.IsNullOrEmpty(seeker.Description),
-    "stock seeker missile carries mass + chaff-resistance and NO cargo-id/glyph",
+    "stock mrm-seeker-1 carries mass + chaff-resistance and NO cargo-id/glyph",
     $"stock seeker wrong (cargo-id {seeker.CargoId}, mass {seeker.Mass}, chaff-res {seeker.ChaffResistance}, glyph '{seeker.Glyph}')"
 );
 // Guided-missile guidance/lock block + smoke-trail runtime extension fields (projected onto the
@@ -160,60 +160,84 @@ Check(
     $"stock seeker guidance wrong (speed {seeker.InitialSpeed}/{seeker.MaxSpeed}, accel {seeker.Acceleration}, turn {seeker.TurnRate}, lock {seeker.LockTime}/{seeker.LockAngle}/{seeker.MaxLock}, power {seeker.Power})"
 );
 Check(
-    seeker.ModelName == "mis09" && seeker.TrailLifetime == 0.7 && seeker.TrailScale == 0.45 && seeker.TrailColor == "ffc890ff",
+    seeker.ModelName == "mis06" && seeker.TrailLifetime == 0.7 && seeker.TrailScale == 0.45 && seeker.TrailColor == "ffc890ff",
     "stock seeker carries smoke-trail fields (model-name/trail-*)",
     $"stock seeker trail wrong (model {seeker.ModelName}, life {seeker.TrailLifetime}, scale {seeker.TrailScale}, color {seeker.TrailColor})"
 );
-var missileRack = stock.Launchers.Single(l => l.Id == "missile-rack");
+var missileRack = stock.Launchers.Single(l => l.Id == "seeker-rack-1");
 Check(
     missileRack.WeaponId == 3 && missileRack.Amount == 6 && missileRack.FireIntervalTicks == 30
-        && missileRack.ExpendableId == "seeker-missile" && missileRack.Mass == 4,
-    "stock missile-rack carries weapon-id + amount + fire-interval-ticks",
-    $"stock missile-rack wrong (weapon-id {missileRack.WeaponId}, amount {missileRack.Amount}, fire {missileRack.FireIntervalTicks}, expendable {missileRack.ExpendableId})"
+        && missileRack.ExpendableId == "mrm-seeker-1" && missileRack.Mass == 4,
+    "stock seeker-rack-1 carries weapon-id + amount + fire-interval-ticks",
+    $"stock seeker-rack-1 wrong (weapon-id {missileRack.WeaponId}, amount {missileRack.Amount}, fire {missileRack.FireIntervalTicks}, expendable {missileRack.ExpendableId})"
+);
+// Tier succession (Iron ordnance import, D1/D6): seeker-rack-1 is obsoleted by the seeker-2 tech and
+// migrates a saved loadout to seeker-rack-2 (weapon-id 18) once owned.
+Check(
+    missileRack.ObsoletedByTechs.Contains("seeker-2") && missileRack.SuccessorPartId == "seeker-rack-2",
+    "seeker-rack-1 is obsoleted-by seeker-2 with successor-part-id seeker-rack-2",
+    $"seeker-rack-1 tier wiring wrong (obsoletedBy [{string.Join(",", missileRack.ObsoletedByTechs)}], successor {missileRack.SuccessorPartId})"
 );
 
 // Anti-base torpedo (weapon-id 5 rack): siege ordnance, no cargo-id (never hangar-stocked, only
 // launcher-fired), can-damage-base true — the flag that lets it (and only it) hurt a station.
-var torpedo = stock.Missiles.Single(m => m.Id == "anti-base-torpedo");
+// Power is IGC-faithful (200 -> 300, Iron ordnance import D5) — a garrison falls in ~7 tier-1 hits.
+var torpedo = stock.Missiles.Single(m => m.Id == "srm-anti-base-1");
 Check(
-    torpedo.CanDamageBase && torpedo.Power == 200 && torpedo.CargoId == null,
-    "stock anti-base-torpedo carries can-damage-base + power, and no cargo-id",
-    $"anti-base-torpedo wrong (can-damage-base {torpedo.CanDamageBase}, power {torpedo.Power}, cargo-id {torpedo.CargoId})"
+    torpedo.CanDamageBase && torpedo.Power == 300 && torpedo.CargoId == null,
+    "stock srm-anti-base-1 carries can-damage-base + power 300, and no cargo-id",
+    $"srm-anti-base-1 wrong (can-damage-base {torpedo.CanDamageBase}, power {torpedo.Power}, cargo-id {torpedo.CargoId})"
 );
-var torpedoRack = stock.Launchers.Single(l => l.Id == "torpedo-rack");
+var torpedoRack = stock.Launchers.Single(l => l.Id == "anti-base-rack-1");
 Check(
     torpedoRack.WeaponId == 5 && torpedoRack.Amount == 6 && torpedoRack.FireIntervalTicks == 60
-        && torpedoRack.ExpendableId == "anti-base-torpedo",
-    "stock torpedo-rack carries weapon-id + amount + fire-interval-ticks + resolves to the torpedo",
-    $"stock torpedo-rack wrong (weapon-id {torpedoRack.WeaponId}, amount {torpedoRack.Amount}, fire {torpedoRack.FireIntervalTicks}, expendable {torpedoRack.ExpendableId})"
+        && torpedoRack.ExpendableId == "srm-anti-base-1",
+    "stock anti-base-rack-1 carries weapon-id + amount + fire-interval-ticks + resolves to the torpedo",
+    $"stock anti-base-rack-1 wrong (weapon-id {torpedoRack.WeaponId}, amount {torpedoRack.Amount}, fire {torpedoRack.FireIntervalTicks}, expendable {torpedoRack.ExpendableId})"
+);
+// MRM Quickfire 1 (weapon-id 4 rack, the dart-rack analog): fast, weak, barely tracks; mass drops
+// 3->2 and the rack keeps its harasser numbers (Iron ordnance import D5).
+var quickfire = stock.Missiles.Single(m => m.Id == "mrm-quickfire-1");
+Check(
+    quickfire.Mass == 3 && quickfire.InitialSpeed == 180 && quickfire.TurnRate == 120
+        && quickfire.LockTime == 0.25 && quickfire.Power == 30 && quickfire.ModelName == "mis08",
+    "stock mrm-quickfire-1 carries its fast/weak/barely-tracking harasser stats",
+    $"mrm-quickfire-1 wrong (mass {quickfire.Mass}, speed {quickfire.InitialSpeed}, turn {quickfire.TurnRate}, lock {quickfire.LockTime}, power {quickfire.Power}, model {quickfire.ModelName})"
+);
+var quickfireRack = stock.Launchers.Single(l => l.Id == "quickfire-rack-1");
+Check(
+    quickfireRack.WeaponId == 4 && quickfireRack.Amount == 6 && quickfireRack.FireIntervalTicks == 10
+        && quickfireRack.ExpendableId == "mrm-quickfire-1" && quickfireRack.Mass == 2,
+    "stock quickfire-rack-1 carries weapon-id + amount + fire-interval-ticks + mass 2 (dropped from 3)",
+    $"stock quickfire-rack-1 wrong (weapon-id {quickfireRack.WeaponId}, amount {quickfireRack.Amount}, fire {quickfireRack.FireIntervalTicks}, mass {quickfireRack.Mass}, expendable {quickfireRack.ExpendableId})"
 );
 // Chaff / mine consumables + their dispensers (launcher-projected, NOT hull-mounted).
-var mine = stock.Mines.Single(m => m.Id == "proximity-mine");
+var mine = stock.Mines.Single(m => m.Id == "prox-mine-1");
 Check(
     mine.CargoId == 2 && mine.Mass == 1 && mine.Power == 60
         && mine.CloudRadius == 80 && mine.CloudCount == 64
-        && mine.ArmDelay == 1 && mine.Lifespan == 60 && mine.ModelName == "acs41",
-    "stock proximity-mine carries field/blast/arming stats",
-    $"proximity-mine wrong (cargo {mine.CargoId}, radius {mine.Radius}, cloud {mine.CloudCount}x{mine.CloudRadius}, arm {mine.ArmDelay})"
+        && mine.ArmDelay == 1 && mine.Lifespan == 60 && mine.ModelName == "dn_ptminprx",
+    "stock prox-mine-1 carries field/blast/arming stats",
+    $"prox-mine-1 wrong (cargo {mine.CargoId}, radius {mine.Radius}, cloud {mine.CloudCount}x{mine.CloudRadius}, arm {mine.ArmDelay}, model {mine.ModelName})"
 );
-var decoy = stock.Chaffs.Single(c => c.Id == "sensor-decoy");
+var decoy = stock.Chaffs.Single(c => c.Id == "counter-1");
 Check(
     decoy.CargoId == 3 && decoy.Mass == 1 && decoy.ChaffStrength == 1.0 && decoy.DecoyRadius == 60 && decoy.Lifespan == 3 && decoy.ModelName == "acs40",
-    "stock sensor-decoy carries chaff-strength + decoy-radius",
-    $"sensor-decoy wrong (cargo {decoy.CargoId}, strength {decoy.ChaffStrength}, decoy {decoy.DecoyRadius})"
+    "stock counter-1 carries chaff-strength + decoy-radius",
+    $"counter-1 wrong (cargo {decoy.CargoId}, strength {decoy.ChaffStrength}, decoy {decoy.DecoyRadius})"
 );
-var decoyDispenser = stock.Launchers.Single(l => l.Id == "decoy-dispenser");
-var mineDispenser = stock.Launchers.Single(l => l.Id == "mine-dispenser");
+var decoyDispenser = stock.Launchers.Single(l => l.Id == "counter-dispenser-1");
+var mineDispenser = stock.Launchers.Single(l => l.Id == "prox-mine-dispenser-1");
 Check(
-    decoyDispenser.WeaponId == 6 && decoyDispenser.ExpendableId == "sensor-decoy" && decoyDispenser.FireIntervalTicks == 40
-        && mineDispenser.WeaponId == 7 && mineDispenser.ExpendableId == "proximity-mine" && mineDispenser.FireIntervalTicks == 100,
+    decoyDispenser.WeaponId == 6 && decoyDispenser.ExpendableId == "counter-1" && decoyDispenser.FireIntervalTicks == 40
+        && mineDispenser.WeaponId == 7 && mineDispenser.ExpendableId == "prox-mine-1" && mineDispenser.FireIntervalTicks == 100,
     "stock chaff/mine dispensers carry weapon-id + expendable-id + cadence",
     $"dispensers wrong (chaff wid {decoyDispenser.WeaponId} exp {decoyDispenser.ExpendableId}, mine wid {mineDispenser.WeaponId} exp {mineDispenser.ExpendableId})"
 );
-// Fighter/bomber default-cargo (raw YAML): fighter 2x sensor-decoy; bomber 8x mine + 1x decoy.
+// Fighter/bomber default-cargo (raw YAML): fighter 2x counter-1 (was sensor-decoy).
 Check(
-    fighter.DefaultCargo.Count == 1 && fighter.DefaultCargo[0].Item == "sensor-decoy" && fighter.DefaultCargo[0].Count == 2,
-    "stock fighter default-cargo = 2x sensor-decoy",
+    fighter.DefaultCargo.Count == 1 && fighter.DefaultCargo[0].Item == "counter-1" && fighter.DefaultCargo[0].Count == 2,
+    "stock fighter default-cargo = 2x counter-1",
     $"fighter default-cargo wrong ({string.Join(",", fighter.DefaultCargo.Select(c => $"{c.Item}x{c.Count}"))})"
 );
 

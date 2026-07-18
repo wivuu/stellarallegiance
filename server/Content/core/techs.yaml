@@ -64,3 +64,49 @@ techs:
   - id: outpost-hvy
     name: Outpost (Hvy)
     description: "Granted by upgrading an Outpost — reinforces this forward base to its heavy tier."
+
+  # ---- Iron Coalition ordnance research (Phase 6, PCore014.igc; granted by developments.yaml) ----
+  # Appended at the tail (indices 16-29) — wire indices are list order, so nothing above this line
+  # may ever be reordered.
+  - id: seeker-2
+    name: MRM Seeker 2
+    description: "Uprated MRM Seeker guidance — the mid-tier of the seeker missile line."
+  - id: seeker-3
+    name: MRM Seeker 3
+    description: "Top-tier MRM Seeker — the hardest-hitting seeker in the arsenal."
+  - id: quickfire-2
+    name: MRM Quickfire 2
+    description: "Uprated MRM Quickfire — faster, harder-hitting harasser missiles."
+  - id: quickfire-3
+    name: MRM Quickfire 3
+    description: "Top-tier MRM Quickfire — the fleet's fastest missile line."
+  - id: dumbfire-2
+    name: SRM Dumbfire 2
+    description: "Uprated SRM Dumbfire — quicker lock, heavier punch."
+  - id: dumbfire-3
+    name: SRM Dumbfire 3
+    description: "Top-tier SRM Dumbfire — the hardest-hitting quick-lock missile in the arsenal."
+  - id: anti-base-2
+    name: SRM Anti-Base 2
+    description: "Uprated SRM Anti-Base torpedo — heavier siege ordnance."
+  - id: anti-base-3
+    name: SRM Anti-Base 3
+    description: "Top-tier SRM Anti-Base torpedo — the hardest-hitting siege ordnance in the arsenal."
+  - id: mine-2
+    name: Prox Mine 2
+    description: "Uprated Prox Mine — a stronger, longer-lived minefield."
+  - id: mine-3
+    name: Prox Mine 3
+    description: "Top-tier Prox Mine — the fleet's most lethal minefield."
+  - id: chaff-2
+    name: Counter 2
+    description: "Uprated Counter chaff — a stronger decoy signature."
+  - id: chaff-3
+    name: Counter 3
+    description: "Top-tier Counter chaff — the fleet's strongest decoy."
+  - id: probe-2
+    name: EWS Probe 2
+    description: "Uprated EWS Probe — a longer vision radius."
+  - id: probe-3
+    name: EWS Probe 3
+    description: "Top-tier EWS Probe — the fleet's longest-ranged sensor buoy."

@@ -66,9 +66,9 @@ hulls:
       - { kind: weapon, index: 0, weapon-id: 0 }   # binds mesh HP_Weapon_0 (PW Gat Gun 1)
       - { kind: cockpit, off-y: 0.35, off-z: 0.8, dir-z: 1 }
     default-cargo:
-      - { item: proximity-mine, count: 3 }
-      - { item: sensor-decoy, count: 1 }
-      - { item: recon-probe, count: 1 }
+      - { item: prox-mine-1, count: 3 }
+      - { item: counter-1, count: 1 }
+      - { item: ews-probe-1, count: 1 }
 
   # Lt Interceptor (class-id 3, wc_icint): agile dock-only booster hull, twin PW Mini-Gun. IGC 2×0x18.
   - id: lt-interceptor
@@ -112,7 +112,7 @@ hulls:
       - { kind: weapon, index: 2, weapon-id: 9 }   # binds mesh HP_Weapon_2 (left wing PW Mini-Gun 1)
       - { kind: cockpit, off-y: 0.4, off-z: 1.2, dir-z: 1 }
     default-cargo:
-      - { item: sensor-decoy, count: 2 }
+      - { item: counter-1, count: 2 }
 
   # Enh Fighter (class-id 1, wc_icfig): the all-rounder — three PW Gat Guns. IGC 3×0x1. The anchor
   # hull for the whole stat translation. Gated behind supremacy-1 (Phase 4): buildable once the team
@@ -159,7 +159,7 @@ hulls:
       - { kind: weapon, index: 2, weapon-id: 0 }   # binds mesh HP_Weapon_2 (belly PW Gat Gun 1)
       - { kind: cockpit, off-y: 0.55, off-z: 1.4, dir-z: 1 }
     default-cargo:
-      - { item: sensor-decoy, count: 2 }
+      - { item: counter-1, count: 2 }
 
   # Adv Fighter (class-id 6, wc_icadv): the Enh Fighter's successor — three PW Gat Guns, more armor.
   # Gated behind supremacy-adv (unbuildable until Phase 3/4 delivers the Supremacy (Adv) base).
@@ -203,10 +203,10 @@ hulls:
       - { kind: weapon, index: 2, weapon-id: 0 }   # binds mesh HP_Weapon_2 (belly PW Gat Gun 1)
       - { kind: cockpit, off-y: 0.55, off-z: 1.4, dir-z: 1 }
     default-cargo:
-      - { item: sensor-decoy, count: 2 }
+      - { item: counter-1, count: 2 }
 
   # Bomber (class-id 2, wc_icbmb): the heavy assault hull — 2x PW Gat Gun + 2x PW AutoCan + the
-  # anti-base torpedo rack (the ONLY can-damage-base weapon, so the bomber is the match-ender). IGC
+  # SRM Anti-Base rack (the ONLY can-damage-base weapon, so the bomber is the match-ender). IGC
   # 2×0x1 + 2×0x4000. Gated behind the `bomber` tech (dev-bomber, researchable at match start).
   - id: bomber
     name: Bomber
@@ -236,23 +236,23 @@ hulls:
     vision-sphere-radius: 400
     radar-signature: 1.75  # big and loud — seen from much further away than a scout
     price: 350
-    payload-capacity: 20 # 2x gat + 2x autocan (4) + torpedo rack (4) = 8; + 8 mine + 1 decoy = 17 -> 3 free
+    payload-capacity: 20 # 2x gat + 2x autocan (4) + anti-base rack (4) = 8; + 8 mine + 1 decoy = 17 -> 3 free
     required-capabilities: [base]
     required-techs: [bomber]
     # wc_icbmb carries HP_Weapon_0 (top-left) + HP_Weapon_1/2 (symmetric nose tips). The nose pair take
     # the two heavy PW AutoCans; the top-left mount + an authored symmetric top-right mount take the two
-    # PW Gat Guns; index 4 (authored belly rack, no mesh node) carries the anti-base torpedo. Guns stay
+    # PW Gat Guns; index 4 (authored belly rack, no mesh node) carries the SRM Anti-Base rack. Guns stay
     # at the low indices, rack last. Booster_0/1, Thruster_0, Turret_0/1, Light_0..4 append.
     hardpoints:
       - { kind: weapon, index: 0, weapon-id: 0 }   # binds mesh HP_Weapon_0 (PW Gat Gun 1)
       - { kind: weapon, index: 1, weapon-id: 12 }  # binds mesh HP_Weapon_1 (right nose PW AutoCan 1)
       - { kind: weapon, index: 2, weapon-id: 12 }  # binds mesh HP_Weapon_2 (left nose PW AutoCan 1)
       - { kind: weapon, index: 3, weapon-id: 0, off-x: 2.25, off-y: 0.92, off-z: 1.36, dir-z: 1 } # PW Gat Gun 1 (top-right, mirror of HP_Weapon_0)
-      - { kind: weapon, index: 4, weapon-id: 5, off-y: -0.5, off-z: 1.5, dir-z: 1 } # anti-base torpedo rack (belly)
+      - { kind: weapon, index: 4, weapon-id: 5, off-y: -0.5, off-z: 1.5, dir-z: 1 } # SRM Anti-Base rack (belly)
       - { kind: cockpit, off-y: 0.7, off-z: 1.8, dir-z: 1 }
     default-cargo:
-      - { item: proximity-mine, count: 8 }
-      - { item: sensor-decoy, count: 1 }
+      - { item: prox-mine-1, count: 8 }
+      - { item: counter-1, count: 1 }
 
   # Devastator (class-id 7, cap09): the Iron capital hull — four heavy PW AutoCans. IGC 0xc400 +
   # 4×0xc000; the 0xc400 (SkyRip) mount is unauthored (cap09.glb exposes exactly four HP_Weapon nodes,
@@ -304,7 +304,7 @@ hulls:
       - { kind: weapon, index: 3, weapon-id: 12 }   # HP_Weapon_3 (PW AutoCan 1)
       - { kind: cockpit, off-y: 0.9, off-z: 3.2, dir-z: 1 }
     default-cargo:
-      - { item: proximity-mine, count: 8 }
+      - { item: prox-mine-1, count: 8 }
 
   # Miner (class-id 4): the AI mining hull — slow, heavy, unarmed. Harvests helium-3 from asteroids
   # into its ore hold (ore-capacity) and offloads it at friendly bases for team credits. No weapon

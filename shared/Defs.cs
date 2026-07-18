@@ -146,7 +146,7 @@ namespace StellarAllegiance.Shared
         Bolt, // instant analytic ray-cast bolt
         Missile, // guided homing missile (projected from a Launcher + its missile expendable)
         Mine, // proximity mine dispenser (projected from a Launcher + its mine expendable)
-        Chaff, // sensor-decoy dispenser (projected from a Launcher + its chaff expendable)
+        Chaff, // decoy dispenser (projected from a Launcher + its chaff expendable)
         Probe, // deployable vision-sphere dispenser (projected from a Launcher + its probe expendable); APPEND-ONLY, never reorder
     }
 

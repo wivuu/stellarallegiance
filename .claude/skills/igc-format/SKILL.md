@@ -31,14 +31,25 @@ for `equipmentType==1` guns (`dtimeReady@+32/dtimeBurst/energyPerShot/dispersion
 New `parse_projectile` (ObjectType 22, a `DataObjectIGC`-derived struct, **not** a buyable, no name — join
 weapons via `projectileTypeID` → projectile `projID@72`): `power/blastPower/blastRadius/speed/lifespan/width/
 radius/damageType`. `parse_station` adds `signature/maxArmor/maxShield/armorRegen/shieldRegen/scannerRange/radius`.
-The `--iron-slice` mode resolves the Iron Coalition roster and prints the Phase-2 hull/gun/station/dev picks
-with RAW IGC values plus anchor-translated core-bundle YAML fields (Enh Fighter↔`fighter`, PW Gat Gun 1↔
+The `--iron-slice` mode resolves the Iron Coalition roster and prints the Phase-2 hull/gun/station/dev/ordnance
+picks with RAW IGC values plus anchor-translated core-bundle YAML fields (Enh Fighter↔`fighter`, PW Gat Gun 1↔
 `fighter-cannon`, Garrison armor 20000↔2000, price ×0.06). Two gotchas surfaced: sustained fire cadence is
 `dtimeBurst` (weaponIGC.cpp:310), not the uniform-0.25 `dtimeReady`; and ER Nanite projectiles carry **negative
 power** (the heal, later modeled as an explicit `is-healing` flag).
 
+**Ordnance** (added 2026-07-18). `parse_missile/mine/chaff/probe` fully decode `DataExpendableTypeIGC`-family
+records (ObjectType 23/24/25/26): shared launcher-buyable fields (price/model/name/req/eff, embedded LauncherDef
+at record offset 64) plus type-specific tails at offset 464 — missile `acceleration/turnRate/initialSpeed/
+lockTime/readyTime/maxLock/chaffResistance/dispersion/lockAngle/power/blastPower/blastRadius/width/damageType`,
+mine `radius/power/endurance/damageType`, chaff `chaffStrength`, probe `scannerRange/dtimeBurst/dispersion/
+accuracy/ammo/projectileTypeID/dtRipcord`. `parse_part` now also decodes magazine records (partType, size<100,
+`DataLauncherTypeIGC`): `amount/partID/successorPartID/launchCount/expendableTypeID`, joined to an expendable via
+`expendableTypeID`. `resolve_faction` gates missiles/mines/chaff/probes the same as parts (`req ⊆ localUltimate`).
+The `--iron-slice` ORDNANCE section prints raw + judgment-translated stats (documented in the `_O` header
+comment) for the Iron roster's missiles/mines/chaff/probes plus their magazine amount/launchCount/successor chain.
+
 Import it as a module for custom work: `read_records`, `parse_all`, `parse_buyable`,
-`parse_hull/part/station/dev/drone/civ`, `mask_bits`, `resolve_faction`.
+`parse_hull/part/station/dev/drone/civ`, `parse_missile/mine/chaff/probe`, `mask_bits`, `resolve_faction`.
 
 ## The format (why the parser is written the way it is)
 

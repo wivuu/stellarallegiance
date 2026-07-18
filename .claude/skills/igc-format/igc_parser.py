@@ -88,8 +88,11 @@ def parse_hull(b, size):
     return d
 
 def parse_part(b, size):
-    if size < 100:  # magazine/dispenser = DataLauncherTypeIGC (~24 B), no DataBuyableIGC base
-        return dict(name='<launcher>', launcher=True)
+    if size < 100:  # magazine/dispenser = DataLauncherTypeIGC (igc.h:1881, 23 B unpadded), no DataBuyableIGC base
+        # amount@0 partID@2 successorPartID@4 launchCount@6 expendableTypeID@8 (all i16)
+        return dict(name='<launcher>', launcher=True,
+                    amount=u('<h',b,0), partID=u('<h',b,2), succ=u('<h',b,4),
+                    launchCount=u('<h',b,6), expendableTypeID=u('<h',b,8))
     d=parse_buyable(b); o=BUY
     d.update(mass=u('<f',b,o), partID=u('<h',b,o+8), succ=u('<h',b,o+10),
              equipmentType=u('<h',b,o+12), partMask=u('<H',b,o+14))
@@ -150,9 +153,53 @@ def parse_civ(b):
         gas=list(struct.unpack_from('<25f',b,160)),
         lifepod=u('<h',b,260), civID=u('<h',b,262), initStation=u('<h',b,264))
 
-def parse_expendable_name(b):
-    # DataExpendableTypeIGC : DataObjectIGC(52) + loadTime,lifespan,signature(12) + LauncherDef(DataBuyableIGC) -> name @ 99
-    return cstr(b[99:124])
+def parse_expendable_base(b):
+    """DataExpendableTypeIGC common layout, shared by missile/mine/chaff/probe records
+    (igc.h:1946 DataExpendableTypeIGC, ~1881 DataLauncherTypeIGC's sibling LauncherDef):
+      DataObjectIGC(52) + loadTime@52/lifespan@56/signature@60(f32) +
+      embedded LauncherDef @64 = DataBuyableIGC(364, name@99 as already validated) +
+      signature@428/mass@432(f32) + partMask@436/expendableSize@438(u16) +
+      hitPoints@440(f32) + defenseType@444(u8) + expendableTypeID@446(i16)
+      -> type-specific tail starts @464 (all validated against igc.h struct math)."""
+    d = parse_buyable(b[64:64+BUY])  # embedded LauncherDef's DataBuyableIGC base
+    d.update(loadTime=u('<f',b,52), lifespan=u('<f',b,56), signature=u('<f',b,60),
+              launchSig=u('<f',b,428), mass=u('<f',b,432),
+              partMask=u('<H',b,436), expendableSize=u('<H',b,438),
+              hitPoints=u('<f',b,440), defenseType=u('<B',b,444),
+              expendableTypeID=u('<h',b,446))
+    return d
+
+def parse_missile(b):
+    # DataMissileTypeIGC tail @464 (igc.h:1960), record sizeof 524 (validated).
+    d = parse_expendable_base(b)
+    d.update(type='missile',
+              acceleration=u('<f',b,464), turnRate=u('<f',b,468), initialSpeed=u('<f',b,472),
+              lockTime=u('<f',b,476), readyTime=u('<f',b,480), maxLock=u('<f',b,484),
+              chaffResistance=u('<f',b,488), dispersion=u('<f',b,492), lockAngle=u('<f',b,496),
+              power=u('<f',b,500), blastPower=u('<f',b,504), blastRadius=u('<f',b,508),
+              width=u('<f',b,512), damageType=u('<B',b,516))
+    return d
+
+def parse_mine(b):
+    # DataMineTypeIGC tail @464 (igc.h:1985).
+    d = parse_expendable_base(b)
+    d.update(type='mine', radius=u('<f',b,464), power=u('<f',b,468), endurance=u('<f',b,472),
+              damageType=u('<B',b,476))
+    return d
+
+def parse_chaff(b):
+    # DataChaffTypeIGC tail @464 (igc.h:1992).
+    d = parse_expendable_base(b)
+    d.update(type='chaff', chaffStrength=u('<f',b,464))
+    return d
+
+def parse_probe(b):
+    # DataProbeTypeIGC tail @464 (igc.h:1996).
+    d = parse_expendable_base(b)
+    d.update(type='probe', scannerRange=u('<f',b,464), dtimeBurst=u('<f',b,468),
+              dispersion=u('<f',b,472), accuracy=u('<f',b,476), ammo=u('<h',b,480),
+              projectileTypeID=u('<h',b,482), dtRipcord=u('<f',b,488))
+    return d
 
 # ---- enum label helpers ----
 EQUIP={0:"ChaffLauncher",1:"Weapon",2:"Magazine",3:"Dispenser",4:"Shield",5:"Cloak",6:"Pack",7:"Afterburner"}
@@ -171,10 +218,10 @@ def parse_all(path):
         elif t==32: out['devs'].append(parse_dev(b))
         elif t==33: out['drones'].append(parse_drone(b))
         elif t==27: out['civs'].append(parse_civ(b))
-        elif t==23: out['missiles'].append(parse_expendable_name(b))
-        elif t==24: out['mines'].append(parse_expendable_name(b))
-        elif t==26: out['chaff'].append(parse_expendable_name(b))
-        elif t==25: out['probes'].append(parse_expendable_name(b))
+        elif t==23: out['missiles'].append(parse_missile(b))
+        elif t==24: out['mines'].append(parse_mine(b))
+        elif t==26: out['chaff'].append(parse_chaff(b))
+        elif t==25: out['probes'].append(parse_probe(b))
     return out, recs
 
 def resolve_faction(data, civ):
@@ -202,6 +249,11 @@ def resolve_faction(data, civ):
         parts=[p for p in parts if not p.get('launcher') and sub(p)],
         stations=[s for s in stations if sub(s)],
         drones=[d for d in data['drones'] if sub(d)],
+        # expendables carry req/eff via their embedded LauncherDef buyable; same subset rule as parts
+        missiles=[m for m in data['missiles'] if sub(m)],
+        mines=[m for m in data['mines'] if sub(m)],
+        chaff=[m for m in data['chaff'] if sub(m)],
+        probes=[m for m in data['probes'] if sub(m)],
         devs=[d for d in devs if d['devID']!=1 and set(d['req'])<=ult
               and not (d['techOnly'] and set(d['eff'])<=init)])
 
@@ -227,6 +279,23 @@ _A = dict(hull_speed=100.0, hull_armor=120.0, hull_mass=36.0, hull_thrust=25.0, 
           igc_speed=120.0, igc_hp=350.0, igc_mass=30.0, igc_thrust=750.0, igc_turn=1.047197,
           gun_power=10.0, gun_pspeed=200.0, igc_gpower=3.2, igc_gspeed=600.0,
           price_mult=0.06, sta_armor=2000.0, igc_sta_armor=20000.0, sta_radius=90.0, igc_sta_radius=423.5)
+
+#   ORDNANCE anchors: unlike HULL/GUN/STATION above, these are NOT measured against an existing
+#   our-side ordnance item (none exists yet pre-import) — they are judgment-call multipliers picked
+#   to keep Allegiance's ordnance ratios recognizable at our tick/scale, meant to be eyeballed and
+#   adjusted per line during transcription, not applied mechanically:
+#     missile : power x0.75 | lock-time x0.75 | acceleration x2/3 | turn-rate rad/s x83.3 -> deg/s
+#               (cap fast turners to ~120-200 deg/s by judgment — raw conversion overshoots at our
+#               scale) | fire-interval-ticks = round(loadTime*15) (15 ticks/s is a starting anchor,
+#               judgment-adjusted per line, not a measured tick rate)
+#     mine    : power x0.15 | endurance x0.03 -> lifespan (seconds) | radius x0.8
+#     chaff   : chaffStrength x2/3
+#     probe   : scannerRange x9.6 -> sight-radius
+#     magazine: amount x0.6
+_O = dict(missile_power=0.75, missile_lock=0.75, missile_accel=2/3, missile_turn_rad2deg=83.3,
+          missile_turn_cap_lo=120.0, missile_turn_cap_hi=200.0, missile_fi_ticks_per_sec=15.0,
+          mine_power=0.15, mine_endurance=0.03, mine_radius=0.8,
+          chaff_strength=2/3, probe_scanner=9.6, magazine_amount=0.6)
 
 def _pick(lst, name):
     """Exact (case-insensitive) name match within a resolved roster list; warn on 0/>1."""
@@ -329,6 +398,110 @@ def iron_slice_report(data):
         if not d: print(f"  {name!r}: NOT FOUND in Iron roster"); continue
         print(f"  {d['name']:22} price {d['price']:6d} -> yaml {rnd(d['price']*A['price_mult'],0):5}  "
               f"techOnly {d['techOnly']}  req {d['req']}  eff {d['eff']}")
+
+    # ---------------- ORDNANCE (missiles/mines/chaff/probes + launcher magazines) ----------------
+    O=_O
+    print("\n================= ORDNANCE (expendables: missiles/mines/chaff/probes + magazines) =================")
+    print("  Translation = judgment-call multipliers (NOT measured against an existing our-side ordnance")
+    print("  anchor item — none exists pre-import); eyeball/adjust per line during transcription:")
+    print("    missile : power x0.75 | lock-time x0.75 | acceleration x2/3 | turn-rate rad/s x83.3 -> deg/s")
+    print("              (cap fast turners ~120-200 deg/s by judgment) | fire-interval-ticks =")
+    print("              round(loadTime*15)  (judgment-adjusted per line)")
+    print("    mine    : power x0.15 | endurance x0.03 -> lifespan(s) | radius x0.8")
+    print("    chaff   : chaffStrength x2/3")
+    print("    probe   : scannerRange x9.6 -> sight-radius")
+    print("    magazine: amount x0.6\n")
+
+    all_mags=[p for p in data['parts'] if p.get('launcher')]
+    def mags_for(etid): return [m for m in all_mags if m['expendableTypeID']==etid]
+    def print_magazines(etid):
+        ms=mags_for(etid)
+        if not ms: print("    magazine: NONE FOUND"); return
+        for m in ms:
+            tr_amt=rnd(m['amount']*O['magazine_amount'],0)
+            print(f"    magazine: partID {m['partID']} succ {m['succ']} amount {m['amount']} (yaml {tr_amt})  "
+                  f"launchCount {m['launchCount']}")
+
+    def print_missile(o):
+        tr_power=rnd(o['power']*O['missile_power'],1)
+        tr_lock =rnd(o['lockTime']*O['missile_lock'],2)
+        tr_accel=rnd(o['acceleration']*O['missile_accel'],1)
+        tr_turn_raw=o['turnRate']*O['missile_turn_rad2deg']
+        cap_note = (f"  (raw {rnd(tr_turn_raw,1)} deg/s exceeds judgment cap -- consider clamping to "
+                    f"~{O['missile_turn_cap_lo']:.0f}-{O['missile_turn_cap_hi']:.0f})") \
+                   if tr_turn_raw>O['missile_turn_cap_hi'] else ""
+        tr_turn=rnd(min(tr_turn_raw,O['missile_turn_cap_hi']),1)
+        tr_fi  =rnd(o['loadTime']*O['missile_fi_ticks_per_sec'],0)
+        print(f"  {o['name']} [expendableTypeID {o['expendableTypeID']} model {o['model']!r} price {o['price']} "
+              f"req {o['req']}]")
+        print(f"    raw : power {o['power']:.1f}  lockTime {o['lockTime']:.3f}  turnRate {o['turnRate']:.3f} rad  "
+              f"acceleration {o['acceleration']:.1f}  initialSpeed {o['initialSpeed']:.1f}  readyTime {o['readyTime']:.2f}  "
+              f"maxLock {o['maxLock']:.2f}  chaffResistance {o['chaffResistance']:.2f}  dispersion {o['dispersion']:.3f}  "
+              f"lockAngle {o['lockAngle']:.3f}  blastPower {o['blastPower']:.1f}  blastRadius {o['blastRadius']:.1f}  "
+              f"width {o['width']:.2f}  damageType {o['damageType']}  loadTime {o['loadTime']:.2f}  "
+              f"lifespan {o['lifespan']:.1f}  hitPoints {o['hitPoints']:.0f}  mass {o['mass']:.1f}")
+        print(f"    yaml: power {tr_power}  lock-time {tr_lock}  turn-rate-deg-s {tr_turn}{cap_note}  "
+              f"acceleration {tr_accel}  fire-interval-ticks {tr_fi} (judgment-adjusted per line)")
+        print_magazines(o['expendableTypeID'])
+
+    def print_mine(o):
+        tr_power=rnd(o['power']*O['mine_power'],1)
+        tr_life =rnd(o['endurance']*O['mine_endurance'],1)
+        tr_radius=rnd(o['radius']*O['mine_radius'],1)
+        print(f"  {o['name']} [expendableTypeID {o['expendableTypeID']} model {o['model']!r} price {o['price']} "
+              f"req {o['req']}]")
+        print(f"    raw : power {o['power']:.1f}  endurance {o['endurance']:.1f}  radius {o['radius']:.1f}  "
+              f"damageType {o['damageType']}  loadTime {o['loadTime']:.2f}  lifespan {o['lifespan']:.1f}  "
+              f"hitPoints {o['hitPoints']:.0f}  mass {o['mass']:.1f}")
+        print(f"    yaml: power {tr_power}  lifespan-s {tr_life}  radius {tr_radius}")
+        print_magazines(o['expendableTypeID'])
+
+    def print_chaff(o):
+        tr_str=rnd(o['chaffStrength']*O['chaff_strength'],2)
+        print(f"  {o['name']} [expendableTypeID {o['expendableTypeID']} model {o['model']!r} price {o['price']} "
+              f"req {o['req']}]")
+        print(f"    raw : chaffStrength {o['chaffStrength']:.3f}  loadTime {o['loadTime']:.2f}  "
+              f"lifespan {o['lifespan']:.1f}  hitPoints {o['hitPoints']:.0f}  mass {o['mass']:.2f}")
+        print(f"    yaml: strength {tr_str}")
+        print_magazines(o['expendableTypeID'])
+
+    def print_probe(o):
+        tr_scan=rnd(o['scannerRange']*O['probe_scanner'],0)
+        print(f"  {o['name']} [expendableTypeID {o['expendableTypeID']} model {o['model']!r} price {o['price']} "
+              f"req {o['req']}]")
+        print(f"    raw : scannerRange {o['scannerRange']:.0f}  dtimeBurst {o['dtimeBurst']:.2f}  "
+              f"dispersion {o['dispersion']:.3f}  accuracy {o['accuracy']:.2f}  ammo {o['ammo']}  "
+              f"projectileTypeID {o['projectileTypeID']}  dtRipcord {o['dtRipcord']:.2f}  loadTime {o['loadTime']:.2f}  "
+              f"lifespan {o['lifespan']:.0f}  hitPoints {o['hitPoints']:.0f}  mass {o['mass']:.1f}")
+        print(f"    yaml: sight-radius {tr_scan}")
+        print_magazines(o['expendableTypeID'])
+
+    print("--- MISSILES ---")
+    for name in ['SRM Dumbfire 1','SRM Dumbfire 2','SRM Dumbfire 3',
+                 'MRM Seeker 1','MRM Seeker 2','MRM Seeker 3',
+                 'MRM Quickfire 1','MRM Quickfire 2','MRM Quickfire 3',
+                 'SRM Anti-Base 1','SRM Anti-Base 2','SRM Anti-Base 3']:
+        o=_pick(r['missiles'], name)
+        if not o: print(f"  {name!r}: NOT FOUND in Iron roster"); continue
+        print_missile(o)
+
+    print("\n--- MINES ---")
+    for name in ['Prox Mine 1','Prox Mine 2','Prox Mine 3']:
+        o=_pick(r['mines'], name)
+        if not o: print(f"  {name!r}: NOT FOUND in Iron roster"); continue
+        print_mine(o)
+
+    print("\n--- CHAFF ---")
+    for name in ['Counter 1','Counter 2','Counter 3']:
+        o=_pick(r['chaff'], name)
+        if not o: print(f"  {name!r}: NOT FOUND in Iron roster"); continue
+        print_chaff(o)
+
+    print("\n--- PROBES ---")
+    for name in ['EWS Probe 1','EWS Probe 2','EWS Probe 3']:
+        o=_pick(r['probes'], name)
+        if not o: print(f"  {name!r}: NOT FOUND in Iron roster"); continue
+        print_probe(o)
 
 def main():
     if len(sys.argv)<2:

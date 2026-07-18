@@ -3,64 +3,270 @@
 # the referenced missile expendable (expendables.yaml); the launcher itself supplies the magazine
 # (amount → MagazineSize), the launch cadence (fire-interval-ticks, tick domain to avoid rounding
 # drift) and the mounted mass (counts against the hull's payload-capacity, like a gun's mass).
-# weapon-id shares the namespace with weapons.yaml guns (0/1/2 = scout/fighter/bomber cannons).
+# weapon-id shares the namespace with weapons.yaml guns (0-2/9-11/12-14/15-17 = the gun lines).
+#
+# Iron Coalition ordnance import (Phase 6, PCore014.igc) — the IGC Iron Coalition extraction is the
+# SOURCE OF TRUTH for what a hull can carry. Weapon-ids 3-8 keep their kind/placement (in-place
+# tier-1 replacement of the AI-invented missile-rack/dart-rack/torpedo-rack/decoy-mine-probe
+# dispensers); 18-32 append the tier-2/3 chains for those four lines plus the new SRM Dumbfire line
+# (24-26, no tier-1 placeholder to replace — it's wholly new). Tier succession mirrors the gun lines
+# exactly: each non-top tier carries obsoleted-by-techs (the NEXT tier's tech — once owned the hangar
+# hides this tier) + successor-part-id (the next-tier weapon a saved loadout or spawn dispenser
+# migrates to — Simulation.ResolveLoadout / SeedDispenserAmmo, mirrored client-side by
+# ShipLoadout.MigrateTier). Chaff/mine/probe dispensers additionally tier the WEAPON, not the cargo
+# item: expendables.yaml keeps exactly one tier-neutral cargo row per line (cargo-ids stay 2/3/4,
+# carried ONLY by the tier-1 expendable) and the fired tier resolves from owned techs at spawn.
+#
+# D3 (deliberate, tested behavior): IGC hull magazine partMasks — which hull can mount which rack —
+# are NOT enforced here. Our schema has no per-mount compatibility mask; LoadoutTest exercises
+# mounting a rack on a hull IGC never paired it with (e.g. a Quickfire rack on the Scout) as a
+# FEATURE of the open mount model. Payload budgets (hulls.yaml payload-capacity) make abuse costly
+# without a hardcoded mask.
 launchers:
-  - id: missile-rack
-    name: Missile Rack
+  # ---- MRM Seeker 1/2/3 (weapon-ids 3/18/19) ----
+  - id: seeker-rack-1
+    name: MRM Seeker 1
     slot: magazine
     mass: 4
     amount: 6
-    expendable-id: seeker-missile
+    expendable-id: mrm-seeker-1
     weapon-id: 3
     fire-interval-ticks: 30
     required-capabilities: [base]
-  - id: dart-rack
-    name: Dart Rack
-    slot: magazine
-    mass: 3
-    amount: 8
-    expendable-id: dart-missile
-    weapon-id: 4
-    fire-interval-ticks: 20
-    required-capabilities: [base]
-  - id: torpedo-rack
-    name: Torpedo Rack
+    obsoleted-by-techs: [seeker-2]
+    successor-part-id: seeker-rack-2
+  - id: seeker-rack-2
+    name: MRM Seeker 2
     slot: magazine
     mass: 4
     amount: 6
-    expendable-id: anti-base-torpedo
+    expendable-id: mrm-seeker-2
+    weapon-id: 18
+    fire-interval-ticks: 30
+    required-capabilities: [base]
+    required-techs: [seeker-2]
+    obsoleted-by-techs: [seeker-3]
+    successor-part-id: seeker-rack-3
+  - id: seeker-rack-3
+    name: MRM Seeker 3
+    slot: magazine
+    mass: 4
+    amount: 6
+    expendable-id: mrm-seeker-3
+    weapon-id: 19
+    fire-interval-ticks: 30
+    required-capabilities: [base]
+    required-techs: [seeker-3]
+
+  # ---- MRM Quickfire 1/2/3 (weapon-ids 4/20/21) ----
+  - id: quickfire-rack-1
+    name: MRM Quickfire 1
+    slot: magazine
+    mass: 2
+    amount: 6
+    expendable-id: mrm-quickfire-1
+    weapon-id: 4
+    fire-interval-ticks: 10
+    required-capabilities: [base]
+    obsoleted-by-techs: [quickfire-2]
+    successor-part-id: quickfire-rack-2
+  - id: quickfire-rack-2
+    name: MRM Quickfire 2
+    slot: magazine
+    mass: 2
+    amount: 6
+    expendable-id: mrm-quickfire-2
+    weapon-id: 20
+    fire-interval-ticks: 10
+    required-capabilities: [base]
+    required-techs: [quickfire-2]
+    obsoleted-by-techs: [quickfire-3]
+    successor-part-id: quickfire-rack-3
+  - id: quickfire-rack-3
+    name: MRM Quickfire 3
+    slot: magazine
+    mass: 2
+    amount: 6
+    expendable-id: mrm-quickfire-3
+    weapon-id: 21
+    fire-interval-ticks: 10
+    required-capabilities: [base]
+    required-techs: [quickfire-3]
+
+  # ---- SRM Anti-Base 1/2/3 (weapon-ids 5/22/23) — the ONLY can-damage-base weapon line, so the
+  # bomber (the sole default carrier) is the match-ender. Bomber hp index 4 stays bound to weapon-id 5. ----
+  - id: anti-base-rack-1
+    name: SRM Anti-Base 1
+    slot: magazine
+    mass: 4
+    amount: 6
+    expendable-id: srm-anti-base-1
     weapon-id: 5
     fire-interval-ticks: 60
     required-capabilities: [base]
+    obsoleted-by-techs: [anti-base-2]
+    successor-part-id: anti-base-rack-2
+  - id: anti-base-rack-2
+    name: SRM Anti-Base 2
+    slot: magazine
+    mass: 4
+    amount: 6
+    expendable-id: srm-anti-base-2
+    weapon-id: 22
+    fire-interval-ticks: 60
+    required-capabilities: [base]
+    required-techs: [anti-base-2]
+    obsoleted-by-techs: [anti-base-3]
+    successor-part-id: anti-base-rack-3
+  - id: anti-base-rack-3
+    name: SRM Anti-Base 3
+    slot: magazine
+    mass: 4
+    amount: 4
+    expendable-id: srm-anti-base-3
+    weapon-id: 23
+    fire-interval-ticks: 50
+    required-capabilities: [base]
+    required-techs: [anti-base-3]
 
-  # Chaff / mine dispensers. Unlike the racks above these are NOT mounted on a hull hardpoint —
-  # they project to Chaff/Mine-kind WeaponDefs the sim resolves from a ship's spawn cargo via the
-  # dispensed expendable's cargo-id (D8). mass 0: the payload cost is the carried consumables, not
-  # the dispenser. amount is a nominal magazine; the real ammo is the cargo count chosen in the hangar.
-  - id: decoy-dispenser
-    name: Decoy Dispenser
+  # ---- SRM Dumbfire 1/2/3 (weapon-ids 24/25/26, new line — no tier-1 placeholder replaced) ----
+  - id: dumbfire-rack-1
+    name: SRM Dumbfire 1
+    slot: magazine
+    mass: 4
+    amount: 6
+    expendable-id: srm-dumbfire-1
+    weapon-id: 24
+    fire-interval-ticks: 30
+    required-capabilities: [base]
+    obsoleted-by-techs: [dumbfire-2]
+    successor-part-id: dumbfire-rack-2
+  - id: dumbfire-rack-2
+    name: SRM Dumbfire 2
+    slot: magazine
+    mass: 4
+    amount: 6
+    expendable-id: srm-dumbfire-2
+    weapon-id: 25
+    fire-interval-ticks: 30
+    required-capabilities: [base]
+    required-techs: [dumbfire-2]
+    obsoleted-by-techs: [dumbfire-3]
+    successor-part-id: dumbfire-rack-3
+  - id: dumbfire-rack-3
+    name: SRM Dumbfire 3
+    slot: magazine
+    mass: 4
+    amount: 6
+    expendable-id: srm-dumbfire-3
+    weapon-id: 26
+    fire-interval-ticks: 30
+    required-capabilities: [base]
+    required-techs: [dumbfire-3]
+
+  # ---- Chaff / mine / probe dispensers. Unlike the racks above these are NOT mounted on a hull
+  # hardpoint — they project to Chaff/Mine/Probe-kind WeaponDefs the sim resolves from a ship's spawn
+  # cargo via the dispensed expendable's cargo-id (tier 1 only — see header). mass 0: the payload
+  # cost is the carried consumables, not the dispenser. amount is a nominal magazine; the real ammo
+  # is the cargo count chosen in the hangar. ----
+  - id: counter-dispenser-1
+    name: Counter Dispenser
     slot: chaff-launcher
     mass: 0
     amount: 1
-    expendable-id: sensor-decoy
+    expendable-id: counter-1
     weapon-id: 6
     fire-interval-ticks: 40
     required-capabilities: [base]
-  - id: mine-dispenser
-    name: Mine Dispenser
+    obsoleted-by-techs: [chaff-2]
+    successor-part-id: counter-dispenser-2
+  - id: counter-dispenser-2
+    name: Counter Dispenser 2
+    slot: chaff-launcher
+    mass: 0
+    amount: 1
+    expendable-id: counter-2
+    weapon-id: 27
+    fire-interval-ticks: 40
+    required-capabilities: [base]
+    required-techs: [chaff-2]
+    obsoleted-by-techs: [chaff-3]
+    successor-part-id: counter-dispenser-3
+  - id: counter-dispenser-3
+    name: Counter Dispenser 3
+    slot: chaff-launcher
+    mass: 0
+    amount: 1
+    expendable-id: counter-3
+    weapon-id: 28
+    fire-interval-ticks: 40
+    required-capabilities: [base]
+    required-techs: [chaff-3]
+
+  - id: prox-mine-dispenser-1
+    name: Prox Mine Dispenser
     slot: dispenser
     mass: 0
     amount: 1
-    expendable-id: proximity-mine
+    expendable-id: prox-mine-1
     weapon-id: 7
     fire-interval-ticks: 100
     required-capabilities: [base]
-  - id: probe-dispenser
-    name: Probe Dispenser
+    obsoleted-by-techs: [mine-2]
+    successor-part-id: prox-mine-dispenser-2
+  - id: prox-mine-dispenser-2
+    name: Prox Mine Dispenser 2
     slot: dispenser
     mass: 0
     amount: 1
-    expendable-id: recon-probe
+    expendable-id: prox-mine-2
+    weapon-id: 29
+    fire-interval-ticks: 100
+    required-capabilities: [base]
+    required-techs: [mine-2]
+    obsoleted-by-techs: [mine-3]
+    successor-part-id: prox-mine-dispenser-3
+  - id: prox-mine-dispenser-3
+    name: Prox Mine Dispenser 3
+    slot: dispenser
+    mass: 0
+    amount: 1
+    expendable-id: prox-mine-3
+    weapon-id: 30
+    fire-interval-ticks: 100
+    required-capabilities: [base]
+    required-techs: [mine-3]
+
+  - id: ews-probe-dispenser-1
+    name: EWS Probe Dispenser
+    slot: dispenser
+    mass: 0
+    amount: 1
+    expendable-id: ews-probe-1
     weapon-id: 8
     fire-interval-ticks: 100
     required-capabilities: [base]
+    obsoleted-by-techs: [probe-2]
+    successor-part-id: ews-probe-dispenser-2
+  - id: ews-probe-dispenser-2
+    name: EWS Probe Dispenser 2
+    slot: dispenser
+    mass: 0
+    amount: 1
+    expendable-id: ews-probe-2
+    weapon-id: 31
+    fire-interval-ticks: 100
+    required-capabilities: [base]
+    required-techs: [probe-2]
+    obsoleted-by-techs: [probe-3]
+    successor-part-id: ews-probe-dispenser-3
+  - id: ews-probe-dispenser-3
+    name: EWS Probe Dispenser 3
+    slot: dispenser
+    mass: 0
+    amount: 1
+    expendable-id: ews-probe-3
+    weapon-id: 32
+    fire-interval-ticks: 100
+    required-capabilities: [base]
+    required-techs: [probe-3]

@@ -9,15 +9,19 @@
 //   Scout (cls 0, payload 12):   weapon hp0 = gat-gun-1 (id 0, mass 1, interval 4); hp1 = EMPTY mount
 //                                 (armed by an override). default hold: 3 mine + 1 decoy + 1 probe.
 //   Fighter (cls 1, payload 20): hp0/hp1/hp2 = gat-gun-1 (id 0, mass 1, interval 4). all-gun, no rack.
-//   Seeker rack: weapon-id 3 (Missile, mass 4, magazine 6) — mountable with no tech
-//   Dart rack:   weapon-id 4 (Missile, mass 3, magazine 8) — mountable with no tech
+//   Seeker rack 1:   weapon-id 3 (Missile, mass 4, magazine 6) — mountable with no tech; obsoleted by
+//                     seeker-2 -> migrates to weapon-id 18 (seeker-rack-2) once owned.
+//   Quickfire rack 1: weapon-id 4 (Missile, mass 2, magazine 6) — mountable with no tech (Iron
+//                     ordnance import: was the dart-rack placeholder, mass dropped 3->2).
+//   Dumbfire rack 1: weapon-id 24 (Missile, mass 4, magazine 6, quick-lock/low-turn) — new line,
+//                     mountable with no tech.
 //   Mini-Gun 1:  weapon-id 9 (Bolt, mass 1, interval 3) — mountable with no tech
 //   Gat Gun 2:   weapon-id 1 (Bolt, mass 1, interval 4) — tech-gated behind gat-2
-//   Decoy dispenser: weapon-id 6 (Chaff) — NOT hardpoint-mountable (D8)
+//   Counter dispenser: weapon-id 6 (Chaff) — NOT hardpoint-mountable (D8)
 //
 // Scenarios:
 //   1. Leave-empty (the motivating bug): scout with hp0 emptied never fires a bolt.
-//   2. Rack mount, no tech: scout's empty hp1 gets a dart rack; ammo/launch use the dart def.
+//   2. Rack mount, no tech: scout's empty hp1 gets a quickfire rack; ammo/launch use the quickfire def.
 //   3. Tech gate: Gat Gun 2 (weapon-id 1) without gat-2 -> whole-request revert to authored; with the
 //      tech seeded -> accepted (MountWeaponIds echo + emptied mount seeds nothing).
 //   4. Whole-request reject: bad hpIndex / dispenser weapon id / payload overflow — each reverts
@@ -30,6 +34,10 @@
 //   6. Emptied mount: no missile ammo, no lock, no launch; MsgShipLoadout table carries the
 //      override ships (and only them).
 //   7. Determinism: scenario-5's script twice from fresh sims -> identical fire sequences.
+//   8. Tier migration at spawn (Iron ordnance import): owning seeker-2 migrates a mounted seeker
+//      rack (weapon-id 3) to its successor (weapon-id 18) at spawn.
+//   9. Dumbfire rack mount + launch: weapon-id 24 seeds its magazine and launches a MissileSim
+//      carrying weapon-id 24.
 
 using System.Linq;
 using SimServer.Content;
@@ -128,29 +136,76 @@ Simulation.ShipSim Spawn(
     );
 }
 
-// ---- 2. Rack mount (no tech): scout's empty hp1 -> dart rack ------------------------------------
+// ---- 2. Rack mount (no tech): scout's empty hp1 -> quickfire rack -------------------------------
 {
     var sim = BootSim(seed: 2);
-    var dart = sim.Content.Weapons.First(w => w.WeaponId == 4);
+    var quickfire = sim.Content.Weapons.First(w => w.WeaponId == 4);
     var ship = Spawn(sim, 1, team: 0, cls: FlightModel.ClassScout, mounts: [(1, 4u)]);
 
     Check(
         ship.MountWeaponIds is [0u, 4u],
-        "scout hp1 armed with the dart rack (effective mounts [gat-gun-1, dart-rack])",
+        "scout hp1 armed with the quickfire rack (effective mounts [gat-gun-1, quickfire-rack-1])",
         $"mount not stored (MountWeaponIds [{string.Join(",", ship.MountWeaponIds ?? [])}])"
     );
     Check(
-        ship.MissileAmmo == dart.MagazineSize,
-        $"missile magazine seeds from the mounted rack ({dart.MagazineSize} darts)",
-        $"magazine wrong: {ship.MissileAmmo}, expected dart {dart.MagazineSize}"
+        ship.MissileAmmo == quickfire.MagazineSize,
+        $"missile magazine seeds from the mounted rack ({quickfire.MagazineSize} rounds)",
+        $"magazine wrong: {ship.MissileAmmo}, expected quickfire {quickfire.MagazineSize}"
     );
 
-    // Dumbfire one round: the launched MissileSim must carry the dart's weapon id.
+    // Fire one round: the launched MissileSim must carry the quickfire rack's weapon id.
     ship.HeldInput = new ShipInputState { Firing2 = true };
     sim.Step();
     Check(
         sim.Missiles.Count == 1 && sim.Missiles[0].WeaponId == 4,
-        "launched missile carries the dart rack's weapon id",
+        "launched missile carries the quickfire rack's weapon id",
+        $"launch wrong (missiles {sim.Missiles.Count}, weapon {(sim.Missiles.Count > 0 ? sim.Missiles[0].WeaponId : 0)})"
+    );
+}
+
+// ---- 8. Tier migration at spawn: owning seeker-2 migrates a mounted seeker rack (3) to its
+// successor (18) — the effective mount reflects the researched tier the instant the ship spawns,
+// exactly like the Gat Gun 1->2 migration in scenario 3, exercised here on a launcher pair. ----------
+{
+    var sim = BootSim(seed: 8, "seeker-2");
+    var ship = Spawn(sim, 1, team: 0, cls: FlightModel.ClassScout, mounts: [(1, 3u)]);
+    Check(
+        ship.MountWeaponIds is [0u, 18u],
+        "team-owned seeker-2 migrates the mounted seeker-rack-1 (3) to seeker-rack-2 (18) at spawn",
+        $"seeker tier migration wrong (mounts [{string.Join(",", ship.MountWeaponIds ?? [])}])"
+    );
+    var seekerRack2 = sim.Content.Weapons.First(w => w.WeaponId == 18);
+    Check(
+        ship.MissileAmmo == seekerRack2.MagazineSize,
+        $"missile magazine seeds from the MIGRATED rack ({seekerRack2.MagazineSize} rounds)",
+        $"migrated magazine wrong: {ship.MissileAmmo}, expected {seekerRack2.MagazineSize}"
+    );
+}
+
+// ---- 9. Dumbfire rack (new line, weapon-id 24): mount seeds its magazine and a launch carries its
+// weapon id — a quick-lock, low-turn GUIDED missile (D1/D5), no different from any other rack from
+// the mount/launch plumbing's point of view. ----------------------------------------------------------
+{
+    var sim = BootSim(seed: 9);
+    var dumbfireRack = sim.Content.Weapons.First(w => w.WeaponId == 24);
+    var ship = Spawn(sim, 1, team: 0, cls: FlightModel.ClassScout, mounts: [(1, 24u)]);
+
+    Check(
+        ship.MountWeaponIds is [0u, 24u],
+        "scout hp1 armed with the dumbfire rack (effective mounts [gat-gun-1, dumbfire-rack-1])",
+        $"mount not stored (MountWeaponIds [{string.Join(",", ship.MountWeaponIds ?? [])}])"
+    );
+    Check(
+        ship.MissileAmmo == 6 && ship.MissileAmmo == dumbfireRack.MagazineSize,
+        $"dumbfire rack seeds its authored 6-round magazine",
+        $"magazine wrong: {ship.MissileAmmo}, expected 6"
+    );
+
+    ship.HeldInput = new ShipInputState { Firing2 = true };
+    sim.Step();
+    Check(
+        sim.Missiles.Count == 1 && sim.Missiles[0].WeaponId == 24,
+        "launched missile carries the dumbfire rack's weapon id",
         $"launch wrong (missiles {sim.Missiles.Count}, weapon {(sim.Missiles.Count > 0 ? sim.Missiles[0].WeaponId : 0)})"
     );
 }

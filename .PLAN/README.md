@@ -20,12 +20,10 @@ Archives:
 
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
-- Add different gun effects 
+- Disallow missiles from being assigned to gun hardpoints, and vice versa
+- Add different gun effects
   - i.e. minigun green, different looking bolt
   - ER nanite shoots glowing blue, thin, toruses
-- Remove stale AI generated content not from the iron coalition tech tree:
-  - i.e. dart missiles, etc
-  - replace with missiles from igc for iron coalition
 - Faction name "Iron Coalition" is streamed but never displayed.
 - Booster fuel needed, interceptor starting fuel too low, and we need the ability to add additional fuel to cargo that can load when we run out
 - hulls.yaml:264-266 comment wrongly claims collision is purely ShipRadius — ship-vs-ship uses the full model-length hull, so the Devastator body-blocks on its ~20u silhouette.

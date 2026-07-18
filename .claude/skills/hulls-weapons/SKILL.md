@@ -32,13 +32,15 @@ table blindly after edits):
 | 0 | scout-cannon | weapons | 2 |
 | 1 | fighter-cannon | weapons | 5 |
 | 2 | bomber-cannon (AP: `shield-damage-multiplier` 0.5) | weapons | 11 |
-| 3 | missile-rack (seeker-missile) | launchers | 4 |
-| 4 | dart-rack (dart-missile) | launchers | 3 |
-| 5 | torpedo-rack (anti-base-torpedo — **only `can-damage-base` weapon**) | launchers | 4 |
-| 6/7/8 | decoy / mine / probe dispenser (NOT hull-mounted — dispensed from cargo) | launchers | 0 |
+| 3 | seeker-rack-1 (mrm-seeker-1) | launchers | 4 |
+| 4 | quickfire-rack-1 (mrm-quickfire-1) | launchers | 2 |
+| 5 | anti-base-rack-1 (srm-anti-base-1 — **`can-damage-base`**) | launchers | 4 |
+| 6/7/8 | counter / prox-mine / ews-probe dispenser tier 1 (NOT hull-mounted — dispensed from cargo) | launchers | 0 |
+| 18–26 | rack tiers 2/3 + dumbfire-rack-1/2/3 (`obsoleted-by-techs`/`successor-part-id` chains) | launchers | 4 or 2 |
+| 27–32 | dispenser tiers 2/3 (no cargo-id — spawn resolution walks the tier chain) | launchers | 0 |
 
-**Mounted mass is the launcher's own `mass`, not the missile's.** A torpedo rack costs 4 to mount
-even though the anti-base-torpedo expendable is mass 6 — the rack supplies a 6-round magazine
+**Mounted mass is the launcher's own `mass`, not the missile's.** An anti-base rack costs 4 to
+mount even though the srm-anti-base-1 expendable is mass 6 — the rack supplies its magazine
 (`amount`) for free.
 
 ## Mounting a weapon on a hull
@@ -70,8 +72,8 @@ Every armed hull must satisfy, or the server **refuses to boot**
 sum(mounted weapon/launcher mass)  +  sum(default-cargo count × expendable mass)   ≤   payload-capacity
 ```
 
-Stock expendable masses: proximity-mine 1, sensor-decoy 1, recon-probe 2, seeker 4, dart 3,
-anti-base-torpedo 6 (only the `default-cargo`-dispensed items count here — magazine ammo rides free
+Stock expendable masses: prox-mine 1, counter 1, ews-probe 2, mrm-seeker 4, mrm-quickfire 3,
+srm-dumbfire 4, srm-anti-base 6 (only the `default-cargo`-dispensed items count here — magazine ammo rides free
 inside its launcher). When you add or up-mass a weapon, **either raise `payload-capacity` to keep
 the existing default cargo, or trim `default-cargo`**. Keep the inline `# math …` comment in sync —
 it's the reviewer's check.
@@ -80,8 +82,8 @@ it's the reviewer's check.
 
 - **Win condition** (`shared/ContentValidator.cs` ~L199): at least one hull's *default* loadout must
   mount a `can-damage-base` weapon, else "bases can never be destroyed, matches can never end" and
-  boot fails. Today only **weapon-id 5 (anti-base torpedo)** is `can-damage-base`, and only the
-  **bomber** mounts it — do not strip it without giving another hull a base-cracker.
+  boot fails. Today only the **SRM Anti-Base line (weapon-ids 5/22/23)** is `can-damage-base`, and
+  only the **bomber** mounts it (id 5) — do not strip it without giving another hull a base-cracker.
 - **Shield**: authoring `shield-capacity` requires a positive `shield-recharge` (else it never comes
   back). `shield-delay` is the quiet-time before regen resumes.
 - **Afterburner**: `ab-accel > 0` requires `max-fuel` (and vice-versa); `ab-fuel-recharge` must be

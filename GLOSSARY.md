@@ -196,7 +196,7 @@ Guidance system that locks onto and tracks targets; disrupted by chaff clouds.
 - **Notes:** ResolveSeekerTarget checks chaff clouds; seekers can be spoofed
 
 ### Chaff
-Expendable sensor-decoy puff a ship ejects (key `C`); a seeker rolls a stateless hash
+Expendable decoy puff (the Counter line) a ship ejects (key `C`); a seeker rolls a stateless hash
 (`ChaffStrength` vs the missile's `ChaffResistance`) to break its lock and home on the puff.
 - **Frequency:** Common
 - **Key Files:**

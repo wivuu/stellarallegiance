@@ -150,15 +150,32 @@ var research0 = world.ResearchByBase[base0Idx]; // live state (StartMatch clears
 // rest gate on forward-declared base techs (supremacy-1/adv, garrison-str, shipyard-1). The Phase-5
 // nanite devs (10/11) are appended after the station upgrades so indices 0-9 stay stable, and
 // dev-upgrade-outpost (12) is appended last so indices 0-11 stay stable.
-Check(content.Developments.Count == 13
+// Phase 6 (Iron Coalition ordnance import): 14 more developments append at the VERY tail (indices
+// 13-26 — dev-seeker-2/3, dev-quickfire-2/3, dev-dumbfire-2/3, dev-anti-base-2/3, dev-mine-2/3,
+// dev-chaff-2/3, dev-probe-2/3, in that order) so every index above (0-12) stays stable.
+Check(content.Developments.Count == 27
     && content.Developments[0].Id == "dev-bomber"
     && content.Developments[1].Id == "dev-gat-2"
     && content.Developments[3].Id == "dev-minigun-2"
     && content.Developments[5].Id == "dev-autocan-2"
     && content.Developments[7].Id == "dev-upgrade-garrison"
     && content.Developments[10].Id == "dev-nanite-2"
-    && content.Developments[12].Id == "dev-upgrade-outpost",
-    "development catalog is in authored order (0 bomber, 1 gat-2, 3 minigun-2, 5 autocan-2, 7 upgrade-garrison, 10 nanite-2, 12 upgrade-outpost)",
+    && content.Developments[12].Id == "dev-upgrade-outpost"
+    && content.Developments[13].Id == "dev-seeker-2"
+    && content.Developments[14].Id == "dev-seeker-3"
+    && content.Developments[15].Id == "dev-quickfire-2"
+    && content.Developments[16].Id == "dev-quickfire-3"
+    && content.Developments[17].Id == "dev-dumbfire-2"
+    && content.Developments[18].Id == "dev-dumbfire-3"
+    && content.Developments[19].Id == "dev-anti-base-2"
+    && content.Developments[20].Id == "dev-anti-base-3"
+    && content.Developments[21].Id == "dev-mine-2"
+    && content.Developments[22].Id == "dev-mine-3"
+    && content.Developments[23].Id == "dev-chaff-2"
+    && content.Developments[24].Id == "dev-chaff-3"
+    && content.Developments[25].Id == "dev-probe-2"
+    && content.Developments[26].Id == "dev-probe-3",
+    "development catalog is in authored order (0 bomber, 1 gat-2, 3 minigun-2, 5 autocan-2, 7 upgrade-garrison, 10 nanite-2, 12 upgrade-outpost, 13-26 Iron ordnance tiers seeker/quickfire/dumbfire/anti-base/mine/chaff/probe)",
     $"development order wrong: [{string.Join(",", content.Developments.Select(d => d.Id))}]");
 
 // Income the just-run Step paid out (0 unless it landed on a paycheck boundary in the active phase).

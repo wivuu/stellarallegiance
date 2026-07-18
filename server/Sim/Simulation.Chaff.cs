@@ -4,7 +4,7 @@ using StellarAllegiance.Shared;
 
 namespace SimServer.Sim;
 
-// Chaff (sensor-decoy) countermeasures. TRACK 0 lands the shared surface only: the ChaffSim entity,
+// Chaff (decoy) countermeasures. TRACK 0 lands the shared surface only: the ChaffSim entity,
 // the _chaff list + accessor, and no-op TryDropChaff / StepChaff / TryChaffAim seams that keep the
 // game behaviourally identical. TRACK A fills the bodies (eject + drag + the D5 decoy-substitution
 // hash roll). Wired into Step() via Pass A (input.DropChaff), StepChaff (before StepMissiles), and

@@ -66,12 +66,16 @@ public static class FactionsContentProjection
             .Select(h => ProjectShip(h, cargoIdByExpendable, partSigById, techIdx))
             .ToList();
 
-        // Weapon-tier succession: a weapon's SuccessorPartId names the next-tier weapon by PART id;
-        // resolve it to the wire WeaponId so ProjectWeapon can stamp WeaponDef.SucceededByWeaponId (a
-        // saved tier-1 gun migrates to tier-2 once its obsoleting tech is owned).
+        // Weapon-tier succession: a weapon's/launcher's SuccessorPartId names the next-tier part by
+        // PART id; resolve it to the wire WeaponId so ProjectWeapon/ProjectLauncher can stamp
+        // WeaponDef.SucceededByWeaponId (a saved tier-1 gun or rack migrates to tier-2 once its
+        // obsoleting tech is owned).
         var weaponIdByPartId = core.Weapons
             .Where(w => w.WeaponId is not null)
             .ToDictionary(w => w.Id, w => w.WeaponId!.Value);
+        foreach (var l in core.Launchers)
+            if (l.WeaponId is not null)
+                weaponIdByPartId[l.Id] = l.WeaponId.Value;
 
         // Runtime weapons = guns (Weapon, with a weapon id) followed by missile launchers (Launcher,
         // with a weapon id), each in Core list order — deterministic (the shared ContentValidator
@@ -81,7 +85,7 @@ public static class FactionsContentProjection
             .Select(w => ProjectWeapon(w, projectileById, techIdx, weaponIdByPartId))
             .Concat(core.Launchers
                 .Where(l => l.WeaponId is not null)
-                .Select(l => ProjectLauncher(l, missileById, mineById, chaffById, probeById, techIdx)))
+                .Select(l => ProjectLauncher(l, missileById, mineById, chaffById, probeById, techIdx, weaponIdByPartId)))
             .ToList();
 
         var bases = core.Stations
@@ -316,15 +320,24 @@ public static class FactionsContentProjection
         IReadOnlyDictionary<string, Factions.Mine> mineById,
         IReadOnlyDictionary<string, Factions.Chaff> chaffById,
         IReadOnlyDictionary<string, Factions.Probe> probeById,
-        IReadOnlyDictionary<string, ushort> techIdx
+        IReadOnlyDictionary<string, ushort> techIdx,
+        IReadOnlyDictionary<string, uint> weaponIdByPartId
     )
     {
         // Stage-4 tech paths: launcher lock state, same rule as guns (indices into the tech catalog).
         ushort[] reqTechs = TechIdxArray(l.RequiredTechs, techIdx);
+        // Launcher-tier succession, same rule as guns: obsoleting techs hide the tier, the successor
+        // is what a mounted rack (or a spawn's dispenser resolution) migrates to.
+        ushort[] obsTechs = TechIdxArray(l.ObsoletedByTechs, techIdx);
+        uint succWid = l.SuccessorPartId is { } sid && weaponIdByPartId.TryGetValue(sid, out uint swid)
+            ? swid
+            : uint.MaxValue;
         if (!string.IsNullOrEmpty(l.ExpendableId) && missileById.TryGetValue(l.ExpendableId, out var m))
             return new WeaponDef
             {
                 RequiredTechIdx = reqTechs,
+                ObsoletedByTechIdx = obsTechs,
+                SucceededByWeaponId = succWid,
                 WeaponId = l.WeaponId!.Value,
                 Name = l.Name,
                 Kind = WeaponKind.Missile,
@@ -363,6 +376,8 @@ public static class FactionsContentProjection
                 Name = l.Name,
                 Kind = WeaponKind.Mine,
                 RequiredTechIdx = reqTechs,
+                ObsoletedByTechIdx = obsTechs,
+                SucceededByWeaponId = succWid,
                 // Field/arming stats reused from the referenced mine. The field is one damage VOLUME
                 // (cloud-radius sphere); there is no per-mine trigger/blast radius any more.
                 ProjectileLifeTicks = (uint)Math.Round(mn.Lifespan * 20.0), // field lifespan
@@ -387,6 +402,8 @@ public static class FactionsContentProjection
                 Name = l.Name,
                 Kind = WeaponKind.Chaff,
                 RequiredTechIdx = reqTechs,
+                ObsoletedByTechIdx = obsTechs,
+                SucceededByWeaponId = succWid,
                 ProjectileLifeTicks = (uint)Math.Round(ch.Lifespan * 20.0), // puff lifespan
                 Mass = (float)l.Mass,
                 FireIntervalTicks = l.FireIntervalTicks, // eject cadence
@@ -404,6 +421,8 @@ public static class FactionsContentProjection
                 Name = l.Name,
                 Kind = WeaponKind.Probe,
                 RequiredTechIdx = reqTechs,
+                ObsoletedByTechIdx = obsTechs,
+                SucceededByWeaponId = succWid,
                 ProjectileLifeTicks = (uint)Math.Round(pr.Lifespan * 20.0), // deployed-probe lifespan
                 Mass = (float)l.Mass,
                 FireIntervalTicks = l.FireIntervalTicks, // deploy cadence

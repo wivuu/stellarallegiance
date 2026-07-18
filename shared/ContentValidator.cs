@@ -93,7 +93,11 @@ namespace StellarAllegiance.Shared
                     // Radar signature must resolve positive (projection maps 0 -> 1).
                     if (w.MineSignature <= 0f)
                         errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") has non-positive MineSignature {w.MineSignature}");
-                    if (cargoItems is not null && !cargoIds.Contains(w.CargoId))
+                    // CargoId 0 is a deliberate sentinel for a tier-2/3 dispenser (no cargo-id authored —
+                    // the hangar keeps one tier-neutral cargo row per line; the fired tier is resolved
+                    // server-side from owned techs, Simulation.SeedDispenserAmmo). Same convention as
+                    // Simulation.cs's `w.CargoId != 0` guard on _dispenserByCargo.
+                    if (cargoItems is not null && w.CargoId != 0 && !cargoIds.Contains(w.CargoId))
                         errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") CargoId {w.CargoId} resolves to no cargo item");
                 }
                 else if (w.Kind == WeaponKind.Chaff)
@@ -106,7 +110,8 @@ namespace StellarAllegiance.Shared
                         errors.Add($"chaff weapon {w.WeaponId} (\"{w.Name}\") has non-positive DecoyRadius {w.DecoyRadius}");
                     if (w.ProjectileLifeTicks == 0)
                         errors.Add($"chaff weapon {w.WeaponId} (\"{w.Name}\") has ProjectileLifeTicks 0 — instantly culled");
-                    if (cargoItems is not null && !cargoIds.Contains(w.CargoId))
+                    // CargoId 0 = tier-2/3 dispenser sentinel (see the Mine-kind branch's comment above).
+                    if (cargoItems is not null && w.CargoId != 0 && !cargoIds.Contains(w.CargoId))
                         errors.Add($"chaff weapon {w.WeaponId} (\"{w.Name}\") CargoId {w.CargoId} resolves to no cargo item");
                 }
                 else if (w.Kind == WeaponKind.Probe)
@@ -123,7 +128,8 @@ namespace StellarAllegiance.Shared
                         errors.Add($"probe weapon {w.WeaponId} (\"{w.Name}\") has non-positive ProbeSignature {w.ProbeSignature}");
                     if (w.ProbeHitPoints > 0f && w.ProbeHitRadius <= 0f)
                         errors.Add($"probe weapon {w.WeaponId} (\"{w.Name}\") has ProbeHitPoints {w.ProbeHitPoints} but non-positive ProbeHitRadius {w.ProbeHitRadius}");
-                    if (cargoItems is not null && !cargoIds.Contains(w.CargoId))
+                    // CargoId 0 = tier-2/3 dispenser sentinel (see the Mine-kind branch's comment above).
+                    if (cargoItems is not null && w.CargoId != 0 && !cargoIds.Contains(w.CargoId))
                         errors.Add($"probe weapon {w.WeaponId} (\"{w.Name}\") CargoId {w.CargoId} resolves to no cargo item");
                 }
 

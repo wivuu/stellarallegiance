@@ -176,9 +176,9 @@ Check(
 // Guided missiles: guns (3) + missile launchers (3 racks) project into one weapon set. A launcher
 // with a weapon-id becomes a WeaponKind.Missile WeaponDef sourced from its referenced missile.
 Check(
-    stock.Weapons.Count == 18,
-    "loader projected guns + missile launchers + dispensers (12 guns [3 Gat + 3 Mini-Gun + 3 AutoCan + 3 Nanite] + 3 racks + chaff + mine + probe)",
-    $"weapon count wrong ({stock.Weapons.Count}, expected 18)"
+    stock.Weapons.Count == 33,
+    "loader projected guns + missile launchers + dispensers (12 guns [3 Gat + 3 Mini-Gun + 3 AutoCan + 3 Nanite] + 21 launchers [3 seeker + 3 quickfire + 3 anti-base + 3 dumbfire + 3 counter + 3 prox-mine + 3 ews-probe])",
+    $"weapon count wrong ({stock.Weapons.Count}, expected 33)"
 );
 var seekerW = stock.Weapons.First(w => w.WeaponId == 3);
 Check(
@@ -189,11 +189,20 @@ Check(
         && seekerW.LockRange == 1200f && seekerW.MissileAccel == 40f && seekerW.MissileMaxSpeed == 220f
         && seekerW.BlastPower == 30f && seekerW.BlastRadius == 25f && seekerW.DirectHitMult == 1.5f
         && seekerW.ChaffResistance == 1f
-        && seekerW.ModelName == "mis09" && seekerW.TrailColor == 0xffc890ffu
+        && seekerW.ModelName == "mis06" && seekerW.TrailColor == 0xffc890ffu
         && !seekerW.CanDamageBase
         && System.MathF.Abs(seekerW.MissileTurnRateRad - (80f * System.MathF.PI / 180f)) < 0.0001f,
-    "loader projected seeker missile launcher (missile-kind WeaponDef, incl. chaff-resistance)",
-    $"seeker weapon wrong (kind {seekerW.Kind}, dmg {seekerW.Damage}, spd {seekerW.ProjectileSpeed}, life {seekerW.ProjectileLifeTicks}, mag {seekerW.MagazineSize}, chaffRes {seekerW.ChaffResistance}, color {seekerW.TrailColor:x})"
+    "loader projected MRM Seeker 1 launcher (missile-kind WeaponDef, incl. chaff-resistance; Iron ordnance import preserved every anchor stat, only the model changed mis09->mis06)",
+    $"seeker weapon wrong (kind {seekerW.Kind}, dmg {seekerW.Damage}, spd {seekerW.ProjectileSpeed}, life {seekerW.ProjectileLifeTicks}, mag {seekerW.MagazineSize}, chaffRes {seekerW.ChaffResistance}, model {seekerW.ModelName}, color {seekerW.TrailColor:x})"
+);
+// Tier succession (Iron ordnance import, D1/D6): weapon 3 (seeker-rack-1) is obsoleted by the
+// seeker-2 tech and migrates a saved loadout/spawn to weapon-id 18 (seeker-rack-2) once owned.
+ushort seeker2Idx = stock.TechIndexById["seeker-2"];
+Check(
+    seekerW.ObsoletedByTechIdx.Length == 1 && seekerW.ObsoletedByTechIdx[0] == seeker2Idx
+        && seekerW.SucceededByWeaponId == 18,
+    "seeker-rack-1 (weapon 3) is obsoleted by seeker-2 and succeeded by weapon-id 18 (seeker-rack-2)",
+    $"seeker-rack-1 tier wiring wrong (obsoletedBy [{string.Join(",", seekerW.ObsoletedByTechIdx)}] vs seeker-2 idx {seeker2Idx}, succeededBy {seekerW.SucceededByWeaponId})"
 );
 // Chaff dispenser (weapon-id 6): Chaff-kind, decoy stats + linked cargo id, puff lifespan in ticks.
 var chaffW = stock.Weapons.First(w => w.WeaponId == 6);
@@ -210,7 +219,7 @@ Check(
     mineW.Kind == WeaponKind.Mine
         && mineW.MineCloudCount == 64 && mineW.MineArmTicks == 20
         && mineW.MineCloudRadius == 80f && mineW.BlastPower == 60f
-        && mineW.ProjectileLifeTicks == 1200 && mineW.CargoId == 2 && mineW.ModelName == "acs41",
+        && mineW.ProjectileLifeTicks == 1200 && mineW.CargoId == 2 && mineW.ModelName == "dn_ptminprx",
     "loader projected the mine-dispenser (mine-kind WeaponDef)",
     $"mine weapon wrong (kind {mineW.Kind}, cloudCount {mineW.MineCloudCount}, arm {mineW.MineArmTicks}, trigger {mineW.MineTriggerRadius}, cloudR {mineW.MineCloudRadius}, cargo {mineW.CargoId})"
 );
@@ -219,7 +228,7 @@ var probeW = stock.Weapons.First(w => w.WeaponId == 8);
 Check(
     probeW.Kind == WeaponKind.Probe
         && probeW.ProbeSightRadius == 4800f && probeW.ProbeLifespanSec == 1200f
-        && probeW.ProjectileLifeTicks == 24000 && probeW.CargoId == 4 && probeW.ModelName == "acs64",
+        && probeW.ProjectileLifeTicks == 24000 && probeW.CargoId == 4 && probeW.ModelName == "utl23",
     "loader projected the probe-dispenser (probe-kind WeaponDef)",
     $"probe weapon wrong (kind {probeW.Kind}, sight {probeW.ProbeSightRadius}, lifespan {probeW.ProbeLifespanSec}, life-ticks {probeW.ProjectileLifeTicks}, cargo {probeW.CargoId}, model {probeW.ModelName})"
 );
@@ -238,11 +247,36 @@ Check(
     "loader projected the anti-base-torpedo weapon (missile-kind, can-damage-base)",
     $"torpedo weapon wrong (kind {torpedoW.Kind}, can-damage-base {torpedoW.CanDamageBase})"
 );
+// The SRM Anti-Base line (tiers 1/2/3 = weapon-ids 5/22/23) is the ONLY can-damage-base line —
+// every other Missile-kind weapon (seeker/quickfire/dumbfire, all tiers) must NOT carry it.
 Check(
-    stock.Weapons.Where(w => w.WeaponId <= 4).All(w => !w.CanDamageBase),
-    "weapon-ids 0-4 (guns + non-siege racks) do not carry can-damage-base",
-    $"a non-siege weapon-id (0-4) unexpectedly carries can-damage-base: {string.Join(", ", stock.Weapons.Where(w => w.WeaponId <= 4 && w.CanDamageBase).Select(w => w.WeaponId))}"
+    stock.Weapons.Where(w => w.Kind == WeaponKind.Missile && w.CanDamageBase)
+        .Select(w => w.WeaponId).OrderBy(id => id).SequenceEqual(new uint[] { 5, 22, 23 }),
+    "Missile-kind CanDamageBase weapon-ids == {5, 22, 23} (the SRM Anti-Base line only)",
+    $"can-damage-base weapon-id set wrong: [{string.Join(", ", stock.Weapons.Where(w => w.Kind == WeaponKind.Missile && w.CanDamageBase).Select(w => w.WeaponId).OrderBy(id => id))}]"
 );
+// SRM Dumbfire 1 (weapon-id 24): a normal GUIDED missile with a QUICK lock (0.5s -> 10 ticks) and a
+// LOW turn-rate (67 deg/s, IGC 0.80 rad/s) — the new dumbfire line (D1/D5), short max-lock range.
+var dumbfireW = stock.Weapons.First(w => w.WeaponId == 24);
+Check(
+    dumbfireW.Kind == WeaponKind.Missile
+        && dumbfireW.LockTicks == 10 && dumbfireW.LockRange == 800f
+        && System.MathF.Abs(dumbfireW.MissileTurnRateRad - (67f * System.MathF.PI / 180f)) < 0.0001f
+        && !dumbfireW.CanDamageBase,
+    "dumbfire-rack-1 (weapon 24) quick-locks (LockTicks 10) at short range (800) with a low turn-rate (~67 deg/s in rad, no base damage)",
+    $"dumbfire weapon wrong (lockTicks {dumbfireW.LockTicks}, lockRange {dumbfireW.LockRange}, turnRateRad {dumbfireW.MissileTurnRateRad}, canDamageBase {dumbfireW.CanDamageBase})"
+);
+// Tier-2/3 chaff/mine/probe dispensers author NO cargo-id (D1/D2 sentinel — they're resolved
+// server-side from owned techs at spawn, not indexed in _dispenserByCargo): counter-dispenser-2
+// (27), prox-mine-dispenser-2 (29), ews-probe-dispenser-2 (31) all project CargoId == 0.
+Check(
+    stock.Weapons.First(w => w.WeaponId == 27).CargoId == 0
+        && stock.Weapons.First(w => w.WeaponId == 29).CargoId == 0
+        && stock.Weapons.First(w => w.WeaponId == 31).CargoId == 0,
+    "tier-2 dispensers (27/29/31) author no cargo-id (CargoId == 0 sentinel)",
+    $"tier-2 dispenser cargo-id wrong (27:{stock.Weapons.First(w => w.WeaponId == 27).CargoId}, 29:{stock.Weapons.First(w => w.WeaponId == 29).CargoId}, 31:{stock.Weapons.First(w => w.WeaponId == 31).CargoId})"
+);
+
 // A bolt gun leaves every missile field zero/empty (guards the projection's Bolt path).
 Check(
     scoutW.Kind == WeaponKind.Bolt && scoutW.MagazineSize == 0 && scoutW.LockTicks == 0
@@ -360,8 +394,8 @@ Check(
 // and stream in MsgDefs. Tech references ride the wire as u16 INDICES into the tech list, so resolve
 // them via TechIndexById rather than hardcoding an index.
 Check(
-    stock.Techs.Count == 16 && stock.TechIndexById.Count == 16,
-    "loader projected 16 Iron Coalition techs (TechIndexById has 16 entries; +nanite-2/3, +outpost-hvy)",
+    stock.Techs.Count == 30 && stock.TechIndexById.Count == 30,
+    "loader projected 30 Iron Coalition + ordnance techs (TechIndexById has 30 entries; +14 Phase-6 ordnance techs appended at the tail, seeker-2 at index 16)",
     $"tech count wrong (techs {stock.Techs.Count}, index {stock.TechIndexById.Count})"
 );
 // dev-gat-2 gates on the (forward-declared) supremacy-1 tech — resolved by index off the tech list.
@@ -375,8 +409,8 @@ Check(
     $"dev-gat-2 required-tech wrong (idx [{string.Join(",", devGat2.RequiredTechIdx)}], supremacy-1 idx {supremacyIdx})"
 );
 Check(
-    stock.Developments.Count == 13 && stock.Developments.All(d => d.Price > 0 && d.BuildTimeSeconds > 0),
-    "loader projected 13 developments, all with positive price + build-time (+dev-nanite-2/3, +dev-upgrade-outpost)",
+    stock.Developments.Count == 27 && stock.Developments.All(d => d.Price > 0 && d.BuildTimeSeconds > 0),
+    "loader projected 27 developments, all with positive price + build-time (+14 Phase-6 ordnance devs appended at the tail)",
     $"development projection wrong (count {stock.Developments.Count}, "
         + $"nonpositive {stock.Developments.Count(d => d.Price <= 0 || d.BuildTimeSeconds <= 0)})"
 );

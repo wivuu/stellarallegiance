@@ -1233,10 +1233,16 @@ public sealed partial class Simulation
     // Seed the ship's dispenser ammo/weapon-ids from an ALREADY-VALIDATED hold (ResolveLoadout).
     private void SeedDispenserAmmo(ShipSim s, (uint cargoId, byte count)[] chosen)
     {
+        World.TeamStates.TryGetValue(s.Team, out var teamState);
         foreach (var (cargoId, count) in chosen)
         {
             if (!_dispenserByCargo.TryGetValue(cargoId, out var w))
                 continue;
+            // Cargo stays one tier-neutral item per line (ids never change); the FIRED tier is the
+            // team's researched successor — walk the same chain mounted racks migrate through.
+            uint upgraded = MigrateWeaponTier(teamState, w.WeaponId);
+            if (upgraded != w.WeaponId && WeaponDefs.TryGetValue(upgraded, out var uw))
+                w = uw;
             // `count` is the loaded PACK count; each pack holds ChargesPerPack charges and one charge
             // is spent per gated press. Total charges = packs × pack-size, clamped to the wire byte.
             byte packSize = _chargesPerPack.TryGetValue(cargoId, out var pk) ? pk : (byte)1;
