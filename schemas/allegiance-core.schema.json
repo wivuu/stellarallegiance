@@ -2770,6 +2770,114 @@
       },
       "description": "The probe expendable catalog."
     },
+    "fuels": {
+      "type": "array",
+      "items": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "fuel-per-charge": {
+            "type": "number",
+            "description": "Afterburner fuel restored per consumed charge, clamped to the hull\u0027s max-fuel (overshoot is wasted \u2014 author a value \u2265 every tank for \u0022full refill\u0022 semantics)."
+          },
+          "id": {
+            "type": "string",
+            "description": "Stable, unique id used for references (kebab-case by convention, e.g. \u0022seeker-missile\u0022)."
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable display name."
+          },
+          "icon-name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Art asset id for the HUD/cargo-list icon."
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Flavor/UI text shown for the expendable."
+          },
+          "mass": {
+            "type": "number",
+            "description": "Payload units one carried unit occupies in a hull\u0027s hold (see PayloadCapacity)."
+          },
+          "load-time": {
+            "type": "number",
+            "description": "Time to load/ready the expendable, in seconds."
+          },
+          "lifespan": {
+            "type": "number",
+            "description": "How long it lives once released, in seconds."
+          },
+          "signature": {
+            "type": "number",
+            "description": "Radar signature the expendable presents to enemy detection while active."
+          },
+          "hit-points": {
+            "type": "number",
+            "description": "Hit points before the expendable is destroyed; 0 = invulnerable."
+          },
+          "defense-type": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Damage-type category this expendable counts as when it deals or absorbs damage."
+          },
+          "abilities": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "capture",
+                "warp-bomb-dual",
+                "warp-bomb-single",
+                "quick-ready",
+                "ripcord",
+                "shoot-stations",
+                "shoot-ships",
+                "shoot-missiles",
+                "shoot-only-target",
+                "rescue",
+                "rescue-any"
+              ],
+              "description": "Capability flags for consumables (missiles, mines, etc.). Mirrors ExpendableAbilityBitMask (igc.h:770-782)."
+            },
+            "description": "Special capability flags granted to this expendable."
+          },
+          "cargo-id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Stable wire id for this expendable as a runtime cargo item the hangar can stock. Null = not a runtime cargo item. Authored explicitly, like ClassId / weapon ids."
+          },
+          "glyph": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Single-character UI glyph the hangar cargo list renders."
+          },
+          "charges-per-pack": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Charges dispensed from one loaded pack; the hangar loads a number of PACKS (each costing one Mass) and every press distributes one charge. Total charges = packs \u00D7 charges-per-pack. Null \u2192 1 (a pack is a single charge \u2014 legacy one-for-one behavior)."
+          }
+        },
+        "description": "Auxiliary afterburner fuel carried in the hold. Pure cargo \u2014 nothing is fired or deployed: when a fuel-modeled hull\u0027s tank hits 0 while boost is held, one charge auto-loads and the tank refills by FuelPerCharge. No C\u002B\u002B IGC equivalent (StellarAllegiance-only).",
+        "additionalProperties": false
+      },
+      "description": "The fuel-pod expendable catalog (reserve afterburner fuel carried as cargo)."
+    },
     "projectiles": {
       "type": "array",
       "items": {

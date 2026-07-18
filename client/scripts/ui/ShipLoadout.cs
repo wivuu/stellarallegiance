@@ -185,7 +185,12 @@ public partial class ShipLoadout : Control
     private Control BuildTopBar()
     {
         var panel = new PanelContainer();
-        var sb = new StyleBoxFlat { BgColor = new Color(DesignTokens.Void, 0.55f), BorderColor = DesignTokens.BorderHi, AntiAliasing = false };
+        var sb = new StyleBoxFlat
+        {
+            BgColor = new Color(DesignTokens.Void, 0.55f),
+            BorderColor = DesignTokens.BorderHi,
+            AntiAliasing = false,
+        };
         sb.SetCornerRadiusAll(0);
         sb.BorderWidthBottom = 1;
         sb.ContentMarginLeft = sb.ContentMarginRight = 26;
@@ -196,7 +201,12 @@ public partial class ShipLoadout : Control
         row.AddThemeConstantOverride("separation", 24);
         panel.AddChild(row);
 
-        var dot = new ColorRect { Color = DesignTokens.TeamAccent, CustomMinimumSize = new Vector2(12, 12), SizeFlagsVertical = SizeFlags.ShrinkCenter };
+        var dot = new ColorRect
+        {
+            Color = DesignTokens.TeamAccent,
+            CustomMinimumSize = new Vector2(12, 12),
+            SizeFlagsVertical = SizeFlags.ShrinkCenter,
+        };
         row.AddChild(dot);
         row.AddChild(UiKit.MakeLabel("STELLAR ALLEGIANCE", UiKit.TextStyle.Label, DesignTokens.TextHi));
 
@@ -258,7 +268,12 @@ public partial class ShipLoadout : Control
                 _researchTab = new ResearchTab();
                 _tabContent.AddChild(_researchTab);
                 _researchTab.Init(_defs, _world, _net);
-                _researchTab.SetBase(_sidebar.SelectedBaseId, _sidebar.SelectedTitle, _sidebar.SelectedSectorName, _sidebar.SelectedBaseType);
+                _researchTab.SetBase(
+                    _sidebar.SelectedBaseId,
+                    _sidebar.SelectedTitle,
+                    _sidebar.SelectedSectorName,
+                    _sidebar.SelectedBaseType
+                );
             }
             _researchTab.Visible = true;
         }
@@ -271,7 +286,12 @@ public partial class ShipLoadout : Control
     private Control BuildLaunchBar()
     {
         var panel = new PanelContainer();
-        var sb = new StyleBoxFlat { BgColor = new Color(DesignTokens.Void, 0.6f), BorderColor = DesignTokens.BorderHi, AntiAliasing = false };
+        var sb = new StyleBoxFlat
+        {
+            BgColor = new Color(DesignTokens.Void, 0.6f),
+            BorderColor = DesignTokens.BorderHi,
+            AntiAliasing = false,
+        };
         sb.SetCornerRadiusAll(0);
         sb.BorderWidthTop = 1;
         sb.ContentMarginLeft = sb.ContentMarginRight = 26;
@@ -433,7 +453,7 @@ public partial class ShipLoadout : Control
 
         // Live telemetry + spawn gating.
         byte team = _world.LocalTeam ?? _net.MyTeam;
-        _topReadout.Text = $"CREDITS {_world.TeamCredits(team)}   ·   PING {_ship.PingMs,3:0} ms";
+        _topReadout.Text = $"CREDITS {_world.TeamCredits(team)}   ·   PING {_ship.PingMs, 3:0} ms";
         RefreshLaunchGate(team);
         RefreshShipCardStates(team);
 
@@ -469,15 +489,12 @@ public partial class ShipLoadout : Control
         bool overCap = IsOverCapacity(def);
         var gate = _world.CheckSpawnGate(team, classId);
         _launch.Disabled = overCap || flying || _launchPending || gate != WorldRenderer.SpawnGate.Allow;
-        _launch.Text = flying
-            ? "IN FLIGHT"
-            : _launchPending
-                ? "LAUNCHING…"
-                : gate == WorldRenderer.SpawnGate.Locked
-                    ? "⚿ LOCKED"
-                    : overCap
-                        ? "OVER CAPACITY"
-                        : "◆ LAUNCH";
+        _launch.Text =
+            flying ? "IN FLIGHT"
+            : _launchPending ? "LAUNCHING…"
+            : gate == WorldRenderer.SpawnGate.Locked ? "⚿ LOCKED"
+            : overCap ? "OVER CAPACITY"
+            : "◆ LAUNCH";
         _launchHint.Visible = hint != null;
         if (hint != null)
             _launchHint.Text = hint;
@@ -521,6 +538,10 @@ public partial class ShipLoadout : Control
 
         RefreshStatBars(def);
         _preview.ShowShip(_defs, classId);
+        // Rebuild the cargo rows for THIS hull (fuel rows only exist on fuel-modeled hulls),
+        // then relabel — RefreshCargoSection already seeds per-class counts, so the loop is
+        // just the legacy relabel for any row it kept.
+        RefreshCargoSection(_defs.AllCargoItems());
         foreach ((uint itemId, Label count) in _cargoCounts)
             count.Text = _state.GetCargoCount(classId, itemId).ToString("00"); // counts are per-class
 
@@ -637,7 +658,8 @@ public partial class ShipLoadout : Control
     }
 
     private bool IsOverCapacity(ShipClassDef def) =>
-        _classId is byte classId && _state.PayloadUsed(classId, def.Hardpoints, _defs.GetWeapon, _defs.GetCargoItem) > def.PayloadCapacity;
+        _classId is byte classId
+        && _state.PayloadUsed(classId, def.Hardpoints, _defs.GetWeapon, _defs.GetCargoItem) > def.PayloadCapacity;
 
     // The arsenal: every streamed weapon that fits the selected slot, plus the empty-slot
     // row. Weapons gated behind unresearched tech are hidden outright (no locked rows) —
@@ -647,7 +669,11 @@ public partial class ShipLoadout : Control
         foreach (var child in _arsenalRows.GetChildren())
             child.QueueFree();
 
-        if (_classId is not byte classId || _selectedHp is not byte hpIndex || _defs.GetHardpoints(classId) is not List<HardpointDef> hps)
+        if (
+            _classId is not byte classId
+            || _selectedHp is not byte hpIndex
+            || _defs.GetHardpoints(classId) is not List<HardpointDef> hps
+        )
         {
             _arsenalFrame.Visible = false;
             return;
@@ -665,12 +691,14 @@ public partial class ShipLoadout : Control
         _arsenalFrame.Visible = true;
         // Name the slot by its mount type so the filtered arsenal is self-explanatory (a missile
         // mount only lists racks, a gun mount only guns; an untyped mount lists both).
-        _arsenalTitle.Text = $"[P{hpIndex + 1}]  " + slot.Mount switch
-        {
-            WeaponMountKind.Gun => "GUN HARDPOINT",
-            WeaponMountKind.Missile => "MISSILE HARDPOINT",
-            _ => "WEAPON HARDPOINT",
-        };
+        _arsenalTitle.Text =
+            $"[P{hpIndex + 1}]  "
+            + slot.Mount switch
+            {
+                WeaponMountKind.Gun => "GUN HARDPOINT",
+                WeaponMountKind.Missile => "MISSILE HARDPOINT",
+                _ => "WEAPON HARDPOINT",
+            };
         byte team = _world.LocalTeam ?? _net.MyTeam;
         // Migrate the equipped id up its tier chain so an obsoleted Gat Gun 1 (now hidden below) still
         // marks its successor Gat Gun 2 as EQUIPPED.
@@ -728,12 +756,14 @@ public partial class ShipLoadout : Control
     {
         for (int guard = 0; guard < 8; guard++)
         {
-            if (_defs.GetWeapon(weaponId) is not WeaponDef w
+            if (
+                _defs.GetWeapon(weaponId) is not WeaponDef w
                 || w.SucceededByWeaponId == uint.MaxValue
                 || w.ObsoletedByTechIdx.Length == 0
                 || _defs.GetWeapon(w.SucceededByWeaponId) is not WeaponDef next
                 || next.Mass > w.Mass // mass guard: matches the server's payload-safe migration
-                || !w.ObsoletedByTechIdx.Any(t => _world.TeamOwnsTech(team, t)))
+                || !w.ObsoletedByTechIdx.Any(t => _world.TeamOwnsTech(team, t))
+            )
                 return weaponId;
             weaponId = w.SucceededByWeaponId;
         }
@@ -753,8 +783,10 @@ public partial class ShipLoadout : Control
     // the empty-string fallbacks are purely cosmetic for a hull that authored none.
     private (string Icon, string Role, string Desc) FlavorOf(byte classId) =>
         _defs.TryGetShipDef(classId, out ShipClassDef d)
-            ? (d.Glyph.Length > 0 ? d.Glyph : "◇",
-               d.Role.Length > 0 ? d.Role : "HULL",
-               d.Description.Length > 0 ? d.Description : "Uncatalogued hull.")
+            ? (
+                d.Glyph.Length > 0 ? d.Glyph : "◇",
+                d.Role.Length > 0 ? d.Role : "HULL",
+                d.Description.Length > 0 ? d.Description : "Uncatalogued hull."
+            )
             : ("◇", "HULL", "Uncatalogued hull.");
 }

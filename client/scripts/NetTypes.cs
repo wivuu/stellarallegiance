@@ -68,6 +68,7 @@ namespace StellarAllegiance.Net
         public byte ChaffAmmo; // chaff puffs left in the dispenser
         public byte MineAmmo; // mine fields left in the dispenser
         public byte ProbeAmmo; // recon probes left in the dispenser
+        public byte FuelPodAmmo; // reserve fuel pods in the hold (auto-consumed when the tank empties mid-boost)
         public byte ThreatLock; // being-locked warning: 0 none, 1 an enemy is locking me, 2 locked
         public bool IsPig; // AI combat drone (orthogonal to Kind — a PIG pod is IsPig && Kind.Pod)
         public bool Autopilot; // server-steered autopilot engaged (ShipFlagAutopilot) — owning client follows authority
@@ -163,6 +164,7 @@ namespace StellarAllegiance.Net
         public byte RockClass;
         public float CurrentRadius;
         public int OrePct;
+
         // Total He3 ore this rock can yield (server-authored capacity). Remaining ore =
         // round(OrePct/100 × OreCapacity). ≤ 0 means "no readout" (non-He3 rock).
         public float OreCapacity;
@@ -241,6 +243,7 @@ namespace StellarAllegiance.Net
         public float DustColorR,
             DustColorG,
             DustColorB;
+
         // 0..1 how opaque the dust renders (scales puff alpha); the server also uses it to scale radar
         // attenuation. 1 = fully opaque for the authored amount (legacy look). Decoupled from cloud count.
         public float DustOpacity = 1f;
@@ -292,7 +295,8 @@ namespace StellarAllegiance.Net
         string SizeLabel,
         string SectorLabel,
         int GarrisonCount,
-        StellarAllegiance.Ui.SectorMapPreview.MapModel Layout);
+        StellarAllegiance.Ui.SectorMapPreview.MapModel Layout
+    );
 
     // One chat line, decoded from MsgChatRelay (scope 0 = all, 1 = team).
     public readonly struct ChatLine

@@ -215,9 +215,18 @@ public partial class ShipLoadout
         payHead.AddChild(payLabel);
         payHead.AddChild(_payloadText);
         col.AddChild(payHead);
-        _payloadBar = new SegmentedBar { Segments = PayloadSegments, Fill = DesignTokens.TeamAccent, CustomMinimumSize = new Vector2(0, 8) };
+        _payloadBar = new SegmentedBar
+        {
+            Segments = PayloadSegments,
+            Fill = DesignTokens.TeamAccent,
+            CustomMinimumSize = new Vector2(0, 8),
+        };
         col.AddChild(_payloadBar);
-        _overCapacity = UiKit.MakeLabel("⚠ OVER CAPACITY — strip a slot to launch", UiKit.TextStyle.Data, DesignTokens.DangerText);
+        _overCapacity = UiKit.MakeLabel(
+            "⚠ OVER CAPACITY — strip a slot to launch",
+            UiKit.TextStyle.Data,
+            DesignTokens.DangerText
+        );
         _overCapacity.AddThemeFontSizeOverride("font_size", 11);
         _overCapacity.Visible = false;
         col.AddChild(_overCapacity);
@@ -230,7 +239,12 @@ public partial class ShipLoadout
 
         // Arsenal frame — tinted container listing what fits the selected slot.
         _arsenalFrame = new PanelContainer { Visible = false };
-        var frameSb = new StyleBoxFlat { BgColor = new Color(DesignTokens.TeamAccentBase, 0.08f), BorderColor = DesignTokens.TeamAccentBase, AntiAliasing = false };
+        var frameSb = new StyleBoxFlat
+        {
+            BgColor = new Color(DesignTokens.TeamAccentBase, 0.08f),
+            BorderColor = DesignTokens.TeamAccentBase,
+            AntiAliasing = false,
+        };
         frameSb.SetCornerRadiusAll(0);
         frameSb.SetBorderWidthAll(1);
         frameSb.SetContentMarginAll(12);
@@ -276,6 +290,18 @@ public partial class ShipLoadout
 
         foreach (CargoItemDef item in items)
         {
+            // Fuel cargo only applies to hulls with a modeled tank — HIDDEN (not greyed) on the
+            // rest, per the repo's inapplicable/unresearched-content convention. SelectShip
+            // re-runs this refresh so the row set follows the hull pick.
+            if (
+                item.FuelPerCharge > 0f
+                && (
+                    _classId is not byte fuelCls
+                    || !_defs.TryGetShipDef(fuelCls, out ShipClassDef fuelDef)
+                    || fuelDef.MaxFuel <= 0f
+                )
+            )
+                continue;
             uint itemId = item.CargoId;
             var row = new HBoxContainer();
             row.AddThemeConstantOverride("separation", 10);
@@ -288,9 +314,10 @@ public partial class ShipLoadout
             name.AddThemeFontSizeOverride("font_size", 12);
             // Dispensers load in PACKS of ChargesPerPack charges (one per press); show the multiplier
             // so the count reads as packs. Legacy single-charge items (ChargesPerPack 1) stay "EA".
-            string cargoSub = item.ChargesPerPack > 1
-                ? $"{item.Mass:0} PAYLOAD/PACK · {item.ChargesPerPack}× CHARGES · {item.Description}"
-                : $"{item.Mass:0} PAYLOAD EA · {item.Description}";
+            string cargoSub =
+                item.ChargesPerPack > 1
+                    ? $"{item.Mass:0} PAYLOAD/PACK · {item.ChargesPerPack}× CHARGES · {item.Description}"
+                    : $"{item.Mass:0} PAYLOAD EA · {item.Description}";
             var sub = UiKit.MakeLabel(cargoSub, UiKit.TextStyle.Data, DesignTokens.TextDim);
             sub.AddThemeFontSizeOverride("font_size", 9);
             sub.ClipText = true;
@@ -362,52 +389,124 @@ public partial class ShipLoadout
         _demoWait = 0.8;
         switch (_demoStep++)
         {
-            case 0: Snap("01-open"); break;
+            case 0:
+                Snap("01-open");
+                break;
             // New geometry: click the 2nd ship card in the strip (proves selection off the strip),
             // then a sidebar base row, before exercising the preview/arsenal/cargo as before.
-            case 1: ClickShipCard(1); break;
-            case 2: ClickSidebarBase(0); break;
-            case 3: Snap("02-card-and-base"); break;
-            case 4: DragPreview(new Vector2(150, -40)); break;
-            case 5: Snap("03-rotated"); break;
-            case 6: ClickFirstMarker(); break;
+            case 1:
+                ClickShipCard(1);
+                break;
+            case 2:
+                ClickSidebarBase(0);
+                break;
+            case 3:
+                Snap("02-card-and-base");
+                break;
+            case 4:
+                DragPreview(new Vector2(150, -40));
+                break;
+            case 5:
+                Snap("03-rotated");
+                break;
+            case 6:
+                ClickFirstMarker();
+                break;
             // The arsenal for a PRIMARY weapon hardpoint lists only researched weapons — the
             // unresearched heavy-cannon is hidden outright, not shown as a locked row.
-            case 7: Snap("04-slot-selected"); break;
-            case 8: ClickArsenalRow(); break;
-            case 9: Snap("05-equipped"); break;
-            case 10: ClickAt(_firstCargoPlus!.GetGlobalRect().GetCenter()); break;
-            case 11: ClickAt(_firstCargoPlus!.GetGlobalRect().GetCenter()); break;
-            case 12: Snap("06-overcap"); break;
-            case 13: ClickAt(_reset.GetGlobalRect().GetCenter()); break;
-            case 14: Snap("07-reset"); break;
+            case 7:
+                Snap("04-slot-selected");
+                break;
+            case 8:
+                ClickArsenalRow();
+                break;
+            case 9:
+                Snap("05-equipped");
+                break;
+            case 10:
+                ClickAt(_firstCargoPlus!.GetGlobalRect().GetCenter());
+                break;
+            case 11:
+                ClickAt(_firstCargoPlus!.GetGlobalRect().GetCenter());
+                break;
+            case 12:
+                Snap("06-overcap");
+                break;
+            case 13:
+                ClickAt(_reset.GetGlobalRect().GetCenter());
+                break;
+            case 14:
+                Snap("07-reset");
+                break;
             // RESEARCH tab: switch to it, pick the first AVAILABLE node, authorize it (we are solo =
             // commander), watch it complete, then confirm the bomber unlocks back in the hangar.
-            case 15: ClickTab("RESEARCH"); break;
-            case 16: Snap("08-research-tab"); break;
-            case 17: ClickResearchNode(); break;
-            case 18: Snap("09-node-detail"); break;
-            case 19: ClickAuthorize(); _demoWait = 1.5; break; // let the MsgResearchState frame land
-            case 20: Snap("10-authorized"); _demoWait = 10.0; break; // wait out the shortened research
-            case 21: Snap("11-complete"); break;
-            case 22: ClickTab("HANGAR"); break;
-            case 23: Snap("12-bomber-unlocked"); break;
+            case 15:
+                ClickTab("RESEARCH");
+                break;
+            case 16:
+                Snap("08-research-tab");
+                break;
+            case 17:
+                ClickResearchNode();
+                break;
+            case 18:
+                Snap("09-node-detail");
+                break;
+            case 19:
+                ClickAuthorize();
+                _demoWait = 1.5;
+                break; // let the MsgResearchState frame land
+            case 20:
+                Snap("10-authorized");
+                _demoWait = 10.0;
+                break; // wait out the shortened research
+            case 21:
+                Snap("11-complete");
+                break;
+            case 22:
+                ClickTab("HANGAR");
+                break;
+            case 23:
+                Snap("12-bomber-unlocked");
+                break;
             // BUILD tab: snap the construction-catalog grid, then select a card so the shared detail
             // panel fills with the always-disabled CONSTRUCTORS OFFLINE footer.
-            case 24: ClickTab("BUILD"); break;
-            case 25: Snap("13-build-catalog"); break;
-            case 26: ClickBuildCard(); break;
-            case 27: Snap("14-build-selected"); break;
+            case 24:
+                ClickTab("BUILD");
+                break;
+            case 25:
+                Snap("13-build-catalog");
+                break;
+            case 26:
+                ClickBuildCard();
+                break;
+            case 27:
+                Snap("14-build-selected");
+                break;
             // Back on the HANGAR tab, reopen a primary weapon slot and scroll the arsenal to its
             // foot — proves the unresearched heavy-cannon stays hidden (no ⚿ LOCKED row).
-            case 28: ClickTab("HANGAR"); break;
-            case 29: ClickFirstMarker(); break;
-            case 30: ScrollArsenalToEnd(); break;
-            case 31: Snap("15-arsenal-bottom"); break;
-            case 32: _demoLaunched = true; ClickAt(_launch.GetGlobalRect().GetCenter()); break;
+            case 28:
+                ClickTab("HANGAR");
+                break;
+            case 29:
+                ClickFirstMarker();
+                break;
+            case 30:
+                ScrollArsenalToEnd();
+                break;
+            case 31:
+                Snap("15-arsenal-bottom");
+                break;
+            case 32:
+                _demoLaunched = true;
+                ClickAt(_launch.GetGlobalRect().GetCenter());
+                break;
             // Only reached if the spawn never landed — the ship spawning closes this
             // screen first and DemoAfterLaunch takes the final shot instead.
-            case 33: Snap("17-launch-stuck"); GetTree().Quit(); break;
+            case 33:
+                Snap("17-launch-stuck");
+                GetTree().Quit();
+                break;
         }
     }
 
@@ -493,8 +592,24 @@ public partial class ShipLoadout
 
     private static void ClickAt(Vector2 pos)
     {
-        Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = pos, GlobalPosition = pos });
-        Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = pos, GlobalPosition = pos });
+        Input.ParseInputEvent(
+            new InputEventMouseButton
+            {
+                ButtonIndex = MouseButton.Left,
+                Pressed = true,
+                Position = pos,
+                GlobalPosition = pos,
+            }
+        );
+        Input.ParseInputEvent(
+            new InputEventMouseButton
+            {
+                ButtonIndex = MouseButton.Left,
+                Pressed = false,
+                Position = pos,
+                GlobalPosition = pos,
+            }
+        );
     }
 
     // Click the Nth VISIBLE ship card in the strip (guarded — the harness may run with fewer
@@ -531,15 +646,38 @@ public partial class ShipLoadout
     private void DragPreview(Vector2 total)
     {
         Vector2 c = _preview.GetGlobalRect().GetCenter();
-        Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = c, GlobalPosition = c });
+        Input.ParseInputEvent(
+            new InputEventMouseButton
+            {
+                ButtonIndex = MouseButton.Left,
+                Pressed = true,
+                Position = c,
+                GlobalPosition = c,
+            }
+        );
         const int steps = 10;
         for (int i = 1; i <= steps; i++)
         {
             Vector2 p = c + total * i / steps;
-            Input.ParseInputEvent(new InputEventMouseMotion { Position = p, GlobalPosition = p, Relative = total / steps });
+            Input.ParseInputEvent(
+                new InputEventMouseMotion
+                {
+                    Position = p,
+                    GlobalPosition = p,
+                    Relative = total / steps,
+                }
+            );
         }
         Vector2 end = c + total;
-        Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = end, GlobalPosition = end });
+        Input.ParseInputEvent(
+            new InputEventMouseButton
+            {
+                ButtonIndex = MouseButton.Left,
+                Pressed = false,
+                Position = end,
+                GlobalPosition = end,
+            }
+        );
     }
 
     private void ClickFirstMarker()
@@ -717,7 +855,11 @@ public partial class HoloBackdrop : Control
         for (int i = 0; i < 4; i++)
         {
             float a = 0.05f * (4 - i) / 4f;
-            DrawRect(new Rect2(0, y + i * band / 4f, Size.X, band / 4f), new Color(DesignTokens.TeamAccentBase, a), filled: true);
+            DrawRect(
+                new Rect2(0, y + i * band / 4f, Size.X, band / 4f),
+                new Color(DesignTokens.TeamAccentBase, a),
+                filled: true
+            );
         }
     }
 }
@@ -744,9 +886,25 @@ public partial class HardpointMarkerOverlay : Control
     public override void _Draw()
     {
         // Legend + rotate hint (static chrome, drawn with the markers to stay one pass).
-        DrawString(UiFonts.Mono, new Vector2(14, 20), "● WEAPON MOUNT", HorizontalAlignment.Left, -1, 10, DesignTokens.TeamAccent);
+        DrawString(
+            UiFonts.Mono,
+            new Vector2(14, 20),
+            "● WEAPON MOUNT",
+            HorizontalAlignment.Left,
+            -1,
+            10,
+            DesignTokens.TeamAccent
+        );
         DrawString(UiFonts.Mono, new Vector2(14, 34), "· SYSTEM", HorizontalAlignment.Left, -1, 10, DesignTokens.TextDim);
-        DrawString(UiFonts.Mono, new Vector2(14, Size.Y - 12), "ROTATE ◄ ► · SCROLL ZOOM · CLICK MOUNT", HorizontalAlignment.Left, -1, 10, DesignTokens.Text2);
+        DrawString(
+            UiFonts.Mono,
+            new Vector2(14, Size.Y - 12),
+            "ROTATE ◄ ► · SCROLL ZOOM · CLICK MOUNT",
+            HorizontalAlignment.Left,
+            -1,
+            10,
+            DesignTokens.Text2
+        );
 
         if (_preview == null)
             return;
@@ -765,7 +923,10 @@ public partial class HardpointMarkerOverlay : Control
             bool hovered = _preview.HoverIndex == m.Hp.Index;
             bool filled = _isFilled(m.Hp.Index);
             Color c = DesignTokens.TeamAccent;
-            float r = selected ? 9f : hovered ? 8f : 6.5f;
+            float r =
+                selected ? 9f
+                : hovered ? 8f
+                : 6.5f;
             if (selected)
             {
                 // Pulsing halo, the design's saMarker glow.
@@ -778,8 +939,20 @@ public partial class HardpointMarkerOverlay : Control
             string tag = $"P{m.Hp.Index + 1}";
             Vector2 sz = UiFonts.Mono.GetStringSize(tag, HorizontalAlignment.Left, -1, 10);
             var tagPos = sp + new Vector2(-sz.X * 0.5f, r + 14f);
-            DrawRect(new Rect2(tagPos + new Vector2(-3, -10), sz + new Vector2(6, 4)), new Color(DesignTokens.Void, 0.7f), filled: true);
-            DrawString(UiFonts.Mono, tagPos, tag, HorizontalAlignment.Left, -1, 10, selected || hovered ? c : DesignTokens.Text2);
+            DrawRect(
+                new Rect2(tagPos + new Vector2(-3, -10), sz + new Vector2(6, 4)),
+                new Color(DesignTokens.Void, 0.7f),
+                filled: true
+            );
+            DrawString(
+                UiFonts.Mono,
+                tagPos,
+                tag,
+                HorizontalAlignment.Left,
+                -1,
+                10,
+                selected || hovered ? c : DesignTokens.Text2
+            );
         }
     }
 }

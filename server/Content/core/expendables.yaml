@@ -450,3 +450,17 @@ probes:
     hit-points: 25
     hit-radius: 12
     signature: 0.67
+
+fuels:
+  # Auxiliary afterburner fuel carried in the hold. Pure cargo (nothing is fired or deployed):
+  # when a fuel-modeled hull's tank hits 0 while boost is held, one charge auto-loads and the
+  # tank refills by fuel-per-charge, clamped to the hull's max-fuel — overshoot is wasted, so a
+  # value >= every tank means "full refill". Single tier, no launcher, no tech gate.
+  - id: fuel-pod-1
+    name: Fuel Pod
+    description: Reserve afterburner fuel. Auto-loads when the tank runs dry.
+    cargo-id: 5
+    mass: 1               # payload cost per PACK (one hangar count = one pack)
+    charges-per-pack: 1   # one refill per pack
+    glyph: "◒"            # geometric like the other cargo glyphs (◈ ◇ ◉) — HUD font has no emoji
+    fuel-per-charge: 999  # >= every tank => full refill (clamped to max-fuel); lower for partials

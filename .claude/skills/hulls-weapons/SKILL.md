@@ -16,7 +16,7 @@ is the hands-on reference for the four content files that define what a ship *is
 | `hulls.yaml` | playable ships + escape pod: flight stats, shield, afterburner, payload, hardpoint bindings, default cargo | `class-id` |
 | `weapons.yaml` | guns (cannons): damage via projectile, cadence, spread, mass, `shield-damage-multiplier` | `weapon-id` |
 | `launchers.yaml` | missile racks + chaff/mine/probe dispensers: magazine (`amount`), cadence, mounted `mass`, referenced expendable | `weapon-id` |
-| `expendables.yaml` | the payloads a launcher fires: missiles/mines/decoys/probes — ballistics, `mass`, `cargo-id`, `can-damage-base` | `cargo-id` (dispensed kinds) |
+| `expendables.yaml` | the payloads a launcher fires: missiles/mines/decoys/probes — ballistics, `mass`, `cargo-id`, `can-damage-base` — plus `fuels:` (fuel pods: pure cargo, no launcher; auto-loads `fuel-per-charge` into the tank when it runs dry mid-boost) | `cargo-id` (dispensed kinds) |
 | `stations.yaml` | bases/garrisons (`base-type-id`) — see `hardpoints` skill for their docking nodes | `base-type-id` |
 
 The manifest `core.manifest.yaml` lists which files load; bump its `version:` when adding a file.
@@ -82,9 +82,10 @@ Every armed hull must satisfy, or the server **refuses to boot**
 sum(mounted weapon/launcher mass)  +  sum(default-cargo count × expendable mass)   ≤   payload-capacity
 ```
 
-Stock expendable masses: prox-mine 1, counter 1, ews-probe 2, mrm-seeker 4, mrm-quickfire 3,
-srm-dumbfire 4, srm-anti-base 6 (only the `default-cargo`-dispensed items count here — magazine ammo rides free
-inside its launcher). When you add or up-mass a weapon, **either raise `payload-capacity` to keep
+Stock expendable masses: prox-mine 1, counter 1, ews-probe 2, fuel-pod 1, mrm-seeker 4,
+mrm-quickfire 3, srm-dumbfire 4, srm-anti-base 6 (only the `default-cargo`-dispensed items count here —
+magazine ammo rides free inside its launcher). Fuel pods additionally require the hull to model fuel
+(`max-fuel > 0`) — authoring them on a fuel-less hull refuses boot. When you add or up-mass a weapon, **either raise `payload-capacity` to keep
 the existing default cargo, or trim `default-cargo`**. Keep the inline `# math …` comment in sync —
 it's the reviewer's check.
 

@@ -47,30 +47,42 @@ public static class FactionsContentProjection
         var techIdx = new Dictionary<string, ushort>();
         for (int i = 0; i < core.Techs.Count; i++)
             techIdx[core.Techs[i].Id] = (ushort)i;
-        var techs = core.Techs
-            .Select(t => new TechDef { Id = t.Id, Name = t.Name, Description = t.Description ?? "" })
+        var techs = core
+            .Techs.Select(t => new TechDef
+            {
+                Id = t.Id,
+                Name = t.Name,
+                Description = t.Description ?? "",
+            })
             .ToList();
         var developments = core.Developments.Select(d => ProjectDevelopment(d, techIdx)).ToList();
         // Station upgrades (v39): resolve a station's `successor-station-id` to the successor tier's
         // base-type-id. Built from the runtime-base subset (a successor must itself be a runtime base).
-        var baseTypeByStationId = core.Stations
-            .Where(s => s.BaseTypeId is not null)
+        var baseTypeByStationId = core
+            .Stations.Where(s => s.BaseTypeId is not null)
             .ToDictionary(s => s.Id, s => (short)s.BaseTypeId!.Value, StringComparer.Ordinal);
         short SuccessorBaseType(string? succId) =>
             !string.IsNullOrEmpty(succId) && baseTypeByStationId.TryGetValue(succId, out var t) ? t : (short)-1;
         // Station CATALOG = every authored station, runtime AND catalog-only (Build-tab placeholders).
-        var stationCatalog = core.Stations.Select(s => ProjectStationCatalog(s, techIdx, SuccessorBaseType(s.SuccessorStationId))).ToList();
+        var stationCatalog = core
+            .Stations.Select(s => ProjectStationCatalog(s, techIdx, SuccessorBaseType(s.SuccessorStationId)))
+            .ToList();
 
         // Weapon-ids that are MISSILE RACKS (a launcher whose expendable is a missile), for the
         // hardpoint mount-type resolution: an un-authored `mount:` derives from the bound weapon
         // (rack -> missile mount, anything else bound -> gun mount, empty -> any).
         var missileExpendableIds = new HashSet<string>(core.Missiles.Select(m => m.Id), StringComparer.Ordinal);
-        var rackWeaponIds = new HashSet<uint>(core.Launchers
-            .Where(l => l.WeaponId is not null && !string.IsNullOrEmpty(l.ExpendableId) && missileExpendableIds.Contains(l.ExpendableId))
-            .Select(l => l.WeaponId!.Value));
+        var rackWeaponIds = new HashSet<uint>(
+            core.Launchers.Where(l =>
+                    l.WeaponId is not null
+                    && !string.IsNullOrEmpty(l.ExpendableId)
+                    && missileExpendableIds.Contains(l.ExpendableId)
+                )
+                .Select(l => l.WeaponId!.Value)
+        );
 
-        var ships = core.Hulls
-            .Where(h => h.ClassId is not null)
+        var ships = core
+            .Hulls.Where(h => h.ClassId is not null)
             .Select(h => ProjectShip(h, cargoIdByExpendable, partSigById, techIdx, rackWeaponIds))
             .ToList();
 
@@ -78,8 +90,8 @@ public static class FactionsContentProjection
         // PART id; resolve it to the wire WeaponId so ProjectWeapon/ProjectLauncher can stamp
         // WeaponDef.SucceededByWeaponId (a saved tier-1 gun or rack migrates to tier-2 once its
         // obsoleting tech is owned).
-        var weaponIdByPartId = core.Weapons
-            .Where(w => w.WeaponId is not null)
+        var weaponIdByPartId = core
+            .Weapons.Where(w => w.WeaponId is not null)
             .ToDictionary(w => w.Id, w => w.WeaponId!.Value);
         foreach (var l in core.Launchers)
             if (l.WeaponId is not null)
@@ -88,41 +100,50 @@ public static class FactionsContentProjection
         // Runtime weapons = guns (Weapon, with a weapon id) followed by missile launchers (Launcher,
         // with a weapon id), each in Core list order — deterministic (the shared ContentValidator
         // catches a duplicate weapon id shared between the two).
-        var weapons = core.Weapons
-            .Where(w => w.WeaponId is not null)
+        var weapons = core
+            .Weapons.Where(w => w.WeaponId is not null)
             .Select(w => ProjectWeapon(w, projectileById, techIdx, weaponIdByPartId))
-            .Concat(core.Launchers
-                .Where(l => l.WeaponId is not null)
-                .Select(l => ProjectLauncher(l, missileById, mineById, chaffById, probeById, techIdx, weaponIdByPartId)))
+            .Concat(
+                core.Launchers.Where(l => l.WeaponId is not null)
+                    .Select(l => ProjectLauncher(l, missileById, mineById, chaffById, probeById, techIdx, weaponIdByPartId))
+            )
             .ToList();
 
-        var bases = core.Stations
-            .Where(s => s.BaseTypeId is not null)
+        var bases = core
+            .Stations.Where(s => s.BaseTypeId is not null)
             .Select(s => ProjectBase(s, SuccessorBaseType(s.SuccessorStationId), rackWeaponIds))
             .ToList();
 
-        // AllExpendables() iterates Missiles→Mines→Chaffs→Probes in list order — deterministic.
-        var cargoItems = core.AllExpendables()
-            .Where(e => e.CargoId is not null)
-            .Select(ProjectCargoItem)
-            .ToList();
+        // AllExpendables() iterates Missiles→Mines→Chaffs→Probes→Fuels in list order — deterministic.
+        var cargoItems = core.AllExpendables().Where(e => e.CargoId is not null).Select(ProjectCargoItem).ToList();
 
         var start = ProjectFactionStart(core);
 
         return new ContentSet(
-            ships, weapons, bases, cargoItems, world, start, core,
-            techs, developments, stationCatalog, techIdx);
+            ships,
+            weapons,
+            bases,
+            cargoItems,
+            world,
+            start,
+            core,
+            techs,
+            developments,
+            stationCatalog,
+            techIdx
+        );
     }
 
     // ---- Tech-path catalog projection (Stage 4) --------------------------------------------
 
     // A TechSet/CapabilitySet is a HashSet (unordered) — SORT the projected index/byte arrays so
     // two loads of the same bundle project byte-identical defs (ContentTest determinism guard).
-    private static ushort[] TechIdxArray(Allegiance.Factions.Model.TechSet set, IReadOnlyDictionary<string, ushort> techIdx) =>
-        set.Select(id => techIdx[id]).OrderBy(x => x).ToArray();
+    private static ushort[] TechIdxArray(
+        Allegiance.Factions.Model.TechSet set,
+        IReadOnlyDictionary<string, ushort> techIdx
+    ) => set.Select(id => techIdx[id]).OrderBy(x => x).ToArray();
 
-    private static byte[] CapArray(Factions.CapabilitySet set) =>
-        set.Select(c => (byte)c).OrderBy(b => b).ToArray();
+    private static byte[] CapArray(Factions.CapabilitySet set) => set.Select(c => (byte)c).OrderBy(b => b).ToArray();
 
     // v41 team-wide stat multipliers: an AttributeModifiers map (GameAttribute -> double) projected to a
     // wire-stable AttrMod[] SORTED by the attribute byte (ContentTest determinism guard — the map has no
@@ -153,7 +174,11 @@ public static class FactionsContentProjection
             Attributes = AttrArray(d.Attributes),
         };
 
-    private static StationCatalogDef ProjectStationCatalog(Factions.Station s, IReadOnlyDictionary<string, ushort> techIdx, short successorBaseTypeId) =>
+    private static StationCatalogDef ProjectStationCatalog(
+        Factions.Station s,
+        IReadOnlyDictionary<string, ushort> techIdx,
+        short successorBaseTypeId
+    ) =>
         new()
         {
             Id = s.Id,
@@ -261,8 +286,8 @@ public static class FactionsContentProjection
             FactionId = 0, // reserved (per-team content); Stage-1 is a single stock bundle
             // Default consumable hold: authored by expendable id, projected to (cargo-id, count) in
             // authored list order (deterministic). CoreValidator already proved each id resolves.
-            DefaultCargo = h.DefaultCargo
-                .Where(c => cargoIdByExpendable.ContainsKey(c.Item))
+            DefaultCargo = h
+                .DefaultCargo.Where(c => cargoIdByExpendable.ContainsKey(c.Item))
                 .Select(c => new CargoLoadDef { CargoId = cargoIdByExpendable[c.Item], Count = (byte)c.Count })
                 .ToList(),
             // Tech-tree UI surfacing (v43): the hull's own required-techs, streamed so the hangar's
@@ -308,9 +333,8 @@ public static class FactionsContentProjection
             // owned) + the next-tier weapon a loadout migrates to. An unresolvable/absent successor
             // stays NoWeapon (uint.MaxValue) so a top-tier gun never migrates.
             ObsoletedByTechIdx = TechIdxArray(w.ObsoletedByTechs, techIdx),
-            SucceededByWeaponId = w.SuccessorPartId is { } sid && weaponIdByPartId.TryGetValue(sid, out uint swid)
-                ? swid
-                : uint.MaxValue,
+            SucceededByWeaponId =
+                w.SuccessorPartId is { } sid && weaponIdByPartId.TryGetValue(sid, out uint swid) ? swid : uint.MaxValue,
         };
     }
 
@@ -338,9 +362,8 @@ public static class FactionsContentProjection
         // Launcher-tier succession, same rule as guns: obsoleting techs hide the tier, the successor
         // is what a mounted rack (or a spawn's dispenser resolution) migrates to.
         ushort[] obsTechs = TechIdxArray(l.ObsoletedByTechs, techIdx);
-        uint succWid = l.SuccessorPartId is { } sid && weaponIdByPartId.TryGetValue(sid, out uint swid)
-            ? swid
-            : uint.MaxValue;
+        uint succWid =
+            l.SuccessorPartId is { } sid && weaponIdByPartId.TryGetValue(sid, out uint swid) ? swid : uint.MaxValue;
         if (!string.IsNullOrEmpty(l.ExpendableId) && missileById.TryGetValue(l.ExpendableId, out var m))
             return new WeaponDef
             {
@@ -449,7 +472,9 @@ public static class FactionsContentProjection
                 ProbeModelSize = (float)pr.ModelSize,
             };
 
-        throw new InvalidDataException($"launcher '{l.Id}' (weapon-id {l.WeaponId}) has no resolvable missile/mine/chaff/probe expendable-id");
+        throw new InvalidDataException(
+            $"launcher '{l.Id}' (weapon-id {l.WeaponId}) has no resolvable missile/mine/chaff/probe expendable-id"
+        );
     }
 
     // Authored trail tint: 8-digit RRGGBBAA verbatim, or 6-digit RRGGBB promoted to opaque (…FF).
@@ -471,6 +496,7 @@ public static class FactionsContentProjection
             Mass = (float)e.Mass,
             ChargesPerPack = (byte)System.Math.Max(1, e.ChargesPerPack ?? 1),
             Description = e.Description ?? "",
+            FuelPerCharge = e is Factions.FuelPod f ? (float)f.FuelPerCharge : 0f,
         };
 
     private static BaseDef ProjectBase(Factions.Station s, short successorBaseTypeId, IReadOnlySet<uint> rackWeaponIds) =>
@@ -523,15 +549,11 @@ public static class FactionsContentProjection
             // hangar. Author `mount:` to expose an empty mount. Streamed, so the hangar filters
             // with the SAME resolved value the server's ResolveLoadout enforces. (Non-weapon kinds
             // carry Any as an inert placeholder — nothing reads their Mount.)
-            Mount = h.Mount is Factions.RuntimeMountKind m
-                ? (WeaponMountKind)(byte)m
-                : h.Kind != Factions.RuntimeHardpointKind.Weapon
-                    ? WeaponMountKind.Any
-                    : h.WeaponId is not uint wid
-                        ? WeaponMountKind.NonMountable
-                        : rackWeaponIds.Contains(wid)
-                            ? WeaponMountKind.Missile
-                            : WeaponMountKind.Gun,
+            Mount =
+                h.Mount is Factions.RuntimeMountKind m ? (WeaponMountKind)(byte)m
+                : h.Kind != Factions.RuntimeHardpointKind.Weapon ? WeaponMountKind.Any
+                : h.WeaponId is not uint wid ? WeaponMountKind.NonMountable
+                : rackWeaponIds.Contains(wid) ? WeaponMountKind.Missile
+                : WeaponMountKind.Gun,
         };
-
 }

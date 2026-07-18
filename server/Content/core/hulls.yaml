@@ -99,9 +99,9 @@ hulls:
     ab-accel: 14
     ab-on-rate: 2.5
     ab-off-rate: 1.5
-    max-fuel: 20          # IGC maxFuel 13 -> a big tank
-    ab-fuel-drain: 4.0    # per second while the afterburner is engaged (~5 s burn)
-    ab-fuel-recharge: 0   # dock-only: no in-flight regen, full tank only on relaunch
+    max-fuel: 60          # ~15 s burn at drain 4 — the booster hull carries a serious tank
+    ab-fuel-drain: 4.0    # per second while the afterburner is engaged
+    ab-fuel-recharge: 0   # dock-only: no in-flight regen — spent tank reloads from fuel pods or relaunch
     armor-hit-points: 206
     shield-capacity: 60
     shield-recharge: 8
@@ -111,7 +111,7 @@ hulls:
     vision-sphere-radius: 450
     radar-signature: 1.0
     price: 150
-    payload-capacity: 12 # 2x mini-gun 2 + 2x decoy 2 = 4 -> 8 free
+    payload-capacity: 12 # 2x mini-gun 2 + 2x decoy 2 + 2x fuel pod 2 = 6 -> 6 free
     required-capabilities: [base]
     # wc_icint carries HP_Weapon_0 (center) + HP_Weapon_1/2 (symmetric wing tips). Mount the two wing
     # guns as the twin Mini-Gun pair; the center mount stays empty. Booster_0/1, Thruster_0, Light_0..4
@@ -122,6 +122,7 @@ hulls:
       - { kind: cockpit, off-y: 0.4, off-z: 1.2, dir-z: 1 }
     default-cargo:
       - { item: counter-1, count: 2 }
+      - { item: fuel-pod-1, count: 2 } # two auto-load refills out of the box (dock-only recharge hull)
 
   # Enh Fighter (class-id 1, wc_icfig): the all-rounder — three PW Gat Guns. IGC 3×0x1. The anchor
   # hull for the whole stat translation. Gated behind supremacy-1 (Phase 4): buildable once the team

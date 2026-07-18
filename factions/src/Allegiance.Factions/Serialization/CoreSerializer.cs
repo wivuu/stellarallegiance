@@ -15,9 +15,8 @@ public static class CoreSerializer
         .WithNamingConvention(HyphenatedNamingConvention.Instance)
         .WithEnumNamingConvention(HyphenatedNamingConvention.Instance)
         .ConfigureDefaultValuesHandling(
-            DefaultValuesHandling.OmitNull
-            | DefaultValuesHandling.OmitDefaults
-            | DefaultValuesHandling.OmitEmptyCollections)
+            DefaultValuesHandling.OmitNull | DefaultValuesHandling.OmitDefaults | DefaultValuesHandling.OmitEmptyCollections
+        )
         .Build();
 
     private static readonly IDeserializer Deserializer = new DeserializerBuilder()
@@ -36,8 +35,8 @@ public static class CoreSerializer
 
     public static string Serialize<T>(T value) => Serializer.Serialize(value!);
 
-    public static T Deserialize<T>(string yaml) where T : new() =>
-        Deserializer.Deserialize<T>(yaml) ?? new T();
+    public static T Deserialize<T>(string yaml)
+        where T : new() => Deserializer.Deserialize<T>(yaml) ?? new T();
 
     // ---- split files + manifest ----------------------------------------------------------------
 
@@ -48,8 +47,9 @@ public static class CoreSerializer
     /// </summary>
     public static Core Load(string manifestPath)
     {
-        var manifest = Deserializer.Deserialize<Manifest>(File.ReadAllText(manifestPath))
-                       ?? throw new InvalidDataException($"Manifest '{manifestPath}' is empty or invalid.");
+        var manifest =
+            Deserializer.Deserialize<Manifest>(File.ReadAllText(manifestPath))
+            ?? throw new InvalidDataException($"Manifest '{manifestPath}' is empty or invalid.");
         var baseDir = Path.GetDirectoryName(Path.GetFullPath(manifestPath)) ?? ".";
 
         var core = new Core { Version = manifest.Version };
@@ -84,26 +84,37 @@ public static class CoreSerializer
 
         WriteFragment(baseDir, "tech.yaml", manifest, new Core { Techs = core.Techs });
         WriteFragment(baseDir, "hulls.yaml", manifest, new Core { Hulls = core.Hulls });
-        WriteFragment(baseDir, "parts.yaml", manifest, new Core
-        {
-            Weapons = core.Weapons,
-            Shields = core.Shields,
-            Cloaks = core.Cloaks,
-            Afterburners = core.Afterburners,
-            AmmoPacks = core.AmmoPacks,
-            Launchers = core.Launchers,
-        });
+        WriteFragment(
+            baseDir,
+            "parts.yaml",
+            manifest,
+            new Core
+            {
+                Weapons = core.Weapons,
+                Shields = core.Shields,
+                Cloaks = core.Cloaks,
+                Afterburners = core.Afterburners,
+                AmmoPacks = core.AmmoPacks,
+                Launchers = core.Launchers,
+            }
+        );
         WriteFragment(baseDir, "stations.yaml", manifest, new Core { Stations = core.Stations });
         WriteFragment(baseDir, "developments.yaml", manifest, new Core { Developments = core.Developments });
         WriteFragment(baseDir, "drones.yaml", manifest, new Core { Drones = core.Drones });
-        WriteFragment(baseDir, "expendables.yaml", manifest, new Core
-        {
-            Missiles = core.Missiles,
-            Mines = core.Mines,
-            Chaffs = core.Chaffs,
-            Probes = core.Probes,
-            Projectiles = core.Projectiles,
-        });
+        WriteFragment(
+            baseDir,
+            "expendables.yaml",
+            manifest,
+            new Core
+            {
+                Missiles = core.Missiles,
+                Mines = core.Mines,
+                Chaffs = core.Chaffs,
+                Probes = core.Probes,
+                Fuels = core.Fuels,
+                Projectiles = core.Projectiles,
+            }
+        );
 
         foreach (var faction in core.Factions)
         {

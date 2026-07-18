@@ -49,8 +49,8 @@ namespace StellarAllegiance.Shared
         Gun, // guns (Bolt) only
         Missile, // missile racks only
         NonMountable, // not a loadout slot: accepts nothing, HIDDEN in the hangar. The default a
-                      // mesh HP_Weapon node gets when hulls.yaml doesn't author it — an empty,
-                      // ASSIGNABLE mount requires an authored entry (`mount: any|gun|missile`).
+        // mesh HP_Weapon node gets when hulls.yaml doesn't author it — an empty,
+        // ASSIGNABLE mount requires an authored entry (`mount: any|gun|missile`).
     }
 
     // Off* is the local offset from the hull origin; Dir* is the local forward (e.g. +Z
@@ -98,14 +98,17 @@ namespace StellarAllegiance.Shared
     {
         public byte ClassId;
         public string Name = "";
+
         // Presentation flavor authored per-hull (streamed, not baked): the hangar's icon glyph,
         // role tag, and blurb. Empty = the client falls back to a generic cosmetic default.
         public string Glyph = "";
         public string Role = "";
         public string Description = "";
+
         // GLB the client loads for this hull (res://assets/ships/<ModelName>.glb). Empty = the
         // procedural placeholder silhouette. Authored, so a new hull ships its own mesh patchless.
         public string ModelName = "";
+
         // Longest local axis (world units) the loaded hull is uniform-scaled to — the silhouette
         // length the client normalizes the GLB to and sizes the engine glow / loadout camera off.
         public float ModelLength;
@@ -124,12 +127,14 @@ namespace StellarAllegiance.Shared
         public float AbAccel,
             AbOnRate,
             AbOffRate;
+
         // 0 max-fuel = unmodeled (unlimited boost); 0 recharge = dock-only (relaunch refills).
         public float MaxFuel;
         public float AbFuelDrain,
             AbFuelRecharge;
 
         public float MaxHull; // starting/spawn hull
+
         // Regenerating energy shield layered over hull (all 0 = no shield). Depleted before hull;
         // overflow spills to hull. Recharge (points/sec) resumes ShieldDelaySec after the last hit.
         public float ShieldCapacity;
@@ -145,6 +150,7 @@ namespace StellarAllegiance.Shared
         public float VisionConeAngleDeg;
         public float VisionSphereRadius;
         public float RadarSignature;
+
         // Additive radar-signature bias projected from authored equipment (Hull.Signature + the
         // default loadout's Part.Signature sum), in RadarSignature units (default 0 = neutral).
         // Server-side fog input only — Protocol.BuildDefs deliberately does NOT write it (the
@@ -228,6 +234,7 @@ namespace StellarAllegiance.Shared
         public byte MineCloudCount; // mine: mines scattered per deploy (<= 64, seed-based aliveMask)
         public uint MineArmTicks; // mine: sim ticks before the field arms (round(arm-delay*20))
         public float MineTriggerRadius; // mine: u proximity radius each armed mine triggers within
+
         // Radar signature of the deployed field (0 authored -> 1.0 at projection). SERVER-ONLY —
         // BuildDefs skips it (detection is server-authoritative; the client never reads signatures;
         // FogEyeballMultiplier / ProbeSignature precedent).
@@ -292,7 +299,8 @@ namespace StellarAllegiance.Shared
 
     // One per runtime cargo item (an expendable the hangar can stock in a ship's hold).
     // CargoId is the stable wire id an authored expendable carries (Expendable.CargoId).
-    // Cargo is hangar/UI-side today — the sim doesn't consume these yet (Stage 2 consumables).
+    // Dispenser items are consumed through the per-kind ammo bytes (SeedDispenserAmmo);
+    // fuel items auto-consume when the tank empties mid-boost.
     public sealed class CargoItemDef
     {
         public uint CargoId;
@@ -301,6 +309,7 @@ namespace StellarAllegiance.Shared
         public float Mass; // payload units per PACK carried (one hangar count = one pack)
         public byte ChargesPerPack = 1; // charges dispensed per loaded pack (one per press); >=1
         public string Description = "";
+        public float FuelPerCharge; // afterburner fuel restored per consumed charge; 0 = not a fuel item
     }
 
     // One per base type.
@@ -328,10 +337,12 @@ namespace StellarAllegiance.Shared
         // The GLB the client loads for this base type (res://assets/bases/<ModelName>.glb) and the
         // server reads for collision — mirrors ShipClassDef.ModelName. Empty => procedural sphere.
         public string ModelName = "";
+
         // Win-condition base ("headquarters"): a team loses when ALL its WinCondition bases are
         // destroyed. Garrisons are WinCondition; forward structures (outpost, …) are not. Projected
         // from the station's `start` ability (only the garrison carries it).
         public bool WinCondition;
+
         // The asteroid class a constructor may build this base on (RockClass byte). Only meaningful
         // for constructor-built forward bases; the garrison authors none (built at match start).
         // 255 = unset (not constructor-buildable).
@@ -420,6 +431,7 @@ namespace StellarAllegiance.Shared
         public short BaseTypeId = -1; // runtime wire base-type id; -1 = catalog-only (not buildable/spawnable)
         public byte ResearchSlots; // resolved (>= 1) for runtime bases; authored raw otherwise
         public byte BuildRockClass = 255; // RockClass a constructor builds this on; 255 = unset (v37)
+
         // Constructor align dwell for THIS station (seconds at the standoff shell before creeping in),
         // resolved (> 0) at projection from stations.yaml `align-time-seconds` (v38). Pairs with
         // BuildTimeSeconds = how long the build sphere runs once the drone is embedded.
@@ -437,7 +449,12 @@ namespace StellarAllegiance.Shared
 
     // How a sector's asteroids are distributed. Field = shallow disc filling toward the edge;
     // Belt = annular ring; None = no rocks. Replaces the old per-sector-id field/belt hardcoding.
-    public enum AsteroidKind { None, Field, Belt }
+    public enum AsteroidKind
+    {
+        None,
+        Field,
+        Belt,
+    }
 
     // Resource class assigned to each asteroid at world-gen (World.RockOre). Only Helium3 is
     // harvestable today (miners fill their ore hold from He3 rocks). Regolith is the COMMON class —
@@ -447,7 +464,11 @@ namespace StellarAllegiance.Shared
     // wire), so never reorder or remove a member; new classes append after the highest value.
     public enum RockClass : byte
     {
-        Carbonaceous = 0, Silicon = 1, Uranium = 2, Helium3 = 3, Regolith = 4,
+        Carbonaceous = 0,
+        Silicon = 1,
+        Uranium = 2,
+        Helium3 = 3,
+        Regolith = 4,
     }
 
     // Relative weights for which SPECIAL class (Carbonaceous/Silicon/Uranium) a seeded special rock
@@ -486,8 +507,8 @@ namespace StellarAllegiance.Shared
             long sum = wc + ws + wu; // > 0 guaranteed by AnyPositive validation at load
             long r = (long)(hash % (ulong)sum);
             return r < wc ? RockClass.Carbonaceous
-                 : r < wc + ws ? RockClass.Silicon
-                 : RockClass.Uranium;
+                : r < wc + ws ? RockClass.Silicon
+                : RockClass.Uranium;
         }
     }
 
@@ -531,6 +552,7 @@ namespace StellarAllegiance.Shared
         // ore-assignment pass.
         public int? He3Count;
         public int? SpecialCount;
+
         // Optional per-sector override of the special-class weights (which class each special rock
         // becomes). Null → the world seeding default (WorldSeedingTuning.SpecialWeights). Composes
         // with SpecialCount: count = how many special rocks, weights = which class each is.
@@ -564,13 +586,13 @@ namespace StellarAllegiance.Shared
     // Streamed. Drives the client's directional sun light + volumetric god-ray shafts.
     public sealed class SectorSun
     {
-        public float? Azimuth;   // degrees around +Y; null → client keeps its static light direction
+        public float? Azimuth; // degrees around +Y; null → client keeps its static light direction
         public float? Elevation; // degrees above the sector plane
-        public Vec3? Color;      // linear rgb; null → client default warm tint
-        public float? Energy;    // directional-light energy; null → client default
-        public float? Ambient;   // ambient (fill) light energy for the whole sector; null → client default
-        public float? Size;      // visible sun disc's world-space quad width; null → client default (900)
-        public float GodRays;    // 0..1 screen-space light-shaft strength (0 = no god rays)
+        public Vec3? Color; // linear rgb; null → client default warm tint
+        public float? Energy; // directional-light energy; null → client default
+        public float? Ambient; // ambient (fill) light energy for the whole sector; null → client default
+        public float? Size; // visible sun disc's world-space quad width; null → client default (900)
+        public float GodRays; // 0..1 screen-space light-shaft strength (0 = no god rays)
     }
 
     // Streamed. Optional override of the client's sector-id-seeded nebula backdrop.
@@ -593,12 +615,13 @@ namespace StellarAllegiance.Shared
     public sealed class SectorDust
     {
         public float Amount = 0.6f; // 0..1 "how dusty" — coverage/count/thickness/vision, all relative
+
         // 0..1 how heavily the dust attenuates RADAR/vision, decoupled from the visual `Amount`: it
         // scales the sightline shortening (0 = dust you can see straight through, 1 = full attenuation
         // for this Amount). Default 1 = the legacy behaviour where Amount alone drove radar impact.
         public float Opacity = 1f;
-        public Vec3? Color;         // dust albedo; null → client default
-        public uint? Seed;          // optional; null → derived from world seed ^ sector id
+        public Vec3? Color; // dust albedo; null → client default
+        public uint? Seed; // optional; null → derived from world seed ^ sector id
     }
 
     // World-scale knobs consumed by MAP SEEDING, not the per-tick sim. SectorScale
@@ -655,6 +678,7 @@ namespace StellarAllegiance.Shared
         public float BoostSignatureMult = 1f;
         public float ShieldSignatureMult = 1f;
         public float DustSignatureMult = 1f;
+
         // Safety rails on the multiplicative stack: the effective signature is clamped to
         // [(base+bias)×Min, (base+bias)×Max] so extreme knob stacking can't make a ship invisible
         // or beacon-loud beyond tuning intent.
@@ -751,6 +775,7 @@ namespace StellarAllegiance.Shared
         public float CollisionDamageScale = 0.6f; // ship-vs-static damage scale
         public float ShipShipDamageScale = 1.2f;
         public float MaxCollisionDamage = 30f;
+
         // Below this closing normal speed (m/s) a collision is a harmless kiss: bounce, no damage.
         public float CollisionDamageMinSpeed = 4f;
 
@@ -765,6 +790,7 @@ namespace StellarAllegiance.Shared
     public sealed class WorldMechanicsTuning
     {
         public float AlephTriggerRadius = 18f; // distance from a gate mouth at which a ship warps
+
         // (also the radius of the solid gate-mouth sphere that absorbs bolts/missiles — see FireBolt)
         public float WarpExitOffset = 60f; // how far beyond the destination mouth a ship exits
         public float WarpExitJitter = 0.12f; // per-axis random spread on the exit cone
@@ -898,7 +924,7 @@ namespace StellarAllegiance.Shared
         // speed/hull-max), so they tune the visual pace directly — the travel legs (ToRock/MoveTo) still
         // fly at full hull speed.
         public float ApproachSpeed = 8f; // standoff shell -> surface contact (meshes touching)
-        public float SinkSpeed = 3f;     // surface contact -> embedded at SinkDepthFrac
+        public float SinkSpeed = 3f; // surface contact -> embedded at SinkDepthFrac
 
         public float Standoff = 60f; // extra reach past the rock surface where ToRock "arrives" (align shell)
 
@@ -921,7 +947,7 @@ namespace StellarAllegiance.Shared
     public sealed class WorldBuildTuning
     {
         public int ParallelLimit = 4; // ordered items a garrison BUILDS at once (1 = strictly one at a time)
-        public int QueueLimit    = 4; // total ordered (building + queued) a garrison may hold before the Build tab locks
+        public int QueueLimit = 4; // total ordered (building + queued) a garrison may hold before the Build tab locks
     }
 
     // Stable content IDENTIFIERS the engine branches on. These are NOT tunable content — the actual
@@ -946,8 +972,11 @@ namespace StellarAllegiance.Shared
         // LockTargetId / MissileSim.TargetShipId carry a base reference through the existing u64 wire
         // fields with no new message fields.
         public const ulong BaseLockFlag = 1UL << 63;
+
         public static bool IsBaseLock(ulong id) => (id & BaseLockFlag) != 0;
+
         public static ulong BaseLockId(ulong baseId) => BaseLockFlag | baseId;
+
         public static ulong BaseIdOf(ulong lockId) => lockId & ~BaseLockFlag;
 
         // Asteroid focus id encoding — mirrors the BaseLock scheme one bit down. Rock ids and
@@ -956,8 +985,11 @@ namespace StellarAllegiance.Shared
         // navigation-only marker (asteroids are never missile-lock targets); the focus->LockTargetId
         // path strips a rock-encoded id to 0 so it never reaches the missile lock system.
         public const ulong AsteroidFocusFlag = 1UL << 62;
+
         public static bool IsAsteroidFocus(ulong id) => (id & AsteroidFocusFlag) != 0;
+
         public static ulong AsteroidFocusId(ulong asteroidId) => AsteroidFocusFlag | asteroidId;
+
         public static ulong AsteroidIdOf(ulong focusId) => focusId & ~AsteroidFocusFlag;
     }
 }

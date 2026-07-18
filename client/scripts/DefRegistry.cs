@@ -87,6 +87,7 @@ public partial class DefRegistry : Node
     // The streamed faction display name (e.g. "Iron Coalition"); "" until the defs arrive.
     public string FactionName { get; private set; } = "";
     private AttrMod[] _factionAttributes = System.Array.Empty<AttrMod>();
+
     // The faction's GAS block (sorted by attr byte). Consumed by the sim server-side; kept here so a
     // client identity/stat panel can surface it. Empty until the defs arrive.
     public IReadOnlyList<AttrMod> FactionAttributes => _factionAttributes;
@@ -99,10 +100,13 @@ public partial class DefRegistry : Node
 
     // Streamed catalog lists in wire-index order (u16 indices on the wire index THESE lists).
     public IReadOnlyList<TechDef> AllTechs() => _techs;
+
     public IReadOnlyList<DevelopmentDef> AllDevelopments() => _developments;
+
     public IReadOnlyList<StationCatalogDef> AllStationCatalog() => _stationCatalog;
 
     public TechDef? GetTech(ushort idx) => idx < _techs.Count ? _techs[idx] : null;
+
     public DevelopmentDef? GetDevelopment(ushort idx) => idx < _developments.Count ? _developments[idx] : null;
 
     // ---- Ship flight stats ------------------------------------------------
@@ -264,6 +268,18 @@ public partial class DefRegistry : Node
         var list = new List<CargoItemDef>(_cargo.Values);
         list.Sort((a, b) => a.CargoId.CompareTo(b.CargoId));
         return list;
+    }
+
+    // The streamed fuel-pod cargo item (FuelPerCharge > 0), lowest CargoId wins — single fuel
+    // type by design (the ship-record fuelPodAmmo byte is only a count, so prediction reads the
+    // one item's yield). Null until the defs arrive.
+    public CargoItemDef? FuelCargoItem()
+    {
+        CargoItemDef? best = null;
+        foreach (var c in _cargo.Values)
+            if (c.FuelPerCharge > 0f && (best is null || c.CargoId < best.CargoId))
+                best = c;
+        return best;
     }
 
     // A base type's def (radius/health/hardpoints), for the base-mesh loader. Null until it arrives.

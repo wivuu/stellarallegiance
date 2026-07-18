@@ -45,6 +45,9 @@
 //      rack (weapon-id 3) to its successor (weapon-id 18) at spawn.
 //   9. Dumbfire rack mount + launch: weapon-id 24 seeds its magazine and launches a MissileSim
 //      carrying weapon-id 24.
+//  10. Fuel cargo (cargo-id 5, mass 1 — no dispenser WeaponDef): accepted on the fuel-modeled
+//      interceptor (cls 3), whole-request rejected on the fuel-less scout, and its mass counts
+//      against the shared payload budget like any other cargo.
 
 using System.Linq;
 using SimServer.Content;
@@ -95,9 +98,13 @@ Simulation BootSim(ulong seed, params string[] techs)
 // Join a client with a mount-override tail (the EnqueueJoin seam ClientHub feeds), step once so
 // ProcessRespawns spawns it, park the ship in the empty sector at rest, and return it.
 Simulation.ShipSim Spawn(
-    Simulation sim, int cid, byte team, byte cls,
+    Simulation sim,
+    int cid,
+    byte team,
+    byte cls,
     (byte hpIndex, uint weaponId)[]? mounts = null,
-    (uint cargoId, byte count)[]? cargo = null)
+    (uint cargoId, byte count)[]? cargo = null
+)
 {
     sim.EnqueueJoin(cid, team, cls, cargo ?? System.Array.Empty<(uint, byte)>(), 0, mounts);
     sim.Step();
@@ -264,11 +271,19 @@ Simulation.ShipSim Spawn(
         ship.HeldInput = new ShipInputState { Firing = true };
         sim.Step();
     }
-    Check(ship.LastFireTick != 0, "the nanite-armed scout fires its mount", $"nanite-armed scout never fired (LastFireTick {ship.LastFireTick})");
+    Check(
+        ship.LastFireTick != 0,
+        "the nanite-armed scout fires its mount",
+        $"nanite-armed scout never fired (LastFireTick {ship.LastFireTick})"
+    );
 
     // Tier 3 (id 17) is tech-gated behind nanite-3 — without it the whole swap reverts to authored.
     var locked = Spawn(sim, 2, team: 0, cls: FlightModel.ClassScout, mounts: [(0, 17u)]);
-    Check(locked.MountWeaponIds is null, "tech-locked ER Nanite 3 rejects to authored mounts", "nanite-3 swap leaked without the tech");
+    Check(
+        locked.MountWeaponIds is null,
+        "tech-locked ER Nanite 3 rejects to authored mounts",
+        "nanite-3 swap leaked without the tech"
+    );
 }
 
 // ---- 4. Whole-request reject: bad slot / dispenser weapon / payload overflow --------------------
@@ -284,7 +299,11 @@ Simulation.ShipSim Spawn(
 
     // (b) a dispenser (Chaff-kind decoy launcher, weapon-id 6) is not hardpoint-mountable.
     var b = Spawn(sim, 2, team: 0, cls: FlightModel.ClassScout, mounts: [(0, 6u)]);
-    Check(b.MountWeaponIds is null, "dispenser weapon id rejects to authored mounts (D8)", "dispenser weapon accepted on a hardpoint");
+    Check(
+        b.MountWeaponIds is null,
+        "dispenser weapon id rejects to authored mounts (D8)",
+        "dispenser weapon accepted on a hardpoint"
+    );
 
     // (c) payload overflow: seeker rack (4) on hp1 + gat (1) = 5 weapon mass, plus a 10-mine request
     // (10) = 15 > scout capacity 12 — the reject must ALSO revert the requested cargo to the authored
@@ -292,7 +311,10 @@ Simulation.ShipSim Spawn(
     var c = Spawn(sim, 3, team: 0, cls: FlightModel.ClassScout, mounts: [(1, 3u)], cargo: [(2u, 10)]);
     Check(c.MountWeaponIds is null, "over-payload swap rejects to authored mounts", "over-payload swap accepted");
     Check(
-        c.MineAmmo == control.MineAmmo && c.ChaffAmmo == control.ChaffAmmo && c.ProbeAmmo == control.ProbeAmmo && c.MineAmmo > 0,
+        c.MineAmmo == control.MineAmmo
+            && c.ChaffAmmo == control.ChaffAmmo
+            && c.ProbeAmmo == control.ProbeAmmo
+            && c.MineAmmo > 0,
         "rejected request reverts the cargo half too (authored default hold seeded)",
         $"cargo not reverted (mine {c.MineAmmo}/{control.MineAmmo}, chaff {c.ChaffAmmo}/{control.ChaffAmmo}, probe {c.ProbeAmmo}/{control.ProbeAmmo})"
     );
@@ -317,7 +339,11 @@ Simulation.ShipSim Spawn(
     // (a) missile rack on a GUN mount: the fighter's hp1 is gun-typed (authored gat-gun-1) — the
     // same seeker rack that mounts fine on the scout's missile-typed hp1 whole-request-rejects here.
     var a = Spawn(sim, 1, team: 0, cls: FlightModel.ClassFighter, mounts: [(1, 3u)]);
-    Check(a.MountWeaponIds is null, "missile rack on a gun mount rejects to authored mounts", "rack accepted on a gun mount");
+    Check(
+        a.MountWeaponIds is null,
+        "missile rack on a gun mount rejects to authored mounts",
+        "rack accepted on a gun mount"
+    );
 
     // (b) gun on a MISSILE mount: the bomber's hp4 is missile-typed (authored SRM anti-base rack).
     var b = Spawn(sim, 2, team: 0, cls: FlightModel.ClassBomber, mounts: [(4, 0u)]);
@@ -353,7 +379,7 @@ Simulation.ShipSim Spawn(
 
 {
     var sim = BootSim(seed: 5);
-    var gatGun = sim.Content.Weapons.First(w => w.WeaponId == 0);  // interval 4
+    var gatGun = sim.Content.Weapons.First(w => w.WeaponId == 0); // interval 4
     var miniGun = sim.Content.Weapons.First(w => w.WeaponId == 9); // interval 3
 
     var (trace, mountLast, _) = RunMixedCadence(seed: 5);
@@ -443,6 +469,50 @@ Simulation.ShipSim Spawn(
         t1.SequenceEqual(t2) && m1.SequenceEqual(m2) && ids1.SequenceEqual(ids2),
         "same script from two fresh sims -> bit-identical fire sequences and mount state",
         "determinism broke: two identical runs diverged"
+    );
+}
+
+// ---- 10. Fuel cargo: hull gate + payload accounting ---------------------------------------------
+// Fuel pods (cargo-id 5) have no dispenser WeaponDef — ResolveLoadout accepts them through the
+// _fuelPerCharge path, but ONLY on a hull that models fuel (MaxFuel > 0). The interceptor
+// (cls 3, payload 12, 2×mini-gun mass 2 mounted) is the fuel hull; the scout is the reject case.
+{
+    const byte ClassInterceptor = 3;
+    const uint FuelPod = 5;
+    var sim = BootSim(seed: 10);
+
+    // (a) accepted on the interceptor: the requested hold replaces the authored one (2 decoy +
+    // 2 pod), so the reserve is exactly the request and the decoys are gone.
+    var a = Spawn(sim, 1, team: 0, cls: ClassInterceptor, cargo: [(FuelPod, 4)]);
+    Check(
+        a.FuelPodAmmo == 4 && a.ChaffAmmo == 0,
+        "fuel cargo accepted on the fuel-modeled interceptor (requested hold, not authored)",
+        $"fuel cargo wrong (pods {a.FuelPodAmmo}, chaff {a.ChaffAmmo})"
+    );
+
+    // (b) whole-request reject on the fuel-less scout: authored hold seeded instead (3 mine +
+    // 1 decoy + 1 probe — the same control counts scenario 4 leans on), zero pods.
+    var control = Spawn(sim, 9, team: 1, cls: FlightModel.ClassScout);
+    var b = Spawn(sim, 2, team: 0, cls: FlightModel.ClassScout, cargo: [(FuelPod, 1)]);
+    Check(
+        b.FuelPodAmmo == 0 && b.MineAmmo == control.MineAmmo && b.ChaffAmmo == control.ChaffAmmo && b.MineAmmo > 0,
+        "fuel cargo on the fuel-less scout rejects the whole request (authored hold back, no pods)",
+        $"scout fuel reject wrong (pods {b.FuelPodAmmo}, mine {b.MineAmmo}/{control.MineAmmo}, chaff {b.ChaffAmmo}/{control.ChaffAmmo})"
+    );
+
+    // (c) payload boundary: guns 2 + 11 pods = 13 > 12 rejects (authored hold back: 2 decoys +
+    // 2 pods); guns 2 + 10 pods = 12 fits exactly and is accepted.
+    var c = Spawn(sim, 3, team: 1, cls: ClassInterceptor, cargo: [(FuelPod, 11)]);
+    Check(
+        c.FuelPodAmmo == 2 && c.ChaffAmmo > 0,
+        "over-payload pod hold rejects to the authored interceptor hold (2 decoy + 2 pod)",
+        $"pod overflow reject wrong (pods {c.FuelPodAmmo}, chaff {c.ChaffAmmo})"
+    );
+    var d = Spawn(sim, 4, team: 0, cls: ClassInterceptor, cargo: [(FuelPod, 10)]);
+    Check(
+        d.FuelPodAmmo == 10 && d.ChaffAmmo == 0,
+        "a 10-pod hold fits the interceptor exactly (12/12) — accepted",
+        $"pod at-capacity accept wrong (pods {d.FuelPodAmmo}, chaff {d.ChaffAmmo})"
     );
 }
 

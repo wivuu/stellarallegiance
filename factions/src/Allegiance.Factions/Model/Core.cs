@@ -18,32 +18,45 @@ public record Core
 
     /// <summary>The mountable weapon (gun) catalog.</summary>
     public List<Weapon> Weapons { get; set; } = [];
+
     /// <summary>The mountable shield generator catalog.</summary>
     public List<Shield> Shields { get; set; } = [];
+
     /// <summary>The mountable cloaking device catalog.</summary>
     public List<Cloak> Cloaks { get; set; } = [];
+
     /// <summary>The mountable afterburner catalog.</summary>
     public List<Afterburner> Afterburners { get; set; } = [];
+
     /// <summary>The mountable ammo pack (magazine) catalog.</summary>
     public List<AmmoPack> AmmoPacks { get; set; } = [];
+
     /// <summary>The mountable expendable-launcher catalog.</summary>
     public List<Launcher> Launchers { get; set; } = [];
 
     /// <summary>The buildable station/building catalog.</summary>
     public List<Station> Stations { get; set; } = [];
+
     /// <summary>The research/tech-purchase catalog.</summary>
     public List<Development> Developments { get; set; } = [];
+
     /// <summary>The AI-piloted drone type catalog.</summary>
     public List<Drone> Drones { get; set; } = [];
 
     /// <summary>The missile expendable catalog.</summary>
     public List<Missile> Missiles { get; set; } = [];
+
     /// <summary>The mine expendable catalog.</summary>
     public List<Mine> Mines { get; set; } = [];
+
     /// <summary>The chaff/decoy expendable catalog.</summary>
     public List<Chaff> Chaffs { get; set; } = [];
+
     /// <summary>The probe expendable catalog.</summary>
     public List<Probe> Probes { get; set; } = [];
+
+    /// <summary>The fuel-pod expendable catalog (reserve afterburner fuel carried as cargo).</summary>
+    public List<FuelPod> Fuels { get; set; } = [];
 
     /// <summary>The weapon-bolt/projectile definition catalog.</summary>
     public List<Projectile> Projectiles { get; set; } = [];
@@ -53,27 +66,16 @@ public record Core
 
     /// <summary>Every mountable part across all part collections.</summary>
     public IEnumerable<Part> AllParts() =>
-        Weapons.Cast<Part>()
-            .Concat(Shields)
-            .Concat(Cloaks)
-            .Concat(Afterburners)
-            .Concat(AmmoPacks)
-            .Concat(Launchers);
+        Weapons.Cast<Part>().Concat(Shields).Concat(Cloaks).Concat(Afterburners).Concat(AmmoPacks).Concat(Launchers);
 
-    /// <summary>Every expendable across all expendable collections.</summary>
+    /// <summary>Every expendable across all expendable collections. Fuels stays last so the
+    /// existing Missiles→Mines→Chaffs→Probes cargo-catalog order is unchanged.</summary>
     public IEnumerable<Expendable> AllExpendables() =>
-        Missiles.Cast<Expendable>()
-            .Concat(Mines)
-            .Concat(Chaffs)
-            .Concat(Probes);
+        Missiles.Cast<Expendable>().Concat(Mines).Concat(Chaffs).Concat(Probes).Concat(Fuels);
 
     /// <summary>Every buildable (anything carrying tech requirements/effects).</summary>
     public IEnumerable<Buildable> AllBuildables() =>
-        Hulls.Cast<Buildable>()
-            .Concat(AllParts())
-            .Concat(Stations)
-            .Concat(Developments)
-            .Concat(Drones);
+        Hulls.Cast<Buildable>().Concat(AllParts()).Concat(Stations).Concat(Developments).Concat(Drones);
 
     /// <summary>Appends every entry from <paramref name="other"/> into this core's collections.</summary>
     public void Merge(Core other)
@@ -96,6 +98,7 @@ public record Core
         Mines.AddRange(other.Mines);
         Chaffs.AddRange(other.Chaffs);
         Probes.AddRange(other.Probes);
+        Fuels.AddRange(other.Fuels);
         Projectiles.AddRange(other.Projectiles);
         Factions.AddRange(other.Factions);
     }

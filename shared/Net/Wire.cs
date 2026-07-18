@@ -91,7 +91,11 @@ public static class Wire
     // on a gun mount or vice versa). Resolved at projection from hulls.yaml `mount:` (default:
     // derived from the bound weapon; empty mounts unrestricted). Writer Protocol.WriteHardpoints
     // ↔ reader GameNetClient.ReadHardpoints.
-    public const byte ProtocolVersion = 34;
+    // (2026-07-18) fuel pods: the ship record appends u8 fuelPodAmmo after probeAmmo
+    // (ShipRecordSize 56 → 57) — reserve afterburner fuel auto-consumed when the tank empties
+    // mid-boost; the MsgDefs cargo-item block appends f32 FuelPerCharge after Description
+    // (0 = not a fuel item). Writer Protocol.WriteShip/BuildDefs ↔ reader GameNetClient mirror.
+    public const byte ProtocolVersion = 35;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

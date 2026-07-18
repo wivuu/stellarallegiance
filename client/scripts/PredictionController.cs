@@ -53,6 +53,7 @@ public partial class PredictionController : Node3D
         public uint Tick;
         public ShipInputState Input;
         public ShipState Predicted;
+        public byte PredictedPods; // fuel-pod reserve AFTER this tick's auto-load (reconcile resync anchor)
     }
 
     // Dynamic engine glow, fed the local input's forward throttle each prediction
@@ -225,6 +226,33 @@ public partial class PredictionController : Node3D
     public float Fuel => _state.Fuel;
     public float MaxFuel => _hasStats ? _stats.MaxFuel : 0f;
 
+    // Predicted fuel-pod reserve, mirroring the server's Pass A auto-load (a pod is consumed
+    // the tick the tank sits empty while boost is held) so the HUD count drops the instant it
+    // happens instead of a round-trip later. Seeded/resynced from the snapshot fuelPodAmmo byte.
+    private byte _predFuelPods;
+    private float _fuelPodYield; // streamed CargoItemDef.FuelPerCharge (re-pulled each Step)
+    public int FuelPods => _predFuelPods;
+
+    // The server's Pass A fuel-pod rule, applied to a state about to Integrate under `input`.
+    // Kept as the single client mirror so live Step and reconcile replay can't drift apart.
+    // The yield>0 guard also keeps a defs gap from burning pods into a 0-fuel refill.
+    private void ConsumeFuelPod(ref ShipState st, in ShipInputState input, ref byte pods)
+    {
+        if (
+            !IsPod
+            && pods > 0
+            && input.Boost
+            && _fuelPodYield > 0f
+            && _stats.MaxFuel > 0f
+            && _stats.AbThrust > 0f
+            && st.Fuel <= 0f
+        )
+        {
+            pods--;
+            st.Fuel = System.MathF.Min(_stats.MaxFuel, _fuelPodYield);
+        }
+    }
+
     // Gun fire cadence, surfaced for the HUD weapons readout. LastFireTick mirrors the server's
     // Ship.LastFireTick (0 = never fired / ready; latest fire across mounts); ClientTick is the
     // tick the predictor last stepped. A weapon is READY once ClientTick - LastFireTickFor(id)
@@ -263,8 +291,10 @@ public partial class PredictionController : Node3D
         if (_mountLastFire.Length < slots.Count)
             System.Array.Resize(ref _mountLastFire, slots.Count);
         for (int i = 0; i < slots.Count; i++)
-            if (slots[i].weapon is { Kind: WeaponKind.Bolt } w
-                && FireCadence.MountFires(row.LastFireTick, _mountLastFire[i], w.FireIntervalTicks))
+            if (
+                slots[i].weapon is { Kind: WeaponKind.Bolt } w
+                && FireCadence.MountFires(row.LastFireTick, _mountLastFire[i], w.FireIntervalTicks)
+            )
                 _mountLastFire[i] = row.LastFireTick;
         _lastFireTick = row.LastFireTick;
     }
@@ -334,10 +364,12 @@ public partial class PredictionController : Node3D
     // class (Scout/Bomber/Pod) shows no plume even while Shift is held — mirroring the
     // FlightModel's own `i.Boost && st.AbThrust > 0` gate so VFX matches authority. Also
     // dies on an empty tank (MaxFuel > 0 && Fuel <= 0) exactly like FlightModel.Integrate's
-    // `afterburning` gate, so the exhaust plume cuts out the instant the server's does.
+    // `afterburning` gate, so the exhaust plume cuts out the instant the server's does —
+    // unless a fuel-pod reserve remains: the next Step's auto-load refills the tank, so the
+    // plume must not flicker in the sub-tick window between empty and refilled.
     public void SetAfterburner(float boost) =>
         _afterburner =
-            _hasStats && _stats.AbThrust > 0f && (_stats.MaxFuel <= 0f || _state.Fuel > 0f)
+            _hasStats && _stats.AbThrust > 0f && (_stats.MaxFuel <= 0f || _state.Fuel > 0f || _predFuelPods > 0)
                 ? Mathf.Clamp(boost, 0f, 1f)
                 : 0f;
 
@@ -361,6 +393,7 @@ public partial class PredictionController : Node3D
         // holds authority instead of flying stale numbers (defs arrive in the initial
         // snapshot, before spawn, so this is effectively always ready here).
         _hasStats = defs.TryGetStats((byte)row.Class, row.IsPod, out _stats);
+        _predFuelPods = row.FuelPodAmmo;
         _state = ShipMath.StateFromRow(row);
         _prevState = _state;
         _buffer.Clear();
@@ -403,7 +436,11 @@ public partial class PredictionController : Node3D
         }
         if (!_hasStats)
             return _shotsOut;
+        // Fuel-pod yield rides the streamed cargo defs — re-pulled like _stats so a live YAML
+        // retune flows in (no baked fallback: 0 until the defs arrive disables the mirror).
+        _fuelPodYield = _defs.FuelCargoItem()?.FuelPerCharge ?? 0f;
         _throttle = Mathf.Clamp(input.Thrust, 0f, 1f); // forward thrust drives the engine glow
+        ConsumeFuelPod(ref _state, input, ref _predFuelPods); // mirror of the server's pre-Integrate auto-load
         _state = FlightModel.Integrate(_state, input, _stats);
         ResolveCollisions(ref _state);
         _buffer.Add(
@@ -412,6 +449,7 @@ public partial class PredictionController : Node3D
                 Tick = clientTick,
                 Input = input,
                 Predicted = _state,
+                PredictedPods = _predFuelPods,
             }
         );
         if (_buffer.Count > BufferLen)
@@ -513,11 +551,13 @@ public partial class PredictionController : Node3D
         if (_autopilot)
         {
             ReconcileFire(row);
+            _predFuelPods = row.FuelPodAmmo; // no prediction running — adopt authority
             // Keep the exhaust alive: local input.Thrust isn't driving _throttle while Step is
             // skipped, so feed the glow from the authoritative forward speed / afterburner ramp.
-            _throttle = _hasStats && _stats.MaxSpeed > 0f
-                ? Mathf.Clamp((float)(authState.Vel.Length() / _stats.MaxSpeed), 0f, 1f)
-                : 0f;
+            _throttle =
+                _hasStats && _stats.MaxSpeed > 0f
+                    ? Mathf.Clamp((float)(authState.Vel.Length() / _stats.MaxSpeed), 0f, 1f)
+                    : 0f;
             _afterburner = _hasStats && _stats.AbThrust > 0f ? Mathf.Clamp(authState.AbPower, 0f, 1f) : 0f;
             RebaseTo(authState);
             return;
@@ -531,6 +571,7 @@ public partial class PredictionController : Node3D
         {
             // No prediction for tick N (just spawned, or N older than the buffer):
             // adopt authority, easing the visible discontinuity.
+            _predFuelPods = row.FuelPodAmmo;
             RebaseTo(auth);
             _buffer.RemoveAll(e => e.Tick <= n);
             return;
@@ -541,27 +582,36 @@ public partial class PredictionController : Node3D
 
         if (posErr <= PosTolerance && rotErr <= RotTolerance)
         {
-            // Prediction good — just retire acknowledged history.
+            // Prediction good — retire acknowledged history, and resync the pod reserve against
+            // the acked tick so a server-side disagreement can't persist: pods burned since tick
+            // N re-apply on top of the authoritative count (a no-op when prediction matched).
+            int burnedSince = _buffer[idx].PredictedPods - _predFuelPods;
+            _predFuelPods = (byte)System.Math.Max(0, row.FuelPodAmmo - burnedSince);
             _buffer.RemoveRange(0, idx + 1);
             return;
         }
 
-        // Diverged: re-base onto authority at N, then replay buffered inputs after N.
+        // Diverged: re-base onto authority at N, then replay buffered inputs after N — pod
+        // consumption re-derives from the authoritative count + fuel exactly like the live path.
         ReconcileCount++;
         LastReconcileError = posErr;
 
         var replay = _buffer.GetRange(idx + 1, _buffer.Count - (idx + 1));
         _buffer.Clear();
         var s = auth;
+        byte pods = row.FuelPodAmmo;
         for (int i = 0; i < replay.Count; i++)
         {
+            ConsumeFuelPod(ref s, replay[i].Input, ref pods);
             s = FlightModel.Integrate(s, replay[i].Input, _stats);
             ResolveCollisions(ref s);
             var e = replay[i];
             e.Predicted = s;
+            e.PredictedPods = pods;
             replay[i] = e;
             _buffer.Add(e);
         }
+        _predFuelPods = pods;
         RebaseTo(s);
     }
 
@@ -589,6 +639,7 @@ public partial class PredictionController : Node3D
         Shield = row.Shield;
         _state = ShipMath.StateFromRow(row);
         _prevState = _state;
+        _predFuelPods = row.FuelPodAmmo;
         ReconcileFire(row);
         _buffer.Clear();
         _tickTimer = 0;

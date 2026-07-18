@@ -312,6 +312,22 @@ and drops a probe just ahead of the ship, granting its team an unoccluded vision
 - **Related:** [[Fog of War (Team Vision)]], [[Minefield]], [[Chaff]], [[Expendables]]
 - **Notes:** Proto v23: `WeaponKind.Probe` dispenser, ammo/cadence rides the same D6/D9 seam as chaff/mine
 
+### Fuel Pod
+Reserve afterburner fuel carried as pure cargo (no launcher, no key): when a fuel-modeled hull's
+tank hits 0 while boost is held, one charge auto-loads pre-Integrate and the tank refills by
+`fuel-per-charge` (clamped to `max-fuel` — the stock 999 value means "full refill").
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `factions/src/Allegiance.Factions/Model/Expendables/FuelPod.cs` — authoring model (`fuels:` in expendables.yaml)
+  - `server/Sim/Simulation.cs` — `ShipSim.FuelPodAmmo` + the Pass A auto-load before `FlightModel.Integrate`
+  - `client/scripts/PredictionController.cs` — `ConsumeFuelPod` prediction mirror (live Step + reconcile replay)
+  - `client/scripts/SystemRing.cs` — `POD +N` reserve readout under the FUEL arc
+- **Related:** [[Expendables]], [[Payload]], [[Afterburner]]
+- **Notes:** Proto v35: ship record appends u8 fuelPodAmmo; cargo defs append f32 FuelPerCharge.
+  FlightModel.Integrate is untouched (PIG determinism) — the refill lands between InputFor and
+  Integrate so the boost gate (which reads pre-tick fuel) never blinks. Hangar hides the row on
+  fuel-less hulls; server rejects fuel cargo there (whole-request authored fallback).
+
 ### Threat Lock (being-locked warning)
 Warning that an enemy missile-armed ship is locking you: `ShipSim.ThreatLockState` (0 none / 1 locking /
 2 locked) rides free bits in the snapshot flags byte (`ShipFlagLockingMe=4`, `ShipFlagLockedMe=8`).
