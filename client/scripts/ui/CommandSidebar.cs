@@ -32,6 +32,7 @@ public partial class CommandSidebar : Control
         string SectorName,
         uint Sector,
         bool Alive,
+        byte TypeId = 0,
         string? ResearchName = null,
         float ResearchProgress = 0f,
         bool ResearchOnDeck = false,
@@ -45,6 +46,9 @@ public partial class CommandSidebar : Control
     // read the same label the sidebar shows. Empty when nothing is selected.
     public string SelectedTitle { get; private set; } = "";
     public string SelectedSectorName { get; private set; } = "";
+    // BaseDef.BaseTypeId of the selected base — lets the Research tab match a station-upgrade dev to
+    // its from-type (so "Upgrade Supremacy" only offers on a Supremacy). 0 when nothing is selected.
+    public byte SelectedBaseType { get; private set; }
 
     private WorldRenderer? _world;
     private GameNetClient? _net;
@@ -52,7 +56,7 @@ public partial class CommandSidebar : Control
 
     private SectorMapPreview _map = null!;
     private VBoxContainer _rowsBox = null!;
-    private readonly List<(ulong Id, uint Sector, string Title, string SectorName, BaseRow Row)> _rows = new();
+    private readonly List<(ulong Id, uint Sector, string Title, string SectorName, byte TypeId, BaseRow Row)> _rows = new();
 
     public void Init(WorldRenderer world, GameNetClient net, DefRegistry? defs = null)
     {
@@ -126,7 +130,7 @@ public partial class CommandSidebar : Control
             int k = seen.TryGetValue((typeName, sector), out int c) ? c + 1 : 1;
             seen[(typeName, sector)] = k;
             string label = k > 1 ? $"{typeName} · {sname} {k}" : $"{typeName} · {sname}";
-            entries.Add(new BaseEntry(id, label, sname, sector, alive));
+            entries.Add(new BaseEntry(id, label, sname, sector, alive, typeId));
         }
 
         SetData(entries, BuildMapModel(_world));
@@ -153,7 +157,7 @@ public partial class CommandSidebar : Control
     {
         if (_world == null || _defs == null)
             return;
-        foreach (var (id, _, _, _, row) in _rows)
+        foreach (var (id, _, _, _, _, row) in _rows)
         {
             var res = _world.ResearchAt(id);
             if (res is WorldRenderer.BaseResearch r && r.Active.Length > 0)
@@ -214,6 +218,7 @@ public partial class CommandSidebar : Control
             SelectedBaseId = 0;
             SelectedTitle = "";
             SelectedSectorName = "";
+            SelectedBaseType = 0;
             _map.HighlightSector = null;
             return;
         }
@@ -238,7 +243,7 @@ public partial class CommandSidebar : Control
             ulong id = e.Id;
             row.Pressed += () => Select(id);
             _rowsBox.AddChild(row);
-            _rows.Add((e.Id, e.Sector, e.Title, e.SectorName, row));
+            _rows.Add((e.Id, e.Sector, e.Title, e.SectorName, e.TypeId, row));
         }
 
         // Keep the current selection if it still exists; else default to the base the pilot last
@@ -246,7 +251,7 @@ public partial class CommandSidebar : Control
         // is rebuilt fresh each time the hangar opens (SelectedBaseId starts 0), so this default
         // applies once per dock — a deliberate click here overrides it, and the next dock moves it.
         bool stillPresent = false;
-        foreach (var (id, _, _, _, _) in _rows)
+        foreach (var (id, _, _, _, _, _) in _rows)
             if (id == SelectedBaseId)
                 stillPresent = true;
 
@@ -258,7 +263,7 @@ public partial class CommandSidebar : Control
             pick = _rows[0].Id;
             ulong lastDocked = _world?.LastDockedBaseId ?? 0;
             if (lastDocked != 0)
-                foreach (var (id, _, _, _, _) in _rows)
+                foreach (var (id, _, _, _, _, _) in _rows)
                     if (id == lastDocked)
                         pick = lastDocked;
         }
@@ -269,7 +274,7 @@ public partial class CommandSidebar : Control
     {
         SelectedBaseId = id;
         uint? sector = null;
-        foreach (var (rid, rsector, title, sname, row) in _rows)
+        foreach (var (rid, rsector, title, sname, rtype, row) in _rows)
         {
             row.Selected = rid == id;
             if (rid == id)
@@ -277,6 +282,7 @@ public partial class CommandSidebar : Control
                 sector = rsector;
                 SelectedTitle = title;
                 SelectedSectorName = sname;
+                SelectedBaseType = rtype;
             }
         }
         _map.HighlightSector = sector;

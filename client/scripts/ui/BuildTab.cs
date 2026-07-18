@@ -633,6 +633,11 @@ public partial class BuildTab : Control
             if (other.Id != s.Id
                 && (other.RequiredTechIdx.Any(gTech.Contains) || other.RequiredCaps.Any(gCap.Contains)))
                 names.Add(other.Name);
+        // Hulls certified by a tech this station grants (v43: ShipClassDef.RequiredTechIdx streamed) —
+        // the Supremacy Center lists the Enh Fighter it fields on completion (supremacy-1).
+        foreach (ShipClassDef sc in _defs!.BuildableShips())
+            if (sc.RequiredTechIdx.Any(gTech.Contains))
+                names.Add(sc.Name);
         _detail.SetUnlocks(names); // dedupe + "// nothing new" live in the panel
     }
 

@@ -11,6 +11,11 @@
 # fire-interval-ticks = round(dtimeBurst × 40): Gat 0.100→4, Mini-Gun 0.080→3, AutoCan 0.083→3.
 # All gun masses are 1.0 (IGC). Tier 2/3 gate on the same-named research tech. can-damage-base stays
 # OFF for every gun — the bomber's anti-base torpedo (weapon-id 5, launchers.yaml) is the match-ender.
+#
+# Tier succession: each non-top tier carries obsoleted-by-techs (the NEXT tier's tech — once owned the
+# hangar hides this tier) + successor-part-id (the next-tier weapon a saved loadout migrates to). So a
+# team that researches gat-2 no longer sees Gat Gun 1 in the arsenal, and any Gat-1 loadout re-arms to
+# Gat Gun 2 on the next dock/launch (Simulation.ResolveLoadout server-side; ShipLoadout client-side).
 weapons:
   # ---- PW Gat Gun 1/2/3 (weapon-ids 0/1/2) ----
   - id: gat-gun-1
@@ -22,6 +27,8 @@ weapons:
     projectile-life-ticks: 20
     projectile-id: gat-bolt-1
     required-capabilities: [base]
+    obsoleted-by-techs: [gat-2]
+    successor-part-id: gat-gun-2
   - id: gat-gun-2
     name: PW Gat Gun 2
     weapon-id: 1
@@ -32,6 +39,8 @@ weapons:
     projectile-id: gat-bolt-2
     required-capabilities: [base]
     required-techs: [gat-2]
+    obsoleted-by-techs: [gat-3]
+    successor-part-id: gat-gun-3
   - id: gat-gun-3
     name: PW Gat Gun 3
     weapon-id: 2
@@ -53,6 +62,8 @@ weapons:
     projectile-life-ticks: 16
     projectile-id: minigun-bolt-1
     required-capabilities: [base]
+    obsoleted-by-techs: [minigun-2]
+    successor-part-id: mini-gun-2
   - id: mini-gun-2
     name: PW Mini-Gun 2
     weapon-id: 10
@@ -63,6 +74,8 @@ weapons:
     projectile-id: minigun-bolt-2
     required-capabilities: [base]
     required-techs: [minigun-2]
+    obsoleted-by-techs: [minigun-3]
+    successor-part-id: mini-gun-3
   - id: mini-gun-3
     name: PW Mini-Gun 3
     weapon-id: 11
@@ -85,6 +98,8 @@ weapons:
     projectile-id: autocan-bolt-1
     shield-damage-multiplier: 0.5 # heavy AP round: hits hull hard, half-effective vs shields
     required-capabilities: [base]
+    obsoleted-by-techs: [autocan-2]
+    successor-part-id: autocan-2
   - id: autocan-2
     name: PW AutoCan 2
     weapon-id: 13
@@ -96,6 +111,8 @@ weapons:
     shield-damage-multiplier: 0.5 # heavy AP round: hits hull hard, half-effective vs shields
     required-capabilities: [base]
     required-techs: [autocan-2]
+    obsoleted-by-techs: [autocan-3]
+    successor-part-id: autocan-3
   - id: autocan-3
     name: PW AutoCan 3
     weapon-id: 14
@@ -122,6 +139,8 @@ weapons:
     projectile-id: nanite-bolt-1
     is-healing: true
     required-capabilities: [base]
+    obsoleted-by-techs: [nanite-2]
+    successor-part-id: nanite-2
   - id: nanite-2
     name: ER Nanite 2
     weapon-id: 16
@@ -133,6 +152,8 @@ weapons:
     is-healing: true
     required-capabilities: [base]
     required-techs: [nanite-2]
+    obsoleted-by-techs: [nanite-3]
+    successor-part-id: nanite-3
   - id: nanite-3
     name: ER Nanite 3
     weapon-id: 17

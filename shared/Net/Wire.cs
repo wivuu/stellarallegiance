@@ -79,6 +79,12 @@ public static class Wire
     // per team (bitmask 1 << RockClass of asteroid classes the team's fog has revealed; 0xFF when
     // fog is off) after the capability list — the Build tab's predictor for the new TryBuyConstructor
     // rock gate. Writer Protocol.BuildTeamState ↔ reader GameNetClient.ApplyTeamState.
+    // (2026-07-18) tech-tree UI surfacing: ShipClassDef appends RequiredTechIdx (tech-list) at the
+    // tail of the ship block so the hangar's locked hull cards + the Research UNLOCKS list can name a
+    // hull's gate. WeaponDef appends ObsoletedByTechIdx (tech-list) + SucceededByWeaponId (u32,
+    // uint.MaxValue = none) after IsHealing so an upgraded weapon tier vanishes from the hangar and
+    // saved loadouts auto-migrate to the successor. Writer Protocol.BuildDefs ↔ reader
+    // GameNetClient.ApplyDefs mirror the new fields.
     public const byte ProtocolVersion = 34;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It

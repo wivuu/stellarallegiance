@@ -501,8 +501,8 @@ public partial class UiShowcase : Control
         sidebar.SetData(
             new[]
             {
-                new CommandSidebar.BaseEntry(1, "GARRISON 01", "BRIMSTONE", 0, true, "HEAVY ORDNANCE", 0.55f, false, 1),
-                new CommandSidebar.BaseEntry(2, "OUTPOST 02", "CINDER BELT", 1, true, "CANNON TIER II", 0f, true),
+                new CommandSidebar.BaseEntry(1, "GARRISON 01", "BRIMSTONE", 0, true, 0, "HEAVY ORDNANCE", 0.55f, false, 1),
+                new CommandSidebar.BaseEntry(2, "OUTPOST 02", "CINDER BELT", 1, true, 1, "CANNON TIER II", 0f, true),
                 new CommandSidebar.BaseEntry(3, "GARRISON 03", "PALLAS-7", 1, true),
             },
             map);

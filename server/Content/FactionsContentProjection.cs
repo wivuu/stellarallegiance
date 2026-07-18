@@ -63,15 +63,22 @@ public static class FactionsContentProjection
 
         var ships = core.Hulls
             .Where(h => h.ClassId is not null)
-            .Select(h => ProjectShip(h, cargoIdByExpendable, partSigById))
+            .Select(h => ProjectShip(h, cargoIdByExpendable, partSigById, techIdx))
             .ToList();
+
+        // Weapon-tier succession: a weapon's SuccessorPartId names the next-tier weapon by PART id;
+        // resolve it to the wire WeaponId so ProjectWeapon can stamp WeaponDef.SucceededByWeaponId (a
+        // saved tier-1 gun migrates to tier-2 once its obsoleting tech is owned).
+        var weaponIdByPartId = core.Weapons
+            .Where(w => w.WeaponId is not null)
+            .ToDictionary(w => w.Id, w => w.WeaponId!.Value);
 
         // Runtime weapons = guns (Weapon, with a weapon id) followed by missile launchers (Launcher,
         // with a weapon id), each in Core list order — deterministic (the shared ContentValidator
         // catches a duplicate weapon id shared between the two).
         var weapons = core.Weapons
             .Where(w => w.WeaponId is not null)
-            .Select(w => ProjectWeapon(w, projectileById, techIdx))
+            .Select(w => ProjectWeapon(w, projectileById, techIdx, weaponIdByPartId))
             .Concat(core.Launchers
                 .Where(l => l.WeaponId is not null)
                 .Select(l => ProjectLauncher(l, missileById, mineById, chaffById, probeById, techIdx)))
@@ -178,7 +185,8 @@ public static class FactionsContentProjection
     private static ShipClassDef ProjectShip(
         Factions.Hull h,
         IReadOnlyDictionary<string, uint> cargoIdByExpendable,
-        IReadOnlyDictionary<string, double> partSigById
+        IReadOnlyDictionary<string, double> partSigById,
+        IReadOnlyDictionary<string, ushort> techIdx
     ) =>
         new()
         {
@@ -244,12 +252,17 @@ public static class FactionsContentProjection
                 .Where(c => cargoIdByExpendable.ContainsKey(c.Item))
                 .Select(c => new CargoLoadDef { CargoId = cargoIdByExpendable[c.Item], Count = (byte)c.Count })
                 .ToList(),
+            // Tech-tree UI surfacing (v43): the hull's own required-techs, streamed so the hangar's
+            // locked hull card + the Research UNLOCKS list can NAME the gate. Server gating stays in
+            // BuildableResolver; this is display-only.
+            RequiredTechIdx = TechIdxArray(h.RequiredTechs, techIdx),
         };
 
     private static WeaponDef ProjectWeapon(
         Factions.Weapon w,
         IReadOnlyDictionary<string, Factions.Projectile> projectileById,
-        IReadOnlyDictionary<string, ushort> techIdx
+        IReadOnlyDictionary<string, ushort> techIdx,
+        IReadOnlyDictionary<string, uint> weaponIdByPartId
     )
     {
         // damage/speed/radius derive from the referenced projectile; spread from the weapon's
@@ -278,6 +291,13 @@ public static class FactionsContentProjection
             BoltLength = (float)proj.BoltLength,
             // Stage-4 tech paths: the hangar arsenal's lock state (indices into the tech catalog).
             RequiredTechIdx = TechIdxArray(w.RequiredTechs, techIdx),
+            // Weapon-tier succession (v43): the techs that retire this tier (hangar hides it once
+            // owned) + the next-tier weapon a loadout migrates to. An unresolvable/absent successor
+            // stays NoWeapon (uint.MaxValue) so a top-tier gun never migrates.
+            ObsoletedByTechIdx = TechIdxArray(w.ObsoletedByTechs, techIdx),
+            SucceededByWeaponId = w.SuccessorPartId is { } sid && weaponIdByPartId.TryGetValue(sid, out uint swid)
+                ? swid
+                : uint.MaxValue,
         };
     }
 

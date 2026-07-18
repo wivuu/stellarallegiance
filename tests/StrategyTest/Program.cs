@@ -148,15 +148,17 @@ var research0 = world.ResearchByBase[base0Idx]; // live state (StartMatch clears
 // supremacy, 9 upgrade-heavy-class — authored last so the weapon dev indices above stay stable).
 // Only dev-bomber(0) and dev-minigun-2(3) are researchable at match start (require only `base`); the
 // rest gate on forward-declared base techs (supremacy-1/adv, garrison-str, shipyard-1). The Phase-5
-// nanite devs (10/11) are appended after the station upgrades so indices 0-9 stay stable.
-Check(content.Developments.Count == 12
+// nanite devs (10/11) are appended after the station upgrades so indices 0-9 stay stable, and
+// dev-upgrade-outpost (12) is appended last so indices 0-11 stay stable.
+Check(content.Developments.Count == 13
     && content.Developments[0].Id == "dev-bomber"
     && content.Developments[1].Id == "dev-gat-2"
     && content.Developments[3].Id == "dev-minigun-2"
     && content.Developments[5].Id == "dev-autocan-2"
     && content.Developments[7].Id == "dev-upgrade-garrison"
-    && content.Developments[10].Id == "dev-nanite-2",
-    "development catalog is in authored order (0 bomber, 1 gat-2, 3 minigun-2, 5 autocan-2, 7 upgrade-garrison, 10 nanite-2)",
+    && content.Developments[10].Id == "dev-nanite-2"
+    && content.Developments[12].Id == "dev-upgrade-outpost",
+    "development catalog is in authored order (0 bomber, 1 gat-2, 3 minigun-2, 5 autocan-2, 7 upgrade-garrison, 10 nanite-2, 12 upgrade-outpost)",
     $"development order wrong: [{string.Join(",", content.Developments.Select(d => d.Id))}]");
 
 // Income the just-run Step paid out (0 unless it landed on a paycheck boundary in the active phase).

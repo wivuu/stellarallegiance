@@ -139,3 +139,19 @@ developments:
     tech-only: true
     required-techs: [garrison-str, nanite-2]
     granted-techs: [nanite-3]
+
+  # ---- Outpost upgrade (station upgrade, single-scope). Appended at the VERY END so every dev wire
+  # index above stays stable (StrategyTest drives research ops by dev index). group: UPGRADES clusters
+  # it with the other station-upgrade devs in the client Research tab regardless of file order. The
+  # from→to swap (Outpost → Outpost (Hvy)) is derived by the sim from the granted tech vs the heavy
+  # outpost's required-techs, and ResearchOpStart rejects queuing it at a base that isn't an Outpost. ----
+  - id: dev-upgrade-outpost
+    name: Upgrade Outpost
+    description: "Reinforce this Outpost to its heavy tier in place — tougher armor and longer sight."
+    group: UPGRADES
+    price: 360
+    build-time-seconds: 72
+    tech-only: true
+    upgrade-scope: single
+    required-capabilities: [base]
+    granted-techs: [outpost-hvy]

@@ -131,6 +131,13 @@ namespace StellarAllegiance.Shared
         // Default consumable hold this hull spawns with (authored order). The hangar seeds its
         // stepper counts from this; MsgSpawn rides the chosen counts back to the server.
         public List<CargoLoadDef> DefaultCargo = new();
+
+        // Techs (indices into the streamed tech catalog) a team must own before this hull may be
+        // built — mirrors WeaponDef.RequiredTechIdx. Server-authoritative gating lives in
+        // BuildableResolver; this is streamed purely so the hangar's locked hull card + the Research
+        // UNLOCKS list can NAME the gate ("REQUIRES SUPREMACY FIELDED") instead of a bare boolean.
+        // Streamed at the tail of the ship block in Protocol.BuildDefs (v43).
+        public ushort[] RequiredTechIdx = System.Array.Empty<ushort>();
     }
 
     // How a weapon behaves when fired. A byte (wire-safe) and APPEND-ONLY, like HardpointKind.
@@ -230,6 +237,18 @@ namespace StellarAllegiance.Shared
         // the sim heal branch (ResolveDueShots) and the client's green bolt/spark tint. Streamed LAST
         // (after RequiredTechIdx) so every block above stays byte-stable (v40).
         public bool IsHealing;
+
+        // Techs whose ownership OBSOLETES this weapon tier — once the team owns any of them the tier
+        // is superseded, so the hangar hides it from the arsenal and loadouts referencing it migrate
+        // to SucceededByWeaponId. Empty = a top-tier (never obsoleted) weapon. Streamed after
+        // IsHealing so every block above stays byte-stable (v43).
+        public ushort[] ObsoletedByTechIdx = System.Array.Empty<ushort>();
+
+        // The next-tier weapon this one upgrades into when obsoleted (ObsoletedByTechIdx owned).
+        // uint.MaxValue (NoWeapon) = no successor. Both peers walk the chain (Simulation.ResolveLoadout
+        // server-side, ShipLoadout client-side) so a saved Gat Gun 1 becomes Gat Gun 2 once gat-2 is
+        // owned. Streamed after ObsoletedByTechIdx (v43).
+        public uint SucceededByWeaponId = uint.MaxValue;
     }
 
     // One entry in a hull's default consumable hold — an item id + a count. Mirrors the authored

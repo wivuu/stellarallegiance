@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Godot;
 using StellarAllegiance.Net;
 using StellarAllegiance.Shared;
@@ -157,7 +158,18 @@ public partial class ShipLoadout
         _cardGateSig = sig;
 
         foreach (var (classId, card) in _shipCards)
-            card.SetGate(_world.CheckSpawnGate(team, classId));
+            card.SetGate(_world.CheckSpawnGate(team, classId), LockNoteFor(classId));
+    }
+
+    // The "REQUIRES <tech>" note for a locked hull card, resolved from the hull's streamed
+    // RequiredTechIdx exactly like the weapon-arsenal locked rows. Null when the hull authored no
+    // required-techs (the card falls back to the generic "TECH LOCKED").
+    private string? LockNoteFor(byte classId)
+    {
+        if (!_defs.TryGetShipDef(classId, out ShipClassDef def) || def.RequiredTechIdx.Length == 0)
+            return null;
+        return "REQUIRES " + string.Join(", ", def.RequiredTechIdx.Select(
+            t => _defs.GetTech(t)?.Name.ToUpperInvariant() ?? $"TECH {t}"));
     }
 
     // ---- right: hardpoints + arsenal + cargo ------------------------------------
@@ -607,13 +619,15 @@ public partial class ShipLoadout
         }
 
         // Reflect the launch gate: Locked/unaffordable grey the card and swap the sub line for a note.
-        public void SetGate(WorldRenderer.SpawnGate gate)
+        // lockNote names the gating tech (e.g. "REQUIRES SUPREMACY FIELDED") the way the weapon-arsenal
+        // rows do — falls back to the generic "TECH LOCKED" when the hull authored no required-techs.
+        public void SetGate(WorldRenderer.SpawnGate gate, string? lockNote = null)
         {
             EnsureBuilt();
             switch (gate)
             {
                 case WorldRenderer.SpawnGate.Locked:
-                    _sub.Text = "⚿ TECH LOCKED";
+                    _sub.Text = string.IsNullOrEmpty(lockNote) ? "⚿ TECH LOCKED" : $"⚿ {lockNote}";
                     _sub.AddThemeColorOverride("font_color", DesignTokens.TextDim);
                     Modulate = new Color(1, 1, 1, 0.6f);
                     break;

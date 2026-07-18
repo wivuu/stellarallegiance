@@ -166,12 +166,15 @@ Simulation.ShipSim Spawn(
         $"tech gate leaked (mounts {(ship.MountWeaponIds is null ? "null" : $"[{string.Join(",", ship.MountWeaponIds!)}]")})"
     );
 
-    // With the tech seeded at the faction base: accepted, and the emptied mount stays empty.
+    // With the tech seeded at the faction base: the Gat Gun 2 override is accepted AND barrel 0's
+    // authored Gat Gun 1 auto-migrates to Gat Gun 2 — owning gat-2 obsoletes tier 1, so every gat
+    // barrel (authored default OR override) reflects the upgrade at spawn (Task 2 loadout migration).
+    // The emptied mount stays empty.
     var sim2 = BootSim(seed: 3, "gat-2");
     var ship2 = Spawn(sim2, 1, team: 0, cls: FlightModel.ClassFighter, mounts: [(1, 1u), (2, NoWeapon)]);
     Check(
-        ship2.MountWeaponIds is [0u, 1u, NoWeapon],
-        "team-owned tech accepts the Gat Gun 2 swap (effective [gat-gun-1, gat-gun-2, empty])",
+        ship2.MountWeaponIds is [1u, 1u, NoWeapon],
+        "team-owned gat-2 accepts the swap AND upgrades the authored Gat Gun 1 (effective [gat-gun-2, gat-gun-2, empty])",
         $"accepted mounts wrong ([{string.Join(",", ship2.MountWeaponIds ?? [])}])"
     );
     Check(

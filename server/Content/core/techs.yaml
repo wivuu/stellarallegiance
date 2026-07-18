@@ -59,3 +59,8 @@ techs:
   - id: heavy-class
     name: Heavy Class Certification
     description: "Certifies the team for capital-class construction — the Devastator's gate."
+
+  # Outpost upgrade tier (granted by dev-upgrade-outpost, swaps the hosting Outpost to Outpost (Hvy)).
+  - id: outpost-hvy
+    name: Outpost (Hvy)
+    description: "Granted by upgrading an Outpost — reinforces this forward base to its heavy tier."

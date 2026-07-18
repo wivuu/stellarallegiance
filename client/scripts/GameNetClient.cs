@@ -1649,6 +1649,9 @@ public partial class GameNetClient : Node
             for (int c = 0; c < cargoN; c++)
                 d.DefaultCargo.Add(new CargoLoadDef { CargoId = r.ReadUInt32(), Count = r.ReadByte() });
             d.IsConstructor = r.ReadBoolean(); // v37; mirror of BuildDefs — hidden from the buy menu
+            // Hull tech-gate (v43; mirror of BuildDefs — streamed LAST in the ship block). Display-only:
+            // the hangar's locked hull card + Research UNLOCKS name the gate from this.
+            d.RequiredTechIdx = ReadTechList(r);
             ships.Add(d);
         }
 
@@ -1707,6 +1710,9 @@ public partial class GameNetClient : Node
                     RequiredTechIdx = ReadTechList(r),
                     // Healing-gun flag (v40, ER Nanite line), read LAST (mirror of BuildDefs).
                     IsHealing = r.ReadBoolean(),
+                    // Weapon-tier succession (v43; mirror of BuildDefs — read after IsHealing).
+                    ObsoletedByTechIdx = ReadTechList(r),
+                    SucceededByWeaponId = r.ReadUInt32(),
                 }
             );
 

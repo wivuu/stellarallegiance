@@ -51,17 +51,18 @@ stations:
     research-slots: 1
     required-techs: [garrison-str]
 
-  # Outpost (Hvy) — the first constructor-built forward base. base-type-id makes it a RUNTIME base
-  # (projected to a BaseDef, streamed, spawnable); model-name binds ss90.glb (server collision +
+  # Outpost — the first constructor-built forward base (base tier). base-type-id makes it a RUNTIME
+  # base (projected to a BaseDef, streamed, spawnable); model-name binds ss90.glb (server collision +
   # client mesh). build-on-rock-class gates which asteroid a constructor may raise it on (Regolith =
   # the common class, so an outpost is always possible). NO `start` ability => not a win-condition
-  # base (destroying it doesn't end the match).
+  # base (destroying it doesn't end the match). Reinforce it in place to Outpost (Hvy) by researching
+  # dev-upgrade-outpost at the base (upgrade-scope: single) — successor-station-id names that tier.
   - id: outpost
-    name: Outpost (Hvy)
+    name: Outpost
     base-type-id: 1
     class: garrison
     model-name: ss90   # res://assets/bases/ss90.glb (IGC Outpost Hvy)
-    description: "A heavy forward garrison — eyes and a foothold in a contested sector."
+    description: "A forward garrison — eyes and a foothold in a contested sector."
     radius: 64            # IGC Outpost (Hvy) radius (302.5 IGC -> 64 kept-magnitude); close to the
                           # old outpost's 55, ss90 carries real docking doors so it isn't cramped.
     max-armor: 667        # IGC 6666 x0.1 kept-magnitude
@@ -71,8 +72,29 @@ stations:
     align-time-seconds: 5     # constructor dwell at the standoff shell before creeping into the rock
     build-time-seconds: 45    # how long the build sphere runs once the drone is embedded
     build-on-rock-class: regolith
+    research-slots: 1         # hosts its own upgrade research (dev-upgrade-outpost)
     abilities: [land, repair, capture]
     required-capabilities: [base]         # buildable from match start
+    successor-station-id: outpost-hvy     # dev-upgrade-outpost swaps this base to Outpost (Hvy)
+
+  # Outpost (Hvy) — the UPGRADED outpost tier (same ss90 mesh, no re-bake). Reached only by researching
+  # dev-upgrade-outpost at an Outpost (upgrade-scope: single), which swaps the hosting outpost's type in
+  # place. base-type-id makes it a runtime base; NOT constructor-buildable (no build-on-rock-class) — an
+  # upgrade tier, like garrison-str / supremacy-adv / shipyard-dry. required-techs is the tier gate the
+  # dev grants (outpost-hvy); tougher armor + longer sight are the reinforcement. Not a win-condition base.
+  - id: outpost-hvy
+    name: Outpost (Hvy)
+    base-type-id: 7
+    class: garrison
+    model-name: ss90      # SAME mesh/collision as the Outpost — no re-bake
+    description: "A heavy forward garrison — the reinforced outpost tier: thicker armor, longer eyes."
+    radius: 64
+    max-armor: 1200       # reinforced tier (~1.8x the base outpost's 667)
+    vision-sphere-radius: 3000
+    radar-signature: 1.8
+    research-slots: 1
+    required-techs: [outpost-hvy]
+    abilities: [land, repair, capture]
 
   # Supremacy Center — constructor-built research/ordnance base (IGC ss21a). Grants the supremacy-1
   # tech on completion (station-completion tech grant, Simulation.Constructors.GrantStationUnlocks),

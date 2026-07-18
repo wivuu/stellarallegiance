@@ -495,6 +495,15 @@ int outpostPriceConst = content.StationCatalog.First(s => s.BaseTypeId == Outpos
     Check(world.TeamStates[0].OwnedTechs.Contains("supremacy-1"),
         "completing the Supremacy grants the supremacy-1 tech to the team",
         $"supremacy-1 not granted (owned: {string.Join(",", world.TeamStates[0].OwnedTechs)})");
+    // The supremacy-1 grant must ALSO flow through ResolveTeamUnlocks so the Enhanced Fighter (class 1,
+    // gated required-techs [supremacy-1]) becomes buildable — the "can't launch an enh-fighter after
+    // building a Supremacy" report. Both the unlock set and the spawn gate must agree.
+    Check(world.TeamStates[0].UnlockedClasses.Contains((byte)1),
+        "completing the Supremacy unlocks the Enhanced Fighter (class 1) team-wide",
+        $"enh-fighter still locked after supremacy (unlocked: {string.Join(",", world.TeamStates[0].UnlockedClasses.OrderBy(x => x))})");
+    Check(sim.TryReserveSpawn(0, 1) == Simulation.SpawnDecision.Allowed,
+        "the Enhanced Fighter passes the spawn gate once the Supremacy is built",
+        "TryReserveSpawn refused the enh-fighter (class 1) after the Supremacy completed");
 
     // supremacy-1 unlocks dev-gat-2 (previously locked). Start it + dev-autocan-2 at the Supremacy: both
     // go Active (2 research slots), proving SlotsFor reads the base's OWN type (garrison would allow 1).

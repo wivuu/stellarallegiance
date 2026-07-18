@@ -360,8 +360,8 @@ Check(
 // and stream in MsgDefs. Tech references ride the wire as u16 INDICES into the tech list, so resolve
 // them via TechIndexById rather than hardcoding an index.
 Check(
-    stock.Techs.Count == 15 && stock.TechIndexById.Count == 15,
-    "loader projected 15 Iron Coalition techs (TechIndexById has 15 entries; +nanite-2/3)",
+    stock.Techs.Count == 16 && stock.TechIndexById.Count == 16,
+    "loader projected 16 Iron Coalition techs (TechIndexById has 16 entries; +nanite-2/3, +outpost-hvy)",
     $"tech count wrong (techs {stock.Techs.Count}, index {stock.TechIndexById.Count})"
 );
 // dev-gat-2 gates on the (forward-declared) supremacy-1 tech — resolved by index off the tech list.
@@ -375,21 +375,22 @@ Check(
     $"dev-gat-2 required-tech wrong (idx [{string.Join(",", devGat2.RequiredTechIdx)}], supremacy-1 idx {supremacyIdx})"
 );
 Check(
-    stock.Developments.Count == 12 && stock.Developments.All(d => d.Price > 0 && d.BuildTimeSeconds > 0),
-    "loader projected 12 developments, all with positive price + build-time (+dev-nanite-2/3)",
+    stock.Developments.Count == 13 && stock.Developments.All(d => d.Price > 0 && d.BuildTimeSeconds > 0),
+    "loader projected 13 developments, all with positive price + build-time (+dev-nanite-2/3, +dev-upgrade-outpost)",
     $"development projection wrong (count {stock.Developments.Count}, "
         + $"nonpositive {stock.Developments.Count(d => d.Price <= 0 || d.BuildTimeSeconds <= 0)})"
 );
-// Station catalog (Phase 4): 7 entries, ALL runtime bases — garrison type 0, outpost type 1,
+// Station catalog (Phase 4): 8 entries, ALL runtime bases — garrison type 0, outpost type 1,
 // supremacy type 2, shipyard type 3, plus the upgrade tiers garrison-str (4), supremacy-adv (5),
-// shipyard-dry (6). The outpost carries build-on-rock-class Regolith and is NOT a win-condition base.
+// shipyard-dry (6), outpost-hvy (7). The outpost carries build-on-rock-class Regolith and is NOT a
+// win-condition base.
 var runtimeStations = stock.StationCatalog.Where(s => s.BaseTypeId >= 0).ToList();
 var garrisonCat = stock.StationCatalog.First(s => s.Id == "garrison");
 var outpostCat = stock.StationCatalog.First(s => s.Id == "outpost");
 Check(
-    stock.StationCatalog.Count == 7 && runtimeStations.Count == 7 && garrisonCat.ResearchSlots == 1
+    stock.StationCatalog.Count == 8 && runtimeStations.Count == 8 && garrisonCat.ResearchSlots == 1
         && outpostCat.BaseTypeId == 1 && outpostCat.BuildRockClass == (byte)RockClass.Regolith,
-    "station catalog has 7 runtime stations (garrison slots 1 + outpost type 1 on Regolith)",
+    "station catalog has 8 runtime stations (garrison slots 1 + outpost type 1 on Regolith)",
     $"station catalog wrong (count {stock.StationCatalog.Count}, runtime {runtimeStations.Count}, "
         + $"outpost type {outpostCat.BaseTypeId} rockClass {outpostCat.BuildRockClass})"
 );

@@ -39,6 +39,7 @@ public partial class ResearchTab : Control
     private ulong _baseId;
     private string _baseTitle = "";
     private string _baseSector = "";
+    private byte _baseType; // BaseDef.BaseTypeId of the selected base — gates station-upgrade devs by from-type
 
     private ushort? _selectedDev;
 
@@ -77,11 +78,12 @@ public partial class ResearchTab : Control
     }
 
     // Called by ShipLoadout when the CommandSidebar selection changes (BaseSelected).
-    public void SetBase(ulong id, string title, string sector)
+    public void SetBase(ulong id, string title, string sector, byte typeId)
     {
         _baseId = id;
         _baseTitle = title;
         _baseSector = sector;
+        _baseType = typeId;
         if (_built)
         {
             UpdateBaseHeader();
@@ -567,8 +569,13 @@ public partial class ResearchTab : Control
         foreach (StationCatalogDef s in _defs.AllStationCatalog())
             if (Intersects(s.RequiredTechIdx))
                 names.Add(s.Name);
-        // Weapons (arsenal locks). NOTE: hulls' required-techs are NOT streamed on ShipClassDef,
-        // so researched hulls (e.g. the bomber) cannot appear here — they surface in the hangar.
+        // Hulls certified by a granted tech (v43: ShipClassDef.RequiredTechIdx is now streamed). Names
+        // the bomber / adv-fighter / devastator a dev unlocks — e.g. "Upgrade Supremacy" lists the Adv
+        // Fighter. Server gating still lives in BuildableResolver; this is the display side.
+        foreach (ShipClassDef sc in _defs.BuildableShips())
+            if (Intersects(sc.RequiredTechIdx))
+                names.Add(sc.Name);
+        // Weapons (arsenal locks).
         foreach (WeaponDef w in _defs.AllWeapons())
             if (Intersects(w.RequiredTechIdx))
                 names.Add(w.Name);
@@ -605,6 +612,29 @@ public partial class ResearchTab : Control
         22 => "Missile damage",
         _ => $"Attr {attr}",
     };
+
+    // The (base-type, display-name) a single-scope station-upgrade dev must be authorized AT: the base
+    // whose SUCCESSOR tier a tech this dev grants unlocks. Mirrors the sim's TriggeredUpgrades match
+    // (successor.RequiredTechIdx vs dev.GrantedTechIdx). Null when the dev triggers no derivable base
+    // upgrade (then the from-type gate is skipped).
+    private (byte type, string name)? UpgradeFromType(DevelopmentDef dev)
+    {
+        if (_defs is null || dev.GrantedTechIdx.Length == 0)
+            return null;
+        // The tier gate (required-techs) rides the StationCatalogDef, not the BaseDef — so match a
+        // runtime station whose SUCCESSOR catalog entry is gated by a tech this dev grants.
+        var granted = new HashSet<ushort>(dev.GrantedTechIdx);
+        var catalog = _defs.AllStationCatalog();
+        foreach (StationCatalogDef from in catalog)
+        {
+            if (from.BaseTypeId < 0 || from.SuccessorBaseTypeId < 0)
+                continue;
+            foreach (StationCatalogDef to in catalog)
+                if (to.BaseTypeId == from.SuccessorBaseTypeId && to.RequiredTechIdx.Any(granted.Contains))
+                    return ((byte)from.BaseTypeId, from.Name);
+        }
+        return null;
+    }
 
     // ---- action footer state machine --------------------------------------
 
@@ -647,6 +677,19 @@ public partial class ResearchTab : Control
         }
 
         // status == Available.
+        // A single-scope station upgrade physically swaps the HOSTING base, so it can only be
+        // authorized at a base of the chain's from-type. Surface that here (matching the sim's
+        // ResearchOpStart guard) instead of letting a Garrison authorize "Upgrade Supremacy" and
+        // relying on the server to reject it.
+        if (dev.UpgradeScope == DevelopmentDef.UpgradeScopeSingle
+            && UpgradeFromType(dev) is (byte fromType, string fromName)
+            && _baseType != fromType)
+        {
+            SetFooter(true, $"▲ AUTHORIZE AT {fromName.ToUpperInvariant()}", ButtonVariant.Secondary, null,
+                $"This upgrade must be authorized at a {fromName} — {_baseTitle} is the wrong base type.",
+                DesignTokens.Warn);
+            return;
+        }
         if (!commander)
         {
             string cmdr = CommanderName();

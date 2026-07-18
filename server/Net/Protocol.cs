@@ -1343,6 +1343,9 @@ public static class Protocol
                 w.Write(c.Count);
             }
             w.Write(s.IsConstructor); // v37: constructor chassis (hidden from the buy menu, like miners)
+            // Hull tech-gate (v43), streamed LAST in the ship block (append-only). Display-only: lets
+            // the hangar's locked hull card + Research UNLOCKS name the gate. Reader mirrors.
+            WriteTechList(w, s.RequiredTechIdx);
         }
 
         var weapons = content.Weapons;
@@ -1398,6 +1401,11 @@ public static class Protocol
             WriteTechList(w, wp.RequiredTechIdx);
             // Healing-gun flag (v40, ER Nanite line), streamed LAST (append-only). Reader mirrors.
             w.Write(wp.IsHealing);
+            // Weapon-tier succession (v43), streamed after IsHealing (append-only). Reader mirrors:
+            // techs that retire this tier (hangar hides it once owned) + the successor weapon id
+            // (uint.MaxValue = no successor) a loadout migrates to.
+            WriteTechList(w, wp.ObsoletedByTechIdx);
+            w.Write(wp.SucceededByWeaponId);
         }
 
         var cargoItems = content.CargoItems;

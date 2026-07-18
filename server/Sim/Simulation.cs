@@ -1275,26 +1275,26 @@ public sealed partial class Simulation
             : def.DefaultCargo.Select(c => (c.CargoId, c.Count)).ToArray();
         bool wantMounts = mounts is { Length: > 0 } && def is not null;
         bool wantCargo = requested is { Length: > 0 };
-        if (!wantMounts && !wantCargo)
-            return (null, fallbackCargo); // pure authored spawn (boot-validated to fit capacity)
 
-        // Effective per-barrel weapon ids: authored, then overrides applied by hardpoint Index
-        // (mapped to barrel = position among the class's Weapon-kind hardpoints — the same
-        // declaration order ClassMuzzles/the client's slot list use; Index is NOT assumed
-        // to equal position).
+        World.TeamStates.TryGetValue(team, out var ts);
+
+        // Effective per-barrel weapon ids: authored muzzles, then overrides applied by hardpoint Index
+        // (mapped to barrel = position among the class's Weapon-kind hardpoints — the same declaration
+        // order ClassMuzzles/the client's slot list use; Index is NOT assumed to equal position), then
+        // a team-wide TIER MIGRATION (a researched gun tier auto-replaces the ones it obsoletes). The
+        // migration runs even on a pure authored spawn, so a quick-launch also flies the current tier.
         var muzzles = cls < ClassMuzzles.Length ? ClassMuzzles[cls] : System.Array.Empty<Muzzle>();
-        uint[]? effective = null;
+        uint[] effective = new uint[muzzles.Length];
+        for (int i = 0; i < muzzles.Length; i++)
+            effective[i] = muzzles[i].WeaponId;
+
         if (wantMounts)
         {
-            effective = new uint[muzzles.Length];
-            for (int i = 0; i < muzzles.Length; i++)
-                effective[i] = muzzles[i].WeaponId;
             var barrelByIndex = new Dictionary<byte, int>();
             int barrel = 0;
             foreach (var h in def!.Hardpoints)
                 if (h.Kind == HardpointKind.Weapon)
                     barrelByIndex[h.Index] = barrel++;
-            World.TeamStates.TryGetValue(team, out var ts);
             foreach (var (hpIndex, weaponId) in mounts!)
             {
                 if (!barrelByIndex.TryGetValue(hpIndex, out int b))
@@ -1323,6 +1323,23 @@ public sealed partial class Simulation
             }
         }
 
+        // Weapon-tier migration (server-authoritative twin of ShipLoadout.MigrateTier): advance each
+        // barrel up its successor chain while an owned tech obsoletes it. A researched gat-2 upgrades a
+        // Gat Gun 1 mount — authored default OR saved override — to Gat Gun 2 at spawn. `migrated` flags
+        // a pure authored spawn that changed, so it still gets a MsgShipLoadout row (others see tier-2).
+        bool migrated = false;
+        for (int i = 0; i < effective.Length; i++)
+        {
+            if (effective[i] == HardpointDef.NoWeapon)
+                continue;
+            uint up = MigrateWeaponTier(ts, effective[i]);
+            if (up != effective[i])
+            {
+                effective[i] = up;
+                migrated = true;
+            }
+        }
+
         // Cargo: an empty request normally means "hull default" (legacy quick-launch, no hangar
         // visit) — but WITH mount overrides it means a deliberately EMPTY hold: overrides only
         // come from the hangar, which always ships its real (possibly zero) hold counts, and
@@ -1330,9 +1347,15 @@ public sealed partial class Simulation
         var cargo = wantCargo ? requested
             : wantMounts ? System.Array.Empty<(uint, byte)>()
             : fallbackCargo;
+
+        // Nothing customized AND no tier migrated AND default cargo ⇒ the pure authored spawn (already
+        // boot-validated to fit capacity): keep the null fast path so it flies ClassMuzzles with no row.
+        if (!wantMounts && !wantCargo && !migrated)
+            return (null, fallbackCargo);
+
         float used = 0f;
-        for (int i = 0; i < muzzles.Length; i++)
-            if (WeaponDefs.TryGetValue(effective is null ? muzzles[i].WeaponId : effective[i], out var wm))
+        for (int i = 0; i < effective.Length; i++)
+            if (WeaponDefs.TryGetValue(effective[i], out var wm))
                 used += wm.Mass;
         foreach (var (cargoId, count) in cargo)
         {
@@ -1350,6 +1373,38 @@ public sealed partial class Simulation
             return (null, fallbackCargo);
         }
         return (effective, cargo);
+    }
+
+    // Walk the weapon-tier successor chain for a team: while the current weapon is obsoleted by a tech
+    // the team owns and names a successor NO HEAVIER than itself, advance to that successor. A
+    // researched tier auto-replaces the guns it obsoletes at spawn. The mass guard keeps a boot-valid
+    // loadout within PayloadCapacity (a heavier successor is left for the player to mount explicitly).
+    // Bounded by the chain length (guard caps a malformed cycle). This is the authoritative twin of
+    // the client's ShipLoadout.MigrateTier display helper.
+    private uint MigrateWeaponTier(World.TeamState? ts, uint weaponId)
+    {
+        if (ts is null)
+            return weaponId;
+        for (int guard = 0; guard < 8; guard++)
+        {
+            if (!WeaponDefs.TryGetValue(weaponId, out var w)
+                || w.SucceededByWeaponId == uint.MaxValue
+                || w.ObsoletedByTechIdx.Length == 0
+                || !WeaponDefs.TryGetValue(w.SucceededByWeaponId, out var next)
+                || next.Mass > w.Mass)
+                return weaponId;
+            bool owns = false;
+            foreach (ushort t in w.ObsoletedByTechIdx)
+                if (t < Content.Techs.Count && ts.OwnedTechs.Contains(Content.Techs[t].Id))
+                {
+                    owns = true;
+                    break;
+                }
+            if (!owns)
+                return weaponId;
+            weaponId = w.SucceededByWeaponId;
+        }
+        return weaponId;
     }
 
     // Position a ship just outside its team base, launched out of one of the base's DOCKING-EXIT

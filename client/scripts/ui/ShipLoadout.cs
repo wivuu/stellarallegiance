@@ -258,7 +258,7 @@ public partial class ShipLoadout : Control
                 _researchTab = new ResearchTab();
                 _tabContent.AddChild(_researchTab);
                 _researchTab.Init(_defs, _world, _net);
-                _researchTab.SetBase(_sidebar.SelectedBaseId, _sidebar.SelectedTitle, _sidebar.SelectedSectorName);
+                _researchTab.SetBase(_sidebar.SelectedBaseId, _sidebar.SelectedTitle, _sidebar.SelectedSectorName, _sidebar.SelectedBaseType);
             }
             _researchTab.Visible = true;
         }
@@ -336,7 +336,7 @@ public partial class ShipLoadout : Control
     {
         _state.SelectedBaseId = baseId; // rides MsgSpawn as the launch base (Phase B)
         UpdateBaseReadouts();
-        _researchTab?.SetBase(baseId, _sidebar.SelectedTitle, _sidebar.SelectedSectorName);
+        _researchTab?.SetBase(baseId, _sidebar.SelectedTitle, _sidebar.SelectedSectorName, _sidebar.SelectedBaseType);
         _buildTab?.SetBase(baseId, _sidebar.SelectedTitle, _sidebar.SelectedSectorName);
     }
 
@@ -580,6 +580,7 @@ public partial class ShipLoadout : Control
         if (_classId is not byte classId || _defs.GetHardpoints(classId) is not List<HardpointDef> hps)
             return;
 
+        byte team = _world.LocalTeam ?? _net.MyTeam;
         int slots = 0;
         foreach (HardpointDef hp in hps)
         {
@@ -587,7 +588,9 @@ public partial class ShipLoadout : Control
                 continue; // engines/thrusters/docking aren't assignable — 3D dots only
             slots++;
             byte hpIndex = hp.Index;
-            WeaponDef? w = _state.AssignedWeapon(classId, hp) is uint id ? _defs.GetWeapon(id) : null;
+            // Show the CURRENT tier: a saved/authored Gat Gun 1 reads as Gat Gun 2 once the team owns
+            // gat-2 (the server migrates the same chain at spawn, so display == what actually flies).
+            WeaponDef? w = _state.AssignedWeapon(classId, hp) is uint id ? _defs.GetWeapon(MigrateTier(id, team)) : null;
             var row = new LoadoutSlot();
             row.Configure(
                 $"P{hpIndex + 1} · WEAPON MOUNT",
@@ -649,7 +652,10 @@ public partial class ShipLoadout : Control
 
         _arsenalFrame.Visible = true;
         _arsenalTitle.Text = $"[P{hpIndex + 1}]  WEAPON HARDPOINT";
-        uint? equipped = _state.AssignedWeapon(classId, slot);
+        byte team = _world.LocalTeam ?? _net.MyTeam;
+        // Migrate the equipped id up its tier chain so an obsoleted Gat Gun 1 (now hidden below) still
+        // marks its successor Gat Gun 2 as EQUIPPED.
+        uint? equipped = _state.AssignedWeapon(classId, slot) is uint eid ? MigrateTier(eid, team) : (uint?)null;
 
         if (equipped != null)
         {
@@ -663,12 +669,15 @@ public partial class ShipLoadout : Control
             _arsenalRows.AddChild(strip);
         }
 
-        byte team = _world.LocalTeam ?? _net.MyTeam;
         int fit = 0;
         var lockedDefs = new List<WeaponDef>();
         foreach (WeaponDef w in _defs.AllWeapons())
         {
             if (!LoadoutState.Compatible(slot, w))
+                continue;
+            // A tier the team has outgrown (an owned tech obsoletes it) is retired from the arsenal
+            // entirely — not even shown as locked. Its successor tier carries the mount instead.
+            if (w.ObsoletedByTechIdx.Length > 0 && w.ObsoletedByTechIdx.Any(t => _world.TeamOwnsTech(team, t)))
                 continue;
             fit++;
             // A weapon gated behind tech the team hasn't fully researched can't be equipped —
@@ -709,10 +718,33 @@ public partial class ShipLoadout : Control
         }
     }
 
+    // Walk the weapon-tier successor chain: while the current weapon is obsoleted by a tech the team
+    // owns and names a successor, advance to it. So a saved/authored Gat Gun 1 resolves to Gat Gun 2
+    // once gat-2 is researched — the DISPLAY mirror of Simulation.ResolveLoadout's server-side migrate
+    // (the authoritative one at spawn). Bounded by the chain length (guard caps a malformed cycle).
+    private uint MigrateTier(uint weaponId, byte team)
+    {
+        for (int guard = 0; guard < 8; guard++)
+        {
+            if (_defs.GetWeapon(weaponId) is not WeaponDef w
+                || w.SucceededByWeaponId == uint.MaxValue
+                || w.ObsoletedByTechIdx.Length == 0
+                || _defs.GetWeapon(w.SucceededByWeaponId) is not WeaponDef next
+                || next.Mass > w.Mass // mass guard: matches the server's payload-safe migration
+                || !w.ObsoletedByTechIdx.Any(t => _world.TeamOwnsTech(team, t)))
+                return weaponId;
+            weaponId = w.SucceededByWeaponId;
+        }
+        return weaponId;
+    }
+
     private static string WeaponStatLine(WeaponDef w)
     {
         float rof = w.FireIntervalTicks > 0 ? FlightModel.TickRate / w.FireIntervalTicks : 0f;
-        return $"DMG {w.Damage:0} · {rof:0.#}/s · {w.ProjectileSpeed:0} u/s";
+        // A healing gun (ER Nanite line) restores hull, so its "Damage" is a heal magnitude — label
+        // it HEAL, not DMG, so the arsenal doesn't read a support gun as a damage weapon.
+        string mag = w.IsHealing ? $"HEAL {w.Damage:0}" : $"DMG {w.Damage:0}";
+        return $"{mag} · {rof:0.#}/s · {w.ProjectileSpeed:0} u/s";
     }
 
     // Presentation flavor is authored per-hull and streamed (ShipClassDef.Glyph/Role/Description);
