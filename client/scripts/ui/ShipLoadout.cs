@@ -411,9 +411,13 @@ public partial class ShipLoadout : Control
         List<ShipClassDef> ships = _defs.BuildableShips();
         if (ships.Count != _builtShipCount && ships.Count > 0)
         {
+            // Re-hydrate saved loadouts before the first SelectShip so SeedDefaults doesn't overwrite
+            // a restored hold with authored defaults (one-shot; validates ids against these defs).
+            _state.Load(_defs);
             _builtShipCount = ships.Count;
             RebuildShipCards(ships);
-            SelectShip(_classId ?? ships[0].ClassId);
+            // Prefer an in-session pick, then the persisted last-flown hull, else the first buildable.
+            SelectShip(_classId ?? DefaultShipClassId(ships));
         }
 
         // Same for the cargo hold — its items are streamed defs too.
@@ -474,6 +478,19 @@ public partial class ShipLoadout : Control
         _launchHint.Visible = hint != null;
         if (hint != null)
             _launchHint.Text = hint;
+    }
+
+    // The card to highlight when the picker first opens with no in-session pick yet: the hull the
+    // pilot last docked with (UserPrefs.LastShip), if it's still in the buildable set, otherwise the
+    // first buildable ship. Keeps a returning pilot in their preferred ship without forcing it.
+    private byte DefaultShipClassId(List<ShipClassDef> ships)
+    {
+        int last = UserPrefs.LastShip;
+        if (last >= 0)
+            foreach (ShipClassDef s in ships)
+                if (s.ClassId == last)
+                    return (byte)last;
+        return ships[0].ClassId;
     }
 
     private void SelectShip(byte classId)

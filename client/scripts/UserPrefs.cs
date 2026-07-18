@@ -10,6 +10,7 @@ public static class UserPrefs
     private const string Path = "user://settings.cfg";
     private const string PlayerSection = "player";
     private const string NameKey = "name";
+    private const string LastShipKey = "last_ship";
     private const string AudioSection = "audio";
     private const string InputSection = "input";
     private const string MouseSensKey = "mouse_sens_mult";
@@ -17,6 +18,7 @@ public static class UserPrefs
     private const string ViewSection = "view";
     private const string FirstPersonKey = "first_person";
     private const string BindingsSection = "bindings";
+    private const string LoadoutSection = "loadout";
 
     // The audio buses the settings sliders drive, mirroring the buses SfxManager/EngineGlow use.
     // Each stores a 0..1 linear volume (1 = full); applied as dB to the matching Godot bus.
@@ -70,6 +72,23 @@ public static class UserPrefs
     {
         name = (name ?? "").Trim();
         return name.Length > MaxNameLength ? name[..MaxNameLength] : name;
+    }
+
+    // The hull class the pilot last docked with, or -1 if none has been stored yet. The hangar's
+    // ship picker defaults its highlighted card to this so a pilot relaunches in the same ship they
+    // last flew, unless they pick another — the next dock updates it. Purely a UI default: the sim
+    // still validates the class the client sends at spawn. Stored as a long (ConfigFile has no byte).
+    public static int LastShip => (int)(long)Cfg.GetValue(PlayerSection, LastShipKey, (long)-1);
+
+    // Persist the last-docked hull class. Writes through immediately like SetPilotName so the
+    // preference survives even a force-quit right after docking.
+    public static void SetLastShip(byte classId)
+    {
+        Cfg.SetValue(PlayerSection, LastShipKey, (long)classId);
+        var err = Cfg.Save(Path);
+        if (err != Error.Ok)
+            Log.Err($"[UserPrefs] failed to save {Path}: {err}");
+        Changed?.Invoke();
     }
 
     // Authored linear volume per bus, captured from the audio server before the first ApplyBus.
@@ -232,6 +251,57 @@ public static class UserPrefs
 
     private static void SaveBindings()
     {
+        var err = Cfg.Save(Path);
+        if (err != Error.Ok)
+            Log.Err($"[UserPrefs] failed to save {Path}: {err}");
+    }
+
+    // ---- Hangar loadout (per hull class) ------------------------------------
+    // The pilot's saved weapon overrides and cargo hold per hull, so a customized loadout survives a
+    // restart (in-session it already lives in LoadoutState.Shared). Each is a flat integer list —
+    // weapons as [hpIndex, weaponId, ...] (an emptied slot rides as HardpointDef.NoWeapon), cargo as
+    // [cargoId, count, ...]. Stored as long because a weapon/cargo id (and the NoWeapon sentinel =
+    // uint.MaxValue) overflows int32. LoadoutState owns the encoding and validates every id against
+    // the streamed defs on load, so this layer is pure storage — a stale id is dropped there, not here.
+
+    public static long[] GetLoadoutWeapons(byte classId) => GetLongArray(LoadoutSection, "w" + classId);
+
+    public static void SetLoadoutWeapons(byte classId, long[] flat) =>
+        SetLongArray(LoadoutSection, "w" + classId, flat);
+
+    public static long[] GetLoadoutCargo(byte classId) => GetLongArray(LoadoutSection, "c" + classId);
+
+    public static void SetLoadoutCargo(byte classId, long[] flat) =>
+        SetLongArray(LoadoutSection, "c" + classId, flat);
+
+    private static long[] GetLongArray(string section, string key)
+    {
+        Variant v = Cfg.GetValue(section, key, new Godot.Collections.Array());
+        if (v.VariantType != Variant.Type.Array)
+            return System.Array.Empty<long>();
+        var arr = v.AsGodotArray();
+        var res = new long[arr.Count];
+        for (int i = 0; i < arr.Count; i++)
+            res[i] = arr[i].AsInt64();
+        return res;
+    }
+
+    // An empty list erases the key (a pristine/reset class carries no row), matching ClearBinding.
+    private static void SetLongArray(string section, string key, long[] flat)
+    {
+        if (flat.Length == 0)
+        {
+            if (!Cfg.HasSectionKey(section, key))
+                return; // nothing stored — skip the disk write
+            Cfg.EraseSectionKey(section, key);
+        }
+        else
+        {
+            var arr = new Godot.Collections.Array();
+            foreach (long x in flat)
+                arr.Add(x);
+            Cfg.SetValue(section, key, arr);
+        }
         var err = Cfg.Save(Path);
         if (err != Error.Ok)
             Log.Err($"[UserPrefs] failed to save {Path}: {err}");

@@ -2461,7 +2461,12 @@ public partial class WorldRenderer : Node3D
             // despawn for a non-pod own ship (rescue is pod-only; fog lost-contact never targets your
             // own ship). Remember the base it docked at so the hangar defaults the next relaunch to it.
             if (reason == GoneClean && !row.IsPod)
+            {
                 RememberDockedBase(node.GlobalPosition, row.SectorId, row.Team);
+                // Remember the hull too, so the hangar's ship picker defaults to the ship the pilot
+                // just flew (parallel to the launch-base default above; persists across sessions).
+                UserPrefs.SetLastShip((byte)row.Class);
+            }
             // Death-cam ONLY when the local POD is DESTROYED — that's the real death (spawn
             // menu reopens). A local COMBAT ship's death instead ejects an escape pod the
             // SAME tick: OnShipInsert for that pod re-points LocalShip, cutting the camera
