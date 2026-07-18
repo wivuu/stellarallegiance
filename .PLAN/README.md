@@ -23,7 +23,6 @@ Archives:
 - Faction name "Iron Coalition" is streamed but never displayed.
 - Reloading things from cargo should take a configurable amount of time (i.e. ammo and fuel)
 - Make gun and missile weapon mounts not compatible with all gun and missiles (explore configuration style options in YAML)
-- Booster fuel needed, interceptor starting fuel too low, and we need the ability to add additional fuel to cargo that can load when we run out
 - hulls.yaml:264-266 comment wrongly claims collision is purely ShipRadius — ship-vs-ship uses the full model-length hull, so the Devastator body-blocks on its ~20u silhouette.
 ---
 
