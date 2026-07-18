@@ -75,7 +75,7 @@ public static class Protocol
     public const byte MsgResearch = 13; // u8 op (0 start-or-queue, 1 cancel-active, 2 cancel-on-deck), u64 baseId, u16 devIndex — commander research order at a friendly base (12-byte frame incl. type byte; v36). Hub-gated by CommanderOrWarn; results come back as system chat + the next MsgResearchState.
     public const byte MsgBuildConstructor = 14; // u8 stationTypeId (BaseTypeId to build), u64 launchBaseId (0 = team default garrison) — commander buys a constructor drone that will build this station type (v37). Hub-gated by CommanderOrWarn; launches from a WinCondition base only. Order it to a rock via MsgOrder.
     public const byte MsgConstructorCancel = 15; // u64 constructorId — commander cancels a STILL-PRODUCING constructor (refunds the station price) (v38). Hub-gated by CommanderOrWarn. A launched drone is managed via MsgOrder, not this.
-    public const byte MsgBuyMiner = 16; // (no body) — commander buys a mining drone for their team (replaces the old /buyminer chat command). Team inferred server-side; Hub-gated by CommanderOrWarn. Cap/cost/phase/kill-switch validated on the sim thread (Simulation.TryBuyMiner); results come back as team-scoped MinerNoticesThisStep chat + the MsgTeamState miner-count tail.
+    public const byte MsgBuyMiner = 16; // u64 launchBaseId (0 = team default garrison) — commander buys a mining drone (replaces the old /buyminer chat command). The miner joins that garrison's build pipeline; team inferred server-side; Hub-gated by CommanderOrWarn. Cap/cost/phase/queue/kill-switch validated on the sim thread (Simulation.TryBuyMiner); results come back as team-scoped MinerNoticesThisStep chat + the MsgTeamState miner-count tail.
 
     // server -> client
     public const byte MsgWelcome = 1; // u32 clientId, u8 team, u32 tick, f32 dt, u8 tokenLen+token, statics (sectors/bases/asteroids/alephs)
@@ -87,7 +87,7 @@ public static class Protocol
     public const byte MsgDefs = 7; // full content defs (ship classes/weapons/cargo items/bases/world cfg) — sent once after Welcome
     public const byte MsgLobbyState = 8; // u8 phase, u8 winner, u8 count, count x lobby entry
     public const byte MsgChatRelay = 9; // u8 scope (0 all, 1 team, 2 commander order directive — team-scoped, gold on the client), u8 fromTeam, str name, str text
-    public const byte MsgTeamState = 10; // u8 count, count x (u8 team, i32 credits, i32 score, u8 nUnlocked, nUnlocked x u8 classId, u16 nOwnedTechs, n x u16 techIdx, u8 nOwnedCaps, n x u8 cap, u8 discoveredRockClasses (v42), u8 minerCount, u8 minerCap (miner tail)) — low-rate per-team economy (+ owned techs/caps, v36)
+    public const byte MsgTeamState = 10; // u8 count, count x (u8 team, i32 credits, i32 score, u8 nUnlocked, nUnlocked x u8 classId, u16 nOwnedTechs, n x u16 techIdx, u8 nOwnedCaps, n x u8 cap, u8 discoveredRockClasses (v42), u8 minerCount, u8 minerCap, u8 buildQueueLimit (build-pipeline tail)) — low-rate per-team economy (+ owned techs/caps, v36)
     public const byte MsgMissiles = 11; // u32 tick, u8 count, count x MissileRecord — in-flight guided missiles (AOI-filtered)
     public const byte MsgMissileGone = 12; // u64 id, u8 reason (0 expired, 1 impact), u16 sector, 3x i16 pos — missile detonation/expiry FX
     public const byte MsgMinefields = 13; // u16 anchorSector, u8 count, count x MinefieldRecord — the client anchor-sector's fields (on change, coarse keepalive, or anchor-sector change)
@@ -107,7 +107,7 @@ public static class Protocol
     public const byte MsgMinerTargets = 23; // u8 count, count x (u64 shipId, u64 rockId) — which rock each actively-mining miner is harvesting, so the client's mining beam aims true (not a nearest-rock guess). Broadcast; rendering is naturally gated by ship+rock visibility. See BuildMinerTargets.
     public const byte MsgResearchState = 24; // u8 nBases, n x (u64 baseId, u8 nActive x (u16 devIdx, u32 startTick, u32 durationTicks), u8 hasOnDeck, ?u16 onDeckDevIdx) — PER-TEAM research orders at the team's bases (v36). Progress derives client-side from startTick+duration vs the live tick, so the frame only changes on start/complete/cancel/promote (sent on change + coarse keepalive). See BuildResearchStateFor.
     public const byte MsgConstructorBuilds = 25; // u8 count, count x (u64 shipId, u64 rockId, u8 phase (0 align, 1 sink, 2 build), f16 progress 0..1) — each constructor drone actively aligning/sinking/building on a rock, so the client drives the build-sphere VFX (v37). Broadcast; rendering gated by ship+rock visibility. See BuildConstructorBuilds.
-    public const byte MsgConstructorState = 26; // u8 count, count x (u64 id, u8 stationTypeId, u8 state (0 producing/1 idle/2 to-rock/3 move/4 align/5 sink/6 build), u32 startTick, u32 durationTicks, u64 targetId) — PER-TEAM constructor roster for the Build tab: producing drones (start/duration → progress bar + cancel) and launched drones (status). Progress derives client-side from startTick+duration (v38). On change + coarse keepalive. See BuildConstructorState.
+    public const byte MsgConstructorState = 26; // u8 count, count x (u64 id, u8 stationTypeId, u8 state (0 producing/1 idle/2 to-rock/3 move/4 align/5 sink/6 build/8 queued), u32 startTick, u32 durationTicks, u64 targetId, bool producesMiner, u64 launchBaseId) — PER-TEAM build roster for the Build tab: producing (start/duration → progress bar + cancel), queued (untimed, 0% — waiting for a build slot at launchBaseId), and launched drones (status). launchBaseId groups a garrison's build pipeline for the queue-full gray-out. Progress derives client-side from startTick+duration (v38). On change + coarse keepalive. See BuildConstructorState.
     public const byte MsgRockGone = 27; // u8 count, count x u64 rockId — rocks fully despawned this step (a constructor's finished base consumed the asteroid). Broadcast, reliable; the client deletes its rock node + collision. See BuildRockGone.
     public const byte MsgShipLoadout = 28; // u8 count, count x (u64 shipId, u8 nSlots, nSlots x u32 weaponId) — per-barrel EFFECTIVE weapon ids (hardpoint declaration order; u32.Max = emptied slot) for every ship flying a NON-authored loadout. Full table, reconcile-by-omission: a ship absent from the frame flies its authored class loadout. Broadcast, reliable, on change + coarse keepalive (empty frames still sent so stale entries prune). Doubles as the owner's authoritative echo. See BuildShipLoadouts.
 
@@ -1160,6 +1160,10 @@ public static class Protocol
             // card readout. Byte-wide: the cap is a small tunable (default 4).
             w.Write((byte)sim.MinerCount(kv.Key));
             w.Write((byte)world.Mining.MaxMinersPerTeam);
+            // Build-pipeline queue depth (build-pipeline tail) — the per-garrison order cap the client
+            // mirrors to gray out the whole Build tab when a garrison's queue is full. World-global
+            // scalar, byte-wide (small tunable, default 4).
+            w.Write((byte)world.Build.QueueLimit);
         }
         w.Flush();
         return ms.ToArray();
@@ -1227,6 +1231,7 @@ public static class Protocol
             w.Write(r.DurationTicks);
             w.Write(r.TargetId);
             w.Write(r.ProducesMiner); // miner order in the shared production queue (roster shows "MINER DRONE")
+            w.Write(r.LaunchBaseId);  // the garrison whose build pipeline this order sits in (queue-full gray-out)
             n++;
         }
         w.Flush();

@@ -394,9 +394,16 @@ public partial class GameNetClient : Node
         _tx.Writer.TryWrite(f);
     }
 
-    // Commander buys a mining drone for their team: [16] (no body). Replaces the old /buyminer chat
-    // command. Team inferred server-side; the server validates cap/cost/phase and charges the hull.
-    public void SendBuyMiner() => _tx.Writer.TryWrite([16]); // MsgBuyMiner
+    // Commander buys a mining drone: [16][u64 launchBaseId]. Replaces the old /buyminer chat command.
+    // launchBaseId = the docked garrison, so the miner joins that garrison's build pipeline (0 = team
+    // default). Team inferred server-side; the server validates cap/cost/phase/queue and charges the hull.
+    public void SendBuyMiner(ulong launchBaseId)
+    {
+        var f = new byte[9];
+        f[0] = 16; // MsgBuyMiner
+        BitConverter.TryWriteBytes(f.AsSpan(1), launchBaseId);
+        _tx.Writer.TryWrite(f);
+    }
 
     public void SetTeam(byte team)
     {
@@ -941,11 +948,12 @@ public partial class GameNetClient : Node
             uint durationTicks = r.ReadUInt32();
             ulong targetId = r.ReadUInt64();
             bool producesMiner = r.ReadBoolean();
+            ulong launchBaseId = r.ReadUInt64();
             list.Add(new WorldRenderer.ConstructorStatus
             {
                 Id = id, StationTypeId = stationType, State = state,
                 StartTick = startTick, DurationTicks = durationTicks, TargetId = targetId,
-                ProducesMiner = producesMiner,
+                ProducesMiner = producesMiner, LaunchBaseId = launchBaseId,
             });
         }
         _world.NetUpdateConstructorState(list);
@@ -1251,7 +1259,10 @@ public partial class GameNetClient : Node
             // Live miner count + per-team cap (miner tail) — the Build tab's "X / N" miner readout.
             byte minerCount = r.ReadByte();
             byte minerCap = r.ReadByte();
-            _world.NetUpdateTeamState(team, credits, score, unlocked, ownedTechs, ownedCaps, rockClasses, minerCount, minerCap);
+            // Build-pipeline queue depth (build-pipeline tail) — the per-garrison order cap the Build
+            // tab grays out on. World-global scalar, same for every team.
+            byte buildQueueLimit = r.ReadByte();
+            _world.NetUpdateTeamState(team, credits, score, unlocked, ownedTechs, ownedCaps, rockClasses, minerCount, minerCap, buildQueueLimit);
         }
     }
 

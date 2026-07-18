@@ -807,11 +807,12 @@ public partial class WorldRenderer : Node3D
 
     // Per-team economy, fed by GameNetClient.ApplyTeamState (mirrors NetUpdateBaseHealth's role for
     // base health). Read accessors return 0 for an unknown team so callers never need a null check.
-    public void NetUpdateTeamState(byte team, int credits, int score, byte[] unlocked, ushort[]? ownedTechs = null, byte[]? ownedCaps = null, byte discoveredRockClasses = 0xFF, int minerCount = 0, int minerCap = 0)
+    public void NetUpdateTeamState(byte team, int credits, int score, byte[] unlocked, ushort[]? ownedTechs = null, byte[]? ownedCaps = null, byte discoveredRockClasses = 0xFF, int minerCount = 0, int minerCap = 0, int buildQueueLimit = 0)
     {
         _teamEconomy[team] = (credits, score);
         _teamRockClasses[team] = discoveredRockClasses;
         _teamMiners[team] = (minerCount, minerCap);
+        BuildQueueLimit = buildQueueLimit; // world-global scalar (same for every team)
         if (!_teamUnlocks.TryGetValue(team, out var set))
             _teamUnlocks[team] = set = new HashSet<byte>();
         set.Clear();
@@ -849,6 +850,11 @@ public partial class WorldRenderer : Node3D
     public int TeamMinerCount(byte team) => _teamMiners.TryGetValue(team, out var m) ? m.Count : 0;
     public int TeamMinerCap(byte team) => _teamMiners.TryGetValue(team, out var m) ? m.Cap : 0;
 
+    // Per-garrison build-queue depth (MsgTeamState build-pipeline tail). World-global scalar: the Build
+    // tab grays out when a garrison's pipeline (BuildPipelineCountForBase) reaches this. 0 until the
+    // first team state arrives (treated as "no gate").
+    public int BuildQueueLimit { get; private set; }
+
     // True once the team's fog has revealed at least one asteroid of `rockClass`. Defers to the
     // server while no team state has arrived yet (only block on positive knowledge — the server
     // gate is authoritative either way).
@@ -884,10 +890,12 @@ public partial class WorldRenderer : Node3D
     public float ResearchProgress(uint startTick, uint durationTicks) =>
         durationTicks == 0 ? 1f : System.Math.Clamp((ServerTick - (float)startTick) / durationTicks, 0f, 1f);
 
-    // Per-team constructor roster (MsgConstructorState, v38): producing + launched drones for the Build
-    // tab. State ordinals mirror the server: 0 producing, 1 idle, 2 to-rock, 3 move, 4 align, 5 sink,
-    // 6 build. StartTick/DurationTicks describe the current timed phase (0/0 for untimed states) so the
-    // progress bar derives client-side; TargetId = rock (build orders) or sector (move orders).
+    // Per-team constructor roster (MsgConstructorState, v38): queued + producing + launched drones for
+    // the Build tab. State ordinals mirror the server: 0 producing, 1 idle, 2 to-rock, 3 move, 4 align,
+    // 5 sink, 6 build, 8 queued. StartTick/DurationTicks describe the current timed phase (0/0 for
+    // untimed states, incl. queued) so the progress bar derives client-side; TargetId = rock (build
+    // orders) or sector (move orders); LaunchBaseId groups a garrison's build pipeline for the
+    // queue-full gray-out.
     public struct ConstructorStatus
     {
         public ulong Id;
@@ -897,6 +905,23 @@ public partial class WorldRenderer : Node3D
         public uint DurationTicks;
         public ulong TargetId;
         public bool ProducesMiner; // true = a miner order in the shared production queue (roster shows "MINER DRONE")
+        public ulong LaunchBaseId; // the garrison whose build pipeline this order sits in (0 = default)
+    }
+
+    // Constructor State byte values that occupy a garrison's build PIPELINE (still queued or building).
+    public const byte ConstructorStateProducing = 0;
+    public const byte ConstructorStateQueued = 8;
+
+    // Items in a garrison's build pipeline (queued + producing), mirroring the server's
+    // BuildPipelineCountForBase — the divisor for the Build-tab queue-full gray-out.
+    public int BuildPipelineCountForBase(ulong launchBaseId)
+    {
+        int n = 0;
+        foreach (var c in _constructorStates)
+            if (c.LaunchBaseId == launchBaseId
+                && (c.State == ConstructorStateProducing || c.State == ConstructorStateQueued))
+                n++;
+        return n;
     }
 
     private System.Collections.Generic.List<ConstructorStatus> _constructorStates = new();

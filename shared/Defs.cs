@@ -634,6 +634,7 @@ namespace StellarAllegiance.Shared
         public WorldSeedingTuning Seeding = new();
         public WorldMiningTuning Mining = new();
         public WorldConstructorTuning Constructor = new();
+        public WorldBuildTuning Build = new();
     }
 
     // PIG drone AI tuning (world.yaml `ai:`). Server-side only — clients never simulate
@@ -841,7 +842,6 @@ namespace StellarAllegiance.Shared
     // AlignTimeSeconds (dwell at the standoff shell) and BuildTimeSeconds (build-sphere duration).
     public sealed class WorldConstructorTuning
     {
-        public int MaxConstructorsPerBase = 4; // cap on live constructors a single garrison may build at once (no team-wide cap)
         public float ProductionSeconds = 20f; // garrison production dwell after purchase, before launch
 
         // Creep speeds for the two slow legs of the build approach. These COMMAND a speed (throttle =
@@ -860,6 +860,18 @@ namespace StellarAllegiance.Shared
         // Backstop: if the embed creep stalls (wedged on a weird hull, avoidance fighting the creep),
         // force the build to start after this long in the Sinking phase anyway.
         public float SinkBackstopSeconds = 30f;
+    }
+
+    // Build-pipeline tuning (world.yaml `build:`) — the per-garrison order queue shared by constructor
+    // AND miner purchases from the docked Build tab. Ordered items sit QUEUED at 0% until a build slot
+    // frees, then count down (Producing) and launch. Replaces the old per-base constructor cap; the
+    // live-drone fleet cap (mining.max-miners-per-team) is a SEPARATE gate. QueueLimit is streamed to
+    // the client (Build-tab gray-out); ParallelLimit is server-only (drives promotion). Defaults 4/4
+    // preserve the prior constructor throughput. The initializers ARE the stock values.
+    public sealed class WorldBuildTuning
+    {
+        public int ParallelLimit = 4; // ordered items a garrison BUILDS at once (1 = strictly one at a time)
+        public int QueueLimit    = 4; // total ordered (building + queued) a garrison may hold before the Build tab locks
     }
 
     // Stable content IDENTIFIERS the engine branches on. These are NOT tunable content — the actual

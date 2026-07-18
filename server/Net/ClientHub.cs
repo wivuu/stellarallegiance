@@ -838,13 +838,18 @@ public sealed class ClientHub
                     }
                     break;
                 }
-                case Protocol.MsgBuyMiner:
+                case Protocol.MsgBuyMiner when count >= 9:
                 {
-                    // Commander buys a mining drone: [16] (no body). Replaces the old /buyminer chat
-                    // command. Commander-gated HERE; cap/cost/phase/kill-switch validated on the sim
-                    // thread (TryBuyMiner). Results come back as team-scoped MinerNoticesThisStep chat.
+                    // Commander buys a mining drone: [16][u64 launchBaseId] (the docked garrison, so the
+                    // miner joins THAT garrison's build pipeline; 0 = default garrison). Replaces the old
+                    // /buyminer chat command. Commander-gated HERE; cap/cost/phase/queue/kill-switch
+                    // validated on the sim thread (TryBuyMiner). Results come back as team-scoped
+                    // MinerNoticesThisStep chat.
                     if (CommanderOrWarn(client) is byte minerTeam)
-                        _sim.EnqueueMinerBuy(minerTeam);
+                    {
+                        ulong launchBaseId = BitConverter.ToUInt64(buffer, 1);
+                        _sim.EnqueueMinerBuy(minerTeam, launchBaseId);
+                    }
                     break;
                 }
                 case Protocol.MsgPing when count >= 1 + 4:

@@ -268,6 +268,10 @@
             "type": "number",
             "description": "Ore hold size (helium-3 units) for a mining hull: the harvest capacity a miner fills at a rock and offloads at a friendly base. 0 = not a miner (no ore hold). Independent of PayloadCapacity (weapons/cargo budget) \u2014 an ore hull is typically unarmed. Omit-when-default; projected onto ShipClassDef.OreCapacity."
           },
+          "order-time-seconds": {
+            "type": "integer",
+            "description": "Production delay (seconds) between ORDERING this hull and it actually launching \u2014 the miner\u0027s analogue of a constructor\u0027s Producing phase. When a team buys a miner it is charged \u002B counted immediately but does not fly until this many seconds elapse (0 = launches at once). Sits next to Price as the other faction-tunable cost of a miner. Omit-when-default; projected onto ShipClassDef.OrderTimeSeconds."
+          },
           "drift-yaw-deg": {
             "type": "number",
             "description": "Drift (turn-rate slop) knobs the game\u0027s flight model needs; no clean Core source."

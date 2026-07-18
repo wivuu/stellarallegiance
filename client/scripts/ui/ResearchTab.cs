@@ -1172,6 +1172,15 @@ internal partial class ActiveBanner : PanelContainer
         Build(accent, title, "--:--", onCancel, cancelText, withBar: true);
     }
 
+    // Queued Build-tab order (waiting for a build slot at its garrison): the same layout as a timed
+    // order but NOT live — a static 0% bar and a "QUEUED" marker, with an optional commander cancel.
+    // Mirroring ConfigureTimed keeps a queued→producing transition visually continuous.
+    public void ConfigureQueued(Color accent, string title, Action? onCancel, string cancelText)
+    {
+        _live = false;
+        Build(accent, title, "QUEUED", onCancel, cancelText, withBar: true);
+    }
+
     // Generic untimed status note (reused by the Build tab for idle / en-route / moving constructors):
     // a left-accent bordered label with no bar or countdown.
     public void ConfigureNote(Color accent, string title)

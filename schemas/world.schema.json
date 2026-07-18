@@ -789,13 +789,6 @@
         "null"
       ],
       "properties": {
-        "max-constructors-per-base": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "description": "Cap on live constructors a single garrison may build at once (no team-wide cap)."
-        },
         "production-seconds": {
           "type": [
             "number",
@@ -840,6 +833,30 @@
         }
       },
       "description": "Constructor/base-building tuning (server-side only \u2014 never streamed). Null -\u003E stock.",
+      "additionalProperties": false
+    },
+    "build": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "parallel-limit": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Ordered items a garrison builds at once (1 = strictly one at a time)."
+        },
+        "queue-limit": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Total ordered (building \u002B queued) a garrison may hold before the Build tab locks."
+        }
+      },
+      "description": "Build-pipeline tuning: the per-garrison order queue (parallel \u002B queue limits). Null -\u003E stock.",
       "additionalProperties": false
     }
   },

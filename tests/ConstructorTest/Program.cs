@@ -163,6 +163,79 @@ int outpostPriceConst = content.StationCatalog.First(s => s.BaseTypeId == Outpos
         $"cancel/refund wrong (count {sim.ConstructorCount(0)}, credits {world.TeamStates[0].Credits}/{credits0})");
 }
 
+// ---- Scenario 1c: build pipeline — parallel=1 serializes, queue=2 caps, launch promotes ----------
+{
+    var (sim, world) = NewSim();
+    world.Build.ParallelLimit = 1; // build one at a time
+    world.Build.QueueLimit = 2;    // ...with room for one more waiting
+
+    // Two orders at the same garrison: the first builds, the second sits QUEUED (0% progress).
+    sim.EnqueueConstructorBuy(0, OutpostType, 0);
+    sim.EnqueueConstructorBuy(0, OutpostType, 0);
+    sim.Step();
+    int Producing() => sim.ConstructorSlotsView().Count(s => s.State == "Producing");
+    int Queued() => sim.ConstructorSlotsView().Count(s => s.State == "Queued");
+    Check(sim.ConstructorSlotsView().Count == 2 && Producing() == 1 && Queued() == 1,
+        "parallel-limit 1: the first order builds, the second waits QUEUED",
+        $"pipeline wrong (count {sim.ConstructorSlotsView().Count}, producing {Producing()}, queued {Queued()})");
+
+    // A third order would exceed queue-limit 2 → refused, no charge.
+    int creditsBefore3 = world.TeamStates[0].Credits;
+    sim.EnqueueConstructorBuy(0, OutpostType, 0);
+    sim.Step();
+    Check(sim.ConstructorCount(0) == 2 && world.TeamStates[0].Credits == creditsBefore3,
+        "queue-limit 2: a third order is refused with no charge",
+        $"third order not refused (count {sim.ConstructorCount(0)}, credits {world.TeamStates[0].Credits}/{creditsBefore3})");
+
+    // When the first finishes producing and launches, it frees the single build slot — the queued
+    // order promotes to Producing (the brain runs PromoteQueuedBuilds after each launch).
+    StepUntilLaunched(sim);
+    for (int i = 0; i < 10; i++) sim.Step();
+    Check(Producing() == 1 && Queued() == 0,
+        "a launched order frees the build slot — the queued order promotes to Producing",
+        $"queued order did not promote (producing {Producing()}, queued {Queued()}, states {string.Join(",", sim.ConstructorSlotsView().Select(s => s.State))})");
+}
+
+// ---- Scenario 1c-clone: MapCatalog.Clone must carry the Build + Constructor tuning blocks ----------
+// Regression for the live bug: applying a map clones the WorldConfig, and a dropped tuning block
+// silently reverted to defaults — so an authored build.parallel-limit was lost on every mapped game.
+{
+    var probe = ContentLoader.Load(manifest, worldPath);
+    probe.World.Build.ParallelLimit = 1;      // distinctive, != the 4/4 default (so a coincidence can't pass)
+    probe.World.Build.QueueLimit = 2;
+    probe.World.Constructor.ProductionSeconds = 99f;
+    var cloned = MapCatalog.Clone(probe.World);
+    Check(cloned.Build.ParallelLimit == 1 && cloned.Build.QueueLimit == 2
+            && cloned.Constructor.ProductionSeconds == 99f,
+        "MapCatalog.Clone carries the Build + Constructor tuning across (mapped games keep authored knobs)",
+        $"clone dropped a tuning block (parallel {cloned.Build.ParallelLimit}, queue {cloned.Build.QueueLimit}, "
+        + $"prod {cloned.Constructor.ProductionSeconds})");
+}
+
+// ---- Scenario 1d: the pipeline is SHARED across TYPES — a miner + a constructor serialize ----------
+// Regression for the reported bug: with parallel-limit 1, a miner and a constructor bought at the same
+// garrison must NOT both build at once (they share one per-garrison pipeline).
+{
+    var (sim, world) = NewSim();
+    world.Build.ParallelLimit = 1;
+    world.Build.QueueLimit = 3; // room for both + more
+    sim.MinersEnabled = true;   // NewSim disabled miners; the miner buy needs them on
+    // The miner must have a production time (so it enters the pipeline rather than launching instantly).
+    var minerDef = content.Ships.First(s => s.OreCapacity > 0f);
+    minerDef.OrderTimeSeconds = 30;
+
+    // Same garrison for both (launchBaseId 0 → the team's garrison), one constructor + one miner.
+    sim.EnqueueConstructorBuy(0, OutpostType, 0);
+    sim.EnqueueMinerBuy(0, 0);
+    sim.Step();
+    int prod = sim.ConstructorStatesView().Count(r => r.State == 0); // Producing
+    int queued = sim.ConstructorStatesView().Count(r => r.State == 8); // Queued
+    Check(sim.ConstructorStatesView().Count == 2 && prod == 1 && queued == 1,
+        "parallel-limit 1 is SHARED across types: a miner + a constructor cannot both build at once",
+        $"miner+constructor not serialized (rows {sim.ConstructorStatesView().Count}, producing {prod}, queued {queued}, "
+        + $"states {string.Join(",", sim.ConstructorStatesView().Select(r => $"{(r.ProducesMiner ? "M" : "C")}:{r.State}@{r.LaunchBaseId}"))})");
+}
+
 // ---- Scenario 2: order to a Regolith rock → base appears, drone consumed ------------------------
 {
     var (sim, world) = NewSim();

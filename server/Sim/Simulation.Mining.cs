@@ -115,7 +115,10 @@ public sealed partial class Simulation
 
     private readonly List<MinerSlot> _miners = [];
     private ulong _nextMinerId = 1;
-    private readonly Queue<byte> _minerBuyQueue = new(); // drained under _qLock in DrainQueues
+    // (team, launchBaseId): the garrison the commander was docked at when they ordered, so the miner
+    // joins THAT garrison's build pipeline (0 = resolve the team's default garrison). Drained under
+    // _qLock in DrainQueues.
+    private readonly Queue<(byte Team, ulong LaunchBase)> _minerBuyQueue = new();
 
     // Team-scoped one-liners the hub relays as system chat ("Miner destroyed", "at cap", ...).
     // Cleared each step alongside the other *ThisStep state.
@@ -167,20 +170,25 @@ public sealed partial class Simulation
 
     // ---- Purchase + orders (thread-safe enqueue; applied on the sim thread in DrainQueues) ----
 
-    public void EnqueueMinerBuy(byte team)
+    // launchBaseId = the garrison the buy came from (Build tab). 0 = resolve the team's default
+    // garrison (the tests, and any caller without a docked base, pass 0).
+    public void EnqueueMinerBuy(byte team, ulong launchBaseId = 0)
     {
         lock (_qLock)
-            _minerBuyQueue.Enqueue(team);
+            _minerBuyQueue.Enqueue((team, launchBaseId));
     }
 
     // Called from DrainQueues (already under _qLock, on the sim thread).
     private void DrainMinerQueues(uint tick)
     {
         while (_minerBuyQueue.Count > 0)
-            TryBuyMiner(_minerBuyQueue.Dequeue(), tick);
+        {
+            var (team, launchBase) = _minerBuyQueue.Dequeue();
+            TryBuyMiner(team, launchBase, tick);
+        }
     }
 
-    private void TryBuyMiner(byte team, uint tick)
+    private void TryBuyMiner(byte team, ulong launchBaseId, uint tick)
     {
         if (!MinersEnabled)
         {
@@ -203,6 +211,22 @@ public sealed partial class Simulation
             MinerNoticesThisStep.Add((team, $"Miner cap reached ({_mining.MaxMinersPerTeam})."));
             return;
         }
+        // A TIMED order joins the docked garrison's build pipeline (shared with constructors), so it's
+        // gated by build.queue-limit; an instant order (order-time 0) has no build stage to queue and
+        // is fleet-cap-only. Resolve the garrison up front so the pipeline count / slot both see it; a
+        // garrison-less world falls back to LaunchBaseId 0 (still buyable, no per-garrison scoping).
+        int orderSec = ShipDefs.TryGetValue((byte)cls, out var md) ? md.OrderTimeSeconds : 0;
+        uint orderTicks = orderSec > 0 ? SecondsToTicks(orderSec) : 0;
+        ulong launchBase = 0;
+        if (orderTicks > 0 && ResolveConstructorLaunchBase(team, launchBaseId) is World.BaseSite gb)
+        {
+            launchBase = gb.Id;
+            if (BuildPipelineCountForBase(gb.Id) >= World.Build.QueueLimit)
+            {
+                MinerNoticesThisStep.Add((team, $"This garrison's build queue is full ({World.Build.QueueLimit})."));
+                return;
+            }
+        }
         // Same authoritative unlock + charge seam as a player hull buy. Buy AUTHORITY is
         // commander-gated at the connection layer (ClientHub.CommanderOrWarn) before the enqueue.
         switch (TryReserveSpawn(team, (byte)cls))
@@ -215,12 +239,10 @@ public sealed partial class Simulation
                 MinerNoticesThisStep.Add((team, $"Not enough credits for a miner ({cost})."));
                 return;
         }
-        // Order → launch production, routed through the SAME queue as a constructor purchase (a
-        // Producing slot in _constructors, shown in the Build-tab roster with a progress bar + cancel).
-        // The dwell is the miner hull's faction-tunable order-time-seconds; on completion the brain
-        // graduates the slot into a MinerSlot. 0 = no production, launch at once.
-        int orderSec = ShipDefs.TryGetValue((byte)cls, out var md) ? md.OrderTimeSeconds : 0;
-        uint orderTicks = orderSec > 0 ? SecondsToTicks(orderSec) : 0;
+        // Order → launch production, routed through the SAME per-garrison pipeline as a constructor
+        // purchase (a slot in _constructors, shown in the Build-tab roster with a queue/progress bar +
+        // cancel). The dwell is the miner hull's faction-tunable order-time-seconds; on completion the
+        // brain graduates the slot into a MinerSlot. 0 = no production, launch at once (fleet cap only).
         if (orderTicks == 0)
         {
             NewMinerSlot(team, tick);
@@ -228,7 +250,7 @@ public sealed partial class Simulation
         }
         else
         {
-            NewMinerProductionSlot(team, tick, orderTicks);
+            NewMinerProductionSlot(team, tick, orderTicks, launchBase);
             MinerNoticesThisStep.Add((team, $"Miner ordered — building {orderSec}s ({MinerCount(team)}/{_mining.MaxMinersPerTeam})."));
         }
     }

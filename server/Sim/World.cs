@@ -59,6 +59,11 @@ public sealed class World
     // brain/steering (Simulation.Constructors.cs). Server-side only — like Mining, never streamed.
     public readonly WorldConstructorTuning Constructor;
 
+    // Build-pipeline tuning (world.yaml `build:`): the per-garrison order queue shared by constructor
+    // and miner purchases (parallel + queue limits). QueueLimit is streamed to the client for the
+    // Build-tab gray-out; ParallelLimit is server-only (drives promotion).
+    public readonly WorldBuildTuning Build;
+
     // Env carries the STREAMED per-sector environment (sun/god-rays + nebula override + dust visual
     // knobs); the seeded dust CLOUDS themselves live in DustClouds. Null Env → legacy backdrop. MapX/
     // MapY (valid when HasMapPos) are the authored 2D map-diagram position, streamed to the client.
@@ -326,6 +331,7 @@ public sealed class World
         _seed = cfg.Seeding;
         Mining = cfg.Mining;
         Constructor = cfg.Constructor;
+        Build = cfg.Build;
         // Live world-scale knobs from the loaded content (the authored world.yaml).
         float sectorScale = cfg.SectorScale;
         float density = cfg.AsteroidDensity;

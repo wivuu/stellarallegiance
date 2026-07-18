@@ -1,123 +1,163 @@
-# Add "Miner Drone" to the Build pane (purchase up to N per team)
+# Per-garrison build pipeline (parallel + queue limits) for the Build tab
 
 ## Context
 
-Today the docked **Build** pane (`client/scripts/ui/BuildTab.cs`) only surfaces
-constructor-built **stations** (from streamed `StationCatalogDef` entries). **Miners** are a
-different thing entirely — AI drone *ships* (any hull with `OreCapacity > 0`) that a team buys via
-the commander-only **`/buyminer` chat command**. The server already enforces a per-team cap
-(`WorldMiningTuning.MaxMinersPerTeam`, default **4**, authored `max-miners-per-team` in
-`world.yaml`) and all buy validation (cap / cost / match-phase / kill-switch) in
-`Simulation.Mining.TryBuyMiner`.
+Today the docked **Build** tab lets a commander order **constructors** (base builders) and **miner
+drones**. Both flow through one server-side production list (`_constructors`, a `ConstructorSlot`
+per order — `ProducesMiner` distinguishes miners). But every ordered item starts its `Producing`
+countdown **immediately and in parallel**, and the only throughput gates are two unrelated caps:
+`constructor.max-constructors-per-base` (live constructors per garrison) and
+`mining.max-miners-per-team` (live miner drones per team). There is no way to author a real *build
+pipeline* — "build one thing at a time, queue the rest."
 
-The gap: miners aren't purchasable from the Build UI. This change surfaces a **"MINER DRONE" card**
-in the Build grid with a **live `X / N` owned-vs-cap readout**, a **commander-gated BUY button**,
-and **removes the now-redundant `/buyminer` chat command**. All server-side purchase logic already
-exists and is reused unchanged — the work is a new typed buy message, streaming the live count to
-the client, and the UI card.
+**Goal:** a faction/world-configurable pipeline scoped **per garrison** (confirmed with user), shared
+across miners and constructors:
 
-### Decisions (confirmed with user)
-- **Card with live `X / N`** owned/cap readout (per the mock).
-- **Commander only** — matches `/buyminer` and the existing constructor BUILD button.
-- **Remove the `/buyminer` chat command** — the Build-pane button replaces it via a dedicated typed
-  message (chat reuse is off the table since the command is being deleted).
+- `build-parallel-limit` — how many ordered items may be actively **building** (counting down) at
+  once at a garrison. The rest sit **QUEUED** at 0% progress.
+- `build-queue-limit` — total ordered items (building + queued) a garrison may hold. When full, the
+  Build tab **grays out every buy button + card** ("BUILD QUEUE FULL").
 
-### Protocol convention (no version bump)
-Follow the established practice in this codebase: `MsgBuildConstructor=14` / `MsgConstructorCancel=15`
-and the `MsgTeamState` `discoveredRockClasses` tail were all added **without** bumping
-`Wire.ProtocolVersion` (still **34**) — new message ids and appended tail fields are tagged with a
-`// vNN`-style comment instead. We do the same: new inbound `MsgBuyMiner=16` + two appended
-`MsgTeamState` tail bytes, **no `Wire.ProtocolVersion` change**. (Compat implication is identical to
-those prior additions: old clients simply ignore the extra tail bytes; the deleted `/buyminer`
-command is the only behavior removed.)
+**Scenario (parallel=1, queue=2):** order a miner, then a constructor → the miner builds, the
+constructor shows QUEUED at 0%. All other Build items gray out (queue is full at 2). When the miner
+**launches** (leaves the pipeline), the constructor promotes and starts its build time.
+
+**Decisions (confirmed with user):** scope is **per-garrison**; the new limits **replace**
+`max-constructors-per-base` (removed), while `max-miners-per-team` **stays** as a separate live-drone
+fleet cap. A constructor that has *launched* (flying out to build a base) has left the pipeline and
+no longer counts toward the queue.
+
+**Naming:** repo YAML is kebab-case, so the knobs are `build-parallel-limit` / `build-queue-limit`
+(the user's `build_parallel_limit` intent, spelled to match `max-constructors-per-base` etc.).
+
+**Protocol:** no `Wire.ProtocolVersion` bump (stays 34) — following the established convention, this
+adds a body to the new `MsgBuyMiner=16`, appends one tail field to each `MsgConstructorState` row +
+the `MsgTeamState` tail, and adds a new `ConstructorState` enum value at the END (existing byte
+values unchanged).
 
 ---
 
 ## Changes
 
-### 1. Wire message — `server/Net/Protocol.cs`
-- Add inbound const after line 77: `public const byte MsgBuyMiner = 16;` (next free client→server id;
-  outbound ids are a separate space) with a comment noting it's commander-gated, no body, team
-  inferred server-side.
-- `BuildTeamState` (line 1121): change signature to take the `Simulation` (Protocol methods like
-  `BuildMinerTargets(_sim)` already do this) so it can read the live count. In the per-team loop,
-  **after** `DiscoveredRockClasses` (line 1155) append two bytes:
-  `w.Write((byte)sim.MinerCount(team));` and `w.Write((byte)sim.World.Mining.MaxMinersPerTeam);`.
-- Update the `MsgTeamState = 10` header comment (line 89) to document the new `u8 minerCount, u8 minerCap` tail.
+### 1. Config — new `WorldBuildTuning` + `build:` YAML block
+- **`shared/Defs.cs`** (~L842, beside `WorldConstructorTuning`): add
+  ```csharp
+  public sealed class WorldBuildTuning {
+      public int ParallelLimit = 4; // items actively building at once per garrison
+      public int QueueLimit    = 4; // total ordered (building + queued) per garrison
+  }
+  ```
+  Defaults 4/4 preserve today's constructor throughput. Add `public WorldBuildTuning Build = new();`
+  to `WorldTuning` (beside `Constructor` at L636) and remove `MaxConstructorsPerBase` from
+  `WorldConstructorTuning` (L844).
+- **`server/Sim/World.cs`**: add `public readonly WorldBuildTuning Build;` beside `Constructor`
+  (L60), wired in the same ctor/projection path.
+- **`server/Content/WorldLoader.cs`**: add `WorldBuildDef { int? ParallelLimit; int? QueueLimit }`
+  (mirror `WorldConstructorDef`, L473), parse a `build:` block, and bind with `??` fallback like
+  L670. Remove `MaxConstructorsPerBase` from `WorldConstructorDef` (L476) and its bind (L670).
+- **`server/Content/core/world.yaml`**: delete `max-constructors-per-base` (L183); add a new block
+  with explanatory comments (leave stock at 4/4 — the user flips to `1`/`2` for the serialized
+  behavior above):
+  ```yaml
+  build:
+    parallel-limit: 4   # items a garrison builds at once (1 = strictly one-at-a-time)
+    queue-limit: 4      # total ordered (building + queued) before the Build tab locks
+  ```
 
-### 2. Server ingest — `server/Net/ClientHub.cs`
-- In `HandleMessage`, add `case Protocol.MsgBuyMiner:` mirroring `MsgBuildConstructor` (~line 816):
-  `if (CommanderOrWarn(client) is byte team) _sim.EnqueueMinerBuy(team);`. No payload to read.
-- **Remove** the `case "buyminer":` block in `HandleCommand` (lines 877–882) and update the method's
-  header comment (line 854) that references `/buyminer`.
-- Update the `BuildTeamState` call site (line 1391) to pass `_sim` instead of `_sim.World, _sim.Content`.
+### 2. Server pipeline — `server/Sim/Simulation.Constructors.cs`
+- **New `Queued` state**: append `Queued` as the LAST `ConstructorState` value (byte 8) so 0–7 are
+  unchanged. A queued slot has no running timer.
+- **Slots start Queued**: `NewConstructorSlot` and `NewMinerProductionSlot` create the slot with
+  `State = Queued` (don't stamp `PhaseStartTick`). `NewMinerProductionSlot` gains a `launchBaseId`
+  param and stores it on `LaunchBaseId` (miners now belong to a garrison for pipeline scoping).
+- **Promotion pass** `PromoteQueuedBuilds(uint tick)`: per `LaunchBaseId`, count `Producing` slots;
+  promote `Queued` slots in list order (FIFO = purchase order) to `Producing` (stamp
+  `PhaseStartTick = tick`) until `ParallelLimit` is reached. Set `ConstructorChangedThisStep` (and
+  `TeamStateChangedThisStep` for miners). Call it (a) at the end of `DrainConstructorQueues` so a buy
+  starts building the same tick when there's room, and (b) at the end of `ConstructorBrainStep` so a
+  launch/graduation/retire frees a slot and the next queued item starts.
+- **Queue gate** replaces the per-base constructor cap: add
+  `BuildPipelineCountForBase(ulong launchBaseId)` = count slots (either type) with that
+  `LaunchBaseId` in `{Queued, Producing}`. In `TryBuyConstructor`, replace the
+  `ConstructorCountForBase >= MaxConstructorsPerBase` check (L349-353) with
+  `BuildPipelineCountForBase(gb.Id) >= QueueLimit` → notice "This garrison's build queue is full
+  (N)." Remove the now-unused `MaxConstructorsPerBase` property (L1048) and `ConstructorCountForBase`
+  (L135, no other callers). **Keep** `ConstructorCount(byte team)` (used by ClientHub + tests).
+- **Cancel covers queued orders**: in `CancelConstructorProduction` (L405) match
+  `State is Producing or Queued` so a commander can cancel/refund a not-yet-started order.
+- **View + brain**: `ConstructorStatesView` adds a `Queued` case (start=0, dur=`ProductionTicks` →
+  reads 0% on the client) and a new tuple element `ulong LaunchBaseId`. The `Producing` brain arm
+  (L493) is unchanged; only promoted slots reach it. `QueueLimit`/`ParallelLimit` read from
+  `World.Build`.
 
-### 3. Client send + team-state read — `client/scripts/GameNetClient.cs`
-- Add `SendBuyMiner()` mirroring `SendBuildConstructor` (line 379): write a 1-byte frame `[16]`.
-- In the `MsgTeamState` parser (per-team loop that currently ends by reading `discoveredRockClasses`),
-  read the two new trailing bytes `minerCount`, `minerCap` (guarded for older/short frames the same
-  way `discoveredRockClasses` is), and pass them into `_world.NetUpdateTeamState(...)`.
+### 3. Miner buy carries a garrison — `Simulation.Mining.cs` + hub + client
+- **`EnqueueMinerBuy(byte team, ulong launchBaseId = 0)`** (default keeps the 11 test call sites +
+  ClientHub compiling). `_minerBuyQueue` becomes `Queue<(byte Team, ulong LaunchBase)>`;
+  `DrainMinerQueues` passes it to `TryBuyMiner(team, launchBaseId, tick)`.
+- **`TryBuyMiner`** (L183): after the fleet-cap check (`MaxMinersPerTeam`, kept), resolve the
+  garrison via `ResolveConstructorLaunchBase(team, launchBaseId)` (fallback `LaunchBaseId = 0` if a
+  world has no garrison, so garrison-less test worlds still buy). Gate on
+  `BuildPipelineCountForBase(gb.Id) >= QueueLimit`. Pass the garrison id into
+  `NewMinerProductionSlot(team, tick, orderTicks, gb.Id)`. The `orderTicks == 0` instant path
+  (`NewMinerSlot`, L224) stays fleet-cap-only (no build time to serialize).
+- **`server/Net/ClientHub.cs`** (L847): read the u64 launch-base from the `MsgBuyMiner` body and pass
+  it: `_sim.EnqueueMinerBuy(minerTeam, launchBaseId)`.
+- **`client/scripts/GameNetClient.cs`**: `SendBuyMiner(ulong launchBaseId)` writes `[16][u64]`
+  (mirror `SendBuildConstructor`, L379). **`BuildTab.OnMinerBuyPressed`** (L513) passes `_baseId`
+  (the sidebar-selected/last-docked base already used for constructor buys).
 
-### 4. Team-state store — `client/scripts/WorldRenderer.cs`
-- Extend `NetUpdateTeamState` (line 810) with two new optional params `int minerCount = 0, int minerCap = 0`
-  (optional, mirroring the `discoveredRockClasses = 0xFF` precedent). Store per-team.
-- Add accessors `TeamMinerCount(byte team)` and `TeamMinerCap(byte team)` next to `TeamCredits`
-  (line 903). Reuse the existing `TeamCredits(team)` / spawn-affordability pattern (line 930) for the
-  card's credit check.
+### 4. Wire the pipeline to the client — `Protocol.cs` + `GameNetClient.cs` + `WorldRenderer.cs`
+- **`Protocol.cs`**: (a) update `MsgBuyMiner=16` doc (L78) — now `u64 launchBaseId` body. (b)
+  `BuildConstructorState` (L1219) writes `r.LaunchBaseId` per row after `ProducesMiner`; update the
+  `MsgConstructorState` doc (L110). (c) `BuildTeamState` (L1162) appends one byte
+  `(byte)world.Build.QueueLimit` after `minerCap`; update the `MsgTeamState` doc.
+- **`GameNetClient.cs`**: `ApplyConstructorState` (L943) reads the trailing `ulong launchBaseId` per
+  row; the `MsgTeamState` tail (L1253) reads `byte buildQueueLimit` and passes it to
+  `NetUpdateTeamState`.
+- **`WorldRenderer.cs`**: `ConstructorStatus` (L891) gains `ulong LaunchBaseId`. Store the streamed
+  `BuildQueueLimit` (world-scalar) + accessor. Add
+  `int BuildPipelineCountForBase(ulong baseId)` = count `_constructorStates` where
+  `LaunchBaseId == baseId && State is 0 (Producing) or 8 (Queued)` (client mirror of the server gate).
 
-### 5. Miner hull lookup — `client/scripts/DefRegistry.cs`
-- Add `public ShipClassDef? MinerShipDef()` returning the lowest-`ClassId` ship def with
-  `OreCapacity > 0` (mirrors the server's `MinerClassId` selection in `Simulation.Mining.cs:127`).
-  Gives the card its **cost** (`ShipClassDef.Cost`) and existence check.
+### 5. Build-tab UI — `client/scripts/ui/BuildTab.cs`
+- **Roster** `RebuildRoster` (L276): add `case 8` (Queued) → a QUEUED row —
+  `"◷ QUEUED · {name}{suffix}"`, no bar / 0% (reuse `ConfigureNote`, or a 0%-pinned timed row), with
+  the commander `✕ CANCEL` action (queued orders are cancelable, matching Producing). The
+  `UpdateRoster` signature (L251) already keys on `State`, so Queued↔Producing transitions rebuild.
+- **Queue-full gray-out**: let `full = BuildQueueLimit > 0 && BuildPipelineCountForBase(_baseId) >=
+  BuildQueueLimit`. In `UpdateFooter` (L520) and `UpdateMinerFooter` (L470) add a top-priority
+  disabled branch → `SetFooter(true, "⊘ BUILD QUEUE FULL ({N})", …)`. In `RebuildGrid` (L355) /
+  `AddMinerCard` (L380) AND the card `available` flag with `!full` so every card dims too.
+- **Re-render on change**: fold `BuildQueueLimit` and `BuildPipelineCountForBase(_baseId)` into
+  `ComputeStatusSig` (L228) so the grid re-grays/re-enables as the queue fills and drains.
 
-### 6. Build pane card — `client/scripts/ui/BuildTab.cs`
-Add a synthetic miner card to the station grid (it is a *drone*, not a `StationCatalogDef`, so it's
-special-cased throughout):
-- Sentinel id constant, e.g. `private const string MinerCardId = "__miner__";`.
-- **Grid** (`RebuildGrid`, line 331): when `_defs.MinerShipDef()` exists (and cap > 0), prepend one
-  `StationCard` for the miner: glyph `◈`, name `"MINER DRONE"`, kind word `"DRONE"`, class `"MINING"`,
-  price from the miner def cost, and status text = `$"{count} / {cap}"` from `TeamMinerCount/TeamMinerCap`.
-  Wire `Pressed` to `SelectStation(MinerCardId)`.
-- **StationCard.Configure** (line 616): add two optional params — `string kindWord = "STRUCTURE"`
-  (replaces the hardcoded `"STRUCTURE · "` prefix at line 621) and `string? statusText = null`
-  (when set, shown verbatim in `_status` instead of the derived AVAILABLE/LOCKED). Miner card passes
-  `kindWord: "DRONE"`, `statusText: "{X} / {N}"`.
-- **Detail panel** (`RefreshDetail`, line 361): when `_selectedId == MinerCardId`, populate from miner
-  data instead of `Catalog()` — title "MINER DRONE", cost, no build-time (show `X / N` in meta), a
-  short description ("Auto-harvests helium-3 into team credits.").
-- **Footer** (new `UpdateMinerFooter`, modeled on `UpdateFooter` line 402), in priority order:
-  not commander → disabled "⊘ COMMANDER AUTHORIZATION REQUIRED"; `count >= cap` → disabled
-  "⊘ MINER CAP REACHED ({N})"; insufficient credits (via `TeamCredits` vs miner cost) → disabled
-  "⊘ INSUFFICIENT CREDITS"; else enabled Primary **"◈ BUY MINER"**.
-- **Buy action** (new `OnMinerBuyPressed`): re-check commander + cap client-side, then
-  `_net.SendBuyMiner(); SfxManager.Instance?.PlayUi(UiClick);`. Route `_detail.PrimaryPressed` to the
-  miner handler when the miner card is selected (branch inside the existing `OnBuildPressed`, or a
-  small dispatch on `_selectedId`).
-- **Live refresh**: fold miner count + cap into `ComputeStatusSig` (line 219) so a purchase/loss
-  re-triggers `RebuildGrid` + `RefreshDetail` (cheap at the 0.25s poll) and the `X / N` stays current.
-
-### 7. Remove the chat command — `client/scripts/Chat.cs`
-- Delete the `/buyminer` help line (line 227) and remove `/buyminer` from the relay `case` list
-  (line 232–238) that forwards it via `SendChat`. Leave `/pigs` and `/commander` intact. (`/mine`
-  targeting, if present, is unrelated to purchasing — do **not** remove it.)
+### 6. Tests — `tests/`
+- **`tests/MiningTest`** already zeroes `OrderTimeSeconds` suite-wide (miners launch instantly, fleet
+  cap only) and calls `EnqueueMinerBuy(0)` — the default `launchBaseId = 0` keeps it compiling; the
+  world has a garrison so resolution + pipeline count behave. The dedicated produce→graduate test (a
+  single order, default parallel 4) still promotes immediately.
+- **`tests/ConstructorTest`** buys one/two constructors and expects immediate `Producing` — the
+  same-tick `PromoteQueuedBuilds` (parallel default 4) preserves that. Update it only if it asserts
+  the removed `max-constructors-per-base` message (grep showed none).
+- **Add** a small case (extend MiningTest or ConstructorTest): with `Build = {ParallelLimit:1,
+  QueueLimit:2}`, order two items at one garrison → assert exactly one `Producing` + one `Queued`,
+  a third order refused ("queue is full"), then after the first launches the second promotes to
+  `Producing`.
 
 ---
 
 ## Verification
 
-1. **Build**: `dotnet build` the server; import the Godot client
-   (`godot --headless --import` per the GLB-import gotcha) and build the client.
-2. **Tests** (regression from command removal + team-state layout):
-   `dotnet test` the `MiningTest` and `CommanderTest` suites — they drive `EnqueueMinerBuy` directly,
-   so they should stay green. Grep tests for the literal `"/buyminer"` first to confirm nothing sends
-   the removed command (`grep -rn "buyminer" tests/`).
-3. **End-to-end** (use the `/verify` skill or manual): launch a headless server + a client, take
-   commander, open the docked screen → **Build** tab. Confirm:
-   - The **MINER DRONE** card appears with `1 / 4` (the free match-start miner) and the correct cost.
-   - **BUY MINER** enqueues a buy; the readout ticks to `2 / 4`; a miner drone launches from the home
-     garrison.
-   - At `4 / 4` the button shows **MINER CAP REACHED (4)** and is disabled.
-   - As a **non-commander**, the button shows **COMMANDER AUTHORIZATION REQUIRED**.
-   - `/buyminer` is gone from `/help` and typing it does nothing special (relayed as normal chat, or
-     unknown — confirm it no longer buys).
-4. Confirm the client `ProtocolVersion` is unchanged (still 34) and a stock client still connects.
+1. **Build**: `dotnet build` server + shared; `godot --headless --import` then build the client.
+2. **Tests**: `dotnet run --project tests/MiningTest` and `.../ConstructorTest` stay green; the new
+   parallel=1/queue=2 case passes. (`ContentTest`/`ShieldTest` carry known pre-existing failures.)
+3. **End-to-end** (verify skill): `scripts/run-server.sh --local --autostart` with a scratch content
+   copy whose `world.yaml` sets `build: { parallel-limit: 1, queue-limit: 2 }`
+   (`--content <scratch>/core/core.manifest.yaml`). Client `scripts/run-client.sh --local`, take
+   commander, dock, open **Build**:
+   - Order a miner then a constructor → miner shows PRODUCING, constructor shows **QUEUED** at 0%;
+     all cards + both buy buttons gray out with **BUILD QUEUE FULL (2)**.
+   - When the miner launches, the constructor flips to PRODUCING and starts its build time; a card
+     frees up.
+   - Cancel the queued constructor → refunded, slot frees.
+   - Confirm `ProtocolVersion` stays 34 and a stock client connects.

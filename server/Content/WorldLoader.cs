@@ -129,6 +129,9 @@ public sealed class WorldDef
 
     /// <summary>Constructor/base-building tuning (server-side only — never streamed). Null -&gt; stock.</summary>
     public WorldConstructorDef? Constructor { get; set; }
+
+    /// <summary>Build-pipeline tuning: the per-garrison order queue (parallel + queue limits). Null -&gt; stock.</summary>
+    public WorldBuildDef? Build { get; set; }
 }
 
 /// <summary>
@@ -472,9 +475,6 @@ public sealed class WorldMiningDef
 /// </summary>
 public sealed class WorldConstructorDef
 {
-    /// <summary>Cap on live constructors a single garrison may build at once (no team-wide cap).</summary>
-    public int? MaxConstructorsPerBase { get; set; }
-
     /// <summary>Garrison production dwell after purchase, before the drone launches, seconds.</summary>
     public double? ProductionSeconds { get; set; }
 
@@ -492,6 +492,23 @@ public sealed class WorldConstructorDef
 
     /// <summary>Backstop: force the build to start after this long in the Sinking phase, seconds.</summary>
     public double? SinkBackstopSeconds { get; set; }
+}
+
+/// <summary>
+/// Build-pipeline tuning, authored under <c>build:</c> — the per-garrison order queue shared by
+/// constructor AND miner purchases from the docked Build tab. Every field is optional; null falls
+/// back to the stock value (the shared <c>WorldBuildTuning</c> initializers, 4/4). Replaces the old
+/// <c>constructor.max-constructors-per-base</c> cap; the live-drone fleet cap
+/// (<c>mining.max-miners-per-team</c>) is a SEPARATE gate. <c>queue-limit</c> is streamed to the
+/// client (Build-tab gray-out); <c>parallel-limit</c> is server-only.
+/// </summary>
+public sealed class WorldBuildDef
+{
+    /// <summary>Ordered items a garrison builds at once (1 = strictly one at a time).</summary>
+    public int? ParallelLimit { get; set; }
+
+    /// <summary>Total ordered (building + queued) a garrison may hold before the Build tab locks.</summary>
+    public int? QueueLimit { get; set; }
 }
 
 // Loads content/core/world.yaml and projects it onto the shared runtime WorldConfig the sim runs on and
@@ -667,13 +684,18 @@ public static class WorldLoader
         if (w.Constructor is { } ct)
         {
             var t = cfg.Constructor;
-            t.MaxConstructorsPerBase = ct.MaxConstructorsPerBase ?? t.MaxConstructorsPerBase;
             t.ProductionSeconds = F(ct.ProductionSeconds, t.ProductionSeconds);
             t.ApproachSpeed = F(ct.ApproachSpeed, t.ApproachSpeed);
             t.SinkSpeed = F(ct.SinkSpeed, t.SinkSpeed);
             t.Standoff = F(ct.Standoff, t.Standoff);
             t.SinkDepthFrac = F(ct.SinkDepthFrac, t.SinkDepthFrac);
             t.SinkBackstopSeconds = F(ct.SinkBackstopSeconds, t.SinkBackstopSeconds);
+        }
+        if (w.Build is { } bd)
+        {
+            var t = cfg.Build;
+            t.ParallelLimit = bd.ParallelLimit ?? t.ParallelLimit;
+            t.QueueLimit = bd.QueueLimit ?? t.QueueLimit;
         }
         return cfg;
     }

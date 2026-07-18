@@ -180,10 +180,18 @@ mining:
 # until embedded sink-depth-frac below the surface; the build sphere emerges from the rock center
 # here) -> Building (build-time-seconds; sphere envelops the rock) -> base appears, drone consumed.
 constructor:
-  max-constructors-per-base: 4  # cap on live constructors a single garrison may build at once (no team-wide cap)
   production-seconds: 20        # garrison production dwell after purchase, before the drone launches
   approach-speed: 8             # creep speed standoff -> surface contact, world units/second
   sink-speed: 3                 # creep speed surface contact -> embedded, world units/second
   standoff: 60                  # extra reach past the rock surface where ToRock "arrives" (align shell)
   sink-depth-frac: 0.65         # embed depth: fraction of the rock radius below the surface
   sink-backstop-seconds: 30     # force the build to start if the embed creep stalls this long
+
+# Build pipeline: the PER-GARRISON order queue shared by constructor AND miner purchases from the
+# docked Build tab. Ordered items sit QUEUED at 0% until a build slot frees, then count down and
+# launch; a launched constructor has left the pipeline (frees its slot). This replaces the old
+# constructor.max-constructors-per-base cap. The live-miner fleet cap (mining.max-miners-per-team)
+# is a SEPARATE gate. Set parallel-limit:1 queue-limit:2 for "build one at a time, queue one more".
+build:
+  parallel-limit: 1  # ordered items a garrison builds at once (1 = strictly one at a time)
+  queue-limit: 2     # total ordered (building + queued) before the Build tab locks

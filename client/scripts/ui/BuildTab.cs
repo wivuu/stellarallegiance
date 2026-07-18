@@ -226,6 +226,9 @@ public partial class BuildTab : Control
         long sig = team + 1L + catalog.Count * 131L;
         // Fold the miner fleet count + cap so a purchase/loss re-renders the MINER DRONE card's "X / N".
         sig ^= (_world!.TeamMinerCount(team) * 733L + 1) ^ (_world.TeamMinerCap(team) * 5701L);
+        // Fold the docked garrison's build-pipeline depth + limit so the grid re-grays/re-enables as
+        // the queue fills and drains (all cards lock when the garrison's queue is full).
+        sig ^= (_world.BuildPipelineCountForBase(_baseId) * 99991L) ^ (_world.BuildQueueLimit * 24593L + 3);
         foreach (ushort t in _world.TeamOwnedTechs(team))
             sig ^= (t + 1) * 2654435761L;
         // Fold capability ownership: caps are a small closed enum, poll each catalog entry's needs.
@@ -304,6 +307,13 @@ public partial class BuildTab : Control
                 case 6: // Sinking (v38: distance-gated embed creep — untimed)
                     row.ConfigureNote(DesignTokens.TeamAccent, $"◈ {name} · EMBEDDING");
                     break;
+                case 8: // Queued (waiting for a build slot at its garrison — 0% until promoted)
+                {
+                    ulong id = c.Id;
+                    Action? cancel = commander ? () => { _net?.SendCancelConstructor(id); SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick); } : null;
+                    row.ConfigureQueued(DesignTokens.Data, $"◷ QUEUED · {name}{suffix}", cancel, "✕ CANCEL");
+                    break;
+                }
                 default: // Building (timed: the station's build-time-seconds)
                     row.ConfigureTimed(_world!, DesignTokens.Warn, $"◈ BUILDING {name}", c.StartTick, c.DurationTicks, null, "");
                     break;
@@ -335,6 +345,15 @@ public partial class BuildTab : Control
     private bool RockDiscovered(StationCatalogDef s) =>
         _world != null && (s.BuildRockClass == 255 || _world.TeamRockClassDiscovered(Team, s.BuildRockClass));
 
+    // The docked garrison's build pipeline (constructors + miners share it) is full — the whole Build
+    // tab locks until a slot frees. Mirrors the server's BuildPipelineCountForBase >= build.queue-limit
+    // gate; 0 limit (pre-team-state / unset) means "no gate". Returns the limit for the message text.
+    private bool BuildQueueFull(out int limit)
+    {
+        limit = _world?.BuildQueueLimit ?? 0;
+        return limit > 0 && _world!.BuildPipelineCountForBase(_baseId) >= limit;
+    }
+
     // ---- grid --------------------------------------------------------------
 
     private void RebuildGrid(List<StationCatalogDef> catalog)
@@ -345,6 +364,7 @@ public partial class BuildTab : Control
 
         AddMinerCard();
 
+        bool queueFull = BuildQueueFull(out _);
         foreach (StationCatalogDef s in catalog)
         {
             string id = s.Id;
@@ -352,7 +372,7 @@ public partial class BuildTab : Control
             card.Configure(
                 GlyphFor(s.StationClass), s.Name.ToUpperInvariant(), ClassName(s.StationClass),
                 s.Description, TechDetailPanel.PriceText(s.Price), TechDetailPanel.Mmss(s.BuildTimeSeconds),
-                IsAvailable(s) && RockDiscovered(s), _selectedId == id);
+                IsAvailable(s) && RockDiscovered(s) && !queueFull, _selectedId == id);
             card.Pressed += () => SelectStation(id);
             _grid.AddChild(card);
             _cards.Add((id, card));
@@ -377,7 +397,7 @@ public partial class BuildTab : Control
             "Autonomous drone — harvests helium-3 into team credits.",
             TechDetailPanel.PriceText(miner.Cost),
             miner.OrderTimeSeconds > 0 ? TechDetailPanel.Mmss(miner.OrderTimeSeconds) : "",
-            count < cap, _selectedId == MinerCardId,
+            count < cap && !BuildQueueFull(out _), _selectedId == MinerCardId,
             kindWord: "DRONE", statusText: $"{count} / {cap}");
         card.Pressed += () => SelectStation(MinerCardId);
         _grid.AddChild(card);
@@ -493,6 +513,14 @@ public partial class BuildTab : Control
                 $"A mining drone costs {TechDetailPanel.PriceText(miner.Cost)}.");
             return;
         }
+        // A timed order joins the garrison's build pipeline, so the queue-full lock applies (an instant
+        // order — order-time 0 — bypasses it, matching the server).
+        if (miner.OrderTimeSeconds > 0 && BuildQueueFull(out int qlimit))
+        {
+            _detail.SetFooter(true, $"⊘ BUILD QUEUE FULL ({qlimit})", ButtonVariant.Secondary, null,
+                "This garrison's build queue is full — cancel or wait for an order to launch.");
+            return;
+        }
         int orderSec = miner.OrderTimeSeconds;
         string when = orderSec > 0
             ? $"Orders a mining drone — launches from your garrison after {TechDetailPanel.Mmss(orderSec)}."
@@ -510,7 +538,9 @@ public partial class BuildTab : Control
         byte team = Team;
         if (_world.TeamMinerCount(team) >= _world.TeamMinerCap(team) || _world.TeamCredits(team) < miner.Cost)
             return;
-        _net.SendBuyMiner();
+        if (miner.OrderTimeSeconds > 0 && BuildQueueFull(out _))
+            return;
+        _net.SendBuyMiner(_baseId);
         SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
     }
 
@@ -543,6 +573,12 @@ public partial class BuildTab : Control
         {
             _detail.SetFooter(true, "⊘ COMMANDER AUTHORIZATION REQUIRED", ButtonVariant.Secondary, null,
                 "Only the team commander can commission a constructor.");
+            return;
+        }
+        if (BuildQueueFull(out int qlimit))
+        {
+            _detail.SetFooter(true, $"⊘ BUILD QUEUE FULL ({qlimit})", ButtonVariant.Secondary, null,
+                "This garrison's build queue is full — cancel or wait for an order to launch.");
             return;
         }
         string rock = sel.BuildRockClass == 255 ? "asteroid" : $"{RockClassName(sel.BuildRockClass)} asteroid";

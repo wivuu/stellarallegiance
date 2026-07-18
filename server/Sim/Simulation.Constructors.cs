@@ -26,6 +26,11 @@ public sealed partial class Simulation
         Approaching, // creeping (approach-speed) from the standoff shell until the hull touches the rock
         Sinking,     // touching — creeping (sink-speed) until embedded; DISTANCE-gated, not timed
         Building,    // embedded, station-keeping while the build sphere runs (build-time-seconds)
+        // Queued MUST stay LAST so the byte values above match the wire (MsgConstructorState) — an
+        // ordered item waiting for a build slot at its garrison (0% progress). PromoteQueuedBuilds
+        // flips it to Producing (stamps PhaseStartTick) when the garrison drops below the parallel
+        // limit. New value 8; older clients that only branch 0-7 fall through to their default arm.
+        Queued,
     }
 
     // One slot per OWNED constructor. Like the miner slot it does not outlive destruction (repurchase
@@ -129,14 +134,16 @@ public sealed partial class Simulation
         return n;
     }
 
-    // Live constructors currently building/producing out of a single garrison. The per-base
-    // simultaneous-build cap gates purchases; there is no team-wide cap. Miner producers (no launch
-    // base) are excluded so they never eat a garrison's constructor slots.
-    public int ConstructorCountForBase(ulong launchBaseId)
+    // Items in a single garrison's build PIPELINE — every order (constructor OR miner) still Queued or
+    // Producing at that garrison. A launched constructor / graduated miner has left the pipeline and is
+    // NOT counted (it freed its slot). This is the per-garrison queue-depth gate (world.yaml
+    // build.queue-limit) and the divisor the client mirrors for the Build-tab gray-out.
+    public int BuildPipelineCountForBase(ulong launchBaseId)
     {
         int n = 0;
         foreach (var c in _constructors)
-            if (c.LaunchBaseId == launchBaseId && !c.ProducesMiner)
+            if (c.LaunchBaseId == launchBaseId
+                && (c.State == ConstructorState.Queued || c.State == ConstructorState.Producing))
                 n++;
         return n;
     }
@@ -158,12 +165,14 @@ public sealed partial class Simulation
     // phase (production, or align/sink/build) so the client animates a smooth bar; 0/0 for untimed states
     // (idle / en route / move). TargetId carries the rock (build orders) or sector (move orders) so the
     // client can name the destination. Sim thread only.
-    public IReadOnlyList<(ulong Id, byte Team, byte StationType, byte State, uint StartTick, uint DurationTicks, ulong TargetId, bool ProducesMiner)>
+    public IReadOnlyList<(ulong Id, byte Team, byte StationType, byte State, uint StartTick, uint DurationTicks, ulong TargetId, bool ProducesMiner, ulong LaunchBaseId)>
         ConstructorStatesView()
     {
-        var rows = new List<(ulong, byte, byte, byte, uint, uint, ulong, bool)>(_constructors.Count);
+        var rows = new List<(ulong, byte, byte, byte, uint, uint, ulong, bool, ulong)>(_constructors.Count);
         foreach (var c in _constructors)
         {
+            // Queued (and Idle) leave start/dur/target at 0 → the client renders an untimed note row
+            // (no progress bar): a queued order reads 0% because it hasn't started counting down.
             uint start = 0, dur = 0;
             ulong target = 0;
             switch (c.State)
@@ -183,7 +192,7 @@ public sealed partial class Simulation
                 case ConstructorState.Building:
                     start = c.PhaseStartTick; dur = BuildTicksFor(c.BuildStationTypeId); target = c.TargetRockId; break;
             }
-            rows.Add((c.ConstructorId, c.Team, c.BuildStationTypeId, (byte)c.State, start, dur, target, c.ProducesMiner));
+            rows.Add((c.ConstructorId, c.Team, c.BuildStationTypeId, (byte)c.State, start, dur, target, c.ProducesMiner, c.LaunchBaseId));
         }
         return rows;
     }
@@ -280,6 +289,38 @@ public sealed partial class Simulation
             var (team, id) = _constructorCancelQueue.Dequeue();
             CancelConstructorProduction(team, id);
         }
+        // New orders enter Queued; promote up to the parallel limit now so a buy with a free slot
+        // starts building the same tick (the 5 Hz brain also promotes when a slot later frees).
+        PromoteQueuedBuilds(tick);
+    }
+
+    // Per-garrison build scheduler: for each launch base, promote its QUEUED orders (in list order =
+    // purchase order) to Producing until the base has world.Build.parallel-limit items actively
+    // building. A launched constructor / graduated miner is already gone from the pipeline, so its
+    // slot frees automatically. Cheap (the constructor list is small); runs after each drain and each
+    // brain tick.
+    private void PromoteQueuedBuilds(uint tick)
+    {
+        int parallel = Math.Max(1, World.Build.ParallelLimit);
+        // Count items already building per garrison.
+        Dictionary<ulong, int> active = new();
+        foreach (var c in _constructors)
+            if (c.State == ConstructorState.Producing)
+                active[c.LaunchBaseId] = active.GetValueOrDefault(c.LaunchBaseId) + 1;
+        foreach (var c in _constructors)
+        {
+            if (c.State != ConstructorState.Queued)
+                continue;
+            int a = active.GetValueOrDefault(c.LaunchBaseId);
+            if (a >= parallel)
+                continue;
+            c.State = ConstructorState.Producing;
+            c.PhaseStartTick = tick;
+            active[c.LaunchBaseId] = a + 1;
+            ConstructorChangedThisStep = true;
+            if (c.ProducesMiner)
+                TeamStateChangedThisStep = true; // miner producers ride the MsgTeamState "X / N" tail
+        }
     }
 
     private void TryBuyConstructor(byte team, byte stationType, ulong launchBaseId, uint tick)
@@ -345,10 +386,11 @@ public sealed partial class Simulation
             Notice("No garrison to launch a constructor from.");
             return;
         }
-        // Per-base simultaneous-build cap (no team-wide cap): this garrison may only build so many at once.
-        if (ConstructorCountForBase(gb.Id) >= MaxConstructorsPerBase)
+        // Per-garrison build-queue depth (world.yaml build.queue-limit): constructors AND miners share
+        // this garrison's pipeline. When it's full the Build tab is locked client-side too.
+        if (BuildPipelineCountForBase(gb.Id) >= World.Build.QueueLimit)
         {
-            Notice($"This garrison's constructor cap is reached ({MaxConstructorsPerBase}).");
+            Notice($"This garrison's build queue is full ({World.Build.QueueLimit}).");
             return;
         }
         // Charge the STATION price (the constructor is the delivery mechanism; the hull itself is free).
@@ -358,9 +400,11 @@ public sealed partial class Simulation
         Notice($"Constructor building {station.Name} purchased — order it to a {RockClassName(station.BuildRockClass)} asteroid.");
     }
 
-    // A purchase creates the slot in Producing (no ship yet). The brain launches the drone from the
-    // garrison when the production timer elapses (ConstructorProductionSeconds); until then the Build
-    // tab shows a progress bar and the commander may cancel for a refund.
+    // A purchase creates the slot QUEUED (no ship yet). PromoteQueuedBuilds (run right after the buy
+    // drains) flips it to Producing the same tick if this garrison is below its parallel limit,
+    // otherwise it waits its turn. Once Producing, the brain launches the drone when the production
+    // timer elapses (ConstructorProductionSeconds); throughout, the Build tab shows a progress/queue
+    // bar and the commander may cancel for a refund.
     private void NewConstructorSlot(byte team, byte stationType, ulong launchBaseId, uint tick)
     {
         var slot = new ConstructorSlot
@@ -369,18 +413,19 @@ public sealed partial class Simulation
             Team = team,
             BuildStationTypeId = stationType,
             LaunchBaseId = launchBaseId,
-            State = ConstructorState.Producing,
-            PhaseStartTick = tick,
+            State = ConstructorState.Queued,
             ProductionTicks = SecondsToTicks(_constructor.ProductionSeconds),
         };
         _constructors.Add(slot);
         ConstructorChangedThisStep = true;
     }
 
-    // A MINER order enters the SAME production queue as a constructor (Simulation.Mining.TryBuyMiner
-    // routes here): a Producing slot with the miner's per-hull order-time, shown in the Build-tab roster
-    // with a progress bar + cancel. On completion the brain graduates it into a MinerSlot (NewMinerSlot).
-    private void NewMinerProductionSlot(byte team, uint tick, uint orderTicks)
+    // A MINER order enters the SAME per-garrison pipeline as a constructor (Simulation.Mining.TryBuyMiner
+    // routes here): a Queued slot with the miner's per-hull order-time and the garrison it was ordered
+    // at (launchBaseId), shown in the Build-tab roster with a progress/queue bar + cancel. When it
+    // reaches the front of the queue PromoteQueuedBuilds starts it (Producing); on completion the brain
+    // graduates it into a MinerSlot (NewMinerSlot).
+    private void NewMinerProductionSlot(byte team, uint tick, uint orderTicks, ulong launchBaseId)
     {
         _constructors.Add(new ConstructorSlot
         {
@@ -388,21 +433,22 @@ public sealed partial class Simulation
             Team = team,
             ProducesMiner = true,
             ProductionTicks = orderTicks,
-            State = ConstructorState.Producing,
-            PhaseStartTick = tick,
+            LaunchBaseId = launchBaseId,
+            State = ConstructorState.Queued,
         });
         ConstructorChangedThisStep = true;
-        TeamStateChangedThisStep = true; // producing miners count toward MinerCount → restream the "X / N" tail
+        TeamStateChangedThisStep = true; // producing/queued miners count toward MinerCount → restream the "X / N" tail
     }
 
-    // Commander cancel of a still-producing constructor: refund the station price and drop the slot.
-    // A drone that has already launched (State != Producing) is managed by F3 orders, not this.
+    // Commander cancel of a not-yet-launched order (Queued or still Producing): refund the price and
+    // drop the slot. A drone that has already launched is managed by F3 orders, not this.
     public bool CancelConstructorProduction(byte team, ulong constructorId)
     {
         for (int i = 0; i < _constructors.Count; i++)
         {
             var slot = _constructors[i];
-            if (slot.Team != team || slot.ConstructorId != constructorId || slot.State != ConstructorState.Producing)
+            if (slot.Team != team || slot.ConstructorId != constructorId
+                || slot.State is not (ConstructorState.Producing or ConstructorState.Queued))
                 continue;
             // Refund what was charged: a miner order paid the miner hull cost; a constructor paid the
             // station price. Both were deducted at buy time (TryReserveSpawn / ts.Credits -= price).
@@ -554,6 +600,9 @@ public sealed partial class Simulation
                     break;
             }
         }
+        // A launch/graduation/retire above may have freed a build slot — pull the next queued order
+        // for that garrison into Producing.
+        PromoteQueuedBuilds(tick);
     }
 
     // The base appears fully constructed at the rock; the drone is consumed; the team gains the
@@ -1044,6 +1093,4 @@ public sealed partial class Simulation
 
     private static string RockClassName(byte rockClass) =>
         rockClass == 255 ? "any" : ((RockClass)rockClass).ToString().ToLowerInvariant();
-
-    private int MaxConstructorsPerBase => _constructor.MaxConstructorsPerBase;
 }
