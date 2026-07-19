@@ -55,6 +55,12 @@ public partial class ResearchTab : Control
     private bool _built;
     private readonly RefreshGate _gate = new();
 
+    // Home-base-family derivation (mirrors the sim's Simulation.Research.cs): each development belongs to
+    // the base family whose tech/capability unlocks it, and the RESEARCH tab shows only the selected
+    // base's family. Built once from the streamed catalog (stable after uplink).
+    private Dictionary<byte, byte>? _familyRoots; // base-type-id -> family-root base-type-id
+    private Dictionary<ushort, byte>? _techFamily; // tech idx -> family root whose base grants it
+
     // -- nodes / roots -------------------------------------------------------
     private Control _guard = null!;
     private Control _mainBody = null!;
@@ -78,12 +84,18 @@ public partial class ResearchTab : Control
     // Called by ShipLoadout when the CommandSidebar selection changes (BaseSelected).
     public void SetBase(ulong id, string title, string sector, byte typeId)
     {
+        bool familyChanged = FamilyRootOf(typeId) != FamilyRootOf(_baseType);
         _baseId = id;
         _baseTitle = title;
         _baseSector = sector;
         _baseType = typeId;
         if (_built)
         {
+            // A different base FAMILY shows a different research tree — force a structural rebuild so
+            // _Process re-filters the canvas. Same-family switches (e.g. Garrison → Garrison Str) only
+            // refresh the chrome.
+            if (familyChanged)
+                _gate.Invalidate();
             UpdateBaseHeader();
             RebuildBanners();
             RefreshDetail();
@@ -341,11 +353,27 @@ public partial class ResearchTab : Control
             c.QueueFree();
         _cards.Clear();
 
-        // Group by Group label (fallback bucket "RESEARCH").
+        EnsureDerived();
+        byte fam = FamilyRootOf(_baseType);
+
+        // Selection may point at a dev from another base's family after a base switch — drop it so the
+        // detail column never describes a node the canvas no longer shows.
+        if (
+            _selectedDev is ushort selDev
+            && _defs?.GetDevelopment(selDev) is DevelopmentDef selDef
+            && HomeFamilyRoot(selDef) != fam
+        )
+            _selectedDev = null;
+
+        // Group by Group label (fallback bucket "RESEARCH"), scoped to the selected base's family. The
+        // loop index i stays the GLOBAL wire dev-index (StatusOf/Send/Authorize rely on it), so other
+        // families are skipped in place rather than compacted out of the list.
         var groups = new List<(string name, List<(ushort idx, DevelopmentDef dev)> devs)>();
         var byName = new Dictionary<string, int>();
         for (ushort i = 0; i < devs.Count; i++)
         {
+            if (HomeFamilyRoot(devs[i]) != fam)
+                continue;
             string g = string.IsNullOrEmpty(devs[i].Group) ? "RESEARCH" : devs[i].Group.ToUpperInvariant();
             if (!byName.TryGetValue(g, out int gi))
             {
@@ -667,6 +695,71 @@ public partial class ResearchTab : Control
                     return ((byte)from.BaseTypeId, from.Name);
         }
         return null;
+    }
+
+    // ---- home-base-family derivation (mirrors sim Simulation.Research.cs) --
+
+    // Build the base-family and tech-origin maps once the catalog has streamed. A base FAMILY is a root
+    // base type plus every tier reachable through its SuccessorBaseTypeId chain (Garrison ↔ Garrison Str,
+    // Supremacy ↔ Adv Supremacy, …); a development belongs to the family that unlocks it.
+    private void EnsureDerived()
+    {
+        if (_familyRoots != null || _defs == null)
+            return;
+        var catalog = _defs.AllStationCatalog();
+        if (catalog.Count == 0)
+            return; // catalog not streamed yet — don't cache empty maps
+
+        // Family root = the base type at the head of the successor chain (the one that is nobody's
+        // successor). Walk predecessor links backward from each base type.
+        var predOf = new Dictionary<byte, byte>(); // successor type -> its predecessor type
+        foreach (StationCatalogDef s in catalog)
+            if (s.BaseTypeId >= 0 && s.SuccessorBaseTypeId >= 0)
+                predOf[(byte)s.SuccessorBaseTypeId] = (byte)s.BaseTypeId;
+        var roots = new Dictionary<byte, byte>();
+        foreach (StationCatalogDef s in catalog)
+        {
+            if (s.BaseTypeId < 0)
+                continue;
+            byte r = (byte)s.BaseTypeId;
+            var seen = new HashSet<byte> { r };
+            while (predOf.TryGetValue(r, out byte p) && seen.Add(p))
+                r = p;
+            roots[(byte)s.BaseTypeId] = r;
+        }
+
+        // tech idx -> family root: a station's granted techs map to that base's family (supremacy-1 →
+        // Supremacy, shipyard-1 → Shipyard); an upgrade dev's granted techs map to the family of the base
+        // it is authorized AT (garrison-str → Garrison, supremacy-adv → Supremacy, outpost-hvy → Outpost).
+        var techFam = new Dictionary<ushort, byte>();
+        foreach (StationCatalogDef s in catalog)
+            if (s.BaseTypeId >= 0)
+                foreach (ushort t in s.GrantedTechIdx)
+                    techFam[t] = roots.TryGetValue((byte)s.BaseTypeId, out byte fr) ? fr : (byte)s.BaseTypeId;
+        foreach (DevelopmentDef d in _defs.AllDevelopments())
+            if (d.UpgradeScope == DevelopmentDef.UpgradeScopeSingle && UpgradeFromType(d) is (byte ft, _))
+                foreach (ushort t in d.GrantedTechIdx)
+                    techFam[t] = roots.TryGetValue(ft, out byte fr) ? fr : ft;
+
+        _familyRoots = roots;
+        _techFamily = techFam;
+    }
+
+    private byte FamilyRootOf(byte type) =>
+        _familyRoots != null && _familyRoots.TryGetValue(type, out byte r) ? r : type;
+
+    // The base family a development is researched at. Single-scope upgrades home to the base they must be
+    // authorized at; everything else homes to the base family that grants its gating tech. Devs gated
+    // only on the `base` capability (Mini-Gun/Mine/Counter/Nanite/Bomber) default to the Garrison family.
+    private byte HomeFamilyRoot(DevelopmentDef dev)
+    {
+        if (dev.UpgradeScope == DevelopmentDef.UpgradeScopeSingle && UpgradeFromType(dev) is (byte ft, _))
+            return FamilyRootOf(ft);
+        if (_techFamily != null)
+            foreach (ushort req in dev.RequiredTechIdx)
+                if (_techFamily.TryGetValue(req, out byte fam))
+                    return fam;
+        return 0; // base-capability starter research -> Garrison family (root 0)
     }
 
     // ---- action footer state machine --------------------------------------

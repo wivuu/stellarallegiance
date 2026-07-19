@@ -21,12 +21,10 @@ Archives:
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
 - Reloading things from cargo should take a configurable amount of time (i.e. ammo and fuel)
-- Different bases should have different research items underneath them - currently only see one tech tree (research canvas). 
-  - Currently it is gated, but the root of the tree should be different when looking at each base
 - No way to research ship classes(hulls)?
 - Adv. Fighter's belly HP is mounted to a gun, but there should be 3 gun hardpoints and a belly missile hardpoint
 - Look for opportunities to utilize native vector3 and SIMD for performance improvements
-- Default scout loadout should not be ER nantive, use gatling
+- Ship loadouts should not not persist between game matches
 - Prevent alephs from spawning too close together by chance
 ---
 

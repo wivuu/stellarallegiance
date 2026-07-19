@@ -538,6 +538,15 @@ The team investment tree: a commander spends credits at a friendly base to resea
 `heavy-ordnance` is researched). Per-base research runs in configurable slots plus one on-deck queue
 slot; credits deduct at start and at queue-reservation; cancel refunds 100%. State encodes
 startTick+duration — the client derives live progress from ServerTick.
+**Research is scoped per base FAMILY:** a development is researched at the base family whose
+tech/capability unlocks it — guns/missiles at the Supremacy, the starter lines (Mini-Gun/Mine/
+Counter/Nanite/Bomber, gated only on `base`) at the Garrison, single-scope upgrades at their
+from-type base. A base family = a root base type + every tier reachable through its
+`SuccessorBaseTypeId` chain (Garrison↔Garrison Str, Supremacy↔Adv Supremacy, …). The home family is
+**derived** (no authored field, no wire change) from `StationCatalogDef.GrantedTechIdx` + the
+successor chains + the existing `UpgradeFromType`/`TriggeredUpgrades` derivation. The `ResearchTab`
+canvas shows only the selected base's family; the sim's `ResearchOpStart` rejects a non-upgrade
+development started at the wrong family (mirrored derivation — keep the two in sync).
 - **Frequency:** Common
 - **Key Files:**
   - `server/Sim/Simulation.Research.cs` — the sim engine (enqueue/step/complete, on-deck promotion)
