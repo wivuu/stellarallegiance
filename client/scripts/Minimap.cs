@@ -132,7 +132,7 @@ public partial class Minimap : Control
         // Which team(s) hold a base in each sector — computed first so contested sectors can
         // tint the aleph links that touch them (the design's front-line cue).
         _teams.Clear();
-        foreach (var (sector, team) in _world.MapBaseTeams)
+        foreach (var (sector, team) in _world.Bases.Teams)
         {
             _teams.TryGetValue(sector, out var cur);
             if (team == 0)
@@ -145,7 +145,7 @@ public partial class Minimap : Control
         // Edges: one line per aleph PAIR (dedupe by unordered sector pair). A link touching a
         // contested (both-team) sector is tinted as a front line.
         _drawnEdges.Clear();
-        foreach (var (sector, dest) in _world.MapAlephLinks)
+        foreach (var (sector, dest) in _world.Alephs.Links)
         {
             uint lo = sector < dest ? sector : dest;
             uint hi = sector < dest ? dest : sector;
@@ -169,13 +169,17 @@ public partial class Minimap : Control
             if (_teams.TryGetValue(s.SectorId, out var tp) && (tp.t0 || tp.t1))
             {
                 neutral = false;
-                fill = tp.t0 && tp.t1 ? Disputed : tp.t0 ? Team0 : Team1;
+                fill =
+                    tp.t0 && tp.t1 ? Disputed
+                    : tp.t0 ? Team0
+                    : Team1;
             }
 
             // Fog stale memory: a single team's base(s) here are all destroyed but still remembered.
             // Dim the tint to a hollow outline so the map reads it as lost ground, not a live hold.
             // (Disputed sectors keep the live tint — a mixed presence isn't cleanly "stale".)
-            bool stale = !neutral && !(tp.t0 && tp.t1) && _world.SectorTeamStale(s.SectorId, tp.t0 ? (byte)0 : (byte)1);
+            bool stale =
+                !neutral && !(tp.t0 && tp.t1) && _world.Bases.SectorTeamStale(s.SectorId, tp.t0 ? (byte)0 : (byte)1);
 
             bool current = s.SectorId == viewSector;
             bool hover = hovered == s.SectorId;
@@ -198,7 +202,15 @@ public partial class Minimap : Control
 
             string lbl = s.SectorId.ToString();
             Vector2 ts = font.GetStringSize(lbl, HorizontalAlignment.Left, -1, 11);
-            DrawString(font, p + new Vector2(-ts.X * 0.5f, ts.Y * 0.30f), lbl, HorizontalAlignment.Left, -1, 11, hollow ? TextColor : NodeEdge);
+            DrawString(
+                font,
+                p + new Vector2(-ts.X * 0.5f, ts.Y * 0.30f),
+                lbl,
+                HorizontalAlignment.Left,
+                -1,
+                11,
+                hollow ? TextColor : NodeEdge
+            );
         }
 
         // Sector name along the panel's bottom edge: the hovered sector while pointing at a node,

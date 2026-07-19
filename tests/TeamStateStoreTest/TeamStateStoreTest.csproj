@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Link the client's pure-POCO team-state sources directly. They depend only on the BCL and the two
+         narrow interfaces (ITickSource / IShipCostSource) — NOT on Godot — so this suite exercises the real
+         production TeamStateStore logic headlessly, with trivial fakes for the two seams. -->
+    <Compile Include="../../client/scripts/world/TeamStateStore.cs" Link="TeamStateStore.cs" />
+    <Compile Include="../../client/scripts/world/ITickSource.cs" Link="ITickSource.cs" />
+    <Compile Include="../../client/scripts/world/IShipCostSource.cs" Link="IShipCostSource.cs" />
+  </ItemGroup>
+</Project>

@@ -32,6 +32,7 @@
     <Project Path="tests/MiningTest/MiningTest.csproj" />
     <Project Path="tests/MissileTest/MissileTest.csproj" />
     <Project Path="tests/StrategyTest/StrategyTest.csproj" />
+    <Project Path="tests/TeamStateStoreTest/TeamStateStoreTest.csproj" />
   </Folder>
   <Folder Name="/tools/" />
   <Folder Name="/tools/simbot/">

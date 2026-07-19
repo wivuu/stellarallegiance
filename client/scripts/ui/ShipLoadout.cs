@@ -418,7 +418,7 @@ public partial class ShipLoadout : Control
         {
             byte hotkeyTeam = Team;
             List<ShipClassDef> ships = _defs.BuildableShips();
-            ships.RemoveAll(s => _world.CheckSpawnGate(hotkeyTeam, s.ClassId) == WorldRenderer.SpawnGate.Locked);
+            ships.RemoveAll(s => _world.TeamState.CheckSpawnGate(hotkeyTeam, s.ClassId) == TeamStateStore.SpawnGate.Locked);
             if (slot < ships.Count)
             {
                 SelectShip(ships[slot].ClassId);
@@ -466,7 +466,7 @@ public partial class ShipLoadout : Control
 
         // Live telemetry + spawn gating.
         byte team = Team;
-        _topReadout.Text = $"CREDITS {_world.TeamCredits(team)}   ·   PING {_ship.PingMs, 3:0} ms";
+        _topReadout.Text = $"CREDITS {_world.TeamState.Credits(team)}   ·   PING {_ship.PingMs, 3:0} ms";
         RefreshLaunchGate(team);
         RefreshShipCardStates(team);
 
@@ -485,7 +485,7 @@ public partial class ShipLoadout : Control
     private long ComputeBaseSig(byte team)
     {
         long sig = team + 1L;
-        foreach (var (id, _, bteam, alive, _) in _world.KnownBases())
+        foreach (var (id, _, bteam, alive, _) in _world.Bases.Known())
             if (bteam == team)
                 sig ^= unchecked((long)(id * 1000003UL) + (alive ? 1L : 2L));
         return sig;
@@ -495,17 +495,17 @@ public partial class ShipLoadout : Control
     {
         if (_classId is not byte classId || !_defs.TryGetShipDef(classId, out _))
             return;
-        bool flying = _world.LocalShip != null;
+        bool flying = _world.Ships.LocalShip != null;
         string? hint = _ship.SpawnHint;
         if (flying || hint != null)
             _launchPending = false; // landed, or refused (the hint names why) — let the pilot retry
         bool overCap = IsOverCapacity();
-        var gate = _world.CheckSpawnGate(team, classId);
-        _launch.Disabled = overCap || flying || _launchPending || gate != WorldRenderer.SpawnGate.Allow;
+        var gate = _world.TeamState.CheckSpawnGate(team, classId);
+        _launch.Disabled = overCap || flying || _launchPending || gate != TeamStateStore.SpawnGate.Allow;
         _launch.Text =
             flying ? "IN FLIGHT"
             : _launchPending ? "LAUNCHING…"
-            : gate == WorldRenderer.SpawnGate.Locked ? "⚿ LOCKED"
+            : gate == TeamStateStore.SpawnGate.Locked ? "⚿ LOCKED"
             : overCap ? "OVER CAPACITY"
             : "◆ LAUNCH";
         _launchHint.Visible = hint != null;
@@ -520,7 +520,7 @@ public partial class ShipLoadout : Control
     private byte DefaultShipClassId(List<ShipClassDef> ships)
     {
         byte team = Team;
-        bool Unlocked(byte cls) => _world.CheckSpawnGate(team, cls) != WorldRenderer.SpawnGate.Locked;
+        bool Unlocked(byte cls) => _world.TeamState.CheckSpawnGate(team, cls) != TeamStateStore.SpawnGate.Locked;
         int last = UserPrefs.LastShip;
         if (last >= 0 && Unlocked((byte)last))
             foreach (ShipClassDef s in ships)
@@ -737,11 +737,11 @@ public partial class ShipLoadout : Control
                 continue;
             // A tier the team has outgrown (an owned tech obsoletes it) is retired from the arsenal
             // entirely. Its successor tier carries the mount instead.
-            if (w.ObsoletedByTechIdx.Length > 0 && w.ObsoletedByTechIdx.Any(t => _world.TeamOwnsTech(team, t)))
+            if (w.ObsoletedByTechIdx.Length > 0 && w.ObsoletedByTechIdx.Any(t => _world.TeamState.OwnsTech(team, t)))
                 continue;
             // A weapon gated behind tech the team hasn't fully researched can't be equipped —
             // it's hidden entirely (heavy-cannon is the stock case), not rendered as a locked row.
-            if (w.RequiredTechIdx.Length > 0 && !w.RequiredTechIdx.All(t => _world.TeamOwnsTech(team, t)))
+            if (w.RequiredTechIdx.Length > 0 && !w.RequiredTechIdx.All(t => _world.TeamState.OwnsTech(team, t)))
                 continue;
             fit++;
             uint weaponId = w.WeaponId;

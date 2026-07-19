@@ -19,7 +19,7 @@ using StellarAllegiance.Shared;
 //  The defs arrive once, right after Welcome and before any ship can spawn, so that window
 //  is momentary.
 // =====================================================================
-public partial class DefRegistry : Node
+public partial class DefRegistry : Node, IShipCostSource
 {
     // The pod's reserved ClassId (mirror of shared GameContent.PodClassId). Pods are picked at
     // runtime via the IsPod flag, not a ShipClass, so their def sits at 255.
@@ -203,6 +203,9 @@ public partial class DefRegistry : Node
 
     public bool TryGetShipDef(byte classId, out ShipClassDef def) => _ships.TryGetValue(classId, out def!);
 
+    // IShipCostSource: the spawn-gate cost lookup TeamStateStore depends on (0 = unknown, defers to server).
+    public int ShipCost(byte classId) => _ships.TryGetValue(classId, out var d) ? d.Cost : 0;
+
     // Every buildable ship class (every ship def except the reserved pod and team-only ore miners),
     // ascending by ClassId so the buy menu has a stable order regardless of dictionary iteration.
     // Miner hulls (OreCapacity > 0) are AI-owned team drones bought from the Build tab (MsgBuyMiner),
@@ -247,7 +250,7 @@ public partial class DefRegistry : Node
                 || w.ObsoletedByTechIdx.Length == 0
                 || GetWeapon(w.SucceededByWeaponId) is not WeaponDef next
                 || next.Mass > w.Mass // mass guard: matches the server's payload-safe migration
-                || !w.ObsoletedByTechIdx.Any(t => world.TeamOwnsTech(team, t))
+                || !w.ObsoletedByTechIdx.Any(t => world.TeamState.OwnsTech(team, t))
             )
                 return weaponId;
             weaponId = w.SucceededByWeaponId;

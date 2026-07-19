@@ -107,7 +107,7 @@ public partial class ShipController : Node
     private Vector2 _mouseDelta; // captured-cursor motion accumulated since last sample
     private float _stickYaw,
         _stickPitch; // persistent self-centering virtual-stick deflection (-1..1)
-    private bool _hasShip; // mirrors _world.LocalShip != null, set each _Process for _Input's capture gate
+    private bool _hasShip; // mirrors _world.Ships.LocalShip != null, set each _Process for _Input's capture gate
 
     // Headless verification: `--autofly` auto-spawns a Scout and flies a fixed
     // input so the full ApplyInput -> SimTick -> reconcile loop can be checked
@@ -242,7 +242,7 @@ public partial class ShipController : Node
     // call happens in _Process once the connection is live (with retry).
     public void RequestSpawn(ShipClass cls)
     {
-        if (_world.LocalShip == null)
+        if (_world.Ships.LocalShip == null)
             _spawnRequest = cls;
     }
 
@@ -294,7 +294,7 @@ public partial class ShipController : Node
     // F3 right-click engage. Sets the optimistic local flag.
     public bool EngageAutopilot()
     {
-        if (_world.LocalShip == null)
+        if (_world.Ships.LocalShip == null)
             return false; // not launched — nothing to steer
         if (!ResolveEngageTarget(out byte kind, out ulong id, out uint sector, out Vector3 pos))
             return false;
@@ -312,7 +312,7 @@ public partial class ShipController : Node
         // Hand control back to local prediction IMMEDIATELY (don't wait ~1 RTT for the server flag to
         // clear) so a manual takeover feels instant; the server flag's later falling edge is then a
         // no-op. RebaseTo inside SetAutopilot keeps the handoff visually continuous.
-        _world.LocalShip?.SetAutopilot(false);
+        _world.Ships.LocalShip?.SetAutopilot(false);
     }
 
     // Autopilot toggle (T): edge-triggered like Tab. Swallowed while chatting (T would type). Toggles
@@ -327,7 +327,7 @@ public partial class ShipController : Node
         bool t = Input.IsActionPressed("engage_autopilot");
         bool pressed = t && !_apHeld;
         _apHeld = t;
-        if (!pressed || _world.LocalShip == null)
+        if (!pressed || _world.Ships.LocalShip == null)
             return;
         if (ApEngagedLocal)
             DisengageAutopilot();
@@ -360,7 +360,7 @@ public partial class ShipController : Node
         // request once the ship actually exists.
         // One native connection: "connected" means the server's Welcome has landed.
         bool connected = _cm.State == ConnectionManager.ConnState.Connected;
-        bool hasShip = _world.LocalShip != null;
+        bool hasShip = _world.Ships.LocalShip != null;
         _hasShip = hasShip; // cached for _Input's capture gate (event-driven, runs between frames)
 
         TickAutoFlyBootstrap(connected, hasShip, delta);
@@ -375,7 +375,7 @@ public partial class ShipController : Node
         // the server's real rate (~18.7 Hz here) without drifting away. Integration
         // is always fixed-dt, so determinism is preserved — only wall-clock pacing
         // is slewed. This makes predicted[N] and auth[N] index the same integration.
-        var pc = _world.LocalShip;
+        var pc = _world.Ships.LocalShip;
         if (pc == null)
         {
             _hadShip = false;
@@ -467,7 +467,7 @@ public partial class ShipController : Node
             // distance check would wipe any waypoint set within the arrive band before the line ever
             // drew. (A manual takeover far from the mark leaves the waypoint so T can re-engage it.)
             if (!ApEngagedLocal)
-                TargetMarkers.DismissWaypointIfReached(_world.LocalSector, _world.LocalShip!.GlobalPosition);
+                TargetMarkers.DismissWaypointIfReached(_world.LocalSector, _world.Ships.LocalShip!.GlobalPosition);
         }
         else if (connected && !_spawnPending && _spawnRequest is { } cls)
         {
@@ -476,8 +476,8 @@ public partial class ShipController : Node
             // send and surfaces a reason. The request stays queued so it auto-fires once affordable
             // (e.g. when the paycheck lands). Team pre-spawn comes from the Welcome assignment.
             byte team = _world.LocalTeam ?? _net?.MyTeam ?? 0;
-            var gate = _world.CheckSpawnGate(team, (byte)cls);
-            if (gate == WorldRenderer.SpawnGate.Allow)
+            var gate = _world.TeamState.CheckSpawnGate(team, (byte)cls);
+            if (gate == TeamStateStore.SpawnGate.Allow)
             {
                 // Spawn on the authoritative sim server (honored only while the match is Active;
                 // the request simply retries until then), carrying the hangar's chosen consumable
@@ -494,9 +494,10 @@ public partial class ShipController : Node
                 // override tail rides alongside (autofly sends none — authored loadout keeps the
                 // headless smoke deterministic); the server echoes the accepted loadout back on
                 // MsgShipLoadout.
-                var mounts = !_autoFly && _defs?.GetHardpoints((byte)cls) is { } hps
-                    ? LoadoutState.Shared.WeaponOverridesFor((byte)cls, hps)
-                    : null;
+                var mounts =
+                    !_autoFly && _defs?.GetHardpoints((byte)cls) is { } hps
+                        ? LoadoutState.Shared.WeaponOverridesFor((byte)cls, hps)
+                        : null;
                 _net?.RequestSpawn((byte)cls, hold, LoadoutState.Shared.SelectedBaseId, mounts);
                 _spawnPending = true;
                 _spawnRetry = 1.0;
@@ -504,9 +505,7 @@ public partial class ShipController : Node
             }
             else
             {
-                SpawnHint = gate == WorldRenderer.SpawnGate.Locked
-                    ? $"{cls} is locked"
-                    : $"Not enough credits for {cls}";
+                SpawnHint = gate == TeamStateStore.SpawnGate.Locked ? $"{cls} is locked" : $"Not enough credits for {cls}";
             }
         }
     }
@@ -544,8 +543,15 @@ public partial class ShipController : Node
         // headless runs exercise the boost + exhaust path.
         // Gate on a captured cursor too: freeing the mouse (Esc → command mode, or the escape
         // menu) means the pilot isn't flying, so a held Shift shouldn't keep the burner lit.
-        bool boost = _autoFly || (Input.MouseMode == Input.MouseModeEnum.Captured
-            && !Chat.Capturing && !SectorOverview.Active && !ShipLoadout.Active && Input.IsActionPressed("afterburner"));
+        bool boost =
+            _autoFly
+            || (
+                Input.MouseMode == Input.MouseModeEnum.Captured
+                && !Chat.Capturing
+                && !SectorOverview.Active
+                && !ShipLoadout.Active
+                && Input.IsActionPressed("afterburner")
+            );
         _input.Boost = boost;
         // While the server flies us the boost decision is the server's; PredictionController drives the
         // plume from the authoritative AbPower instead (feeding the local key here would fight it).
@@ -630,7 +636,15 @@ public partial class ShipController : Node
             // Skip local prediction while the server flies us; snapshots drive the render instead.
             if (!apActive)
                 foreach (var shot in pc.Step(_input, _predTick))
-                    _world.SpawnLocalBolt(shot.Pos, shot.Vel, shot.Dir, shot.LifeSec, shot.BoltRadius, shot.BoltLength, shot.IsHeal);
+                    _world.Bolts.SpawnLocalBolt(
+                        shot.Pos,
+                        shot.Vel,
+                        shot.Dir,
+                        shot.LifeSec,
+                        shot.BoltRadius,
+                        shot.BoltLength,
+                        shot.IsHeal
+                    );
         }
     }
 
@@ -842,12 +856,14 @@ public partial class ShipController : Node
         // mode exists to smoke. Manual AutoSteer with a NO-OP avoid delegate (unlike the server
         // autopilot, whose obstacle-avoidance treats the solid aleph as a barrier and orbits its mouth
         // without ever entering the warp-trigger radius) plows the ship straight through the mouth.
-        if (_warpTest && _world.LocalShip is { } wpShip)
+        if (_warpTest && _world.Ships.LocalShip is { } wpShip)
         {
-            var gates = _world.VisibleAlephs();
+            var gates = _world.Alephs.Visible();
             bool dropping = _stepsSinceSpawn * FlightModel.Dt < 6f;
             if ((_stepsSinceSpawn % 40) == 0) // ~2s cadence at 20Hz sim
-                Log.Print($"[warp-test] sector {_world.ViewSector}, gates {gates.Count}, t {_stepsSinceSpawn * FlightModel.Dt:0.0}s");
+                Log.Print(
+                    $"[warp-test] sector {_world.ViewSector}, gates {gates.Count}, t {_stepsSinceSpawn * FlightModel.Dt:0.0}s"
+                );
             if (dropping || gates.Count == 0)
                 return new ShipInputState { Thrust = 1f, DropMine = dropping };
 
@@ -863,7 +879,10 @@ public partial class ShipController : Node
                 new Vec3(gp.X, gp.Y, gp.Z),
                 new Quat(q.X, q.Y, q.Z, q.W),
                 new Vec3(best.X, best.Y, best.Z),
-                turnGain: 3f, thrustWhenFacing: 1f, avoid: (_, dir) => dir);
+                turnGain: 3f,
+                thrustWhenFacing: 1f,
+                avoid: (_, dir) => dir
+            );
             return steer;
         }
 

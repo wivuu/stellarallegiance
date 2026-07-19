@@ -253,9 +253,9 @@ public partial class ResearchTab : Control
     {
         byte team = Team;
         long sig = team + 1L + devs.Count * 131L;
-        foreach (ushort t in _world!.TeamOwnedTechs(team))
+        foreach (ushort t in _world!.TeamState.OwnedTechs(team))
             sig ^= (t + 1) * 2654435761L;
-        foreach (var (id, r) in _world.AllResearch())
+        foreach (var (id, r) in _world.TeamState.AllResearch())
         {
             sig ^= unchecked((long)(id * 1000003UL));
             foreach (var a in r.Active)
@@ -281,12 +281,12 @@ public partial class ResearchTab : Control
         if (_world == null || _defs == null)
             return;
 
-        var res = _baseId != 0 ? _world.ResearchAt(_baseId) : null;
+        var res = _baseId != 0 ? _world.TeamState.ResearchAt(_baseId) : null;
         bool commander = _net?.IsCommander ?? false;
         int active = res?.Active.Length ?? 0;
         bool onDeck = res?.OnDeck != null;
 
-        if (res is WorldRenderer.BaseResearch r)
+        if (res is TeamStateStore.BaseResearch r)
         {
             foreach (var a in r.Active)
             {
@@ -480,7 +480,7 @@ public partial class ResearchTab : Control
     {
         if (_world == null)
             return null;
-        foreach (var (_, r) in _world.AllResearch())
+        foreach (var (_, r) in _world.TeamState.AllResearch())
         foreach (var a in r.Active)
             if (a.DevIndex == devIndex)
                 return (a.StartTick, a.DurationTicks);
@@ -498,11 +498,11 @@ public partial class ResearchTab : Control
         // done: all grants owned (tech-only devs vanish from "researchable" once granted).
         if (
             (dev.GrantedTechIdx.Length > 0 || dev.GrantedCaps.Length > 0)
-            && _world.TeamHasAll(team, dev.GrantedTechIdx, dev.GrantedCaps)
+            && _world.TeamState.HasAll(team, dev.GrantedTechIdx, dev.GrantedCaps)
         )
             return Status.Done;
         // in-progress / on-deck at any friendly base.
-        foreach (var (_, r) in _world.AllResearch())
+        foreach (var (_, r) in _world.TeamState.AllResearch())
         {
             foreach (var a in r.Active)
                 if (a.DevIndex == idx)
@@ -511,8 +511,8 @@ public partial class ResearchTab : Control
                 return Status.OnDeck;
         }
         // available (mirror of BuildableResolver).
-        bool obsoleted = dev.ObsoletedByTechIdx.Any(t => _world.TeamOwnsTech(team, t));
-        if (!obsoleted && _world.TeamHasAll(team, dev.RequiredTechIdx, dev.RequiredCaps))
+        bool obsoleted = dev.ObsoletedByTechIdx.Any(t => _world.TeamState.OwnsTech(team, t));
+        if (!obsoleted && _world.TeamState.HasAll(team, dev.RequiredTechIdx, dev.RequiredCaps))
             return Status.Available;
         return Status.Locked;
     }
@@ -679,7 +679,7 @@ public partial class ResearchTab : Control
 
         bool commander = _net?.IsCommander ?? false;
         int price = dev.Price;
-        int credits = _world!.TeamCredits(Team);
+        int credits = _world!.TeamState.Credits(Team);
 
         switch (status)
         {
@@ -752,7 +752,7 @@ public partial class ResearchTab : Control
 
         // Occupancy at the selected base.
         int slots = SlotCount();
-        var res = _baseId != 0 ? _world.ResearchAt(_baseId) : null;
+        var res = _baseId != 0 ? _world.TeamState.ResearchAt(_baseId) : null;
         int active = res?.Active.Length ?? 0;
         bool onDeck = res?.OnDeck != null;
         if (active < slots)
@@ -817,7 +817,7 @@ public partial class ResearchTab : Control
     private void CancelActive(ushort devIndex)
     {
         // Cancel targets the base actually running it (may not be the selected base).
-        foreach (var (id, r) in _world!.AllResearch())
+        foreach (var (id, r) in _world!.TeamState.AllResearch())
             if (r.Active.Any(a => a.DevIndex == devIndex))
             {
                 Send(1, id, devIndex);
@@ -827,7 +827,7 @@ public partial class ResearchTab : Control
 
     private void CancelOnDeck(ushort devIndex)
     {
-        foreach (var (id, r) in _world!.AllResearch())
+        foreach (var (id, r) in _world!.TeamState.AllResearch())
             if (r.OnDeck == devIndex)
             {
                 Send(2, id, devIndex);
@@ -856,12 +856,12 @@ public partial class ResearchTab : Control
     {
         byte team = Team;
         foreach (ushort t in dev.RequiredTechIdx)
-            if (!_world!.TeamOwnsTech(team, t))
+            if (!_world!.TeamState.OwnsTech(team, t))
                 return _defs!.GetTech(t)?.Name ?? $"tech {t}";
         foreach (byte c in dev.RequiredCaps)
-            if (!_world!.TeamOwnsCap(team, c))
+            if (!_world!.TeamState.OwnsCap(team, c))
                 return TechDetailPanel.CapName(c);
-        if (dev.ObsoletedByTechIdx.Any(t => _world!.TeamOwnsTech(team, t)))
+        if (dev.ObsoletedByTechIdx.Any(t => _world!.TeamState.OwnsTech(team, t)))
             return "— superseded";
         return "an unmet requirement";
     }
@@ -1214,7 +1214,7 @@ internal partial class NodeCard : PanelContainer
             return;
         if (!IsVisibleInTree())
             return;
-        float p = _world.ResearchProgress(start, dur);
+        float p = _world.TeamState.ResearchProgress(start, dur);
         _underlay.Progress = p;
         _underlay.QueueRedraw();
         _statusLabel.Text = $"◷ {TechDetailPanel.MmssRemaining(_world, start, dur)}";
@@ -1411,7 +1411,7 @@ internal partial class ActiveBanner : PanelContainer
         if (!_live || _world == null || _bar == null || !IsVisibleInTree())
             return;
         _count.Text = TechDetailPanel.MmssRemaining(_world, _start, _dur);
-        _bar.Progress = _world.ResearchProgress(_start, _dur);
+        _bar.Progress = _world.TeamState.ResearchProgress(_start, _dur);
         _bar.QueueRedraw();
     }
 }

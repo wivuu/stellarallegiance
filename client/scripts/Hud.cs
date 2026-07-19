@@ -74,7 +74,7 @@ public partial class Hud : CanvasLayer
         // Its own high CanvasLayer, driven by the local ship's sector change via WorldRenderer.Warped.
         var warpFlash = new WarpFlash { Name = "WarpFlash" };
         AddChild(warpFlash);
-        _world.Warped += warpFlash.Play;        // raise + hold on warp
+        _world.Warped += warpFlash.Play; // raise + hold on warp
         _world.WarpSettled += warpFlash.Release; // clear once the destination sector has loaded
 
         // Sun lens flare (added first so it sits UNDER every HUD element while still drawing over
@@ -185,7 +185,11 @@ public partial class Hud : CanvasLayer
             if (a.StartsWith("--ui-shot="))
                 outPath = a["--ui-shot=".Length..];
             else if (a.StartsWith("--ui-shot-delay="))
-                double.TryParse(a["--ui-shot-delay=".Length..], System.Globalization.CultureInfo.InvariantCulture, out delay);
+                double.TryParse(
+                    a["--ui-shot-delay=".Length..],
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out delay
+                );
         }
         if (outPath == null)
             return;
@@ -259,7 +263,7 @@ public partial class Hud : CanvasLayer
 
     public override void _Process(double delta)
     {
-        var ship = _world.LocalShip;
+        var ship = _world.Ships.LocalShip;
         bool flying = ship != null;
 
         // The Lobby overlay owns the not-flying screen — pre-match, post-match, AND mid-match
@@ -291,7 +295,7 @@ public partial class Hud : CanvasLayer
         // no death-cam, so it opens immediately). Once the ship exists — or the match leaves Active
         // — the spawn hangar closes itself and the lobby overlay takes over.
         bool hangarUp = _hangar != null && IsInstanceValid(_hangar);
-        if (inMatch && !flying && DeployRequested && !_world.DeathCamActive)
+        if (inMatch && !flying && DeployRequested && !_world.Ships.DeathCamActive)
         {
             if (hangarUp)
                 _hangar!.OpenedForSpawn = true;
@@ -306,13 +310,13 @@ public partial class Hud : CanvasLayer
 
         _sectorShips.Visible = inMatch;
         if (inMatch)
-            _sectorShips.Text = $"Ships in sector: {_world.ShipsInLocalSector()}";
+            _sectorShips.Text = $"Ships in sector: {_world.Ships.ShipsInLocalSector()}";
 
         // Running team balance (server-authoritative; accrues on the paycheck cadence). Same team
         // source as the buy menu so the balance shown matches what gates the buttons.
         _credits.Visible = inMatch;
         if (inMatch)
-            _credits.Text = $"Credits: {_world.TeamCredits(_world.LocalTeam ?? _net.MyTeam)}";
+            _credits.Text = $"Credits: {_world.TeamState.Credits(_world.LocalTeam ?? _net.MyTeam)}";
 
         // Missile launcher presence gates the empty-rack blip below. The live ammo/lock readout now
         // lives in the bottom-right WeaponsPanel; MissileMount() returns null for hulls with no rack

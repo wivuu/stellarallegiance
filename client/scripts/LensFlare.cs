@@ -108,7 +108,7 @@ public partial class LensFlare : Control
 
         // Fade the whole flare as the disc slips behind a rock or base — a blocked source casts no
         // flare, so the additive overlay stops bleeding sun-glow through solid geometry.
-        float visibility = _world.SunVisibility(cam.GlobalPosition, skyDir);
+        float visibility = _world.Bolts.SunVisibility(cam.GlobalPosition, skyDir);
 
         _intensity = MasterIntensity * falloff * visibility;
         QueueRedraw();

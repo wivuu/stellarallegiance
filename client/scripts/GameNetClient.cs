@@ -821,7 +821,7 @@ public partial class GameNetClient : Node
                 // where a snapshot raced ahead of the YouAre) so the next snapshot re-inserts it
                 // as the predicted local ship rather than leaving it an un-predicted remote.
                 _rows.Remove(LocalShipId);
-                _world.NetPromoteLocal(LocalShipId);
+                _world.Ships.NetPromoteLocal(LocalShipId);
                 Log.Print($"[GameNet] assigned ship {LocalShipId}");
                 break;
             case 3:
@@ -920,7 +920,7 @@ public partial class GameNetClient : Node
                 ids[s] = r.ReadUInt32();
             table.Add((shipId, ids));
         }
-        _world.NetShipLoadouts(table);
+        _world.Ships.NetShipLoadouts(table);
     }
 
     // MsgRockGone: rocks a finished constructor base consumed. Delete each rock outright (mesh node +
@@ -930,7 +930,7 @@ public partial class GameNetClient : Node
     {
         byte count = r.ReadByte();
         for (int i = 0; i < count; i++)
-            _world.NetRemoveRock(r.ReadUInt64());
+            _world.Asteroids.NetRemoveRock(r.ReadUInt64());
     }
 
     // MsgConstructorBuilds (v37): each constructor drone aligning/sinking/building on a rock, driving the
@@ -939,7 +939,7 @@ public partial class GameNetClient : Node
     private void ApplyConstructorBuilds(BinaryReader r)
     {
         byte count = r.ReadByte();
-        var list = new System.Collections.Generic.List<WorldRenderer.ConstructorBuild>(count);
+        var list = new System.Collections.Generic.List<ConstructionRenderer.ConstructorBuild>(count);
         for (int i = 0; i < count; i++)
         {
             ulong shipId = r.ReadUInt64();
@@ -947,7 +947,7 @@ public partial class GameNetClient : Node
             byte phase = r.ReadByte();
             float progress = StellarAllegiance.Shared.WireQuant.UnpackHalf(r.ReadUInt16());
             list.Add(
-                new WorldRenderer.ConstructorBuild
+                new ConstructionRenderer.ConstructorBuild
                 {
                     ShipId = shipId,
                     RockId = rockId,
@@ -956,7 +956,7 @@ public partial class GameNetClient : Node
                 }
             );
         }
-        _world.NetUpdateConstructorBuilds(list);
+        _world.Construction.NetUpdateConstructorBuilds(list);
     }
 
     // MsgConstructorState (v38): PER-TEAM constructor roster (producing + launched) for the Build tab.
@@ -964,7 +964,7 @@ public partial class GameNetClient : Node
     private void ApplyConstructorState(BinaryReader r)
     {
         byte count = r.ReadByte();
-        var list = new System.Collections.Generic.List<WorldRenderer.ConstructorStatus>(count);
+        var list = new System.Collections.Generic.List<TeamStateStore.ConstructorStatus>(count);
         for (int i = 0; i < count; i++)
         {
             ulong id = r.ReadUInt64();
@@ -976,7 +976,7 @@ public partial class GameNetClient : Node
             bool producesMiner = r.ReadBoolean();
             ulong launchBaseId = r.ReadUInt64();
             list.Add(
-                new WorldRenderer.ConstructorStatus
+                new TeamStateStore.ConstructorStatus
                 {
                     Id = id,
                     StationTypeId = stationType,
@@ -989,7 +989,7 @@ public partial class GameNetClient : Node
                 }
             );
         }
-        _world.NetUpdateConstructorState(list);
+        _world.TeamState.ApplyConstructorState(list);
     }
 
     // MsgMinerTargets: the exact rock each actively-mining miner is harvesting, so the mining beam aims
@@ -1006,7 +1006,7 @@ public partial class GameNetClient : Node
             ulong rockId = r.ReadUInt64();
             map[shipId] = rockId;
         }
-        _world.NetUpdateMinerTargets(map);
+        _world.Mining.NetUpdateMinerTargets(map);
     }
 
     // MsgRockUpdate (mining): live rock shrink deltas — the renderer eases each rock's mesh + collision
@@ -1020,7 +1020,7 @@ public partial class GameNetClient : Node
             ulong id = r.ReadUInt64();
             float radius = r.ReadSingle();
             int orePct = r.ReadByte();
-            _world.NetUpdateRock(id, radius, orePct);
+            _world.Asteroids.NetUpdateRock(id, radius, orePct);
         }
     }
 
@@ -1034,7 +1034,7 @@ public partial class GameNetClient : Node
     {
         byte count = r.ReadByte();
         for (int i = 0; i < count; i++)
-            _world.NetUpdateBaseHealth(r.ReadUInt64(), r.ReadSingle());
+            _world.Bases.NetUpdateBaseHealth(r.ReadUInt64(), r.ReadSingle());
     }
 
     // In-flight guided missiles (mirrors Protocol.WriteMissile). Each record upserts the local
@@ -1073,7 +1073,7 @@ public partial class GameNetClient : Node
                 TargetShipId = targetId,
             };
             _missileRows[id] = row;
-            _world.NetUpsertMissile(row);
+            _world.Missiles.NetUpsert(row);
         }
     }
 
@@ -1088,7 +1088,7 @@ public partial class GameNetClient : Node
             py = r.ReadInt16(),
             pz = r.ReadInt16();
         _missileRows.Remove(id);
-        _world.NetMissileGone(
+        _world.Missiles.NetGone(
             id,
             reason,
             sector,
@@ -1129,7 +1129,7 @@ public partial class GameNetClient : Node
             };
             _probeRows[id] = row;
             _probeSeen.Add(id);
-            _world.NetUpsertProbe(row);
+            _world.Probes.NetUpsert(row);
         }
 
         // Prune any cached probe the frame no longer lists (fogged-out enemy probe). Reason 255 =
@@ -1144,7 +1144,7 @@ public partial class GameNetClient : Node
             {
                 var g = _probeRows[id];
                 _probeRows.Remove(id);
-                _world.NetProbeGone(id, 255, g.SectorId, new Vec3(g.PosX, g.PosY, g.PosZ));
+                _world.Probes.NetGone(id, 255, g.SectorId, new Vec3(g.PosX, g.PosY, g.PosZ));
             }
         }
     }
@@ -1164,7 +1164,7 @@ public partial class GameNetClient : Node
             py = r.ReadInt16(),
             pz = r.ReadInt16();
         _probeRows.Remove(id);
-        _world.NetProbeGone(
+        _world.Probes.NetGone(
             id,
             reason,
             sector,
@@ -1214,7 +1214,7 @@ public partial class GameNetClient : Node
             };
             _minefieldRows[fieldId] = row;
             seen.Add(fieldId);
-            _world.NetUpsertMinefield(row);
+            _world.Minefields.NetUpsertMinefield(row);
         }
 
         // Reconcile the cache against the authoritative full set: any cached field the frame no longer
@@ -1230,7 +1230,7 @@ public partial class GameNetClient : Node
             foreach (var id in gone)
             {
                 _minefieldRows.Remove(id);
-                _world.NetMinefieldGone(id);
+                _world.Minefields.NetMinefieldGone(id);
             }
     }
 
@@ -1247,7 +1247,7 @@ public partial class GameNetClient : Node
             pz = r.ReadInt16();
         if (_minefieldRows.TryGetValue(fieldId, out var mf))
             mf.AliveMask &= ~(1UL << mineIndex);
-        _world.NetMineGone(
+        _world.Minefields.NetMineGone(
             fieldId,
             mineIndex,
             reason,
@@ -1270,7 +1270,7 @@ public partial class GameNetClient : Node
             vy = r.ReadUInt16(),
             vz = r.ReadUInt16();
         uint weaponId = r.ReadUInt32();
-        _world.NetSpawnChaff(
+        _world.Minefields.NetSpawnChaff(
             id,
             team,
             sector,
@@ -1311,8 +1311,8 @@ public partial class GameNetClient : Node
             // Build-pipeline queue depth (build-pipeline tail) — the per-garrison order cap the Build
             // tab grays out on. World-global scalar, same for every team.
             byte buildQueueLimit = r.ReadByte();
-            _world.NetUpdateTeamState(
-                new WorldRenderer.TeamStateSnapshot(
+            _world.TeamState.Apply(
+                new TeamStateStore.TeamStateSnapshot(
                     team,
                     credits,
                     score,
@@ -1333,7 +1333,7 @@ public partial class GameNetClient : Node
     private void ApplyResearchState(BinaryReader r)
     {
         byte nBases = r.ReadByte();
-        var map = new Dictionary<ulong, WorldRenderer.BaseResearch>();
+        var map = new Dictionary<ulong, TeamStateStore.BaseResearch>();
         for (int i = 0; i < nBases; i++)
         {
             ulong baseId = r.ReadUInt64();
@@ -1344,9 +1344,9 @@ public partial class GameNetClient : Node
             ushort? onDeck = null;
             if (r.ReadByte() != 0)
                 onDeck = r.ReadUInt16();
-            map[baseId] = new WorldRenderer.BaseResearch(active, onDeck);
+            map[baseId] = new TeamStateStore.BaseResearch(active, onDeck);
         }
-        _world.NetUpdateResearch(map);
+        _world.TeamState.ApplyResearch(map);
     }
 
     // Single source: shared/Net/Wire.cs (the server's Protocol.Version aliases the same
@@ -1408,13 +1408,13 @@ public partial class GameNetClient : Node
 
         ushort bases = r.ReadUInt16();
         for (int i = 0; i < bases; i++)
-            _world.NetAddBase(ReadBaseStatic(r));
+            _world.Bases.NetAdd(ReadBaseStatic(r));
         uint asteroids = r.ReadUInt32();
         for (int i = 0; i < asteroids; i++)
-            _world.NetAddAsteroid(ReadRockStatic(r));
+            _world.Asteroids.NetAdd(ReadRockStatic(r));
         ushort alephs = r.ReadUInt16();
         for (int i = 0; i < alephs; i++)
-            _world.NetAddAleph(ReadAlephStatic(r));
+            _world.Alephs.NetAdd(ReadAlephStatic(r));
         Log.Print($"[GameNet] world received — {sectors} sectors, {bases} bases, {asteroids} asteroids");
         _cm.NotifyConnected();
         Connected?.Invoke();
@@ -1585,18 +1585,18 @@ public partial class GameNetClient : Node
     // MsgReveal (fog): statics this team just scouted for the first time. Same record layout as
     // Welcome (shared readers above). The renderer's Insert* paths are idempotent and also feed the
     // Minimap source caches (_baseTeams via InsertBase, _alephLinks via InsertAleph), so revealing a
-    // base/aleph updates MapBaseTeams/MapAlephLinks the same way Welcome does — no extra refresh.
+    // base/aleph updates Bases.Teams/Alephs.Links the same way Welcome does — no extra refresh.
     private void ApplyReveal(BinaryReader r)
     {
         byte nBases = r.ReadByte();
         for (int i = 0; i < nBases; i++)
-            _world.NetAddBase(ReadBaseStatic(r));
+            _world.Bases.NetAdd(ReadBaseStatic(r));
         ushort nRocks = r.ReadUInt16();
         for (int i = 0; i < nRocks; i++)
-            _world.NetAddAsteroid(ReadRockStatic(r));
+            _world.Asteroids.NetAdd(ReadRockStatic(r));
         byte nAlephs = r.ReadByte();
         for (int i = 0; i < nAlephs; i++)
-            _world.NetAddAleph(ReadAlephStatic(r));
+            _world.Alephs.NetAdd(ReadAlephStatic(r));
         // Sectors this team just reached (via a discovered aleph or a warp) — appended after the
         // aleph block. NetAddSector is an idempotent upsert, so re-revealing a known sector is safe.
         byte nSectors = r.ReadByte();
@@ -1611,7 +1611,7 @@ public partial class GameNetClient : Node
     private void ApplyContacts(BinaryReader r)
     {
         byte nGhosts = r.ReadByte();
-        var ghosts = new List<WorldRenderer.GhostContact>(nGhosts);
+        var ghosts = new List<FogStore.GhostContact>(nGhosts);
         for (int i = 0; i < nGhosts; i++)
         {
             ulong id = r.ReadUInt64();
@@ -1624,7 +1624,7 @@ public partial class GameNetClient : Node
             short yawQ = r.ReadInt16();
             short pitchQ = r.ReadInt16();
             ghosts.Add(
-                new WorldRenderer.GhostContact
+                new FogStore.GhostContact
                 {
                     ShipId = id,
                     Team = team,
@@ -1640,7 +1640,7 @@ public partial class GameNetClient : Node
         var radar = new List<ulong>(nRadar);
         for (int i = 0; i < nRadar; i++)
             radar.Add(r.ReadUInt64());
-        _world.NetSetContacts(ghosts, radar);
+        _world.Fog.NetSetContacts(ghosts, radar);
     }
 
     private static List<HardpointDef> ReadHardpoints(BinaryReader r)
@@ -1980,7 +1980,7 @@ public partial class GameNetClient : Node
         LobbyPlayers = list;
         // Push the fresh roster's ship -> name map into the renderer so nameplates resolve / refresh
         // (covers a ship snapshot that arrived before its roster row, and respawns under a new id).
-        _world.NetApplyPilotNames(list);
+        _world.Ships.NetApplyPilotNames(list);
         // Tell the renderer which side WE picked so the pre-launch home-sector view / F3 peek frames
         // our garrison (a fresh joiner is NoTeam → null until they pick BLUE/RED).
         byte? myTeam = null;
@@ -2007,7 +2007,7 @@ public partial class GameNetClient : Node
                     // real YouAre is merely still in flight behind this roster frame.
                     LocalShipId = p.ShipId;
                     _rows.Remove(LocalShipId);
-                    _world.NetPromoteLocal(LocalShipId);
+                    _world.Ships.NetPromoteLocal(LocalShipId);
                     Log.Print($"[GameNet] adopted ship {LocalShipId} from lobby roster (YouAre missed?)");
                 }
             }
@@ -2210,9 +2210,9 @@ public partial class GameNetClient : Node
 
             _seenThisSnapshot.Add(id);
             if (prev is null)
-                _world.NetInsertShip(row, id == LocalShipId);
+                _world.Ships.NetInsertShip(row, id == LocalShipId);
             else
-                _world.NetUpdateShip(prev, row);
+                _world.Ships.NetUpdateShip(prev, row);
             _rows[id] = row;
         }
     }
@@ -2221,6 +2221,6 @@ public partial class GameNetClient : Node
     private void ApplyShipGone(ulong shipId, byte reason)
     {
         if (_rows.Remove(shipId, out var row))
-            _world.NetDeleteShip(row, reason);
+            _world.Ships.NetDeleteShip(row, reason);
     }
 }

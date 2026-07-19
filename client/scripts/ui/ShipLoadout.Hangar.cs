@@ -150,9 +150,9 @@ public partial class ShipLoadout
     // (credits/unlocks) change.
     private void RefreshShipCardStates(byte team)
     {
-        long sig = team + 1L + (long)_world.TeamCredits(team) * 131L;
+        long sig = team + 1L + (long)_world.TeamState.Credits(team) * 131L;
         foreach (var (classId, _) in _shipCards)
-            if (_world.CheckSpawnGate(team, classId) == WorldRenderer.SpawnGate.Locked)
+            if (_world.TeamState.CheckSpawnGate(team, classId) == TeamStateStore.SpawnGate.Locked)
                 sig ^= (long)(classId + 1) * 1000003L; // fold in lock state so an unlock re-styles
         if (sig == _cardGateSig)
             return;
@@ -160,14 +160,14 @@ public partial class ShipLoadout
 
         foreach (var (classId, card) in _shipCards)
         {
-            var gate = _world.CheckSpawnGate(team, classId);
-            card.Visible = gate != WorldRenderer.SpawnGate.Locked;
+            var gate = _world.TeamState.CheckSpawnGate(team, classId);
+            card.Visible = gate != TeamStateStore.SpawnGate.Locked;
             card.SetGate(gate);
         }
 
         // The selected hull can go hidden under us (a persisted last-ship pick landing before the
         // first team state proved it locked) — fall back to the first fieldable card.
-        if (_classId is byte sel && _world.CheckSpawnGate(team, sel) == WorldRenderer.SpawnGate.Locked)
+        if (_classId is byte sel && _world.TeamState.CheckSpawnGate(team, sel) == TeamStateStore.SpawnGate.Locked)
             foreach (var (classId, card) in _shipCards)
                 if (card.Visible)
                 {
@@ -767,17 +767,17 @@ public partial class ShipLoadout
 
         // Reflect the launch gate: unaffordable greys the card and warns the cost line. The Locked
         // style is showcase-only in practice — the hangar hides locked cards instead of greying them.
-        public void SetGate(WorldRenderer.SpawnGate gate)
+        public void SetGate(TeamStateStore.SpawnGate gate)
         {
             EnsureBuilt();
             switch (gate)
             {
-                case WorldRenderer.SpawnGate.Locked:
+                case TeamStateStore.SpawnGate.Locked:
                     _sub.Text = "⚿ TECH LOCKED";
                     _sub.AddThemeColorOverride("font_color", DesignTokens.TextDim);
                     Modulate = new Color(1, 1, 1, 0.6f);
                     break;
-                case WorldRenderer.SpawnGate.TooPoor:
+                case TeamStateStore.SpawnGate.TooPoor:
                     _sub.Text = _normalSub;
                     _sub.AddThemeColorOverride("font_color", DesignTokens.Warn);
                     Modulate = new Color(1, 1, 1, 0.7f);

@@ -135,7 +135,7 @@ public partial class EscapeMenu : Control
         // we're closing back into flight, or the ship coasts uncontrollable. But when the
         // F3 map is still up behind us (menu was opened from the map), leave the cursor free
         // for the map — SectorOverview.Close() will recapture when the pilot exits the map.
-        if (_ctx == Context.Flight && _world?.LocalShip != null && !SectorOverview.Active)
+        if (_ctx == Context.Flight && _world?.Ships.LocalShip != null && !SectorOverview.Active)
             Input.MouseMode = Input.MouseModeEnum.Captured;
         QueueFree();
     }

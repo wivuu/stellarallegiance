@@ -20,6 +20,8 @@
 //  identical source. (Decision logged in .PLAN/99.)
 // =====================================================================
 
+using System.Runtime.InteropServices;
+
 namespace StellarAllegiance.Shared
 {
     // Deterministic trig for CROSS-RUNTIME agreement. The server runs in wasm and
@@ -101,24 +103,18 @@ namespace StellarAllegiance.Shared
         }
     }
 
-    public struct Vec3
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Vec3(float x, float y, float z)
     {
-        public float X,
-            Y,
-            Z;
-
-        public Vec3(float x, float y, float z)
-        {
-            X = x;
-            Y = y;
+        public float X = x,
+            Y = y,
             Z = z;
-        }
 
-        public static Vec3 operator +(Vec3 a, Vec3 b) => new Vec3(a.X + b.X, a.Y + b.Y, a.Z + b.Z);
+        public static Vec3 operator +(Vec3 a, Vec3 b) => new(a.X + b.X, a.Y + b.Y, a.Z + b.Z);
 
-        public static Vec3 operator -(Vec3 a, Vec3 b) => new Vec3(a.X - b.X, a.Y - b.Y, a.Z - b.Z);
+        public static Vec3 operator -(Vec3 a, Vec3 b) => new(a.X - b.X, a.Y - b.Y, a.Z - b.Z);
 
-        public static Vec3 operator *(Vec3 a, float s) => new Vec3(a.X * s, a.Y * s, a.Z * s);
+        public static Vec3 operator *(Vec3 a, float s) => new(a.X * s, a.Y * s, a.Z * s);
 
         public float LengthSquared() => X * X + Y * Y + Z * Z;
 
@@ -128,26 +124,19 @@ namespace StellarAllegiance.Shared
             new Vec3(a.Y * b.Z - a.Z * b.Y, a.Z * b.X - a.X * b.Z, a.X * b.Y - a.Y * b.X);
     }
 
-    public struct Quat
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Quat(float x, float y, float z, float w)
     {
-        public float X,
-            Y,
-            Z,
-            W;
-
-        public Quat(float x, float y, float z, float w)
-        {
-            X = x;
-            Y = y;
-            Z = z;
+        public float X = x,
+            Y = y,
+            Z = z,
             W = w;
-        }
 
-        public static Quat Identity => new Quat(0f, 0f, 0f, 1f);
+        public static readonly Quat Identity = new(0f, 0f, 0f, 1f);
 
         // Hamilton product a*b (apply b in a's local frame when used as a*delta).
         public static Quat operator *(Quat a, Quat b) =>
-            new Quat(
+            new(
                 a.W * b.X + a.X * b.W + a.Y * b.Z - a.Z * b.Y,
                 a.W * b.Y - a.X * b.Z + a.Y * b.W + a.Z * b.X,
                 a.W * b.Z + a.X * b.Y - a.Y * b.X + a.Z * b.W,
@@ -160,7 +149,7 @@ namespace StellarAllegiance.Shared
 
         public Quat Normalized()
         {
-            float n = (float)System.Math.Sqrt(X * X + Y * Y + Z * Z + W * W);
+            float n = (float)Math.Sqrt(X * X + Y * Y + Z * Z + W * W);
             if (n < 1e-12f)
                 return Identity;
             float inv = 1f / n;

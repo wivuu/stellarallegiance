@@ -224,22 +224,23 @@ public partial class BuildTab : Control
         byte team = Team;
         long sig = team + 1L + catalog.Count * 131L;
         // Fold the miner fleet count + cap so a purchase/loss re-renders the MINER DRONE card's "X / N".
-        sig ^= (_world!.TeamMinerCount(team) * 733L + 1) ^ (_world.TeamMinerCap(team) * 5701L);
+        sig ^= (_world!.TeamState.MinerCount(team) * 733L + 1) ^ (_world.TeamState.MinerCap(team) * 5701L);
         // Fold the docked garrison's build-pipeline depth + limit so the grid re-grays/re-enables as
         // the queue fills and drains (all cards lock when the garrison's queue is full).
-        sig ^= (_world.BuildPipelineCountForBase(_baseId) * 99991L) ^ (_world.BuildQueueLimit * 24593L + 3);
-        foreach (ushort t in _world.TeamOwnedTechs(team))
+        sig ^=
+            (_world.TeamState.BuildPipelineCountForBase(_baseId) * 99991L) ^ (_world.TeamState.BuildQueueLimit * 24593L + 3);
+        foreach (ushort t in _world.TeamState.OwnedTechs(team))
             sig ^= (t + 1) * 2654435761L;
         // Fold capability ownership: caps are a small closed enum, poll each catalog entry's needs.
         // Fold each owned cap ONCE — a per-entry fold XOR-cancels when two structures need the same cap.
         var capsSeen = new HashSet<byte>();
         foreach (StationCatalogDef s in catalog)
         foreach (byte c in s.RequiredCaps)
-            if (capsSeen.Add(c) && _world.TeamOwnsCap(team, c))
+            if (capsSeen.Add(c) && _world.TeamState.OwnsCap(team, c))
                 sig ^= (c + 17L) * 40503L;
         // Fold rock discovery so a scout's find re-enables the greyed constructor card live.
         for (byte rc = 0; rc < 5; rc++)
-            if (_world.TeamRockClassDiscovered(team, rc))
+            if (_world.TeamState.RockClassDiscovered(team, rc))
                 sig ^= (rc + 29L) * 15485863L;
         return sig;
     }
@@ -255,7 +256,7 @@ public partial class BuildTab : Control
     // animates continuously in each row's _Process — no rebuild). Hidden when the team has none.
     private void UpdateRoster()
     {
-        var states = _world!.ConstructorStates();
+        var states = _world!.TeamState.ConstructorStates();
         long sig = states.Count * 2654435761L;
         foreach (var c in states)
             sig ^= (long)(c.Id * 131u + c.State + 1u) * 40503L;
@@ -265,7 +266,7 @@ public partial class BuildTab : Control
         RebuildRoster(states);
     }
 
-    private void RebuildRoster(IReadOnlyList<WorldRenderer.ConstructorStatus> states)
+    private void RebuildRoster(IReadOnlyList<TeamStateStore.ConstructorStatus> states)
     {
         foreach (Node c in _roster.GetChildren())
             c.QueueFree();
@@ -367,23 +368,23 @@ public partial class BuildTab : Control
         if (_world == null)
             return false;
         byte team = Team;
-        bool obsoleted = s.ObsoletedByTechIdx.Any(t => _world.TeamOwnsTech(team, t));
-        return !obsoleted && _world.TeamHasAll(team, s.RequiredTechIdx, s.RequiredCaps);
+        bool obsoleted = s.ObsoletedByTechIdx.Any(t => _world.TeamState.OwnsTech(team, t));
+        return !obsoleted && _world.TeamState.HasAll(team, s.RequiredTechIdx, s.RequiredCaps);
     }
 
     // Rock-discovery gate predictor: a constructor base stays locked until the team's fog of war has
     // revealed at least one asteroid of its build class (mirrors the server's TryBuyConstructor gate
     // via the MsgTeamState discoveredRockClasses mask). Defers to the server pre-team-state.
     private bool RockDiscovered(StationCatalogDef s) =>
-        _world != null && (s.BuildRockClass == 255 || _world.TeamRockClassDiscovered(Team, s.BuildRockClass));
+        _world != null && (s.BuildRockClass == 255 || _world.TeamState.RockClassDiscovered(Team, s.BuildRockClass));
 
     // The docked garrison's build pipeline (constructors + miners share it) is full — the whole Build
     // tab locks until a slot frees. Mirrors the server's BuildPipelineCountForBase >= build.queue-limit
     // gate; 0 limit (pre-team-state / unset) means "no gate". Returns the limit for the message text.
     private bool BuildQueueFull(out int limit)
     {
-        limit = _world?.BuildQueueLimit ?? 0;
-        return limit > 0 && _world!.BuildPipelineCountForBase(_baseId) >= limit;
+        limit = _world?.TeamState.BuildQueueLimit ?? 0;
+        return limit > 0 && _world!.TeamState.BuildPipelineCountForBase(_baseId) >= limit;
     }
 
     // ---- grid --------------------------------------------------------------
@@ -435,10 +436,10 @@ public partial class BuildTab : Control
         if (_world == null || _defs?.MinerShipDef() is not ShipClassDef miner)
             return;
         byte team = Team;
-        int cap = _world.TeamMinerCap(team);
+        int cap = _world.TeamState.MinerCap(team);
         if (cap <= 0)
             return;
-        int count = _world.TeamMinerCount(team);
+        int count = _world.TeamState.MinerCount(team);
         var card = new StationCard();
         card.Configure(
             GlyphFor(4),
@@ -529,8 +530,8 @@ public partial class BuildTab : Control
     {
         ShipClassDef? miner = _defs!.MinerShipDef();
         byte team = Team;
-        int count = _world!.TeamMinerCount(team);
-        int cap = _world.TeamMinerCap(team);
+        int count = _world!.TeamState.MinerCount(team);
+        int cap = _world.TeamState.MinerCap(team);
         bool room = miner != null && count < cap;
 
         _detail.SetSchematic(GlyphFor(4), "// DRONE");
@@ -592,7 +593,7 @@ public partial class BuildTab : Control
             );
             return;
         }
-        if (_world!.TeamCredits(Team) < miner.Cost)
+        if (_world!.TeamState.Credits(Team) < miner.Cost)
         {
             _detail.SetFooter(
                 true,
@@ -632,7 +633,10 @@ public partial class BuildTab : Control
         if (_defs?.MinerShipDef() is not ShipClassDef miner)
             return;
         byte team = Team;
-        if (_world.TeamMinerCount(team) >= _world.TeamMinerCap(team) || _world.TeamCredits(team) < miner.Cost)
+        if (
+            _world.TeamState.MinerCount(team) >= _world.TeamState.MinerCap(team)
+            || _world.TeamState.Credits(team) < miner.Cost
+        )
             return;
         if (miner.OrderTimeSeconds > 0 && BuildQueueFull(out _))
             return;

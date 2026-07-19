@@ -136,8 +136,11 @@ public partial class Chat : Control
     //     Lobby._Process's `!SectorOverview.Active` show-gate).
     //   - the hangar / ship-loadout: it covers the Lobby (hidden when the spawn hangar is committed,
     //     or its comms box unfocused while ShipLoadout.Active) and binds no Enter of its own.
-    private bool LobbyOwnsScreen => _cm.State == ConnectionManager.ConnState.Connected && _world.LocalShip == null
-        && !SectorOverview.Active && !ShipLoadout.Active;
+    private bool LobbyOwnsScreen =>
+        _cm.State == ConnectionManager.ConnState.Connected
+        && _world.Ships.LocalShip == null
+        && !SectorOverview.Active
+        && !ShipLoadout.Active;
 
     public override void _UnhandledInput(InputEvent @event)
     {
@@ -236,10 +239,10 @@ public partial class Chat : Control
                 break;
             case "/money":
             case "/credits":
-                AddSystemLine($"Credits: {_world.TeamCredits(_net.MyTeam)}");
+                AddSystemLine($"Credits: {_world.TeamState.Credits(_net.MyTeam)}");
                 break;
             case "/score":
-                AddSystemLine($"Score — Blue {_world.TeamScore(0)}  ·  Red {_world.TeamScore(1)}");
+                AddSystemLine($"Score — Blue {_world.TeamState.Score(0)}  ·  Red {_world.TeamState.Score(1)}");
                 break;
             case "/team":
                 AddSystemLine($"You are on {(_net.MyTeam == 0 ? "Blue" : "Red")} team.");
@@ -293,7 +296,7 @@ public partial class Chat : Control
         if (_inputRow.Visible)
             _inputRow.Position = new Vector2((vp.X - _inputRow.Size.X) * 0.5f, vp.Y * 0.72f);
 
-        bool keepVisible = _inputRow.Visible || _world.LocalShip == null;
+        bool keepVisible = _inputRow.Visible || _world.Ships.LocalShip == null;
         float target;
         if (keepVisible || _sinceLastMsg < FadeDelay)
             target = 1f;

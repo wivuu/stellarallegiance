@@ -144,8 +144,7 @@ public partial class TargetMarkers : Control
     // independent counters and can collide numerically, so a rock focus must never reach the
     // server-authoritative missile lock; bases already flow through the lock path (BaseLockFlag
     // disambiguates), so they pass unchanged.
-    public static ulong WireLockId =>
-        GameContent.IsAsteroidFocus(FocusedId) || _focusFriendlyShip ? 0UL : FocusedId;
+    public static ulong WireLockId => GameContent.IsAsteroidFocus(FocusedId) || _focusFriendlyShip ? 0UL : FocusedId;
 
     // Navigation waypoint dropped from the F3 sector map (Has, its sector, and world position). A
     // static so SectorOverview can set it and ShipController can resolve it for an autopilot engage
@@ -233,9 +232,8 @@ public partial class TargetMarkers : Control
         FocusedId = _focused ?? 0; // publish for ShipController's missile-lock input
         // Flag a same-team ship focus so WireLockId strips it from the missile-lock slot (a friendly
         // is a fly-to / follow target, never a missile lock). Bases/asteroids handled by their flags.
-        _focusFriendlyShip = _focused is ulong ff
-            && !GameContent.IsBaseLock(ff) && !GameContent.IsAsteroidFocus(ff)
-            && IsFriendlyShipId(ff);
+        _focusFriendlyShip =
+            _focused is ulong ff && !GameContent.IsBaseLock(ff) && !GameContent.IsAsteroidFocus(ff) && IsFriendlyShipId(ff);
         UpdateMissileHud(delta);
         QueueRedraw();
     }
@@ -283,19 +281,19 @@ public partial class TargetMarkers : Control
         bool pressed = tab && !_tabHeld;
         _tabHeld = tab;
 
-        var local = _world.LocalShip;
+        var local = _world.Ships.LocalShip;
         if (local == null)
         {
             _focused = null;
             return;
         }
 
-        // EnemyShips() / LockableEnemyBases() each return a shared scratch list — read once and
+        // EnemyShips() / Bases.LockableEnemy() each return a shared scratch list — read once and
         // don't re-call mid-use (a second call clears it). Bases are ALWAYS in the cycle now
         // (targeting is navigation, not just siege): the siege gate moved to lock-arc rendering
         // only, so any hull can focus an enemy base to fly to it.
-        var enemies = _world.EnemyShips();
-        var bases = _world.LockableEnemyBases();
+        var enemies = _world.Ships.EnemyShips();
+        var bases = _world.Bases.LockableEnemy();
 
         // If the focus is no longer valid — a focused SHIP died/left, a focused BASE fell out of
         // sector/was destroyed, or a focused ASTEROID left the view — auto-target the nearest
@@ -305,7 +303,7 @@ public partial class TargetMarkers : Control
             bool stillValid;
             if (GameContent.IsBaseLock(f))
             {
-                // A focused base stays valid whether enemy (health-filtered LockableEnemyBases) OR
+                // A focused base stays valid whether enemy (health-filtered Bases.LockableEnemy) OR
                 // friendly (any visible same-team base — a navigation/dock destination), so a Tab-focused
                 // friendly base isn't dropped and re-aimed at the nearest enemy each frame.
                 ulong bid = GameContent.BaseIdOf(f);
@@ -316,8 +314,7 @@ public partial class TargetMarkers : Control
                 // A rock a constructor has claimed for a base is no longer a nav/lock target — drop
                 // it the moment construction begins (it'll be consumed into a base shortly).
                 ulong rid = GameContent.AsteroidIdOf(f);
-                stillValid = !_world.IsRockUnderConstruction(rid)
-                    && ContainsRockId(_world.AsteroidsInView(), rid);
+                stillValid = !_world.IsRockUnderConstruction(rid) && ContainsRockId(_world.Asteroids.InView(), rid);
             }
             else
                 // A raw ship-id focus stays valid whether it's an ENEMY (combat) or a same-team FRIENDLY
@@ -357,7 +354,7 @@ public partial class TargetMarkers : Control
         // base. A friendly base can't be locked/damaged (no lock arc — see _Draw), it's purely a
         // navigation/auto-dock destination, so it ranks above rocks but below hostile targets.
         if (_world.LocalTeam is byte lt)
-            foreach (var (id, pos, team) in _world.AllVisibleBases())
+            foreach (var (id, pos, team) in _world.Bases.AllVisible())
                 if (team == lt && !cam.IsPositionBehind(pos))
                 {
                     float d2 = (cam.UnprojectPosition(pos) - aimPt).LengthSquared();
@@ -366,13 +363,13 @@ public partial class TargetMarkers : Control
         // Friendly ships (rank 3): every visible teammate, EXCLUDING pods (symmetry with the enemy set
         // — a drifting pod isn't a useful target) but INCLUDING miners (fly out to escort a harvester).
         // Raw ship-id encoding, same as enemies. FriendlyShips() uses a separate scratch from `enemies`.
-        foreach (var fr in _world.FriendlyShips())
+        foreach (var fr in _world.Ships.FriendlyShips())
             if (!fr.IsPod && !cam.IsPositionBehind(fr.GlobalPosition))
             {
                 float d2 = (cam.UnprojectPosition(fr.GlobalPosition) - aimPt).LengthSquared();
                 _visible.Add((3, d2, fr.ShipId));
             }
-        foreach (var (id, node) in _world.AsteroidsInView())
+        foreach (var (id, node) in _world.Asteroids.InView())
         {
             if (_world.IsRockUnderConstruction(id))
                 continue; // a rock being built into a base is no longer a Tab/lock target
@@ -430,13 +427,13 @@ public partial class TargetMarkers : Control
     }
 
     // Whether `baseId` names a visible FRIENDLY base (same team as the local ship). Used to keep a
-    // Tab-focused friendly base (a dock/navigation destination) valid across frames — LockableEnemyBases
-    // only carries hostile bases, so friendly focus must be revalidated against AllVisibleBases + team.
+    // Tab-focused friendly base (a dock/navigation destination) valid across frames — Bases.LockableEnemy
+    // only carries hostile bases, so friendly focus must be revalidated against Bases.AllVisible + team.
     private bool ContainsFriendlyBaseId(ulong baseId)
     {
         if (_world.LocalTeam is not byte lt)
             return false;
-        foreach (var (id, _, team) in _world.AllVisibleBases())
+        foreach (var (id, _, team) in _world.Bases.AllVisible())
             if (id == baseId && team == lt)
                 return true;
         return false;
@@ -447,7 +444,7 @@ public partial class TargetMarkers : Control
     // Pods are excluded to match the cycle set (a drifting pod isn't a target).
     private bool IsFriendlyShipId(ulong id)
     {
-        foreach (var fr in _world.FriendlyShips())
+        foreach (var fr in _world.Ships.FriendlyShips())
             if (fr.ShipId == id && !fr.IsPod)
                 return true;
         return false;
@@ -499,7 +496,7 @@ public partial class TargetMarkers : Control
     // fresh focus when the current target dies — nearest is the most useful next threat.
     private ulong? NearestEnemy(IReadOnlyList<RemoteShip> enemies)
     {
-        var local = _world.LocalShip;
+        var local = _world.Ships.LocalShip;
         if (local == null || enemies.Count == 0)
             return null;
         Vector3 p = local.GlobalPosition;
@@ -523,7 +520,7 @@ public partial class TargetMarkers : Control
     // on the local ship — the nearest one's world position feeds the off-screen threat arrow.
     private void UpdateMissileHud(double delta)
     {
-        var local = _world.LocalShip;
+        var local = _world.Ships.LocalShip;
 
         // Lock tone: fire once when the server confirms a full lock (bit7). Resets naturally when
         // the lock drops (progress zeroed server-side), re-arming the tone for the next lock.
@@ -635,7 +632,7 @@ public partial class TargetMarkers : Control
         // flight); that's why a miner or teammate now shows on the F3 map and in the pre-launch peek,
         // matching the in-flight HUD. Only the ship-centric combat readouts further down (aim reticle,
         // lead, incoming banner) require a live own ship — they stay gated on `local != null` below.
-        var local = _world.LocalShip;
+        var local = _world.Ships.LocalShip;
 
         var (focusedFriendly, focusedShip) = DrawShipsPass(view);
 
@@ -650,7 +647,7 @@ public partial class TargetMarkers : Control
     }
 
     // The focused base's world position, or null if focus isn't a base right now. Resolved via
-    // AllVisibleBases() (ANY team, carries id + team) rather than LockableEnemyBases() so a
+    // Bases.AllVisible() (ANY team, carries id + team) rather than Bases.LockableEnemy() so a
     // FRIENDLY base focused for navigation (an autopilot dock destination) also draws its bracket.
     // Used both to skip it in the dim pass below (it gets the bright focused treatment instead) and
     // to draw the marker/lock arc against the same position. The lock arc is enemy-only (below).
@@ -662,7 +659,7 @@ public partial class TargetMarkers : Control
         if (_focused is ulong bf && GameContent.IsBaseLock(bf))
         {
             ulong baseId = GameContent.BaseIdOf(bf);
-            foreach (var (id, pos, team) in _world.AllVisibleBases())
+            foreach (var (id, pos, team) in _world.Bases.AllVisible())
                 if (id == baseId)
                 {
                     focusedBasePos = pos;
@@ -679,19 +676,19 @@ public partial class TargetMarkers : Control
     // The focused base is skipped here — it's drawn bright/bracketed below instead.
     private void DrawBasesPass(Vector2 view, Vector3? focusedBasePos)
     {
-        foreach (var (pos, team, dead) in _world.VisibleBases())
+        foreach (var (pos, team, dead) in _world.Bases.Visible())
             if (focusedBasePos is Vector3 fbp && pos == fbp)
             {
                 /* focused base: skip the dim pass; drawn bright/bracketed below */
             }
             else if (dead)
                 // Fog stale memory: a destroyed base still remembered on the team map draws as a
-                // dim hollow marker (no health bar — VisibleBaseHealth() skips it) so it reads as
+                // dim hollow marker (no health bar — Bases.VisibleHealth() skips it) so it reads as
                 // wreckage, not a live station.
                 DrawStaleBase(view, pos, team);
             else
                 DrawEntity(view, pos, Kind.Base, TeamColor(team), focused: false, friendly: true);
-        foreach (var (pos, frac) in _world.VisibleBaseHealth())
+        foreach (var (pos, frac) in _world.Bases.VisibleHealth())
             DrawBaseHealthBar(view, pos, frac);
     }
 
@@ -704,27 +701,32 @@ public partial class TargetMarkers : Control
     // The focused asteroid: a neutral-chrome bracket + range tag, resolved from the in-view rock
     // set. Never a lock arc or lead circle — a rock is a pure navigation target. Drawn here (with
     // the bases, before the local-ship gate) so it also reprojects onto the F3 map.
-    private void DrawFocusedBaseAndAsteroid(Vector2 view, Vector3? focusedBasePos, byte focusedBaseTeam, bool focusedBaseEnemy)
+    private void DrawFocusedBaseAndAsteroid(
+        Vector2 view,
+        Vector3? focusedBasePos,
+        byte focusedBaseTeam,
+        bool focusedBaseEnemy
+    )
     {
         if (focusedBasePos is Vector3 fp)
         {
             DrawEntity(view, fp, Kind.Base, FocusTint(focusedBaseTeam), focused: true, friendly: false);
-            DrawFocusTag(view, fp, FocusTint(focusedBaseTeam), _world.LocalShip);
+            DrawFocusTag(view, fp, FocusTint(focusedBaseTeam), _world.Ships.LocalShip);
             // Lock arc ONLY for an enemy base the local hull can actually siege — never for a friendly
             // base (a dock destination), which focuses for navigation but can't be locked/damaged.
-            if (focusedBaseEnemy && _world.LocalShip is { } ls && HasSiegeCapability(ls))
+            if (focusedBaseEnemy && _world.Ships.LocalShip is { } ls && HasSiegeCapability(ls))
                 DrawLockArc(fp, focusedBaseTeam);
         }
 
         if (_focused is ulong rf && GameContent.IsAsteroidFocus(rf))
         {
             ulong rockId = GameContent.AsteroidIdOf(rf);
-            foreach (var (id, node) in _world.AsteroidsInView())
+            foreach (var (id, node) in _world.Asteroids.InView())
                 if (id == rockId)
                 {
                     Vector3 rp = node.GlobalPosition;
                     DrawEntity(view, rp, Kind.Asteroid, AsteroidFocusColor, focused: true, friendly: false);
-                    DrawFocusTag(view, rp, AsteroidFocusColor, _world.LocalShip);
+                    DrawFocusTag(view, rp, AsteroidFocusColor, _world.Ships.LocalShip);
                     DrawRockDetail(view, rp, rockId);
                     break;
                 }
@@ -744,18 +746,18 @@ public partial class TargetMarkers : Control
     {
         Camera3D rockCam = Cam;
         bool f3Rocks = SectorOverview.Active;
-        PredictionController? rockAnchorShip = _world.LocalShip;
+        PredictionController? rockAnchorShip = _world.Ships.LocalShip;
         if (f3Rocks || rockAnchorShip != null)
         {
-            const float F3CameraFar = 1e9f;   // interesting rocks sort ahead of every common in F3
-            const int F3MaxRockLabels = 14;   // cap total F3 captions so a huge field never floods
-            ulong focusedRockId = _focused is ulong rfl && GameContent.IsAsteroidFocus(rfl)
-                ? GameContent.AsteroidIdOf(rfl) : 0UL;
+            const float F3CameraFar = 1e9f; // interesting rocks sort ahead of every common in F3
+            const int F3MaxRockLabels = 14; // cap total F3 captions so a huge field never floods
+            ulong focusedRockId =
+                _focused is ulong rfl && GameContent.IsAsteroidFocus(rfl) ? GameContent.AsteroidIdOf(rfl) : 0UL;
             Vector3 anchor = f3Rocks ? rockCam.GlobalPosition : rockAnchorShip!.GlobalPosition;
             _nearRocks.Clear();
-            foreach (var (id, node) in _world.AsteroidsInView())
+            foreach (var (id, node) in _world.Asteroids.InView())
             {
-                if (id == focusedRockId || _world.GetAsteroid(id) is not { } rock)
+                if (id == focusedRockId || _world.Asteroids.GetAsteroid(id) is not { } rock)
                     continue;
                 // Only the valuable classes (He3/U/Si/C) earn a caption — common Regolith rocks are
                 // the overwhelming majority and reading "Regolith" on every one is pure clutter, so
@@ -776,27 +778,39 @@ public partial class TargetMarkers : Control
                 }
             }
             _nearRocks.Sort(static (a, b) => a.Dist.CompareTo(b.Dist));
-            int shown = 0, cap = f3Rocks ? F3MaxRockLabels : 3;
+            int shown = 0,
+                cap = f3Rocks ? F3MaxRockLabels : 3;
             foreach (var (_, id, rp) in _nearRocks)
             {
                 if (shown >= cap)
                     break;
-                if (rockCam.IsPositionBehind(rp) || _world.GetAsteroid(id) is not { } rock)
+                if (rockCam.IsPositionBehind(rp) || _world.Asteroids.GetAsteroid(id) is not { } rock)
                     continue;
                 Vector2 sp = rockCam.UnprojectPosition(rp);
                 if (!new Rect2(Vector2.Zero, view).HasPoint(sp))
                     continue;
                 string label = RockLabel(rock);
                 float w = UiFonts.Mono.GetStringSize(label, HorizontalAlignment.Left, -1, 10).X;
-                DrawString(UiFonts.Mono, sp + new Vector2(-w * 0.5f, GlyphSize + 12f), label,
-                    HorizontalAlignment.Left, -1, 10, DesignTokens.Text2);
+                DrawString(
+                    UiFonts.Mono,
+                    sp + new Vector2(-w * 0.5f, GlyphSize + 12f),
+                    label,
+                    HorizontalAlignment.Left,
+                    -1,
+                    10,
+                    DesignTokens.Text2
+                );
                 // Special rocks (He3/U/Si/C) get a distinctive material-tinted glyph just left of the
                 // label so the valuable classes read at a glance; commons draw text only.
                 if (IsSpecialRock(rock.RockClass))
                 {
                     const float rg = 5.5f;
-                    DrawRockGlyph(sp + new Vector2(-w * 0.5f - rg - 4f, GlyphSize + 12f - 3f),
-                        rock.RockClass, rg, RockGlyphColor(rock.RockClass));
+                    DrawRockGlyph(
+                        sp + new Vector2(-w * 0.5f - rg - 4f, GlyphSize + 12f - 3f),
+                        rock.RockClass,
+                        rg,
+                        RockGlyphColor(rock.RockClass)
+                    );
                 }
                 shown++;
             }
@@ -811,9 +825,8 @@ public partial class TargetMarkers : Control
     // sector id 0 is a real sector (the stock map's home hub), not a "no destination" sentinel.
     private void DrawAlephsPass(Vector2 view)
     {
-        foreach (var (pos, dest) in _world.VisibleAlephs())
-            DrawEntity(view, pos, Kind.Aleph, AlephColor, focused: false, friendly: true,
-                label: _world.SectorName(dest));
+        foreach (var (pos, dest) in _world.Alephs.Visible())
+            DrawEntity(view, pos, Kind.Aleph, AlephColor, focused: false, friendly: true, label: _world.SectorName(dest));
     }
 
     // Recon probes: a subtle team-tinted beacon glyph, drawn like the neutral gate markers
@@ -825,14 +838,22 @@ public partial class TargetMarkers : Control
     // matching how alephs/ghosts fully render there.
     private void DrawProbesPass(Vector2 view)
     {
-        PredictionController? probeRef = _world.LocalShip;
-        foreach (var (pos, team) in _world.VisibleProbes())
+        PredictionController? probeRef = _world.Ships.LocalShip;
+        foreach (var (pos, team) in _world.Probes.Visible())
         {
             bool friendlyProbe = probeRef != null && team == probeRef.Team;
-            bool beyondRange = probeRef != null
+            bool beyondRange =
+                probeRef != null
                 && pos.DistanceSquaredTo(probeRef.GlobalPosition) > ProbeEdgeMarkerRange * ProbeEdgeMarkerRange;
-            DrawEntity(view, pos, Kind.Probe, TeamColor(team), focused: false, friendly: true,
-                hideOffScreen: friendlyProbe && beyondRange && !SectorOverview.Active);
+            DrawEntity(
+                view,
+                pos,
+                Kind.Probe,
+                TeamColor(team),
+                focused: false,
+                friendly: true,
+                hideOffScreen: friendlyProbe && beyondRange && !SectorOverview.Active
+            );
         }
     }
 
@@ -842,9 +863,8 @@ public partial class TargetMarkers : Control
     // arrow, so a field off to the side or behind never clutters. friendly: true = quiet glyph.
     private void DrawMinefieldsPass(Vector2 view)
     {
-        foreach (var (pos, team) in _world.VisibleMinefields())
-            DrawEntity(view, pos, Kind.Mine, TeamColor(team), focused: false, friendly: true,
-                hideOffScreen: true);
+        foreach (var (pos, team) in _world.Minefields.VisibleMinefields())
+            DrawEntity(view, pos, Kind.Mine, TeamColor(team), focused: false, friendly: true, hideOffScreen: true);
     }
 
     // Friendly ships: a subtle team glyph, or — when Tab-focused — the same bright focus bracket as
@@ -854,7 +874,7 @@ public partial class TargetMarkers : Control
     private (RemoteShip? focusedFriendly, RemoteShip? focusedShip) DrawShipsPass(Vector2 view)
     {
         RemoteShip? focusedFriendly = null;
-        foreach (var fr in _world.FriendlyShips())
+        foreach (var fr in _world.Ships.FriendlyShips())
         {
             bool focused = !fr.IsPod && _focused is ulong ff && ff == fr.ShipId;
             if (focused)
@@ -864,7 +884,7 @@ public partial class TargetMarkers : Control
         }
 
         RemoteShip? focusedShip = null;
-        foreach (var e in _world.EnemyShips())
+        foreach (var e in _world.Ships.EnemyShips())
         {
             bool focused = _focused is ulong f && f == e.ShipId;
             if (focused)
@@ -883,7 +903,12 @@ public partial class TargetMarkers : Control
     // A focused FRIENDLY ship gets the target tag + health arc + MINER role tag, but NEVER a lock
     // arc — a teammate is a fly-to / escort target, not a missile lock. (WireLockId already strips
     // a friendly focus from the wire lock slot.)
-    private void DrawFocusTagsPass(Vector2 view, RemoteShip? focusedShip, RemoteShip? focusedFriendly, PredictionController? local)
+    private void DrawFocusTagsPass(
+        Vector2 view,
+        RemoteShip? focusedShip,
+        RemoteShip? focusedFriendly,
+        PredictionController? local
+    )
     {
         if (focusedShip != null)
         {
@@ -992,7 +1017,15 @@ public partial class TargetMarkers : Control
             Color c = new(DesignTokens.TeamAccent, pulse);
             const string txt = "◈  AUTOPILOT";
             float w = font.GetStringSize(txt, HorizontalAlignment.Left, -1, 14).X;
-            DrawString(font, new Vector2(view.X * 0.5f - w * 0.5f, view.Y * 0.66f), txt, HorizontalAlignment.Left, -1, 14, c);
+            DrawString(
+                font,
+                new Vector2(view.X * 0.5f - w * 0.5f, view.Y * 0.66f),
+                txt,
+                HorizontalAlignment.Left,
+                -1,
+                14,
+                c
+            );
             return;
         }
         double now = Time.GetTicksMsec() / 1000.0;
@@ -1002,7 +1035,15 @@ public partial class TargetMarkers : Control
             Color c = new(DesignTokens.TeamAccent, alpha);
             const string txt = "AUTOPILOT DISENGAGED";
             float w = font.GetStringSize(txt, HorizontalAlignment.Left, -1, 13).X;
-            DrawString(font, new Vector2(view.X * 0.5f - w * 0.5f, view.Y * 0.66f), txt, HorizontalAlignment.Left, -1, 13, c);
+            DrawString(
+                font,
+                new Vector2(view.X * 0.5f - w * 0.5f, view.Y * 0.66f),
+                txt,
+                HorizontalAlignment.Left,
+                -1,
+                13,
+                c
+            );
         }
     }
 
@@ -1175,7 +1216,17 @@ public partial class TargetMarkers : Control
     // behind the camera: an edge-clamped class glyph + an arrow pointing the way to turn — unless
     // hideOffScreen is set, in which case an off-screen entity draws nothing (used to keep distant
     // friendly probes from crowding the screen edges while still marking them when in view).
-    private void DrawEntity(Vector2 size, Vector3 worldPos, Kind kind, Color color, bool focused, bool friendly, string glyph = "", string label = "", bool hideOffScreen = false)
+    private void DrawEntity(
+        Vector2 size,
+        Vector3 worldPos,
+        Kind kind,
+        Color color,
+        bool focused,
+        bool friendly,
+        string glyph = "",
+        string label = "",
+        bool hideOffScreen = false
+    )
     {
         Vector2 center = size * 0.5f;
 
@@ -1274,7 +1325,7 @@ public partial class TargetMarkers : Control
         Camera3D cam = Cam;
         Vector2 center = view * 0.5f;
         var onScreen = new Rect2(Vector2.Zero, view).Grow(-EdgeMargin);
-        foreach (var g in _world.GhostContacts(_world.ViewSector))
+        foreach (var g in _world.Fog.GhostContacts(_world.ViewSector))
         {
             bool behind = cam.IsPositionBehind(g.Pos);
             Vector2 sp = cam.UnprojectPosition(g.Pos);
@@ -1330,7 +1381,7 @@ public partial class TargetMarkers : Control
     // the missile banners so it never collides with them. Time-gated by WorldRenderer.ContactLostActive.
     private void DrawContactLost(Vector2 view)
     {
-        if (!_world.ContactLostActive)
+        if (!_world.Fog.ContactLostActive)
             return;
         float pulse = 0.5f + 0.4f * Mathf.Sin(Time.GetTicksMsec() / 1000f * 4f);
         Color c = new(DesignTokens.Warn, pulse);
@@ -1523,14 +1574,15 @@ public partial class TargetMarkers : Control
     }
 
     // Material-family tint for each special rock's HUD glyph so the icon echoes the 3D material look.
-    private static Color RockGlyphColor(byte cls) => (RockClass)cls switch
-    {
-        RockClass.Helium3 => new Color(0.45f, 0.85f, 0.95f),      // bright cyan — the valuable one
-        RockClass.Uranium => new Color(0.95f, 0.45f, 0.25f),      // orange-red — hazard
-        RockClass.Silicon => new Color(0.65f, 0.85f, 0.60f),      // pale green
-        RockClass.Carbonaceous => new Color(0.55f, 0.68f, 0.90f), // cool blue
-        _ => DesignTokens.Text2,
-    };
+    private static Color RockGlyphColor(byte cls) =>
+        (RockClass)cls switch
+        {
+            RockClass.Helium3 => new Color(0.45f, 0.85f, 0.95f), // bright cyan — the valuable one
+            RockClass.Uranium => new Color(0.95f, 0.45f, 0.25f), // orange-red — hazard
+            RockClass.Silicon => new Color(0.65f, 0.85f, 0.60f), // pale green
+            RockClass.Carbonaceous => new Color(0.55f, 0.68f, 0.90f), // cool blue
+            _ => DesignTokens.Text2,
+        };
 
     // A rounded four-corner bracket reticle centered on p: four short arcs at the diagonal corners
     // (with gaps at the cardinal directions, where the ticks/lead/tag sit). Drawn on a circle of
@@ -1573,7 +1625,15 @@ public partial class TargetMarkers : Control
         {
             string info = $"{(worldPos - local.GlobalPosition).Length():0} u";
             float infoW = font.GetStringSize(info, HorizontalAlignment.Left, -1, 10).X;
-            DrawString(font, sp + new Vector2(-infoW * 0.5f, FocusHalf + 17f), info, HorizontalAlignment.Left, -1, 10, DesignTokens.Text2);
+            DrawString(
+                font,
+                sp + new Vector2(-infoW * 0.5f, FocusHalf + 17f),
+                info,
+                HorizontalAlignment.Left,
+                -1,
+                10,
+                DesignTokens.Text2
+            );
         }
     }
 
@@ -1588,7 +1648,15 @@ public partial class TargetMarkers : Control
             return;
         Font font = UiFonts.Mono;
         float w = font.GetStringSize(tag, HorizontalAlignment.Left, -1, 10).X;
-        DrawString(font, sp + new Vector2(-w * 0.5f, FocusHalf + 29f), tag, HorizontalAlignment.Left, -1, 10, DesignTokens.Data);
+        DrawString(
+            font,
+            sp + new Vector2(-w * 0.5f, FocusHalf + 29f),
+            tag,
+            HorizontalAlignment.Left,
+            -1,
+            10,
+            DesignTokens.Data
+        );
     }
 
     // Resource class name for a rock class byte (mirrors Shared.RockClass). Only Helium-3 is
@@ -1598,17 +1666,17 @@ public partial class TargetMarkers : Control
     // label); Regolith and Ice are commons. Single definition shared by the near/F3 label predicate
     // and the glyph draw sites so "special" is defined in exactly one place.
     private static bool IsSpecialRock(byte cls) =>
-        (RockClass)cls is RockClass.Helium3 or RockClass.Uranium
-            or RockClass.Silicon or RockClass.Carbonaceous;
+        (RockClass)cls is RockClass.Helium3 or RockClass.Uranium or RockClass.Silicon or RockClass.Carbonaceous;
 
-    private static string RockClassName(byte cls) => (RockClass)cls switch
-    {
-        RockClass.Helium3 => "Helium-3",
-        RockClass.Uranium => "Uranium",
-        RockClass.Silicon => "Silicon",
-        RockClass.Carbonaceous => "Carbonaceous",
-        _ => "Regolith",
-    };
+    private static string RockClassName(byte cls) =>
+        (RockClass)cls switch
+        {
+            RockClass.Helium3 => "Helium-3",
+            RockClass.Uranium => "Uranium",
+            RockClass.Silicon => "Silicon",
+            RockClass.Carbonaceous => "Carbonaceous",
+            _ => "Regolith",
+        };
 
     // The label for a rock: its class name, plus for a He3 rock with a known capacity (OreCapacity > 0)
     // the "remaining/capacity" ore readout (remaining = round(OrePct/100 × OreCapacity)), or "DEPLETED"
@@ -1631,7 +1699,7 @@ public partial class TargetMarkers : Control
     // a line below DrawFocusTag's range readout.
     private void DrawRockDetail(Vector2 view, Vector3 worldPos, ulong rockId)
     {
-        if (_world.GetAsteroid(rockId) is not { } rock)
+        if (_world.Asteroids.GetAsteroid(rockId) is not { } rock)
             return;
         // Commons (Regolith) carry no caption even when focused — a "Regolith" readout is noise; the
         // focus bracket alone marks the target. Only the valuable classes get the class/ore detail.
@@ -1646,13 +1714,25 @@ public partial class TargetMarkers : Control
         string label = RockLabel(rock);
         Font font = UiFonts.Mono;
         float w = font.GetStringSize(label, HorizontalAlignment.Left, -1, 10).X;
-        DrawString(font, sp + new Vector2(-w * 0.5f, FocusHalf + 29f), label, HorizontalAlignment.Left, -1, 10, AsteroidFocusColor);
+        DrawString(
+            font,
+            sp + new Vector2(-w * 0.5f, FocusHalf + 29f),
+            label,
+            HorizontalAlignment.Left,
+            -1,
+            10,
+            AsteroidFocusColor
+        );
         // Echo the special-rock glyph beside the focused rock's label too, so it matches the near/F3 labels.
         if (IsSpecialRock(rock.RockClass))
         {
             const float rg = 5.5f;
-            DrawRockGlyph(sp + new Vector2(-w * 0.5f - rg - 4f, FocusHalf + 29f - 3f),
-                rock.RockClass, rg, RockGlyphColor(rock.RockClass));
+            DrawRockGlyph(
+                sp + new Vector2(-w * 0.5f - rg - 4f, FocusHalf + 29f - 3f),
+                rock.RockClass,
+                rg,
+                RockGlyphColor(rock.RockClass)
+            );
         }
     }
 
