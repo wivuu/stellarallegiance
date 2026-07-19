@@ -285,6 +285,12 @@ public sealed class WorldCombatDef
 
     /// <summary>Maximum damage-per-second the boundary erosion can ever deal.</summary>
     public double? BoundaryMaxDps { get; set; }
+
+    /// <summary>Closing speed (u/s) at which a minefield deals its full authored DPS; damage scales speed/ref.</summary>
+    public double? MineSpeedRef { get; set; }
+
+    /// <summary>Cap on the minefield speed multiplier — a fast pass can't exceed this × the authored DPS.</summary>
+    public double? MineMaxSpeedMult { get; set; }
 }
 
 /// <summary>
@@ -624,6 +630,8 @@ public static class WorldLoader
             t.BoundaryBaseDps = F(co.BoundaryBaseDps, t.BoundaryBaseDps);
             t.BoundaryRampDps = F(co.BoundaryRampDps, t.BoundaryRampDps);
             t.BoundaryMaxDps = F(co.BoundaryMaxDps, t.BoundaryMaxDps);
+            t.MineSpeedRef = F(co.MineSpeedRef, t.MineSpeedRef);
+            t.MineMaxSpeedMult = F(co.MineMaxSpeedMult, t.MineMaxSpeedMult);
         }
         if (w.Mechanics is { } me)
         {
@@ -716,10 +724,19 @@ public static class WorldLoader
         float s = (float)(d.Silicon ?? 0);
         float u = (float)(d.Uranium ?? 0);
         if (c < 0 || s < 0 || u < 0)
-            throw new InvalidDataException($"{ctx}: special-weights must be non-negative (got carbonaceous={c}, silicon={s}, uranium={u}).");
-        var w = new SpecialWeights { Carbonaceous = c, Silicon = s, Uranium = u };
+            throw new InvalidDataException(
+                $"{ctx}: special-weights must be non-negative (got carbonaceous={c}, silicon={s}, uranium={u})."
+            );
+        var w = new SpecialWeights
+        {
+            Carbonaceous = c,
+            Silicon = s,
+            Uranium = u,
+        };
         if (!w.AnyPositive)
-            throw new InvalidDataException($"{ctx}: special-weights has no positive share — at least one of carbonaceous/silicon/uranium must be > 0.");
+            throw new InvalidDataException(
+                $"{ctx}: special-weights has no positive share — at least one of carbonaceous/silicon/uranium must be > 0."
+            );
         return w;
     }
 }

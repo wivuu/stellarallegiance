@@ -104,7 +104,13 @@ public partial class UiShowcase : Control
     {
         col.AddChild(UiKit.MakeLabel("STELLAR ALLEGIANCE", UiKit.TextStyle.Label, DesignTokens.TextDim));
         col.AddChild(UiKit.MakeLabel("DESIGN SYSTEM", UiKit.TextStyle.Display));
-        col.AddChild(UiKit.MakeLabel("Component library · bracket / retro-futurism · Godot 4 Control nodes — F9 toggles this gallery", UiKit.TextStyle.Data, DesignTokens.Text2));
+        col.AddChild(
+            UiKit.MakeLabel(
+                "Component library · bracket / retro-futurism · Godot 4 Control nodes — F9 toggles this gallery",
+                UiKit.TextStyle.Data,
+                DesignTokens.Text2
+            )
+        );
     }
 
     private static VBoxContainer Section(VBoxContainer parent, string heading)
@@ -113,7 +119,13 @@ public partial class UiShowcase : Control
         var tag = new HBoxContainer();
         tag.AddThemeConstantOverride("separation", 14);
         tag.AddChild(UiKit.MakeLabel(heading, UiKit.TextStyle.Label, DesignTokens.TeamAccent));
-        var rule = new ColorRect { Color = DesignTokens.BorderHi, CustomMinimumSize = new Vector2(0, 1), SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ShrinkCenter };
+        var rule = new ColorRect
+        {
+            Color = DesignTokens.BorderHi,
+            CustomMinimumSize = new Vector2(0, 1),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ShrinkCenter,
+        };
         tag.AddChild(rule);
 
         var spacer = new Control { CustomMinimumSize = new Vector2(0, 14) };
@@ -130,13 +142,23 @@ public partial class UiShowcase : Control
         var s = Section(parent, "01 — FOUNDATIONS");
         var swatches = new HBoxContainer();
         swatches.AddThemeConstantOverride("separation", 12);
-        foreach (var (name, color) in new[]
-        {
-            ("Void", DesignTokens.Void), ("Panel", DesignTokens.Panel), ("Panel Hi", DesignTokens.PanelHi),
-            ("Accent", DesignTokens.TeamAccent), ("Secondary", DesignTokens.Secondary), ("Text Hi", DesignTokens.TextHi),
-            ("OK", DesignTokens.Ok), ("Warn", DesignTokens.Warn), ("Danger", DesignTokens.Danger),
-            ("Data", DesignTokens.Data), ("Text 2", DesignTokens.Text2), ("Text Dim", DesignTokens.TextDim),
-        })
+        foreach (
+            var (name, color) in new[]
+            {
+                ("Void", DesignTokens.Void),
+                ("Panel", DesignTokens.Panel),
+                ("Panel Hi", DesignTokens.PanelHi),
+                ("Accent", DesignTokens.TeamAccent),
+                ("Secondary", DesignTokens.Secondary),
+                ("Text Hi", DesignTokens.TextHi),
+                ("OK", DesignTokens.Ok),
+                ("Warn", DesignTokens.Warn),
+                ("Danger", DesignTokens.Danger),
+                ("Data", DesignTokens.Data),
+                ("Text 2", DesignTokens.Text2),
+                ("Text Dim", DesignTokens.TextDim),
+            }
+        )
         {
             var cell = new VBoxContainer();
             cell.AddChild(new ColorRect { Color = color, CustomMinimumSize = new Vector2(86, 56) });
@@ -194,7 +216,13 @@ public partial class UiShowcase : Control
         row.AddChild(disabled);
         row.AddChild(UiKit.MakeButton("◆", null, ButtonVariant.Icon));
         s.AddChild(row);
-        s.AddChild(UiKit.MakeLabel("// hover glows · primary uses team accent · chamfered 9px corners", UiKit.TextStyle.Data, DesignTokens.TextDim));
+        s.AddChild(
+            UiKit.MakeLabel(
+                "// hover glows · primary uses team accent · chamfered 9px corners",
+                UiKit.TextStyle.Data,
+                DesignTokens.TextDim
+            )
+        );
     }
 
     private static void Controls(VBoxContainer parent)
@@ -223,7 +251,9 @@ public partial class UiShowcase : Control
         row.AddChild(c2);
 
         var c3 = new HairlinePanel { Title = "SELECT", CustomMinimumSize = new Vector2(280, 0) };
-        c3.AddChild(UiKit.MakeSelect(new[] { "Garrison · Brimstone", "Outpost · Cinder Belt", "Refinery · Pallas-7" }, 0, null));
+        c3.AddChild(
+            UiKit.MakeSelect(new[] { "Garrison · Brimstone", "Outpost · Cinder Belt", "Refinery · Pallas-7" }, 0, null)
+        );
         row.AddChild(c3);
 
         s.AddChild(row);
@@ -250,10 +280,20 @@ public partial class UiShowcase : Control
         var gauges = new HairlinePanel { Title = "GAUGES", CustomMinimumSize = new Vector2(320, 0) };
         var gcol = new VBoxContainer();
         gcol.AddThemeConstantOverride("separation", 12);
-        var gauge = new RadialGauge { CenterText = "62", Caption = "SHIELD", CustomMinimumSize = new Vector2(96, 96) };
+        var gauge = new RadialGauge
+        {
+            CenterText = "62",
+            Caption = "SHIELD",
+            CustomMinimumSize = new Vector2(96, 96),
+        };
         gauge.SetValue(0.62f);
         gcol.AddChild(gauge);
-        var hull = new SegmentedBar { Segments = 10, Fill = DesignTokens.Ok, CustomMinimumSize = new Vector2(0, 8) };
+        var hull = new SegmentedBar
+        {
+            Segments = 10,
+            Fill = DesignTokens.Ok,
+            CustomMinimumSize = new Vector2(0, 8),
+        };
         hull.Set(8);
         gcol.AddChild(UiKit.MakeLabel("HULL", UiKit.TextStyle.Data, DesignTokens.TextDim));
         gcol.AddChild(hull);
@@ -298,7 +338,13 @@ public partial class UiShowcase : Control
         var alert = new AlertBox();
         alert.Configure("GARRISON UNDER ATTACK", "Brimstone · hull 41% · 3 hostiles", StatusPill.Kind.Danger);
         feedback.AddChild(alert);
-        feedback.AddChild(UiKit.MakeButton("TRIGGER TOAST", () => GetToast(parent).Show("Tech researched: Capacitor Mk II"), ButtonVariant.Secondary));
+        feedback.AddChild(
+            UiKit.MakeButton(
+                "TRIGGER TOAST",
+                () => GetToast(parent).Show("Tech researched: Capacitor Mk II"),
+                ButtonVariant.Secondary
+            )
+        );
         row.AddChild(feedback);
 
         var connect = new HairlinePanel { Title = "CONNECT", CustomMinimumSize = new Vector2(300, 0) };
@@ -353,11 +399,9 @@ public partial class UiShowcase : Control
         row.AddChild(res);
 
         var radar = new RadarFrame { CustomMinimumSize = new Vector2(160, 160) };
-        radar.SetBlips(new[]
-        {
-            (new Vector2(0.28f, -0.24f), DesignTokens.Faction1),
-            (new Vector2(-0.20f, 0.24f), DesignTokens.Ok),
-        });
+        radar.SetBlips(
+            new[] { (new Vector2(0.28f, -0.24f), DesignTokens.Faction1), (new Vector2(-0.20f, 0.24f), DesignTokens.Ok) }
+        );
         row.AddChild(radar);
 
         s.AddChild(row);
@@ -401,10 +445,10 @@ public partial class UiShowcase : Control
         c2.Configure("▲", "FIGHTER", "LINE · 180 CR");
         var c3 = new ShipLoadout.ShipCard();
         c3.Configure("⬟", "BOMBER", "HEAVY · 300 CR");
-        c3.SetGate(WorldRenderer.SpawnGate.Locked);
+        c3.SetGate(TeamStateStore.SpawnGate.Locked);
         var c4 = new ShipLoadout.ShipCard();
         c4.Configure("◇", "CARRIER", "CAPITAL · 900 CR");
-        c4.SetGate(WorldRenderer.SpawnGate.TooPoor);
+        c4.SetGate(TeamStateStore.SpawnGate.TooPoor);
         foreach (var card in new[] { c1, c2, c3, c4 })
             cardRow.AddChild(card);
         s.AddChild(cardRow);
@@ -412,15 +456,38 @@ public partial class UiShowcase : Control
         // Docked-screen CommandSidebar: live map + selectable YOUR BASES rows (active / selected /
         // destroyed). Mock data lives only here — the component itself bakes none.
         s.AddChild(UiKit.MakeLabel("// DOCKED SCREEN — COMMAND SIDEBAR", UiKit.TextStyle.Data, DesignTokens.TextDim));
-        var sidebar = new CommandSidebar { CustomMinimumSize = new Vector2(340, 560), SizeFlagsHorizontal = SizeFlags.ShrinkBegin };
+        var sidebar = new CommandSidebar
+        {
+            CustomMinimumSize = new Vector2(340, 560),
+            SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
+        };
         s.AddChild(sidebar);
         var mockMap = new SectorMapPreview.MapModel(
             new()
             {
-                new SectorMapPreview.SectorModel(0, 2100f, new() { new SectorMapPreview.BaseMark(0) }, new(), "BRIMSTONE", -0.6f, 0f, true),
-                new SectorMapPreview.SectorModel(1, 900f, new() { new SectorMapPreview.BaseMark(0) }, new(), "CINDER BELT", 0.6f, 0.3f, true),
+                new SectorMapPreview.SectorModel(
+                    0,
+                    2100f,
+                    new() { new SectorMapPreview.BaseMark(0) },
+                    new(),
+                    "BRIMSTONE",
+                    -0.6f,
+                    0f,
+                    true
+                ),
+                new SectorMapPreview.SectorModel(
+                    1,
+                    900f,
+                    new() { new SectorMapPreview.BaseMark(0) },
+                    new(),
+                    "CINDER BELT",
+                    0.6f,
+                    0.3f,
+                    true
+                ),
             },
-            new() { (0u, 1u) });
+            new() { (0u, 1u) }
+        );
         sidebar.SetData(
             new[]
             {
@@ -428,7 +495,8 @@ public partial class UiShowcase : Control
                 new CommandSidebar.BaseEntry(2, "OUTPOST 02", "CINDER BELT", 1, true),
                 new CommandSidebar.BaseEntry(3, "GARRISON 03", "PALLAS-7", 1, false),
             },
-            mockMap);
+            mockMap
+        );
     }
 
     // Docked-screen RESEARCH tab building blocks: node cards (each status), a cluster header, the
@@ -489,15 +557,38 @@ public partial class UiShowcase : Control
 
         // CommandSidebar base rows with live research banners (mock).
         s.AddChild(UiKit.MakeLabel("// COMMAND SIDEBAR — LIVE RESEARCH ROWS", UiKit.TextStyle.Data, DesignTokens.TextDim));
-        var sidebar = new CommandSidebar { CustomMinimumSize = new Vector2(340, 560), SizeFlagsHorizontal = SizeFlags.ShrinkBegin };
+        var sidebar = new CommandSidebar
+        {
+            CustomMinimumSize = new Vector2(340, 560),
+            SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
+        };
         s.AddChild(sidebar);
         var map = new SectorMapPreview.MapModel(
             new()
             {
-                new SectorMapPreview.SectorModel(0, 2100f, new() { new SectorMapPreview.BaseMark(0) }, new(), "BRIMSTONE", -0.6f, 0f, true),
-                new SectorMapPreview.SectorModel(1, 900f, new() { new SectorMapPreview.BaseMark(0) }, new(), "CINDER BELT", 0.6f, 0.3f, true),
+                new SectorMapPreview.SectorModel(
+                    0,
+                    2100f,
+                    new() { new SectorMapPreview.BaseMark(0) },
+                    new(),
+                    "BRIMSTONE",
+                    -0.6f,
+                    0f,
+                    true
+                ),
+                new SectorMapPreview.SectorModel(
+                    1,
+                    900f,
+                    new() { new SectorMapPreview.BaseMark(0) },
+                    new(),
+                    "CINDER BELT",
+                    0.6f,
+                    0.3f,
+                    true
+                ),
             },
-            new() { (0u, 1u) });
+            new() { (0u, 1u) }
+        );
         sidebar.SetData(
             new[]
             {
@@ -505,7 +596,8 @@ public partial class UiShowcase : Control
                 new CommandSidebar.BaseEntry(2, "OUTPOST 02", "CINDER BELT", 1, true, 1, "CANNON TIER II", 0f, true),
                 new CommandSidebar.BaseEntry(3, "GARRISON 03", "PALLAS-7", 1, true),
             },
-            map);
+            map
+        );
     }
 
     // Build tab (Phase D placeholder): the responsive station-card grid (available / locked /
@@ -516,23 +608,56 @@ public partial class UiShowcase : Control
         var s = Section(parent, "08 — BUILD");
 
         // Station cards, one per status.
-        s.AddChild(UiKit.MakeLabel("// DOCKED SCREEN — CONSTRUCTION CATALOG CARDS", UiKit.TextStyle.Data, DesignTokens.TextDim));
+        s.AddChild(
+            UiKit.MakeLabel("// DOCKED SCREEN — CONSTRUCTION CATALOG CARDS", UiKit.TextStyle.Data, DesignTokens.TextDim)
+        );
         var cards = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         cards.AddThemeConstantOverride("h_separation", 14);
         cards.AddThemeConstantOverride("v_separation", 14);
         var avail = new StationCard();
-        avail.ConfigureMock("⬡", "SHIPYARD", "SHIPYARD", "Builds and services ships away from the home garrison.", "₡ 600", "01:30", available: true);
+        avail.ConfigureMock(
+            "⬡",
+            "SHIPYARD",
+            "SHIPYARD",
+            "Builds and services ships away from the home garrison.",
+            "₡ 600",
+            "01:30",
+            available: true
+        );
         var sel = new StationCard();
-        sel.ConfigureMock("❖", "TECHNOLOGY LAB", "RESEARCH", "Hosts advanced research and unlocks the tactical doctrine tree.", "₡ 500", "01:15", available: true, selected: true);
+        sel.ConfigureMock(
+            "❖",
+            "TECHNOLOGY LAB",
+            "RESEARCH",
+            "Hosts advanced research and unlocks the tactical doctrine tree.",
+            "₡ 500",
+            "01:15",
+            available: true,
+            selected: true
+        );
         var locked = new StationCard();
-        locked.ConfigureMock("✦", "SUPREMACY CENTER", "STARBASE", "The team's supremacy fortress — raising it unlocks the supremacy victory path.", "₡ 1500", "02:30", available: false);
+        locked.ConfigureMock(
+            "✦",
+            "SUPREMACY CENTER",
+            "STARBASE",
+            "The team's supremacy fortress — raising it unlocks the supremacy victory path.",
+            "₡ 1500",
+            "02:30",
+            available: false
+        );
         foreach (var c in new[] { avail, sel, locked })
             cards.AddChild(c);
         s.AddChild(cards);
 
         // Shared detail panel with the always-disabled construction footer.
-        s.AddChild(UiKit.MakeLabel("// SHARED DETAIL PANEL — CONSTRUCTORS OFFLINE", UiKit.TextStyle.Data, DesignTokens.TextDim));
-        var detail = new TechDetailPanel { CustomMinimumSize = new Vector2(400, 460), SizeFlagsHorizontal = SizeFlags.ShrinkBegin };
+        s.AddChild(
+            UiKit.MakeLabel("// SHARED DETAIL PANEL — CONSTRUCTORS OFFLINE", UiKit.TextStyle.Data, DesignTokens.TextDim)
+        );
+        var detail = new TechDetailPanel
+        {
+            CustomMinimumSize = new Vector2(400, 460),
+            SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
+        };
         s.AddChild(detail);
         detail.SetSchematic("❖", "// STRUCTURE");
         detail.SetTitle("TECHNOLOGY LAB");
@@ -541,12 +666,24 @@ public partial class UiShowcase : Control
         detail.SetMeta("₡ 500", "01:15", "GARRISON 01");
         detail.SetPrereqs(new[] { ("TACTICAL DOCTRINE", true) });
         detail.SetUnlocks(new[] { "TACTICAL OPS", "SUPREMACY CENTER" });
-        detail.SetFooter(true, "⊘ CONSTRUCTORS OFFLINE", ButtonVariant.Secondary, null,
-            "Construction logic arrives with the base-building update.");
+        detail.SetFooter(
+            true,
+            "⊘ CONSTRUCTORS OFFLINE",
+            ButtonVariant.Secondary,
+            null,
+            "Construction logic arrives with the base-building update."
+        );
 
         // A tech-locked arsenal row (hangar): the real ⚿ LOCKED affordance replacing "TECH TREE (SOON)".
-        s.AddChild(UiKit.MakeLabel("// HANGAR ARSENAL — TECH-LOCKED WEAPON ROW", UiKit.TextStyle.Data, DesignTokens.TextDim));
-        var lockedRow = new LoadoutSlot { Accent = DesignTokens.TextDim, CustomMinimumSize = new Vector2(380, 0), SizeFlagsHorizontal = SizeFlags.ShrinkBegin };
+        s.AddChild(
+            UiKit.MakeLabel("// HANGAR ARSENAL — TECH-LOCKED WEAPON ROW", UiKit.TextStyle.Data, DesignTokens.TextDim)
+        );
+        var lockedRow = new LoadoutSlot
+        {
+            Accent = DesignTokens.TextDim,
+            CustomMinimumSize = new Vector2(380, 0),
+            SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
+        };
         lockedRow.Configure("⚿ LOCKED", "HEAVY CANNON", "REQUIRES CLASS-2 CANNON DOCTRINE");
         lockedRow.Modulate = new Color(1, 1, 1, 0.6f);
         s.AddChild(lockedRow);
@@ -555,22 +692,36 @@ public partial class UiShowcase : Control
     private static void Modals(VBoxContainer parent)
     {
         var s = Section(parent, "09 — MODALS");
-        s.AddChild(UiKit.MakeLabel(
-            "SettingsDialog (audio / controls / pilot) and EscapeMenu (pause) — open live over the gallery; Esc dismisses.",
-            UiKit.TextStyle.Body, DesignTokens.Text2));
+        s.AddChild(
+            UiKit.MakeLabel(
+                "SettingsDialog (audio / controls / pilot) and EscapeMenu (pause) — open live over the gallery; Esc dismisses.",
+                UiKit.TextStyle.Body,
+                DesignTokens.Text2
+            )
+        );
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 14);
         row.AddChild(UiKit.MakeButton("OPEN SETTINGS DIALOG", () => SettingsDialog.Open(parent), ButtonVariant.Ghost));
-        row.AddChild(UiKit.MakeButton("OPEN ESCAPE MENU", () => EscapeMenu.Open(parent, EscapeMenu.Context.Browser), ButtonVariant.Ghost));
+        row.AddChild(
+            UiKit.MakeButton(
+                "OPEN ESCAPE MENU",
+                () => EscapeMenu.Open(parent, EscapeMenu.Context.Browser),
+                ButtonVariant.Ghost
+            )
+        );
         s.AddChild(row);
     }
 
     private static void Backgrounds(VBoxContainer parent)
     {
         var s = Section(parent, "10 — BACKGROUNDS");
-        s.AddChild(UiKit.MakeLabel(
-            "NebulaBackground — animated gas-cloud backdrop for menu screens with no live space behind them (server browser). Intensity 0.35 vs 0.7.",
-            UiKit.TextStyle.Body, DesignTokens.Text2));
+        s.AddChild(
+            UiKit.MakeLabel(
+                "NebulaBackground — animated gas-cloud backdrop for menu screens with no live space behind them (server browser). Intensity 0.35 vs 0.7.",
+                UiKit.TextStyle.Body,
+                DesignTokens.Text2
+            )
+        );
 
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 14);

@@ -35,8 +35,5 @@ public sealed class CapabilitySet : HashSet<Capability>
 
     public CapabilitySet(IEnumerable<Capability> capabilities) : base(capabilities) { }
 
-    /// <summary>True when every capability in this set is also present in <paramref name="owned"/>.</summary>
-    public bool IsSatisfiedBy(CapabilitySet owned) => IsSubsetOf(owned);
-
     public CapabilitySet Clone() => new(this);
 }

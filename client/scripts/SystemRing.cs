@@ -51,14 +51,14 @@ public partial class SystemRing : Control
 
     public override void _Process(double delta)
     {
-        Visible = _world.LocalShip != null && !ZoomView.Active && !SectorOverview.Active; // scope circle or F3 map replaces these gauges
+        Visible = _world.Ships.LocalShip != null && !ZoomView.Active && !SectorOverview.Active; // scope circle or F3 map replaces these gauges
         if (Visible)
             QueueRedraw();
     }
 
     public override void _Draw()
     {
-        var local = _world.LocalShip;
+        var local = _world.Ships.LocalShip;
         if (local == null)
             return;
 

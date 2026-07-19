@@ -50,4 +50,41 @@ public static class Nameplate
     // reads clearly against the dark sector.
     public static Color TeamColor(byte team) =>
         team == 0 ? new Color(0.5f, 0.7f, 1f, 1f) : new Color(1f, 0.55f, 0.5f, 1f);
+
+    // Shared create/update/hide logic for a pilot nameplate — the null-coalesce, the
+    // unchanged-name short-circuit, the empty-name hide, and the lazy Create+AddChild that
+    // PredictionController and RemoteShip both did identically. `visibleWhenSet` is the Visible
+    // state applied when a non-empty name is (re)assigned: RemoteShip has no per-frame visibility
+    // drive, so it passes true; PredictionController's own nameplate visibility is instead driven
+    // every frame (ShowOwnNameplate / SectorOverview.Active / first-person — see
+    // PredictionController._Process), so it passes false here and lets that block take over.
+    public static void SetText(
+        ref Label3D? nameplate,
+        ref string pilotName,
+        string? name,
+        byte team,
+        Node3D parent,
+        bool visibleWhenSet
+    )
+    {
+        name ??= "";
+        if (name == pilotName)
+            return; // cheap: skip churn when the roster re-broadcasts unchanged
+        pilotName = name;
+
+        if (name.Length == 0)
+        {
+            if (nameplate is not null)
+                nameplate.Visible = false;
+            return;
+        }
+
+        if (nameplate is null)
+        {
+            nameplate = Create(team);
+            parent.AddChild(nameplate);
+        }
+        nameplate.Text = name;
+        nameplate.Visible = visibleWhenSet;
+    }
 }

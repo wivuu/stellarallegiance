@@ -20,10 +20,17 @@ Archives:
 
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
-- Faction name "Iron Coalition" is streamed but never displayed.
 - Reloading things from cargo should take a configurable amount of time (i.e. ammo and fuel)
-- Make gun and missile weapon mounts not compatible with all gun and missiles (explore configuration style options in YAML)
-- hulls.yaml:264-266 comment wrongly claims collision is purely ShipRadius — ship-vs-ship uses the full model-length hull, so the Devastator body-blocks on its ~20u silhouette.
+- Nav shows distance to nav-point for autopilot, even if the distance is in measuring a different sector
+- Gray out build/research items that you dont have enough credits for
+- Make constructors and ships more obvious (text) in F3 (i.e. 'Outpost Constructor' label, or 'Miner')
+- Different bases should have different research items underneath them - currently only see one tech tree (research canvas). 
+  - Currently it is gated, but the root of the tree should be different when looking at each base
+- No way to research ship classes(hulls)?
+- Adv. Fighter's belly HP is mounted to a gun, but there should be 3 gun hardpoints and a belly missile hardpoint
+- Look for opportunities to utilize native vector3 and SIMD for performance improvements
+- Default scout loadout should not be ER nantive, use gatling
+- Prevent alephs from spawning too close together by chance
 ---
 
 ## Content philosophy (the through-line)

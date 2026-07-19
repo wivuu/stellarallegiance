@@ -51,14 +51,17 @@ public partial class CameraRig : Camera3D
     private const float LaunchRightWidthMult = 2f; // and off to the camera's right, in model widths
     private const float LaunchUpLengthMult = 0.5f; // mild vertical lift (art-tuning knob; ~ChaseOffset's ratio)
     private const float LaunchBlendOutSec = 0.6f; // softer/longer than the 0.3s mode-toggle dolly — a cinematic beat
-    // Defensive fallbacks only — ShipModelLoader.Build always stashes the real extents. DefaultModelLength
-    // duplicates ShipModelLoader.DefaultModelLength (same CockpitFallback philosophy: never break on odd content).
-    private const float DefaultModelLength = 4.5f;
+
+    // Defensive fallbacks only — ShipModelLoader.Build always stashes the real extents. Length
+    // reads ShipModelLoader.DefaultModelLength directly (single source, same CockpitFallback
+    // philosophy: never break on odd content); width has no ShipModelLoader equivalent, so it
+    // stays a local constant.
     private const float DefaultModelWidth = 3f;
     private float _launchCamT; // seconds remaining in the rigid hold; 0 = inactive
     private float _launchBlendT; // 0..1 progress of the blend-out into the normal framing
     private Transform3D? _launchFromPose; // frozen launch pose to blend FROM (null once blend done)
-    private float _launchLen = DefaultModelLength, _launchWidth = DefaultModelWidth;
+    private float _launchLen = ShipModelLoader.DefaultModelLength,
+        _launchWidth = DefaultModelWidth;
 
     // True only once the dolly INTO first person has (nearly) finished — so the own hull stays
     // rendered while the camera moves in/out and hides only when actually in the cockpit. The
@@ -111,8 +114,8 @@ public partial class CameraRig : Camera3D
         // Same inputFree idiom the rest of the client gates keys on (ZoomView), plus a live local
         // ship: no view-mode changes while a full-screen overlay owns the screen (F3 overview reads
         // the wheel itself; chat/menus capture keys).
-        bool inputFree = !Chat.Capturing && !SectorOverview.Active && !ShipLoadout.Active && !EscapeMenu.Active && !SettingsDialog.Active;
-        if (!inputFree || _world.LocalShip == null)
+        bool inputFree = InputGate.FlightInputFree;
+        if (!inputFree || _world.Ships.LocalShip == null)
             return;
 
         // toggle_view flips modes WITHOUT touching _zoom, so toggling round-trips to the prior
@@ -175,16 +178,16 @@ public partial class CameraRig : Camera3D
 
     public override void _Process(double delta)
     {
-        var ship = _world.LocalShip;
+        var ship = _world.Ships.LocalShip;
         if (ship == null)
         {
             FirstPersonActive = false; // no ship ⇒ never "in the cockpit" (hull-hide seam reads this)
             // Just died: hold the last chase framing on the death point for a beat so the player
             // sees their own blast up close (see WorldRenderer death-cam) before the view pulls back
             // to the wide overview. The death cam always frames the wreck from OUTSIDE (third person).
-            if (_world.DeathCamActive)
+            if (_world.Ships.DeathCamActive)
             {
-                Transform3D d = _world.DeathCamShipTransform;
+                Transform3D d = _world.Ships.DeathCamShipTransform;
                 GlobalTransform = new Transform3D(d.Basis * FaceForward, d.Origin + d.Basis * (ChaseOffset * _zoom));
                 return;
             }
@@ -246,11 +249,15 @@ public partial class CameraRig : Camera3D
         if (amp > 0.001f)
         {
             _shakeTime += (float)delta;
-            float f1 = _shakeTime * 37f, f2 = _shakeTime * 53f, f3 = _shakeTime * 71f;
-            offset += new Vector3(
-                Mathf.Sin(f1) + 0.5f * Mathf.Sin(f2 * 1.7f),
-                Mathf.Sin(f2 + 1.3f) + 0.5f * Mathf.Sin(f3 * 1.3f),
-                Mathf.Sin(f3 + 2.1f) + 0.5f * Mathf.Sin(f1 * 1.9f)) * (ShakePosAmp * amp / 1.5f);
+            float f1 = _shakeTime * 37f,
+                f2 = _shakeTime * 53f,
+                f3 = _shakeTime * 71f;
+            offset +=
+                new Vector3(
+                    Mathf.Sin(f1) + 0.5f * Mathf.Sin(f2 * 1.7f),
+                    Mathf.Sin(f2 + 1.3f) + 0.5f * Mathf.Sin(f3 * 1.3f),
+                    Mathf.Sin(f3 + 2.1f) + 0.5f * Mathf.Sin(f1 * 1.9f)
+                ) * (ShakePosAmp * amp / 1.5f);
             float pitch = Mathf.Sin(f1 * 1.1f + 1.9f) * ShakeRotAmp * amp;
             float roll = Mathf.Sin(f2 * 0.9f + 0.7f) * ShakeRotAmp * amp;
             basis = basis * new Basis(Vector3.Right, pitch) * new Basis(Vector3.Forward, roll);
@@ -307,7 +314,7 @@ public partial class CameraRig : Camera3D
         var shipModel = ship.GetNodeOrNull<Node3D>("ShipModel");
         float len = shipModel?.GetMeta("ModelLength", 0f).AsSingle() ?? 0f;
         float wid = shipModel?.GetMeta("ModelWidth", 0f).AsSingle() ?? 0f;
-        return (len > 0.01f ? len : DefaultModelLength, wid > 0.01f ? wid : DefaultModelWidth);
+        return (len > 0.01f ? len : ShipModelLoader.DefaultModelLength, wid > 0.01f ? wid : DefaultModelWidth);
     }
 
     // The rigid launch-cam pose from the ship's transform `t`: parked ahead of the nose (+Z) and off to
@@ -342,24 +349,63 @@ public partial class CameraRig : Camera3D
         _demoWait = 0.8;
         switch (_demoStep++)
         {
-            case 0: Snap("01-fp-default"); break; // spawns in first person (default)
-            case 1: Tap(Key.V); break; // FP -> 3P
-            case 2: Snap("02-third"); break;
-            case 3: Tap(Key.V); _demoWait = 0.15; break; // 3P -> FP; short wait to catch the dolly
-            case 4: Snap("03-fp-mid-transition"); break; // hull still visible mid-blend
-            case 5: Snap("04-fp"); break; // settled first person
-            case 6: Wheel(MouseButton.WheelUp); break; // FP -> 3P (zoom snaps to MinZoom)
-            case 7: Snap("05-wheel-out-third"); break;
-            case 8: Wheel(MouseButton.WheelDown); _demoWait = 0.15; break; // at MinZoom -> auto FP
-            case 9: Snap("06-wheel-in-fp-mid"); break; // mid dolly again
-            case 10: Snap("07-wheel-in-fp"); GetTree().Quit(); break;
+            case 0:
+                Snap("01-fp-default");
+                break; // spawns in first person (default)
+            case 1:
+                Tap(Key.V);
+                break; // FP -> 3P
+            case 2:
+                Snap("02-third");
+                break;
+            case 3:
+                Tap(Key.V);
+                _demoWait = 0.15;
+                break; // 3P -> FP; short wait to catch the dolly
+            case 4:
+                Snap("03-fp-mid-transition");
+                break; // hull still visible mid-blend
+            case 5:
+                Snap("04-fp");
+                break; // settled first person
+            case 6:
+                Wheel(MouseButton.WheelUp);
+                break; // FP -> 3P (zoom snaps to MinZoom)
+            case 7:
+                Snap("05-wheel-out-third");
+                break;
+            case 8:
+                Wheel(MouseButton.WheelDown);
+                _demoWait = 0.15;
+                break; // at MinZoom -> auto FP
+            case 9:
+                Snap("06-wheel-in-fp-mid");
+                break; // mid dolly again
+            case 10:
+                Snap("07-wheel-in-fp");
+                GetTree().Quit();
+                break;
         }
     }
 
     private static void Tap(Key k)
     {
-        Input.ParseInputEvent(new InputEventKey { Keycode = k, PhysicalKeycode = k, Pressed = true });
-        Input.ParseInputEvent(new InputEventKey { Keycode = k, PhysicalKeycode = k, Pressed = false });
+        Input.ParseInputEvent(
+            new InputEventKey
+            {
+                Keycode = k,
+                PhysicalKeycode = k,
+                Pressed = true,
+            }
+        );
+        Input.ParseInputEvent(
+            new InputEventKey
+            {
+                Keycode = k,
+                PhysicalKeycode = k,
+                Pressed = false,
+            }
+        );
     }
 
     private static void Wheel(MouseButton b)

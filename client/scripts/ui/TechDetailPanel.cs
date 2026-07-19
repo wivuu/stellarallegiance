@@ -45,7 +45,12 @@ public partial class TechDetailPanel : PanelContainer
 
         CustomMinimumSize = new Vector2(400, 0);
         SizeFlagsVertical = SizeFlags.ExpandFill;
-        var sb = new StyleBoxFlat { BgColor = DesignTokens.Panel, BorderColor = DesignTokens.BorderHi, AntiAliasing = false };
+        var sb = new StyleBoxFlat
+        {
+            BgColor = DesignTokens.Panel,
+            BorderColor = DesignTokens.BorderHi,
+            AntiAliasing = false,
+        };
         sb.SetCornerRadiusAll(0);
         sb.BorderWidthLeft = 1;
         sb.SetContentMarginAll(0);
@@ -131,7 +136,12 @@ public partial class TechDetailPanel : PanelContainer
 
         // Sticky action footer.
         var footer = new PanelContainer();
-        var fsb = new StyleBoxFlat { BgColor = new Color(DesignTokens.Void, 0.6f), BorderColor = DesignTokens.BorderHi, AntiAliasing = false };
+        var fsb = new StyleBoxFlat
+        {
+            BgColor = new Color(DesignTokens.Void, 0.6f),
+            BorderColor = DesignTokens.BorderHi,
+            AntiAliasing = false,
+        };
         fsb.SetCornerRadiusAll(0);
         fsb.BorderWidthTop = 1;
         fsb.SetContentMarginAll(14);
@@ -238,7 +248,14 @@ public partial class TechDetailPanel : PanelContainer
     // Presentation-only footer setter. The caller keeps the action semantics and reacts to
     // PrimaryPressed / SecondaryPressed. secondaryText null hides the secondary button; sub null
     // hides the subtext.
-    public void SetFooter(bool disabled, string text, ButtonVariant variant, string? secondaryText, string? sub, Color? subColor = null)
+    public void SetFooter(
+        bool disabled,
+        string text,
+        ButtonVariant variant,
+        string? secondaryText,
+        string? sub,
+        Color? subColor = null
+    )
     {
         EnsureBuilt();
         _footerPrimary.Disabled = disabled;
@@ -261,21 +278,15 @@ public partial class TechDetailPanel : PanelContainer
         _footerSub.AddThemeColorOverride("font_color", subColor ?? DesignTokens.TextDim);
     }
 
-    // ---- footer accessors (demo harness / tab state machine) --------------
-
-    public bool FooterPrimaryDisabled
-    {
-        get { EnsureBuilt(); return _footerPrimary.Disabled; }
-    }
-
-    public string FooterPrimaryText
-    {
-        get { EnsureBuilt(); return _footerPrimary.Text; }
-    }
+    // ---- footer accessors (demo harness) -----------------------------------
 
     public Vector2 FooterPrimaryCenter
     {
-        get { EnsureBuilt(); return _footerPrimary.GetGlobalRect().GetCenter(); }
+        get
+        {
+            EnsureBuilt();
+            return _footerPrimary.GetGlobalRect().GetCenter();
+        }
     }
 
     // ---- shared static helpers (used by both tabs) ------------------------
@@ -290,15 +301,44 @@ public partial class TechDetailPanel : PanelContainer
         return $"{t / 60:00}:{t % 60:00}";
     }
 
-    public static string CapName(byte c) => (CapabilityId)c switch
+    // Ticks-remaining variant of Mmss: converts a (start, duration) tick pair vs the live ServerTick
+    // into the same "mm:ss" text. Shared by every countdown that derives from a timed order (research
+    // active banner, node-card countdown, sidebar research line) so the tick->seconds->clamp->format
+    // chain lives in exactly one place.
+    public static string MmssRemaining(WorldRenderer world, uint start, uint dur) =>
+        Mmss((start + dur - world.ServerTick) / FlightModel.TickRate);
+
+    // Shared prerequisite-row builder for RESEARCH (tech reqs) and BUILD (station reqs): each required
+    // tech/cap becomes a (name, owned?) row fed straight to SetPrereqs (which supplies the "No
+    // prerequisites" fallback when both arrays are empty). Both tabs' BuildPrereqs differ only in
+    // their def's required-tech/cap arrays, so this is the one place that walks them into rows.
+    public static void SetPrereqsFrom(
+        TechDetailPanel detail,
+        ushort[] requiredTechIdx,
+        byte[] requiredCaps,
+        DefRegistry defs,
+        WorldRenderer world,
+        byte team
+    )
     {
-        CapabilityId.Base => "BASE OPS",
-        CapabilityId.ShipyardAllowed => "SHIPYARD",
-        CapabilityId.ExpansionAllowed => "EXPANSION",
-        CapabilityId.TacticalAllowed => "TACTICAL OPS",
-        CapabilityId.SupremacyAllowed => "SUPREMACY",
-        _ => $"CAPABILITY {c}",
-    };
+        var rows = new List<(string, bool)>();
+        foreach (ushort t in requiredTechIdx)
+            rows.Add((defs.GetTech(t)?.Name ?? $"TECH {t}", world.TeamState.OwnsTech(team, t)));
+        foreach (byte c in requiredCaps)
+            rows.Add((CapName(c), world.TeamState.OwnsCap(team, c)));
+        detail.SetPrereqs(rows); // empty -> "No prerequisites" row
+    }
+
+    public static string CapName(byte c) =>
+        (CapabilityId)c switch
+        {
+            CapabilityId.Base => "BASE OPS",
+            CapabilityId.ShipyardAllowed => "SHIPYARD",
+            CapabilityId.ExpansionAllowed => "EXPANSION",
+            CapabilityId.TacticalAllowed => "TACTICAL OPS",
+            CapabilityId.SupremacyAllowed => "SUPREMACY",
+            _ => $"CAPABILITY {c}",
+        };
 
     private static (Control cell, Label value) TriCell(string label, Color valueColor)
     {
@@ -319,7 +359,12 @@ public partial class TechDetailPanel : PanelContainer
     {
         Color c = met ? DesignTokens.Ok : DesignTokens.Warn;
         var panel = new PanelContainer();
-        var sb = new StyleBoxFlat { BgColor = new Color(c, 0.07f), BorderColor = c, AntiAliasing = false };
+        var sb = new StyleBoxFlat
+        {
+            BgColor = new Color(c, 0.07f),
+            BorderColor = c,
+            AntiAliasing = false,
+        };
         sb.SetCornerRadiusAll(0);
         sb.BorderWidthLeft = 3;
         sb.ContentMarginLeft = 10;
@@ -335,7 +380,12 @@ public partial class TechDetailPanel : PanelContainer
     private static Control Chip(string text)
     {
         var panel = new PanelContainer();
-        var sb = new StyleBoxFlat { BgColor = new Color(DesignTokens.Secondary, 0.14f), BorderColor = new Color(DesignTokens.Secondary, 0.5f), AntiAliasing = false };
+        var sb = new StyleBoxFlat
+        {
+            BgColor = new Color(DesignTokens.Secondary, 0.14f),
+            BorderColor = new Color(DesignTokens.Secondary, 0.5f),
+            AntiAliasing = false,
+        };
         sb.SetCornerRadiusAll(0);
         sb.SetBorderWidthAll(1);
         sb.ContentMarginLeft = sb.ContentMarginRight = 8;

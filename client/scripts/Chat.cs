@@ -136,8 +136,11 @@ public partial class Chat : Control
     //     Lobby._Process's `!SectorOverview.Active` show-gate).
     //   - the hangar / ship-loadout: it covers the Lobby (hidden when the spawn hangar is committed,
     //     or its comms box unfocused while ShipLoadout.Active) and binds no Enter of its own.
-    private bool LobbyOwnsScreen => _cm.State == ConnectionManager.ConnState.Connected && _world.LocalShip == null
-        && !SectorOverview.Active && !ShipLoadout.Active;
+    private bool LobbyOwnsScreen =>
+        _cm.State == ConnectionManager.ConnState.Connected
+        && _world.Ships.LocalShip == null
+        && !SectorOverview.Active
+        && !ShipLoadout.Active;
 
     public override void _UnhandledInput(InputEvent @event)
     {
@@ -236,10 +239,10 @@ public partial class Chat : Control
                 break;
             case "/money":
             case "/credits":
-                AddSystemLine($"Credits: {_world.TeamCredits(_net.MyTeam)}");
+                AddSystemLine($"Credits: {_world.TeamState.Credits(_net.MyTeam)}");
                 break;
             case "/score":
-                AddSystemLine($"Score — Blue {_world.TeamScore(0)}  ·  Red {_world.TeamScore(1)}");
+                AddSystemLine($"Score — Blue {_world.TeamState.Score(0)}  ·  Red {_world.TeamState.Score(1)}");
                 break;
             case "/team":
                 AddSystemLine($"You are on {(_net.MyTeam == 0 ? "Blue" : "Red")} team.");
@@ -293,7 +296,7 @@ public partial class Chat : Control
         if (_inputRow.Visible)
             _inputRow.Position = new Vector2((vp.X - _inputRow.Size.X) * 0.5f, vp.Y * 0.72f);
 
-        bool keepVisible = _inputRow.Visible || _world.LocalShip == null;
+        bool keepVisible = _inputRow.Visible || _world.Ships.LocalShip == null;
         float target;
         if (keepVisible || _sinceLastMsg < FadeDelay)
             target = 1f;
@@ -318,25 +321,12 @@ public partial class Chat : Control
         _log.Text = sb.ToString();
     }
 
-    private static readonly string DimHex = DesignTokens.TextDim.ToHtml(false);
-    private static readonly string MuteHex = DesignTokens.Text2.ToHtml(false);
-    private static readonly string GoldHex = DesignTokens.CmdrGold.ToHtml(false);
-
-    private static string FormatLine(ChatLine line, string time, bool system)
-    {
-        string stamp = $"[color=#{DimHex}]{time}[/color]";
-        // System lines (slash-command output): a muted diamond-prefixed note, no team-name coloring.
-        if (system)
-            return $"{stamp} [color=#{MuteHex}]◆ {Escape(line.Text)}[/color]";
-        // Scope 2 = commander order directive (v34): the whole line gold so an order reads as an
-        // order, not chatter. Name = the issuing commander.
-        if (line.Scope == 2)
-            return $"{stamp} [color=#{GoldHex}]★ CMDR {Escape(line.Name)} ▸ {Escape(line.Text)}[/color]";
-        Color nameColor = line.FromTeam == 0 ? Team0 : Team1;
-        string tag = line.Scope == 1 ? $"[color=#{MuteHex}]\\[team][/color] " : "";
-        string name = $"[color=#{nameColor.ToHtml(false)}]{Escape(line.Name)}[/color]";
-        return $"{stamp} {tag}{name}: {Escape(line.Text)}";
-    }
-
-    private static string Escape(string s) => string.IsNullOrEmpty(s) ? "" : s.Replace("[", "[lb]");
+    // nameColorForTeam mirrors this file's old `line.FromTeam == 0 ? Team0 : Team1` (Team0/Team1
+    // alias DesignTokens.Faction0/1) — DesignTokens.Faction has the identical two-way ternary, so
+    // handing it over keeps every FromTeam value mapping to the same colour as before. The
+    // scope-1 tag has always read "team" here regardless of FromTeam (no NOAT concept in-flight),
+    // and the message text relies on the log's default_color (AllColor = TextHi) rather than an
+    // explicit wrap, so messageColor is left unset.
+    private static string FormatLine(ChatLine line, string time, bool system) =>
+        ChatFormat.ToBbcode(line, time, isSystem: system, nameColorForTeam: DesignTokens.Faction, teamTagLabel: _ => "team");
 }

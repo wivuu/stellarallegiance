@@ -53,6 +53,14 @@ public static class UserPrefs
         }
     }
 
+    // Persist Cfg to disk and log on failure. Every setter funnels its save+error-log through here.
+    private static void Save()
+    {
+        var err = Cfg.Save(Path);
+        if (err != Error.Ok)
+            Log.Err($"[UserPrefs] failed to save {Path}: {err}");
+    }
+
     // The saved pilot name, or "" if none has been stored yet.
     public static string PilotName => (string)Cfg.GetValue(PlayerSection, NameKey, "");
 
@@ -61,9 +69,7 @@ public static class UserPrefs
     public static void SetPilotName(string name)
     {
         Cfg.SetValue(PlayerSection, NameKey, Clamp(name));
-        var err = Cfg.Save(Path);
-        if (err != Error.Ok)
-            Log.Err($"[UserPrefs] failed to save {Path}: {err}");
+        Save();
         Changed?.Invoke();
     }
 
@@ -85,9 +91,7 @@ public static class UserPrefs
     public static void SetLastShip(byte classId)
     {
         Cfg.SetValue(PlayerSection, LastShipKey, (long)classId);
-        var err = Cfg.Save(Path);
-        if (err != Error.Ok)
-            Log.Err($"[UserPrefs] failed to save {Path}: {err}");
+        Save();
         Changed?.Invoke();
     }
 
@@ -134,9 +138,7 @@ public static class UserPrefs
         EnsureAudioDefaults();
         linear = Mathf.Clamp(linear, 0f, 1f);
         Cfg.SetValue(AudioSection, bus, linear);
-        var err = Cfg.Save(Path);
-        if (err != Error.Ok)
-            Log.Err($"[UserPrefs] failed to save {Path}: {err}");
+        Save();
         ApplyBus(bus, linear);
         Changed?.Invoke();
     }
@@ -174,9 +176,7 @@ public static class UserPrefs
     public static void SetMouseSensMultiplier(float v)
     {
         Cfg.SetValue(InputSection, MouseSensKey, Mathf.Clamp(v, 0.1f, 3f));
-        var err = Cfg.Save(Path);
-        if (err != Error.Ok)
-            Log.Err($"[UserPrefs] failed to save {Path}: {err}");
+        Save();
         Changed?.Invoke();
     }
 
@@ -187,9 +187,7 @@ public static class UserPrefs
     public static void SetMouseInvertY(bool v)
     {
         Cfg.SetValue(InputSection, InvertYKey, v);
-        var err = Cfg.Save(Path);
-        if (err != Error.Ok)
-            Log.Err($"[UserPrefs] failed to save {Path}: {err}");
+        Save();
         Changed?.Invoke();
     }
 
@@ -202,9 +200,7 @@ public static class UserPrefs
     public static void SetFirstPersonView(bool v)
     {
         Cfg.SetValue(ViewSection, FirstPersonKey, v);
-        var err = Cfg.Save(Path);
-        if (err != Error.Ok)
-            Log.Err($"[UserPrefs] failed to save {Path}: {err}");
+        Save();
         Changed?.Invoke();
     }
 
@@ -249,12 +245,7 @@ public static class UserPrefs
         SaveBindings();
     }
 
-    private static void SaveBindings()
-    {
-        var err = Cfg.Save(Path);
-        if (err != Error.Ok)
-            Log.Err($"[UserPrefs] failed to save {Path}: {err}");
-    }
+    private static void SaveBindings() => Save();
 
     // ---- Hangar loadout (per hull class) ------------------------------------
     // The pilot's saved weapon overrides and cargo hold per hull, so a customized loadout survives a
@@ -302,8 +293,6 @@ public static class UserPrefs
                 arr.Add(x);
             Cfg.SetValue(section, key, arr);
         }
-        var err = Cfg.Save(Path);
-        if (err != Error.Ok)
-            Log.Err($"[UserPrefs] failed to save {Path}: {err}");
+        Save();
     }
 }

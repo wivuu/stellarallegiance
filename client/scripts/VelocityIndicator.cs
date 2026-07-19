@@ -76,7 +76,7 @@ public partial class VelocityIndicator : Control
     {
         screen = default;
         _hasTrail = false;
-        var local = _world.LocalShip;
+        var local = _world.Ships.LocalShip;
         if (local == null)
             return false;
 

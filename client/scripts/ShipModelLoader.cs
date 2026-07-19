@@ -97,8 +97,10 @@ public static class ShipModelLoader
     }
 
     // Cosmetic guard for a hull that authored no model-length (or whose def hasn't arrived): keeps
-    // the GLB normalize / glow sizing from collapsing to zero. Not a gameplay fallback.
-    private const float DefaultModelLength = 4.5f;
+    // the GLB normalize / glow sizing from collapsing to zero. Not a gameplay fallback. Internal:
+    // CameraRig's launch-cam fallback and LoadoutPreview's orbit-camera framing share this exact
+    // value rather than each hardcoding their own 4.5f.
+    internal const float DefaultModelLength = 4.5f;
 
     // Longest local axis (world units) a loaded hull is uniform-scaled to — authored per hull on the
     // def (ShipClassDef.ModelLength), so the fixed def muzzle (+Z≈3) and engine nozzles (−Z≈2.25-3.4)
@@ -118,51 +120,61 @@ public static class ShipModelLoader
     {
         // Hot exhaust tinted toward the team hue so friend/foe still reads in a dogfight.
         Color hot = team == 0 ? new Color(0.5f, 0.78f, 1f) : new Color(1f, 0.62f, 0.4f);
+        List<HardpointDef>? hardpoints = defs.GetHardpoints(DefId(cls, isPod));
+
+        List<Vector3> nozzleOffsets = BuildEngineGlow();
+        BuildTeamTrail(nozzleOffsets);
+        BuildNavBeacons();
 
         // Collect engine nozzle offsets from the engine-class hardpoints (a Scout's single
         // MainEngine, a Fighter's twin Boosters, a Bomber's twin MainEngines). Thruster (RCS
         // maneuvering ports) is deliberately excluded — those stream on every hull now (GLB
         // merge), and an RCS port is not an engine nozzle; including it would sprout a
-        // constant engine plume from every ship's attitude thrusters.
-        List<HardpointDef>? hardpoints = defs.GetHardpoints(DefId(cls, isPod));
-        var nozzles = new List<Vector3>();
-        if (hardpoints != null)
-            foreach (HardpointDef hp in hardpoints)
-                if (hp.Kind is HardpointKind.MainEngine or HardpointKind.Booster)
-                    nozzles.Add(new Vector3(hp.OffX, hp.OffY, hp.OffZ));
-
+        // constant engine plume from every ship's attitude thrusters. Returns the nozzle
+        // offsets so BuildTeamTrail can anchor off the same cluster.
+        //
         // A pod is a powered-down lifeboat — no engine glow even though its def carries an
         // engine hardpoint. It still gets the team trail below so a drifting pod stays
         // trackable. (No nozzles at all ⇒ no glow either — defensive; a def with engine
         // hardpoints always arrives before its ship spawns, see DefRegistry.)
-        if (!isPod && nozzles.Count > 0)
+        List<Vector3> BuildEngineGlow()
         {
-            // Size the flame off the hull's silhouette length so a Scout's exhaust isn't as big
-            // as a Bomber's, and keep it deliberately small relative to the hull (the old
-            // per-class constants over-sized the glow — the Scout worst of all).
-            float len = TargetLength(defs, cls, isPod);
-            float radius = len * 0.10f; // flame mouth radius
-            float plume = len * 0.55f; // plume length (before the afterburner stretch)
-            float range = len * 2.6f; // engine-wash light reach
-            var glow = new EngineGlow
+            var nozzles = new List<Vector3>();
+            if (hardpoints != null)
+                foreach (HardpointDef hp in hardpoints)
+                    if (hp.Kind is HardpointKind.MainEngine or HardpointKind.Booster)
+                        nozzles.Add(new Vector3(hp.OffX, hp.OffY, hp.OffZ));
+
+            if (!isPod && nozzles.Count > 0)
             {
-                Name = "EngineGlow",
-                Nozzles = nozzles.ToArray(),
-                NozzleRadius = radius,
-                PlumeLength = plume,
-                LightRange = range,
-                CoreColor = hot,
-            };
-            shipNode.AddChild(glow);
-            switch (shipNode)
-            {
-                case PredictionController pc:
-                    pc.AttachEngine(glow);
-                    break;
-                case RemoteShip rs:
-                    rs.AttachEngine(glow);
-                    break;
+                // Size the flame off the hull's silhouette length so a Scout's exhaust isn't as big
+                // as a Bomber's, and keep it deliberately small relative to the hull (the old
+                // per-class constants over-sized the glow — the Scout worst of all).
+                float len = TargetLength(defs, cls, isPod);
+                float radius = len * 0.10f; // flame mouth radius
+                float plume = len * 0.55f; // plume length (before the afterburner stretch)
+                float range = len * 2.6f; // engine-wash light reach
+                var glow = new EngineGlow
+                {
+                    Name = "EngineGlow",
+                    Nozzles = nozzles.ToArray(),
+                    NozzleRadius = radius,
+                    PlumeLength = plume,
+                    LightRange = range,
+                    CoreColor = hot,
+                };
+                shipNode.AddChild(glow);
+                switch (shipNode)
+                {
+                    case PredictionController pc:
+                        pc.AttachEngine(glow);
+                        break;
+                    case RemoteShip rs:
+                        rs.AttachEngine(glow);
+                        break;
+                }
             }
+            return nozzles;
         }
 
         // Ghostly team-coloured ribbon tracing the ship's path. Anchored at the engine
@@ -171,20 +183,23 @@ public static class ShipModelLoader
         // value derived from the seeded hardpoints. Width stays a cosmetic per-class lever.
         // Pushed a few metres further back (forward is +Z) so the ribbon starts behind the
         // exhaust rather than clipping the hull.
-        const float trailGap = 3f;
-        float trailZ = (nozzles.Count > 0 ? AvgZ(nozzles) : 0f) - trailGap;
-        shipNode.AddChild(
-            new TeamTrail
-            {
-                Name = "TeamTrail",
-                Position = new Vector3(0f, 0f, trailZ),
-                TeamColor = hot,
-                Width =
-                    cls == ShipClass.Bomber ? 0.65f
-                    : cls == ShipClass.Fighter ? 0.5f
-                    : 0.4f,
-            }
-        );
+        void BuildTeamTrail(List<Vector3> nozzles)
+        {
+            const float trailGap = 3f;
+            float trailZ = (nozzles.Count > 0 ? AvgZ(nozzles) : 0f) - trailGap;
+            shipNode.AddChild(
+                new TeamTrail
+                {
+                    Name = "TeamTrail",
+                    Position = new Vector3(0f, 0f, trailZ),
+                    TeamColor = hot,
+                    Width =
+                        cls == ShipClass.Bomber ? 0.65f
+                        : cls == ShipClass.Fighter ? 0.5f
+                        : 0.4f,
+                }
+            );
+        }
 
         // A team-tinted blinking nav beacon at every Light hardpoint (GLB-derived nav lights on
         // the fighter/scout/bomber/pod meshes). Runs unconditionally — a pod skips the engine
@@ -199,35 +214,38 @@ public static class ShipModelLoader
         // Light whose lateral offset is a large fraction of the widest light's — so nose/tail
         // lights near the centreline stay white. Starboard is −X (game-forward is +Z, up is +Y,
         // so right = forward × up = Z × Y = −X); a mirrored GLB export would flip this.
-        if (hardpoints != null)
+        void BuildNavBeacons()
         {
-            float maxAbsX = 0f;
-            foreach (HardpointDef hp in hardpoints)
-                if (hp.Kind == HardpointKind.Light)
-                    maxAbsX = Mathf.Max(maxAbsX, Mathf.Abs(hp.OffX));
+            if (hardpoints != null)
+            {
+                float maxAbsX = 0f;
+                foreach (HardpointDef hp in hardpoints)
+                    if (hp.Kind == HardpointKind.Light)
+                        maxAbsX = Mathf.Max(maxAbsX, Mathf.Abs(hp.OffX));
 
-            float wingThreshold = maxAbsX * WingLightFrac;
+                float wingThreshold = maxAbsX * WingLightFrac;
 
-            float len = TargetLength(defs, cls, isPod);
-            int beaconIndex = 0;
-            foreach (HardpointDef hp in hardpoints)
-                if (hp.Kind == HardpointKind.Light)
-                {
-                    Color color = BaseModelLoader.NavWhite;
-                    if (maxAbsX > 0.1f && Mathf.Abs(hp.OffX) >= wingThreshold)
-                        color = hp.OffX < 0f ? BaseModelLoader.NavGreen : BaseModelLoader.NavRed;
-                    shipNode.AddChild(
-                        new BaseBeacon
-                        {
-                            Name = $"Beacon_{beaconIndex++}",
-                            Position = new Vector3(hp.OffX, hp.OffY, hp.OffZ),
-                            Color = color,
-                            MoteSize = len * BeaconMoteFactor,
-                            Range = len * BeaconRangeFactor,
-                            Intensity = BeaconIntensity,
-                        }
-                    );
-                }
+                float len = TargetLength(defs, cls, isPod);
+                int beaconIndex = 0;
+                foreach (HardpointDef hp in hardpoints)
+                    if (hp.Kind == HardpointKind.Light)
+                    {
+                        Color color = BaseModelLoader.NavWhite;
+                        if (maxAbsX > 0.1f && Mathf.Abs(hp.OffX) >= wingThreshold)
+                            color = hp.OffX < 0f ? BaseModelLoader.NavGreen : BaseModelLoader.NavRed;
+                        shipNode.AddChild(
+                            new BaseBeacon
+                            {
+                                Name = $"Beacon_{beaconIndex++}",
+                                Position = new Vector3(hp.OffX, hp.OffY, hp.OffZ),
+                                Color = color,
+                                MoteSize = len * BeaconMoteFactor,
+                                Range = len * BeaconRangeFactor,
+                                Intensity = BeaconIntensity,
+                            }
+                        );
+                    }
+            }
         }
     }
 
@@ -286,22 +304,8 @@ public static class ShipModelLoader
     private static Marker3D MakeMarker(HardpointDef hp)
     {
         var pos = new Vector3(hp.OffX, hp.OffY, hp.OffZ);
-        Basis basis = BasisFacingZ(new Vector3(hp.DirX, hp.DirY, hp.DirZ));
+        Basis basis = ModelGeom.BasisFacingZ(new Vector3(hp.DirX, hp.DirY, hp.DirZ));
         return new Marker3D { Name = $"HP_{hp.Kind}_{hp.Index}", Transform = new Transform3D(basis, pos) };
-    }
-
-    // Orthonormal basis whose local +Z points along `forward` (game-forward). Falls back to
-    // identity for a near-zero direction, and swaps the up reference when forward is nearly
-    // parallel to world up so the cross product stays well-conditioned.
-    private static Basis BasisFacingZ(Vector3 forward)
-    {
-        if (forward.LengthSquared() < 1e-8f)
-            return Basis.Identity;
-        Vector3 z = forward.Normalized();
-        Vector3 upRef = Mathf.Abs(z.Dot(Vector3.Up)) > 0.999f ? Vector3.Right : Vector3.Up;
-        Vector3 x = upRef.Cross(z).Normalized();
-        Vector3 y = z.Cross(x);
-        return new Basis(x, y, z);
     }
 
     private static float AvgZ(List<Vector3> v)

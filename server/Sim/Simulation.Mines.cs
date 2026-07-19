@@ -13,10 +13,8 @@ namespace SimServer.Sim;
 // Wired into Step() via Pass A (input.DropMine -> TryDeployMine) and StepMines (after StepMissiles).
 public sealed partial class Simulation
 {
-    // Speed the field deals its full authored DPS at (u/s); a victim's damage scales speed/ref.
-    private const float MineSpeedRef = 40f;
-    // Cap on the speed multiplier — a blisteringly fast pass can't exceed this × the authored DPS.
-    private const float MineMaxSpeedMult = 2.5f;
+    // Speed the field deals its full authored DPS at (u/s) and the multiplier cap are authored in
+    // world.yaml (`combat:` → WorldCombatTuning.MineSpeedRef / MineMaxSpeedMult), read via _combat.
     // Min ticks between hit-FX pings for one victim (~0.4s at 20 Hz) so a plow-through pops a few
     // explosions rather than one every tick.
     private const uint MineFxIntervalTicks = 8;
@@ -165,39 +163,39 @@ public sealed partial class Simulation
         int z0 = World.CellOf(c.Z - radius),
             z1 = World.CellOf(c.Z + radius);
         for (int cx = x0; cx <= x1; cx++)
-            for (int cy = y0; cy <= y1; cy++)
-                for (int cz = z0; cz <= z1; cz++)
+        for (int cy = y0; cy <= y1; cy++)
+        for (int cz = z0; cz <= z1; cz++)
+        {
+            if (!grid.TryGetValue((cx, cy, cz), out var shipsInCell))
+                continue;
+            foreach (var s in shipsInCell)
+            {
+                if (s.Team == field.Team || !s.Alive)
+                    continue;
+                if ((s.State.Pos - c).LengthSquared() > radiusSq)
+                    continue;
+
+                // Speed-scaled damage. Static mines: only a MOVING ship gets hurt, and faster
+                // hurts more (up to the cap). A parked ship inside the cloud takes nothing.
+                float speed = s.State.Vel.Length();
+                float mult = speed / _combat.MineSpeedRef;
+                if (mult > _combat.MineMaxSpeedMult)
+                    mult = _combat.MineMaxSpeedMult;
+                float dmg = w.BlastPower * mult * FlightModel.Dt;
+                if (dmg <= 0f)
+                    continue;
+                ApplyDamage(s, dmg, tick, w.ShieldMult);
+
+                // Rate-limited hit-FX ping: a small explosion + pop at the nearest cosmetic
+                // mine (a mine "near you" going off). Doesn't deplete anything.
+                if (s.LastMineFxTick == 0 || tick - s.LastMineFxTick >= MineFxIntervalTicks)
                 {
-                    if (!grid.TryGetValue((cx, cy, cz), out var shipsInCell))
-                        continue;
-                    foreach (var s in shipsInCell)
-                    {
-                        if (s.Team == field.Team || !s.Alive)
-                            continue;
-                        if ((s.State.Pos - c).LengthSquared() > radiusSq)
-                            continue;
-
-                        // Speed-scaled damage. Static mines: only a MOVING ship gets hurt, and faster
-                        // hurts more (up to the cap). A parked ship inside the cloud takes nothing.
-                        float speed = s.State.Vel.Length();
-                        float mult = speed / MineSpeedRef;
-                        if (mult > MineMaxSpeedMult)
-                            mult = MineMaxSpeedMult;
-                        float dmg = w.BlastPower * mult * FlightModel.Dt;
-                        if (dmg <= 0f)
-                            continue;
-                        ApplyDamage(s, dmg, tick, w.ShieldMult);
-
-                        // Rate-limited hit-FX ping: a small explosion + pop at the nearest cosmetic
-                        // mine (a mine "near you" going off). Doesn't deplete anything.
-                        if (s.LastMineFxTick == 0 || tick - s.LastMineFxTick >= MineFxIntervalTicks)
-                        {
-                            s.LastMineFxTick = tick;
-                            Vec3 fxPos = NearestMinePos(field, s.State.Pos);
-                            MineGoneThisStep.Add((field.FieldId, 0, 2, field.SectorId, fxPos));
-                        }
-                    }
+                    s.LastMineFxTick = tick;
+                    Vec3 fxPos = NearestMinePos(field, s.State.Pos);
+                    MineGoneThisStep.Add((field.FieldId, 0, 2, field.SectorId, fxPos));
                 }
+            }
+        }
     }
 
     // Nearest scattered mine position to `p` (the field's cosmetic meshes), for placing the hit-FX

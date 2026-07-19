@@ -271,16 +271,18 @@ hulls:
   # speed 62.5, thrust 833, armor 1200, turn 10°/s, side/back-mult 0.5).
   #   model-length: the IGC hull is enormous (length 225 ≈ a real capital ship) — untranslatable to our
   #   smaller world. Capped to 20 (≈2× the bomber's 9.6, within the plan's ≤3×-bomber ceiling). Note:
-  #   ship COLLISION uses the global World.ShipRadius for every hull (model-length is purely the client
-  #   mesh scale), so the Devastator launches/re-docks through base doors exactly like any other ship —
-  #   only its visual mesh is larger. A DELIBERATE fidelity deviation (plan Phase 4).
+  #   ship-vs-BASE collision + docking use the global World.ShipRadius sphere (model-length is purely the
+  #   client mesh scale there), so the Devastator launches/re-docks through base doors exactly like any
+  #   other ship. Ship-vs-SHIP collision, HOWEVER, uses the full model hull (CollideShips →
+  #   Collide.ShipShipContact, falling back to ShipRadius only when a GLB is missing), so the Devastator
+  #   body-blocks on its ~20u silhouette. The base-door parity is a DELIBERATE fidelity deviation (plan Phase 4).
   - id: devastator
     name: Devastator
     glyph: "✦"
     role: ASSAULT
     description: "The Iron capital hull — four heavy auto-cannons and a frame that shrugs off a squadron. The fleet's hammer."
     model-name: cap09   # res://assets/ships/cap09.glb (4x HP_Weapon nodes -> 4x AutoCan)
-    model-length: 20    # capped for playability (IGC length 225 untranslatable); collision is ShipRadius
+    model-length: 20    # capped for playability (IGC length 225 untranslatable); base collision = ShipRadius sphere, ship-vs-ship = full model hull
     class-id: 7
     mass: 3000
     speed: 62.5

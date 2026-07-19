@@ -27,10 +27,15 @@ public sealed class WebRtcTransport : IClientTransport
         _dc.onerror += _ => _rx.Writer.TryComplete();
         _pc.onconnectionstatechange += s =>
         {
-            if (s is RTCPeerConnectionState.closed or RTCPeerConnectionState.failed or RTCPeerConnectionState.disconnected)
+            if (IsTerminal(s))
                 _rx.Writer.TryComplete();
         };
     }
+
+    // Terminal states after which the connection is torn down; shared with WebRtcListener.
+    // AnswerOffer's own onconnectionstatechange handler.
+    internal static bool IsTerminal(RTCPeerConnectionState s) =>
+        s is RTCPeerConnectionState.closed or RTCPeerConnectionState.failed or RTCPeerConnectionState.disconnected;
 
     public async ValueTask<int> ReceiveAsync(byte[] buffer, CancellationToken ct)
     {
@@ -164,12 +169,7 @@ public sealed class WebRtcListener
                 // Dispose on disconnected too (not just failed/closed): a client that restarts
                 // leaves its server-side pc in `disconnected` for SIPSorcery's long consent-timeout,
                 // and a leaked pc keeps holding its ICE/STUN sockets while the next offer comes in.
-                if (
-                    s
-                    is RTCPeerConnectionState.failed
-                        or RTCPeerConnectionState.closed
-                        or RTCPeerConnectionState.disconnected
-                )
+                if (WebRtcTransport.IsTerminal(s))
                 {
                     if (s == RTCPeerConnectionState.failed)
                         Log.WebRtcConnectionFailed(_log, offer.Ticket);

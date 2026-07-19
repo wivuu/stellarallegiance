@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Godot;
 using StellarAllegiance.Shared;
 
@@ -18,7 +19,7 @@ using StellarAllegiance.Shared;
 //  The defs arrive once, right after Welcome and before any ship can spawn, so that window
 //  is momentary.
 // =====================================================================
-public partial class DefRegistry : Node
+public partial class DefRegistry : Node, IShipCostSource
 {
     // The pod's reserved ClassId (mirror of shared GameContent.PodClassId). Pods are picked at
     // runtime via the IsPod flag, not a ShipClass, so their def sits at 255.
@@ -33,7 +34,6 @@ public partial class DefRegistry : Node
     // repeat per-ship per-tick). Pure function of the def, so it never breaks determinism;
     // cleared whenever the defs are reloaded.
     private readonly Dictionary<byte, ShipStats> _statsCache = [];
-    private readonly Dictionary<byte, List<(HardpointDef hp, WeaponDef weapon)>> _mountsCache = [];
     private readonly Dictionary<byte, List<(HardpointDef hp, WeaponDef? weapon)>> _slotsCache = [];
 
     // Latest streamed world config. Fog-of-war (server-authoritative per-server toggle) drives the
@@ -63,7 +63,6 @@ public partial class DefRegistry : Node
         _bases.Clear();
         _cargo.Clear();
         _statsCache.Clear();
-        _mountsCache.Clear();
         _slotsCache.Clear();
         foreach (var s in ships)
             _ships[s.ClassId] = s;
@@ -85,11 +84,13 @@ public partial class DefRegistry : Node
     // ---- Faction identity + team-wide stat multipliers (v41; empty until MsgDefs lands) ----
 
     // The streamed faction display name (e.g. "Iron Coalition"); "" until the defs arrive.
+    // Surfaced via GameNetClient.FactionName in the lobby's SECTOR INTEL pane ("who am I" identity).
     public string FactionName { get; private set; } = "";
     private AttrMod[] _factionAttributes = System.Array.Empty<AttrMod>();
 
     // The faction's GAS block (sorted by attr byte). Consumed by the sim server-side; kept here so a
     // client identity/stat panel can surface it. Empty until the defs arrive.
+    // TODO: no consumer yet — forward-looking for the future identity/stat panel.
     public IReadOnlyList<AttrMod> FactionAttributes => _factionAttributes;
 
     // ---- Tech-path catalog (Stage-4 research; empty until MsgDefs lands — callers guard) ----
@@ -132,30 +133,12 @@ public partial class DefRegistry : Node
 
     // ---- Weapons / hardpoints --------------------------------------------
 
-    // Every Weapon hardpoint on a class paired with the WeaponDef it fires, in hardpoint
-    // declaration order — ARMED AUTHORED mounts only (unresolvable/NoWeapon slots are dropped, so
-    // list position is NOT the barrel index; barrel-indexed math must use WeaponSlots). Kept for
-    // non-positional consumers (HUD listings) that want the authored armed set. Empty when the
-    // class has no def or carries no firing weapon hardpoint (e.g. a pod).
-    public List<(HardpointDef hp, WeaponDef weapon)> WeaponMounts(byte classId)
-    {
-        if (_mountsCache.TryGetValue(classId, out var cached))
-            return cached;
-        var mounts = new List<(HardpointDef, WeaponDef)>();
-        if (_ships.TryGetValue(classId, out var def) && def.Hardpoints is not null)
-            foreach (var h in def.Hardpoints)
-                if (h.Kind == HardpointKind.Weapon && _weapons.TryGetValue(h.WeaponId, out var w))
-                    mounts.Add((h, w));
-        _mountsCache[classId] = mounts;
-        return mounts;
-    }
-
     // POSITIONAL weapon slots: EVERY Weapon-kind hardpoint in declaration order, null weapon for
     // an empty/unresolvable slot. The list index IS the barrel index — the per-barrel spread seed
     // (FlightModel.SpreadDirection) and the MsgShipLoadout per-barrel echo both index this order,
     // matching the server's ClassMuzzles (which also keeps empty slots). Every barrel-indexed
-    // consumer (prediction, remote bolt render) MUST iterate this, not the filtered WeaponMounts,
-    // or seeds desync the moment a leading slot is emptied.
+    // consumer (prediction, remote bolt render) MUST iterate this in order, or seeds desync the
+    // moment a leading slot is emptied.
     public List<(HardpointDef hp, WeaponDef? weapon)> WeaponSlots(byte classId)
     {
         if (_slotsCache.TryGetValue(classId, out var cached))
@@ -220,6 +203,9 @@ public partial class DefRegistry : Node
 
     public bool TryGetShipDef(byte classId, out ShipClassDef def) => _ships.TryGetValue(classId, out def!);
 
+    // IShipCostSource: the spawn-gate cost lookup TeamStateStore depends on (0 = unknown, defers to server).
+    public int ShipCost(byte classId) => _ships.TryGetValue(classId, out var d) ? d.Cost : 0;
+
     // Every buildable ship class (every ship def except the reserved pod and team-only ore miners),
     // ascending by ClassId so the buy menu has a stable order regardless of dictionary iteration.
     // Miner hulls (OreCapacity > 0) are AI-owned team drones bought from the Build tab (MsgBuyMiner),
@@ -248,6 +234,29 @@ public partial class DefRegistry : Node
     }
 
     public WeaponDef? GetWeapon(uint weaponId) => _weapons.TryGetValue(weaponId, out var w) ? w : null;
+
+    // Walk the weapon-tier successor chain: while the current weapon is obsoleted by a tech the team
+    // owns and names a successor, advance to it. So a saved/authored Gat Gun 1 resolves to Gat Gun 2
+    // once gat-2 is researched — the DISPLAY mirror of Simulation.ResolveLoadout's server-side migrate
+    // (the authoritative one at spawn). Bounded by the chain length (guard caps a malformed cycle).
+    // Shared by ShipLoadout (equipped-slot + arsenal display) and WeaponsPanel (dispenser row naming).
+    public uint MigrateWeaponTier(uint weaponId, byte team, WorldRenderer world)
+    {
+        for (int guard = 0; guard < 8; guard++)
+        {
+            if (
+                GetWeapon(weaponId) is not WeaponDef w
+                || w.SucceededByWeaponId == uint.MaxValue
+                || w.ObsoletedByTechIdx.Length == 0
+                || GetWeapon(w.SucceededByWeaponId) is not WeaponDef next
+                || next.Mass > w.Mass // mass guard: matches the server's payload-safe migration
+                || !w.ObsoletedByTechIdx.Any(t => world.TeamState.OwnsTech(team, t))
+            )
+                return weaponId;
+            weaponId = w.SucceededByWeaponId;
+        }
+        return weaponId;
+    }
 
     // Every streamed weapon def, ascending by WeaponId so lists built from it have a stable
     // order regardless of dictionary iteration — the hangar's arsenal list. Empty until the

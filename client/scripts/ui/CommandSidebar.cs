@@ -15,7 +15,7 @@ namespace StellarAllegiance.Ui;
 //  sector name, ACTIVE/DESTROYED status). Selecting a base raises BaseSelected and highlights its
 //  sector on the map; Phase A stores the pick in LoadoutState.Shared.SelectedBaseId (display-only).
 //
-//  Data comes from WorldRenderer.KnownBases()/MapSectors/MapBaseTeams/MapAlephLinks, filtered to
+//  Data comes from WorldRenderer.Bases.Known()/MapSectors/Bases.Teams/Alephs.Links, filtered to
 //  the local team. It exposes only what MsgBases already streams (never a secret base position).
 //  The showcase feeds mock rows straight through SetData — no baked data lives in this component.
 // =====================================================================
@@ -46,6 +46,7 @@ public partial class CommandSidebar : Control
     // read the same label the sidebar shows. Empty when nothing is selected.
     public string SelectedTitle { get; private set; } = "";
     public string SelectedSectorName { get; private set; } = "";
+
     // BaseDef.BaseTypeId of the selected base — lets the Research tab match a station-upgrade dev to
     // its from-type (so "Upgrade Supremacy" only offers on a Supremacy). 0 when nothing is selected.
     public byte SelectedBaseType { get; private set; }
@@ -121,7 +122,7 @@ public partial class CommandSidebar : Control
         // a sector, the second+ get a numeric suffix so they stay distinct.
         var entries = new List<BaseEntry>();
         var seen = new Dictionary<(string, uint), int>();
-        foreach (var (id, sector, bteam, alive, typeId) in _world.KnownBases())
+        foreach (var (id, sector, bteam, alive, typeId) in _world.Bases.Known())
         {
             if (bteam != team)
                 continue; // never surface enemy bases beyond what the map already reveals
@@ -159,20 +160,21 @@ public partial class CommandSidebar : Control
             return;
         foreach (var (id, _, _, _, _, row) in _rows)
         {
-            var res = _world.ResearchAt(id);
-            if (res is WorldRenderer.BaseResearch r && r.Active.Length > 0)
+            var res = _world.TeamState.ResearchAt(id);
+            if (res is TeamStateStore.BaseResearch r && r.Active.Length > 0)
             {
                 var a = r.Active[0];
                 string name = _defs.GetDevelopment(a.DevIndex)?.Name.ToUpperInvariant() ?? $"DEV {a.DevIndex}";
-                float remaining = (a.StartTick + a.DurationTicks - _world.ServerTick) / FlightModel.TickRate;
-                if (remaining < 0)
-                    remaining = 0;
-                int t = (int)System.MathF.Ceiling(remaining);
+                string mmss = TechDetailPanel.MmssRemaining(_world, a.StartTick, a.DurationTicks);
                 string more = r.Active.Length > 1 ? $"  +{r.Active.Length - 1} more" : "";
-                row.SetResearch($"◷ {name} · {t / 60:00}:{t % 60:00}{more}", DesignTokens.Warn,
-                    _world.ResearchProgress(a.StartTick, a.DurationTicks), showBar: true);
+                row.SetResearch(
+                    $"◷ {name} · {mmss}{more}",
+                    DesignTokens.Warn,
+                    _world.TeamState.ResearchProgress(a.StartTick, a.DurationTicks),
+                    showBar: true
+                );
             }
-            else if (res is WorldRenderer.BaseResearch r2 && r2.OnDeck is ushort od)
+            else if (res is TeamStateStore.BaseResearch r2 && r2.OnDeck is ushort od)
             {
                 string name = _defs.GetDevelopment(od)?.Name.ToUpperInvariant() ?? $"DEV {od}";
                 row.SetResearch($"⊕ ON DECK {name}", DesignTokens.Data, 0f, showBar: false);
@@ -189,15 +191,24 @@ public partial class CommandSidebar : Control
         foreach (Sector s in world.MapSectors)
         {
             var bases = new List<SectorMapPreview.BaseMark>();
-            foreach (var (sec, bteam) in world.MapBaseTeams)
+            foreach (var (sec, bteam) in world.Bases.Teams)
                 if (sec == s.SectorId)
                     bases.Add(new SectorMapPreview.BaseMark(bteam));
-            sectors.Add(new SectorMapPreview.SectorModel(
-                s.SectorId, s.Radius, bases, new List<Vector2>(),
-                string.IsNullOrEmpty(s.Name) ? null : s.Name, s.MapPosX, s.MapPosY, s.HasMapPos));
+            sectors.Add(
+                new SectorMapPreview.SectorModel(
+                    s.SectorId,
+                    s.Radius,
+                    bases,
+                    new List<Vector2>(),
+                    string.IsNullOrEmpty(s.Name) ? null : s.Name,
+                    s.MapPosX,
+                    s.MapPosY,
+                    s.HasMapPos
+                )
+            );
         }
         var links = new List<(uint A, uint B)>();
-        foreach (var (sec, dest) in world.MapAlephLinks)
+        foreach (var (sec, dest) in world.Alephs.Links)
             links.Add((sec, dest));
         return new SectorMapPreview.MapModel(sectors, links);
     }
@@ -333,13 +344,22 @@ public partial class CommandSidebar : Control
             tile.AddThemeFontOverride("font", UiFonts.Mono);
             tile.AddThemeFontSizeOverride("font_size", 18);
             tile.AddThemeColorOverride("font_color", DesignTokens.TeamAccent);
-            var tileSb = new StyleBoxFlat { BgColor = new Color(DesignTokens.TeamAccentBase, 0.10f), BorderColor = new Color(DesignTokens.TeamAccentBase, 0.4f), AntiAliasing = false };
+            var tileSb = new StyleBoxFlat
+            {
+                BgColor = new Color(DesignTokens.TeamAccentBase, 0.10f),
+                BorderColor = new Color(DesignTokens.TeamAccentBase, 0.4f),
+                AntiAliasing = false,
+            };
             tileSb.SetCornerRadiusAll(0);
             tileSb.SetBorderWidthAll(1);
             tile.AddThemeStyleboxOverride("normal", tileSb);
             row.AddChild(tile);
 
-            var texts = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ShrinkCenter };
+            var texts = new VBoxContainer
+            {
+                SizeFlagsHorizontal = SizeFlags.ExpandFill,
+                SizeFlagsVertical = SizeFlags.ShrinkCenter,
+            };
             texts.AddThemeConstantOverride("separation", 1);
             _title = UiKit.MakeLabel("", UiKit.TextStyle.Body);
             _title.AddThemeFontOverride("font", UiFonts.SairaSemi);
@@ -352,7 +372,12 @@ public partial class CommandSidebar : Control
             _research.ClipText = true;
             _research.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
             _research.Visible = false;
-            _bar = new ProgressUnderlay { ShowTrack = true, CustomMinimumSize = new Vector2(0, 3), Visible = false };
+            _bar = new ProgressUnderlay
+            {
+                ShowTrack = true,
+                CustomMinimumSize = new Vector2(0, 3),
+                Visible = false,
+            };
             texts.AddChild(_title);
             texts.AddChild(_sector);
             texts.AddChild(_status);

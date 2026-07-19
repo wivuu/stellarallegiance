@@ -56,9 +56,6 @@ public record Missile : Expendable
     /// <summary>Damage multiplier applied to <see cref="Power"/> on a direct (fuse-triggering) hit.</summary>
     public double DirectHitMultiplier { get; set; }
 
-    /// <summary>GLB model basename the client loads from <c>assets/missiles/</c> (no extension).</summary>
-    public string? ModelName { get; set; }
-
     /// <summary>Smoke-trail plume lifetime, in seconds (client EngineGlow tuning).</summary>
     public double TrailLifetime { get; set; }
 

@@ -123,12 +123,7 @@ public partial class ContactChip : Control
         DrawRect(r, new Color(DesignTokens.Void, 0.7f), filled: true);
         UiDraw.CornerBrackets(this, r, 12f, _accent, 2f);
 
-        var diamond = new Vector2(14, 16);
-        const float s = 4.5f;
-        DrawColoredPolygon(
-            new[] { diamond + new Vector2(0, -s), diamond + new Vector2(s, 0), diamond + new Vector2(0, s), diamond + new Vector2(-s, 0) },
-            _accent
-        );
+        UiDraw.Diamond(this, new Vector2(14, 16), 4.5f, _accent);
         DrawString(UiFonts.SairaSemi, new Vector2(26, 21), _name, HorizontalAlignment.Left, -1, 13, DesignTokens.TextHi);
         DrawString(UiFonts.Mono, new Vector2(12, 40), _info, HorizontalAlignment.Left, -1, 10, DesignTokens.DangerText);
 
@@ -221,13 +216,8 @@ public partial class RadarFrame : Control
         DrawLine(new Vector2(center.X, 0), new Vector2(center.X, Size.Y), new Color(DesignTokens.BorderLo, 0.7f), 1f);
         DrawLine(new Vector2(0, center.Y), new Vector2(Size.X, center.Y), new Color(DesignTokens.BorderLo, 0.7f), 1f);
 
-        DrawSelfDiamond(center, 4f, DesignTokens.TeamAccent);
+        UiDraw.Diamond(this, center, 4f, DesignTokens.TeamAccent);
         foreach (var (pos, color) in _blips)
-            DrawSelfDiamond(center + pos * radius, 3f, color);
-    }
-
-    private void DrawSelfDiamond(Vector2 c, float s, Color color)
-    {
-        DrawColoredPolygon(new[] { c + new Vector2(0, -s), c + new Vector2(s, 0), c + new Vector2(0, s), c + new Vector2(-s, 0) }, color);
+            UiDraw.Diamond(this, center + pos * radius, 3f, color);
     }
 }

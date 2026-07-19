@@ -24,11 +24,11 @@ public static class DesignTokens
     public static readonly Color BorderLo = new(120f / 255f, 190f / 255f, 255f / 255f, 0.16f); // faint hairline
 
     // ---- Accents -------------------------------------------------------------
-    // Structural/chrome accent (token diamonds, brackets, primary buttons, gauge arcs).
-    // Faction-tintable so a player's chrome can lean toward their team without becoming
-    // the literal team-identity colour. Mutable: SetTeamAccentTint swaps it at runtime.
-    public static Color TeamAccent = Color.FromHtml("37E0FF");
-    public static readonly Color TeamAccentBase = Color.FromHtml("37E0FF");
+    // Structural/chrome accent (token diamonds, brackets, primary buttons, gauge arcs). A single
+    // fixed readonly token — the runtime per-faction tint (SetTeamAccentTint) was dead code (no
+    // caller ever wired it up), so the mutable/base split it existed for has been collapsed away.
+    public static readonly Color TeamAccent = Color.FromHtml("37E0FF");
+    public static readonly Color TeamAccentBase = TeamAccent; // alias for existing external readers
     public static readonly Color Secondary = Color.FromHtml("FF9D4D"); // highlight / credits
     public static readonly Color CmdrGold = Color.FromHtml("FFD24D"); // commander authority: CMDR badge, order directives, F3 command selection
 
@@ -64,17 +64,4 @@ public static class DesignTokens
     // ---- Geometry ------------------------------------------------------------
     public const float CornerChamfer = 9f; // chamfered button corner cut
     public const float BracketLength = 16f; // corner-bracket arm length on panels
-
-    // Tint the structural accent toward a faction (subtle — keeps the cyan reading as
-    // chrome, not as the team colour). Call once the local team is known.
-    public static void SetTeamAccentTint(int team)
-    {
-        // 25% lean toward the faction colour; reset by passing team < 0.
-        if (team < 0)
-        {
-            TeamAccent = TeamAccentBase;
-            return;
-        }
-        TeamAccent = TeamAccentBase.Lerp(Faction(team), 0.25f);
-    }
 }

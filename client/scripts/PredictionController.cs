@@ -336,26 +336,11 @@ public partial class PredictionController : Node3D
     private Label3D? _nameplate;
     private string _pilotName = "";
 
-    public void SetPilotName(string name)
-    {
-        name ??= "";
-        if (name == _pilotName)
-            return;
-        _pilotName = name;
-        if (name.Length == 0)
-        {
-            if (_nameplate is not null)
-                _nameplate.Visible = false;
-            return;
-        }
-        if (_nameplate is null)
-        {
-            _nameplate = Nameplate.Create(Team);
-            _nameplate.Visible = false; // visibility is driven each frame in _Process
-            AddChild(_nameplate);
-        }
-        _nameplate.Text = name;
-    }
+    // Visibility is driven each frame in _Process (ShowOwnNameplate / SectorOverview.Active /
+    // first-person), so a (re)assigned name always sets Visible = false here and lets that block
+    // take over on the next frame.
+    public void SetPilotName(string name) =>
+        Nameplate.SetText(ref _nameplate, ref _pilotName, name, Team, this, visibleWhenSet: false);
 
     // Engine-glow intensity for the afterburner. The boost's FLIGHT effect now rides
     // in the networked ShipInput (FlightModel reads input.Boost), so this only drives

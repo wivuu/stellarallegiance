@@ -63,7 +63,7 @@ public partial class DustField : Node3D
 
     public override void _Process(double delta)
     {
-        var ship = _world.LocalShip;
+        var ship = _world.Ships.LocalShip;
         if (ship == null)
         {
             // No local ship (pre-spawn overview): nothing to gauge motion against, so hide.

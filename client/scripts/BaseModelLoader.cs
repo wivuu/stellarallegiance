@@ -40,17 +40,6 @@ public static class BaseModelLoader
     // literal, so this can't drift from the server's own base-radius fallback.
     public const float FallbackRadius = CollisionConfig.BaseRadius;
 
-    // DEBUG: render a faint cone at each docking hardpoint so the dock geometry is visible against the
-    // rendered hull. NOTE: HP_DockingEntrance markers are no longer independent discs — they group in
-    // FIVES into one bounded rectangular door (1 face marker + 4 boundary markers; see DockFaceParser),
-    // and a ship docks by intersecting that face laterally within a depth window (CollisionConfig
-    // .DockFaceDepth). This dormant per-marker cone viz predates the grouped convention and only draws
-    // a coarse hint at each marker; DebugConeRadius is just a viz size now, not a collision radius.
-    // Entry markers = green, exit = magenta. Flip ShowHardpointDebug to true to see the markers.
-    public const bool ShowHardpointDebug = false;
-    private const float DebugConeRadius = 7f;
-    private const float DebugConeHeight = 34f;
-
     // --- Nav-light palette + base-beacon sizing (shared source; ShipModelLoader references these) ---
     // Universal position-light colours — not team-tinted, so a green/red light reads the same on any
     // hull the way real aircraft/runway lights do (friend/foe still reads from the hull HUD tint).
@@ -130,19 +119,6 @@ public static class BaseModelLoader
                 }
         }
 
-        // // DEBUG visualization of the docking hardpoints (entry = green, exit = magenta). Read from
-        // // the hull's own HP_ nodes — the exact positions the server scales by the same world scale
-        // // Each green cone's base disc IS the dock zone, so this shows exactly where you must fly to
-        // // dock. hull.Transform maps the GLB-local node into the unscaled
-        // // BaseModel root the cones sit on, same as the beacons above.
-        // if (ShowHardpointDebug)
-        // {
-        // 	foreach ((string name, Transform3D local) in GlbLoader.FindHardpoints(hull, "HP_DockingEntrance"))
-        // 		root.AddChild(MakeHardpointCone((hull.Transform * local).Origin, new Color(0.2f, 1f, 0.35f), name));
-        // 	foreach ((string name, Transform3D local) in GlbLoader.FindHardpoints(hull, "HP_DockingExit"))
-        // 		root.AddChild(MakeHardpointCone((hull.Transform * local).Origin, new Color(1f, 0.25f, 0.95f), name));
-        // }
-
         return root;
     }
 
@@ -182,58 +158,14 @@ public static class BaseModelLoader
             MaterialOverride = mat,
         };
 
-    // The radius a base of this type renders at — the def's Radius, or the placeholder
-    // fallback until the row arrives. WorldRenderer uses it to anchor the floating health
-    // bar above the (def-sized) sphere.
-    public static float Radius(DefRegistry defs, byte baseTypeId) => defs.GetBaseDef(baseTypeId)?.Radius ?? FallbackRadius;
-
     // A positioned, oriented marker for one hardpoint: local position from the def's
     // offset, local +Z aligned with the def's forward (the same convention the ship loader
     // and the weapon/muzzle code use).
     private static Marker3D MakeMarker(HardpointDef hp)
     {
         var pos = new Vector3(hp.OffX, hp.OffY, hp.OffZ);
-        Basis basis = BasisFacingZ(new Vector3(hp.DirX, hp.DirY, hp.DirZ));
+        Basis basis = ModelGeom.BasisFacingZ(new Vector3(hp.DirX, hp.DirY, hp.DirZ));
         return new Marker3D { Name = $"HP_{hp.Kind}_{hp.Index}", Transform = new Transform3D(basis, pos) };
-    }
-
-    // DEBUG cone parked at a docking hardpoint, pointing radially outward from the base center (the
-    // server's exitDir/entryAxis convention). Bright, unshaded, double-sided and shadow-free so it
-    // reads clearly from any angle while troubleshooting the dock geometry. Position is in the
-    // unscaled BaseModel root frame (true world units), matching MakeMarker/MakeBeacon.
-    private static Node3D MakeHardpointCone(Vector3 pos, Color color, string name)
-    {
-        Vector3 outward = pos.LengthSquared() > 1e-6f ? pos.Normalized() : Vector3.Forward;
-        var node = new Node3D { Name = $"DebugHP_{name}", Transform = new Transform3D(BasisFacingZ(outward), pos) };
-        var mat = new StandardMaterial3D
-        {
-            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
-            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-            AlbedoColor = new Color(color.R, color.G, color.B, 0.1f), // 90% transparent
-            EmissionEnabled = true,
-            Emission = color,
-            EmissionEnergyMultiplier = 0.6f,
-            CullMode = BaseMaterial3D.CullModeEnum.Disabled,
-        };
-        var cone = new MeshInstance3D
-        {
-            Mesh = new CylinderMesh
-            {
-                TopRadius = 0f,
-                BottomRadius = DebugConeRadius,
-                Height = DebugConeHeight,
-                RadialSegments = 16,
-            },
-            MaterialOverride = mat,
-            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-            // CylinderMesh runs along +Y; rotate so its tip points along the node's +Z (outward),
-            // then push it out so the base sits at the hardpoint and the tip points away from the hull.
-            Transform = new Transform3D(Basis.Identity, Vector3.Zero)
-                .RotatedLocal(Vector3.Right, Mathf.Pi / 2f)
-                .Translated(new Vector3(0f, 0f, DebugConeHeight * 0.5f)),
-        };
-        node.AddChild(cone);
-        return node;
     }
 
     // A blinking nav beacon parked at a Light hardpoint's local position, in the given nav colour.
@@ -302,21 +234,6 @@ public static class BaseModelLoader
         }
         return best;
     }
-
-    // Orthonormal basis whose local +Z points along `forward` (game-forward). Falls back to
-    // identity for a near-zero direction, and swaps the up reference when forward is nearly
-    // parallel to world up so the cross product stays well-conditioned. (Mirror of the ship
-    // loader's helper — the two loaders are deliberately independent parallel files.)
-    private static Basis BasisFacingZ(Vector3 forward)
-    {
-        if (forward.LengthSquared() < 1e-8f)
-            return Basis.Identity;
-        Vector3 z = forward.Normalized();
-        Vector3 upRef = Mathf.Abs(z.Dot(Vector3.Up)) > 0.999f ? Vector3.Right : Vector3.Up;
-        Vector3 x = upRef.Cross(z).Normalized();
-        Vector3 y = z.Cross(x);
-        return new Basis(x, y, z);
-    }
 }
 
 // A simple blinking nav beacon: an emissive billboard mote (drives the bloom pipeline) plus
@@ -348,7 +265,7 @@ public partial class BaseBeacon : Node3D
     {
         _phase = GD.Randf() * Period;
 
-        var dot = RadialDot();
+        var dot = VfxTextures.RadialDot(64);
         _moteMat = new StandardMaterial3D
         {
             ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
@@ -398,24 +315,5 @@ public partial class BaseBeacon : Node3D
         _moteMat.EmissionEnergyMultiplier = (1f + 6f * lit) * Intensity;
         _moteMat.AlbedoColor = new Color(Color.R, Color.G, Color.B, lit);
         _light.LightEnergy = 3f * lit * Intensity;
-    }
-
-    // Soft round mote: hot centre fading to transparent — drives bloom via emission energy.
-    private static GradientTexture2D RadialDot()
-    {
-        var gradient = new Gradient
-        {
-            Offsets = new[] { 0f, 0.5f, 1f },
-            Colors = new[] { new Color(1f, 1f, 1f, 1f), new Color(1f, 1f, 1f, 0.4f), new Color(1f, 1f, 1f, 0f) },
-        };
-        return new GradientTexture2D
-        {
-            Gradient = gradient,
-            Width = 64,
-            Height = 64,
-            Fill = GradientTexture2D.FillEnum.Radial,
-            FillFrom = new Vector2(0.5f, 0.5f),
-            FillTo = new Vector2(0.5f, 0f),
-        };
     }
 }

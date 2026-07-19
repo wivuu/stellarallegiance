@@ -30,8 +30,8 @@ from these tokens and components** — never re-hardcode colors, fonts, or sizes
 | `Faction0` / `Faction1` | blue `(.30,.55,1)` / red `(1,.40,.34)` | **team identity** |
 
 **Rule: `TeamAccent` (cyan) is chrome, not team color.** Team identity is always
-`Faction0`/`Faction1`. Never recolor blips, rosters, or trails to cyan. `TeamAccent` may be
-subtly faction-tinted via `DesignTokens.SetTeamAccentTint(team)`, but stays distinct.
+`Faction0`/`Faction1`. Never recolor blips, rosters, or trails to cyan. `TeamAccent` is a fixed
+static chrome accent — it is never tinted toward the local team's faction color.
 
 ### Type scale & fonts (`UiFonts`, `UiKit.TextStyle`)
 

@@ -121,28 +121,10 @@ public partial class RemoteShip : Node3D
     private Label3D? _nameplate;
     private string _pilotName = "";
 
-    public void SetPilotName(string name)
-    {
-        name ??= "";
-        if (name == _pilotName)
-            return; // cheap: skip churn when the roster re-broadcasts unchanged
-        _pilotName = name;
-
-        if (name.Length == 0)
-        {
-            if (_nameplate is not null)
-                _nameplate.Visible = false;
-            return;
-        }
-
-        if (_nameplate is null)
-        {
-            _nameplate = Nameplate.Create(Team);
-            AddChild(_nameplate);
-        }
-        _nameplate.Text = name;
-        _nameplate.Visible = true;
-    }
+    // No per-frame visibility drive here (unlike PredictionController's own nameplate), so a
+    // (re)assigned non-empty name always sets Visible = true.
+    public void SetPilotName(string name) =>
+        Nameplate.SetText(ref _nameplate, ref _pilotName, name, Team, this, visibleWhenSet: true);
 
     public void Initialize(Ship row, DefRegistry defs, uint serverTick)
     {

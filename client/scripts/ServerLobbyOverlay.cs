@@ -190,7 +190,7 @@ public partial class ServerLobbyOverlay : Control
         brand.AddThemeFontSizeOverride("font_size", 16);
         brand.AddThemeColorOverride("font_color", DesignTokens.TextHi);
         bar.AddChild(brand);
-        bar.AddChild(MakeChip("LOBBY"));
+        bar.AddChild(UiChips.AccentChip("LOBBY", 12, 3));
 
         var spacer = new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         bar.AddChild(spacer);
@@ -222,21 +222,6 @@ public partial class ServerLobbyOverlay : Control
     {
         UserPrefs.SetPilotName(_name.Text);
         SettingsDialog.Open(this);
-    }
-
-    // Solid-accent chip (the design's active-tab marker): accent fill, void text.
-    private static Control MakeChip(string text)
-    {
-        var chip = new PanelContainer();
-        var sb = new StyleBoxFlat { BgColor = DesignTokens.TeamAccent, AntiAliasing = false };
-        sb.SetCornerRadiusAll(0);
-        sb.ContentMarginLeft = sb.ContentMarginRight = 12;
-        sb.ContentMarginTop = sb.ContentMarginBottom = 3;
-        chip.AddThemeStyleboxOverride("panel", sb);
-        var label = UiKit.MakeLabel(text, UiKit.TextStyle.Label, DesignTokens.Void);
-        chip.AddChild(label);
-        chip.SizeFlagsVertical = SizeFlags.ShrinkCenter;
-        return chip;
     }
 
     private void BuildGameList(HBoxContainer body)

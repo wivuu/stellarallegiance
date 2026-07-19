@@ -14,7 +14,6 @@ namespace SimServer.Sim;
 public sealed partial class Simulation
 {
     // PigDecision.Kind — how PigExecute should fly a drone for the cached decision.
-    private const byte PigKindNone = 0;
     private const byte PigKindChase = 1; // combat: lead + juke + fire on a target ship
     private const byte PigKindSteerShip = 2; // fly onto a moving friendly ship (rescue pod)
     private const byte PigKindSteerPoint = 3; // fly to a static point (aleph gate / home)
@@ -244,27 +243,25 @@ public sealed partial class Simulation
             _livePigIds.Add(me.ShipId);
             _pigDecisions[me.ShipId] = PigDecide(me, tick);
         }
-        // Prune decisions whose drone no longer exists.
-        if (_pigDecisions.Count > _livePigIds.Count)
+        // Drops every key in dict that isn't in _livePigIds, reusing the shared _stalePigIds
+        // scratch set (same scratch reuse / iteration as the two call sites below).
+        void PruneToLive<T>(Dictionary<ulong, T> dict)
         {
             _stalePigIds.Clear();
-            foreach (var id in _pigDecisions.Keys)
+            foreach (var id in dict.Keys)
                 if (!_livePigIds.Contains(id))
                     _stalePigIds.Add(id);
             foreach (var id in _stalePigIds)
-                _pigDecisions.Remove(id);
+                dict.Remove(id);
         }
+
+        // Prune decisions whose drone no longer exists.
+        if (_pigDecisions.Count > _livePigIds.Count)
+            PruneToLive(_pigDecisions);
         // Same for commander orders: keyed by ShipId, they die with the drone (a respawned
         // replacement must never inherit its predecessor's order).
         if (_pigOrders.Count > 0)
-        {
-            _stalePigIds.Clear();
-            foreach (var id in _pigOrders.Keys)
-                if (!_livePigIds.Contains(id))
-                    _stalePigIds.Add(id);
-            foreach (var id in _stalePigIds)
-                _pigOrders.Remove(id);
-        }
+            PruneToLive(_pigOrders);
     }
 
     private void EnsurePigSlots()

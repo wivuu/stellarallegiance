@@ -14,6 +14,6 @@ namespace StellarAllegiance.Shared
         Combat = 0,  // player or PIG combat hull (default — no role bit on the wire)
         Pod,         // ejected escape pod (a form change of a combat ship)
         Miner,       // AI ore harvester (server/Sim/Simulation.Mining.cs)
-        Constructor, // RESERVED — enum value + wire round-trip only; no spawn/brain/build behavior yet
+        Constructor, // AI base-builder drone (spawn/brain/build in server/Sim/Simulation.Constructors.cs)
     }
 }

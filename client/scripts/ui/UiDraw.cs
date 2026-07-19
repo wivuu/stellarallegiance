@@ -98,6 +98,55 @@ public static class UiDraw
         ci.DrawRect(r, border, filled: false, width);
     }
 
+    // Hollow diamond outline + center dot + a short mono tag sitting just above the top vertex —
+    // the nav-waypoint / order-glyph marker (waypoint "NAV", commander-order "CMD", rock-order
+    // "BUILD"/"MINE"). Four DrawLine segments (a HOLLOW outline, unlike the filled Diamond blip
+    // above) so it never reads as a solid contact marker.
+    public static void HollowDiamondMarker(CanvasItem ci, Vector2 center, float r, Color color, string tag, Font font, int fontSize)
+    {
+        Vector2 top = center + new Vector2(0f, -r);
+        Vector2 right = center + new Vector2(r, 0f);
+        Vector2 bottom = center + new Vector2(0f, r);
+        Vector2 left = center + new Vector2(-r, 0f);
+        ci.DrawLine(top, right, color, 1.75f, true);
+        ci.DrawLine(right, bottom, color, 1.75f, true);
+        ci.DrawLine(bottom, left, color, 1.75f, true);
+        ci.DrawLine(left, top, color, 1.75f, true);
+        ci.DrawCircle(center, r * 0.28f, color);
+        float tw = font.GetStringSize(tag, HorizontalAlignment.Left, -1, fontSize).X;
+        ci.DrawString(font, center + new Vector2(-tw * 0.5f, -r - 4f), tag, HorizontalAlignment.Left, -1, fontSize, color);
+    }
+
+    // Clamp a projected screen point to the inset viewport edge along the ray from its center —
+    // the shared off-screen indicator math (nav waypoint / live entities / rock-order glyphs).
+    // `point` is the marker's screen point (already un-mirrored for behind-camera points via
+    // center*2 - sp), `margin` is the caller's edge inset. Returns the clamped point on the
+    // margin-inset rectangle edge, plus the outward unit direction along that ray.
+    public static (Vector2 edge, Vector2 dir) ClampToEdge(Vector2 point, Vector2 viewportSize, float margin)
+    {
+        Vector2 center = viewportSize * 0.5f;
+        Vector2 dir = point - center;
+        if (dir.LengthSquared() < 1e-4f)
+            dir = Vector2.Down;
+        dir = dir.Normalized();
+        Vector2 half = center - new Vector2(margin, margin);
+        float scale = Mathf.Min(half.X / Mathf.Max(Mathf.Abs(dir.X), 1e-4f), half.Y / Mathf.Max(Mathf.Abs(dir.Y), 1e-4f));
+        return (center + dir * scale, dir);
+    }
+
+    // A filled triangle at `at` pointing along `dir` (unit) — the off-screen edge-arrow glyph.
+    public static void DrawEdgeArrow(CanvasItem ci, Vector2 at, Vector2 dir, float size, Color color)
+    {
+        Vector2 perp = new(-dir.Y, dir.X);
+        var pts = new[]
+        {
+            at + dir * size,
+            at - dir * size * 0.5f + perp * size * 0.6f,
+            at - dir * size * 0.5f - perp * size * 0.6f,
+        };
+        ci.DrawColoredPolygon(pts, color);
+    }
+
     private static Vector2[] Close(Vector2[] pts)
     {
         var closed = new Vector2[pts.Length + 1];

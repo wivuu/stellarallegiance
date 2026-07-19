@@ -51,124 +51,15 @@ namespace StellarAllegiance.Shared
             var weaponsById = new Dictionary<uint, WeaponDef>();
             foreach (var w in weapons)
             {
+                // Id-uniqueness bookkeeping stays here (not in ValidateWeapon): weaponsById is
+                // shared state consumed by later checks (SucceededByWeaponId below, plus the
+                // hardpoint/payload/winnable checks over ships and bases further down).
                 if (!weaponIds.Add(w.WeaponId))
                     errors.Add($"duplicate WeaponId {w.WeaponId} (\"{w.Name}\")");
                 else
                     weaponsById[w.WeaponId] = w;
 
-                // Missile-kind defs need a live guidance/lock stat block (belt-and-suspenders over
-                // the library CoreValidator — a projected missile with a dead lock/range/speed/
-                // magazine would spawn an unusable launcher).
-                if (w.Kind == WeaponKind.Missile)
-                {
-                    if (w.LockTicks == 0)
-                        errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has LockTicks 0 — never locks");
-                    if (w.LockRange <= 0f)
-                        errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive LockRange {w.LockRange}");
-                    if (w.ProjectileSpeed <= 0f)
-                        errors.Add(
-                            $"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive ProjectileSpeed {w.ProjectileSpeed}"
-                        );
-                    if (w.MagazineSize == 0)
-                        errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has MagazineSize 0 — empty launcher");
-                    if (w.ProjectileLifeTicks == 0)
-                        errors.Add(
-                            $"missile weapon {w.WeaponId} (\"{w.Name}\") has ProjectileLifeTicks 0 — instantly culled"
-                        );
-                    if (w.BlastPower <= 0f)
-                        errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive BlastPower {w.BlastPower}");
-                    if (w.BlastRadius <= 0f)
-                        errors.Add(
-                            $"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive BlastRadius {w.BlastRadius}"
-                        );
-                    if (w.DirectHitMult <= 0f)
-                        errors.Add(
-                            $"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive DirectHitMult {w.DirectHitMult}"
-                        );
-                }
-                else if (w.Kind == WeaponKind.Mine)
-                {
-                    // Mine-kind dispenser: the field/blast/arming block must be live, and it must link
-                    // to a stockable cargo item (the mine expendable it consumes).
-                    if (w.MineCloudCount < 1 || w.MineCloudCount > 64)
-                        errors.Add(
-                            $"mine weapon {w.WeaponId} (\"{w.Name}\") has MineCloudCount {w.MineCloudCount} — must be 1..64"
-                        );
-                    if (w.MineCloudRadius <= 0f)
-                        errors.Add(
-                            $"mine weapon {w.WeaponId} (\"{w.Name}\") has non-positive MineCloudRadius {w.MineCloudRadius}"
-                        );
-                    if (w.BlastPower <= 0f)
-                        errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") has non-positive BlastPower {w.BlastPower}");
-                    if (w.ProjectileLifeTicks == 0)
-                        errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") has ProjectileLifeTicks 0 — never lives");
-                    if (w.MineArmTicks >= w.ProjectileLifeTicks)
-                        errors.Add(
-                            $"mine weapon {w.WeaponId} (\"{w.Name}\") MineArmTicks {w.MineArmTicks} >= ProjectileLifeTicks {w.ProjectileLifeTicks} — never arms"
-                        );
-                    // Radar signature must resolve positive (projection maps 0 -> 1).
-                    if (w.MineSignature <= 0f)
-                        errors.Add(
-                            $"mine weapon {w.WeaponId} (\"{w.Name}\") has non-positive MineSignature {w.MineSignature}"
-                        );
-                    // CargoId 0 is a deliberate sentinel for a tier-2/3 dispenser (no cargo-id authored —
-                    // the hangar keeps one tier-neutral cargo row per line; the fired tier is resolved
-                    // server-side from owned techs, Simulation.SeedDispenserAmmo). Same convention as
-                    // Simulation.cs's `w.CargoId != 0` guard on _dispenserByCargo.
-                    if (cargoItems is not null && w.CargoId != 0 && !cargoIds.Contains(w.CargoId))
-                        errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") CargoId {w.CargoId} resolves to no cargo item");
-                }
-                else if (w.Kind == WeaponKind.Chaff)
-                {
-                    // Chaff-kind dispenser: decoy strength/radius/life must be live, and it must link
-                    // to a stockable cargo item (the chaff expendable it consumes).
-                    if (w.ChaffStrength <= 0f)
-                        errors.Add(
-                            $"chaff weapon {w.WeaponId} (\"{w.Name}\") has non-positive ChaffStrength {w.ChaffStrength}"
-                        );
-                    if (w.DecoyRadius <= 0f)
-                        errors.Add($"chaff weapon {w.WeaponId} (\"{w.Name}\") has non-positive DecoyRadius {w.DecoyRadius}");
-                    if (w.ProjectileLifeTicks == 0)
-                        errors.Add($"chaff weapon {w.WeaponId} (\"{w.Name}\") has ProjectileLifeTicks 0 — instantly culled");
-                    // CargoId 0 = tier-2/3 dispenser sentinel (see the Mine-kind branch's comment above).
-                    if (cargoItems is not null && w.CargoId != 0 && !cargoIds.Contains(w.CargoId))
-                        errors.Add(
-                            $"chaff weapon {w.WeaponId} (\"{w.Name}\") CargoId {w.CargoId} resolves to no cargo item"
-                        );
-                }
-                else if (w.Kind == WeaponKind.Probe)
-                {
-                    // Probe dispenser: sight-radius/lifespan must be live, and it must link to a
-                    // stockable cargo item (the probe expendable it consumes).
-                    if (w.ProbeSightRadius <= 0f)
-                        errors.Add(
-                            $"probe weapon {w.WeaponId} (\"{w.Name}\") has non-positive ProbeSightRadius {w.ProbeSightRadius}"
-                        );
-                    if (w.ProbeLifespanSec <= 0f)
-                        errors.Add(
-                            $"probe weapon {w.WeaponId} (\"{w.Name}\") has non-positive ProbeLifespanSec {w.ProbeLifespanSec}"
-                        );
-                    // Combat block: signature must resolve positive (projection maps 0 -> 1), and
-                    // a destructible probe (ProbeHitPoints > 0) needs a live hit sphere.
-                    if (w.ProbeSignature <= 0f)
-                        errors.Add(
-                            $"probe weapon {w.WeaponId} (\"{w.Name}\") has non-positive ProbeSignature {w.ProbeSignature}"
-                        );
-                    if (w.ProbeHitPoints > 0f && w.ProbeHitRadius <= 0f)
-                        errors.Add(
-                            $"probe weapon {w.WeaponId} (\"{w.Name}\") has ProbeHitPoints {w.ProbeHitPoints} but non-positive ProbeHitRadius {w.ProbeHitRadius}"
-                        );
-                    // CargoId 0 = tier-2/3 dispenser sentinel (see the Mine-kind branch's comment above).
-                    if (cargoItems is not null && w.CargoId != 0 && !cargoIds.Contains(w.CargoId))
-                        errors.Add(
-                            $"probe weapon {w.WeaponId} (\"{w.Name}\") CargoId {w.CargoId} resolves to no cargo item"
-                        );
-                }
-
-                // A weapon must be able to damage a shield: ShieldMult <= 0 would make it useless
-                // against any shielded ship (the shield absorbs everything and never depletes).
-                if (w.ShieldMult <= 0f)
-                    errors.Add($"weapon {w.WeaponId} (\"{w.Name}\") has non-positive ShieldMult {w.ShieldMult}");
+                ValidateWeapon(w, cargoIds, cargoItems is not null, errors);
             }
 
             // Weapon-tier succession must stay within one category: MigrateWeaponTier swaps a
@@ -263,6 +154,125 @@ namespace StellarAllegiance.Shared
             }
 
             return errors;
+        }
+
+        // Per-weapon stat checks: missile/mine/chaff/probe kind-specific stat blocks must be live,
+        // a dispenser-kind CargoId (when authored) must resolve to a real cargo item, and every
+        // weapon must be able to damage a shield. Id-uniqueness/weaponsById bookkeeping stays in
+        // Validate's loop (that state is shared with later checks) — this only covers the parts
+        // of the old per-weapon loop that depend solely on a single WeaponDef.
+        private static void ValidateWeapon(WeaponDef w, HashSet<uint> cargoIds, bool haveCargo, List<string> errors)
+        {
+            // CargoId 0 is a deliberate sentinel for a tier-2/3 dispenser (no cargo-id authored —
+            // the hangar keeps one tier-neutral cargo row per line; the fired tier is resolved
+            // server-side from owned techs, Simulation.SeedDispenserAmmo). Same convention as
+            // Simulation.cs's `w.CargoId != 0` guard on _dispenserByCargo.
+            void RequireCargo(string kind)
+            {
+                if (haveCargo && w.CargoId != 0 && !cargoIds.Contains(w.CargoId))
+                    errors.Add($"{kind} weapon {w.WeaponId} (\"{w.Name}\") CargoId {w.CargoId} resolves to no cargo item");
+            }
+
+            // Missile-kind defs need a live guidance/lock stat block (belt-and-suspenders over
+            // the library CoreValidator — a projected missile with a dead lock/range/speed/
+            // magazine would spawn an unusable launcher).
+            if (w.Kind == WeaponKind.Missile)
+            {
+                if (w.LockTicks == 0)
+                    errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has LockTicks 0 — never locks");
+                if (w.LockRange <= 0f)
+                    errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive LockRange {w.LockRange}");
+                if (w.ProjectileSpeed <= 0f)
+                    errors.Add(
+                        $"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive ProjectileSpeed {w.ProjectileSpeed}"
+                    );
+                if (w.MagazineSize == 0)
+                    errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has MagazineSize 0 — empty launcher");
+                if (w.ProjectileLifeTicks == 0)
+                    errors.Add(
+                        $"missile weapon {w.WeaponId} (\"{w.Name}\") has ProjectileLifeTicks 0 — instantly culled"
+                    );
+                if (w.BlastPower <= 0f)
+                    errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive BlastPower {w.BlastPower}");
+                if (w.BlastRadius <= 0f)
+                    errors.Add(
+                        $"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive BlastRadius {w.BlastRadius}"
+                    );
+                if (w.DirectHitMult <= 0f)
+                    errors.Add(
+                        $"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive DirectHitMult {w.DirectHitMult}"
+                    );
+            }
+            else if (w.Kind == WeaponKind.Mine)
+            {
+                // Mine-kind dispenser: the field/blast/arming block must be live, and it must link
+                // to a stockable cargo item (the mine expendable it consumes).
+                if (w.MineCloudCount < 1 || w.MineCloudCount > 64)
+                    errors.Add(
+                        $"mine weapon {w.WeaponId} (\"{w.Name}\") has MineCloudCount {w.MineCloudCount} — must be 1..64"
+                    );
+                if (w.MineCloudRadius <= 0f)
+                    errors.Add(
+                        $"mine weapon {w.WeaponId} (\"{w.Name}\") has non-positive MineCloudRadius {w.MineCloudRadius}"
+                    );
+                if (w.BlastPower <= 0f)
+                    errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") has non-positive BlastPower {w.BlastPower}");
+                if (w.ProjectileLifeTicks == 0)
+                    errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") has ProjectileLifeTicks 0 — never lives");
+                if (w.MineArmTicks >= w.ProjectileLifeTicks)
+                    errors.Add(
+                        $"mine weapon {w.WeaponId} (\"{w.Name}\") MineArmTicks {w.MineArmTicks} >= ProjectileLifeTicks {w.ProjectileLifeTicks} — never arms"
+                    );
+                // Radar signature must resolve positive (projection maps 0 -> 1).
+                if (w.MineSignature <= 0f)
+                    errors.Add(
+                        $"mine weapon {w.WeaponId} (\"{w.Name}\") has non-positive MineSignature {w.MineSignature}"
+                    );
+                RequireCargo("mine");
+            }
+            else if (w.Kind == WeaponKind.Chaff)
+            {
+                // Chaff-kind dispenser: decoy strength/radius/life must be live, and it must link
+                // to a stockable cargo item (the chaff expendable it consumes).
+                if (w.ChaffStrength <= 0f)
+                    errors.Add(
+                        $"chaff weapon {w.WeaponId} (\"{w.Name}\") has non-positive ChaffStrength {w.ChaffStrength}"
+                    );
+                if (w.DecoyRadius <= 0f)
+                    errors.Add($"chaff weapon {w.WeaponId} (\"{w.Name}\") has non-positive DecoyRadius {w.DecoyRadius}");
+                if (w.ProjectileLifeTicks == 0)
+                    errors.Add($"chaff weapon {w.WeaponId} (\"{w.Name}\") has ProjectileLifeTicks 0 — instantly culled");
+                RequireCargo("chaff");
+            }
+            else if (w.Kind == WeaponKind.Probe)
+            {
+                // Probe dispenser: sight-radius/lifespan must be live, and it must link to a
+                // stockable cargo item (the probe expendable it consumes).
+                if (w.ProbeSightRadius <= 0f)
+                    errors.Add(
+                        $"probe weapon {w.WeaponId} (\"{w.Name}\") has non-positive ProbeSightRadius {w.ProbeSightRadius}"
+                    );
+                if (w.ProbeLifespanSec <= 0f)
+                    errors.Add(
+                        $"probe weapon {w.WeaponId} (\"{w.Name}\") has non-positive ProbeLifespanSec {w.ProbeLifespanSec}"
+                    );
+                // Combat block: signature must resolve positive (projection maps 0 -> 1), and
+                // a destructible probe (ProbeHitPoints > 0) needs a live hit sphere.
+                if (w.ProbeSignature <= 0f)
+                    errors.Add(
+                        $"probe weapon {w.WeaponId} (\"{w.Name}\") has non-positive ProbeSignature {w.ProbeSignature}"
+                    );
+                if (w.ProbeHitPoints > 0f && w.ProbeHitRadius <= 0f)
+                    errors.Add(
+                        $"probe weapon {w.WeaponId} (\"{w.Name}\") has ProbeHitPoints {w.ProbeHitPoints} but non-positive ProbeHitRadius {w.ProbeHitRadius}"
+                    );
+                RequireCargo("probe");
+            }
+
+            // A weapon must be able to damage a shield: ShieldMult <= 0 would make it useless
+            // against any shielded ship (the shield absorbs everything and never depletes).
+            if (w.ShieldMult <= 0f)
+                errors.Add($"weapon {w.WeaponId} (\"{w.Name}\") has non-positive ShieldMult {w.ShieldMult}");
         }
 
         // Every projected tech index must land inside the streamed tech catalog — an out-of-range

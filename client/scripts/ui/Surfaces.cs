@@ -87,9 +87,7 @@ public partial class DiamondDivider : Control
     {
         float midY = Size.Y * 0.5f;
         DrawLine(new Vector2(0, midY), new Vector2(Size.X, midY), DesignTokens.BorderHi, 1f, true);
-        const float s = 5f;
         var c = new Vector2(Size.X * 0.5f, midY);
-        var pts = new[] { c + new Vector2(0, -s), c + new Vector2(s, 0), c + new Vector2(0, s), c + new Vector2(-s, 0) };
-        DrawColoredPolygon(pts, DesignTokens.TeamAccent);
+        UiDraw.Diamond(this, c, 5f, DesignTokens.TeamAccent);
     }
 }

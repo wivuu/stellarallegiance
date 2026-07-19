@@ -139,8 +139,8 @@ public partial class ZoomView : Control
     public override void _Input(InputEvent @event)
     {
         // Same inputFree idiom the rest of the client gates keys on, plus a live local ship.
-        bool inputFree = !Chat.Capturing && !SectorOverview.Active && !ShipLoadout.Active && !EscapeMenu.Active && !SettingsDialog.Active;
-        if (!inputFree || _world.LocalShip == null)
+        bool inputFree = InputGate.FlightInputFree;
+        if (!inputFree || _world.Ships.LocalShip == null)
             return;
 
         // scope_zoom_in / scope_zoom_out are rebindable InputMap actions (InputBindings), so accept
@@ -173,7 +173,7 @@ public partial class ZoomView : Control
 
     public override void _Process(double delta)
     {
-        var ship = _world.LocalShip;
+        var ship = _world.Ships.LocalShip;
         // Auto-close when the ship is gone (death / dock) or another full-screen overlay takes over.
         if (Active && (ship == null || SectorOverview.Active || ShipLoadout.Active || EscapeMenu.Active))
         {
@@ -223,25 +223,64 @@ public partial class ZoomView : Control
         _demoWait = 0.8;
         switch (_demoStep++)
         {
-            case 0: Snap("01-flight"); break;
-            case 1: Tap(Key.Equal); break; // open at 5x
-            case 2: Snap("02-open-5x"); break;
-            case 3: Tap(Key.Equal); break; // 10x
-            case 4: Snap("03-10x"); break;
-            case 5: Tap(Key.Equal); break; // 20x
-            case 6: Tap(Key.Equal); break; // capped — must stay 20x
-            case 7: Snap("04-20x-capped"); break;
-            case 8: Tap(Key.Minus); break; // back down to 10x
-            case 9: Snap("05-minus-10x"); break;
-            case 10: Tap(Key.Escape); break; // dismiss
-            case 11: Snap("06-esc-closed"); GetTree().Quit(); break;
+            case 0:
+                Snap("01-flight");
+                break;
+            case 1:
+                Tap(Key.Equal);
+                break; // open at 5x
+            case 2:
+                Snap("02-open-5x");
+                break;
+            case 3:
+                Tap(Key.Equal);
+                break; // 10x
+            case 4:
+                Snap("03-10x");
+                break;
+            case 5:
+                Tap(Key.Equal);
+                break; // 20x
+            case 6:
+                Tap(Key.Equal);
+                break; // capped — must stay 20x
+            case 7:
+                Snap("04-20x-capped");
+                break;
+            case 8:
+                Tap(Key.Minus);
+                break; // back down to 10x
+            case 9:
+                Snap("05-minus-10x");
+                break;
+            case 10:
+                Tap(Key.Escape);
+                break; // dismiss
+            case 11:
+                Snap("06-esc-closed");
+                GetTree().Quit();
+                break;
         }
     }
 
     private static void Tap(Key k)
     {
-        Input.ParseInputEvent(new InputEventKey { Keycode = k, PhysicalKeycode = k, Pressed = true });
-        Input.ParseInputEvent(new InputEventKey { Keycode = k, PhysicalKeycode = k, Pressed = false });
+        Input.ParseInputEvent(
+            new InputEventKey
+            {
+                Keycode = k,
+                PhysicalKeycode = k,
+                Pressed = true,
+            }
+        );
+        Input.ParseInputEvent(
+            new InputEventKey
+            {
+                Keycode = k,
+                PhysicalKeycode = k,
+                Pressed = false,
+            }
+        );
     }
 
     private void Snap(string name)

@@ -28,8 +28,4 @@ public record Mine : Expendable
     /// <summary>Field arm delay, in seconds — mines are inert until this elapses (projected onto
     /// WeaponDef.MineArmTicks after ×20 tick conversion).</summary>
     public double ArmDelay { get; set; }
-
-    /// <summary>GLB model basename the client instances (once per visual mine) from
-    /// <c>assets/mines/</c> (no extension); projected onto WeaponDef.ModelName.</summary>
-    public string? ModelName { get; set; }
 }

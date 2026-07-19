@@ -783,6 +783,12 @@ namespace StellarAllegiance.Shared
         public float BoundaryBaseDps = 8f;
         public float BoundaryRampDps = 0.12f;
         public float BoundaryMaxDps = 60f;
+
+        // Minefield speed-scaled damage: a victim takes the field's full authored DPS at MineSpeedRef
+        // closing speed and scales linearly (speed/ref), capped at MineMaxSpeedMult× so a near-static
+        // ship takes ~0 and a blistering plow-through can't exceed the cap.
+        public float MineSpeedRef = 40f;
+        public float MineMaxSpeedMult = 2.5f;
     }
 
     // Gate / docking / pod / economy / match-flow tuning (world.yaml `mechanics:`).
@@ -960,11 +966,9 @@ namespace StellarAllegiance.Shared
         // (not a ShipClass), so this sits clear of real-hull ids (0,1,2,…).
         public const byte PodClassId = 255;
 
-        // Weapon ids for the stock class guns (referenced by a ship's Weapon hardpoint). The sim
+        // Weapon id for the stock scout gun (referenced by a ship's Weapon hardpoint). The sim
         // uses ScoutWeaponId as the PIG's representative gun for lead prediction.
         public const uint ScoutWeaponId = 0;
-        public const uint FighterWeaponId = 1;
-        public const uint BomberWeaponId = 2;
 
         // Ship/missile ids are monotonic from 1 (Simulation._nextShipId); base ids come from
         // World.Bases / the Welcome frame and are small (1/2). The top bit is otherwise unused by

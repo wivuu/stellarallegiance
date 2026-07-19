@@ -15,13 +15,17 @@ public partial class ExplosionEffect : Node3D
     private byte _team;
 
     // Shared immutable resources — built once, reused by every explosion (no per-blast GC).
-    private static readonly GradientTexture2D Dot = RadialDot();
+    private static readonly GradientTexture2D Dot = VfxTextures.RadialDot();
     private static readonly CurveTexture ScaleTex = BurstScaleCurve();
 
     private const double FlashLife = 0.22;
     private const double RingLife = 0.42;
     private const float FlashEnergy = 14f;
     private const float RingEnergy = 2.6f;
+
+    // Reference blast radius (world units) a warhead's visual scale is normalized against — see
+    // CreateBlast.
+    private const float SeekerReferenceRadius = 25f;
 
     private MeshInstance3D? _flash;
     private StandardMaterial3D _flashMat = null!;
@@ -39,18 +43,18 @@ public partial class ExplosionEffect : Node3D
             _team = team,
         };
 
-    // A warhead-scaled detonation blast (missile impact / mine pop). TRACK A scales it by
-    // blastRadius/25 (the seeker's reference radius) so a torpedo booms bigger than a seeker; the
-    // Track-0 stub reproduces today's Scout-scale visual EXACTLY regardless of radius, so the impact
-    // FX is behaviourally unchanged until Track A lands.
+    // A warhead-scaled detonation blast (missile impact / mine pop): scales the visual by
+    // blastRadius/SeekerReferenceRadius so a wider-radius torpedo booms proportionally bigger than
+    // a seeker, while a splash-less weapon still shows a small default pop.
     public static ExplosionEffect CreateBlast(float blastRadius, byte team) =>
         new()
         {
             Name = "Explosion",
-            // Scale to the warhead: the seeker's 25 u blast is the 1.0 reference, so a wider-radius
-            // torpedo booms proportionally bigger. Clamp low so a 0-radius (splash-less) weapon still
-            // shows the small default pop, and cap high so a huge radius doesn't fill the screen.
-            _classScale = Mathf.Clamp(blastRadius / 25f, 0.6f, 3.0f),
+            // Scale to the warhead: the seeker's SeekerReferenceRadius blast is the 1.0 reference, so a
+            // wider-radius torpedo booms proportionally bigger. Clamp low so a 0-radius (splash-less)
+            // weapon still shows the small default pop, and cap high so a huge radius doesn't fill the
+            // screen.
+            _classScale = Mathf.Clamp(blastRadius / SeekerReferenceRadius, 0.6f, 3.0f),
             _team = team,
         };
 
@@ -113,8 +117,6 @@ public partial class ExplosionEffect : Node3D
 
         // --- Shockwave ring: a thin torus that races outward and fades. Randomly oriented so
         // successive blasts don't all share a plane (there's no canonical "up" in space). ---
-        var rng = new RandomNumberGenerator();
-        rng.Randomize();
         _ringMat = new StandardMaterial3D
         {
             ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
@@ -137,7 +139,10 @@ public partial class ExplosionEffect : Node3D
                 RingSegments = 8,
             },
             MaterialOverride = _ringMat,
-            Rotation = new Vector3(rng.RandfRange(0f, Mathf.Pi), rng.RandfRange(0f, Mathf.Pi), rng.RandfRange(0f, Mathf.Pi)),
+            // Same uniform 0..Pi spread as RandomNumberGenerator.RandfRange gave, without a
+            // per-blast RNG instance (GD.Randf() is the shared engine RNG the rest of the file
+            // already uses for jitter).
+            Rotation = new Vector3(GD.Randf() * Mathf.Pi, GD.Randf() * Mathf.Pi, GD.Randf() * Mathf.Pi),
             Scale = Vector3.One * 0.5f,
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         };
@@ -251,23 +256,4 @@ public partial class ExplosionEffect : Node3D
             Emission = Colors.White,
             EmissionEnergyMultiplier = energy,
         };
-
-    // Soft round mote: hot centre fading to transparent (same recipe as EngineGlow.RadialDot).
-    private static GradientTexture2D RadialDot()
-    {
-        var gradient = new Gradient
-        {
-            Offsets = new[] { 0f, 0.5f, 1f },
-            Colors = new[] { new Color(1f, 1f, 1f, 1f), new Color(1f, 1f, 1f, 0.4f), new Color(1f, 1f, 1f, 0f) },
-        };
-        return new GradientTexture2D
-        {
-            Gradient = gradient,
-            Width = 128,
-            Height = 128,
-            Fill = GradientTexture2D.FillEnum.Radial,
-            FillFrom = new Vector2(0.5f, 0.5f),
-            FillTo = new Vector2(0.5f, 0f),
-        };
-    }
 }

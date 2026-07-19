@@ -96,7 +96,7 @@ public partial class MissileView : Node3D
 
         // Orient along velocity (local +Z = forward, matching the ship/hardpoint convention).
         if (_vel.LengthSquared() > 1e-4f)
-            Basis = BasisFacingZ(_vel);
+            Basis = ModelGeom.BasisFacingZ(_vel);
 
         // Keep the booster pinned so the plume/contrail never gutters out mid-flight.
         _glow?.SetThrottle(1f, 0.15f);
@@ -139,16 +139,4 @@ public partial class MissileView : Node3D
     // 0xRRGGBBAA -> Color.
     private static Color ColorFromRgba(uint rgba) =>
         new(((rgba >> 24) & 0xFF) / 255f, ((rgba >> 16) & 0xFF) / 255f, ((rgba >> 8) & 0xFF) / 255f, (rgba & 0xFF) / 255f);
-
-    // Orthonormal basis whose local +Z points along `forward` (game-forward), with the up
-    // reference swapped when forward is near-vertical so the cross product stays conditioned —
-    // the same convention ShipModelLoader.BasisFacingZ uses for hardpoint markers.
-    private static Basis BasisFacingZ(Vector3 forward)
-    {
-        Vector3 z = forward.Normalized();
-        Vector3 upRef = Mathf.Abs(z.Dot(Vector3.Up)) > 0.999f ? Vector3.Right : Vector3.Up;
-        Vector3 x = upRef.Cross(z).Normalized();
-        Vector3 y = z.Cross(x);
-        return new Basis(x, y, z);
-    }
 }

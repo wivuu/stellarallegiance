@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics;
 using Godot;
 using StellarAllegiance.Net;
 using StellarAllegiance.Shared;
@@ -32,10 +34,14 @@ public static class ShipMath
     }
 
     // Angular difference between two unit quaternions, in radians.
-    public static float AngleBetween(Quat a, Quat b)
+    public static float AngleBetween(in Quat a, in Quat b)
     {
-        float dot = a.X * b.X + a.Y * b.Y + a.Z * b.Z + a.W * b.W;
-        dot = Mathf.Clamp(Mathf.Abs(dot), 0f, 1f);
-        return 2f * Mathf.Acos(dot);
+        var qa = Unsafe.BitCast<Quat, Vector128<float>>(a);
+        var qb = Unsafe.BitCast<Quat, Vector128<float>>(b);
+
+        // 4-wide dot; no construction, no overread
+        float dot = Vector128.Dot(qa, qb);
+        dot = System.Math.Clamp(System.Math.Abs(dot), 0f, 1f);
+        return 2f * System.MathF.Acos(dot);
     }
 }

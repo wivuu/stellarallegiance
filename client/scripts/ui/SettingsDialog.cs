@@ -5,7 +5,7 @@ using Godot;
 namespace StellarAllegiance.Ui;
 
 // The settings modal (the Claude Design "CONFIGURATION / SETTINGS" mockup): dim scrim,
-// centred 720×560 bracket panel, header with an ✕ close, a left tab rail
+// centred 1080×840 bracket panel, header with an ✕ close, a left tab rail
 // (AUDIO / CONTROLS / PILOT) beside the scrollable content, and a footer bar with
 // RESTORE DEFAULTS · CANCEL · DONE. Opened from the screen gears, the escape menu, or the
 // showcase; it mounts last on ModalHost's shared layer, so it draws and receives input
@@ -86,13 +86,12 @@ public partial class SettingsDialog : Control
             InputEvent? bind = InputBindings.NormalizeCaptured(@event);
             if (bind != null)
             {
-                string? conflict = InputBindings.Rebind(_capturingRow.ActionId, bind);
+                InputBindings.Rebind(_capturingRow.ActionId, bind);
                 _capturingRow.SetCapturing(false);
                 _capturingRow = null;
                 foreach (var r in _bindRows)
                     r.Refresh(); // a conflict may have cleared another action's binding
                 GetViewport().SetInputAsHandled();
-                _ = conflict;
             }
             else if (@event is InputEventKey or InputEventMouseButton or InputEventJoypadButton)
             {

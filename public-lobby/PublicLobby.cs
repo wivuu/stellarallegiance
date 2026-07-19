@@ -62,10 +62,13 @@ app.MapPost(
     "/servers",
     async (RegisterRequest req, HttpContext ctx, IServerRegistry registry, ReachabilityProbe probe, CancellationToken ct) =>
     {
+        // Shared 400 payload: NormalizeName's pre-check and Register's null-return both mean the
+        // same thing (name outside the valid length range), so both branches return this one.
+        var nameErr = Results.BadRequest(
+            new { error = $"name must be {InMemoryServerRegistry.NameMin}-{InMemoryServerRegistry.NameMax} characters" }
+        );
         if (InMemoryServerRegistry.NormalizeName(req.Name) is null)
-            return Results.BadRequest(
-                new { error = $"name must be {InMemoryServerRegistry.NameMin}-{InMemoryServerRegistry.NameMax} characters" }
-            );
+            return nameErr;
 
         var sourceIp = ctx.Connection.RemoteIpAddress?.ToString();
         var endpoint = await probe.ResolveAsync(sourceIp, req.Port, req.PublicEndpoint, ct);
@@ -73,11 +76,7 @@ app.MapPost(
         var result = registry.Register(req, endpoint);
         // The response body is the only place the per-session secret is disclosed; it never appears
         // in the SSE stream or GET /servers, so a client browsing the list can't replay it.
-        return result is null
-            ? Results.BadRequest(
-                new { error = $"name must be {InMemoryServerRegistry.NameMin}-{InMemoryServerRegistry.NameMax} characters" }
-            )
-            : Results.Created($"/servers/{result.Server.SessionId}", result);
+        return result is null ? nameErr : Results.Created($"/servers/{result.Server.SessionId}", result);
     }
 );
 
@@ -147,13 +146,7 @@ app.MapGet(
 // that wire-protocol version.
 app.MapGet(
     "/servers",
-    (IServerRegistry registry, int? protocol) =>
-    {
-        var active = registry.ListActive();
-        if (protocol is > 0)
-            active = [.. active.Where(s => s.ProtocolVersion == protocol)];
-        return Results.Ok(active);
-    }
+    (IServerRegistry registry, int? protocol) => Results.Ok(FilterProtocol(registry.ListActive(), protocol))
 );
 
 // Explicitly remove a server (graceful host shutdown). Requires the per-session secret in an
@@ -186,10 +179,8 @@ app.MapGet(
 
         using var sub = bus.Subscribe(out var reader);
 
-        // Initial full snapshot filtered to the client's protocol (same logic as GET /servers).
-        var snap = registry.ListActive();
-        if (protocol is > 0)
-            snap = [.. snap.Where(s => s.ProtocolVersion == protocol)];
+        // Initial full snapshot filtered to the client's protocol (same FilterProtocol as GET /servers).
+        var snap = FilterProtocol(registry.ListActive(), protocol);
         await WriteSseEvent(ctx.Response.Body, "snapshot", SseJson(snap), ct);
 
         // Keepalive comment lines run concurrently with the event loop.
@@ -272,6 +263,11 @@ app.Run();
 // ---- Helpers ---------------------------------------------------------------
 
 static string SseJson(object? o) => JsonSerializer.Serialize(o, LobbyJson.Opts);
+
+// Filters an active-server list to one wire-protocol version. Shared by GET /servers and the SSE
+// snapshot so both apply identical filtering. protocol <= 0 or absent means "no filter".
+static IReadOnlyCollection<ServerEntry> FilterProtocol(IReadOnlyCollection<ServerEntry> list, int? protocol) =>
+    protocol is > 0 ? [.. list.Where(s => s.ProtocolVersion == protocol)] : list;
 
 // Extracts the bearer token from an `Authorization: Bearer <token>` header, or null if absent.
 static string? BearerToken(HttpContext ctx)
@@ -374,7 +370,7 @@ static async Task<T?> WsReceiveJsonAsync<T>(WebSocket ws, CancellationToken ct)
         ms.Write(buf, 0, result.Count);
     } while (!result.EndOfMessage);
     ms.Seek(0, System.IO.SeekOrigin.Begin);
-    return JsonSerializer.Deserialize<T>(ms, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+    return JsonSerializer.Deserialize<T>(ms, LobbyJson.CaseInsensitive);
 }
 
 // ---- STUN config from env -------------------------------------------------
@@ -407,4 +403,7 @@ file sealed record WsServerMsg(
 static class LobbyJson
 {
     internal static readonly JsonSerializerOptions Opts = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
+    // Reused by WsReceiveJsonAsync for every inbound WS frame instead of allocating one per call.
+    internal static readonly JsonSerializerOptions CaseInsensitive = new() { PropertyNameCaseInsensitive = true };
 }

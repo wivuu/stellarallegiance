@@ -57,7 +57,7 @@ public partial class WeaponsPanel : Control
     public override void _Process(double delta)
     {
         _t += delta;
-        var local = _world.LocalShip;
+        var local = _world.Ships.LocalShip;
         // Only armed hulls in flight get the readout — a pod (no weapon hardpoint) shows nothing.
         BuildWeapons(local);
         Visible = local != null && !local.IsPod && _weapons.Count > 0 && !SectorOverview.Active;
@@ -91,7 +91,7 @@ public partial class WeaponsPanel : Control
 
     public override void _Draw()
     {
-        var local = _world.LocalShip;
+        var local = _world.Ships.LocalShip;
         if (local == null || _weapons.Count == 0)
             return;
 
@@ -110,17 +110,9 @@ public partial class WeaponsPanel : Control
         WeaponDef? probeDisp = DispenserFor(cls, WeaponKind.Probe, _net.LocalProbeAmmo);
 
         int secCount =
-            _weapons.Count - 1
-            + (chaffDisp != null ? 1 : 0)
-            + (mineDisp != null ? 1 : 0)
-            + (probeDisp != null ? 1 : 0);
+            _weapons.Count - 1 + (chaffDisp != null ? 1 : 0) + (mineDisp != null ? 1 : 0) + (probeDisp != null ? 1 : 0);
         float panelH =
-            PadTop
-            + HeaderH
-            + GapAfterHeader
-            + PrimaryH
-            + (secCount > 0 ? RowGap + secCount * SecRowH : 0f)
-            + PadBottom;
+            PadTop + HeaderH + GapAfterHeader + PrimaryH + (secCount > 0 ? RowGap + secCount * SecRowH : 0f) + PadBottom;
 
         Vector2 view = GetViewportRect().Size;
         Vector2 panelPos = new(view.X - PanelW - Margin, view.Y - panelH - Margin);
@@ -149,7 +141,15 @@ public partial class WeaponsPanel : Control
         string primState = ready ? "READY" : "CYCLING";
         float primStateW = MonoWidth(mono, primState, 10);
         DrawString(mono, new Vector2(left + 8f, y + 14f), "[1]", HorizontalAlignment.Left, -1, 10, DesignTokens.TeamAccent);
-        DrawString(UiFonts.SairaBold, new Vector2(left + 30f, y + 15f), primary.Name.ToUpperInvariant(), HorizontalAlignment.Left, right - 6f - primStateW - 8f - (left + 30f), 14, DesignTokens.TextHi);
+        DrawString(
+            UiFonts.SairaBold,
+            new Vector2(left + 30f, y + 15f),
+            primary.Name.ToUpperInvariant(),
+            HorizontalAlignment.Left,
+            right - 6f - primStateW - 8f - (left + 30f),
+            14,
+            DesignTokens.TextHi
+        );
         DrawStringRight(mono, new Vector2(right - 6f, y + 14f), primState, 10, ready ? DesignTokens.Ok : DesignTokens.Warn);
 
         // Cadence bar: charges from just-fired (empty) back to full = READY. Green when ready, cyan while charging.
@@ -195,9 +195,9 @@ public partial class WeaponsPanel : Control
     {
         if (_defs.TryGetShipDef(classId, out var def) && def.DefaultCargo is not null)
             foreach (var load in def.DefaultCargo)
-                foreach (var w in _defs.AllWeapons())
-                    if (w.Kind == kind && w.CargoId == load.CargoId)
-                        return w;
+            foreach (var w in _defs.AllWeapons())
+                if (w.Kind == kind && w.CargoId == load.CargoId)
+                    return w;
         if (liveAmmo > 0)
             foreach (var w in _defs.AllWeapons())
                 if (w.Kind == kind)
@@ -208,30 +208,11 @@ public partial class WeaponsPanel : Control
     // The researched tier's display name for a dispenser row. Cargo stays one tier-neutral item per
     // line (the def found by CargoId is always tier 1) while research upgrades what actually fires —
     // Simulation.SeedDispenserAmmo walks the same successor chain server-side — so the row names the
-    // LIVE tier. The pack/ammo math stays on the tier-1 def (it owns the CargoId).
+    // LIVE tier. The pack/ammo math stays on the tier-1 def (it owns the CargoId). Walk shared with
+    // ShipLoadout via DefRegistry.MigrateWeaponTier.
     private string MigratedDispenserName(WeaponDef disp)
     {
-        byte team = _net.MyTeam;
-        uint id = disp.WeaponId;
-        for (int guard = 0; guard < 8; guard++)
-        {
-            if (_defs.GetWeapon(id) is not WeaponDef w
-                || w.SucceededByWeaponId == uint.MaxValue
-                || w.ObsoletedByTechIdx.Length == 0
-                || _defs.GetWeapon(w.SucceededByWeaponId) is not WeaponDef next
-                || next.Mass > w.Mass) // mass guard: matches the server's payload-safe migration
-                break;
-            bool owns = false;
-            foreach (ushort t in w.ObsoletedByTechIdx)
-                if (_world.TeamOwnsTech(team, t))
-                {
-                    owns = true;
-                    break;
-                }
-            if (!owns)
-                break;
-            id = w.SucceededByWeaponId;
-        }
+        uint id = _defs.MigrateWeaponTier(disp.WeaponId, _net.MyTeam, _world);
         return _defs.GetWeapon(id) is WeaponDef live ? live.Name : disp.Name;
     }
 
@@ -242,7 +223,15 @@ public partial class WeaponsPanel : Control
     private void DrawDispenserRow(string keyHint, WeaponDef disp, int ammo, float left, float right, float y, Font mono)
     {
         float mid = y + SecRowH * 0.5f;
-        DrawString(mono, new Vector2(left, mid + 4f), $"[{keyHint}]", HorizontalAlignment.Left, -1, 10, DesignTokens.TextDim);
+        DrawString(
+            mono,
+            new Vector2(left, mid + 4f),
+            $"[{keyHint}]",
+            HorizontalAlignment.Left,
+            -1,
+            10,
+            DesignTokens.TextDim
+        );
 
         int packSize = _defs.GetCargoItem(disp.CargoId)?.ChargesPerPack ?? 1;
         if (packSize < 1)
@@ -255,17 +244,39 @@ public partial class WeaponsPanel : Control
         // Exact remaining charges, just left of the state tag.
         float countRight = right - MonoWidth(mono, txt, 10) - 10f;
         string countTxt = ammo.ToString();
-        DrawStringRight(mono, new Vector2(countRight, mid + 4f), countTxt, 10, ammo == 0 ? DesignTokens.TextDim : DesignTokens.Data);
+        DrawStringRight(
+            mono,
+            new Vector2(countRight, mid + 4f),
+            countTxt,
+            10,
+            ammo == 0 ? DesignTokens.TextDim : DesignTokens.Data
+        );
 
         float pipsRight = countRight - MonoWidth(mono, countTxt, 10) - 10f;
         float clusterLeft = DrawPips(pipsRight, mid, packs, System.Math.Max(packs, 1));
 
         float nameX = left + 26f;
-        DrawString(UiFonts.Saira, new Vector2(nameX, mid + 4f), MigratedDispenserName(disp).ToUpperInvariant(), HorizontalAlignment.Left, Mathf.Max(24f, clusterLeft - 8f - nameX), 12, DesignTokens.Text2);
+        DrawString(
+            UiFonts.Saira,
+            new Vector2(nameX, mid + 4f),
+            MigratedDispenserName(disp).ToUpperInvariant(),
+            HorizontalAlignment.Left,
+            Mathf.Max(24f, clusterLeft - 8f - nameX),
+            12,
+            DesignTokens.Text2
+        );
     }
 
     // One secondary weapon row: "[n]  NAME  <pips|bar>  STATE".
-    private void DrawSecondaryRow(WeaponDef w, int slot, float left, float right, float y, Font mono, PredictionController local)
+    private void DrawSecondaryRow(
+        WeaponDef w,
+        int slot,
+        float left,
+        float right,
+        float y,
+        Font mono,
+        PredictionController local
+    )
     {
         float mid = y + SecRowH * 0.5f;
         DrawString(mono, new Vector2(left, mid + 4f), $"[{slot}]", HorizontalAlignment.Left, -1, 10, DesignTokens.TextDim);
@@ -276,17 +287,11 @@ public partial class WeaponsPanel : Control
         if (w.Kind == WeaponKind.Missile)
         {
             // Ammo (pips) + authoritative lock state, from the local ship's snapshot.
-            byte ls = _net.LocalLockState;
-            bool locked = (ls & 0x80) != 0;
-            int prog = ls & 0x7F; // 0..100
+            (bool locked, int prog) = DecodeLockState(_net.LocalLockState);
             int ammo = _net.LocalMissileAmmo;
             int mag = System.Math.Max(w.MagazineSize, (byte)ammo);
 
-            (string txt, Color col, bool pulse) =
-                ammo == 0 ? ("EMPTY", DesignTokens.TextDim, false)
-                : locked ? ("LOCKED", DesignTokens.Danger, true)
-                : prog > 0 ? ($"LOCK {prog}%", DesignTokens.Warn, false)
-                : ("READY", DesignTokens.Ok, false);
+            (string txt, Color col, bool pulse) = LauncherStatus(ammo, locked, prog);
             DrawStringRight(mono, new Vector2(right, mid + 4f), txt, 10, pulse ? Pulsed(col) : col);
 
             float pipsRight = right - MonoWidth(mono, txt, 10) - 10f;
@@ -305,7 +310,15 @@ public partial class WeaponsPanel : Control
         }
 
         float nameX = left + 26f;
-        DrawString(UiFonts.Saira, new Vector2(nameX, mid + 4f), w.Name.ToUpperInvariant(), HorizontalAlignment.Left, Mathf.Max(24f, clusterLeft - 8f - nameX), 12, DesignTokens.Text2);
+        DrawString(
+            UiFonts.Saira,
+            new Vector2(nameX, mid + 4f),
+            w.Name.ToUpperInvariant(),
+            HorizontalAlignment.Left,
+            Mathf.Max(24f, clusterLeft - 8f - nameX),
+            12,
+            DesignTokens.Text2
+        );
     }
 
     // Right-aligned header cue: the launcher's state if the hull carries one, else a guns-armed tag.
@@ -317,15 +330,12 @@ public partial class WeaponsPanel : Control
         bool pulse = false;
         if (launcher != null)
         {
-            byte ls = _net.LocalLockState;
-            bool locked = (ls & 0x80) != 0;
-            int prog = ls & 0x7F;
+            (bool locked, int prog) = DecodeLockState(_net.LocalLockState);
             int ammo = _net.LocalMissileAmmo;
-            (txt, col, pulse) =
-                ammo == 0 ? ("● EMPTY", DesignTokens.TextDim, false)
-                : locked ? ("● LOCKED", DesignTokens.Danger, true)
-                : prog > 0 ? ($"● LOCK {prog}%", DesignTokens.Warn, false)
-                : ("● ARMED", DesignTokens.Ok, false);
+            var (s, c, p) = LauncherStatus(ammo, locked, prog, "ARMED");
+            txt = "● " + s;
+            col = c;
+            pulse = p;
         }
         else
         {
@@ -334,6 +344,25 @@ public partial class WeaponsPanel : Control
         }
         DrawStringRight(mono, rightAnchor, txt, 10, pulse ? Pulsed(col) : col);
     }
+
+    // Decode the local ship's authoritative missile lock byte (bit7 = locked, bits0-6 = progress
+    // 0..100). Public so TargetMarkers' lock-progress arc (a third consumer of the same wire byte)
+    // shares this exact bit math instead of re-deriving it.
+    public static (bool locked, int progressPct) DecodeLockState(byte ls) => ((ls & 0x80) != 0, ls & 0x7F);
+
+    // The launcher's EMPTY / LOCKED / LOCK n% / <ready> status tuple, shared by the secondary-row
+    // and header readouts. `readyText` differs between them (plain "READY" for the row, "ARMED"
+    // for the header's more general armed-and-ready cue) — text/color/pulse are otherwise identical.
+    private static (string text, Color color, bool pulse) LauncherStatus(
+        int ammo,
+        bool locked,
+        int prog,
+        string readyText = "READY"
+    ) =>
+        ammo == 0 ? ("EMPTY", DesignTokens.TextDim, false)
+        : locked ? ("LOCKED", DesignTokens.Danger, true)
+        : prog > 0 ? ($"LOCK {prog}%", DesignTokens.Warn, false)
+        : (readyText, DesignTokens.Ok, false);
 
     // Fire-cadence readiness for a bolt gun, 0..1 (1 = READY). Mirrors the predictor's per-mount
     // fire gate (mixed loadouts: each weapon cools down on its own interval, so read THIS
@@ -352,12 +381,14 @@ public partial class WeaponsPanel : Control
     // large torpedo magazine (or a big missile rack) never overruns the row — the state text carries
     // the exact count. Pips are laid out right-to-left ending at `rightX`.
     private const int MaxPips = 6;
+
     private float DrawPips(float rightX, float midY, int ammo, int mag)
     {
         int shown = System.Math.Min(mag, MaxPips);
         if (shown <= 0)
             return rightX;
-        const float pip = 6f, gap = 4f;
+        const float pip = 6f,
+            gap = 4f;
         float x = rightX - shown * (pip + gap) + gap;
         for (int i = 0; i < shown; i++)
         {
