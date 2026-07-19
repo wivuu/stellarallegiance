@@ -53,9 +53,7 @@ public partial class ResearchTab : Control
     private double _pendingUntilMsec;
 
     private bool _built;
-    private double _refreshTimer;
-    private long _statusSig = long.MinValue;
-    private int _catalogCount = -1;
+    private readonly RefreshGate _gate = new();
 
     // -- nodes / roots -------------------------------------------------------
     private Control _guard = null!;
@@ -121,7 +119,11 @@ public partial class ResearchTab : Control
         var glyph = UiKit.MakeLabel("◇", UiKit.TextStyle.Display, DesignTokens.TextDim);
         glyph.HorizontalAlignment = HorizontalAlignment.Center;
         col.AddChild(glyph);
-        var msg = UiKit.MakeLabel("RESEARCH UPLINK OFFLINE — AWAITING SERVER CATALOG", UiKit.TextStyle.Data, DesignTokens.TextDim);
+        var msg = UiKit.MakeLabel(
+            "RESEARCH UPLINK OFFLINE — AWAITING SERVER CATALOG",
+            UiKit.TextStyle.Data,
+            DesignTokens.TextDim
+        );
         msg.HorizontalAlignment = HorizontalAlignment.Center;
         col.AddChild(msg);
         center.AddChild(col);
@@ -172,12 +174,21 @@ public partial class ResearchTab : Control
         _baseGlyph.AddThemeFontOverride("font", UiFonts.Mono);
         _baseGlyph.AddThemeFontSizeOverride("font_size", 24);
         _baseGlyph.AddThemeColorOverride("font_color", DesignTokens.TeamAccent);
-        var tileSb = new StyleBoxFlat { BgColor = new Color(DesignTokens.TeamAccentBase, 0.10f), BorderColor = new Color(DesignTokens.TeamAccentBase, 0.4f), AntiAliasing = false };
+        var tileSb = new StyleBoxFlat
+        {
+            BgColor = new Color(DesignTokens.TeamAccentBase, 0.10f),
+            BorderColor = new Color(DesignTokens.TeamAccentBase, 0.4f),
+            AntiAliasing = false,
+        };
         tileSb.SetCornerRadiusAll(0);
         tileSb.SetBorderWidthAll(1);
         _baseGlyph.AddThemeStyleboxOverride("normal", tileSb);
         head.AddChild(_baseGlyph);
-        var htxt = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ShrinkCenter };
+        var htxt = new VBoxContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ShrinkCenter,
+        };
         htxt.AddThemeConstantOverride("separation", 1);
         htxt.AddChild(UiKit.MakeLabel("▶ RESEARCH DIRECTORATE", UiKit.TextStyle.Label, DesignTokens.TextDim));
         _baseTitleLabel = UiKit.MakeLabel("—", UiKit.TextStyle.Title);
@@ -226,15 +237,9 @@ public partial class ResearchTab : Control
         if (!haveCatalog)
             return;
 
-        _refreshTimer -= delta;
-        long sig = ComputeStatusSig(devs);
-        bool catalogChanged = devs.Count != _catalogCount;
-        if (_refreshTimer <= 0 || sig != _statusSig || catalogChanged)
+        var (run, structural) = _gate.Tick(delta, devs.Count, ComputeStatusSig(devs));
+        if (run)
         {
-            _refreshTimer = 0.25;
-            _catalogCount = devs.Count;
-            bool structural = sig != _statusSig || catalogChanged;
-            _statusSig = sig;
             if (structural)
                 RebuildClusters(devs);
             UpdateBaseHeader();
@@ -287,8 +292,13 @@ public partial class ResearchTab : Control
             {
                 string name = _defs.GetDevelopment(a.DevIndex)?.Name.ToUpperInvariant() ?? $"DEV {a.DevIndex}";
                 var banner = new ActiveBanner();
-                banner.ConfigureActive(_world, name, a.StartTick, a.DurationTicks,
-                    commander ? () => Send(1, _baseId, a.DevIndex) : (Action?)null);
+                banner.ConfigureActive(
+                    _world,
+                    name,
+                    a.StartTick,
+                    a.DurationTicks,
+                    commander ? () => Send(1, _baseId, a.DevIndex) : (Action?)null
+                );
                 _bannersBox.AddChild(banner);
             }
             if (r.OnDeck is ushort od)
@@ -347,7 +357,15 @@ public partial class ResearchTab : Control
     private Control BuildCluster(string groupName, List<(ushort idx, DevelopmentDef dev)> gdevs)
     {
         // Build the single-parent forest within this group.
-        var nodes = gdevs.ToDictionary(d => d.idx, d => new TreeNode { Index = d.idx, Dev = d.dev, Done = StatusOf(d.dev, d.idx) == Status.Done });
+        var nodes = gdevs.ToDictionary(
+            d => d.idx,
+            d => new TreeNode
+            {
+                Index = d.idx,
+                Dev = d.dev,
+                Done = StatusOf(d.dev, d.idx) == Status.Done,
+            }
+        );
         var roots = new List<TreeNode>();
         foreach (var (idx, dev) in gdevs)
         {
@@ -384,7 +402,7 @@ public partial class ResearchTab : Control
         {
             if (!_collapsedGroups.Add(groupName))
                 _collapsedGroups.Remove(groupName);
-            _statusSig = long.MinValue; // force a structural rebuild
+            _gate.Invalidate(); // force a structural rebuild
         };
         cluster.AddChild(header);
 
@@ -425,15 +443,23 @@ public partial class ResearchTab : Control
         bool hasChildren = node.Children.Count > 0;
         bool nodeCollapsed = _collapsedNodes.Contains(node.Index);
         ushort idx = node.Index;
-        card.Configure(_world!, status, node.Dev, TechDetailPanel.PriceText(node.Dev.Price), hasChildren, nodeCollapsed,
-            ActiveInfoFor(node.Index), _selectedDev == node.Index);
+        card.Configure(
+            _world!,
+            status,
+            node.Dev,
+            TechDetailPanel.PriceText(node.Dev.Price),
+            hasChildren,
+            nodeCollapsed,
+            ActiveInfoFor(node.Index),
+            _selectedDev == node.Index
+        );
         card.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         card.Pressed += () => SelectDev(idx);
         card.ChevronPressed += () =>
         {
             if (!_collapsedNodes.Add(idx))
                 _collapsedNodes.Remove(idx);
-            _statusSig = long.MinValue;
+            _gate.Invalidate();
         };
         row.AddChild(card);
         body.AddChild(row);
@@ -455,9 +481,9 @@ public partial class ResearchTab : Control
         if (_world == null)
             return null;
         foreach (var (_, r) in _world.AllResearch())
-            foreach (var a in r.Active)
-                if (a.DevIndex == devIndex)
-                    return (a.StartTick, a.DurationTicks);
+        foreach (var a in r.Active)
+            if (a.DevIndex == devIndex)
+                return (a.StartTick, a.DurationTicks);
         return null;
     }
 
@@ -468,11 +494,12 @@ public partial class ResearchTab : Control
         if (_world == null)
             return Status.Locked;
         byte team = Team;
-        bool AllTech(ushort[] a) => a.All(t => _world.TeamOwnsTech(team, t));
-        bool AllCap(byte[] a) => a.All(c => _world.TeamOwnsCap(team, c));
 
         // done: all grants owned (tech-only devs vanish from "researchable" once granted).
-        if ((dev.GrantedTechIdx.Length > 0 || dev.GrantedCaps.Length > 0) && AllTech(dev.GrantedTechIdx) && AllCap(dev.GrantedCaps))
+        if (
+            (dev.GrantedTechIdx.Length > 0 || dev.GrantedCaps.Length > 0)
+            && _world.TeamHasAll(team, dev.GrantedTechIdx, dev.GrantedCaps)
+        )
             return Status.Done;
         // in-progress / on-deck at any friendly base.
         foreach (var (_, r) in _world.AllResearch())
@@ -485,7 +512,7 @@ public partial class ResearchTab : Control
         }
         // available (mirror of BuildableResolver).
         bool obsoleted = dev.ObsoletedByTechIdx.Any(t => _world.TeamOwnsTech(team, t));
-        if (!obsoleted && AllTech(dev.RequiredTechIdx) && AllCap(dev.RequiredCaps))
+        if (!obsoleted && _world.TeamHasAll(team, dev.RequiredTechIdx, dev.RequiredCaps))
             return Status.Available;
         return Status.Locked;
     }
@@ -527,8 +554,11 @@ public partial class ResearchTab : Control
         if (dev.UpgradeScope == DevelopmentDef.UpgradeScopeSingle)
             desc += "\n\n▲ Upgrades this base to its next tier.";
         _detail.SetDescription(desc);
-        _detail.SetMeta(TechDetailPanel.PriceText(dev.Price), TechDetailPanel.Mmss(dev.BuildTimeSeconds),
-            string.IsNullOrEmpty(_baseTitle) ? "—" : _baseTitle);
+        _detail.SetMeta(
+            TechDetailPanel.PriceText(dev.Price),
+            TechDetailPanel.Mmss(dev.BuildTimeSeconds),
+            string.IsNullOrEmpty(_baseTitle) ? "—" : _baseTitle
+        );
 
         BuildPrereqs(dev);
         BuildUnlocks(dev);
@@ -585,25 +615,26 @@ public partial class ResearchTab : Control
     // Readable name for a GameAttribute wire byte (order mirrors the factions library GameAttribute enum,
     // shared/AttrMod carries the byte). Only the attributes a dev can plausibly carry are named; anything
     // else falls back to a generic label so a future faction never renders a blank line.
-    private static string AttrName(byte attr) => attr switch
-    {
-        0 => "Top speed",
-        1 => "Thrust",
-        2 => "Turn rate",
-        4 => "Station armor",
-        6 => "Station shield",
-        8 => "Ship armor",
-        9 => "Ship shield",
-        11 => "Scan range",
-        12 => "Signature",
-        13 => "Max energy",
-        17 => "Mining rate",
-        18 => "Mining yield",
-        19 => "Mining capacity",
-        21 => "Gun damage",
-        22 => "Missile damage",
-        _ => $"Attr {attr}",
-    };
+    private static string AttrName(byte attr) =>
+        attr switch
+        {
+            0 => "Top speed",
+            1 => "Thrust",
+            2 => "Turn rate",
+            4 => "Station armor",
+            6 => "Station shield",
+            8 => "Ship armor",
+            9 => "Ship shield",
+            11 => "Scan range",
+            12 => "Signature",
+            13 => "Max energy",
+            17 => "Mining rate",
+            18 => "Mining yield",
+            19 => "Mining capacity",
+            21 => "Gun damage",
+            22 => "Missile damage",
+            _ => $"Attr {attr}",
+        };
 
     // The (base-type, display-name) a single-scope station-upgrade dev must be authorized AT: the base
     // whose SUCCESSOR tier a tech this dev grants unlocks. Mirrors the sim's TriggeredUpgrades match
@@ -656,12 +687,22 @@ public partial class ResearchTab : Control
                 SetFooter(true, "✓ RESEARCHED", ButtonVariant.Secondary, null, null);
                 return;
             case Status.InProgress:
-                SetFooter(true, "◷ RESEARCHING…", ButtonVariant.Secondary,
-                    commander ? ("✕ CANCEL ORDER", (Action)(() => CancelActive(sel))) : ((string, Action)?)null, null);
+                SetFooter(
+                    true,
+                    "◷ RESEARCHING…",
+                    ButtonVariant.Secondary,
+                    commander ? ("✕ CANCEL ORDER", (Action)(() => CancelActive(sel))) : ((string, Action)?)null,
+                    null
+                );
                 return;
             case Status.OnDeck:
-                SetFooter(true, "◷ ON DECK", ButtonVariant.Secondary,
-                    commander ? ("✕ REMOVE FROM QUEUE", (Action)(() => CancelOnDeck(sel))) : ((string, Action)?)null, null);
+                SetFooter(
+                    true,
+                    "◷ ON DECK",
+                    ButtonVariant.Secondary,
+                    commander ? ("✕ REMOVE FROM QUEUE", (Action)(() => CancelOnDeck(sel))) : ((string, Action)?)null,
+                    null
+                );
                 return;
             case Status.Locked:
                 SetFooter(true, "⊘ LOCKED", ButtonVariant.Secondary, null, $"Needs {FirstUnmetName(dev)}");
@@ -673,20 +714,34 @@ public partial class ResearchTab : Control
         // authorized at a base of the chain's from-type. Surface that here (matching the sim's
         // ResearchOpStart guard) instead of letting a Garrison authorize "Upgrade Supremacy" and
         // relying on the server to reject it.
-        if (dev.UpgradeScope == DevelopmentDef.UpgradeScopeSingle
+        if (
+            dev.UpgradeScope == DevelopmentDef.UpgradeScopeSingle
             && UpgradeFromType(dev) is (byte fromType, string fromName)
-            && _baseType != fromType)
+            && _baseType != fromType
+        )
         {
-            SetFooter(true, $"▲ AUTHORIZE AT {fromName.ToUpperInvariant()}", ButtonVariant.Secondary, null,
+            SetFooter(
+                true,
+                $"▲ AUTHORIZE AT {fromName.ToUpperInvariant()}",
+                ButtonVariant.Secondary,
+                null,
                 $"This upgrade must be authorized at a {fromName} — {_baseTitle} is the wrong base type.",
-                DesignTokens.Warn);
+                DesignTokens.Warn
+            );
             return;
         }
         if (!commander)
         {
-            SetFooter(true, "▲ COMMANDER AUTHORIZATION REQUIRED", ButtonVariant.Danger, null,
-                HasCommander(Team) ? "Only the commander can authorize research." : "Only the team commander can authorize research.",
-                DesignTokens.Warn);
+            SetFooter(
+                true,
+                "▲ COMMANDER AUTHORIZATION REQUIRED",
+                ButtonVariant.Danger,
+                null,
+                HasCommander(Team)
+                    ? "Only the commander can authorize research."
+                    : "Only the team commander can authorize research.",
+                DesignTokens.Warn
+            );
             return;
         }
         if (credits < price)
@@ -701,13 +756,31 @@ public partial class ResearchTab : Control
         int active = res?.Active.Length ?? 0;
         bool onDeck = res?.OnDeck != null;
         if (active < slots)
-            SetFooter(false, "◆ AUTHORIZE RESEARCH", ButtonVariant.Primary, null, $"{TechDetailPanel.PriceText(price)} · {TechDetailPanel.Mmss(dev.BuildTimeSeconds)} at {_baseTitle}",
-                primary: () => Authorize(sel));
+            SetFooter(
+                false,
+                "◆ AUTHORIZE RESEARCH",
+                ButtonVariant.Primary,
+                null,
+                $"{TechDetailPanel.PriceText(price)} · {TechDetailPanel.Mmss(dev.BuildTimeSeconds)} at {_baseTitle}",
+                primary: () => Authorize(sel)
+            );
         else if (!onDeck)
-            SetFooter(false, "⊕ QUEUE ON DECK", ButtonVariant.Primary, null, $"All {slots} slots busy — reserves the next slot ({TechDetailPanel.PriceText(price)})",
-                primary: () => Authorize(sel));
+            SetFooter(
+                false,
+                "⊕ QUEUE ON DECK",
+                ButtonVariant.Primary,
+                null,
+                $"All {slots} slots busy — reserves the next slot ({TechDetailPanel.PriceText(price)})",
+                primary: () => Authorize(sel)
+            );
         else
-            SetFooter(true, "◷ BASE OCCUPIED", ButtonVariant.Secondary, null, "Slots full and on-deck taken — cancel an order first.");
+            SetFooter(
+                true,
+                "◷ BASE OCCUPIED",
+                ButtonVariant.Secondary,
+                null,
+                "Slots full and on-deck taken — cancel an order first."
+            );
     }
 
     private Action? _primaryAction;
@@ -715,8 +788,15 @@ public partial class ResearchTab : Control
 
     // Presentation goes to the shared panel; the action semantics (what PrimaryPressed/SecondaryPressed
     // actually DO) stay here, set DIRECTLY by the caller — never derived from the button's glyph/text.
-    private void SetFooter(bool disabled, string text, ButtonVariant variant,
-        (string text, Action act)? secondary, string? sub, Color? subColor = null, Action? primary = null)
+    private void SetFooter(
+        bool disabled,
+        string text,
+        ButtonVariant variant,
+        (string text, Action act)? secondary,
+        string? sub,
+        Color? subColor = null,
+        Action? primary = null
+    )
     {
         _detail.SetFooter(disabled, text, variant, secondary?.text, sub, subColor);
         _primaryAction = disabled ? null : primary;
@@ -765,7 +845,7 @@ public partial class ResearchTab : Control
             _pendingStatus = StatusOf(d, sel);
             _pendingUntilMsec = Time.GetTicksMsec() + 3000;
         }
-        _statusSig = long.MinValue; // reflect the pending affordance immediately
+        _gate.Invalidate(); // reflect the pending affordance immediately
     }
 
     // ---- helpers -----------------------------------------------------------
@@ -790,14 +870,15 @@ public partial class ResearchTab : Control
     // commander's client id — no friendly name is guaranteed, so callers inline their own copy).
     private bool HasCommander(byte team) => (_net?.CommanderIdOf(team) ?? -1) >= 0;
 
-    private static (string, StatusPill.Kind, bool) PillFor(Status s) => s switch
-    {
-        Status.Done => ("✓ RESEARCHED", StatusPill.Kind.Ok, false),
-        Status.InProgress => ("◷ RESEARCHING", StatusPill.Kind.Warn, true),
-        Status.OnDeck => ("◷ ON DECK", StatusPill.Kind.Data, false),
-        Status.Available => ("◈ AVAILABLE", StatusPill.Kind.Accent, false),
-        _ => ("⊘ LOCKED", StatusPill.Kind.Neutral, false),
-    };
+    private static (string, StatusPill.Kind, bool) PillFor(Status s) =>
+        s switch
+        {
+            Status.Done => ("✓ RESEARCHED", StatusPill.Kind.Ok, false),
+            Status.InProgress => ("◷ RESEARCHING", StatusPill.Kind.Warn, true),
+            Status.OnDeck => ("◷ ON DECK", StatusPill.Kind.Data, false),
+            Status.Available => ("◈ AVAILABLE", StatusPill.Kind.Accent, false),
+            _ => ("⊘ LOCKED", StatusPill.Kind.Neutral, false),
+        };
 
     // ---- demo hooks (used by --hangar-demo harness) -----------------------
 
@@ -834,7 +915,12 @@ internal partial class ClusterHeader : PanelContainer
     {
         if (_chevron != null)
             return;
-        var sb = new StyleBoxFlat { BgColor = new Color(DesignTokens.TeamAccentBase, 0.08f), BorderColor = new Color(DesignTokens.TeamAccentBase, 0.55f), AntiAliasing = false };
+        var sb = new StyleBoxFlat
+        {
+            BgColor = new Color(DesignTokens.TeamAccentBase, 0.08f),
+            BorderColor = new Color(DesignTokens.TeamAccentBase, 0.55f),
+            AntiAliasing = false,
+        };
         sb.SetCornerRadiusAll(0);
         sb.BorderWidthLeft = 2;
         sb.ContentMarginLeft = 10;
@@ -970,7 +1056,11 @@ internal partial class NodeCard : PanelContainer
         _badge.AddThemeFontSizeOverride("font_size", 16);
         row.AddChild(_badge);
 
-        var texts = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ShrinkCenter };
+        var texts = new VBoxContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ShrinkCenter,
+        };
         texts.AddThemeConstantOverride("separation", 0);
         _name = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.TextHi);
         _name.AddThemeFontOverride("font", UiFonts.SairaSemi);
@@ -988,15 +1078,29 @@ internal partial class NodeCard : PanelContainer
         _price.VerticalAlignment = VerticalAlignment.Center;
         row.AddChild(_price);
 
-        _chevron = new Label { Text = "", CustomMinimumSize = new Vector2(18, 0), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        _chevron = new Label
+        {
+            Text = "",
+            CustomMinimumSize = new Vector2(18, 0),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
         _chevron.AddThemeFontOverride("font", UiFonts.Mono);
         _chevron.AddThemeColorOverride("font_color", DesignTokens.Text2);
         _chevron.MouseFilter = MouseFilterEnum.Stop;
         row.AddChild(_chevron);
     }
 
-    public void Configure(WorldRenderer world, ResearchTab.Status status, DevelopmentDef dev, string priceText,
-        bool hasChildren, bool collapsed, (uint start, uint dur)? active, bool selected)
+    public void Configure(
+        WorldRenderer world,
+        ResearchTab.Status status,
+        DevelopmentDef dev,
+        string priceText,
+        bool hasChildren,
+        bool collapsed,
+        (uint start, uint dur)? active,
+        bool selected
+    )
     {
         EnsureBuilt();
         _world = world;
@@ -1021,7 +1125,14 @@ internal partial class NodeCard : PanelContainer
     }
 
     // Showcase-only: render a node card in a given status with no live world (progress is static).
-    public void ConfigureMock(ResearchTab.Status status, string name, string priceText, bool hasChildren, float progress, bool selected = false)
+    public void ConfigureMock(
+        ResearchTab.Status status,
+        string name,
+        string priceText,
+        bool hasChildren,
+        float progress,
+        bool selected = false
+    )
     {
         EnsureBuilt();
         _world = null; // _Process no-ops without a world
@@ -1064,14 +1175,15 @@ internal partial class NodeCard : PanelContainer
         _badge.AddThemeStyleboxOverride("normal", bsb);
     }
 
-    private static (string, Color, bool, string, Color) StyleFor(ResearchTab.Status s) => s switch
-    {
-        ResearchTab.Status.Done => ("◆", DesignTokens.Ok, true, "✓ RESEARCHED", DesignTokens.Ok),
-        ResearchTab.Status.InProgress => ("◷", DesignTokens.Warn, false, "◷ --:--", DesignTokens.Warn),
-        ResearchTab.Status.OnDeck => ("⊕", DesignTokens.Data, false, "◷ ON DECK", DesignTokens.Data),
-        ResearchTab.Status.Available => ("◈", DesignTokens.TeamAccent, false, "AVAILABLE", DesignTokens.TeamAccent),
-        _ => ("⊘", DesignTokens.TextDim, false, "⊘ LOCKED", DesignTokens.TextDim),
-    };
+    private static (string, Color, bool, string, Color) StyleFor(ResearchTab.Status s) =>
+        s switch
+        {
+            ResearchTab.Status.Done => ("◆", DesignTokens.Ok, true, "✓ RESEARCHED", DesignTokens.Ok),
+            ResearchTab.Status.InProgress => ("◷", DesignTokens.Warn, false, "◷ --:--", DesignTokens.Warn),
+            ResearchTab.Status.OnDeck => ("⊕", DesignTokens.Data, false, "◷ ON DECK", DesignTokens.Data),
+            ResearchTab.Status.Available => ("◈", DesignTokens.TeamAccent, false, "AVAILABLE", DesignTokens.TeamAccent),
+            _ => ("⊘", DesignTokens.TextDim, false, "⊘ LOCKED", DesignTokens.TextDim),
+        };
 
     private void Restyle()
     {
@@ -1171,13 +1283,25 @@ internal partial class ActiveBanner : PanelContainer
     public void ConfigureOnDeck(string devName, Action? onCancel)
     {
         _live = false;
-        Build(DesignTokens.Data, $"⊕ ON DECK — {devName}", "starts when a slot frees", onCancel, cancelText: "✕ REMOVE", withBar: false);
+        Build(
+            DesignTokens.Data,
+            $"⊕ ON DECK — {devName}",
+            "starts when a slot frees",
+            onCancel,
+            cancelText: "✕ REMOVE",
+            withBar: false
+        );
     }
 
     public void ConfigureIdle()
     {
         _live = false;
-        var sb = new StyleBoxFlat { BgColor = new Color(DesignTokens.Void, 0.4f), BorderColor = DesignTokens.BorderLo, AntiAliasing = false };
+        var sb = new StyleBoxFlat
+        {
+            BgColor = new Color(DesignTokens.Void, 0.4f),
+            BorderColor = DesignTokens.BorderLo,
+            AntiAliasing = false,
+        };
         sb.SetCornerRadiusAll(0);
         sb.SetBorderWidthAll(1);
         sb.SetContentMarginAll(10);
@@ -1189,7 +1313,15 @@ internal partial class ActiveBanner : PanelContainer
     // Generic timed banner (reused by the Build tab for constructor production/build phases): a live
     // countdown + progress bar in the given accent, with an optional cancel button. Progress derives
     // from start+dur vs ServerTick, exactly like a research order.
-    public void ConfigureTimed(WorldRenderer world, Color accent, string title, uint start, uint dur, Action? onCancel, string cancelText)
+    public void ConfigureTimed(
+        WorldRenderer world,
+        Color accent,
+        string title,
+        uint start,
+        uint dur,
+        Action? onCancel,
+        string cancelText
+    )
     {
         _world = world;
         _start = start;
@@ -1212,7 +1344,12 @@ internal partial class ActiveBanner : PanelContainer
     public void ConfigureNote(Color accent, string title)
     {
         _live = false;
-        var sb = new StyleBoxFlat { BgColor = new Color(accent, 0.06f), BorderColor = new Color(accent, 0.55f), AntiAliasing = false };
+        var sb = new StyleBoxFlat
+        {
+            BgColor = new Color(accent, 0.06f),
+            BorderColor = new Color(accent, 0.55f),
+            AntiAliasing = false,
+        };
         sb.SetCornerRadiusAll(0);
         sb.BorderWidthLeft = 2;
         sb.ContentMarginLeft = 12;
@@ -1224,7 +1361,12 @@ internal partial class ActiveBanner : PanelContainer
 
     private void Build(Color accent, string title, string countText, Action? onCancel, string cancelText, bool withBar)
     {
-        var sb = new StyleBoxFlat { BgColor = new Color(accent, 0.08f), BorderColor = accent, AntiAliasing = false };
+        var sb = new StyleBoxFlat
+        {
+            BgColor = new Color(accent, 0.08f),
+            BorderColor = accent,
+            AntiAliasing = false,
+        };
         sb.SetCornerRadiusAll(0);
         sb.BorderWidthLeft = 2;
         sb.ContentMarginLeft = 12;
@@ -1254,7 +1396,12 @@ internal partial class ActiveBanner : PanelContainer
 
         if (withBar)
         {
-            _bar = new ProgressUnderlay { ShowTrack = true, CustomMinimumSize = new Vector2(0, 4), MouseFilter = MouseFilterEnum.Ignore };
+            _bar = new ProgressUnderlay
+            {
+                ShowTrack = true,
+                CustomMinimumSize = new Vector2(0, 4),
+                MouseFilter = MouseFilterEnum.Ignore,
+            };
             col.AddChild(_bar);
         }
     }

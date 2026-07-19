@@ -66,8 +66,8 @@ _Deduplicated action list. The report cross-lists many findings (the `cross-dry`
 - [x] E-R12 `DefRegistry.MigrateWeaponTier` → ShipLoadout.MigrateTier + WeaponsPanel.MigratedDispenserName (predicates matched)
 - [x] E-R14 new `ChatFormat.ToBbcode`+`Escape` → Chat/Lobby (byte-identity verified vs diff)
 - [x] E-R15 NodeCard.ApplyBadge → Configure/ConfigureMock
-- [ ] E-R19 ⏭️ DEFER — WorldRenderer.TeamCanUse would bridge two file-components; low/med, tabs carry an extra RequiredCaps clause
-- [ ] E-R20 ⏭️ DEFER — BuildTab/ResearchTab RefreshGate shared base is the most invasive (shared Control/struct); revisit standalone
+- [x] E-R19 ✅ (loop 2026-07-19) — `WorldRenderer.TeamHasAll(team, techs, caps)` (plain-loop, no Linq import) → BuildTab.IsAvailable + ResearchTab.StatusOf granted/required; dropped ResearchTab AllTech/AllCap locals
+- [x] E-R20 ✅ (loop 2026-07-19) — new `ui/RefreshGate.cs` (Tick→(run,structural) + Invalidate) → BuildTab/ResearchTab `_Process`; byte-equivalent gate (run==timer||structural, structural vs prior sig/count); replaced 3 `_statusSig=long.MinValue` seams with `_gate.Invalidate()`
 - [x] E-M21 removed glyph-derivation (`PrimaryActionForText` gone; action intent set directly); CommanderName → `HasCommander`
 - [x] E-M26 ShipLoadout `_payloadOverCap` cache (one payload walk/frame) + `Team` property (5 sites); SettingsDialog dead-store already fixed in Wave A
 
@@ -124,7 +124,8 @@ _Deduplicated action list. The report cross-lists many findings (the `cross-dry`
 - AsteroidSphere/ProbeSphere/BuildSphere factory merge — note-only (names document intent)
 - Protocol base-health `WriteBaseHealthRecord`; FireBolt/StepMissiles sweep; ClassifyTarget/IsPointVisibleToTeam; CellsAlongRay/CollectCellsAlongRay — REFUTED (appendix)
 - BaseModelLoader BasisFacingZ/MakeMarker "parallel files" — only BasisFacingZ hoisted (D-R13); MakeMarker left parallel
-- WorldRenderer TeamStateStore extraction (M24) & god-class split (M27); NetUpdateTeamState 11-param→struct (M29); Lobby factory-kit→ui-lib (M28); Mines damage constants→YAML — DEFER (high-churn / separate config-pipeline work)
+- ✅ DONE (loop 2026-07-19): NetUpdateTeamState 11-param→struct (M29, `WorldRenderer.TeamStateSnapshot`); Mines damage constants→YAML (`combat.mine-speed-ref`/`mine-max-speed-mult`, byte-identical defaults, MineTest green)
+- ⏭️ STILL DEFERRED (see ADDENDUM for reasons): WorldRenderer TeamStateStore extraction (M24) & god-class split (M27); Lobby factory-kit→ui-lib (M28)
 
 
 ## Executive summary
@@ -825,4 +826,37 @@ _These were flagged by a reviewer but an adversarial verifier found them reachab
 - `server/Sim/World.cs:1411` — splitmix64 finalizer duplicated verbatim across server, shared, and client → **refuted** (Sites read: server/Sim/World.cs:1411-1435 (DetRng stateful PRNG); shared/Collision/Collide.cs:95-114 (RockSpin inline, prelude +0x632BE59BD9B4E019); shared/MinefieldLayout.cs:22-32 (Mix bare finalizer); client/scripts/WorldRenderer.cs:2183-2189 (Hash64, x += golden); client/scripts/Starscape.cs:119-128 (SeedFor, prelude +0x1234567). Each has distinct semantics and its own prelude; only MinefieldLayout.Mix is a generic finalizer helper, and it is not substitutable for the stateful DetRng.)
 - `server/Sim/Simulation.Constructors.cs:666` — ConstructorHoldDistance and MinerHoldDistance have byte-identical bodies → **refuted** (server/Sim/Simulation.Constructors.cs:666 (ConstructorHoldDistance) and server/Sim/Simulation.Mining.cs:789 (MinerHoldDistance) — identical bodies but semantically distinct knobs)
 - `server/Sim/Simulation.Mining.cs:845` — AlignGated + CrossSector gate-approach helpers duplicated verbatim between MinerExecute and ConstructorExecute → **refuted** (Duplicate pair: server/Sim/Simulation.Mining.cs:830 (CrossSector) + 845 (AlignGated), constant MinerGateAlignRange=200f at Simulation.Mining.cs:109. Identical pair at server/Sim/Simulation.Constructors.cs:749/759, constant ConstructorGateAlignRange=200f at Constructors.cs:67. A third structurally-identical CrossSector at server/Sim/Simulation.cs:1818.)
+
+
+---
+
+## ADDENDUM — remaining-issue disposition (loop pass, 2026-07-19)
+
+Per the `/loop` directive ("fix the remaining issues; for any that are NOT fixed, leave a reason why"). The Wave A–H sweep (above) had already landed every actionable finding; this pass closed the last deferred items that were safe to close and records, below, why the rest are intentionally left. Every code change here is compile-gated (full solution + client both `0 warning / 0 error`) and determinism-gated (**FlightModelTest PASS**, **MineTest PASS**).
+
+### ✅ Fixed in this pass (4)
+- **E-R19** — `WorldRenderer.TeamHasAll(team, techs, caps)` (plain-loop; WorldRenderer has no `System.Linq` import and I did not add one) replaces the inline `RequiredTechIdx.All(...) && RequiredCaps.All(...)` in `BuildTab.IsAvailable` and both branches of `ResearchTab.StatusOf`; the tab-local `AllTech`/`AllCap` closures are gone.
+- **E-R20** — new `client/scripts/ui/RefreshGate.cs` (a `Tick(delta, count, sig) → (Run, Structural)` throttle + `Invalidate()`) replaces the duplicated per-frame timer/signature/structural bookkeeping in `BuildTab._Process` and `ResearchTab._Process`. Behaviour is byte-equivalent to the inlined gate (`Run == timer-elapsed || structural`; `structural` compared against the *previous* sig/count before latching); the three `_statusSig = long.MinValue` force-rebuild seams became `_gate.Invalidate()`. Chose a small `sealed class` over a mutable struct to avoid the `default(struct)`-skips-initializers footgun.
+- **M29** — `WorldRenderer.NetUpdateTeamState(...)`'s 10 positional parameters are now a `readonly record struct WorldRenderer.TeamStateSnapshot`; the sole caller (`GameNetClient.ApplyTeamState`) builds the named record. Wire decode order is untouched.
+- **Mines constants → YAML** — `MineSpeedRef` (40) and `MineMaxSpeedMult` (2.5) moved off `Simulation.Mines.cs` `const`s onto `WorldCombatTuning` (`shared/Defs.cs`), plumbed through `WorldCombatDef` + the `combat:` projection (`WorldLoader.cs`) and documented in stock `world.yaml` as `mine-speed-ref` / `mine-max-speed-mult`. Defaults are identical to the old constants, so an omitted/stock block is byte-for-byte the previous sim (MineTest confirms).
+
+### ⏭️ Not fixed — deferred large refactors (pure organization; recommend a deliberate, visually-verified session)
+These are the lowest-value finding category (no correctness or DRY defect — readability only), they sit on the highest-churn client file, and their only real verification is *visual parity in the running Godot client*, which this headless environment cannot exercise. A compile pass does not catch a subtly re-parented control or a dropped theme override. The risk/benefit does not favour doing them blind inside an automated sweep.
+- **M24 — `WorldRenderer` per-team state → `TeamStateStore`.** ~250 lines of `_teamEconomy`/`_teamRockClasses`/`_teamMiners`/`_teamOwnedTechs`/`_teamOwnedCaps`/`_teamUnlocks` + accessors. This is a *behavioural* extraction (every reader must route through the new store), not a relocation, so it carries real regression surface with no headless test to catch it. Note this pass already tidied the *input* (M29 snapshot) and a *query* (E-R19 `TeamHasAll`) of exactly this area, so the incremental readability win from a full store is now smaller.
+- **M27 — `WorldRenderer` god-class split (3342 lines).** The safe form is a `partial`-file relocation (compiler-verified), but a *good* split needs judgment about cohesive groupings; done hastily it produces arbitrary partials that don't aid comprehension, and it creates a repo-sized diff on the most-touched client file (git-blame/merge cost). Best done interactively with the running client open.
+- **M28 — `Lobby` private factory-kit (~15 statics) → `ui/` library.** `Mono/Lbl/Cell/Badge/Diamond/EmptyNote/BarPanel/PaddedRow/Margins/Spacer/Hairline/TabStyle` bake in Lobby-tuned font sizes/margins/`DesignTokens`; promoting them means rewriting `ServerLobbyOverlay`'s inline styling to match. The two lobby screens "share a visual language but no shared helpers" *by degree* — a merged helper risks silently erasing an intentional per-screen difference (a font size, a margin) that only a side-by-side visual check would reveal. (D-R16 `Diamond`→`UiDraw` and D-R17 `Chip`→`UiChips` already promoted the two that were genuinely identical.)
+
+### ⏭️ Not fixed — determinism-refuted / semantically-distinct (must NOT be merged)
+The review's own adversarial verification pass (the `**refuted**` block above) proved these are *not* safe consolidations. Merging any would risk the bit-exact server sim / replay contract or collapse knobs that are deliberately independent:
+- splitmix64 / `Hash.SplitMix64` — each site has a distinct prelude/seed-mix and some feed determinism-critical streams (DetRng, RockSpin, OreMix, MinefieldLayout); no substitutable generic finalizer.
+- `Vec3` `Dot`/`Normalize` onto shared `Vec3` — the `Normalize` copies have **divergent epsilons and degenerate-vector fallbacks** ((0,0,1) vs (0,1,0) vs return-v; 1e-6 vs 1e-12); a single kernel would change sim output.
+- Miner/Constructor `AlignGated`+`CrossSector`, and `MinerHoldDistance`/`ConstructorHoldDistance` — byte-identical *today* but deliberately decoupled tunables; merging couples two independently-balanced systems.
+- `NormalizeOr` Pig↔AutoSteer — AutoSteer is PIG-determinism-critical (shared server/client steering); no cross-file reuse.
+- `FireBolt`/`StepMissiles` full segment-sweep, `ClassifyTarget`/`IsPointVisibleToTeam`, `CellsAlongRay`/`CollectCellsAlongRay`, Protocol base-health `WriteBaseHealthRecord` — refuted in the appendix (distinct semantics / no true third caller / wire-order sensitivity).
+
+### ⏭️ Not fixed — note-only / live-API / forward-looking (intentional no-op)
+- **C12 `ValidationResult.Warn`** — inert today but is live Factions-CLI API surface (`Program.cs` prints/counts `Warnings`); deleting churns the CLI for no gain. Left as-is.
+- **C10/C11** (`DefRegistry.FactionName/FactionAttributes`, `FactionStart.LifepodHullId/InitialStationId`) — kept for wire-decode symmetry / reserved Phase-5 wiring with an explicit forward-looking TODO (done in Wave C); no consumer to add yet.
+- **`AsteroidSphere`/`ProbeSphere`/`BuildSphere` factory merge**, **`BaseModelLoader.MakeMarker` parallel** — note-only in the report; the distinct names document intent and a merge would obscure it. Only the genuinely-shared `BasisFacingZ` was hoisted (D-R13).
+- **"Ruled out by verification" (22)** — the report's adversarial pass already refuted these as non-findings; no action by design.
 

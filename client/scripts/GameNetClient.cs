@@ -1308,16 +1308,18 @@ public partial class GameNetClient : Node
             // tab grays out on. World-global scalar, same for every team.
             byte buildQueueLimit = r.ReadByte();
             _world.NetUpdateTeamState(
-                team,
-                credits,
-                score,
-                unlocked,
-                ownedTechs,
-                ownedCaps,
-                rockClasses,
-                minerCount,
-                minerCap,
-                buildQueueLimit
+                new WorldRenderer.TeamStateSnapshot(
+                    team,
+                    credits,
+                    score,
+                    unlocked,
+                    ownedTechs,
+                    ownedCaps,
+                    rockClasses,
+                    minerCount,
+                    minerCap,
+                    buildQueueLimit
+                )
             );
         }
     }

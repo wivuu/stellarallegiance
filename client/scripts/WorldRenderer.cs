@@ -47,6 +47,7 @@ public partial class WorldRenderer : Node3D
     private Node3D _projectiles = null!;
     private Node3D _alephs = null!;
     private Node3D _effects = null!; // transient FX (explosions, hit flashes); self-freeing
+
     // Cached group arrays for the RefreshSectorVisibility/HideForWarp/Reset sweep loops (set once in
     // _Ready, right after the groups above are created) so those hot passes don't reallocate every call.
     private Node3D[] _staticGroups = null!; // { _bases, _asteroids } — swap via ShowNodeInstant (can fade)
@@ -60,6 +61,7 @@ public partial class WorldRenderer : Node3D
     // walks it and filters by Node.Visible (sector visibility), so it allocates nothing. Id is
     // also read by LockableEnemyBases() to offer a base as a Tab-cycle lock target.
     private readonly List<(Node3D Node, byte Team, ulong Id, uint Sector)> _baseList = new();
+
     // Base id -> type id (garrison 0, outpost 1, …), for type-aware base naming. Parallel to _baseList.
     private readonly Dictionary<ulong, byte> _baseType = new();
 
@@ -92,13 +94,22 @@ public partial class WorldRenderer : Node3D
     // Base construction (v37): one BuildSphere per rock a constructor is actively raising a base on,
     // driven by the MsgConstructorBuilds stream (NetUpdateConstructorBuilds). Keyed by rock id; created
     // when the build appears, grown by phase/progress, freed when the build drops out (base completes).
-    public struct ConstructorBuild { public ulong ShipId, RockId; public byte Phase; public float Progress; }
+    public struct ConstructorBuild
+    {
+        public ulong ShipId,
+            RockId;
+        public byte Phase;
+        public float Progress;
+    }
+
     private List<ConstructorBuild> _constructorBuilds = new();
     private readonly Dictionary<ulong, BuildSphere> _buildSpheres = new();
     private readonly List<ulong> _buildSpherePrune = new(); // scratch
+
     // Rock-spitting debris spray per active build, live only while the drone SINKS into the rock (phase 1).
     private readonly Dictionary<ulong, ConstructorDebris> _constructorDebris = new();
     private readonly List<ulong> _constructorDebrisPrune = new(); // scratch
+
     // Last-known radius per active build's rock, so the sphere keeps growing after the rock despawns
     // mid-build (a finished base consumes its asteroid — the rock node is gone but the sphere lives on).
     private readonly Dictionary<ulong, float> _buildRockRadius = new();
@@ -112,10 +123,12 @@ public partial class WorldRenderer : Node3D
     // scale (mesh authored bound, or the baked sphere-fallback radius), so a target radius maps to a
     // node scale of Vector3.One * (radius / Divisor). Populated at InsertAsteroid.
     private readonly Dictionary<ulong, (Node3D Node, float Divisor)> _rockScaleBasis = new();
+
     // Rocks currently easing toward a new (mined-down) radius; the value is the target radius. Eased
     // in _Process and dropped once the node reaches it, so a static world costs nothing here.
     private readonly Dictionary<ulong, float> _rockShrinkTarget = new();
     private readonly List<ulong> _rockShrinkDone = new(); // scratch: rocks that finished easing this frame
+
     // id -> index into _asteroidClip, so a live shrink updates the bolt/sun-occlusion clip radius in
     // O(1) (clip entries are append-only until Clear, so the index is stable).
     private readonly Dictionary<ulong, int> _asteroidClipIndex = new();
@@ -138,6 +151,7 @@ public partial class WorldRenderer : Node3D
     // Static-geometry caches for the bolt-TTL clip (replaces the old STDB table scans). Filled
     // once from the Welcome frame; each entry is (sector-local position, collision radius, sector).
     private readonly List<(Vector3 Pos, float Radius, uint Sector)> _asteroidClip = new();
+
     // Each base also carries a MeshRaycaster against its VISIBLE hull (null when only the
     // procedural sphere placeholder rendered), so a bolt's TTL clips — and its impact spark lands —
     // on the real superstructure surface, not the coarse BaseDef sphere out in front of it.
@@ -249,8 +263,10 @@ public partial class WorldRenderer : Node3D
                 continue;
             if (_radarVisible.Contains(g.ShipId))
                 continue;
-            if (_shipNodes.TryGetValue(g.ShipId, out var node)
-                && node.GlobalPosition.DistanceSquaredTo(g.Pos) < GhostLiveSuppressDist * GhostLiveSuppressDist)
+            if (
+                _shipNodes.TryGetValue(g.ShipId, out var node)
+                && node.GlobalPosition.DistanceSquaredTo(g.Pos) < GhostLiveSuppressDist * GhostLiveSuppressDist
+            )
                 continue;
             _ghostScratch.Add(g);
         }
@@ -479,11 +495,11 @@ public partial class WorldRenderer : Node3D
 
     // Warp-settle timing (seconds), all off the real-time clock (Time.GetTicksMsec):
     private bool _warpSettling;
-    private double _warpStartSec;    // when the current warp began
+    private double _warpStartSec; // when the current warp began
     private double _warpLastRockSec; // last time a rock for _localSector was inserted (loaded → stays stale)
-    private const double WarpMinHold = 0.2;      // flash covers the swap for at least this long
+    private const double WarpMinHold = 0.2; // flash covers the swap for at least this long
     private const double WarpQuietDebounce = 0.25; // settle this long after the last rock arrives
-    private const double WarpMaxHold = 2.0;      // safety cap so the flash never sticks
+    private const double WarpMaxHold = 2.0; // safety cap so the flash never sticks
 
     // Deferred warp swap (cover → swap → reveal). Phase A (UpdateShip's warp branch) hides the old
     // sector and arms this; Phase B (in _Process) runs the heavy ApplySectorEnv + RefreshSectorVisibility
@@ -629,11 +645,9 @@ public partial class WorldRenderer : Node3D
         return false;
     }
 
-    private static bool InSector(Node3D n, uint sector) =>
-        n.HasMeta("sector") && (int)n.GetMeta("sector") == (int)sector;
+    private static bool InSector(Node3D n, uint sector) => n.HasMeta("sector") && (int)n.GetMeta("sector") == (int)sector;
 
-    private static float ShadowRadius(Node3D n) =>
-        n.HasMeta("shadowRadius") ? (float)n.GetMeta("shadowRadius") : 0f;
+    private static float ShadowRadius(Node3D n) => n.HasMeta("shadowRadius") ? (float)n.GetMeta("shadowRadius") : 0f;
 
     // Collect an occluder's silhouette-relevant vertices in the occluder NODE's LOCAL frame, reduced to
     // directional extremes. Local (not world) so the baked shadow volume can parent to the node and tumble
@@ -646,9 +660,7 @@ public partial class WorldRenderer : Node3D
         _hullVertScratch.Clear();
         Transform3D rootInv = node.GlobalTransform.AffineInverse();
         CollectMeshVerts(node, rootInv, _hullVertScratch);
-        return _hullVertScratch.Count >= 4
-            ? ShadowVolume.Extremes(_hullVertScratch, 48)
-            : System.Array.Empty<Vector3>();
+        return _hullVertScratch.Count >= 4 ? ShadowVolume.Extremes(_hullVertScratch, 48) : System.Array.Empty<Vector3>();
     }
 
     private static void CollectMeshVerts(Node node, Transform3D rootInv, List<Vector3> outVerts)
@@ -686,9 +698,8 @@ public partial class WorldRenderer : Node3D
             return;
         _hullVertScratch.Clear();
         CollectSurfaceVerts(mesh, Transform3D.Identity, _hullVertScratch);
-        _meshHullVertCache[mesh] = _hullVertScratch.Count >= 4
-            ? ShadowVolume.Extremes(_hullVertScratch, 48)
-            : System.Array.Empty<Vector3>();
+        _meshHullVertCache[mesh] =
+            _hullVertScratch.Count >= 4 ? ShadowVolume.Extremes(_hullVertScratch, 48) : System.Array.Empty<Vector3>();
     }
 
     private byte? _localTeam;
@@ -807,31 +818,47 @@ public partial class WorldRenderer : Node3D
         RefreshSectorVisibility();
     }
 
+    // One team's economy/research snapshot decoded from MsgTeamState. Bundles what NetUpdateTeamState
+    // applies so the wire decoder builds a named record instead of threading ten positional args.
+    // OwnedTechs/OwnedCaps null == "none this frame"; DiscoveredRockClasses defaults to all-known.
+    public readonly record struct TeamStateSnapshot(
+        byte Team,
+        int Credits,
+        int Score,
+        byte[] Unlocked,
+        ushort[]? OwnedTechs = null,
+        byte[]? OwnedCaps = null,
+        byte DiscoveredRockClasses = 0xFF,
+        int MinerCount = 0,
+        int MinerCap = 0,
+        int BuildQueueLimit = 0
+    );
+
     // Per-team economy, fed by GameNetClient.ApplyTeamState (mirrors NetUpdateBaseHealth's role for
     // base health). Read accessors return 0 for an unknown team so callers never need a null check.
-    public void NetUpdateTeamState(byte team, int credits, int score, byte[] unlocked, ushort[]? ownedTechs = null, byte[]? ownedCaps = null, byte discoveredRockClasses = 0xFF, int minerCount = 0, int minerCap = 0, int buildQueueLimit = 0)
+    public void NetUpdateTeamState(in TeamStateSnapshot s)
     {
-        _teamEconomy[team] = (credits, score);
-        _teamRockClasses[team] = discoveredRockClasses;
-        _teamMiners[team] = (minerCount, minerCap);
-        BuildQueueLimit = buildQueueLimit; // world-global scalar (same for every team)
-        if (!_teamUnlocks.TryGetValue(team, out var set))
-            _teamUnlocks[team] = set = new HashSet<byte>();
+        _teamEconomy[s.Team] = (s.Credits, s.Score);
+        _teamRockClasses[s.Team] = s.DiscoveredRockClasses;
+        _teamMiners[s.Team] = (s.MinerCount, s.MinerCap);
+        BuildQueueLimit = s.BuildQueueLimit; // world-global scalar (same for every team)
+        if (!_teamUnlocks.TryGetValue(s.Team, out var set))
+            _teamUnlocks[s.Team] = set = new HashSet<byte>();
         set.Clear();
-        foreach (byte cls in unlocked)
+        foreach (byte cls in s.Unlocked)
             set.Add(cls);
         // Owned techs (wire indices into DefRegistry.AllTechs) + capabilities (v36 research state).
-        if (!_teamOwnedTechs.TryGetValue(team, out var techSet))
-            _teamOwnedTechs[team] = techSet = new HashSet<ushort>();
+        if (!_teamOwnedTechs.TryGetValue(s.Team, out var techSet))
+            _teamOwnedTechs[s.Team] = techSet = new HashSet<ushort>();
         techSet.Clear();
-        if (ownedTechs is not null)
-            foreach (ushort t in ownedTechs)
+        if (s.OwnedTechs is not null)
+            foreach (ushort t in s.OwnedTechs)
                 techSet.Add(t);
-        if (!_teamOwnedCaps.TryGetValue(team, out var capSet))
-            _teamOwnedCaps[team] = capSet = new HashSet<byte>();
+        if (!_teamOwnedCaps.TryGetValue(s.Team, out var capSet))
+            _teamOwnedCaps[s.Team] = capSet = new HashSet<byte>();
         capSet.Clear();
-        if (ownedCaps is not null)
-            foreach (byte c in ownedCaps)
+        if (s.OwnedCaps is not null)
+            foreach (byte c in s.OwnedCaps)
                 capSet.Add(c);
     }
 
@@ -850,6 +877,7 @@ public partial class WorldRenderer : Node3D
 
     // Miners the team currently fields / the per-team cap (server-authoritative, from MsgTeamState).
     public int TeamMinerCount(byte team) => _teamMiners.TryGetValue(team, out var m) ? m.Count : 0;
+
     public int TeamMinerCap(byte team) => _teamMiners.TryGetValue(team, out var m) ? m.Cap : 0;
 
     // Per-garrison build-queue depth (MsgTeamState build-pipeline tail). World-global scalar: the Build
@@ -866,8 +894,21 @@ public partial class WorldRenderer : Node3D
     public bool TeamOwnsTech(byte team, ushort techIdx) =>
         _teamOwnedTechs.TryGetValue(team, out var s) && s.Contains(techIdx);
 
-    public bool TeamOwnsCap(byte team, byte cap) =>
-        _teamOwnedCaps.TryGetValue(team, out var s) && s.Contains(cap);
+    public bool TeamOwnsCap(byte team, byte cap) => _teamOwnedCaps.TryGetValue(team, out var s) && s.Contains(cap);
+
+    // True when `team` owns EVERY tech in `techs` AND every capability in `caps` — the shared
+    // "has all prerequisites" test behind the Build tab's IsAvailable and the Research tab's
+    // node-status resolution (both previously re-implemented the two All(...) walks inline).
+    public bool TeamHasAll(byte team, ushort[] techs, byte[] caps)
+    {
+        foreach (ushort t in techs)
+            if (!TeamOwnsTech(team, t))
+                return false;
+        foreach (byte c in caps)
+            if (!TeamOwnsCap(team, c))
+                return false;
+        return true;
+    }
 
     public IReadOnlyCollection<ushort> TeamOwnedTechs(byte team) =>
         _teamOwnedTechs.TryGetValue(team, out var s) ? s : System.Array.Empty<ushort>();
@@ -883,8 +924,7 @@ public partial class WorldRenderer : Node3D
 
     public void NetUpdateResearch(Dictionary<ulong, BaseResearch> map) => _baseResearch = map;
 
-    public BaseResearch? ResearchAt(ulong baseId) =>
-        _baseResearch.TryGetValue(baseId, out var r) ? r : null;
+    public BaseResearch? ResearchAt(ulong baseId) => _baseResearch.TryGetValue(baseId, out var r) ? r : null;
 
     public IReadOnlyDictionary<ulong, BaseResearch> AllResearch() => _baseResearch;
 
@@ -920,8 +960,10 @@ public partial class WorldRenderer : Node3D
     {
         int n = 0;
         foreach (var c in _constructorStates)
-            if (c.LaunchBaseId == launchBaseId
-                && (c.State == ConstructorStateProducing || c.State == ConstructorStateQueued))
+            if (
+                c.LaunchBaseId == launchBaseId
+                && (c.State == ConstructorStateProducing || c.State == ConstructorStateQueued)
+            )
                 n++;
         return n;
     }
@@ -948,14 +990,18 @@ public partial class WorldRenderer : Node3D
 
     // Whether this team may currently build the given hull ClassId (Stage-2 unlock gating). Meaningful
     // only once HasTeamState(team) is true; the caller guards on that.
-    public bool TeamUnlocked(byte team, byte cls) =>
-        _teamUnlocks.TryGetValue(team, out var set) && set.Contains(cls);
+    public bool TeamUnlocked(byte team, byte cls) => _teamUnlocks.TryGetValue(team, out var set) && set.Contains(cls);
 
     // Client-side pre-flight for a spawn (the buy seam), mirroring the server's TryReserveSpawn gate.
     // ONLY returns a positive block when the latest snapshot proves it, so a doomed buy isn't spammed;
     // before the first snapshot (or for an unknown cost) it returns Allow and defers to the server's
     // authoritative gate (the spawn-pending timeout backstops any race-reject). Cost = ShipClassDef.Cost.
-    public enum SpawnGate { Allow, Locked, TooPoor }
+    public enum SpawnGate
+    {
+        Allow,
+        Locked,
+        TooPoor,
+    }
 
     public SpawnGate CheckSpawnGate(byte team, byte cls)
     {
@@ -987,8 +1033,13 @@ public partial class WorldRenderer : Node3D
             foreach (var node in _shipNodes.Values)
                 // Exclude enemy pods: they're harmless and shouldn't draw a marker or be
                 // Tab-targetable (let a downed opponent float home unmolested).
-                if (node is RemoteShip rs && rs.Team != lt && !rs.IsPod && rs.Visible
-                    && (!fog || _radarVisible.Contains(rs.ShipId)))
+                if (
+                    node is RemoteShip rs
+                    && rs.Team != lt
+                    && !rs.IsPod
+                    && rs.Visible
+                    && (!fog || _radarVisible.Contains(rs.ShipId))
+                )
                     _enemyScratch.Add(rs);
         }
         return _enemyScratch;
@@ -1015,10 +1066,7 @@ public partial class WorldRenderer : Node3D
     // sector, so the node exists until the ship actually despawns). Null once despawned. The
     // local ship is a PredictionController, not a RemoteShip, so it stays naturally excluded.
     public RemoteShip? FriendlyShipById(ulong shipId) =>
-        MarkerTeam is byte team
-        && _shipNodes.TryGetValue(shipId, out var node)
-        && node is RemoteShip rs
-        && rs.Team == team
+        MarkerTeam is byte team && _shipNodes.TryGetValue(shipId, out var node) && node is RemoteShip rs && rs.Team == team
             ? rs
             : null;
 
@@ -1155,8 +1203,7 @@ public partial class WorldRenderer : Node3D
     }
 
     // Pass-through to the minefield feed for the HUD mine glyph (mirrors VisibleProbes above).
-    public IReadOnlyList<(Vector3 Pos, byte Team)> VisibleMinefields()
-        => _minefieldViews.VisibleMinefields();
+    public IReadOnlyList<(Vector3 Pos, byte Team)> VisibleMinefields() => _minefieldViews.VisibleMinefields();
 
     public override void _Ready()
     {
@@ -1305,7 +1352,13 @@ public partial class WorldRenderer : Node3D
     // F3/death/respawn keep their pre-existing hitch) — so this only covers same-sector fog reveals and
     // the stale-base ghost dim.
     private const float FadeDur = 0.55f; // seconds for a full in/out ramp
-    private struct Fade { public float Curr; public float Target; }
+
+    private struct Fade
+    {
+        public float Curr;
+        public float Target;
+    }
+
     private readonly Dictionary<Node3D, Fade> _fades = new();
     private readonly List<Node3D> _fadeScratch = new();
 
@@ -1315,9 +1368,7 @@ public partial class WorldRenderer : Node3D
     {
         foreach (var (bn, _, id, _) in _baseList)
             if (bn == node)
-                return FogActive && _baseHealthFrac.TryGetValue(id, out float f) && f <= 0.001f
-                    ? StaleBaseTransparency
-                    : 0f;
+                return FogActive && _baseHealthFrac.TryGetValue(id, out float f) && f <= 0.001f ? StaleBaseTransparency : 0f;
         return 0f; // asteroids (and live bases) rest opaque
     }
 
@@ -1435,6 +1486,7 @@ public partial class WorldRenderer : Node3D
     // Effective per-barrel weapon ids for every ship flying a NON-authored loadout (absent =
     // authored class loadout). Fed whole by GameNetClient.ApplyShipLoadout each frame.
     private readonly Dictionary<ulong, uint[]> _shipMounts = new();
+
     // Per-remote-ship derived MountLastFire shadow (FireCadence): which tick each gun barrel
     // last fired, reconstructed from observed LastFireTick changes so SpawnBoltFor knows WHICH
     // mounts fired a given volley. Reset when that ship's loadout changes; pruned with the ship.
@@ -1558,10 +1610,16 @@ public partial class WorldRenderer : Node3D
     // the ChaffFx / MinefieldViews child nodes (compilable no-op skeletons in Track 0).
 
     public void NetSpawnChaff(ulong id, byte team, uint sector, Vec3 pos, Vec3 vel, uint weaponId) =>
-        _chaffFx.Spawn(id, team, sector, new Vector3(pos.X, pos.Y, pos.Z), new Vector3(vel.X, vel.Y, vel.Z), _defs.GetWeapon(weaponId));
+        _chaffFx.Spawn(
+            id,
+            team,
+            sector,
+            new Vector3(pos.X, pos.Y, pos.Z),
+            new Vector3(vel.X, vel.Y, vel.Z),
+            _defs.GetWeapon(weaponId)
+        );
 
-    public void NetUpsertMinefield(Minefield row) =>
-        _minefieldViews.Upsert(row, _defs.GetWeapon(row.WeaponId), ServerTick);
+    public void NetUpsertMinefield(Minefield row) => _minefieldViews.Upsert(row, _defs.GetWeapon(row.WeaponId), ServerTick);
 
     public void NetMineGone(ulong fieldId, byte mineIndex, byte reason, uint sector, Vec3 pos) =>
         _minefieldViews.MineGone(fieldId, mineIndex, reason, sector, new Vector3(pos.X, pos.Y, pos.Z));
@@ -1893,7 +1951,8 @@ public partial class WorldRenderer : Node3D
                 // so the touch is not an impact — no thud. Gated on the build stream (a row exists from
                 // Aligning on), so a constructor merely flying past rocks (ToRock/MoveTo) still thuds.
                 bool buildContact = ship is RemoteShip { IsConstructor: true } && HasBuildRow(shipId);
-                bool now = !buildContact
+                bool now =
+                    !buildContact
                     && Collide.Touches(
                         new Vec3(c.X, c.Y, c.Z),
                         CollisionConfig.ShipRadius,
@@ -1913,37 +1972,37 @@ public partial class WorldRenderer : Node3D
         // visible local-sector ships — few enough that the O(n²) pair sweep is trivial. Entry-edge
         // debounce per id-ordered pair, exactly like the static _collidingShips gate above.
         for (int i = 0; i < _pairScratch.Count; i++)
-            for (int j = i + 1; j < _pairScratch.Count; j++)
-            {
-                var (idA, a) = _pairScratch[i];
-                var (idB, b) = _pairScratch[j];
-                var (clsA, podA) = ShipClassOf(a);
-                var (clsB, podB) = ShipClassOf(b);
-                var ha = _collisionWorld.ShipHull(_defs, clsA, podA);
-                var hb = _collisionWorld.ShipHull(_defs, clsB, podB);
-                Vector3 pa = a.GlobalPosition,
-                    pb = b.GlobalPosition;
-                Quaternion qa = a.Quaternion,
-                    qb = b.Quaternion;
-                bool now = Collide.ShipShipContact(
-                    new Vec3(pa.X, pa.Y, pa.Z),
-                    new Quat(qa.X, qa.Y, qa.Z, qa.W),
-                    ha?.Hull,
-                    ha?.Bound ?? CollisionConfig.ShipRadius,
-                    new Vec3(pb.X, pb.Y, pb.Z),
-                    new Quat(qb.X, qb.Y, qb.Z, qb.W),
-                    hb?.Hull,
-                    hb?.Bound ?? CollisionConfig.ShipRadius,
-                    CollisionConfig.ShipRadius,
-                    out _,
-                    out _
-                );
-                var key = idA < idB ? (idA, idB) : (idB, idA);
-                if (now && _collidingPairs.Add(key))
-                    PlayCollisionSfx((pa + pb) * 0.5f);
-                else if (!now)
-                    _collidingPairs.Remove(key);
-            }
+        for (int j = i + 1; j < _pairScratch.Count; j++)
+        {
+            var (idA, a) = _pairScratch[i];
+            var (idB, b) = _pairScratch[j];
+            var (clsA, podA) = ShipClassOf(a);
+            var (clsB, podB) = ShipClassOf(b);
+            var ha = _collisionWorld.ShipHull(_defs, clsA, podA);
+            var hb = _collisionWorld.ShipHull(_defs, clsB, podB);
+            Vector3 pa = a.GlobalPosition,
+                pb = b.GlobalPosition;
+            Quaternion qa = a.Quaternion,
+                qb = b.Quaternion;
+            bool now = Collide.ShipShipContact(
+                new Vec3(pa.X, pa.Y, pa.Z),
+                new Quat(qa.X, qa.Y, qa.Z, qa.W),
+                ha?.Hull,
+                ha?.Bound ?? CollisionConfig.ShipRadius,
+                new Vec3(pb.X, pb.Y, pb.Z),
+                new Quat(qb.X, qb.Y, qb.Z, qb.W),
+                hb?.Hull,
+                hb?.Bound ?? CollisionConfig.ShipRadius,
+                CollisionConfig.ShipRadius,
+                out _,
+                out _
+            );
+            var key = idA < idB ? (idA, idB) : (idB, idA);
+            if (now && _collidingPairs.Add(key))
+                PlayCollisionSfx((pa + pb) * 0.5f);
+            else if (!now)
+                _collidingPairs.Remove(key);
+        }
     }
 
     // Visible local-sector ships collected each CheckCollisions sweep (reused buffer).
@@ -2034,7 +2093,12 @@ public partial class WorldRenderer : Node3D
         if (_alephNodes.ContainsKey(row.AlephId))
             return;
         var pos = new Vector3(row.PosX, row.PosY, row.PosZ);
-        var av = new AlephView { Name = $"Aleph_{row.AlephId}", Position = pos, DestSectorId = row.DestSectorId };
+        var av = new AlephView
+        {
+            Name = $"Aleph_{row.AlephId}",
+            Position = pos,
+            DestSectorId = row.DestSectorId,
+        };
         _alephs.AddChild(av);
         _alephNodes[row.AlephId] = av;
         _alephLinks.Add((row.SectorId, row.DestSectorId));
@@ -2070,7 +2134,9 @@ public partial class WorldRenderer : Node3D
                 string? oldModel = _defs.GetBaseDef(prev)?.ModelName;
                 string? newModel = _defs.GetBaseDef(row.BaseTypeId)?.ModelName;
                 if (!string.Equals(oldModel ?? "", newModel ?? "", StringComparison.Ordinal))
-                    Log.Warn($"[WorldRenderer] Base {row.BaseId} upgraded to a DIFFERENT mesh ({oldModel} -> {newModel}); live re-mesh is not supported — mesh stays stale until reload.");
+                    Log.Warn(
+                        $"[WorldRenderer] Base {row.BaseId} upgraded to a DIFFERENT mesh ({oldModel} -> {newModel}); live re-mesh is not supported — mesh stays stale until reload."
+                    );
             }
             return;
         }
@@ -2115,7 +2181,8 @@ public partial class WorldRenderer : Node3D
     // STATIC: the cache is instance-independent (meshes are immutable shared resources), so
     // AssetPreloader can warm it at startup — first-touch GD.Load of a variant GLB costs
     // ~300ms and used to land mid-join, inside the world-restream frame.
-    private static readonly Dictionary<string, (Mesh? Mesh, float AuthoredRadius, Material? BaseMat)> _asteroidMeshes = new();
+    private static readonly Dictionary<string, (Mesh? Mesh, float AuthoredRadius, Material? BaseMat)> _asteroidMeshes =
+        new();
 
     // Load (and cache) the mesh + authored radius for a variant, or (null, 0) if unavailable.
     internal static (Mesh? Mesh, float AuthoredRadius, Material? BaseMat) AsteroidMesh(string variant)
@@ -2173,13 +2240,14 @@ public partial class WorldRenderer : Node3D
         float t3 = Hash01((ulong)bucket * 3UL + 2UL);
         // AlbedoColor MULTIPLIES the baked albedo, so keep the spread at/below 1.0 — a darken-biased
         // range preserves the full variety instead of clamping the bright end to white.
-        float bright = 0.58f + t1 * 0.42f;   // 0.58 .. 1.00 — darker/lighter dust
-        float warm = -0.09f + t2 * 0.16f;    // + tan, - cool grey (R up / B down)
-        float grn = -0.05f + t3 * 0.10f;     // + olive, - cool grey
+        float bright = 0.58f + t1 * 0.42f; // 0.58 .. 1.00 — darker/lighter dust
+        float warm = -0.09f + t2 * 0.16f; // + tan, - cool grey (R up / B down)
+        float grn = -0.05f + t3 * 0.10f; // + olive, - cool grey
         var tint = new Color(
             Mathf.Clamp(bright * (1f + warm), 0f, 1f),
             Mathf.Clamp(bright * (1f + grn), 0f, 1f),
-            Mathf.Clamp(bright * (1f - warm), 0f, 1f));
+            Mathf.Clamp(bright * (1f - warm), 0f, 1f)
+        );
 
         var mat = (StandardMaterial3D)baseMat.Duplicate();
         mat.AlbedoColor = tint;
@@ -2302,7 +2370,6 @@ public partial class WorldRenderer : Node3D
         }
     }
 
-
     // ---- Ship -----------------------------------------------------------
 
     private void InsertShip(Ship row, bool local)
@@ -2328,7 +2395,7 @@ public partial class WorldRenderer : Node3D
                     _shipMounts.TryGetValue(row.ShipId, out var mountIds) ? mountIds
                     : _defs.GetHardpoints((byte)row.Class) is { } hps
                         ? StellarAllegiance.Ui.LoadoutState.Shared.ExpectedEffectiveIds((byte)row.Class, hps)
-                        : null
+                    : null
                 );
             // Fresh launch (base spawn/respawn or pod-eject) gets the establishing cinematic; a
             // reconnect reclaim of a ship already in flight does not (NetPromoteLocal tagged it).
@@ -2340,10 +2407,7 @@ public partial class WorldRenderer : Node3D
             pc.SetCollisionProvider(() => _collisionWorld.BodiesIn(_localSector, SimSeconds));
             // ... and against the other SHIPS in the local sector (interpolated remote poses), with
             // this hull's own collision hull for the hull-aware contact — mirroring server Pass C.
-            pc.SetShipCollisionProvider(
-                ShipObstacles,
-                () => _collisionWorld.ShipHull(_defs, (byte)pc.Class, pc.IsPod)
-            );
+            pc.SetShipCollisionProvider(ShipObstacles, () => _collisionWorld.ShipHull(_defs, (byte)pc.Class, pc.IsPod));
             if (_pilotNames.TryGetValue(row.ShipId, out var localPilot))
                 pc.SetPilotName(localPilot);
             LocalShip = pc;
@@ -2637,8 +2701,15 @@ public partial class WorldRenderer : Node3D
 
     // The LOCAL ship's fire prediction produced a shot this tick (ShipController). Same
     // rendering as a remote bolt, no masking lead (prediction is already now-correct).
-    public void SpawnLocalBolt(Vector3 pos, Vector3 vel, Vector3 aimDir, float lifeSec, float boltRadius, float boltLength, bool isHeal) =>
-        AddBolt(pos, vel, aimDir, _localSector, lifeSec, LocalShip?.ShipId ?? 0, 0f, boltRadius, boltLength, isHeal);
+    public void SpawnLocalBolt(
+        Vector3 pos,
+        Vector3 vel,
+        Vector3 aimDir,
+        float lifeSec,
+        float boltRadius,
+        float boltLength,
+        bool isHeal
+    ) => AddBolt(pos, vel, aimDir, _localSector, lifeSec, LocalShip?.ShipId ?? 0, 0f, boltRadius, boltLength, isHeal);
 
     private void AddBolt(
         Vector3 pos,
@@ -2743,7 +2814,15 @@ public partial class WorldRenderer : Node3D
                     }
                 }
             }
-            else if (_collisionWorld.BaseRayEntry(sector, new Vec3(pos.X, pos.Y, pos.Z), new Vec3(vel.X, vel.Y, vel.Z), ttl, out float tHull))
+            else if (
+                _collisionWorld.BaseRayEntry(
+                    sector,
+                    new Vec3(pos.X, pos.Y, pos.Z),
+                    new Vec3(vel.X, vel.Y, vel.Z),
+                    ttl,
+                    out float tHull
+                )
+            )
             {
                 // Tier 2: procedural placeholder rendered, but the server-parity convex hull is
                 // loaded — still far tighter than the sphere. Spark at the hull-entry point, unless
@@ -3100,9 +3179,7 @@ public partial class WorldRenderer : Node3D
         float rockR = _buildRockRadius.TryGetValue(b.RockId, out var rr) ? rr : 2f;
         float baseR = _defs.GetBaseDef(DefaultBaseTypeId)?.Radius ?? BaseModelLoader.FallbackRadius;
         float finalR = MathF.Max(rockR * 1.05f, baseR);
-        float worldR = b.Phase == 1
-            ? rockR * (0.05f + 0.50f * b.Progress)
-            : Mathf.Lerp(rockR * 0.55f, finalR, b.Progress);
+        float worldR = b.Phase == 1 ? rockR * (0.05f + 0.50f * b.Progress) : Mathf.Lerp(rockR * 0.55f, finalR, b.Progress);
         sphere.SetEnvelop(worldR);
         return (sphere, worldR);
     }
@@ -3143,14 +3220,13 @@ public partial class WorldRenderer : Node3D
                 _effects.AddChild(debris);
                 _constructorDebris[b.RockId] = debris;
             }
-            debris.GlobalPosition = _shipNodes.TryGetValue(b.ShipId, out var dn) && dn.Visible
-                ? dn.GlobalPosition
-                : sphere.GlobalPosition;
+            debris.GlobalPosition =
+                _shipNodes.TryGetValue(b.ShipId, out var dn) && dn.Visible ? dn.GlobalPosition : sphere.GlobalPosition;
             SetNodeSector(debris, rock.SectorId);
         }
         else if (_constructorDebris.TryGetValue(b.RockId, out var debris))
         {
-            debris.Stop();                     // embedded/hidden — cut the spray
+            debris.Stop(); // embedded/hidden — cut the spray
             _constructorDebris.Remove(b.RockId); // stop tracking; it self-frees so we never touch a freed node
         }
     }
@@ -3164,8 +3240,7 @@ public partial class WorldRenderer : Node3D
     // despawn.
     private void LatchDroneHideForBuild(ConstructorBuild b)
     {
-        if (b.Phase >= 2
-            && _shipNodes.TryGetValue(b.ShipId, out var shipNode) && shipNode is RemoteShip drone)
+        if (b.Phase >= 2 && _shipNodes.TryGetValue(b.ShipId, out var shipNode) && shipNode is RemoteShip drone)
         {
             drone.HideForBuild = true;
             drone.Visible = false;
@@ -3216,8 +3291,11 @@ public partial class WorldRenderer : Node3D
             _miningBeamPrune.Clear();
             foreach (var (id, _) in _miningBeams)
             {
-                bool keep = _shipNodes.TryGetValue(id, out var node)
-                    && node is RemoteShip rs && rs.IsMining && rs.Visible
+                bool keep =
+                    _shipNodes.TryGetValue(id, out var node)
+                    && node is RemoteShip rs
+                    && rs.IsMining
+                    && rs.Visible
                     && MiningTargetRock(id, rs.GlobalPosition) is not null;
                 if (!keep)
                     _miningBeamPrune.Add(id);
@@ -3235,9 +3313,11 @@ public partial class WorldRenderer : Node3D
     // nearest in-view He3 rock so a pre-v33 server (or a not-yet-arrived frame) still shows a beam.
     private (Vector3 Center, float Radius, MeshInstance3D? Node)? MiningTargetRock(ulong shipId, Vector3 fromPos)
     {
-        if (_minerTargetRock.TryGetValue(shipId, out ulong rockId)
+        if (
+            _minerTargetRock.TryGetValue(shipId, out ulong rockId)
             && _asteroidNodes.TryGetValue(rockId, out var node)
-            && GetAsteroid(rockId) is { } rock)
+            && GetAsteroid(rockId) is { } rock
+        )
             return (node.GlobalPosition, rock.CurrentRadius, node as MeshInstance3D);
         return NearestHe3Rock(fromPos);
     }
@@ -3301,7 +3381,11 @@ public partial class WorldRenderer : Node3D
                     {
                         // ER Nanite heal impact: a green spark on the (same-team) ship it restores;
                         // a heal bypasses shields, so never the shield-bubble flash even if it's up.
-                        SpawnEffect(new HitFlash { CoreColor = HealSparkTint, EmissionColor = HealSparkTint }, hit, _localSector);
+                        SpawnEffect(
+                            new HitFlash { CoreColor = HealSparkTint, EmissionColor = HealSparkTint },
+                            hit,
+                            _localSector
+                        );
                         SfxManager.Instance?.PlayAt(SfxManager.SfxId.Impact, hit, pitch: 1.15f + GD.Randf() * 0.12f);
                     }
                     // Shield up on the struck ship → a hemisphere shield-bubble flash + shield sound;

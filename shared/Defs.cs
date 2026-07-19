@@ -783,6 +783,12 @@ namespace StellarAllegiance.Shared
         public float BoundaryBaseDps = 8f;
         public float BoundaryRampDps = 0.12f;
         public float BoundaryMaxDps = 60f;
+
+        // Minefield speed-scaled damage: a victim takes the field's full authored DPS at MineSpeedRef
+        // closing speed and scales linearly (speed/ref), capped at MineMaxSpeedMult× so a near-static
+        // ship takes ~0 and a blistering plow-through can't exceed the cap.
+        public float MineSpeedRef = 40f;
+        public float MineMaxSpeedMult = 2.5f;
     }
 
     // Gate / docking / pod / economy / match-flow tuning (world.yaml `mechanics:`).

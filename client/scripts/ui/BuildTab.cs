@@ -40,9 +40,7 @@ public partial class BuildTab : Control
     private const string MinerCardId = "__miner__";
 
     private bool _built;
-    private double _refreshTimer;
-    private long _statusSig = long.MinValue;
-    private int _catalogCount = -1;
+    private readonly RefreshGate _gate = new();
 
     private Control _guard = null!;
     private Control _mainBody = null!;
@@ -104,7 +102,11 @@ public partial class BuildTab : Control
         var glyph = UiKit.MakeLabel("⬡", UiKit.TextStyle.Display, DesignTokens.TextDim);
         glyph.HorizontalAlignment = HorizontalAlignment.Center;
         col.AddChild(glyph);
-        var msg = UiKit.MakeLabel("CONSTRUCTION CATALOG OFFLINE — AWAITING SERVER CATALOG", UiKit.TextStyle.Data, DesignTokens.TextDim);
+        var msg = UiKit.MakeLabel(
+            "CONSTRUCTION CATALOG OFFLINE — AWAITING SERVER CATALOG",
+            UiKit.TextStyle.Data,
+            DesignTokens.TextDim
+        );
         msg.HorizontalAlignment = HorizontalAlignment.Center;
         col.AddChild(msg);
         center.AddChild(col);
@@ -183,7 +185,8 @@ public partial class BuildTab : Control
     private List<StationCatalogDef> Catalog() =>
         _defs == null
             ? new()
-            : _defs.AllStationCatalog()
+            : _defs
+                .AllStationCatalog()
                 .Where(s => s.BaseTypeId != 0 && !(s.BaseTypeId >= 1 && s.BuildRockClass == 255))
                 .ToList();
 
@@ -205,15 +208,9 @@ public partial class BuildTab : Control
         if (!have)
             return;
 
-        _refreshTimer -= delta;
-        long sig = ComputeStatusSig(catalog);
-        bool catalogChanged = catalog.Count != _catalogCount;
-        if (_refreshTimer <= 0 || sig != _statusSig || catalogChanged)
+        var (run, structural) = _gate.Tick(delta, catalog.Count, ComputeStatusSig(catalog));
+        if (run)
         {
-            _refreshTimer = 0.25;
-            _catalogCount = catalog.Count;
-            bool structural = sig != _statusSig || catalogChanged;
-            _statusSig = sig;
             if (structural)
                 RebuildGrid(catalog);
             UpdateHeader();
@@ -237,9 +234,9 @@ public partial class BuildTab : Control
         // Fold each owned cap ONCE — a per-entry fold XOR-cancels when two structures need the same cap.
         var capsSeen = new HashSet<byte>();
         foreach (StationCatalogDef s in catalog)
-            foreach (byte c in s.RequiredCaps)
-                if (capsSeen.Add(c) && _world.TeamOwnsCap(team, c))
-                    sig ^= (c + 17L) * 40503L;
+        foreach (byte c in s.RequiredCaps)
+            if (capsSeen.Add(c) && _world.TeamOwnsCap(team, c))
+                sig ^= (c + 17L) * 40503L;
         // Fold rock discovery so a scout's find re-enables the greyed constructor card live.
         for (byte rc = 0; rc < 5; rc++)
             if (_world.TeamRockClassDiscovered(team, rc))
@@ -289,8 +286,22 @@ public partial class BuildTab : Control
                 case 0: // Producing
                 {
                     ulong id = c.Id;
-                    Action? cancel = commander ? () => { _net?.SendCancelConstructor(id); SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick); } : null;
-                    row.ConfigureTimed(_world!, DesignTokens.Warn, $"◷ PRODUCING · {name}{suffix}", c.StartTick, c.DurationTicks, cancel, "✕ CANCEL");
+                    Action? cancel = commander
+                        ? () =>
+                        {
+                            _net?.SendCancelConstructor(id);
+                            SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
+                        }
+                        : null;
+                    row.ConfigureTimed(
+                        _world!,
+                        DesignTokens.Warn,
+                        $"◷ PRODUCING · {name}{suffix}",
+                        c.StartTick,
+                        c.DurationTicks,
+                        cancel,
+                        "✕ CANCEL"
+                    );
                     break;
                 }
                 case 1: // Idle
@@ -302,12 +313,21 @@ public partial class BuildTab : Control
                 case 3: // MoveTo
                 {
                     string sec = _world!.SectorName((uint)c.TargetId);
-                    if (string.IsNullOrEmpty(sec)) sec = $"SECTOR {c.TargetId}";
+                    if (string.IsNullOrEmpty(sec))
+                        sec = $"SECTOR {c.TargetId}";
                     row.ConfigureNote(DesignTokens.TeamAccent, $"▸ {name} CONSTRUCTOR · MOVING TO {sec.ToUpperInvariant()}");
                     break;
                 }
                 case 4: // Aligning (timed: the station's align-time-seconds)
-                    row.ConfigureTimed(_world!, DesignTokens.TeamAccent, $"◈ {name} · ALIGNING", c.StartTick, c.DurationTicks, null, "");
+                    row.ConfigureTimed(
+                        _world!,
+                        DesignTokens.TeamAccent,
+                        $"◈ {name} · ALIGNING",
+                        c.StartTick,
+                        c.DurationTicks,
+                        null,
+                        ""
+                    );
                     break;
                 case 5: // Approaching (v38: distance-gated creep to surface contact — untimed)
                     row.ConfigureNote(DesignTokens.TeamAccent, $"◈ {name} · APPROACHING SURFACE");
@@ -318,7 +338,13 @@ public partial class BuildTab : Control
                 case 8: // Queued (waiting for a build slot at its garrison — 0% until promoted)
                 {
                     ulong id = c.Id;
-                    Action? cancel = commander ? () => { _net?.SendCancelConstructor(id); SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick); } : null;
+                    Action? cancel = commander
+                        ? () =>
+                        {
+                            _net?.SendCancelConstructor(id);
+                            SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
+                        }
+                        : null;
                     row.ConfigureQueued(DesignTokens.Data, $"◷ QUEUED · {name}{suffix}", cancel, "✕ CANCEL");
                     break;
                 }
@@ -342,9 +368,7 @@ public partial class BuildTab : Control
             return false;
         byte team = Team;
         bool obsoleted = s.ObsoletedByTechIdx.Any(t => _world.TeamOwnsTech(team, t));
-        return !obsoleted
-            && s.RequiredTechIdx.All(t => _world.TeamOwnsTech(team, t))
-            && s.RequiredCaps.All(c => _world.TeamOwnsCap(team, c));
+        return !obsoleted && _world.TeamHasAll(team, s.RequiredTechIdx, s.RequiredCaps);
     }
 
     // Rock-discovery gate predictor: a constructor base stays locked until the team's fog of war has
@@ -383,9 +407,15 @@ public partial class BuildTab : Control
             string id = s.Id;
             var card = new StationCard();
             card.Configure(
-                GlyphFor(s.StationClass), s.Name.ToUpperInvariant(), ClassName(s.StationClass),
-                s.Description, TechDetailPanel.PriceText(s.Price), TechDetailPanel.Mmss(s.BuildTimeSeconds),
-                RockDiscovered(s) && !queueFull, _selectedId == id);
+                GlyphFor(s.StationClass),
+                s.Name.ToUpperInvariant(),
+                ClassName(s.StationClass),
+                s.Description,
+                TechDetailPanel.PriceText(s.Price),
+                TechDetailPanel.Mmss(s.BuildTimeSeconds),
+                RockDiscovered(s) && !queueFull,
+                _selectedId == id
+            );
             card.Pressed += () => SelectStation(id);
             _grid.AddChild(card);
             _cards.Add((id, card));
@@ -411,12 +441,17 @@ public partial class BuildTab : Control
         int count = _world.TeamMinerCount(team);
         var card = new StationCard();
         card.Configure(
-            GlyphFor(4), "MINER DRONE", ClassName(4),
+            GlyphFor(4),
+            "MINER DRONE",
+            ClassName(4),
             "Autonomous drone — harvests helium-3 into team credits.",
             TechDetailPanel.PriceText(miner.Cost),
             miner.OrderTimeSeconds > 0 ? TechDetailPanel.Mmss(miner.OrderTimeSeconds) : "",
-            count < cap && !BuildQueueFull(out _), _selectedId == MinerCardId,
-            kindWord: "DRONE", statusText: $"{count} / {cap}");
+            count < cap && !BuildQueueFull(out _),
+            _selectedId == MinerCardId,
+            kindWord: "DRONE",
+            statusText: $"{count} / {cap}"
+        );
         card.Pressed += () => SelectStation(MinerCardId);
         _grid.AddChild(card);
         _cards.Add((MinerCardId, card));
@@ -443,21 +478,26 @@ public partial class BuildTab : Control
             return;
         }
 
-        StationCatalogDef? sel = _selectedId != null
-            ? Catalog().FirstOrDefault(s => s.Id == _selectedId)
-            : null;
+        StationCatalogDef? sel = _selectedId != null ? Catalog().FirstOrDefault(s => s.Id == _selectedId) : null;
 
         if (sel == null)
         {
             _detail.SetSchematic("⬡", "// STRUCTURE");
             _detail.SetTitle("SELECT A STRUCTURE");
             _detail.SetStatus("—", StatusPill.Kind.Neutral);
-            _detail.SetDescription("Choose a structure from the catalog to review its cost, prerequisites, and what it unlocks.");
+            _detail.SetDescription(
+                "Choose a structure from the catalog to review its cost, prerequisites, and what it unlocks."
+            );
             _detail.SetMeta("—", "—", "—");
             _detail.ClearPrereqs();
             _detail.ClearUnlocks();
-            _detail.SetFooter(true, "— SELECT A STRUCTURE", ButtonVariant.Secondary, null,
-                "Choose a structure to commission a constructor.");
+            _detail.SetFooter(
+                true,
+                "— SELECT A STRUCTURE",
+                ButtonVariant.Secondary,
+                null,
+                "Choose a structure to commission a constructor."
+            );
             return;
         }
 
@@ -465,11 +505,16 @@ public partial class BuildTab : Control
         bool rockOk = RockDiscovered(sel);
         _detail.SetSchematic(GlyphFor(sel.StationClass), "// STRUCTURE");
         _detail.SetTitle(sel.Name.ToUpperInvariant());
-        _detail.SetStatus(available && rockOk ? "◈ AVAILABLE" : "⊘ LOCKED",
-            available && rockOk ? StatusPill.Kind.Accent : StatusPill.Kind.Neutral);
+        _detail.SetStatus(
+            available && rockOk ? "◈ AVAILABLE" : "⊘ LOCKED",
+            available && rockOk ? StatusPill.Kind.Accent : StatusPill.Kind.Neutral
+        );
         _detail.SetDescription(string.IsNullOrEmpty(sel.Description) ? "No briefing on file." : sel.Description);
-        _detail.SetMeta(TechDetailPanel.PriceText(sel.Price), TechDetailPanel.Mmss(sel.BuildTimeSeconds),
-            string.IsNullOrEmpty(_baseTitle) ? "—" : _baseTitle);
+        _detail.SetMeta(
+            TechDetailPanel.PriceText(sel.Price),
+            TechDetailPanel.Mmss(sel.BuildTimeSeconds),
+            string.IsNullOrEmpty(_baseTitle) ? "—" : _baseTitle
+        );
 
         BuildPrereqs(sel);
         BuildUnlocks(sel);
@@ -490,14 +535,21 @@ public partial class BuildTab : Control
 
         _detail.SetSchematic(GlyphFor(4), "// DRONE");
         _detail.SetTitle("MINER DRONE");
-        _detail.SetStatus(room ? $"◈ {count} / {cap} FIELDED" : $"⊘ CAP REACHED ({cap})",
-            room ? StatusPill.Kind.Accent : StatusPill.Kind.Neutral);
-        _detail.SetDescription("An autonomous mining drone. It prospects your team's sectors for "
-            + "helium-3, harvests it, and offloads at a friendly base as team credits. A destroyed "
-            + "drone is not replaced automatically — buy another.");
+        _detail.SetStatus(
+            room ? $"◈ {count} / {cap} FIELDED" : $"⊘ CAP REACHED ({cap})",
+            room ? StatusPill.Kind.Accent : StatusPill.Kind.Neutral
+        );
+        _detail.SetDescription(
+            "An autonomous mining drone. It prospects your team's sectors for "
+                + "helium-3, harvests it, and offloads at a friendly base as team credits. A destroyed "
+                + "drone is not replaced automatically — buy another."
+        );
         int orderSec = miner?.OrderTimeSeconds ?? 0;
-        _detail.SetMeta(TechDetailPanel.PriceText(miner?.Cost ?? 0),
-            orderSec > 0 ? TechDetailPanel.Mmss(orderSec) : "INSTANT", "GARRISON");
+        _detail.SetMeta(
+            TechDetailPanel.PriceText(miner?.Cost ?? 0),
+            orderSec > 0 ? TechDetailPanel.Mmss(orderSec) : "INSTANT",
+            "GARRISON"
+        );
         _detail.ClearPrereqs();
         _detail.ClearUnlocks();
         UpdateMinerFooter(miner, count, cap);
@@ -509,40 +561,66 @@ public partial class BuildTab : Control
     {
         if (miner is null)
         {
-            _detail.SetFooter(true, "⊘ MINING OFFLINE", ButtonVariant.Secondary, null,
-                "This server's content has no mining drone.");
+            _detail.SetFooter(
+                true,
+                "⊘ MINING OFFLINE",
+                ButtonVariant.Secondary,
+                null,
+                "This server's content has no mining drone."
+            );
             return;
         }
         if (!(_net?.IsCommander ?? false))
         {
-            _detail.SetFooter(true, "⊘ COMMANDER AUTHORIZATION REQUIRED", ButtonVariant.Secondary, null,
-                "Only the team commander can buy a mining drone.");
+            _detail.SetFooter(
+                true,
+                "⊘ COMMANDER AUTHORIZATION REQUIRED",
+                ButtonVariant.Secondary,
+                null,
+                "Only the team commander can buy a mining drone."
+            );
             return;
         }
         if (count >= cap)
         {
-            _detail.SetFooter(true, $"⊘ MINER CAP REACHED ({cap})", ButtonVariant.Secondary, null,
-                "Your team is fielding the maximum number of mining drones.");
+            _detail.SetFooter(
+                true,
+                $"⊘ MINER CAP REACHED ({cap})",
+                ButtonVariant.Secondary,
+                null,
+                "Your team is fielding the maximum number of mining drones."
+            );
             return;
         }
         if (_world!.TeamCredits(Team) < miner.Cost)
         {
-            _detail.SetFooter(true, "⊘ INSUFFICIENT CREDITS", ButtonVariant.Secondary, null,
-                $"A mining drone costs {TechDetailPanel.PriceText(miner.Cost)}.");
+            _detail.SetFooter(
+                true,
+                "⊘ INSUFFICIENT CREDITS",
+                ButtonVariant.Secondary,
+                null,
+                $"A mining drone costs {TechDetailPanel.PriceText(miner.Cost)}."
+            );
             return;
         }
         // A timed order joins the garrison's build pipeline, so the queue-full lock applies (an instant
         // order — order-time 0 — bypasses it, matching the server).
         if (miner.OrderTimeSeconds > 0 && BuildQueueFull(out int qlimit))
         {
-            _detail.SetFooter(true, $"⊘ BUILD QUEUE FULL ({qlimit})", ButtonVariant.Secondary, null,
-                "This garrison's build queue is full — cancel or wait for an order to launch.");
+            _detail.SetFooter(
+                true,
+                $"⊘ BUILD QUEUE FULL ({qlimit})",
+                ButtonVariant.Secondary,
+                null,
+                "This garrison's build queue is full — cancel or wait for an order to launch."
+            );
             return;
         }
         int orderSec = miner.OrderTimeSeconds;
-        string when = orderSec > 0
-            ? $"Orders a mining drone — launches from your garrison after {TechDetailPanel.Mmss(orderSec)}."
-            : "Launches an autonomous mining drone from your garrison.";
+        string when =
+            orderSec > 0
+                ? $"Orders a mining drone — launches from your garrison after {TechDetailPanel.Mmss(orderSec)}."
+                : "Launches an autonomous mining drone from your garrison.";
         _detail.SetFooter(false, "◈ BUY MINER", ButtonVariant.Primary, null, when);
     }
 
@@ -569,45 +647,81 @@ public partial class BuildTab : Control
     {
         if (!IsConstructible(sel))
         {
-            _detail.SetFooter(true, "⊘ NOT YET BUILDABLE", ButtonVariant.Secondary, null,
-                "This structure type arrives in a later update.");
+            _detail.SetFooter(
+                true,
+                "⊘ NOT YET BUILDABLE",
+                ButtonVariant.Secondary,
+                null,
+                "This structure type arrives in a later update."
+            );
             return;
         }
         if (!available)
         {
-            _detail.SetFooter(true, "⊘ LOCKED", ButtonVariant.Secondary, null,
-                "Research or build the prerequisites to unlock this structure.");
+            _detail.SetFooter(
+                true,
+                "⊘ LOCKED",
+                ButtonVariant.Secondary,
+                null,
+                "Research or build the prerequisites to unlock this structure."
+            );
             return;
         }
         if (!rockOk)
         {
             string cls = RockClassName(sel.BuildRockClass);
-            _detail.SetFooter(true, $"⊘ NO {cls.ToUpperInvariant()} ASTEROID DISCOVERED", ButtonVariant.Secondary, null,
-                $"Scout a {cls} asteroid to unlock this structure.");
+            _detail.SetFooter(
+                true,
+                $"⊘ NO {cls.ToUpperInvariant()} ASTEROID DISCOVERED",
+                ButtonVariant.Secondary,
+                null,
+                $"Scout a {cls} asteroid to unlock this structure."
+            );
             return;
         }
         bool commander = _net?.IsCommander ?? false;
         if (!commander)
         {
-            _detail.SetFooter(true, "⊘ COMMANDER AUTHORIZATION REQUIRED", ButtonVariant.Secondary, null,
-                "Only the team commander can commission a constructor.");
+            _detail.SetFooter(
+                true,
+                "⊘ COMMANDER AUTHORIZATION REQUIRED",
+                ButtonVariant.Secondary,
+                null,
+                "Only the team commander can commission a constructor."
+            );
             return;
         }
         if (BuildQueueFull(out int qlimit))
         {
-            _detail.SetFooter(true, $"⊘ BUILD QUEUE FULL ({qlimit})", ButtonVariant.Secondary, null,
-                "This garrison's build queue is full — cancel or wait for an order to launch.");
+            _detail.SetFooter(
+                true,
+                $"⊘ BUILD QUEUE FULL ({qlimit})",
+                ButtonVariant.Secondary,
+                null,
+                "This garrison's build queue is full — cancel or wait for an order to launch."
+            );
             return;
         }
         string rock = sel.BuildRockClass == 255 ? "asteroid" : $"{RockClassName(sel.BuildRockClass)} asteroid";
-        _detail.SetFooter(false, "◈ BUILD CONSTRUCTOR", ButtonVariant.Primary, null,
-            $"Launches a constructor from your garrison — then F3-order it to a {rock}.");
+        _detail.SetFooter(
+            false,
+            "◈ BUILD CONSTRUCTOR",
+            ButtonVariant.Primary,
+            null,
+            $"Launches a constructor from your garrison — then F3-order it to a {rock}."
+        );
     }
 
-    private static string RockClassName(byte rc) => rc switch
-    {
-        0 => "carbonaceous", 1 => "silicon", 2 => "uranium", 3 => "helium-3", 4 => "regolith", _ => "any",
-    };
+    private static string RockClassName(byte rc) =>
+        rc switch
+        {
+            0 => "carbonaceous",
+            1 => "silicon",
+            2 => "uranium",
+            3 => "helium-3",
+            4 => "regolith",
+            _ => "any",
+        };
 
     // BUILD button: commander commissions a constructor for the selected structure, launching from the
     // sidebar-selected base (0 = the server's default garrison). The server validates + charges.
@@ -640,8 +754,7 @@ public partial class BuildTab : Control
         var gTech = new HashSet<ushort>(s.GrantedTechIdx);
         var gCap = new HashSet<byte>(s.GrantedCaps);
         foreach (StationCatalogDef other in Catalog())
-            if (other.Id != s.Id
-                && (other.RequiredTechIdx.Any(gTech.Contains) || other.RequiredCaps.Any(gCap.Contains)))
+            if (other.Id != s.Id && (other.RequiredTechIdx.Any(gTech.Contains) || other.RequiredCaps.Any(gCap.Contains)))
                 names.Add(other.Name);
         // Hulls certified by a tech this station grants (v43: ShipClassDef.RequiredTechIdx streamed) —
         // the Supremacy Center lists the Enh Fighter it fields on completion (supremacy-1).
@@ -667,31 +780,33 @@ public partial class BuildTab : Control
     // ---- presentation maps -------------------------------------------------
 
     // Glyph per StationClass byte (Starbase=0 … Electronics=7). A small static map — cosmetic only.
-    private static string GlyphFor(byte stationClass) => stationClass switch
-    {
-        0 => "✦", // Starbase
-        1 => "◰", // Garrison
-        2 => "⬡", // Shipyard
-        3 => "◎", // Ripcord
-        4 => "◈", // Mining / Refinery
-        5 => "❖", // Research
-        6 => "⬢", // Ordnance
-        7 => "◇", // Electronics
-        _ => "⬡",
-    };
+    private static string GlyphFor(byte stationClass) =>
+        stationClass switch
+        {
+            0 => "✦", // Starbase
+            1 => "◰", // Garrison
+            2 => "⬡", // Shipyard
+            3 => "◎", // Ripcord
+            4 => "◈", // Mining / Refinery
+            5 => "❖", // Research
+            6 => "⬢", // Ordnance
+            7 => "◇", // Electronics
+            _ => "⬡",
+        };
 
-    private static string ClassName(byte stationClass) => stationClass switch
-    {
-        0 => "STARBASE",
-        1 => "GARRISON",
-        2 => "SHIPYARD",
-        3 => "RIPCORD",
-        4 => "MINING",
-        5 => "RESEARCH",
-        6 => "ORDNANCE",
-        7 => "ELECTRONICS",
-        _ => "STRUCTURE",
-    };
+    private static string ClassName(byte stationClass) =>
+        stationClass switch
+        {
+            0 => "STARBASE",
+            1 => "GARRISON",
+            2 => "SHIPYARD",
+            3 => "RIPCORD",
+            4 => "MINING",
+            5 => "RESEARCH",
+            6 => "ORDNANCE",
+            7 => "ELECTRONICS",
+            _ => "STRUCTURE",
+        };
 }
 
 // =====================================================================
@@ -743,7 +858,12 @@ internal partial class StationCard : PanelContainer
         _glyph.AddThemeFontOverride("font", UiFonts.Mono);
         _glyph.AddThemeFontSizeOverride("font_size", 22);
         _glyph.AddThemeColorOverride("font_color", DesignTokens.TeamAccent);
-        var tileSb = new StyleBoxFlat { BgColor = new Color(DesignTokens.TeamAccentBase, 0.10f), BorderColor = new Color(DesignTokens.TeamAccentBase, 0.4f), AntiAliasing = false };
+        var tileSb = new StyleBoxFlat
+        {
+            BgColor = new Color(DesignTokens.TeamAccentBase, 0.10f),
+            BorderColor = new Color(DesignTokens.TeamAccentBase, 0.4f),
+            AntiAliasing = false,
+        };
         tileSb.SetCornerRadiusAll(0);
         tileSb.SetBorderWidthAll(1);
         _glyph.AddThemeStyleboxOverride("normal", tileSb);
@@ -788,7 +908,18 @@ internal partial class StationCard : PanelContainer
         Restyle();
     }
 
-    public void Configure(string glyph, string name, string className, string desc, string priceText, string buildText, bool available, bool selected, string kindWord = "STRUCTURE", string? statusText = null)
+    public void Configure(
+        string glyph,
+        string name,
+        string className,
+        string desc,
+        string priceText,
+        string buildText,
+        bool available,
+        bool selected,
+        string kindWord = "STRUCTURE",
+        string? statusText = null
+    )
     {
         EnsureBuilt();
         _glyph.Text = glyph;
@@ -806,8 +937,16 @@ internal partial class StationCard : PanelContainer
     }
 
     // Showcase-only: render a card with no live catalog.
-    public void ConfigureMock(string glyph, string name, string className, string desc, string priceText, string buildText, bool available, bool selected = false) =>
-        Configure(glyph, name, className, desc, priceText, buildText, available, selected);
+    public void ConfigureMock(
+        string glyph,
+        string name,
+        string className,
+        string desc,
+        string priceText,
+        string buildText,
+        bool available,
+        bool selected = false
+    ) => Configure(glyph, name, className, desc, priceText, buildText, available, selected);
 
     public void SetSelected(bool sel)
     {
@@ -818,9 +957,10 @@ internal partial class StationCard : PanelContainer
     private void Restyle()
     {
         var accent = DesignTokens.TeamAccentBase;
-        var border = _selected
-            ? new Color(accent, 1f)
-            : _available ? new Color(accent, 0.4f) : DesignTokens.BorderLo;
+        var border =
+            _selected ? new Color(accent, 1f)
+            : _available ? new Color(accent, 0.4f)
+            : DesignTokens.BorderLo;
         var sb = new StyleBoxFlat
         {
             BgColor = _selected ? new Color(accent, 0.16f) : new Color(DesignTokens.Panel, 0.85f),

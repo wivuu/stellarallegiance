@@ -102,6 +102,8 @@ combat:
   boundary-base-dps: 8             # outside-the-sector erosion: base + ramp per unit beyond, capped
   boundary-ramp-dps: 0.12
   boundary-max-dps: 60
+  mine-speed-ref: 40               # closing speed a minefield deals full authored DPS at; scales speed/ref
+  mine-max-speed-mult: 2.5         # cap on the minefield speed multiplier (a near-static ship takes ~0)
 
 # Warp gates, docking, escape pods, economy cadence, match flow.
 mechanics:
