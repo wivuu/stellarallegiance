@@ -251,7 +251,6 @@ public sealed class World
 
     // Legacy single-model accessors (garrison, type 0) — for call sites without a base-type context
     // (SelfTest, launch fallback). Behavior byte-identical to the pre-v37 single-model fields.
-    public SimModel? BaseModel => Model0.Model;
     public ConvexHull? BaseHull => Model0.Hull;
     public ConvexHull[] BaseSubHulls => Model0.SubHulls;
     public BaseExit[] BaseExits => Model0.Exits;
@@ -332,6 +331,48 @@ public sealed class World
         Mining = cfg.Mining;
         Constructor = cfg.Constructor;
         Build = cfg.Build;
+
+        // ---- Sectors: geometry is entirely data-driven (see SeedSectors). ----
+        var (secCfg, defaultRadius, density) = SeedSectors(cfg);
+
+        // ---- Garrisons → team bases + team-count validation (see SeedGarrisonsAndValidateTeams). ----
+        SeedGarrisonsAndValidateTeams(seed, secCfg, defaultRadius);
+
+        // ---- Per-base health stamp + per-team economy seed (see SeedBaseHealthAndEconomy).
+        // GarrisonCount is a readonly field, so — like the ship-hull tuple below — its assignment must
+        // stay lexically inside the constructor even though the value is computed by the helper. ----
+        SeedBaseHealthAndEconomy(start, out int garrisonCount);
+        GarrisonCount = garrisonCount;
+
+        // ---- Asteroids, then gates/dust: both phases SHARE one DetRng stream (asteroids draw first;
+        // gates continue the exact same stream where asteroids left off). Dust draws its own
+        // independent rng internally (see SeedGatesAndDust), so it never perturbs this shared stream. ----
+        var rng = new DetRng(seed);
+        SeedAsteroids(ref rng, secCfg, defaultRadius, density);
+        SeedGatesAndDust(ref rng, cfg, secCfg, defaultRadius);
+
+        // ---- Spatial grid + resource/cosmetic assignment (see BucketRockGrid / AssignOreAndVariants). ----
+        BucketRockGrid();
+        AssignOreAndVariants(secCfg);
+
+        // ---- Collision/hardpoint models (see LoadModels). _shipHulls/_podHull are readonly fields, so
+        // the tuple assignment must stay directly in the constructor even though the loading work lives
+        // in the helper (same rule as GarrisonCount above). ----
+        (_shipHulls, _podHull) = LoadModels(ships);
+
+        // Collapse the aleph gate graph into an all-pairs next-hop table (players route multi-hop across
+        // sectors, not just through a single direct gate). The graph is tiny (~2-10 nodes); deterministic
+        // (lowest gate Id breaks equal-hop ties, no Random, no dictionary-order dependence) so it is safe
+        // to consult from the 20Hz sim step.
+        BuildSectorRouting();
+    }
+
+    // ---- Sectors: geometry is entirely data-driven. Radius = explicit override, else the single
+    // shared default. Name/env/map-pos come straight from the authored per-sector config. Returns the
+    // effective sector config list + the computed default radius/density so later phases (garrisons,
+    // asteroids, gates/dust) can consume them without re-deriving anything from `cfg`. ----
+    private (List<WorldSectorConfig> secCfg, float defaultRadius, float density) SeedSectors(WorldConfig cfg)
+    {
         // Live world-scale knobs from the loaded content (the authored world.yaml).
         float sectorScale = cfg.SectorScale;
         float density = cfg.AsteroidDensity;
@@ -343,8 +384,6 @@ public sealed class World
         // set of defaults": one uniform template applied to every sector, NOT a per-sector-id layout.
         var secCfg = cfg.Sectors.Count > 0 ? cfg.Sectors : DefaultArena(sectorScale);
 
-        // ---- Sectors: geometry is entirely data-driven. Radius = explicit override, else the single
-        // shared default. Name/env/map-pos come straight from the authored per-sector config. ----
         foreach (var sc in secCfg)
         {
             float radius = sc.Radius ?? defaultRadius;
@@ -353,19 +392,28 @@ public sealed class World
                 sc.Id, radius, sc.Name ?? "", sc.Env,
                 sc.MapPosX ?? 0f, sc.MapPosY ?? 0f, hasPos));
         }
-        float RadiusOf(uint id)
-        {
-            foreach (var s in Sectors)
-                if (s.Id == id)
-                    return s.Radius;
-            return defaultRadius;
-        }
+        return (secCfg, defaultRadius, density);
+    }
 
-        // ---- Garrisons → team bases. The SET of garrisons across the map defines the teams. Positions
-        // are drawn from a dedicated RNG (so the asteroid/aleph sequence is unaffected) and placed
-        // relative to each sector's radius. When a config declares sectors but NO garrison anywhere,
-        // fall back to one garrison per sector (team = index) for the first DefaultTeamCount sectors, so
-        // a bare arena is still playable — real maps declare garrisons explicitly. ----
+    // Sector radius lookup shared by every phase that runs after SeedSectors (garrisons/asteroids/
+    // gates/dust) — Sectors is already fully populated by then. Mirrors the ctor's old local
+    // `RadiusOf` function exactly (including the defensive fallback, which real configs never hit
+    // since every id consulted below was seeded into Sectors above).
+    private float RadiusOf(uint id, float defaultRadius)
+    {
+        foreach (var s in Sectors)
+            if (s.Id == id)
+                return s.Radius;
+        return defaultRadius;
+    }
+
+    // ---- Garrisons → team bases. The SET of garrisons across the map defines the teams. Positions
+    // are drawn from a dedicated RNG (so the asteroid/aleph sequence is unaffected) and placed
+    // relative to each sector's radius. When a config declares sectors but NO garrison anywhere,
+    // fall back to one garrison per sector (team = index) for the first DefaultTeamCount sectors, so
+    // a bare arena is still playable — real maps declare garrisons explicitly. ----
+    private void SeedGarrisonsAndValidateTeams(ulong seed, List<WorldSectorConfig> secCfg, float defaultRadius)
+    {
         bool anyGarrison = false;
         foreach (var sc in secCfg)
             if (sc.Garrison is not null)
@@ -381,7 +429,7 @@ public sealed class World
                 ?? (!anyGarrison && i < DefaultTeamCount ? new SectorGarrison { Team = (byte)i } : null);
             if (garrison is null)
                 continue;
-            float r = RadiusOf(sc.Id);
+            float r = RadiusOf(sc.Id, defaultRadius);
             Vec3 pos = RandomBasePos(ref baseRng, r * _seed.BaseInnerFrac, r * _seed.BaseOuterFrac, _seed.BaseYJitter);
             Bases.Add(new BaseSite(_nextBaseId++, garrison.Team, sc.Id, pos)); // garrisons are type 0
         }
@@ -403,6 +451,12 @@ public sealed class World
             throw new InvalidOperationException(
                 $"map declares {teams.Count} garrison team(s) (max id {maxTeam}) — the sim currently "
                     + $"supports {MaxSupportedTeams} teams (ids 0..{MaxSupportedTeams - 1}).");
+    }
+
+    // Per-base health stamp + per-team economy seed. `garrisonCount` is handed back via `out` because
+    // GarrisonCount is a readonly field (the ctor assigns it immediately after calling this).
+    private void SeedBaseHealthAndEconomy(FactionStart start, out int garrisonCount)
+    {
         for (int i = 0; i < Bases.Count; i++)
         {
             // All match-start bases are garrisons (type 0); BaseMaxHealthOf(0) == BaseMaxHealth here
@@ -414,19 +468,22 @@ public sealed class World
         }
         // The match-start garrisons (all type 0). ResetMatchBases trims runtime-built bases back to
         // these on a World-reuse rematch, so a reused World starts each match with only its garrisons.
-        GarrisonCount = Bases.Count;
+        garrisonCount = Bases.Count;
 
         // One economy state per team (Stage-1 = every team seeds from the single stock faction).
         foreach (var b in Bases)
             TeamStates[b.Team] = new TeamState();
         SeedEconomy(start);
+    }
 
-        // ---- Asteroids: each sector seeds by its declared shape from the shared shape constants. ----
-        var rng = new DetRng(seed);
+    // ---- Asteroids: each sector seeds by its declared shape from the shared shape constants. Draws
+    // from the SHARED `rng` (passed by ref) — the same stream SeedGatesAndDust continues afterward. ----
+    private void SeedAsteroids(ref DetRng rng, List<WorldSectorConfig> secCfg, float defaultRadius, float density)
+    {
         ulong rockId = 1;
         foreach (var sc in secCfg)
         {
-            float r = RadiusOf(sc.Id);
+            float r = RadiusOf(sc.Id, defaultRadius);
             float d = density * (sc.AsteroidDensityMult ?? 1f);
             switch (sc.Asteroids)
             {
@@ -440,24 +497,33 @@ public sealed class World
                     break;
             }
         }
+    }
 
-        // ---- Gates / alephs: one bidirectional pair per authored link (empty → ring by id), placed
-        // toward the outer reaches of each endpoint sector. ----
+    // ---- Gates / alephs: one bidirectional pair per authored link (empty → ring by id), placed
+    // toward the outer reaches of each endpoint sector — continues the SAME `rng` stream SeedAsteroids
+    // left off at. Dust clouds are then seeded on their OWN rng (independent of `rng`), so authoring
+    // dust never shifts a single asteroid or aleph — a map with dust reads byte-identical rocks to one
+    // without. ----
+    private void SeedGatesAndDust(ref DetRng rng, WorldConfig cfg, List<WorldSectorConfig> secCfg, float defaultRadius)
+    {
         var links = cfg.Links.Count > 0 ? cfg.Links : DefaultRing(secCfg);
         ulong gateId = 1;
         foreach (var link in links)
         {
-            Vec3 aPos = RandomOuterPos(ref rng, RadiusOf(link.A));
-            Vec3 bPos = RandomOuterPos(ref rng, RadiusOf(link.B));
+            Vec3 aPos = RandomOuterPos(ref rng, RadiusOf(link.A, defaultRadius));
+            Vec3 bPos = RandomOuterPos(ref rng, RadiusOf(link.B, defaultRadius));
             Alephs.Add(new Gate(gateId++, link.A, link.B, aPos, bPos));
             Alephs.Add(new Gate(gateId++, link.B, link.A, bPos, aPos));
         }
 
-        // Dust clouds are seeded on their OWN rng (independent of `rng`), so authoring dust never
-        // shifts a single asteroid or aleph — a map with dust reads byte-identical rocks to one without.
         foreach (var sc in secCfg)
-            SeedDustClouds(sc.Id, RadiusOf(sc.Id), sc.Env?.Dust);
+            SeedDustClouds(sc.Id, RadiusOf(sc.Id, defaultRadius), sc.Env?.Dust);
+    }
 
+    // Per-sector asteroid broad-phase grid, bucketed once from the fully-seeded Asteroids list. Must
+    // run after SeedAsteroids.
+    private void BucketRockGrid()
+    {
         foreach (var r in Asteroids)
         {
             if (!_rockGrid.TryGetValue(r.SectorId, out var grid))
@@ -467,28 +533,29 @@ public sealed class World
                 grid[key] = cell = new List<Rock>();
             cell.Add(r);
         }
+    }
 
-        // Assign each rock a resource class + (He3 rocks) an ore hold, then remap each rock's cosmetic
-        // mesh Variant to a member of its class's pool so the shape/texture reads the resource type.
-        // Both draw ONLY from per-rock derived sub-RNGs (OreMix) — never the shared `rng` above — so the
-        // rock/aleph layout for a pinned seed stays byte-identical no matter how the mining knobs are
-        // tuned (the canary). Runs BEFORE LoadRockBodies so the collision hull is built from the same
-        // class-derived variant the client renders (LoadRockBodies keys convex hulls off r.Variant).
+    // Assign each rock a resource class + (He3 rocks) an ore hold, then remap each rock's cosmetic
+    // mesh Variant to a member of its class's pool so the shape/texture reads the resource type.
+    // Both draw ONLY from per-rock derived sub-RNGs (OreMix) — never the shared world-gen `rng` — so
+    // the rock/aleph layout for a pinned seed stays byte-identical no matter how the mining knobs are
+    // tuned (the canary). Runs BEFORE LoadRockBodies so the collision hull is built from the same
+    // class-derived variant the client renders (LoadRockBodies keys convex hulls off r.Variant).
+    private void AssignOreAndVariants(List<WorldSectorConfig> secCfg)
+    {
         AssignOre(secCfg);
         AssignVariants();
+    }
 
-        // Load the per-type GLB collision/hardpoint models (best-effort; falls back to spheres). Type 0
-        // (garrison) is always loaded — from the content garrison def if present, else the legacy
-        // "garrison"/BaseRadius fallback so a minimal caller (map preview) stays byte-identical.
+    // Load the per-type GLB collision/hardpoint models (best-effort; falls back to spheres). Type 0
+    // (garrison) is always loaded — from the content garrison def if present, else the legacy
+    // "garrison"/BaseRadius fallback so a minimal caller (map preview) stays byte-identical. Returns
+    // the ship-hull tables so the ctor can assign them (_shipHulls/_podHull are readonly fields).
+    private (Dictionary<byte, ShipBody>, ShipBody?) LoadModels(IReadOnlyList<ShipClassDef> ships)
+    {
         LoadBaseModels();
         LoadRockBodies();
-        (_shipHulls, _podHull) = LoadShipBodies(ships);
-
-        // Collapse the aleph gate graph into an all-pairs next-hop table (players route multi-hop across
-        // sectors, not just through a single direct gate). The graph is tiny (~2-10 nodes); deterministic
-        // (lowest gate Id breaks equal-hop ties, no Random, no dictionary-order dependence) so it is safe
-        // to consult from the 20Hz sim step.
-        BuildSectorRouting();
+        return LoadShipBodies(ships);
     }
 
     // Rewrite every rock's cosmetic mesh Variant to a variant from its RockClass's pool, so a rock's
@@ -1002,8 +1069,6 @@ public sealed class World
         float l = v.Length();
         return l > 1e-6f ? v * (1f / l) : new Vec3(0f, 0f, 1f);
     }
-
-    private static float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
 
     public Dictionary<(int, int, int), List<Rock>> RockGrid(uint sector) =>
         _rockGrid.TryGetValue(sector, out var g) ? g : NoGrid;

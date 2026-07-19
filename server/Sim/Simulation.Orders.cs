@@ -118,7 +118,6 @@ public sealed partial class Simulation
     )
     {
         void Notice(string text) => OrderNoticesThisStep.Add((cid, text));
-        void Directive(string text) => OrderDirectivesThisStep.Add((team, issuer, text));
 
         if (!_ships.TryGetValue(subject, out var ship) || !ship.Alive || ship.Team != team)
         {
@@ -181,6 +180,18 @@ public sealed partial class Simulation
             ApplyConstructorCommandOrder(cid, issuer, team, cs, targetKind, targetId, sector, pos);
             return;
         }
+
+        ApplyPigCommandOrder(cid, issuer, team, subject, ship, targetKind, targetId, sector, pos);
+    }
+
+    // Combat-drone subjects (ordinary AI pigs — not miners/constructors): builds/updates the
+    // _pigOrders entry TryObeyOrder consumes. Ship/Base infer attack-vs-escort from team+alive;
+    // Rock/Point/Sector are plain goto-and-hold orders.
+    private void ApplyPigCommandOrder(
+        int cid, string issuer, byte team, ulong subject, ShipSim ship, byte targetKind, ulong targetId, uint sector, Vec3 pos)
+    {
+        void Notice(string text) => OrderNoticesThisStep.Add((cid, text));
+        void Directive(string text) => OrderDirectivesThisStep.Add((team, issuer, text));
 
         string subjectName = DescribeAi(ship, null);
         switch (targetKind)

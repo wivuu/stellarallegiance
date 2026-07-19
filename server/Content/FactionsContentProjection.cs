@@ -256,7 +256,7 @@ public static class FactionsContentProjection
             VisionConeLength = (float)h.VisionConeLength,
             VisionConeAngleDeg = (float)h.VisionConeAngleDeg,
             VisionSphereRadius = (float)h.VisionSphereRadius,
-            RadarSignature = h.RadarSignature <= 0 ? 1f : (float)h.RadarSignature,
+            RadarSignature = Sig(h.RadarSignature),
             // Authored equipment bias: the hull's own Signature plus its default loadout's
             // (PreferredParts) part Signature sum. Stock core hulls author neither ⇒ 0 ⇒ no
             // behavior change; a faction that authors loadout signatures gets it for free. An
@@ -364,118 +364,111 @@ public static class FactionsContentProjection
         ushort[] obsTechs = TechIdxArray(l.ObsoletedByTechs, techIdx);
         uint succWid =
             l.SuccessorPartId is { } sid && weaponIdByPartId.TryGetValue(sid, out uint swid) ? swid : uint.MaxValue;
-        if (!string.IsNullOrEmpty(l.ExpendableId) && missileById.TryGetValue(l.ExpendableId, out var m))
-            return new WeaponDef
+
+        // Launcher-common prefix, shared by every expendable kind below: the launcher's own id/name/
+        // tech-gate/succession, plus the mass/cadence/magazine it mounts with (deploy/eject/fire
+        // cadence is authored the same way regardless of expendable kind).
+        WeaponDef Common() =>
+            new()
             {
+                WeaponId = l.WeaponId!.Value,
+                Name = l.Name,
                 RequiredTechIdx = reqTechs,
                 ObsoletedByTechIdx = obsTechs,
                 SucceededByWeaponId = succWid,
-                WeaponId = l.WeaponId!.Value,
-                Name = l.Name,
-                Kind = WeaponKind.Missile,
-                // Ballistics reused from the referenced missile.
-                Damage = (float)m.Power,
-                ProjectileSpeed = (float)m.InitialSpeed,
-                ProjectileLifeTicks = (uint)Math.Round(m.Lifespan * 20.0),
-                ProjectileRadius = (float)m.Width, // proximity-fuse swept-sphere margin
-                SpreadRad = 0f,
                 Mass = (float)l.Mass,
                 FireIntervalTicks = l.FireIntervalTicks,
-                CanDamageBase = m.CanDamageBase,
-                // Missile-kind extension fields.
                 MagazineSize = (byte)l.Amount,
-                LockTicks = (uint)Math.Round(m.LockTime * 20.0),
-                LockAngleRad = (float)m.LockAngle,
-                LockRange = (float)m.MaxLock,
-                MissileAccel = (float)m.Acceleration,
-                MissileTurnRateRad = (float)(m.TurnRate * Math.PI / 180.0),
-                MissileMaxSpeed = (float)m.MaxSpeed,
-                BlastPower = (float)m.BlastPower,
-                BlastRadius = (float)m.BlastRadius,
-                DirectHitMult = (float)m.DirectHitMultiplier,
-                ChaffResistance = (float)m.ChaffResistance, // authored-but-previously-dropped; now projected
-                ShieldMult = (float)(l.ShieldDamageMultiplier ?? 1.0),
-                ModelName = m.ModelName ?? "",
-                TrailLifetime = (float)m.TrailLifetime,
-                TrailScale = (float)m.TrailScale,
-                TrailColor = ParseTrailColor(m.TrailColor),
             };
+
+        if (!string.IsNullOrEmpty(l.ExpendableId) && missileById.TryGetValue(l.ExpendableId, out var m))
+        {
+            var def = Common();
+            def.Kind = WeaponKind.Missile;
+            // Ballistics reused from the referenced missile.
+            def.Damage = (float)m.Power;
+            def.ProjectileSpeed = (float)m.InitialSpeed;
+            def.ProjectileLifeTicks = (uint)Math.Round(m.Lifespan * 20.0);
+            def.ProjectileRadius = (float)m.Width; // proximity-fuse swept-sphere margin
+            def.SpreadRad = 0f;
+            def.CanDamageBase = m.CanDamageBase;
+            // Missile-kind extension fields.
+            def.LockTicks = (uint)Math.Round(m.LockTime * 20.0);
+            def.LockAngleRad = (float)m.LockAngle;
+            def.LockRange = (float)m.MaxLock;
+            def.MissileAccel = (float)m.Acceleration;
+            def.MissileTurnRateRad = (float)(m.TurnRate * Math.PI / 180.0);
+            def.MissileMaxSpeed = (float)m.MaxSpeed;
+            def.BlastPower = (float)m.BlastPower;
+            def.BlastRadius = (float)m.BlastRadius;
+            def.DirectHitMult = (float)m.DirectHitMultiplier;
+            def.ChaffResistance = (float)m.ChaffResistance; // authored-but-previously-dropped; now projected
+            def.ShieldMult = (float)(l.ShieldDamageMultiplier ?? 1.0);
+            def.ModelName = m.ModelName ?? "";
+            def.TrailLifetime = (float)m.TrailLifetime;
+            def.TrailScale = (float)m.TrailScale;
+            def.TrailColor = ParseTrailColor(m.TrailColor);
+            return def;
+        }
 
         if (!string.IsNullOrEmpty(l.ExpendableId) && mineById.TryGetValue(l.ExpendableId, out var mn))
-            return new WeaponDef
-            {
-                WeaponId = l.WeaponId!.Value,
-                Name = l.Name,
-                Kind = WeaponKind.Mine,
-                RequiredTechIdx = reqTechs,
-                ObsoletedByTechIdx = obsTechs,
-                SucceededByWeaponId = succWid,
-                // Field/arming stats reused from the referenced mine. The field is one damage VOLUME
-                // (cloud-radius sphere); there is no per-mine trigger/blast radius any more.
-                ProjectileLifeTicks = (uint)Math.Round(mn.Lifespan * 20.0), // field lifespan
-                Mass = (float)l.Mass,
-                FireIntervalTicks = l.FireIntervalTicks, // deploy cadence
-                MagazineSize = (byte)l.Amount,
-                BlastPower = (float)mn.Power, // damage-per-second at reference speed (speed-scaled)
-                MineCloudRadius = (float)mn.CloudRadius, // scatter radius AND lethal sphere radius
-                MineCloudCount = (byte)mn.CloudCount, // cosmetic mesh count
-                MineArmTicks = (uint)Math.Round(mn.ArmDelay * 20.0),
-                // Radar signature of the deployed field; authored 0/omitted -> 1.0 (probe rule).
-                MineSignature = mn.Signature <= 0 ? 1f : (float)mn.Signature,
-                CargoId = mn.CargoId ?? 0,
-                ShieldMult = (float)(l.ShieldDamageMultiplier ?? 1.0),
-                ModelName = mn.ModelName ?? "",
-            };
+        {
+            var def = Common();
+            def.Kind = WeaponKind.Mine;
+            // Field/arming stats reused from the referenced mine. The field is one damage VOLUME
+            // (cloud-radius sphere); there is no per-mine trigger/blast radius any more.
+            def.ProjectileLifeTicks = (uint)Math.Round(mn.Lifespan * 20.0); // field lifespan
+            def.BlastPower = (float)mn.Power; // damage-per-second at reference speed (speed-scaled)
+            def.MineCloudRadius = (float)mn.CloudRadius; // scatter radius AND lethal sphere radius
+            def.MineCloudCount = (byte)mn.CloudCount; // cosmetic mesh count
+            def.MineArmTicks = (uint)Math.Round(mn.ArmDelay * 20.0);
+            // Radar signature of the deployed field; authored 0/omitted -> 1.0 (probe rule).
+            def.MineSignature = Sig(mn.Signature);
+            def.CargoId = mn.CargoId ?? 0;
+            def.ShieldMult = (float)(l.ShieldDamageMultiplier ?? 1.0);
+            def.ModelName = mn.ModelName ?? "";
+            return def;
+        }
 
         if (!string.IsNullOrEmpty(l.ExpendableId) && chaffById.TryGetValue(l.ExpendableId, out var ch))
-            return new WeaponDef
-            {
-                WeaponId = l.WeaponId!.Value,
-                Name = l.Name,
-                Kind = WeaponKind.Chaff,
-                RequiredTechIdx = reqTechs,
-                ObsoletedByTechIdx = obsTechs,
-                SucceededByWeaponId = succWid,
-                ProjectileLifeTicks = (uint)Math.Round(ch.Lifespan * 20.0), // puff lifespan
-                Mass = (float)l.Mass,
-                FireIntervalTicks = l.FireIntervalTicks, // eject cadence
-                MagazineSize = (byte)l.Amount,
-                ChaffStrength = (float)ch.ChaffStrength,
-                DecoyRadius = (float)ch.DecoyRadius,
-                CargoId = ch.CargoId ?? 0,
-                ModelName = ch.ModelName ?? "",
-            };
+        {
+            var def = Common();
+            def.Kind = WeaponKind.Chaff;
+            def.ProjectileLifeTicks = (uint)Math.Round(ch.Lifespan * 20.0); // puff lifespan
+            def.ChaffStrength = (float)ch.ChaffStrength;
+            def.DecoyRadius = (float)ch.DecoyRadius;
+            def.CargoId = ch.CargoId ?? 0;
+            def.ModelName = ch.ModelName ?? "";
+            return def;
+        }
 
         if (!string.IsNullOrEmpty(l.ExpendableId) && probeById.TryGetValue(l.ExpendableId, out var pr))
-            return new WeaponDef
-            {
-                WeaponId = l.WeaponId!.Value,
-                Name = l.Name,
-                Kind = WeaponKind.Probe,
-                RequiredTechIdx = reqTechs,
-                ObsoletedByTechIdx = obsTechs,
-                SucceededByWeaponId = succWid,
-                ProjectileLifeTicks = (uint)Math.Round(pr.Lifespan * 20.0), // deployed-probe lifespan
-                Mass = (float)l.Mass,
-                FireIntervalTicks = l.FireIntervalTicks, // deploy cadence
-                MagazineSize = (byte)l.Amount,
-                ProbeSightRadius = (float)pr.SightRadius,
-                ProbeLifespanSec = (float)pr.Lifespan,
-                CargoId = pr.CargoId ?? 0,
-                ShieldMult = (float)(l.ShieldDamageMultiplier ?? 1.0),
-                ModelName = pr.ModelName ?? "",
-                // Probe combat/visual block. Signature resolves an authored 0/omitted to 1.0
-                // (hull rule); HitPoints 0 = authored-invulnerable.
-                ProbeHitPoints = (float)pr.HitPoints,
-                ProbeSignature = pr.Signature <= 0 ? 1f : (float)pr.Signature,
-                ProbeHitRadius = (float)pr.HitRadius,
-                ProbeModelSize = (float)pr.ModelSize,
-            };
+        {
+            var def = Common();
+            def.Kind = WeaponKind.Probe;
+            def.ProjectileLifeTicks = (uint)Math.Round(pr.Lifespan * 20.0); // deployed-probe lifespan
+            def.ProbeSightRadius = (float)pr.SightRadius;
+            def.ProbeLifespanSec = (float)pr.Lifespan;
+            def.CargoId = pr.CargoId ?? 0;
+            def.ShieldMult = (float)(l.ShieldDamageMultiplier ?? 1.0);
+            def.ModelName = pr.ModelName ?? "";
+            // Probe combat/visual block. Signature resolves an authored 0/omitted to 1.0
+            // (hull rule); HitPoints 0 = authored-invulnerable.
+            def.ProbeHitPoints = (float)pr.HitPoints;
+            def.ProbeSignature = Sig(pr.Signature);
+            def.ProbeHitRadius = (float)pr.HitRadius;
+            def.ProbeModelSize = (float)pr.ModelSize;
+            return def;
+        }
 
         throw new InvalidDataException(
             $"launcher '{l.Id}' (weapon-id {l.WeaponId}) has no resolvable missile/mine/chaff/probe expendable-id"
         );
     }
+
+    // Radar/mine/probe signature: an authored 0/omitted resolves to 1.0 so the wire never carries
+    // a signature of 0 (which would make the thing undetectable at any range).
+    private static float Sig(double v) => v <= 0 ? 1f : (float)v;
 
     // Authored trail tint: 8-digit RRGGBBAA verbatim, or 6-digit RRGGBB promoted to opaque (…FF).
     // CoreValidator already proved the string is 6/8-digit hex when present.
@@ -509,7 +502,7 @@ public static class FactionsContentProjection
             // Fog-of-war vision (behavior-inert until a later WP): RadarSignature resolves an
             // authored 0/omitted to 1.0, mirroring the hull rule.
             VisionSphereRadius = (float)s.VisionSphereRadius,
-            RadarSignature = s.RadarSignature <= 0 ? 1f : (float)s.RadarSignature,
+            RadarSignature = Sig(s.RadarSignature),
             Hardpoints = s.Hardpoints.Select(hp => ProjectHardpoint(hp, rackWeaponIds)).ToList(),
             // Stage-4 research: authored 0/omitted resolves to the default single slot.
             ResearchSlots = (byte)Math.Clamp(s.ResearchSlots <= 0 ? 1 : s.ResearchSlots, 1, 255),

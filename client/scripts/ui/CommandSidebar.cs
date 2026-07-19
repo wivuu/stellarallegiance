@@ -164,12 +164,9 @@ public partial class CommandSidebar : Control
             {
                 var a = r.Active[0];
                 string name = _defs.GetDevelopment(a.DevIndex)?.Name.ToUpperInvariant() ?? $"DEV {a.DevIndex}";
-                float remaining = (a.StartTick + a.DurationTicks - _world.ServerTick) / FlightModel.TickRate;
-                if (remaining < 0)
-                    remaining = 0;
-                int t = (int)System.MathF.Ceiling(remaining);
+                string mmss = TechDetailPanel.MmssRemaining(_world, a.StartTick, a.DurationTicks);
                 string more = r.Active.Length > 1 ? $"  +{r.Active.Length - 1} more" : "";
-                row.SetResearch($"◷ {name} · {t / 60:00}:{t % 60:00}{more}", DesignTokens.Warn,
+                row.SetResearch($"◷ {name} · {mmss}{more}", DesignTokens.Warn,
                     _world.ResearchProgress(a.StartTick, a.DurationTicks), showBar: true);
             }
             else if (res is WorldRenderer.BaseResearch r2 && r2.OnDeck is ushort od)

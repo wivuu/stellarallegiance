@@ -62,9 +62,7 @@ public static class TechTreeReport
     // and the techs you must already hold to build the things that grant it.
     private static TechInfo DescribeTech(Core core, string techId)
     {
-        var grantedBy = core.AllBuildables()
-            .Where(b => b.GrantedTechs.Contains(techId) || (b is Station s && s.LocalTechs.Contains(techId)))
-            .ToList();
+        var grantedBy = GrantersOf(core, techId).ToList();
 
         var requiresFirst = new TechSet();
         foreach (var b in grantedBy)
@@ -90,8 +88,7 @@ public static class TechTreeReport
         if (!atStart)
         {
             foreach (var t in b.RequiredTechs.Where(t => !faction.BaseTechs.Contains(t)))
-                foreach (var g in core.AllBuildables()
-                             .Where(x => x.GrantedTechs.Contains(t) || (x is Station s && s.LocalTechs.Contains(t))))
+                foreach (var g in GrantersOf(core, t))
                     unlockedBy.Add(g.Id);
 
             foreach (var c in b.RequiredCapabilities.Where(c => !faction.BaseCapabilities.Contains(c)))
@@ -101,7 +98,7 @@ public static class TechTreeReport
 
         return new BuildableInfo
         {
-            Kind = KindOf(b),
+            Kind = b.KindName,
             Price = b.Price,
             BuildTimeSeconds = b.BuildTimeSeconds,
             Group = b.Group,
@@ -115,20 +112,10 @@ public static class TechTreeReport
         };
     }
 
-    private static string KindOf(Buildable b) => b switch
-    {
-        Hull => "hull",
-        Weapon => "weapon",
-        Shield => "shield",
-        Cloak => "cloak",
-        Afterburner => "afterburner",
-        AmmoPack => "ammo-pack",
-        Launcher => "launcher",
-        Station => "station",
-        Development => "development",
-        Drone => "drone",
-        _ => "buildable",
-    };
+    // Catalog fact shared by DescribeTech and DescribeBuildable: every buildable that grants a given
+    // tech, either directly (GrantedTechs) or as a station's local-only research (LocalTechs).
+    private static IEnumerable<Buildable> GrantersOf(Core core, string techId) =>
+        core.AllBuildables().Where(b => b.GrantedTechs.Contains(techId) || (b is Station s && s.LocalTechs.Contains(techId)));
 
     private static List<string> Sorted(TechSet techs) => techs.OrderBy(t => t, StringComparer.Ordinal).ToList();
 

@@ -5,8 +5,6 @@ namespace StellarAllegiance.Ui;
 // Font registry for the design system. Two variable typefaces, imported as FontFile:
 //   • Saira          — UI, headings, labels (weights 400 / 600 / 700)
 //   • JetBrains Mono — telemetry, numbers, coordinates (weights 400 / 500)
-//   • Michroma       — the brand display face (the STELLAR ALLEGIANCE wordmark). Single
-//                      weight, no axes; caps-only, wide geometric. Reserved for brand marks.
 //
 // Weights are realised as FontVariation instances over the variable base fonts (one
 // .ttf per family) so we don't ship a file per weight. The caps "Label" style also
@@ -21,7 +19,6 @@ public static class UiFonts
 {
     private const string SairaPath = "res://assets/fonts/saira.ttf";
     private const string MonoPath = "res://assets/fonts/jetbrains-mono.ttf";
-    private const string MichromaPath = "res://assets/fonts/michroma.ttf";
 
     public static Font Saira { get; private set; } = null!; // 400
     public static Font SairaSemi { get; private set; } = null!; // 600
@@ -29,7 +26,6 @@ public static class UiFonts
     public static Font SairaLabel { get; private set; } = null!; // 600 + letter-spacing (caps labels)
     public static Font Mono { get; private set; } = null!; // 400
     public static Font MonoMedium { get; private set; } = null!; // 500
-    public static Font Michroma { get; private set; } = null!; // brand display (single weight)
 
     private static bool _loaded;
 
@@ -49,10 +45,6 @@ public static class UiFonts
         SairaLabel = Weight(sairaBase, 600, DesignTokens.LabelLetterSpacing);
         Mono = Weight(monoBase, 400);
         MonoMedium = Weight(monoBase, 500);
-
-        // Michroma is a single-weight, non-variable face — use the FontFile directly (no
-        // weight axis to apply). Callers add per-glyph tracking with WithGlyphSpacing.
-        Michroma = LoadOrFallback(MichromaPath, fallback);
     }
 
     // Wrap a font with extra per-glyph letter-spacing (px). Used for wide-tracked brand

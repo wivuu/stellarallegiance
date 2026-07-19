@@ -17,10 +17,10 @@ namespace StellarAllegiance.Ui;
 //  card strip, demo harness) lives in the partial ShipLoadout.Hangar.cs; this file owns the shell,
 //  the top/launch bars, tab switching, ship selection, and the spawn gate.
 //
-//  Everything the player edits here lives in LoadoutState (CLIENT-LOCAL, cosmetic for now) —
-//  LAUNCH spawns the hull with the server's authored loadout. The launch-base pick (CommandSidebar)
-//  is stored in LoadoutState.Shared.SelectedBaseId but is DISPLAY-ONLY this phase (Phase B wires it
-//  into MsgSpawn).
+//  Everything the player edits here lives in LoadoutState (CLIENT-LOCAL) — cargo counts and the
+//  per-slot weapon overrides ride LAUNCH's MsgSpawn (RequestSpawn ships CargoFor + WeaponOverridesFor),
+//  and the server validates and spawns with the accepted loadout. The launch-base pick (CommandSidebar)
+//  is stored in LoadoutState.Shared.SelectedBaseId and also rides MsgSpawn as the launch base.
 //
 //  This IS the ship-select screen: the Hud auto-opens it (OpenedForSpawn) whenever you're in an
 //  active match without a ship and closes it once the ship spawns — LAUNCH is the only way out of a
@@ -76,6 +76,13 @@ public partial class ShipLoadout : Control
     private Label _payloadText = null!;
     private SegmentedBar _payloadBar = null!;
     private Label _overCapacity = null!;
+
+    // Cached by RefreshPayload's PayloadUsed walk; IsOverCapacity reads this instead of re-running
+    // the full hardpoint+cargo walk itself (RefreshLaunchGate calls it every _Process frame).
+    // RefreshPayload always runs before this is read each frame — either earlier in the same
+    // _Process call (via SelectShip/RefreshLoadoutViews when the ship-card list first builds) or
+    // from a prior frame's loadout edit (equip/unequip, cargo step, reset) — so it's never stale.
+    private bool _payloadOverCap;
     private PanelContainer _arsenalFrame = null!;
     private Label _arsenalTitle = null!;
     private Label _arsenalFit = null!;
@@ -114,6 +121,11 @@ public partial class ShipLoadout : Control
         _world = world;
         _net = net;
     }
+
+    // The local pilot's team: the world's authoritative LocalTeam once known, else the net
+    // handshake's MyTeam (set before the world ever confirms it). Used everywhere this screen
+    // needs "my team" — spawn gates, tech-gated arsenal filtering, tier migration.
+    private byte Team => _world.LocalTeam ?? _net.MyTeam;
 
     public override void _EnterTree()
     {
@@ -337,9 +349,10 @@ public partial class ShipLoadout : Control
 
     // LAUNCH = the spawn request. The screen stays open showing "LAUNCHING…" until the
     // ship actually exists (the Hud closes a spawn hangar then) or the gate refuses.
-    // The local weapon/cargo assignments do NOT ship with the request — the server
-    // spawns the authored loadout until MsgSetLoadout exists. The launch-base pick is
-    // stored in LoadoutState but is display-only until Phase B wires it into MsgSpawn.
+    // The local weapon/cargo assignments and the launch-base pick all ride the request
+    // (ShipController.RequestSpawn ships CargoFor, WeaponOverridesFor, and
+    // LoadoutState.Shared.SelectedBaseId on MsgSpawn) — the server validates and spawns
+    // with the accepted loadout.
     private void OnLaunch()
     {
         if (_classId is not byte classId)
@@ -403,7 +416,7 @@ public partial class ShipLoadout : Control
         int slot = (int)(key.Keycode - Key.Key1);
         if (slot >= 0 && slot < 9)
         {
-            byte hotkeyTeam = _world.LocalTeam ?? _net.MyTeam;
+            byte hotkeyTeam = Team;
             List<ShipClassDef> ships = _defs.BuildableShips();
             ships.RemoveAll(s => _world.CheckSpawnGate(hotkeyTeam, s.ClassId) == WorldRenderer.SpawnGate.Locked);
             if (slot < ships.Count)
@@ -452,7 +465,7 @@ public partial class ShipLoadout : Control
         }
 
         // Live telemetry + spawn gating.
-        byte team = _world.LocalTeam ?? _net.MyTeam;
+        byte team = Team;
         _topReadout.Text = $"CREDITS {_world.TeamCredits(team)}   ·   PING {_ship.PingMs, 3:0} ms";
         RefreshLaunchGate(team);
         RefreshShipCardStates(team);
@@ -480,13 +493,13 @@ public partial class ShipLoadout : Control
 
     private void RefreshLaunchGate(byte team)
     {
-        if (_classId is not byte classId || !_defs.TryGetShipDef(classId, out var def))
+        if (_classId is not byte classId || !_defs.TryGetShipDef(classId, out _))
             return;
         bool flying = _world.LocalShip != null;
         string? hint = _ship.SpawnHint;
         if (flying || hint != null)
             _launchPending = false; // landed, or refused (the hint names why) — let the pilot retry
-        bool overCap = IsOverCapacity(def);
+        bool overCap = IsOverCapacity();
         var gate = _world.CheckSpawnGate(team, classId);
         _launch.Disabled = overCap || flying || _launchPending || gate != WorldRenderer.SpawnGate.Allow;
         _launch.Text =
@@ -506,7 +519,7 @@ public partial class ShipLoadout : Control
     // otherwise the first unlocked ship. Keeps a returning pilot in their preferred ship.
     private byte DefaultShipClassId(List<ShipClassDef> ships)
     {
-        byte team = _world.LocalTeam ?? _net.MyTeam;
+        byte team = Team;
         bool Unlocked(byte cls) => _world.CheckSpawnGate(team, cls) != WorldRenderer.SpawnGate.Locked;
         int last = UserPrefs.LastShip;
         if (last >= 0 && Unlocked((byte)last))
@@ -610,7 +623,7 @@ public partial class ShipLoadout : Control
         if (_classId is not byte classId || _defs.GetHardpoints(classId) is not List<HardpointDef> hps)
             return;
 
-        byte team = _world.LocalTeam ?? _net.MyTeam;
+        byte team = Team;
         int slots = 0;
         foreach (HardpointDef hp in hps)
         {
@@ -647,6 +660,7 @@ public partial class ShipLoadout : Control
         float used = _state.PayloadUsed(classId, def.Hardpoints, _defs.GetWeapon, _defs.GetCargoItem);
         float cap = def.PayloadCapacity;
         bool over = used > cap;
+        _payloadOverCap = over; // cache for IsOverCapacity — avoids a second walk every _Process frame
         _payloadText.Text = $"{used:0} / {cap:0}";
         _payloadText.AddThemeColorOverride("font_color", over ? DesignTokens.DangerText : DesignTokens.Data);
         _payloadBar.Fill = over ? DesignTokens.Danger : DesignTokens.TeamAccent;
@@ -657,9 +671,9 @@ public partial class ShipLoadout : Control
         _costReadout.Set($"{def.Cost}", "UNIT COST · CREDITS", DesignTokens.Warn);
     }
 
-    private bool IsOverCapacity(ShipClassDef def) =>
-        _classId is byte classId
-        && _state.PayloadUsed(classId, def.Hardpoints, _defs.GetWeapon, _defs.GetCargoItem) > def.PayloadCapacity;
+    // Reads the flag RefreshPayload cached from its own PayloadUsed walk — RefreshLaunchGate calls
+    // this every _Process frame, so this stays O(1) rather than re-walking hardpoints+cargo per frame.
+    private bool IsOverCapacity() => _payloadOverCap;
 
     // The arsenal: every streamed weapon that fits the selected slot, plus the empty-slot
     // row. Weapons gated behind unresearched tech are hidden outright (no locked rows) —
@@ -699,7 +713,7 @@ public partial class ShipLoadout : Control
                 WeaponMountKind.Missile => "MISSILE HARDPOINT",
                 _ => "WEAPON HARDPOINT",
             };
-        byte team = _world.LocalTeam ?? _net.MyTeam;
+        byte team = Team;
         // Migrate the equipped id up its tier chain so an obsoleted Gat Gun 1 (now hidden below) still
         // marks its successor Gat Gun 2 as EQUIPPED.
         uint? equipped = _state.AssignedWeapon(classId, slot) is uint eid ? MigrateTier(eid, team) : (uint?)null;
@@ -748,27 +762,10 @@ public partial class ShipLoadout : Control
         _arsenalFit.Text = $"{fit} FIT";
     }
 
-    // Walk the weapon-tier successor chain: while the current weapon is obsoleted by a tech the team
-    // owns and names a successor, advance to it. So a saved/authored Gat Gun 1 resolves to Gat Gun 2
-    // once gat-2 is researched — the DISPLAY mirror of Simulation.ResolveLoadout's server-side migrate
-    // (the authoritative one at spawn). Bounded by the chain length (guard caps a malformed cycle).
-    private uint MigrateTier(uint weaponId, byte team)
-    {
-        for (int guard = 0; guard < 8; guard++)
-        {
-            if (
-                _defs.GetWeapon(weaponId) is not WeaponDef w
-                || w.SucceededByWeaponId == uint.MaxValue
-                || w.ObsoletedByTechIdx.Length == 0
-                || _defs.GetWeapon(w.SucceededByWeaponId) is not WeaponDef next
-                || next.Mass > w.Mass // mass guard: matches the server's payload-safe migration
-                || !w.ObsoletedByTechIdx.Any(t => _world.TeamOwnsTech(team, t))
-            )
-                return weaponId;
-            weaponId = w.SucceededByWeaponId;
-        }
-        return weaponId;
-    }
+    // Walk the weapon-tier successor chain — the DISPLAY mirror of Simulation.ResolveLoadout's
+    // server-side migrate (the authoritative one at spawn). Shared with WeaponsPanel via
+    // DefRegistry.MigrateWeaponTier; see that method for the predicate-by-predicate rationale.
+    private uint MigrateTier(uint weaponId, byte team) => _defs.MigrateWeaponTier(weaponId, team, _world);
 
     private static string WeaponStatLine(WeaponDef w)
     {

@@ -318,25 +318,12 @@ public partial class Chat : Control
         _log.Text = sb.ToString();
     }
 
-    private static readonly string DimHex = DesignTokens.TextDim.ToHtml(false);
-    private static readonly string MuteHex = DesignTokens.Text2.ToHtml(false);
-    private static readonly string GoldHex = DesignTokens.CmdrGold.ToHtml(false);
-
-    private static string FormatLine(ChatLine line, string time, bool system)
-    {
-        string stamp = $"[color=#{DimHex}]{time}[/color]";
-        // System lines (slash-command output): a muted diamond-prefixed note, no team-name coloring.
-        if (system)
-            return $"{stamp} [color=#{MuteHex}]◆ {Escape(line.Text)}[/color]";
-        // Scope 2 = commander order directive (v34): the whole line gold so an order reads as an
-        // order, not chatter. Name = the issuing commander.
-        if (line.Scope == 2)
-            return $"{stamp} [color=#{GoldHex}]★ CMDR {Escape(line.Name)} ▸ {Escape(line.Text)}[/color]";
-        Color nameColor = line.FromTeam == 0 ? Team0 : Team1;
-        string tag = line.Scope == 1 ? $"[color=#{MuteHex}]\\[team][/color] " : "";
-        string name = $"[color=#{nameColor.ToHtml(false)}]{Escape(line.Name)}[/color]";
-        return $"{stamp} {tag}{name}: {Escape(line.Text)}";
-    }
-
-    private static string Escape(string s) => string.IsNullOrEmpty(s) ? "" : s.Replace("[", "[lb]");
+    // nameColorForTeam mirrors this file's old `line.FromTeam == 0 ? Team0 : Team1` (Team0/Team1
+    // alias DesignTokens.Faction0/1) — DesignTokens.Faction has the identical two-way ternary, so
+    // handing it over keeps every FromTeam value mapping to the same colour as before. The
+    // scope-1 tag has always read "team" here regardless of FromTeam (no NOAT concept in-flight),
+    // and the message text relies on the log's default_color (AllColor = TextHi) rather than an
+    // explicit wrap, so messageColor is left unset.
+    private static string FormatLine(ChatLine line, string time, bool system) =>
+        ChatFormat.ToBbcode(line, time, isSystem: system, nameColorForTeam: DesignTokens.Faction, teamTagLabel: _ => "team");
 }

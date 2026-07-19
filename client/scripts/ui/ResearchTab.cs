@@ -535,16 +535,8 @@ public partial class ResearchTab : Control
         BuildActionFooter(dev, sel, status);
     }
 
-    private void BuildPrereqs(DevelopmentDef dev)
-    {
-        byte team = Team;
-        var rows = new List<(string, bool)>();
-        foreach (ushort t in dev.RequiredTechIdx)
-            rows.Add((_defs!.GetTech(t)?.Name ?? $"TECH {t}", _world!.TeamOwnsTech(team, t)));
-        foreach (byte c in dev.RequiredCaps)
-            rows.Add((TechDetailPanel.CapName(c), _world!.TeamOwnsCap(team, c)));
-        _detail.SetPrereqs(rows); // empty -> "No prerequisites" row
-    }
+    private void BuildPrereqs(DevelopmentDef dev) =>
+        TechDetailPanel.SetPrereqsFrom(_detail, dev.RequiredTechIdx, dev.RequiredCaps, _defs!, _world!, Team);
 
     private void BuildUnlocks(DevelopmentDef dev)
     {
@@ -692,9 +684,8 @@ public partial class ResearchTab : Control
         }
         if (!commander)
         {
-            string cmdr = CommanderName();
             SetFooter(true, "▲ COMMANDER AUTHORIZATION REQUIRED", ButtonVariant.Danger, null,
-                cmdr.Length > 0 ? $"Only {cmdr} can authorize research." : "Only the team commander can authorize research.",
+                HasCommander(Team) ? "Only the commander can authorize research." : "Only the team commander can authorize research.",
                 DesignTokens.Warn);
             return;
         }
@@ -710,9 +701,11 @@ public partial class ResearchTab : Control
         int active = res?.Active.Length ?? 0;
         bool onDeck = res?.OnDeck != null;
         if (active < slots)
-            SetFooter(false, "◆ AUTHORIZE RESEARCH", ButtonVariant.Primary, null, $"{TechDetailPanel.PriceText(price)} · {TechDetailPanel.Mmss(dev.BuildTimeSeconds)} at {_baseTitle}");
+            SetFooter(false, "◆ AUTHORIZE RESEARCH", ButtonVariant.Primary, null, $"{TechDetailPanel.PriceText(price)} · {TechDetailPanel.Mmss(dev.BuildTimeSeconds)} at {_baseTitle}",
+                primary: () => Authorize(sel));
         else if (!onDeck)
-            SetFooter(false, "⊕ QUEUE ON DECK", ButtonVariant.Primary, null, $"All {slots} slots busy — reserves the next slot ({TechDetailPanel.PriceText(price)})");
+            SetFooter(false, "⊕ QUEUE ON DECK", ButtonVariant.Primary, null, $"All {slots} slots busy — reserves the next slot ({TechDetailPanel.PriceText(price)})",
+                primary: () => Authorize(sel));
         else
             SetFooter(true, "◷ BASE OCCUPIED", ButtonVariant.Secondary, null, "Slots full and on-deck taken — cancel an order first.");
     }
@@ -720,20 +713,15 @@ public partial class ResearchTab : Control
     private Action? _primaryAction;
     private Action? _secondaryAction;
 
+    // Presentation goes to the shared panel; the action semantics (what PrimaryPressed/SecondaryPressed
+    // actually DO) stay here, set DIRECTLY by the caller — never derived from the button's glyph/text.
     private void SetFooter(bool disabled, string text, ButtonVariant variant,
-        (string text, Action act)? secondary, string? sub, Color? subColor = null)
+        (string text, Action act)? secondary, string? sub, Color? subColor = null, Action? primary = null)
     {
-        // Presentation goes to the shared panel; the action semantics stay here (research-specific).
         _detail.SetFooter(disabled, text, variant, secondary?.text, sub, subColor);
-        _primaryAction = disabled ? null : PrimaryActionForText(text);
+        _primaryAction = disabled ? null : primary;
         _secondaryAction = secondary?.act;
     }
-
-    // The primary button carries either AUTHORIZE (op 0 at the selected base) — the only live case.
-    private Action? PrimaryActionForText(string text) =>
-        text.StartsWith("◆") || text.StartsWith("⊕")
-            ? () => { if (_selectedDev is ushort d) Authorize(d); }
-            : null;
 
     private void OnFooterPrimary() => _primaryAction?.Invoke();
 
@@ -798,12 +786,9 @@ public partial class ResearchTab : Control
         return "an unmet requirement";
     }
 
-    private string CommanderName()
-    {
-        // Best-effort: GameNetClient exposes commander client ids; a friendly name isn't guaranteed.
-        int id = _net?.CommanderIdOf(Team) ?? -1;
-        return id >= 0 ? $"the commander" : "";
-    }
+    // Whether `team` currently has a commander assigned at all (GameNetClient exposes only the
+    // commander's client id — no friendly name is guaranteed, so callers inline their own copy).
+    private bool HasCommander(byte team) => (_net?.CommanderIdOf(team) ?? -1) >= 0;
 
     private static (string, StatusPill.Kind, bool) PillFor(Status s) => s switch
     {
@@ -824,10 +809,10 @@ public partial class ResearchTab : Control
         return null;
     }
 
-    public Vector2? DemoAuthorizeCenter() =>
-        !_detail.FooterPrimaryDisabled && (_detail.FooterPrimaryText.StartsWith("◆") || _detail.FooterPrimaryText.StartsWith("⊕"))
-            ? _detail.FooterPrimaryCenter
-            : null;
+    // The footer's primary action is only ever wired to Authorize (see BuildActionFooter) when the
+    // button is enabled, so a live action intent IS the "authorize" affordance — no need to re-derive
+    // it from the button's glyph/text here.
+    public Vector2? DemoAuthorizeCenter() => _primaryAction != null ? _detail.FooterPrimaryCenter : null;
 }
 
 // =====================================================================
@@ -1023,17 +1008,7 @@ internal partial class NodeCard : PanelContainer
         _chevron.Text = hasChildren ? (collapsed ? "▸" : "▾") : "";
 
         (string badgeGlyph, Color badgeColor, bool badgeFilled, string label, Color labelColor) = StyleFor(status);
-        _badge.Text = badgeGlyph;
-        _badge.AddThemeColorOverride("font_color", badgeFilled ? DesignTokens.Void : badgeColor);
-        var bsb = new StyleBoxFlat
-        {
-            BgColor = badgeFilled ? badgeColor : new Color(badgeColor, 0.12f),
-            BorderColor = new Color(badgeColor, 0.9f),
-            AntiAliasing = false,
-        };
-        bsb.SetCornerRadiusAll(0);
-        bsb.SetBorderWidthAll(1);
-        _badge.AddThemeStyleboxOverride("normal", bsb);
+        ApplyBadge(badgeGlyph, badgeColor, badgeFilled);
 
         _statusLabel.Text = label;
         _statusLabel.AddThemeColorOverride("font_color", labelColor);
@@ -1057,12 +1032,7 @@ internal partial class NodeCard : PanelContainer
         _chevron.Text = hasChildren ? "▾" : "";
 
         (string badgeGlyph, Color badgeColor, bool badgeFilled, string label, Color labelColor) = StyleFor(status);
-        _badge.Text = badgeGlyph;
-        _badge.AddThemeColorOverride("font_color", badgeFilled ? DesignTokens.Void : badgeColor);
-        var bsb = new StyleBoxFlat { BgColor = badgeFilled ? badgeColor : new Color(badgeColor, 0.12f), BorderColor = new Color(badgeColor, 0.9f), AntiAliasing = false };
-        bsb.SetCornerRadiusAll(0);
-        bsb.SetBorderWidthAll(1);
-        _badge.AddThemeStyleboxOverride("normal", bsb);
+        ApplyBadge(badgeGlyph, badgeColor, badgeFilled);
         _statusLabel.Text = status == ResearchTab.Status.InProgress ? "◷ 00:42" : label;
         _statusLabel.AddThemeColorOverride("font_color", labelColor);
         _underlay.Visible = status == ResearchTab.Status.InProgress;
@@ -1075,6 +1045,23 @@ internal partial class NodeCard : PanelContainer
     {
         _selected = sel;
         Restyle();
+    }
+
+    // Badge glyph + filled/outline styling for a status: shared by Configure (live) and ConfigureMock
+    // (showcase) — the only thing that differs between the two callers is the status LABEL text.
+    private void ApplyBadge(string glyph, Color color, bool filled)
+    {
+        _badge.Text = glyph;
+        _badge.AddThemeColorOverride("font_color", filled ? DesignTokens.Void : color);
+        var bsb = new StyleBoxFlat
+        {
+            BgColor = filled ? color : new Color(color, 0.12f),
+            BorderColor = new Color(color, 0.9f),
+            AntiAliasing = false,
+        };
+        bsb.SetCornerRadiusAll(0);
+        bsb.SetBorderWidthAll(1);
+        _badge.AddThemeStyleboxOverride("normal", bsb);
     }
 
     private static (string, Color, bool, string, Color) StyleFor(ResearchTab.Status s) => s switch
@@ -1118,11 +1105,7 @@ internal partial class NodeCard : PanelContainer
         float p = _world.ResearchProgress(start, dur);
         _underlay.Progress = p;
         _underlay.QueueRedraw();
-        float remaining = (start + dur - _world.ServerTick) / FlightModel.TickRate;
-        if (remaining < 0)
-            remaining = 0;
-        int t = (int)MathF.Ceiling(remaining);
-        _statusLabel.Text = $"◷ {t / 60:00}:{t % 60:00}";
+        _statusLabel.Text = $"◷ {TechDetailPanel.MmssRemaining(_world, start, dur)}";
         float pulse = 0.6f + 0.4f * Mathf.Sin(Time.GetTicksMsec() / 240f);
         _badge.Modulate = new Color(1, 1, 1, pulse);
     }
@@ -1280,11 +1263,7 @@ internal partial class ActiveBanner : PanelContainer
     {
         if (!_live || _world == null || _bar == null || !IsVisibleInTree())
             return;
-        float remaining = (_start + _dur - _world.ServerTick) / FlightModel.TickRate;
-        if (remaining < 0)
-            remaining = 0;
-        int t = (int)MathF.Ceiling(remaining);
-        _count.Text = $"{t / 60:00}:{t % 60:00}";
+        _count.Text = TechDetailPanel.MmssRemaining(_world, _start, _dur);
         _bar.Progress = _world.ResearchProgress(_start, _dur);
         _bar.QueueRedraw();
     }

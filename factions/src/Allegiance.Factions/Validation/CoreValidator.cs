@@ -23,6 +23,21 @@ public static class CoreValidator
         var factionIds = BuildIdSet(result, "faction", core.Factions.Select(f => f.Id));
         _ = factionIds;
 
+        ValidateTechReferences(result, core, techIds);
+        ValidateHulls(result, core, hullIds, partIds);
+        ValidateLaunchers(result, core);
+        ValidateFuelAndCargo(result, core);
+        ValidateCrossReferences(result, core, partIds, projectileIds, expendableIds);
+        ValidateStations(result, core, techIds, stationIds, droneIds);
+        ValidateDevelopments(result, core);
+        ValidateDrones(result, core, hullIds, expendableIds);
+        ValidateFactions(result, core, techIds, hullIds, stationIds);
+
+        return result;
+    }
+
+    private static void ValidateTechReferences(ValidationResult result, Core core, HashSet<string> techIds)
+    {
         // Tech ids referenced anywhere must exist in the tech catalog.
         foreach (var buildable in core.AllBuildables())
         {
@@ -30,7 +45,10 @@ public static class CoreValidator
             CheckTechs(result, techIds, buildable.GrantedTechs, $"{Describe(buildable)} granted-techs");
             CheckTechs(result, techIds, buildable.ObsoletedByTechs, $"{Describe(buildable)} obsoleted-by-techs");
         }
+    }
 
+    private static void ValidateHulls(ValidationResult result, Core core, HashSet<string> hullIds, HashSet<string> partIds)
+    {
         // Hulls.
         foreach (var hull in core.Hulls)
         {
@@ -117,7 +135,10 @@ public static class CoreValidator
                     $"hull '{hull.Id}' authored default loadout payload {defaultPayload} exceeds payload-capacity {hull.PayloadCapacity}."
                 );
         }
+    }
 
+    private static void ValidateLaunchers(ValidationResult result, Core core)
+    {
         // Runtime launchers: a launcher carrying a weapon id projects to a runtime WeaponDef whose
         // KIND is dispatched off the referenced expendable — a Missile launcher, a Mine dispenser, or
         // a Chaff launcher, each with its own per-type sanity rules. The launcher itself must always
@@ -232,7 +253,10 @@ public static class CoreValidator
                 );
             }
         }
+    }
 
+    private static void ValidateFuelAndCargo(ValidationResult result, Core core)
+    {
         // Runtime hulls: afterburner and fuel are authored as a pair, and the drain/recharge
         // rates must actually behave like a gauge (never net-zero, never negative).
         foreach (var hull in core.Hulls)
@@ -272,7 +296,16 @@ public static class CoreValidator
         foreach (var expendable in core.AllExpendables())
             if (expendable.CargoId is uint cid && !cargoIds.Add(cid))
                 result.Error($"duplicate cargo-id {cid} (expendable '{expendable.Id}').");
+    }
 
+    private static void ValidateCrossReferences(
+        ValidationResult result,
+        Core core,
+        HashSet<string> partIds,
+        HashSet<string> projectileIds,
+        HashSet<string> expendableIds
+    )
+    {
         // Parts.
         foreach (var part in core.AllParts())
             CheckRef(result, partIds, part.SuccessorPartId, $"{Describe(part)} successor-part-id");
@@ -290,7 +323,16 @@ public static class CoreValidator
         // Probes.
         foreach (var probe in core.Probes)
             CheckRef(result, projectileIds, probe.ProjectileId, $"probe '{probe.Id}' projectile-id");
+    }
 
+    private static void ValidateStations(
+        ValidationResult result,
+        Core core,
+        HashSet<string> techIds,
+        HashSet<string> stationIds,
+        HashSet<string> droneIds
+    )
+    {
         // Stations.
         foreach (var station in core.Stations)
         {
@@ -300,7 +342,10 @@ public static class CoreValidator
             if (station.ResearchSlots < 0)
                 result.Error($"station '{station.Id}' research-slots must be >= 0 (got {station.ResearchSlots}).");
         }
+    }
 
+    private static void ValidateDevelopments(ValidationResult result, Core core)
+    {
         // Developments: a station-upgrade with `upgrade-scope: single` must actually TRIGGER an
         // upgrade — i.e. it must grant a tech that some station's SUCCESSOR tier requires. Without
         // that link the scoped completion has no valid target (the ResearchOpStart from-type guard
@@ -332,14 +377,26 @@ public static class CoreValidator
                         + "station's required-techs names, or drop upgrade-scope."
                 );
         }
+    }
 
+    private static void ValidateDrones(ValidationResult result, Core core, HashSet<string> hullIds, HashSet<string> expendableIds)
+    {
         // Drones.
         foreach (var drone in core.Drones)
         {
             CheckRequiredRef(result, hullIds, drone.HullId, $"drone '{drone.Id}' hull-id");
             CheckRef(result, expendableIds, drone.DeployedExpendableId, $"drone '{drone.Id}' deployed-expendable-id");
         }
+    }
 
+    private static void ValidateFactions(
+        ValidationResult result,
+        Core core,
+        HashSet<string> techIds,
+        HashSet<string> hullIds,
+        HashSet<string> stationIds
+    )
+    {
         // Factions.
         foreach (var faction in core.Factions)
         {
@@ -356,8 +413,6 @@ public static class CoreValidator
                     );
             }
         }
-
-        return result;
     }
 
     private static HashSet<string> BuildIdSet(ValidationResult result, string kind, IEnumerable<string> ids)
@@ -406,22 +461,5 @@ public static class CoreValidator
     /// <summary>A 6-digit (RRGGBB) or 8-digit (RRGGBBAA) hex color string, no leading '#'.</summary>
     private static bool IsHexColor(string s) => (s.Length == 6 || s.Length == 8) && s.All(Uri.IsHexDigit);
 
-    private static string Describe(Buildable buildable)
-    {
-        var kind = buildable switch
-        {
-            Hull => "hull",
-            Weapon => "weapon",
-            Shield => "shield",
-            Cloak => "cloak",
-            Afterburner => "afterburner",
-            AmmoPack => "ammo-pack",
-            Launcher => "launcher",
-            Station => "station",
-            Development => "development",
-            Drone => "drone",
-            _ => "buildable",
-        };
-        return $"{kind} '{buildable.Id}'";
-    }
+    private static string Describe(Buildable buildable) => $"{buildable.KindName} '{buildable.Id}'";
 }

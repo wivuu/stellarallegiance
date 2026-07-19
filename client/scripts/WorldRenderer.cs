@@ -47,6 +47,10 @@ public partial class WorldRenderer : Node3D
     private Node3D _projectiles = null!;
     private Node3D _alephs = null!;
     private Node3D _effects = null!; // transient FX (explosions, hit flashes); self-freeing
+    // Cached group arrays for the RefreshSectorVisibility/HideForWarp/Reset sweep loops (set once in
+    // _Ready, right after the groups above are created) so those hot passes don't reallocate every call.
+    private Node3D[] _staticGroups = null!; // { _bases, _asteroids } — swap via ShowNodeInstant (can fade)
+    private Node3D[] _transientGroups = null!; // { _ships, _projectiles, _alephs, _effects } — hard toggle only
     private ChaffFx _chaffFx = null!; // live chaff-puff sprites (Track A fills the visuals)
     private MinefieldViews _minefieldViews = null!; // live minefield sprite clouds (Track B fills the visuals)
 
@@ -216,8 +220,6 @@ public partial class WorldRenderer : Node3D
     // Both are reconciled wholesale by NetSetContacts each MsgContacts frame. Read by WP4's HUD.
     private readonly Dictionary<ulong, GhostContact> _ghosts = new();
     private readonly HashSet<ulong> _radarVisible = new();
-    public IReadOnlyDictionary<ulong, GhostContact> GhostContacts() => _ghosts;
-    public IReadOnlyCollection<ulong> RadarVisibleIds => _radarVisible;
 
     // Scratch reused by GhostContacts(sector) so the per-frame HUD pass allocates nothing.
     private readonly List<GhostContact> _ghostScratch = new();
@@ -449,7 +451,7 @@ public partial class WorldRenderer : Node3D
     {
         int n = 0;
         foreach (var node in _shipNodes.Values)
-            if (node.HasMeta("sector") && (int)node.GetMeta("sector") == (int)_localSector)
+            if (InSector(node, _localSector))
                 n++;
         return n;
     }
@@ -1050,7 +1052,7 @@ public partial class WorldRenderer : Node3D
         bool any = false;
         foreach (var (node, t, id, _) in _baseList)
         {
-            if (t != team || !node.HasMeta("sector") || (int)node.GetMeta("sector") != (int)sector)
+            if (t != team || !InSector(node, sector))
                 continue;
             any = true;
             if (!BaseIsDead(id))
@@ -1164,6 +1166,8 @@ public partial class WorldRenderer : Node3D
         _projectiles = new Node3D { Name = "Projectiles" };
         _alephs = new Node3D { Name = "Alephs" };
         _effects = new Node3D { Name = "Effects" };
+        _staticGroups = new[] { _bases, _asteroids };
+        _transientGroups = new[] { _ships, _projectiles, _alephs, _effects };
         _chaffFx = new ChaffFx { Name = "ChaffFx" };
         _minefieldViews = new MinefieldViews { Name = "MinefieldViews" };
         _ambience = new AsteroidAmbience { Name = "AsteroidAmbience" };
@@ -1605,7 +1609,11 @@ public partial class WorldRenderer : Node3D
         // Welcome rebuilds them (the same-sector dedup would otherwise skip the post-reconnect re-apply).
         _sectorEnv?.Invalidate();
 
-        foreach (var group in new[] { _bases, _asteroids, _ships, _projectiles, _alephs, _effects })
+        foreach (var group in _staticGroups)
+        foreach (var child in group.GetChildren())
+            child.QueueFree();
+
+        foreach (var group in _transientGroups)
         foreach (var child in group.GetChildren())
             child.QueueFree();
 
@@ -1764,18 +1772,18 @@ public partial class WorldRenderer : Node3D
     // reveals (SetNodeSectorFading) and stale-base ghost dimming — those aren't sector transitions.
     private void RefreshSectorVisibility()
     {
-        foreach (var group in new[] { _bases, _asteroids })
+        foreach (var group in _staticGroups)
         foreach (var child in group.GetChildren())
             if (child is Node3D n && n.HasMeta("sector"))
-                ShowNodeInstant(n, (int)n.GetMeta("sector") == (int)ViewSector);
+                ShowNodeInstant(n, InSector(n, ViewSector));
 
         // Transient groups (ships/bolts/alephs/effects) always toggle instantly — a sector cut is hard
         // between the two sectors' live action, and fading brief effects would just smear them.
-        foreach (var group in new[] { _ships, _projectiles, _alephs, _effects })
+        foreach (var group in _transientGroups)
         foreach (var child in group.GetChildren())
             if (child is Node3D n && n.HasMeta("sector"))
                 // Keep a build-embedded constructor hidden (see SetNodeSector) across this sector re-eval.
-                n.Visible = (int)n.GetMeta("sector") == (int)ViewSector && n is not RemoteShip { HideForBuild: true };
+                n.Visible = InSector(n, ViewSector) && n is not RemoteShip { HideForBuild: true };
     }
 
     // Phase A of a warp (cover): hide every sector-tagged node NOT in the destination sector, HARD, so
@@ -1786,14 +1794,14 @@ public partial class WorldRenderer : Node3D
     // before), to be shown in Phase B — nothing new is shown here.
     private void HideForWarp(uint destSector)
     {
-        foreach (var group in new[] { _bases, _asteroids })
+        foreach (var group in _staticGroups)
         foreach (var child in group.GetChildren())
-            if (child is Node3D n && n.HasMeta("sector") && (int)n.GetMeta("sector") != (int)destSector)
+            if (child is Node3D n && n.HasMeta("sector") && !InSector(n, destSector))
                 ShowNodeInstant(n, false);
 
-        foreach (var group in new[] { _ships, _projectiles, _alephs, _effects })
+        foreach (var group in _transientGroups)
         foreach (var child in group.GetChildren())
-            if (child is Node3D n && n.HasMeta("sector") && (int)n.GetMeta("sector") != (int)destSector)
+            if (child is Node3D n && n.HasMeta("sector") && !InSector(n, destSector))
                 n.Visible = false;
     }
 
@@ -1986,7 +1994,7 @@ public partial class WorldRenderer : Node3D
         {
             if (node is not RemoteShip rs || !rs.Visible)
                 continue;
-            if (!rs.HasMeta("sector") || (int)rs.GetMeta("sector") != (int)_localSector)
+            if (!InSector(rs, _localSector))
                 continue;
             var hull = _collisionWorld.ShipHull(_defs, (byte)rs.Class, rs.IsPod);
             Vector3 p = rs.Position;
@@ -3026,91 +3034,13 @@ public partial class WorldRenderer : Node3D
             if (rock is null && !_buildSpheres.ContainsKey(b.RockId))
                 continue; // never saw the rock and have no sphere to anchor — nothing to draw
             live.Add(b.RockId);
-            if (!_buildSpheres.TryGetValue(b.RockId, out var sphere))
-            {
-                sphere = new BuildSphere();
-                _effects.AddChild(sphere);
-                _buildSpheres[b.RockId] = sphere;
-            }
-            if (rock is not null)
-            {
-                sphere.GlobalPosition = node!.GlobalPosition;
-                SetNodeSector(sphere, rock.SectorId);
-                _buildRockRadius[b.RockId] = MathF.Max(2f, rock.CurrentRadius);
-            }
-            // Envelop radius (world units). Phase 1 (sink) BEGINS at surface contact and its progress is
-            // the drone's physical embed-depth fraction (v38), so the sphere emerges from the rock CENTER
-            // and grows with the hull's actual descent out to the rock surface. Phase 2 (build, the
-            // station's build-time-seconds) grows it from the surface out to finalR — the eventual base's
-            // footprint, so the finished base is revealed from INSIDE a fully-enveloping shell rather than
-            // poking out of a sphere that only reached the rock radius. NOT bigger, or the sphere dwarfs
-            // the base: the base GLB is scaled so its LONGEST axis spans baseR·2 (BaseModelLoader.LoadHull
-            // → NormalizeLongestAxis), so baseR IS the base's furthest tip — the sphere ends snug there.
-            // rockR·1.05 is a floor for the rare rock wider than the base (still covered as it grows).
-            float rockR = _buildRockRadius.TryGetValue(b.RockId, out var rr) ? rr : 2f;
-            float baseR = _defs.GetBaseDef(DefaultBaseTypeId)?.Radius ?? BaseModelLoader.FallbackRadius;
-            float finalR = MathF.Max(rockR * 1.05f, baseR);
-            float worldR = b.Phase == 1
-                ? rockR * (0.05f + 0.50f * b.Progress)
-                : Mathf.Lerp(rockR * 0.55f, finalR, b.Progress);
-            sphere.SetEnvelop(worldR);
-            // Solid barrier for local prediction: only in BUILDING (phase 2), when the shell grows PAST
-            // the (still-solid) rock — matches the server's ResolveBuildSphereCollisions so the local
-            // ship bounces off the shell instead of sinking into it and snapping back. Registered in
-            // SIM/sector coordinates (the rock's raw row position), where the ship prediction runs — not
-            // the sphere node's render-space GlobalPosition. Dropped when the rock is unavailable
-            // (fogged/gone: a predict-miss the server reconciles) or the build leaves phase 2.
-            if (b.Phase >= 2 && rock is not null)
-                _collisionWorld.SetBuildSphere(rock.SectorId, b.RockId, new Vec3(rock.PosX, rock.PosY, rock.PosZ), worldR);
-            else
-                _collisionWorld.RemoveBuildSphere(b.RockId);
-            // Core opacity: stay mostly TRANSLUCENT while the drone SINKS (so you watch the mesh slide
-            // down into the rock), then ramp to opaque through the first half of BUILDING as the sphere
-            // swallows it. Continuous across the phase seam (sink ends ≈0.35, build starts at 0.35).
-            sphere.SetCover(b.Phase == 1 ? b.Progress * 0.35f : Mathf.Clamp(0.35f + b.Progress * 1.4f, 0f, 1f));
-            // Rock-spitting debris: while the drone grinds into the surface (phase 1) throw a continuous
-            // spray of rock chunks from the contact point, anchored on the still-visible drone (falling
-            // back to the sphere centre). The instant it embeds and hides (phase 2) stop the spray — the
-            // last chunks in flight settle out, then the node self-frees.
-            if (b.Phase == 1 && rock is not null)
-            {
-                if (!_constructorDebris.TryGetValue(b.RockId, out var debris))
-                {
-                    debris = new ConstructorDebris();
-                    _effects.AddChild(debris);
-                    _constructorDebris[b.RockId] = debris;
-                }
-                debris.GlobalPosition = _shipNodes.TryGetValue(b.ShipId, out var dn) && dn.Visible
-                    ? dn.GlobalPosition
-                    : sphere.GlobalPosition;
-                SetNodeSector(debris, rock.SectorId);
-            }
-            else if (_constructorDebris.TryGetValue(b.RockId, out var debris))
-            {
-                debris.Stop();                     // embedded/hidden — cut the spray
-                _constructorDebris.Remove(b.RockId); // stop tracking; it self-frees so we never touch a freed node
-            }
-            // Keep the mesh VISIBLE only while it SINKS (phase 1) so you watch it slide into the rock;
-            // the instant BUILDING begins (phase 2) hard-hide it. By then it's fully embedded — the still-
-            // solid rock (its fade doesn't start until build ~35%) plus the growing opaque core cover the
-            // spot, so it eases away rather than popping — and the build sphere must completely occlude it,
-            // never leaving the drone floating visibly inside. Latching HideForBuild stops the per-snapshot
-            // SetNodeSector re-showing it (else it blinks); Building is terminal, so it stays hidden to
-            // despawn.
-            if (b.Phase >= 2
-                && _shipNodes.TryGetValue(b.ShipId, out var shipNode) && shipNode is RemoteShip drone)
-            {
-                drone.HideForBuild = true;
-                drone.Visible = false;
-            }
-            // Dissolve the actual ROCK as the base rises so it's gone by the time the finished base is
-            // revealed — the opaque core hides the drone, this fades the rock itself. Stays fully SOLID
-            // through the sink and the first third of BUILDING (so the drone-hide above is covered), then
-            // dissolves gradually across the back two-thirds, fully gone by ~build-95% (the server then
-            // sends MsgRockGone and the already-transparent node slips away under the sphere). Only its
-            // own node, only while a build row is live; RestTransparencyFor restores it if it cancels.
-            if (node is not null)
-                DimNode(node, b.Phase >= 2 ? Mathf.Clamp((b.Progress - 0.35f) / 0.60f, 0f, 1f) : 0f);
+
+            var (sphere, worldR) = UpdateBuildSphereGeometry(b, node, rock);
+            RegisterBuildSphereCollision(b, rock, worldR);
+            UpdateBuildSphereCover(sphere, b);
+            UpdateConstructorDebris(b, rock, sphere);
+            LatchDroneHideForBuild(b);
+            DissolveBuildRock(b, node);
         }
         // A build that completed/cancelled drops out of the stream. Don't free its sphere instantly —
         // FADE it (the finished base has appeared underneath via the reveal path); it self-frees.
@@ -3139,6 +3069,119 @@ public partial class WorldRenderer : Node3D
             _constructorDebris[id].Stop();
             _constructorDebris.Remove(id);
         }
+    }
+
+    // Grow/position the glowing sphere enveloping the rock a constructor is building on, creating it on
+    // first sight. Envelop fraction ramps through the phases (sink → build) so the sphere gradually
+    // swallows the asteroid, peaking just past the rock surface as the base completes.
+    private (BuildSphere sphere, float worldR) UpdateBuildSphereGeometry(ConstructorBuild b, Node3D? node, Asteroid? rock)
+    {
+        if (!_buildSpheres.TryGetValue(b.RockId, out var sphere))
+        {
+            sphere = new BuildSphere();
+            _effects.AddChild(sphere);
+            _buildSpheres[b.RockId] = sphere;
+        }
+        if (rock is not null)
+        {
+            sphere.GlobalPosition = node!.GlobalPosition;
+            SetNodeSector(sphere, rock.SectorId);
+            _buildRockRadius[b.RockId] = MathF.Max(2f, rock.CurrentRadius);
+        }
+        // Envelop radius (world units). Phase 1 (sink) BEGINS at surface contact and its progress is
+        // the drone's physical embed-depth fraction (v38), so the sphere emerges from the rock CENTER
+        // and grows with the hull's actual descent out to the rock surface. Phase 2 (build, the
+        // station's build-time-seconds) grows it from the surface out to finalR — the eventual base's
+        // footprint, so the finished base is revealed from INSIDE a fully-enveloping shell rather than
+        // poking out of a sphere that only reached the rock radius. NOT bigger, or the sphere dwarfs
+        // the base: the base GLB is scaled so its LONGEST axis spans baseR·2 (BaseModelLoader.LoadHull
+        // → NormalizeLongestAxis), so baseR IS the base's furthest tip — the sphere ends snug there.
+        // rockR·1.05 is a floor for the rare rock wider than the base (still covered as it grows).
+        float rockR = _buildRockRadius.TryGetValue(b.RockId, out var rr) ? rr : 2f;
+        float baseR = _defs.GetBaseDef(DefaultBaseTypeId)?.Radius ?? BaseModelLoader.FallbackRadius;
+        float finalR = MathF.Max(rockR * 1.05f, baseR);
+        float worldR = b.Phase == 1
+            ? rockR * (0.05f + 0.50f * b.Progress)
+            : Mathf.Lerp(rockR * 0.55f, finalR, b.Progress);
+        sphere.SetEnvelop(worldR);
+        return (sphere, worldR);
+    }
+
+    // Solid barrier for local prediction: only in BUILDING (phase 2), when the shell grows PAST
+    // the (still-solid) rock — matches the server's ResolveBuildSphereCollisions so the local
+    // ship bounces off the shell instead of sinking into it and snapping back. Registered in
+    // SIM/sector coordinates (the rock's raw row position), where the ship prediction runs — not
+    // the sphere node's render-space GlobalPosition. Dropped when the rock is unavailable
+    // (fogged/gone: a predict-miss the server reconciles) or the build leaves phase 2.
+    private void RegisterBuildSphereCollision(ConstructorBuild b, Asteroid? rock, float worldR)
+    {
+        if (b.Phase >= 2 && rock is not null)
+            _collisionWorld.SetBuildSphere(rock.SectorId, b.RockId, new Vec3(rock.PosX, rock.PosY, rock.PosZ), worldR);
+        else
+            _collisionWorld.RemoveBuildSphere(b.RockId);
+    }
+
+    // Core opacity: stay mostly TRANSLUCENT while the drone SINKS (so you watch the mesh slide
+    // down into the rock), then ramp to opaque through the first half of BUILDING as the sphere
+    // swallows it. Continuous across the phase seam (sink ends ≈0.35, build starts at 0.35).
+    private void UpdateBuildSphereCover(BuildSphere sphere, ConstructorBuild b)
+    {
+        sphere.SetCover(b.Phase == 1 ? b.Progress * 0.35f : Mathf.Clamp(0.35f + b.Progress * 1.4f, 0f, 1f));
+    }
+
+    // Rock-spitting debris: while the drone grinds into the surface (phase 1) throw a continuous
+    // spray of rock chunks from the contact point, anchored on the still-visible drone (falling
+    // back to the sphere centre). The instant it embeds and hides (phase 2) stop the spray — the
+    // last chunks in flight settle out, then the node self-frees.
+    private void UpdateConstructorDebris(ConstructorBuild b, Asteroid? rock, BuildSphere sphere)
+    {
+        if (b.Phase == 1 && rock is not null)
+        {
+            if (!_constructorDebris.TryGetValue(b.RockId, out var debris))
+            {
+                debris = new ConstructorDebris();
+                _effects.AddChild(debris);
+                _constructorDebris[b.RockId] = debris;
+            }
+            debris.GlobalPosition = _shipNodes.TryGetValue(b.ShipId, out var dn) && dn.Visible
+                ? dn.GlobalPosition
+                : sphere.GlobalPosition;
+            SetNodeSector(debris, rock.SectorId);
+        }
+        else if (_constructorDebris.TryGetValue(b.RockId, out var debris))
+        {
+            debris.Stop();                     // embedded/hidden — cut the spray
+            _constructorDebris.Remove(b.RockId); // stop tracking; it self-frees so we never touch a freed node
+        }
+    }
+
+    // Keep the mesh VISIBLE only while it SINKS (phase 1) so you watch it slide into the rock;
+    // the instant BUILDING begins (phase 2) hard-hide it. By then it's fully embedded — the still-
+    // solid rock (its fade doesn't start until build ~35%) plus the growing opaque core cover the
+    // spot, so it eases away rather than popping — and the build sphere must completely occlude it,
+    // never leaving the drone floating visibly inside. Latching HideForBuild stops the per-snapshot
+    // SetNodeSector re-showing it (else it blinks); Building is terminal, so it stays hidden to
+    // despawn.
+    private void LatchDroneHideForBuild(ConstructorBuild b)
+    {
+        if (b.Phase >= 2
+            && _shipNodes.TryGetValue(b.ShipId, out var shipNode) && shipNode is RemoteShip drone)
+        {
+            drone.HideForBuild = true;
+            drone.Visible = false;
+        }
+    }
+
+    // Dissolve the actual ROCK as the base rises so it's gone by the time the finished base is
+    // revealed — the opaque core hides the drone, this fades the rock itself. Stays fully SOLID
+    // through the sink and the first third of BUILDING (so the drone-hide above is covered), then
+    // dissolves gradually across the back two-thirds, fully gone by ~build-95% (the server then
+    // sends MsgRockGone and the already-transparent node slips away under the sphere). Only its
+    // own node, only while a build row is live; RestTransparencyFor restores it if it cancels.
+    private void DissolveBuildRock(ConstructorBuild b, Node3D? node)
+    {
+        if (node is not null)
+            DimNode(node, b.Phase >= 2 ? Mathf.Clamp((b.Progress - 0.35f) / 0.60f, 0f, 1f) : 0f);
     }
 
     // Mining beams (client-only VFX). For every ship whose ShipFlagMining is set and whose mesh is

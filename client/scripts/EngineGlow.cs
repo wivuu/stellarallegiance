@@ -140,7 +140,7 @@ public partial class EngineGlow : Node3D
 
         // Soft radial mote for the hot cores: an 8-bit shape only — the HDR brightness
         // that drives bloom comes from emission energy.
-        var dot = RadialDot();
+        var dot = VfxTextures.RadialDot();
         // Soft-edged mote for the exhaust: a dense pile of these, mix-blended, builds one
         // continuous smoke volume; the particle shader moves/sizes each mote into the plume.
         var smoke = SmokeMote();
@@ -529,25 +529,6 @@ public partial class EngineGlow : Node3D
         _light.OmniRange = LightRange * (0.7f + 0.3f * throttle);
     }
 
-    // Soft round mote: hot centre fading to transparent — drives bloom via emission.
-    private static GradientTexture2D RadialDot()
-    {
-        var gradient = new Gradient
-        {
-            Offsets = new[] { 0f, 0.5f, 1f },
-            Colors = new[] { new Color(1f, 1f, 1f, 1f), new Color(1f, 1f, 1f, 0.4f), new Color(1f, 1f, 1f, 0f) },
-        };
-        return new GradientTexture2D
-        {
-            Gradient = gradient,
-            Width = 128,
-            Height = 128,
-            Fill = GradientTexture2D.FillEnum.Radial,
-            FillFrom = new Vector2(0.5f, 0.5f),
-            FillTo = new Vector2(0.5f, 0f),
-        };
-    }
-
     // Custom particle-process shader for the exhaust smoke. It owns the whole motion+look of a
     // mote so the shape is explicit and reliable (no ParticleProcessMaterial curve quirks):
     //
@@ -639,7 +620,7 @@ void process() {
 }
 ";
 
-    // Exhaust mote shape: a fuller soft-edged puff (vs. the cores' tighter RadialDot). The
+    // Exhaust mote shape: a fuller soft-edged puff (vs. the cores' tighter VfxTextures.RadialDot). The
     // solid-ish core gives each mote enough presence that the dense pile resolves a defined
     // plume silhouette, while the feathered rim still blends the seams into continuous smoke.
     private static GradientTexture2D SmokeMote()

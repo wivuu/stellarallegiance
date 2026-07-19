@@ -2,6 +2,131 @@
 
 _Automated multi-agent review: 20 segment reviewers → per-finding adversarial verification → cross-segment DRY sweep. Report only; no code was changed._
 
+---
+
+## Execution tracker (started 2026-07-18)
+
+_Deduplicated action list. The report cross-lists many findings (the `cross-dry` segment repeats per-segment items) and its own appendix REFUTES several determinism-sensitive DRY merges — those are marked ⏭️ SKIP with the reason. Every change is compile-gated (`dotnet build wivuullegiance.slnx`, currently green) and determinism-gated against the captured baseline (FlightModelTest PASS; pre-existing FAILs: CollisionTest×4, AutopilotTest×3, CommanderTest×1, FogTest×1 — all asset/env, not to be regressed)._
+
+### Wave A — trivial comment/doc fixes ✅ DONE (build+tests green)
+- [x] A1 ExplosionEffect.cs:42 — dropped Track-0/Track-A comment; added `SeekerReferenceRadius=25f` const, used in clamp
+- [x] A2 Protocol.cs:391 — BuildProbeGone comment "19 bytes" → "18 bytes"
+- [x] A3 ShipKind.cs:17 — Constructor comment now describes live AI base-builder drone role
+- [x] A4 Simulation.Research.cs:300 — comment `CompleteBuild` → `CompleteConstruction`
+- [x] A5 SettingsDialog.cs:8 — header comment 720×560 → real 1080×840
+- [x] A6 ShipLoadout.cs:338 + class header + LoadoutState.cs:26 — reworded to "rides MsgSpawn"
+- [x] A7 TargetMarkers.cs:160 — WaypointArriveRange reworded as client-cosmetic (not server-matched)
+
+### Wave B — dead code (client) ✅ DONE (build+tests green)
+- [x] B1 BaseModelLoader — deleted MakeHardpointCone + ShowHardpointDebug/DebugCone* consts + commented block
+- [x] B2 BaseModelLoader — deleted unused Radius(DefRegistry,byte) + stale comment
+- [x] B3 WorldRenderer — deleted RadarVisibleIds property
+- [x] B4 WorldRenderer — deleted no-arg GhostContacts() overload
+- [x] B5 MeshRaycaster — deleted HasGeometry
+- [x] B6 SectorOverview — deleted SelectedId
+- [x] B7 DefRegistry — deleted WeaponMounts() + _mountsCache + its Clear()
+- [x] B8 DesignTokens — deleted SetTeamAccentTint; TeamAccent now readonly; DESIGN.md updated. _NOTE: agent kept `TeamAccentBase` as a same-value readonly alias (6 external readers) — Wave E will swap those to TeamAccent and drop the alias._
+- [x] B9 UiFonts — deleted Michroma path/property/load + doc bullet
+- [x] B10 ShipLoadout.Hangar — dropped SetGate `lockNote` param + branch
+
+### Wave C — dead code (server / shared / factions / public-lobby) ✅ DONE (build+tests green)
+- [x] C1 ClientHub — deleted TakeBytesSent() + _bytesSent + Interlocked.Add
+- [x] C2 World — deleted unused private static Dot
+- [x] C3 World — deleted BaseModel accessor
+- [x] C4 Defs — deleted FighterWeaponId/BomberWeaponId + trimmed comment
+- [x] C5 Simulation.Pig — deleted PigKindNone const
+- [x] C6 Team.cs — deleted unused record file
+- [x] C7 Contracts — removed RegisterRequest.IceCandidates param + comment
+- [x] C8 TechSet + Capability — deleted both IsSatisfiedBy
+- [x] C9 ConvexHull — removed unused 5-arg ResolveSphere(out faceIndex) overload; fixed stale comment (CollisionTest at baseline, no regression)
+- [x] C10 DefRegistry — added "no consumer yet / forward-looking" TODO on FactionName/FactionAttributes (kept for decode symmetry)
+- [x] C11 FactionStart — reserved-unused note already present (no change needed)
+- [x] C12 ValidationResult.cs:13 — ⏭️ SKIP (Warn/Warnings is live CLI API surface; deleting churns CLI for no gain)
+
+### Wave D — client draw/VFX/HUD DRY ✅ DONE (client build 0 warnings)
+- [x] D-R1 new `VfxTextures.RadialDot(size)` → EngineGlow/ExplosionEffect/HitFlash/BaseModelLoader(64); Sun/DustField/ChaffFx/LensFlare left
+- [x] D-R4 UiDraw.HollowDiamondMarker → TargetMarkers.DrawWaypoint + SectorOverview CMD/BUILD/MINE glyphs
+- [x] D-R5 UiDraw.ClampToEdge/DrawEdgeArrow (param margin/size); SectorOverview privates deleted
+- [x] D-R13 new `ModelGeom.BasisFacingZ` (guarded) → MissileView/ShipModelLoader/BaseModelLoader; MakeMarker left parallel
+- [x] D-R16 UiDraw.Diamond → GameElements (ContactChip/RadarFrame) + Surfaces (DiamondDivider)
+- [x] D-R17 new `UiChips.AccentChip` → Lobby.Chip + ServerLobbyOverlay.MakeChip (margin/font diffs kept as params)
+- [x] D-R18 WeaponsPanel.DecodeLockState + LauncherStatus → 2 draw sites + TargetMarkers.DrawLockArc decode
+- [x] D-M19 WorldRenderer `_staticGroups`/`_transientGroups` readonly fields → 5 literal sites
+- [x] D-M20 ExplosionEffect per-blast RNG → GD.Randf; ShipController ManualOverrideDeadzone const
+
+### Wave E — client UI/net/lobby DRY & refactors ✅ DONE (full build 0 warnings; client-only)
+- [x] E-R2 WorldRenderer InSector reuse — 6 sites routed (De Morgan-equivalent; HasMeta guards kept where needed)
+- [x] E-R3 ShipModelLoader.DefaultModelLength made `internal` → CameraRig + LoadoutPreview
+- [x] E-R6 new `InputGate.FlightInputFree` → CameraRig/ZoomView/Hud (different-subset gates left)
+- [x] E-R7 `Nameplate.SetText(ref …, visibleWhenSet)` → PredictionController/RemoteShip (per-frame visibility preserved)
+- [x] E-R8 UserPrefs single `Save()` helper → 8 setters
+- [x] E-R9 GameNetClient `ResetConnectionState()` + `ClearEntityCaches()` (reconnect 3-clear site left intentional)
+- [x] E-R10 `TechDetailPanel.MmssRemaining` → ResearchTab×2 + CommandSidebar
+- [x] E-R11 `TechDetailPanel.SetPrereqsFrom` → both tabs' BuildPrereqs one-line delegate
+- [x] E-R12 `DefRegistry.MigrateWeaponTier` → ShipLoadout.MigrateTier + WeaponsPanel.MigratedDispenserName (predicates matched)
+- [x] E-R14 new `ChatFormat.ToBbcode`+`Escape` → Chat/Lobby (byte-identity verified vs diff)
+- [x] E-R15 NodeCard.ApplyBadge → Configure/ConfigureMock
+- [ ] E-R19 ⏭️ DEFER — WorldRenderer.TeamCanUse would bridge two file-components; low/med, tabs carry an extra RequiredCaps clause
+- [ ] E-R20 ⏭️ DEFER — BuildTab/ResearchTab RefreshGate shared base is the most invasive (shared Control/struct); revisit standalone
+- [x] E-M21 removed glyph-derivation (`PrimaryActionForText` gone; action intent set directly); CommanderName → `HasCommander`
+- [x] E-M26 ShipLoadout `_payloadOverCap` cache (one payload walk/frame) + `Team` property (5 sites); SettingsDialog dead-store already fixed in Wave A
+
+### Wave F — server/shared/factions/PL DRY & small refactors ✅ DONE (full build + determinism gate green)
+- [x] F-S1 Simulation.Pig PruneToLive<T> local fn (guards kept per-site)
+- [x] F-S2 ClientHub HandleOrder → CommanderOrWarn gate (message unified to "direct")
+- [x] F-S3 ContentValidator RequireCargo(kind) (3 dispenser branches, byte-identical strings)
+- [x] F-S4 Buildable.KindName property ([YamlIgnore]/[JsonIgnore]) → TechTreeReport.KindOf + CoreValidator.Describe
+- [x] F-S5 PublicLobby FilterProtocol (GET /servers + SSE snapshot)
+- [x] F-S6 FactionsContentProjection Sig(double) helper (4 sites, all double sources)
+- [x] F-S7 FactionsContentProjection ProjectLauncher Common() prefix factory (field-by-field verified; ShieldMult kept per-branch)
+- [x] F-S8 WebRtcListener IsTerminal helper (both handlers)
+- [x] F-S9 Simulation.Vision ghost single-snapshot (ContainsKey guard preserves semantics; FogTest at baseline)
+- [x] F-S10 Expendables ModelName hoisted to Expendable base (convention serialization unaffected)
+- [x] F-S11 TechTreeReport GrantersOf(core,techId) helper
+- [x] F-S12 PublicLobby name-validation BadRequest hoisted to one local
+- [x] F-M13 ServerRegistry.NormalizeState → CleanShortText(state,20) (control-char strip)
+- [x] F-M23 Simulation.Vision cone-cos memoized per def (ConeCosFor)
+- [x] F-M22 Simulation ContentBaseLookup wrapper → plain lazy dict
+- [x] F-M31 PublicLobby JsonSerializerOptions → static readonly
+- [x] F-M32 ContentValidator ValidateWeapon extracted (uniqueness stays in Validate; error order preserved)
+
+### Wave G — god-method splits (client) ✅ DONE (full build 0 warnings; client-only)
+- [x] G-M1 TargetMarkers._Draw (~325→~48 lines) → 10 draw-pass helpers (ResolveFocusedBase/DrawBasesPass/…/DrawFiringSolution)
+- [x] G-M2 ShipController._Process (~265→~45 lines) → SampleInput/TickSpawn/AnchorFreshShip/TickAutopilotAndBoost/StepPrediction/… (fixed-dt loop verbatim)
+- [x] G-M9 WorldRenderer.UpdateBuildSpheres → 6 per-concern helpers (geometry/collision/cover/debris/latch/dissolve)
+- [x] G-M10 SectorOverview.HandleMapClick → SendAndSupersede + IssueSectorOrder/IssueEntityOrder (asymmetric null-gate preserved)
+- [x] G-M15 GameNetClient.ApplyDefs → ReadShipDef/ReadWeaponDef/ReadCargoItemDef/ReadBaseDef/ReadDevelopmentDef/ReadStationCatalogDef (wire order verified field-by-field)
+- [x] G-M25 ShipModelLoader.AttachEngineGlow → BuildEngineGlow/BuildTeamTrail/BuildNavBeacons local fns
+
+### Wave H — god-method splits & refactors (server, determinism-gated) ✅ DONE (build 0 warn; FlightModel PASS; all suites at baseline)
+- [x] H-M3 ClientHub.AfterStep → LogQueuePressure/HandlePhaseTransition/DrainStepNotices/PrepareBroadcastFrames(BroadcastFrames holder)/SendPerClientFrames/FanOutSnapshots
+- [x] S13 ClientHub SendToTeam(team, buildFrame) → SystemToTeam + OrderDirectives
+- [x] S14 ClientHub TeamFrame local fn → 5 lazy per-team cache sites in SendPerClientFrames
+- [x] H-M4 Simulation.DockApproach → DockAlign/DockCreep/DockTransit (dispatch keeps geometry setup)
+- [x] H-M5 Simulation.Vision.ApplyVisionResult → SwapStreamedSets/RefreshEyeballGhosts/SwapProbe/SwapMine/ProcessGhosts(single-snapshot kept)/MergeDiscoveredStatics
+- [x] H-M6 Simulation.Mining.MinerBrainStep → StepProspectingMiner
+- [x] H-M7 ClientHub MsgHello → TryParseHello (flat cursor)
+- [x] H-M8 CoreValidator.Validate (~349) → 9 passes (shared id-sets threaded; error order verified via diff)
+- [x] H-M11 Protocol.BuildDefs → 7 per-section writers (byte order verified; pairs with G-M15 reader)
+- [x] H-M12 World ctor → 8 seed phases (single DetRng threaded by `ref` — RNG consumption order preserved)
+- [x] H-M14 Simulation.Orders.ApplyCommandOrder → ApplyPigCommandOrder (+ removed dead `Directive` local; CommanderTest command-order tests pass)
+- [x] H-M16 Simulation.Step per-ship boundary/dock loop → ResolveBoundaryCollisionsAndDocking + ResolveOwnBaseDock
+- [x] H-M17 RockEligible ⇒ `RockIneligibleReason(...).Length==0` (1:1 check mapping verified)
+- [x] H-M18 Simulation.AutopilotStep ArriveAt helper (**caught `radius + standoff*1.2f` precedence** — exact per-site band preserved)
+- [x] H-M32 ContentValidator.Validate → ValidateWeapon (done in Wave F)
+
+### ⏭️ SKIP (determinism-refuted / note-only / deferred) — do NOT act
+- splitmix64 `Hash.SplitMix64` consolidation — REFUTED (per-site distinct preludes/semantics; DetRng/RockSpin/OreMix determinism-critical)
+- Vec3 `Dot`/`Normalize` onto shared Vec3 — REFUTED (divergent Normalize epsilons/fallbacks; sim determinism)
+- Miner/Constructor `AlignGated`+`CrossSector` merge — REFUTED (decoupled tunables; determinism)
+- `MinerHoldDistance`/`ConstructorHoldDistance` merge — REFUTED (semantically distinct knobs)
+- `NormalizeOr` Pig↔AutoSteer reuse — SKIP (AutoSteer is PIG-determinism-critical)
+- AsteroidSphere/ProbeSphere/BuildSphere factory merge — note-only (names document intent)
+- Protocol base-health `WriteBaseHealthRecord`; FireBolt/StepMissiles sweep; ClassifyTarget/IsPointVisibleToTeam; CellsAlongRay/CollectCellsAlongRay — REFUTED (appendix)
+- BaseModelLoader BasisFacingZ/MakeMarker "parallel files" — only BasisFacingZ hoisted (D-R13); MakeMarker left parallel
+- WorldRenderer TeamStateStore extraction (M24) & god-class split (M27); NetUpdateTeamState 11-param→struct (M29); Lobby factory-kit→ui-lib (M28); Mines damage constants→YAML — DEFER (high-churn / separate config-pipeline work)
+
+
 ## Executive summary
 
 The codebase is structurally sound but carries broad low-risk maintenance debt rather than correctness problems: of 127 kept findings, none are correctness bugs — the load is dominated by DRY duplication (62) and dead code (21 unused, 21 confirmed-dead), concentrated heavily in the Godot client's UI and rendering layer. Two recurring themes stand out: a handful of oversized "god-methods" (5 confirmed high-severity methods of 160–600 lines each across `_Draw`, `_Process`, `AfterStep`, and sim brain steps) that dominate the readability cost, and copy-paste primitives — splitmix64 hashing, `Vec3` math, VFX gradient textures, countdown formatting, marker drawing — reimplemented across 3–8 sites each. The determinism-sensitive server sim paths are largely clean; the risk in consolidation is confined to a few shared-hash sites that must stay byte-identical.

@@ -627,16 +627,8 @@ public partial class BuildTab : Control
         SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
     }
 
-    private void BuildPrereqs(StationCatalogDef s)
-    {
-        byte team = Team;
-        var rows = new List<(string, bool)>();
-        foreach (ushort t in s.RequiredTechIdx)
-            rows.Add((_defs!.GetTech(t)?.Name ?? $"TECH {t}", _world!.TeamOwnsTech(team, t)));
-        foreach (byte c in s.RequiredCaps)
-            rows.Add((TechDetailPanel.CapName(c), _world!.TeamOwnsCap(team, c)));
-        _detail.SetPrereqs(rows); // empty -> "No prerequisites"
-    }
+    private void BuildPrereqs(StationCatalogDef s) =>
+        TechDetailPanel.SetPrereqsFrom(_detail, s.RequiredTechIdx, s.RequiredCaps, _defs!, _world!, Team);
 
     private void BuildUnlocks(StationCatalogDef s)
     {

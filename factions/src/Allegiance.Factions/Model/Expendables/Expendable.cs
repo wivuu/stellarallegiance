@@ -58,4 +58,12 @@ public abstract record Expendable
     /// charges-per-pack. Null → 1 (a pack is a single charge — legacy one-for-one behavior).
     /// </summary>
     public uint? ChargesPerPack { get; set; }
+
+    /// <summary>
+    /// GLB model basename the client loads/instances from its per-kind assets folder (e.g.
+    /// <c>assets/missiles/</c>, <c>assets/mines/</c>, <c>assets/chaff/</c>, <c>assets/probes/</c>;
+    /// no extension); projected onto WeaponDef.ModelName. Shared by every expendable kind (a
+    /// FuelPod inherits it too, though it is pure cargo and never renders one).
+    /// </summary>
+    public string? ModelName { get; set; }
 }

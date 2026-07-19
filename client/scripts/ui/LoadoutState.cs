@@ -23,7 +23,7 @@ public sealed class LoadoutState
     public static readonly LoadoutState Shared = new();
 
     // The base the pilot has picked to launch from in the docked screen's CommandSidebar. 0 = server
-    // default (Phase A is display-only — RequestSpawn still ignores this; Phase B wires it into MsgSpawn).
+    // default; RequestSpawn ships this on MsgSpawn as the launch base.
     public ulong SelectedBaseId;
 
     // Classes whose default hold has been seeded from ShipClassDef.DefaultCargo (once each, so a

@@ -37,7 +37,6 @@ public partial class SectorOverview : Node3D
     // lone informational entry. Cleared on Close and pruned per frame as entities leave the viewed
     // sector / despawn.
     private static readonly System.Collections.Generic.List<ulong> _selection = new();
-    public static ulong SelectedId => _selection.Count == 0 ? 0 : _selection[^1];
 
     // Cross-node seams for the cursor-free flight command mode, read by ShipController: whether the
     // in-cockpit command gestures are live (so it defers cursor recapture to us), the current group
@@ -236,19 +235,7 @@ public partial class SectorOverview : Node3D
             // marked by the cyan waypoint diamond (TargetMarkers.DrawWaypoint).
             if (!glyph)
                 continue;
-            var top = point + new Vector2(0f, -r);
-            var right = point + new Vector2(r, 0f);
-            var bottom = point + new Vector2(0f, r);
-            var left = point + new Vector2(-r, 0f);
-            _selMarker.DrawLine(top, right, gold, 1.75f, true);
-            _selMarker.DrawLine(right, bottom, gold, 1.75f, true);
-            _selMarker.DrawLine(bottom, left, gold, 1.75f, true);
-            _selMarker.DrawLine(left, top, gold, 1.75f, true);
-            _selMarker.DrawCircle(point, r * 0.28f, gold);
-            const string tag = "CMD";
-            float tw = UiFonts.Mono.GetStringSize(tag, HorizontalAlignment.Left, -1, 9).X;
-            _selMarker.DrawString(UiFonts.Mono, point + new Vector2(-tw * 0.5f, -r - 4f), tag,
-                HorizontalAlignment.Left, -1, 9, gold);
+            UiDraw.HollowDiamondMarker(_selMarker, point, r, gold, "CMD", UiFonts.Mono, 9);
         }
 
         // Yellow rock-order waypoints for selected constructors/miners: a diamond + "BUILD"/"MINE" tag
@@ -264,59 +251,21 @@ public partial class SectorOverview : Node3D
             {
                 if (shipOn)
                     _selMarker.DrawLine(ship, rock, new Color(yellow, 0.35f), 1f);
-                var top = rock + new Vector2(0f, -r);
-                var right = rock + new Vector2(r, 0f);
-                var bottom = rock + new Vector2(0f, r);
-                var left = rock + new Vector2(-r, 0f);
-                _selMarker.DrawLine(top, right, yellow, 1.75f, true);
-                _selMarker.DrawLine(right, bottom, yellow, 1.75f, true);
-                _selMarker.DrawLine(bottom, left, yellow, 1.75f, true);
-                _selMarker.DrawLine(left, top, yellow, 1.75f, true);
-                _selMarker.DrawCircle(rock, r * 0.28f, yellow);
                 string mtag = build ? "BUILD" : "MINE";
-                float mtw = UiFonts.Mono.GetStringSize(mtag, HorizontalAlignment.Left, -1, 9).X;
-                _selMarker.DrawString(UiFonts.Mono, rock + new Vector2(-mtw * 0.5f, -r - 4f), mtag,
-                    HorizontalAlignment.Left, -1, 9, yellow);
+                UiDraw.HollowDiamondMarker(_selMarker, rock, r, yellow, mtag, UiFonts.Mono, 9);
             }
             else
             {
-                Vector2 edge = ClampToViewportEdge(rock, vp, out Vector2 dir);
+                (Vector2 edge, Vector2 dir) = UiDraw.ClampToEdge(rock, vp, RockEdgeMargin);
                 if (shipOn)
                     _selMarker.DrawLine(ship, edge, new Color(yellow, 0.3f), 1f);
-                DrawEdgeArrow(edge, dir, yellow);
+                UiDraw.DrawEdgeArrow(_selMarker, edge, dir, RockArrowSize, yellow);
             }
         }
     }
 
     private const float RockEdgeMargin = 40f; // off-screen rock-order-arrow inset from the viewport edge (px)
-
-    // The point on the RockEdgeMargin-inset rectangle along the ray from center toward sp, plus the
-    // outward unit direction — mirrors TargetMarkers.ClampToEdge so the rock-order arrow pins like the HUD's.
-    private static Vector2 ClampToViewportEdge(Vector2 sp, Vector2 view, out Vector2 dir)
-    {
-        Vector2 center = view * 0.5f;
-        dir = sp - center;
-        if (dir.LengthSquared() < 1e-4f)
-            dir = Vector2.Down;
-        dir = dir.Normalized();
-        Vector2 half = center - new Vector2(RockEdgeMargin, RockEdgeMargin);
-        float scale = Mathf.Min(half.X / Mathf.Max(Mathf.Abs(dir.X), 1e-4f), half.Y / Mathf.Max(Mathf.Abs(dir.Y), 1e-4f));
-        return center + dir * scale;
-    }
-
-    // A filled triangle at p pointing along dir (unit).
-    private void DrawEdgeArrow(Vector2 p, Vector2 dir, Color color)
-    {
-        const float sz = 10f;
-        Vector2 perp = new(-dir.Y, dir.X);
-        var poly = new[]
-        {
-            p + dir * sz,
-            p - dir * sz * 0.5f + perp * sz * 0.6f,
-            p - dir * sz * 0.5f - perp * sz * 0.6f,
-        };
-        _selMarker.DrawColoredPolygon(poly, color);
-    }
+    private const float RockArrowSize = 10f; // off-screen rock-order-arrow half-extent (px); TargetMarkers.ArrowSize is 13
 
     private void DrawSelectionBox()
     {
@@ -932,50 +881,16 @@ public partial class SectorOverview : Node3D
         ulong ownId = _world.LocalShip?.ShipId ?? 0;
 
         // Minimap precedence (covers the right-click path; left already gated on press).
-        // LEFT click on a sector node views it; RIGHT click sends units there:
-        //   - teammates get a SECTOR order (targetKind 4): combat drones go through the aleph and
-        //     hold just inside (never a run at the sector center), miners prospect-patrol the sector
-        //     until helium-3 turns up. No CMD waypoint marker is recorded — the stop point is decided
-        //     server-side (wherever the unit enters), so any client-drawn diamond would lie.
-        //   - our own ship gets the autopilot analog (OrderOwnShipToSector): a cross-sector nav
-        //     waypoint that multi-hops the gates there and warps through, then idles on arrival.
-        //     This is the path taken with NOTHING selected — the common "send me over there" case —
-        //     so a right-click on a sector commands the ship rather than just changing the view.
+        // LEFT click on a sector node views it; RIGHT click sends units there — see IssueSectorOrder
+        // for the teammate SECTOR order / own-ship autopilot split.
         _minimap ??= GetNodeOrNull<Minimap>("../Hud/Minimap");
         if (_minimap != null && _minimap.TryClickSector(point, out uint mapSector))
         {
-            if (engage)
-            {
-                bool ownSelected = ownId != 0 && _selection.Contains(ownId);
-                var group = CommandableSelection();
-                if (group.Count > 0 || ownSelected)
-                {
-                    _net ??= GetNodeOrNull<GameNetClient>("../GameNetClient");
-                    if (_net != null)
-                        foreach (ulong subject in group)
-                        {
-                            _net.SendOrder(subject, targetKind: 4, targetId: 0, sector: mapSector, pos: Vector3.Zero);
-                            _orderedPoints.Remove(subject); // supersedes any earlier point order
-                            _orderedRocks.Remove(subject); // ...and any rock intent
-                        }
-                    if (ownSelected)
-                        OrderOwnShipToSector(mapSector);
-                    return;
-                }
-                // Nothing selected but LAUNCHED: a right-click sends our OWN ship to autopilot to that
-                // sector and idle on arrival (OrderOwnShipToSector's kind-3 cross-sector waypoint at the
-                // sector centre). It deliberately does NOT retarget the F3 view — viewing a sector is the
-                // LEFT-click gesture (TryMinimapClick on press). Pre-launch / spectating (no own ship)
-                // falls through to SwitchView so the map is still explorable by right-click.
-                if (ownId != 0)
-                {
-                    OrderOwnShipToSector(mapSector);
-                    return;
-                }
-            }
-            // A LEFT (non-engage) minimap click, or a RIGHT click while not launched, only retargets the
-            // F3 view; in cursor-free flight the map isn't open, so a left-click there does nothing
-            // (orders go through the engage path above).
+            if (engage && IssueSectorOrder(mapSector, ownId))
+                return;
+            // A LEFT (non-engage) minimap click, or a RIGHT click while not launched and nothing
+            // selected, only retargets the F3 view; in cursor-free flight the map isn't open, so a
+            // left-click there does nothing (orders go through the engage path above).
             if (Active)
                 SwitchView(mapSector);
             return;
@@ -1016,46 +931,126 @@ public partial class SectorOverview : Node3D
         var subjects = CommandableSelection();
         if (subjects.Count > 0)
         {
-            _net ??= GetNodeOrNull<GameNetClient>("../GameNetClient");
-            if (_net is null)
-                return;
-            if (pickedTarget)
-            {
-                // Strip the entity-kind flags into the wire's (kind, raw id) pair — same contract
-                // as SetAutopilot (the server disambiguates by kind, never by flag bits).
-                (byte kind, ulong id) =
-                    GameContent.IsBaseLock(encoded) ? ((byte)1, GameContent.BaseIdOf(encoded))
-                    : GameContent.IsAsteroidFocus(encoded) ? ((byte)2, GameContent.AsteroidIdOf(encoded))
-                    : ((byte)0, encoded);
-                foreach (ulong subject in subjects)
-                {
-                    _net.SendOrder(subject, kind, id, sector: 0, pos: Vector3.Zero);
-                    _orderedPoints.Remove(subject); // an entity target supersedes any goto point
-                    // A rock order on a constructor ("build here") or miner ("mine here"): remember
-                    // the rock so a yellow BUILD/MINE waypoint points the way while it's selected.
-                    // Any other entity target (or other subject type) clears the rock intent.
-                    if (kind == 2
-                        && _world.FriendlyShipById(subject) is { IsConstructor: true } or { IsMiner: true })
-                        _orderedRocks[subject] = id;
-                    else
-                        _orderedRocks.Remove(subject);
-                }
-            }
-            else if (TryGridPoint(cam, point, out Vector3 world))
-                foreach (ulong subject in subjects)
-                {
-                    _net.SendOrder(subject, targetKind: 3, targetId: 0, sector: _world.ViewSector, pos: world);
-                    _orderedPoints[subject] = (_world.ViewSector, world);
-                    _orderedRocks.Remove(subject); // a goto point supersedes any rock intent
-                }
-            // Fan the same click out to our own ship (autopilot, not a MsgOrder) when it rides along.
-            if (ownId != 0 && _selection.Contains(ownId))
+            // Fan the same click out to our own ship (autopilot, not a MsgOrder) when it rides along
+            // — but only once the group order actually dispatched (IssueEntityOrder returns false,
+            // skipping this too, when GameNetClient couldn't be resolved).
+            if (IssueEntityOrder(cam, point, subjects, pickedTarget, encoded)
+                && ownId != 0
+                && _selection.Contains(ownId))
                 ApplyOwnShipRightClick(cam, pickedTarget, encoded, point);
             return;
         }
 
         // Nothing (or only our own ship) selected: the legacy focus/waypoint + engage-own-autopilot.
         ApplyOwnShipRightClick(cam, pickedTarget, encoded, point);
+    }
+
+    // Right-click on a minimap sector node: teammates get a SECTOR order (targetKind 4) — combat
+    // drones go through the aleph and hold just inside (never a run at the sector center), miners
+    // prospect-patrol the sector until helium-3 turns up. No CMD waypoint marker is recorded — the
+    // stop point is decided server-side (wherever the unit enters), so any client-drawn diamond
+    // would lie. Our own ship gets the autopilot analog (OrderOwnShipToSector): a cross-sector nav
+    // waypoint that multi-hops the gates there and warps through, then idles on arrival. That's also
+    // the path taken with NOTHING selected — the common "send me over there" case — so a right-click
+    // on a sector commands the ship rather than just changing the view (handled by the caller).
+    // Returns true when the click was fully handled (caller should return without falling through to
+    // SwitchView); false when nothing was selected/launched and the caller should fall through.
+    private bool IssueSectorOrder(uint mapSector, ulong ownId)
+    {
+        bool ownSelected = ownId != 0 && _selection.Contains(ownId);
+        var group = CommandableSelection();
+        if (group.Count > 0 || ownSelected)
+        {
+            _net ??= GetNodeOrNull<GameNetClient>("../GameNetClient");
+            if (_net != null)
+                foreach (ulong subject in group)
+                    SendAndSupersede(subject, targetKind: 4, targetId: 0, sector: mapSector, pos: Vector3.Zero);
+            if (ownSelected)
+                OrderOwnShipToSector(mapSector);
+            return true;
+        }
+        // Nothing selected but LAUNCHED: a right-click sends our OWN ship to autopilot to that
+        // sector and idle on arrival (OrderOwnShipToSector's kind-3 cross-sector waypoint at the
+        // sector centre). It deliberately does NOT retarget the F3 view — viewing a sector is the
+        // LEFT-click gesture (TryMinimapClick on press). Pre-launch / spectating (no own ship) falls
+        // through to SwitchView so the map is still explorable by right-click.
+        if (ownId != 0)
+        {
+            OrderOwnShipToSector(mapSector);
+            return true;
+        }
+        return false;
+    }
+
+    // RIGHT click while commanding selected friendly ships (a picked entity target, or an empty-grid
+    // move point) — never touches focus/own autopilot, that's the caller's job via
+    // ApplyOwnShipRightClick. Returns false (no orders sent) when GameNetClient couldn't be resolved,
+    // so the caller can skip fanning the click out to our own ship too, matching prior behavior.
+    private bool IssueEntityOrder(
+        Camera3D cam,
+        Vector2 point,
+        System.Collections.Generic.List<ulong> subjects,
+        bool pickedTarget,
+        ulong encoded)
+    {
+        _net ??= GetNodeOrNull<GameNetClient>("../GameNetClient");
+        if (_net is null)
+            return false;
+        if (pickedTarget)
+        {
+            // Strip the entity-kind flags into the wire's (kind, raw id) pair — same contract
+            // as SetAutopilot (the server disambiguates by kind, never by flag bits).
+            (byte kind, ulong id) =
+                GameContent.IsBaseLock(encoded) ? ((byte)1, GameContent.BaseIdOf(encoded))
+                : GameContent.IsAsteroidFocus(encoded) ? ((byte)2, GameContent.AsteroidIdOf(encoded))
+                : ((byte)0, encoded);
+            foreach (ulong subject in subjects)
+            {
+                // A rock order on a constructor ("build here") or miner ("mine here"): remember the
+                // rock so a yellow BUILD/MINE waypoint points the way while it's selected. Any other
+                // entity target (or other subject type) clears the rock intent.
+                ulong? rock =
+                    kind == 2 && _world.FriendlyShipById(subject) is { IsConstructor: true } or { IsMiner: true }
+                        ? id
+                        : null;
+                SendAndSupersede(subject, kind, id, sector: 0, pos: Vector3.Zero, newRock: rock);
+            }
+        }
+        else if (TryGridPoint(cam, point, out Vector3 world))
+            foreach (ulong subject in subjects)
+                SendAndSupersede(
+                    subject,
+                    targetKind: 3,
+                    targetId: 0,
+                    sector: _world.ViewSector,
+                    pos: world,
+                    newPoint: (_world.ViewSector, world));
+        return true;
+    }
+
+    // Send one MsgOrder frame to `subject` and update its client-side ordered-point/rock intent
+    // bookkeeping to match: any prior point/rock intent is superseded (cleared) unless the caller
+    // supplies a replacement via `newPoint`/`newRock`. Centralizes the "SendOrder + intent cleanup"
+    // repeated by all three HandleMapClick fan-out loops (sector, entity, point) so the emitted
+    // MsgOrder sequence and intent bookkeeping stay in one place.
+    private void SendAndSupersede(
+        ulong subject,
+        byte targetKind,
+        ulong targetId,
+        uint sector,
+        Vector3 pos,
+        (uint Sector, Vector3 Pos)? newPoint = null,
+        ulong? newRock = null)
+    {
+        _net!.SendOrder(subject, targetKind, targetId, sector, pos);
+        if (newPoint is { } point)
+            _orderedPoints[subject] = point;
+        else
+            _orderedPoints.Remove(subject);
+        if (newRock is { } rock)
+            _orderedRocks[subject] = rock;
+        else
+            _orderedRocks.Remove(subject);
     }
 
     // Apply the local-ship half of a right-click to our OWN ship — it's never a MsgOrder subject,

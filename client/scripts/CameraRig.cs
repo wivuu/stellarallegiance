@@ -51,14 +51,15 @@ public partial class CameraRig : Camera3D
     private const float LaunchRightWidthMult = 2f; // and off to the camera's right, in model widths
     private const float LaunchUpLengthMult = 0.5f; // mild vertical lift (art-tuning knob; ~ChaseOffset's ratio)
     private const float LaunchBlendOutSec = 0.6f; // softer/longer than the 0.3s mode-toggle dolly — a cinematic beat
-    // Defensive fallbacks only — ShipModelLoader.Build always stashes the real extents. DefaultModelLength
-    // duplicates ShipModelLoader.DefaultModelLength (same CockpitFallback philosophy: never break on odd content).
-    private const float DefaultModelLength = 4.5f;
+    // Defensive fallbacks only — ShipModelLoader.Build always stashes the real extents. Length
+    // reads ShipModelLoader.DefaultModelLength directly (single source, same CockpitFallback
+    // philosophy: never break on odd content); width has no ShipModelLoader equivalent, so it
+    // stays a local constant.
     private const float DefaultModelWidth = 3f;
     private float _launchCamT; // seconds remaining in the rigid hold; 0 = inactive
     private float _launchBlendT; // 0..1 progress of the blend-out into the normal framing
     private Transform3D? _launchFromPose; // frozen launch pose to blend FROM (null once blend done)
-    private float _launchLen = DefaultModelLength, _launchWidth = DefaultModelWidth;
+    private float _launchLen = ShipModelLoader.DefaultModelLength, _launchWidth = DefaultModelWidth;
 
     // True only once the dolly INTO first person has (nearly) finished — so the own hull stays
     // rendered while the camera moves in/out and hides only when actually in the cockpit. The
@@ -111,7 +112,7 @@ public partial class CameraRig : Camera3D
         // Same inputFree idiom the rest of the client gates keys on (ZoomView), plus a live local
         // ship: no view-mode changes while a full-screen overlay owns the screen (F3 overview reads
         // the wheel itself; chat/menus capture keys).
-        bool inputFree = !Chat.Capturing && !SectorOverview.Active && !ShipLoadout.Active && !EscapeMenu.Active && !SettingsDialog.Active;
+        bool inputFree = InputGate.FlightInputFree;
         if (!inputFree || _world.LocalShip == null)
             return;
 
@@ -307,7 +308,7 @@ public partial class CameraRig : Camera3D
         var shipModel = ship.GetNodeOrNull<Node3D>("ShipModel");
         float len = shipModel?.GetMeta("ModelLength", 0f).AsSingle() ?? 0f;
         float wid = shipModel?.GetMeta("ModelWidth", 0f).AsSingle() ?? 0f;
-        return (len > 0.01f ? len : DefaultModelLength, wid > 0.01f ? wid : DefaultModelWidth);
+        return (len > 0.01f ? len : ShipModelLoader.DefaultModelLength, wid > 0.01f ? wid : DefaultModelWidth);
     }
 
     // The rigid launch-cam pose from the ship's transform `t`: parked ahead of the nose (+Z) and off to

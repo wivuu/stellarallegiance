@@ -261,17 +261,7 @@ public partial class TechDetailPanel : PanelContainer
         _footerSub.AddThemeColorOverride("font_color", subColor ?? DesignTokens.TextDim);
     }
 
-    // ---- footer accessors (demo harness / tab state machine) --------------
-
-    public bool FooterPrimaryDisabled
-    {
-        get { EnsureBuilt(); return _footerPrimary.Disabled; }
-    }
-
-    public string FooterPrimaryText
-    {
-        get { EnsureBuilt(); return _footerPrimary.Text; }
-    }
+    // ---- footer accessors (demo harness) -----------------------------------
 
     public Vector2 FooterPrimaryCenter
     {
@@ -288,6 +278,28 @@ public partial class TechDetailPanel : PanelContainer
             seconds = 0;
         int t = (int)MathF.Ceiling(seconds);
         return $"{t / 60:00}:{t % 60:00}";
+    }
+
+    // Ticks-remaining variant of Mmss: converts a (start, duration) tick pair vs the live ServerTick
+    // into the same "mm:ss" text. Shared by every countdown that derives from a timed order (research
+    // active banner, node-card countdown, sidebar research line) so the tick->seconds->clamp->format
+    // chain lives in exactly one place.
+    public static string MmssRemaining(WorldRenderer world, uint start, uint dur) =>
+        Mmss((start + dur - world.ServerTick) / FlightModel.TickRate);
+
+    // Shared prerequisite-row builder for RESEARCH (tech reqs) and BUILD (station reqs): each required
+    // tech/cap becomes a (name, owned?) row fed straight to SetPrereqs (which supplies the "No
+    // prerequisites" fallback when both arrays are empty). Both tabs' BuildPrereqs differ only in
+    // their def's required-tech/cap arrays, so this is the one place that walks them into rows.
+    public static void SetPrereqsFrom(TechDetailPanel detail, ushort[] requiredTechIdx, byte[] requiredCaps,
+        DefRegistry defs, WorldRenderer world, byte team)
+    {
+        var rows = new List<(string, bool)>();
+        foreach (ushort t in requiredTechIdx)
+            rows.Add((defs.GetTech(t)?.Name ?? $"TECH {t}", world.TeamOwnsTech(team, t)));
+        foreach (byte c in requiredCaps)
+            rows.Add((CapName(c), world.TeamOwnsCap(team, c)));
+        detail.SetPrereqs(rows); // empty -> "No prerequisites" row
     }
 
     public static string CapName(byte c) => (CapabilityId)c switch

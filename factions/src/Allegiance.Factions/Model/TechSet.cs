@@ -14,11 +14,5 @@ public sealed class TechSet : HashSet<string>
 
     public TechSet(IEnumerable<string> techIds) : base(techIds, StringComparer.Ordinal) { }
 
-    /// <summary>
-    /// True when every tech in this set is also present in <paramref name="owned"/>.
-    /// This is the C++ "<c>required &lt;= owned</c>" prerequisite test.
-    /// </summary>
-    public bool IsSatisfiedBy(TechSet owned) => IsSubsetOf(owned);
-
     public TechSet Clone() => new(this);
 }

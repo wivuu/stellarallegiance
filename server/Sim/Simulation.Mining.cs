@@ -434,81 +434,8 @@ public sealed partial class Simulation
                     break;
                 }
                 case MinerState.Prospect:
-                {
-                    // Same retreat/offload guards as the mining legs.
-                    if (s.Health < _mining.RetreatHealthFrac * HullFor(s.Class))
-                    {
-                        MinerNoticesThisStep.Add((slot.Team, "Miner damaged — returning to base."));
-                        GoHome(slot, s, remember: false);
-                        break;
-                    }
-                    if (full)
-                    {
-                        GoHome(slot, s, remember: true);
-                        break;
-                    }
-                    // Sector-transit order: the mark anchors wherever the drone ENTERS the
-                    // ordered sector — through the aleph and no further, never a run at the
-                    // sector center.
-                    if (slot.ProspectFromEntry)
-                    {
-                        if (s.SectorId != slot.ProspectSector)
-                            break; // still traveling (MinerExecute steers gate to gate)
-                        slot.ProspectPos = s.State.Pos;
-                        slot.ProspectFromEntry = false;
-                    }
-                    if (slot.ProspectPatrol)
-                    {
-                        // Search sweep: ANY eligible rock in the sector wins the moment it's
-                        // discovered...
-                        if (PickRock(slot, slot.ProspectSector, s.State.Pos, onlySector: slot.ProspectSector) is ulong hit)
-                        {
-                            slot.TargetRockId = hit;
-                            slot.State = MinerState.ToRock;
-                            slot.ProspectSector = 0;
-                            slot.ProspectPatrol = false;
-                            break;
-                        }
-                        // ...otherwise keep flying at the nearest still-undiscovered rock. Its own
-                        // vision reveals rocks on approach, so every leg shrinks the unknown set —
-                        // the sweep provably terminates.
-                        if (NextProspectPoint(slot.Team, slot.ProspectSector, s.State.Pos) is Vec3 leg)
-                        {
-                            slot.ProspectPos = leg;
-                            break;
-                        }
-                        // Every rock in the sector is discovered and none is eligible: provably
-                        // dry. Give up loudly and fall back to autonomy.
-                        MinerNoticesThisStep.Add((slot.Team,
-                            $"Miner found no eligible helium-3 in {World.SectorName(slot.ProspectSector)}."));
-                        slot.ProspectSector = 0;
-                        slot.ProspectPatrol = false;
-                        if (PickRock(slot, s.SectorId, s.State.Pos) is ulong next)
-                        {
-                            slot.TargetRockId = next;
-                            slot.State = MinerState.ToRock;
-                        }
-                        else
-                            GoHome(slot, s, remember: false);
-                        break;
-                    }
-                    // Journey phase — the waypoint is LITERAL: no mid-flight shortcuts, even when
-                    // a rock sits right next to the mark (blowing past it read as the order being
-                    // ignored). Arrived: pick sector-wide FROM the mark, else start the sweep.
-                    if (s.SectorId == slot.ProspectSector
-                        && (s.State.Pos - slot.ProspectPos).LengthSquared() <= ProspectArriveRange * ProspectArriveRange)
-                    {
-                        if (PickRock(slot, slot.ProspectSector, slot.ProspectPos, onlySector: slot.ProspectSector) is ulong near)
-                        {
-                            slot.TargetRockId = near;
-                            slot.State = MinerState.ToRock;
-                            slot.ProspectSector = 0;
-                            break;
-                        }
-                        slot.ProspectPatrol = true; // nothing at the mark yet — sweep the sector
-                    }
+                    StepProspectingMiner(slot, s);
                     break;
-                }
                 case MinerState.ToBase:
                 {
                     // Re-pick every decide tick: the destination may have been destroyed inbound.
@@ -520,6 +447,87 @@ public sealed partial class Simulation
                     break;
                 }
             }
+        }
+    }
+
+    // The Prospect-state leg of MinerBrainStep, extracted verbatim: same retreat/full-hold guards,
+    // same entry-anchoring, patrol sweep, and journey-arrival logic and ordering as before the
+    // extraction. Each `return` below stands in for the original case's `break` (both end this
+    // slot's brain-tick handling with no further fallthrough).
+    private void StepProspectingMiner(MinerSlot slot, ShipSim s)
+    {
+        bool full = s.Ore >= MinerOreCapacity(s) - 1e-3f;
+        // Same retreat/offload guards as the mining legs.
+        if (s.Health < _mining.RetreatHealthFrac * HullFor(s.Class))
+        {
+            MinerNoticesThisStep.Add((slot.Team, "Miner damaged — returning to base."));
+            GoHome(slot, s, remember: false);
+            return;
+        }
+        if (full)
+        {
+            GoHome(slot, s, remember: true);
+            return;
+        }
+        // Sector-transit order: the mark anchors wherever the drone ENTERS the
+        // ordered sector — through the aleph and no further, never a run at the
+        // sector center.
+        if (slot.ProspectFromEntry)
+        {
+            if (s.SectorId != slot.ProspectSector)
+                return; // still traveling (MinerExecute steers gate to gate)
+            slot.ProspectPos = s.State.Pos;
+            slot.ProspectFromEntry = false;
+        }
+        if (slot.ProspectPatrol)
+        {
+            // Search sweep: ANY eligible rock in the sector wins the moment it's
+            // discovered...
+            if (PickRock(slot, slot.ProspectSector, s.State.Pos, onlySector: slot.ProspectSector) is ulong hit)
+            {
+                slot.TargetRockId = hit;
+                slot.State = MinerState.ToRock;
+                slot.ProspectSector = 0;
+                slot.ProspectPatrol = false;
+                return;
+            }
+            // ...otherwise keep flying at the nearest still-undiscovered rock. Its own
+            // vision reveals rocks on approach, so every leg shrinks the unknown set —
+            // the sweep provably terminates.
+            if (NextProspectPoint(slot.Team, slot.ProspectSector, s.State.Pos) is Vec3 leg)
+            {
+                slot.ProspectPos = leg;
+                return;
+            }
+            // Every rock in the sector is discovered and none is eligible: provably
+            // dry. Give up loudly and fall back to autonomy.
+            MinerNoticesThisStep.Add((slot.Team,
+                $"Miner found no eligible helium-3 in {World.SectorName(slot.ProspectSector)}."));
+            slot.ProspectSector = 0;
+            slot.ProspectPatrol = false;
+            if (PickRock(slot, s.SectorId, s.State.Pos) is ulong next)
+            {
+                slot.TargetRockId = next;
+                slot.State = MinerState.ToRock;
+            }
+            else
+                GoHome(slot, s, remember: false);
+            return;
+        }
+        // Journey phase — the waypoint is LITERAL: no mid-flight shortcuts, even when
+        // a rock sits right next to the mark (blowing past it read as the order being
+        // ignored). Arrived: pick sector-wide FROM the mark, else start the sweep.
+        if (s.SectorId == slot.ProspectSector
+            && (s.State.Pos - slot.ProspectPos).LengthSquared() <= ProspectArriveRange * ProspectArriveRange)
+        {
+            if (PickRock(slot, slot.ProspectSector, slot.ProspectPos, onlySector: slot.ProspectSector) is ulong near)
+            {
+                slot.TargetRockId = near;
+                slot.State = MinerState.ToRock;
+                slot.ProspectSector = 0;
+                return;
+            }
+            slot.ProspectPatrol = true; // nothing at the mark yet — sweep the sector
         }
     }
 
@@ -637,28 +645,12 @@ public sealed partial class Simulation
         return best;
     }
 
-    // A rock a TEAM may currently harvest: exists, Helium3 with ore left, inside an authorized
-    // mining sector, and (fog on) already discovered by the team. Reading DiscoveredRocks here is
-    // safe — the brain runs on the sim thread, the only writer.
-    private bool RockEligible(byte team, ulong rockId)
-    {
-        if (rockId == 0
-            || !World.RockOre.TryGetValue(rockId, out var ore)
-            || ore.Class != RockClass.Helium3
-            || ore.OreRemaining <= 0f
-            || World.RockById(rockId) is not World.Rock rock)
-            return false;
-        if (!World.TeamStates.TryGetValue(team, out var ts)
-            || !ts.AuthorizedMiningSectors.Contains(rock.SectorId))
-            return false;
-        if (FogEnabled && VisionFor(team) is { } tv && !tv.DiscoveredRocks.Contains(rockId))
-            return false;
-        return true;
-    }
-
-    // Why a rock the team was working is no longer eligible — the SAME checks as RockEligible in the
-    // SAME order, phrased for a team-chat notice. "" means it is still eligible. Drives the explicit
-    // abandon lines so a manual verifier sees every target switch and its cause.
+    // Why a rock the team was working is no longer eligible — the SINGLE SOURCE OF TRUTH for rock
+    // eligibility (RockEligible below just checks this is empty), phrased for a team-chat notice.
+    // "" means it is eligible: exists, Helium3 with ore left, inside an authorized mining sector,
+    // and (fog on) already discovered by the team. Reading DiscoveredRocks here is safe — the
+    // brain runs on the sim thread, the only writer. Drives the explicit abandon lines so a manual
+    // verifier sees every target switch and its cause.
     private string RockIneligibleReason(byte team, ulong rockId)
     {
         if (rockId == 0 || !World.RockOre.TryGetValue(rockId, out var ore))
@@ -676,6 +668,9 @@ public sealed partial class Simulation
             return "not discovered (fog)";
         return "";
     }
+
+    // A rock a TEAM may currently harvest: RockIneligibleReason returns "".
+    private bool RockEligible(byte team, ulong rockId) => RockIneligibleReason(team, rockId).Length == 0;
 
     // Pick the slot's next rock from `fromSector`/`fromPos` (the ship, or the dock it relaunches
     // from), honoring the selection rules:

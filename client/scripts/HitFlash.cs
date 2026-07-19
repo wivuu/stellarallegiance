@@ -11,7 +11,7 @@ public partial class HitFlash : Node3D
     private const float StartEnergy = 5f;
 
     // Shared soft dot — built once, reused by every flash.
-    private static readonly GradientTexture2D Dot = RadialDot();
+    private static readonly GradientTexture2D Dot = VfxTextures.RadialDot();
 
     private MeshInstance3D _quad = null!;
     private StandardMaterial3D _mat = null!;
@@ -59,24 +59,5 @@ public partial class HitFlash : Node3D
         _quad.Scale = Vector3.One * Mathf.Lerp(0.4f, 1.6f, t);
         _mat.EmissionEnergyMultiplier = StartEnergy * (1f - t);
         _mat.AlbedoColor = _mat.AlbedoColor with { A = 1f - t };
-    }
-
-    // Soft round mote: hot centre fading to transparent (same recipe as EngineGlow.RadialDot).
-    private static GradientTexture2D RadialDot()
-    {
-        var gradient = new Gradient
-        {
-            Offsets = [0f, 0.5f, 1f],
-            Colors = [new Color(1f, 1f, 1f, 1f), new Color(1f, 1f, 1f, 0.4f), new Color(1f, 1f, 1f, 0f)],
-        };
-        return new GradientTexture2D
-        {
-            Gradient = gradient,
-            Width = 128,
-            Height = 128,
-            Fill = GradientTexture2D.FillEnum.Radial,
-            FillFrom = new Vector2(0.5f, 0.5f),
-            FillTo = new Vector2(0.5f, 0f),
-        };
     }
 }

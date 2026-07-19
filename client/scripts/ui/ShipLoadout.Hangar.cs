@@ -767,13 +767,13 @@ public partial class ShipLoadout
 
         // Reflect the launch gate: unaffordable greys the card and warns the cost line. The Locked
         // style is showcase-only in practice — the hangar hides locked cards instead of greying them.
-        public void SetGate(WorldRenderer.SpawnGate gate, string? lockNote = null)
+        public void SetGate(WorldRenderer.SpawnGate gate)
         {
             EnsureBuilt();
             switch (gate)
             {
                 case WorldRenderer.SpawnGate.Locked:
-                    _sub.Text = string.IsNullOrEmpty(lockNote) ? "⚿ TECH LOCKED" : $"⚿ {lockNote}";
+                    _sub.Text = "⚿ TECH LOCKED";
                     _sub.AddThemeColorOverride("font_color", DesignTokens.TextDim);
                     Modulate = new Color(1, 1, 1, 0.6f);
                     break;

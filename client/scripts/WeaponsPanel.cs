@@ -208,30 +208,11 @@ public partial class WeaponsPanel : Control
     // The researched tier's display name for a dispenser row. Cargo stays one tier-neutral item per
     // line (the def found by CargoId is always tier 1) while research upgrades what actually fires —
     // Simulation.SeedDispenserAmmo walks the same successor chain server-side — so the row names the
-    // LIVE tier. The pack/ammo math stays on the tier-1 def (it owns the CargoId).
+    // LIVE tier. The pack/ammo math stays on the tier-1 def (it owns the CargoId). Walk shared with
+    // ShipLoadout via DefRegistry.MigrateWeaponTier.
     private string MigratedDispenserName(WeaponDef disp)
     {
-        byte team = _net.MyTeam;
-        uint id = disp.WeaponId;
-        for (int guard = 0; guard < 8; guard++)
-        {
-            if (_defs.GetWeapon(id) is not WeaponDef w
-                || w.SucceededByWeaponId == uint.MaxValue
-                || w.ObsoletedByTechIdx.Length == 0
-                || _defs.GetWeapon(w.SucceededByWeaponId) is not WeaponDef next
-                || next.Mass > w.Mass) // mass guard: matches the server's payload-safe migration
-                break;
-            bool owns = false;
-            foreach (ushort t in w.ObsoletedByTechIdx)
-                if (_world.TeamOwnsTech(team, t))
-                {
-                    owns = true;
-                    break;
-                }
-            if (!owns)
-                break;
-            id = w.SucceededByWeaponId;
-        }
+        uint id = _defs.MigrateWeaponTier(disp.WeaponId, _net.MyTeam, _world);
         return _defs.GetWeapon(id) is WeaponDef live ? live.Name : disp.Name;
     }
 
@@ -276,17 +257,11 @@ public partial class WeaponsPanel : Control
         if (w.Kind == WeaponKind.Missile)
         {
             // Ammo (pips) + authoritative lock state, from the local ship's snapshot.
-            byte ls = _net.LocalLockState;
-            bool locked = (ls & 0x80) != 0;
-            int prog = ls & 0x7F; // 0..100
+            (bool locked, int prog) = DecodeLockState(_net.LocalLockState);
             int ammo = _net.LocalMissileAmmo;
             int mag = System.Math.Max(w.MagazineSize, (byte)ammo);
 
-            (string txt, Color col, bool pulse) =
-                ammo == 0 ? ("EMPTY", DesignTokens.TextDim, false)
-                : locked ? ("LOCKED", DesignTokens.Danger, true)
-                : prog > 0 ? ($"LOCK {prog}%", DesignTokens.Warn, false)
-                : ("READY", DesignTokens.Ok, false);
+            (string txt, Color col, bool pulse) = LauncherStatus(ammo, locked, prog);
             DrawStringRight(mono, new Vector2(right, mid + 4f), txt, 10, pulse ? Pulsed(col) : col);
 
             float pipsRight = right - MonoWidth(mono, txt, 10) - 10f;
@@ -317,15 +292,12 @@ public partial class WeaponsPanel : Control
         bool pulse = false;
         if (launcher != null)
         {
-            byte ls = _net.LocalLockState;
-            bool locked = (ls & 0x80) != 0;
-            int prog = ls & 0x7F;
+            (bool locked, int prog) = DecodeLockState(_net.LocalLockState);
             int ammo = _net.LocalMissileAmmo;
-            (txt, col, pulse) =
-                ammo == 0 ? ("● EMPTY", DesignTokens.TextDim, false)
-                : locked ? ("● LOCKED", DesignTokens.Danger, true)
-                : prog > 0 ? ($"● LOCK {prog}%", DesignTokens.Warn, false)
-                : ("● ARMED", DesignTokens.Ok, false);
+            var (s, c, p) = LauncherStatus(ammo, locked, prog, "ARMED");
+            txt = "● " + s;
+            col = c;
+            pulse = p;
         }
         else
         {
@@ -334,6 +306,20 @@ public partial class WeaponsPanel : Control
         }
         DrawStringRight(mono, rightAnchor, txt, 10, pulse ? Pulsed(col) : col);
     }
+
+    // Decode the local ship's authoritative missile lock byte (bit7 = locked, bits0-6 = progress
+    // 0..100). Public so TargetMarkers' lock-progress arc (a third consumer of the same wire byte)
+    // shares this exact bit math instead of re-deriving it.
+    public static (bool locked, int progressPct) DecodeLockState(byte ls) => ((ls & 0x80) != 0, ls & 0x7F);
+
+    // The launcher's EMPTY / LOCKED / LOCK n% / <ready> status tuple, shared by the secondary-row
+    // and header readouts. `readyText` differs between them (plain "READY" for the row, "ARMED"
+    // for the header's more general armed-and-ready cue) — text/color/pulse are otherwise identical.
+    private static (string text, Color color, bool pulse) LauncherStatus(int ammo, bool locked, int prog, string readyText = "READY") =>
+        ammo == 0 ? ("EMPTY", DesignTokens.TextDim, false)
+        : locked ? ("LOCKED", DesignTokens.Danger, true)
+        : prog > 0 ? ($"LOCK {prog}%", DesignTokens.Warn, false)
+        : (readyText, DesignTokens.Ok, false);
 
     // Fire-cadence readiness for a bolt gun, 0..1 (1 = READY). Mirrors the predictor's per-mount
     // fire gate (mixed loadouts: each weapon cools down on its own interval, so read THIS

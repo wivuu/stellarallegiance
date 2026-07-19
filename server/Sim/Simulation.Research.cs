@@ -297,7 +297,7 @@ public partial class Simulation
     }
 
     // A base built after its team already completed an `all`-scope upgrade dev spawns pre-upgraded.
-    // Called from the constructor build-completion path (Simulation.Constructors.CompleteBuild).
+    // Called from the constructor build-completion path (Simulation.Constructors.CompleteConstruction).
     private void MaybePreUpgradeSpawnedBase(byte team, ulong baseId, byte builtType)
     {
         if (!World.TeamStates.TryGetValue(team, out var ts))

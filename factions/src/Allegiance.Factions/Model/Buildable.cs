@@ -1,3 +1,6 @@
+using System.Text.Json.Serialization;
+using YamlDotNet.Serialization;
+
 namespace Allegiance.Factions.Model;
 
 /// <summary>
@@ -51,6 +54,29 @@ public abstract record Buildable
     /// set. Serialized kebab-case as <c>obsoleted-by-techs</c>; omitted when empty.
     /// </summary>
     public TechSet ObsoletedByTechs { get; set; } = new();
+
+    /// <summary>
+    /// Lowercase-kebab label naming this buildable's concrete kind (e.g. "hull", "ammo-pack"),
+    /// used to build human-readable descriptions in validation errors and tech-tree reports.
+    /// Computed, not authored data — excluded from (de)serialization.
+    /// </summary>
+    [YamlIgnore]
+    [JsonIgnore]
+    public string KindName =>
+        this switch
+        {
+            Hull => "hull",
+            Weapon => "weapon",
+            Shield => "shield",
+            Cloak => "cloak",
+            Afterburner => "afterburner",
+            AmmoPack => "ammo-pack",
+            Launcher => "launcher",
+            Station => "station",
+            Development => "development",
+            Drone => "drone",
+            _ => "buildable",
+        };
 }
 
 /// <summary>Yaw/pitch/roll triple. Replaces the C++ <c>float[3]</c> turn-rate arrays.</summary>

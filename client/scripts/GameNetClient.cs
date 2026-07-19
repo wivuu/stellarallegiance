@@ -196,10 +196,7 @@ public partial class GameNetClient : Node
         _connectSeq++;
         Active = true;
         LocalShipId = 0;
-        _rows.Clear();
-        _missileRows.Clear();
-        _minefieldRows.Clear();
-        _probeRows.Clear();
+        ClearEntityCaches();
         _rejectReason = "";
         _socketCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
         Log.Print($"[GameNet] connecting ({what})");
@@ -234,20 +231,37 @@ public partial class GameNetClient : Node
         _socketCts?.Cancel();
         _connectSeq++; // stragglers from the dead task are dropped by the seq guard
         while (_tx.Reader.TryRead(out _)) { } // drop frames queued for the dead link
+        ResetConnectionState();
+    }
+
+    // Shared teardown for Abort/Disconnect: drop all per-connection state, reset the lobby
+    // roster/host/map catalog, and tear the rendered world down. Callers must do their own
+    // transport-specific pre-steps (draining queued frames, sending Bye, cancelling the socket)
+    // BEFORE calling this — the ordering of those side effects differs between the two callers.
+    private void ResetConnectionState()
+    {
         Active = false;
         LocalShipId = 0;
         LocalClientId = 0;
         _reconnectToken = "";
         _worldLoaded = false;
-        _rows.Clear();
-        _missileRows.Clear();
-        _minefieldRows.Clear();
-        _probeRows.Clear();
-        LobbyPlayers = [];
+        ClearEntityCaches();
+        LobbyPlayers = Array.Empty<LobbyPlayer>();
         HostId = -1;
         Maps = Array.Empty<MapInfo>();
         LobbyChanged?.Invoke();
         _world.Reset();
+    }
+
+    // Clear all four per-entity render caches (ships, missiles, minefields, probes). Used by the
+    // full connection resets (BeginConnect/Abort/Disconnect/GiveUpShip). The ApplyWelcome
+    // reconnect path deliberately clears only three of these itself — see there.
+    private void ClearEntityCaches()
+    {
+        _rows.Clear();
+        _missileRows.Clear();
+        _minefieldRows.Clear();
+        _probeRows.Clear();
     }
 
     // Voluntarily leave the current server: cancel the live socket/peer connection and drop all
@@ -272,20 +286,9 @@ public partial class GameNetClient : Node
             cts?.Cancel();
         });
 
-        Active = false;
-        LocalShipId = 0;
-        LocalClientId = 0;
-        _reconnectToken = ""; // voluntary leave gives the ship up — don't try to reclaim it
-        _worldLoaded = false;
-        _rows.Clear();
-        _missileRows.Clear();
-        _minefieldRows.Clear();
-        _probeRows.Clear();
-        LobbyPlayers = Array.Empty<LobbyPlayer>();
-        HostId = -1;
-        Maps = Array.Empty<MapInfo>();
-        LobbyChanged?.Invoke();
-        _world.Reset();
+        // Shared teardown clears _reconnectToken among other things — fine here since a
+        // voluntary leave gives the ship up and should never try to reclaim it.
+        ResetConnectionState();
     }
 
     // Abandon the ship the server may still be holding for us (clear the reconnect token) and drop
@@ -297,10 +300,7 @@ public partial class GameNetClient : Node
         _reconnectToken = "";
         _worldLoaded = false;
         LocalShipId = 0;
-        _rows.Clear();
-        _missileRows.Clear();
-        _minefieldRows.Clear();
-        _probeRows.Clear();
+        ClearEntityCaches();
         _world.Reset();
     }
 
@@ -1387,6 +1387,9 @@ public partial class GameNetClient : Node
         if (_worldLoaded)
         {
             _world.Reset();
+            // NOTE: _rows (ships) is deliberately NOT cleared here, unlike the full-reset
+            // ClearEntityCaches() used by BeginConnect/Abort/Disconnect/GiveUpShip — ship rows
+            // are reconciled by the spawn/update frames that follow this Welcome.
             _missileRows.Clear(); // stale missiles from the pre-drop world must not linger
             _minefieldRows.Clear();
             _probeRows.Clear();
@@ -1657,163 +1660,217 @@ public partial class GameNetClient : Node
         return list;
     }
 
+    // One ship class (mirror of Protocol.BuildDefs' ship block, exact field order).
+    private static ShipClassDef ReadShipDef(BinaryReader r)
+    {
+        var d = new ShipClassDef { ClassId = r.ReadByte(), Name = ReadStr(r) };
+        d.Glyph = ReadStr(r);
+        d.Role = ReadStr(r);
+        d.Description = ReadStr(r);
+        d.ModelName = ReadStr(r);
+        d.ModelLength = r.ReadSingle();
+        d.Mass = r.ReadSingle();
+        d.MaxSpeed = r.ReadSingle();
+        d.Accel = r.ReadSingle();
+        d.RateYawDeg = r.ReadSingle();
+        d.RatePitchDeg = r.ReadSingle();
+        d.RateRollDeg = r.ReadSingle();
+        d.DriftYawDeg = r.ReadSingle();
+        d.DriftPitchDeg = r.ReadSingle();
+        d.SideMult = r.ReadSingle();
+        d.BackMult = r.ReadSingle();
+        d.AbAccel = r.ReadSingle();
+        d.AbOnRate = r.ReadSingle();
+        d.AbOffRate = r.ReadSingle();
+        d.MaxFuel = r.ReadSingle();
+        d.AbFuelDrain = r.ReadSingle();
+        d.AbFuelRecharge = r.ReadSingle();
+        d.MaxHull = r.ReadSingle();
+        d.ShieldCapacity = r.ReadSingle();
+        d.ShieldRecharge = r.ReadSingle();
+        d.ShieldDelaySec = r.ReadSingle();
+        // Fog-of-war vision (mirror of Protocol.BuildDefs, exact field order).
+        d.VisionConeLength = r.ReadSingle();
+        d.VisionConeAngleDeg = r.ReadSingle();
+        d.VisionSphereRadius = r.ReadSingle();
+        d.RadarSignature = r.ReadSingle();
+        d.Cost = r.ReadInt32();
+        d.PayloadCapacity = r.ReadSingle();
+        d.OreCapacity = r.ReadSingle(); // mining ore hold (0 = not a miner) — mirror of BuildDefs order
+        d.OrderTimeSeconds = r.ReadInt32(); // miner order→launch delay (seconds; 0 = instant)
+        d.FactionId = r.ReadUInt32();
+        d.Hardpoints = ReadHardpoints(r);
+        // Default consumable hold: u8 count, then n x (u32 cargoId, u8 count).
+        byte cargoN = r.ReadByte();
+        d.DefaultCargo = new List<CargoLoadDef>(cargoN);
+        for (int c = 0; c < cargoN; c++)
+            d.DefaultCargo.Add(new CargoLoadDef { CargoId = r.ReadUInt32(), Count = r.ReadByte() });
+        d.IsConstructor = r.ReadBoolean(); // v37; mirror of BuildDefs — hidden from the buy menu
+        // Hull tech-gate (v43; mirror of BuildDefs — streamed LAST in the ship block). Display-only:
+        // the hangar's locked hull card + Research UNLOCKS name the gate from this.
+        d.RequiredTechIdx = ReadTechList(r);
+        return d;
+    }
+
+    // One weapon (mirror of Protocol.BuildDefs' weapon block, exact field order).
+    private static WeaponDef ReadWeaponDef(BinaryReader r) =>
+        new WeaponDef
+        {
+            WeaponId = r.ReadUInt32(),
+            Name = ReadStr(r),
+            Damage = r.ReadSingle(),
+            FireIntervalTicks = r.ReadUInt32(),
+            ProjectileSpeed = r.ReadSingle(),
+            ProjectileLifeTicks = r.ReadUInt32(),
+            ProjectileRadius = r.ReadSingle(),
+            SpreadRad = r.ReadSingle(),
+            Mass = r.ReadSingle(),
+            CanDamageBase = r.ReadBoolean(),
+            // Missile-kind block (mirror of Protocol.BuildDefs, exact field order).
+            Kind = (WeaponKind)r.ReadByte(),
+            MagazineSize = r.ReadByte(),
+            LockTicks = r.ReadUInt32(),
+            LockAngleRad = r.ReadSingle(),
+            LockRange = r.ReadSingle(),
+            MissileAccel = r.ReadSingle(),
+            MissileTurnRateRad = r.ReadSingle(),
+            MissileMaxSpeed = r.ReadSingle(),
+            BlastPower = r.ReadSingle(),
+            BlastRadius = r.ReadSingle(),
+            DirectHitMult = r.ReadSingle(),
+            ModelName = ReadStr(r),
+            TrailLifetime = r.ReadSingle(),
+            TrailScale = r.ReadSingle(),
+            TrailColor = r.ReadUInt32(),
+            // Chaff / mine dispenser block (mirror of Protocol.BuildDefs, exact field order).
+            ChaffResistance = r.ReadSingle(),
+            ChaffStrength = r.ReadSingle(),
+            DecoyRadius = r.ReadSingle(),
+            MineCloudRadius = r.ReadSingle(),
+            MineCloudCount = r.ReadByte(),
+            MineArmTicks = r.ReadUInt32(),
+            MineTriggerRadius = r.ReadSingle(),
+            CargoId = r.ReadUInt32(),
+            // Probe dispenser block (mirror of Protocol.BuildDefs, exact field order).
+            ProbeSightRadius = r.ReadSingle(),
+            ProbeLifespanSec = r.ReadSingle(),
+            ShieldMult = r.ReadSingle(),
+            BoltRadius = r.ReadSingle(),
+            BoltLength = r.ReadSingle(),
+            // Probe combat/visual block (mirrors BuildDefs order; HitPoints/Signature
+            // are server-only and never ride the wire).
+            ProbeHitRadius = r.ReadSingle(),
+            ProbeModelSize = r.ReadSingle(),
+            // Tech-path lock state (v36; mirror of BuildDefs — streamed after ProbeModelSize).
+            RequiredTechIdx = ReadTechList(r),
+            // Healing-gun flag (v40, ER Nanite line), read LAST (mirror of BuildDefs).
+            IsHealing = r.ReadBoolean(),
+            // Weapon-tier succession (v43; mirror of BuildDefs — read after IsHealing).
+            ObsoletedByTechIdx = ReadTechList(r),
+            SucceededByWeaponId = r.ReadUInt32(),
+        };
+
+    // One cargo item (mirror of Protocol.BuildDefs' cargo block, exact field order).
+    private static CargoItemDef ReadCargoItemDef(BinaryReader r) =>
+        new CargoItemDef
+        {
+            CargoId = r.ReadUInt32(),
+            Name = ReadStr(r),
+            Glyph = ReadStr(r),
+            Mass = r.ReadSingle(),
+            ChargesPerPack = r.ReadByte(),
+            Description = ReadStr(r),
+            FuelPerCharge = r.ReadSingle(), // v35: 0 = not a fuel item
+        };
+
+    // One base type (mirror of Protocol.BuildDefs' base block, exact field order).
+    private static BaseDef ReadBaseDef(BinaryReader r)
+    {
+        var b = new BaseDef
+        {
+            BaseTypeId = r.ReadByte(),
+            Name = ReadStr(r),
+            Radius = r.ReadSingle(),
+            MaxHealth = r.ReadSingle(),
+            // Fog-of-war vision (mirror of Protocol.BuildDefs, exact field order).
+            VisionSphereRadius = r.ReadSingle(),
+            RadarSignature = r.ReadSingle(),
+        };
+        b.Hardpoints = ReadHardpoints(r);
+        // Research slots (v36; mirror of BuildDefs — streamed after Hardpoints).
+        b.ResearchSlots = r.ReadByte();
+        // Base building (v37; mirror of BuildDefs — streamed after ResearchSlots).
+        b.ModelName = ReadStr(r);
+        b.WinCondition = r.ReadBoolean();
+        b.BuildRockClass = r.ReadByte();
+        // Station upgrades (v39; mirror of BuildDefs — appended after BuildRockClass).
+        b.SuccessorBaseTypeId = r.ReadInt16();
+        return b;
+    }
+
+    // One development/tech-tree item (mirror of Protocol.BuildDefs' development block, exact field order).
+    private static DevelopmentDef ReadDevelopmentDef(BinaryReader r) =>
+        new DevelopmentDef
+        {
+            Id = ReadStr(r),
+            Name = ReadStr(r),
+            Description = ReadStr(r),
+            Group = ReadStr(r),
+            Price = r.ReadInt32(),
+            BuildTimeSeconds = r.ReadInt32(),
+            TechOnly = r.ReadBoolean(),
+            RequiredTechIdx = ReadTechList(r),
+            GrantedTechIdx = ReadTechList(r),
+            ObsoletedByTechIdx = ReadTechList(r),
+            RequiredCaps = ReadCapList(r),
+            GrantedCaps = ReadCapList(r),
+            UpgradeScope = r.ReadByte(), // v39; mirror of BuildDefs (0 all / 1 single)
+            Attributes = ReadAttrList(r), // v41; mirror of BuildDefs (sorted by attr byte)
+        };
+
+    // One station-catalog entry (mirror of Protocol.BuildDefs' station-catalog block, exact field order).
+    private static StationCatalogDef ReadStationCatalogDef(BinaryReader r) =>
+        new StationCatalogDef
+        {
+            Id = ReadStr(r),
+            Name = ReadStr(r),
+            Description = ReadStr(r),
+            Price = r.ReadInt32(),
+            BuildTimeSeconds = r.ReadInt32(),
+            StationClass = r.ReadByte(),
+            BaseTypeId = r.ReadInt16(), // -1 = catalog-only (Build-tab placeholder)
+            ResearchSlots = r.ReadByte(),
+            BuildRockClass = r.ReadByte(), // v37; mirror of BuildDefs
+            AlignTimeSeconds = r.ReadInt32(), // v38; constructor align dwell for this station
+            RequiredTechIdx = ReadTechList(r),
+            GrantedTechIdx = ReadTechList(r),
+            ObsoletedByTechIdx = ReadTechList(r),
+            RequiredCaps = ReadCapList(r),
+            GrantedCaps = ReadCapList(r),
+            SuccessorBaseTypeId = r.ReadInt16(), // v39; mirror of BuildDefs (appended last)
+        };
+
     private void ApplyDefs(BinaryReader r)
     {
         var ships = new List<ShipClassDef>();
         byte shipCount = r.ReadByte();
         for (int i = 0; i < shipCount; i++)
-        {
-            var d = new ShipClassDef { ClassId = r.ReadByte(), Name = ReadStr(r) };
-            d.Glyph = ReadStr(r);
-            d.Role = ReadStr(r);
-            d.Description = ReadStr(r);
-            d.ModelName = ReadStr(r);
-            d.ModelLength = r.ReadSingle();
-            d.Mass = r.ReadSingle();
-            d.MaxSpeed = r.ReadSingle();
-            d.Accel = r.ReadSingle();
-            d.RateYawDeg = r.ReadSingle();
-            d.RatePitchDeg = r.ReadSingle();
-            d.RateRollDeg = r.ReadSingle();
-            d.DriftYawDeg = r.ReadSingle();
-            d.DriftPitchDeg = r.ReadSingle();
-            d.SideMult = r.ReadSingle();
-            d.BackMult = r.ReadSingle();
-            d.AbAccel = r.ReadSingle();
-            d.AbOnRate = r.ReadSingle();
-            d.AbOffRate = r.ReadSingle();
-            d.MaxFuel = r.ReadSingle();
-            d.AbFuelDrain = r.ReadSingle();
-            d.AbFuelRecharge = r.ReadSingle();
-            d.MaxHull = r.ReadSingle();
-            d.ShieldCapacity = r.ReadSingle();
-            d.ShieldRecharge = r.ReadSingle();
-            d.ShieldDelaySec = r.ReadSingle();
-            // Fog-of-war vision (mirror of Protocol.BuildDefs, exact field order).
-            d.VisionConeLength = r.ReadSingle();
-            d.VisionConeAngleDeg = r.ReadSingle();
-            d.VisionSphereRadius = r.ReadSingle();
-            d.RadarSignature = r.ReadSingle();
-            d.Cost = r.ReadInt32();
-            d.PayloadCapacity = r.ReadSingle();
-            d.OreCapacity = r.ReadSingle(); // mining ore hold (0 = not a miner) — mirror of BuildDefs order
-            d.OrderTimeSeconds = r.ReadInt32(); // miner order→launch delay (seconds; 0 = instant)
-            d.FactionId = r.ReadUInt32();
-            d.Hardpoints = ReadHardpoints(r);
-            // Default consumable hold: u8 count, then n x (u32 cargoId, u8 count).
-            byte cargoN = r.ReadByte();
-            d.DefaultCargo = new List<CargoLoadDef>(cargoN);
-            for (int c = 0; c < cargoN; c++)
-                d.DefaultCargo.Add(new CargoLoadDef { CargoId = r.ReadUInt32(), Count = r.ReadByte() });
-            d.IsConstructor = r.ReadBoolean(); // v37; mirror of BuildDefs — hidden from the buy menu
-            // Hull tech-gate (v43; mirror of BuildDefs — streamed LAST in the ship block). Display-only:
-            // the hangar's locked hull card + Research UNLOCKS name the gate from this.
-            d.RequiredTechIdx = ReadTechList(r);
-            ships.Add(d);
-        }
+            ships.Add(ReadShipDef(r));
 
         var weapons = new List<WeaponDef>();
         byte weaponCount = r.ReadByte();
         for (int i = 0; i < weaponCount; i++)
-            weapons.Add(
-                new WeaponDef
-                {
-                    WeaponId = r.ReadUInt32(),
-                    Name = ReadStr(r),
-                    Damage = r.ReadSingle(),
-                    FireIntervalTicks = r.ReadUInt32(),
-                    ProjectileSpeed = r.ReadSingle(),
-                    ProjectileLifeTicks = r.ReadUInt32(),
-                    ProjectileRadius = r.ReadSingle(),
-                    SpreadRad = r.ReadSingle(),
-                    Mass = r.ReadSingle(),
-                    CanDamageBase = r.ReadBoolean(),
-                    // Missile-kind block (mirror of Protocol.BuildDefs, exact field order).
-                    Kind = (WeaponKind)r.ReadByte(),
-                    MagazineSize = r.ReadByte(),
-                    LockTicks = r.ReadUInt32(),
-                    LockAngleRad = r.ReadSingle(),
-                    LockRange = r.ReadSingle(),
-                    MissileAccel = r.ReadSingle(),
-                    MissileTurnRateRad = r.ReadSingle(),
-                    MissileMaxSpeed = r.ReadSingle(),
-                    BlastPower = r.ReadSingle(),
-                    BlastRadius = r.ReadSingle(),
-                    DirectHitMult = r.ReadSingle(),
-                    ModelName = ReadStr(r),
-                    TrailLifetime = r.ReadSingle(),
-                    TrailScale = r.ReadSingle(),
-                    TrailColor = r.ReadUInt32(),
-                    // Chaff / mine dispenser block (mirror of Protocol.BuildDefs, exact field order).
-                    ChaffResistance = r.ReadSingle(),
-                    ChaffStrength = r.ReadSingle(),
-                    DecoyRadius = r.ReadSingle(),
-                    MineCloudRadius = r.ReadSingle(),
-                    MineCloudCount = r.ReadByte(),
-                    MineArmTicks = r.ReadUInt32(),
-                    MineTriggerRadius = r.ReadSingle(),
-                    CargoId = r.ReadUInt32(),
-                    // Probe dispenser block (mirror of Protocol.BuildDefs, exact field order).
-                    ProbeSightRadius = r.ReadSingle(),
-                    ProbeLifespanSec = r.ReadSingle(),
-                    ShieldMult = r.ReadSingle(),
-                    BoltRadius = r.ReadSingle(),
-                    BoltLength = r.ReadSingle(),
-                    // Probe combat/visual block (mirrors BuildDefs order; HitPoints/Signature
-                    // are server-only and never ride the wire).
-                    ProbeHitRadius = r.ReadSingle(),
-                    ProbeModelSize = r.ReadSingle(),
-                    // Tech-path lock state (v36; mirror of BuildDefs — streamed after ProbeModelSize).
-                    RequiredTechIdx = ReadTechList(r),
-                    // Healing-gun flag (v40, ER Nanite line), read LAST (mirror of BuildDefs).
-                    IsHealing = r.ReadBoolean(),
-                    // Weapon-tier succession (v43; mirror of BuildDefs — read after IsHealing).
-                    ObsoletedByTechIdx = ReadTechList(r),
-                    SucceededByWeaponId = r.ReadUInt32(),
-                }
-            );
+            weapons.Add(ReadWeaponDef(r));
 
         var cargoItems = new List<CargoItemDef>();
         byte cargoCount = r.ReadByte();
         for (int i = 0; i < cargoCount; i++)
-            cargoItems.Add(
-                new CargoItemDef
-                {
-                    CargoId = r.ReadUInt32(),
-                    Name = ReadStr(r),
-                    Glyph = ReadStr(r),
-                    Mass = r.ReadSingle(),
-                    ChargesPerPack = r.ReadByte(),
-                    Description = ReadStr(r),
-                    FuelPerCharge = r.ReadSingle(), // v35: 0 = not a fuel item
-                }
-            );
+            cargoItems.Add(ReadCargoItemDef(r));
 
         var bases = new List<BaseDef>();
         byte baseCount = r.ReadByte();
         for (int i = 0; i < baseCount; i++)
-        {
-            var b = new BaseDef
-            {
-                BaseTypeId = r.ReadByte(),
-                Name = ReadStr(r),
-                Radius = r.ReadSingle(),
-                MaxHealth = r.ReadSingle(),
-                // Fog-of-war vision (mirror of Protocol.BuildDefs, exact field order).
-                VisionSphereRadius = r.ReadSingle(),
-                RadarSignature = r.ReadSingle(),
-            };
-            b.Hardpoints = ReadHardpoints(r);
-            // Research slots (v36; mirror of BuildDefs — streamed after Hardpoints).
-            b.ResearchSlots = r.ReadByte();
-            // Base building (v37; mirror of BuildDefs — streamed after ResearchSlots).
-            b.ModelName = ReadStr(r);
-            b.WinCondition = r.ReadBoolean();
-            b.BuildRockClass = r.ReadByte();
-            // Station upgrades (v39; mirror of BuildDefs — appended after BuildRockClass).
-            b.SuccessorBaseTypeId = r.ReadInt16();
-            bases.Add(b);
-        }
+            bases.Add(ReadBaseDef(r));
 
         var cfg = new WorldConfig
         {
@@ -1843,49 +1900,12 @@ public partial class GameNetClient : Node
         var developments = new List<DevelopmentDef>();
         ushort devCount = r.ReadUInt16();
         for (int i = 0; i < devCount; i++)
-            developments.Add(
-                new DevelopmentDef
-                {
-                    Id = ReadStr(r),
-                    Name = ReadStr(r),
-                    Description = ReadStr(r),
-                    Group = ReadStr(r),
-                    Price = r.ReadInt32(),
-                    BuildTimeSeconds = r.ReadInt32(),
-                    TechOnly = r.ReadBoolean(),
-                    RequiredTechIdx = ReadTechList(r),
-                    GrantedTechIdx = ReadTechList(r),
-                    ObsoletedByTechIdx = ReadTechList(r),
-                    RequiredCaps = ReadCapList(r),
-                    GrantedCaps = ReadCapList(r),
-                    UpgradeScope = r.ReadByte(), // v39; mirror of BuildDefs (0 all / 1 single)
-                    Attributes = ReadAttrList(r), // v41; mirror of BuildDefs (sorted by attr byte)
-                }
-            );
+            developments.Add(ReadDevelopmentDef(r));
+
         var stationCatalog = new List<StationCatalogDef>();
         ushort stationCount = r.ReadUInt16();
         for (int i = 0; i < stationCount; i++)
-            stationCatalog.Add(
-                new StationCatalogDef
-                {
-                    Id = ReadStr(r),
-                    Name = ReadStr(r),
-                    Description = ReadStr(r),
-                    Price = r.ReadInt32(),
-                    BuildTimeSeconds = r.ReadInt32(),
-                    StationClass = r.ReadByte(),
-                    BaseTypeId = r.ReadInt16(), // -1 = catalog-only (Build-tab placeholder)
-                    ResearchSlots = r.ReadByte(),
-                    BuildRockClass = r.ReadByte(), // v37; mirror of BuildDefs
-                    AlignTimeSeconds = r.ReadInt32(), // v38; constructor align dwell for this station
-                    RequiredTechIdx = ReadTechList(r),
-                    GrantedTechIdx = ReadTechList(r),
-                    ObsoletedByTechIdx = ReadTechList(r),
-                    RequiredCaps = ReadCapList(r),
-                    GrantedCaps = ReadCapList(r),
-                    SuccessorBaseTypeId = r.ReadInt16(), // v39; mirror of BuildDefs (appended last)
-                }
-            );
+            stationCatalog.Add(ReadStationCatalogDef(r));
 
         // Faction identity + team-wide stat multipliers (v41; mirror of BuildDefs — appended LAST).
         string factionName = ReadStr(r);

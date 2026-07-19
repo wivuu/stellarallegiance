@@ -174,7 +174,7 @@ public partial class Lobby : Control
         word.AddThemeFontOverride("font", UiFonts.WithGlyphSpacing(UiFonts.SairaBold, 3));
         word.AddThemeFontSizeOverride("font_size", 16);
         brand.AddChild(word);
-        brand.AddChild(Chip("MATCH"));
+        brand.AddChild(UiChips.AccentChip("MATCH", 16, 6, 12));
         row.AddChild(brand);
 
         row.AddChild(Spacer());
@@ -1149,24 +1149,21 @@ public partial class Lobby : Control
         {
             if (!ChannelShows(line))
                 continue;
-            string stamp = $"[color=#{DesignTokens.TextDim.ToHtml(false)}]{time}[/color]";
-            if (string.IsNullOrEmpty(line.Name))
-            {
-                sb.Append($"{stamp} [color=#{DesignTokens.Text2.ToHtml(false)}]◆ {Escape(line.Text)}[/color]\n");
-                continue;
-            }
-            // Scope 2 = commander order directive (v34): whole line gold, mirroring the in-flight
-            // chat overlay's styling, so orders read as orders in the lobby comms too.
-            if (line.Scope == 2)
-            {
-                sb.Append($"{stamp} [color=#{DesignTokens.CmdrGold.ToHtml(false)}]★ CMDR {Escape(line.Name)} ▸ {Escape(line.Text)}[/color]\n");
-                continue;
-            }
-            Color nameCol = TeamColor(line.FromTeam);
-            string tag = line.Scope == 1
-                ? $"[color=#{DesignTokens.Text2.ToHtml(false)}]\\[{(IsNoat(line.FromTeam) ? "noat" : "team")}][/color] "
-                : "";
-            sb.Append($"{stamp} {tag}[color=#{nameCol.ToHtml(false)}]{Escape(line.Name)}[/color]: [color=#{DesignTokens.TextHi.ToHtml(false)}]{Escape(line.Text)}[/color]\n");
+            // isSystem mirrors this panel's old `string.IsNullOrEmpty(line.Name)` check (Chat's
+            // in-flight overlay instead carries an explicit system flag); the scope-1 tag reads
+            // "noat"/"team" here (Chat has no NOAT concept) and the message text stays wrapped in
+            // TextHi, matching this panel's prior styling.
+            sb.Append(
+                    ChatFormat.ToBbcode(
+                        line,
+                        time,
+                        isSystem: string.IsNullOrEmpty(line.Name),
+                        nameColorForTeam: TeamColor,
+                        teamTagLabel: team => IsNoat(team) ? "noat" : "team",
+                        messageColor: DesignTokens.TextHi
+                    )
+                )
+                .Append('\n');
         }
         _commsLog.Text = sb.ToString();
     }
@@ -1226,8 +1223,6 @@ public partial class Lobby : Control
         int s = (int)secs;
         return $"{s / 60:00}:{s % 60:00}";
     }
-
-    private static string Escape(string s) => string.IsNullOrEmpty(s) ? "" : s.Replace("[", "[lb]");
 
     private static Label Mono(string text, Color color, HorizontalAlignment align = HorizontalAlignment.Left)
     {
@@ -1301,19 +1296,6 @@ public partial class Lobby : Control
         wrap.AddChild(col);
         parent.AddChild(wrap);
         return v;
-    }
-
-    private Label Chip(string text)
-    {
-        var l = UiKit.MakeLabel(text, UiKit.TextStyle.Label, DesignTokens.Void);
-        l.AddThemeFontSizeOverride("font_size", 12);
-        var sb = new StyleBoxFlat { BgColor = DesignTokens.TeamAccent, AntiAliasing = false };
-        sb.SetCornerRadiusAll(0);
-        sb.ContentMarginLeft = sb.ContentMarginRight = 16;
-        sb.ContentMarginTop = sb.ContentMarginBottom = 6;
-        l.AddThemeStyleboxOverride("normal", sb);
-        l.SizeFlagsVertical = SizeFlags.ShrinkCenter;
-        return l;
     }
 
     private static StyleBoxFlat TabStyle(Color accent, bool selected)

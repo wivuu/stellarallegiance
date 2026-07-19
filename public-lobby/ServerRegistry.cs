@@ -124,12 +124,9 @@ public sealed class InMemoryServerRegistry : IServerRegistry
         return true;
     }
 
-    // Trim and cap a reported game-state label so a server can't bloat the list payload.
-    static string? NormalizeState(string? state)
-    {
-        var s = state?.Trim();
-        return string.IsNullOrEmpty(s) ? null : (s.Length > 20 ? s[..20] : s);
-    }
+    // Trim, strip control chars, and cap a reported game-state label so a server can't bloat the
+    // list payload. Shares hygiene with hostedBy/roster names (see CleanShortText below).
+    static string? NormalizeState(string? state) => CleanShortText(state, 20);
 
     // Hosted-by label: trimmed, control chars stripped, capped. Null when absent/empty.
     static string? NormalizeHostedBy(string? hostedBy) => CleanShortText(hostedBy, 24);

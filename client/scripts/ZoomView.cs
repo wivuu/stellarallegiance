@@ -139,7 +139,7 @@ public partial class ZoomView : Control
     public override void _Input(InputEvent @event)
     {
         // Same inputFree idiom the rest of the client gates keys on, plus a live local ship.
-        bool inputFree = !Chat.Capturing && !SectorOverview.Active && !ShipLoadout.Active && !EscapeMenu.Active && !SettingsDialog.Active;
+        bool inputFree = InputGate.FlightInputFree;
         if (!inputFree || _world.LocalShip == null)
             return;
 

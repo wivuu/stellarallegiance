@@ -33,11 +33,6 @@ public sealed class MeshRaycaster
 
     private readonly List<Entry> _entries = new();
 
-    // True once at least one visible mesh was found in the subtree — the caller keeps the
-    // raycaster only for GLB hulls, so this is effectively always true, but it guards the
-    // degenerate case of a hull subtree that carried no MeshInstance3D at all.
-    public bool HasGeometry => _entries.Count > 0;
-
     // Build from the base's GLB hull subtree and the container's world transform. Mirrors the
     // GlbLoader.MeshAabb recursion, but bakes the FULL world transform (container × every child
     // transform, including the hull's NormalizeLongestAxis scale) rather than a hull-local one.

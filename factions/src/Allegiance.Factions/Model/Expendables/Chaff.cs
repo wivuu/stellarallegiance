@@ -11,8 +11,4 @@ public record Chaff : Expendable
     /// <summary>Radius, in u, within which a missile can be decoyed onto this puff (projected onto
     /// WeaponDef.DecoyRadius).</summary>
     public double DecoyRadius { get; set; }
-
-    /// <summary>GLB model basename the client loads from <c>assets/chaff/</c> (no extension);
-    /// projected onto WeaponDef.ModelName.</summary>
-    public string? ModelName { get; set; }
 }

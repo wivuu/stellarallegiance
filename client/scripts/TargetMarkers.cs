@@ -154,9 +154,10 @@ public partial class TargetMarkers : Control
     public static (bool Has, uint Sector, Vector3 Pos) Waypoint { get; private set; }
 
     // Arrive band shared by every waypoint dismissal (own-ship NAV here, commander goto markers in
-    // SectorOverview): inside this of the mark, the unit has reached it. Matches the server's arrive
-    // bands (miner ProspectArriveRange 50, pig patrol-arrive + wobble) so the marker clears exactly
-    // when the ship stops there.
+    // SectorOverview): inside this of the mark, the unit has reached it. Purely a client-cosmetic
+    // dismissal band, hand-tuned to look right against the server's own arrive bands (miner
+    // ProspectArriveRange 50, pig patrol-arrive + wobble) — it is NOT streamed/shared with the
+    // server and can drift from those values without anything enforcing agreement.
     public const float WaypointArriveRange = 50;
 
     // Whether `shipPos` has reached `pointPos` (within the shared arrive band). One place so the
@@ -192,7 +193,7 @@ public partial class TargetMarkers : Control
 
     // Reusable scratch arrays for DrawColoredPolygon — Godot copies on call so sequential
     // reuse is safe. Eliminates per-draw allocation for every entity marker drawn.
-    private readonly Vector2[] _poly3 = new Vector2[3]; // Scout tri + off-screen arrow
+    private readonly Vector2[] _poly3 = new Vector2[3]; // Scout tri
     private readonly Vector2[] _poly4 = new Vector2[4]; // Fighter chevron
     private readonly Vector2[] _poly5 = new Vector2[5]; // Miner pentagon
     private readonly Vector2[] _poly6 = new Vector2[6]; // Bomber hexagon
@@ -606,11 +607,55 @@ public partial class TargetMarkers : Control
         // resolve its rect to the viewport, which would misplace the edge-clamped arrows.
         Vector2 view = GetViewportRect().Size;
 
-        // The focused base's world position, or null if focus isn't a base right now. Resolved via
-        // AllVisibleBases() (ANY team, carries id + team) rather than LockableEnemyBases() so a
-        // FRIENDLY base focused for navigation (an autopilot dock destination) also draws its bracket.
-        // Used both to skip it in the dim pass below (it gets the bright focused treatment instead) and
-        // to draw the marker/lock arc against the same position. The lock arc is enemy-only (below).
+        var (focusedBasePos, focusedBaseTeam, focusedBaseEnemy) = ResolveFocusedBase();
+
+        // Bases first (drawn under the ships), then the focused base/asteroid bright treatment,
+        // then the ambient rock-class labels — all reproject through Cam so they draw in every
+        // state (hangar, F3, in flight), before the local-ship gate below.
+        DrawBasesPass(view, focusedBasePos);
+        DrawFocusedBaseAndAsteroid(view, focusedBasePos, focusedBaseTeam, focusedBaseEnemy);
+        DrawRockLabelsPass(view);
+
+        // The navigation waypoint diamond (F3-dropped), drawn in the ship's-sector view whenever its
+        // sector matches the viewed sector. Reprojects through the F3 cam too, so it shows on both.
+        DrawWaypoint(view);
+
+        DrawAlephsPass(view);
+        DrawProbesPass(view);
+        DrawMinefieldsPass(view);
+
+        // Fog last-known ghost contacts (HUD glyph only, never a 3D mesh) + the brief "CONTACT LOST"
+        // note when one just faded. Drawn before the local-ship gate so they still read pre-spawn /
+        // in the F3 overview (which reprojects through Cam like everything else here).
+        DrawGhosts(view);
+        DrawContactLost(view);
+
+        // Own ship — null pre-launch / while spectating. The ship glyphs, brackets, and focus tags
+        // below reproject through Cam and DON'T need it, so they draw in EVERY state (hangar, F3, in
+        // flight); that's why a miner or teammate now shows on the F3 map and in the pre-launch peek,
+        // matching the in-flight HUD. Only the ship-centric combat readouts further down (aim reticle,
+        // lead, incoming banner) require a live own ship — they stay gated on `local != null` below.
+        var local = _world.LocalShip;
+
+        var (focusedFriendly, focusedShip) = DrawShipsPass(view);
+
+        DrawFocusTagsPass(view, focusedShip, focusedFriendly, local);
+
+        // The ship firing-line reticule (aim reticle + lead crosshair) and the incoming-missile
+        // banner are ship-centric combat readouts, meaningless in the F3 orbit view (and impossible
+        // without an own ship) — skip them there and pre-launch. The entity brackets/glyphs/ghosts
+        // above still reproject onto the map in every state.
+        if (local != null && !SectorOverview.Active)
+            DrawFiringSolution(view, local, focusedShip);
+    }
+
+    // The focused base's world position, or null if focus isn't a base right now. Resolved via
+    // AllVisibleBases() (ANY team, carries id + team) rather than LockableEnemyBases() so a
+    // FRIENDLY base focused for navigation (an autopilot dock destination) also draws its bracket.
+    // Used both to skip it in the dim pass below (it gets the bright focused treatment instead) and
+    // to draw the marker/lock arc against the same position. The lock arc is enemy-only (below).
+    private (Vector3? pos, byte team, bool enemy) ResolveFocusedBase()
+    {
         Vector3? focusedBasePos = null;
         byte focusedBaseTeam = 1;
         bool focusedBaseEnemy = false;
@@ -626,10 +671,14 @@ public partial class TargetMarkers : Control
                     break;
                 }
         }
+        return (focusedBasePos, focusedBaseTeam, focusedBaseEnemy);
+    }
 
-        // Bases first (drawn under the ships). Bases + their damage bars are drawn even when
-        // the local ship is gone (pre-spawn / death overview) so a base under attack still reads.
-        // The focused base is skipped here — it's drawn bright/bracketed below instead.
+    // Bases first (drawn under the ships). Bases + their damage bars are drawn even when
+    // the local ship is gone (pre-spawn / death overview) so a base under attack still reads.
+    // The focused base is skipped here — it's drawn bright/bracketed below instead.
+    private void DrawBasesPass(Vector2 view, Vector3? focusedBasePos)
+    {
         foreach (var (pos, team, dead) in _world.VisibleBases())
             if (focusedBasePos is Vector3 fbp && pos == fbp)
             {
@@ -644,12 +693,19 @@ public partial class TargetMarkers : Control
                 DrawEntity(view, pos, Kind.Base, TeamColor(team), focused: false, friendly: true);
         foreach (var (pos, frac) in _world.VisibleBaseHealth())
             DrawBaseHealthBar(view, pos, frac);
+    }
 
-        // The focused base itself: same bright bracket + TARGET tag treatment as a focused ship, in
-        // a shade of its team color. No lead indicator — a base is a static target. The missile
-        // lock-progress arc draws ONLY when the local hull can actually siege the base (mounts a
-        // CanDamageBase weapon); a non-siege hull still focuses it for navigation, just without a
-        // lock arc it can't fill.
+    // The focused base itself: same bright bracket + TARGET tag treatment as a focused ship, in
+    // a shade of its team color. No lead indicator — a base is a static target. The missile
+    // lock-progress arc draws ONLY when the local hull can actually siege the base (mounts a
+    // CanDamageBase weapon); a non-siege hull still focuses it for navigation, just without a
+    // lock arc it can't fill.
+    //
+    // The focused asteroid: a neutral-chrome bracket + range tag, resolved from the in-view rock
+    // set. Never a lock arc or lead circle — a rock is a pure navigation target. Drawn here (with
+    // the bases, before the local-ship gate) so it also reprojects onto the F3 map.
+    private void DrawFocusedBaseAndAsteroid(Vector2 view, Vector3? focusedBasePos, byte focusedBaseTeam, bool focusedBaseEnemy)
+    {
         if (focusedBasePos is Vector3 fp)
         {
             DrawEntity(view, fp, Kind.Base, FocusTint(focusedBaseTeam), focused: true, friendly: false);
@@ -660,9 +716,6 @@ public partial class TargetMarkers : Control
                 DrawLockArc(fp, focusedBaseTeam);
         }
 
-        // The focused asteroid: a neutral-chrome bracket + range tag, resolved from the in-view rock
-        // set. Never a lock arc or lead circle — a rock is a pure navigation target. Drawn here (with
-        // the bases, before the local-ship gate) so it also reprojects onto the F3 map.
         if (_focused is ulong rf && GameContent.IsAsteroidFocus(rf))
         {
             ulong rockId = GameContent.AsteroidIdOf(rf);
@@ -676,16 +729,19 @@ public partial class TargetMarkers : Control
                     break;
                 }
         }
+    }
 
-        // Asteroid type labels: a dim mono caption (class name + He3 ore readout) at each rock so you
-        // can read what's out there without focusing it. Two modes, same RockLabel text:
-        //   • In flight — anchored to your ship: only the nearest 3 rocks you're flying close to (surface
-        //     distance under clamp(3·radius, 80, 400)), so a dense field never floods the cockpit HUD.
-        //   • In the F3 overview — anchored to the orbit CAMERA: label the whole sector's He3 + special
-        //     rocks (the gameplay-relevant ones) always, plus the nearest commons up to a cap, so the map
-        //     reads rock types like the in-ship view (and works pre-launch, where there's no own ship).
-        // The focused rock is skipped (it shows its detail via DrawRockDetail); fog gating is free
-        // (undiscovered rocks never reach the client).
+    // Asteroid type labels: a dim mono caption (class name + He3 ore readout) at each rock so you
+    // can read what's out there without focusing it. Two modes, same RockLabel text:
+    //   • In flight — anchored to your ship: only the nearest 3 rocks you're flying close to (surface
+    //     distance under clamp(3·radius, 80, 400)), so a dense field never floods the cockpit HUD.
+    //   • In the F3 overview — anchored to the orbit CAMERA: label the whole sector's He3 + special
+    //     rocks (the gameplay-relevant ones) always, plus the nearest commons up to a cap, so the map
+    //     reads rock types like the in-ship view (and works pre-launch, where there's no own ship).
+    // The focused rock is skipped (it shows its detail via DrawRockDetail); fog gating is free
+    // (undiscovered rocks never reach the client).
+    private void DrawRockLabelsPass(Vector2 view)
+    {
         Camera3D rockCam = Cam;
         bool f3Rocks = SectorOverview.Active;
         PredictionController? rockAnchorShip = _world.LocalShip;
@@ -745,28 +801,30 @@ public partial class TargetMarkers : Control
                 shown++;
             }
         }
+    }
 
-        // The navigation waypoint diamond (F3-dropped), drawn in the ship's-sector view whenever its
-        // sector matches the viewed sector. Reprojects through the F3 cam too, so it shows on both.
-        DrawWaypoint(view);
-
-        // Warp gates: neutral landmarks shown like friendly markers (subtle on-screen glyph,
-        // edge arrow off-screen) so the way to the nearest aleph always reads. Labelled with the
-        // destination sector name so the gate reads as "goes to X" at a glance.
-        // Label with the destination sector's name (SectorName returns "" for an unknown/nameless
-        // sector, which DrawEntity's label.Length gate then suppresses). Do NOT special-case dest==0:
-        // sector id 0 is a real sector (the stock map's home hub), not a "no destination" sentinel.
+    // Warp gates: neutral landmarks shown like friendly markers (subtle on-screen glyph,
+    // edge arrow off-screen) so the way to the nearest aleph always reads. Labelled with the
+    // destination sector name so the gate reads as "goes to X" at a glance.
+    // Label with the destination sector's name (SectorName returns "" for an unknown/nameless
+    // sector, which DrawEntity's label.Length gate then suppresses). Do NOT special-case dest==0:
+    // sector id 0 is a real sector (the stock map's home hub), not a "no destination" sentinel.
+    private void DrawAlephsPass(Vector2 view)
+    {
         foreach (var (pos, dest) in _world.VisibleAlephs())
             DrawEntity(view, pos, Kind.Aleph, AlephColor, focused: false, friendly: true,
                 label: _world.SectorName(dest));
+    }
 
-        // Recon probes: a subtle team-tinted beacon glyph, drawn like the neutral gate markers
-        // (friendly: true = quiet glyph). The streamed set is already fog-filtered (own team +
-        // radar-detected enemy). In flight, a friendly probe beyond ProbeEdgeMarkerRange drops its
-        // off-screen edge marker so your own distant probes don't crowd the screen edges — but it
-        // still draws when it's actually on screen. Enemy probes are never suppressed. In the F3
-        // overview the edge-declutter is switched off entirely: the map should show every probe,
-        // matching how alephs/ghosts fully render there.
+    // Recon probes: a subtle team-tinted beacon glyph, drawn like the neutral gate markers
+    // (friendly: true = quiet glyph). The streamed set is already fog-filtered (own team +
+    // radar-detected enemy). In flight, a friendly probe beyond ProbeEdgeMarkerRange drops its
+    // off-screen edge marker so your own distant probes don't crowd the screen edges — but it
+    // still draws when it's actually on screen. Enemy probes are never suppressed. In the F3
+    // overview the edge-declutter is switched off entirely: the map should show every probe,
+    // matching how alephs/ghosts fully render there.
+    private void DrawProbesPass(Vector2 view)
+    {
         PredictionController? probeRef = _world.LocalShip;
         foreach (var (pos, team) in _world.VisibleProbes())
         {
@@ -776,32 +834,25 @@ public partial class TargetMarkers : Control
             DrawEntity(view, pos, Kind.Probe, TeamColor(team), focused: false, friendly: true,
                 hideOffScreen: friendlyProbe && beyondRange && !SectorOverview.Active);
         }
+    }
 
-        // Deployed minefields: a hazard-burst glyph over any visible field (own always; enemy once
-        // radar/LOS-revealed — the feed is already fog-filtered). In-view only: hideOffScreen draws
-        // the glyph solely when the field projects on-screen and suppresses the off-screen edge
-        // arrow, so a field off to the side or behind never clutters. friendly: true = quiet glyph.
+    // Deployed minefields: a hazard-burst glyph over any visible field (own always; enemy once
+    // radar/LOS-revealed — the feed is already fog-filtered). In-view only: hideOffScreen draws
+    // the glyph solely when the field projects on-screen and suppresses the off-screen edge
+    // arrow, so a field off to the side or behind never clutters. friendly: true = quiet glyph.
+    private void DrawMinefieldsPass(Vector2 view)
+    {
         foreach (var (pos, team) in _world.VisibleMinefields())
             DrawEntity(view, pos, Kind.Mine, TeamColor(team), focused: false, friendly: true,
                 hideOffScreen: true);
+    }
 
-        // Fog last-known ghost contacts (HUD glyph only, never a 3D mesh) + the brief "CONTACT LOST"
-        // note when one just faded. Drawn before the local-ship gate so they still read pre-spawn /
-        // in the F3 overview (which reprojects through Cam like everything else here).
-        DrawGhosts(view);
-        DrawContactLost(view);
-
-        // Own ship — null pre-launch / while spectating. The ship glyphs, brackets, and focus tags
-        // below reproject through Cam and DON'T need it, so they draw in EVERY state (hangar, F3, in
-        // flight); that's why a miner or teammate now shows on the F3 map and in the pre-launch peek,
-        // matching the in-flight HUD. Only the ship-centric combat readouts further down (aim reticle,
-        // lead, incoming banner) require a live own ship — they stay gated on `local != null` below.
-        var local = _world.LocalShip;
-
-        // Friendly ships: a subtle team glyph, or — when Tab-focused — the same bright focus bracket as
-        // an enemy (in a shade of the team color), so a focused teammate reads distinctly. A focused
-        // friendly draws with friendly:false so DrawEntity paints the bracket; the lock arc is added
-        // enemy-only below. Pods can't be focused (excluded from the cycle), so a pod always draws quiet.
+    // Friendly ships: a subtle team glyph, or — when Tab-focused — the same bright focus bracket as
+    // an enemy (in a shade of the team color), so a focused teammate reads distinctly. A focused
+    // friendly draws with friendly:false so DrawEntity paints the bracket; the lock arc is added
+    // enemy-only below. Pods can't be focused (excluded from the cycle), so a pod always draws quiet.
+    private (RemoteShip? focusedFriendly, RemoteShip? focusedShip) DrawShipsPass(Vector2 view)
+    {
         RemoteShip? focusedFriendly = null;
         foreach (var fr in _world.FriendlyShips())
         {
@@ -822,9 +873,18 @@ public partial class TargetMarkers : Control
             DrawEntity(view, e.GlobalPosition, KindOf(e), color, focused, friendly: false, GlyphOf(e));
         }
 
-        // A mono "TARGET" tag + range over the focused enemy — a light echo of the design's
-        // target chrome — plus the missile lock-progress arc on its bracket, filling as the
-        // server-authoritative lock timer runs and snapping to a steady ring once locked.
+        return (focusedFriendly, focusedShip);
+    }
+
+    // A mono "TARGET" tag + range over the focused enemy — a light echo of the design's
+    // target chrome — plus the missile lock-progress arc on its bracket, filling as the
+    // server-authoritative lock timer runs and snapping to a steady ring once locked.
+    //
+    // A focused FRIENDLY ship gets the target tag + health arc + MINER role tag, but NEVER a lock
+    // arc — a teammate is a fly-to / escort target, not a missile lock. (WireLockId already strips
+    // a friendly focus from the wire lock slot.)
+    private void DrawFocusTagsPass(Vector2 view, RemoteShip? focusedShip, RemoteShip? focusedFriendly, PredictionController? local)
+    {
         if (focusedShip != null)
         {
             DrawFocusTag(view, focusedShip, local);
@@ -837,9 +897,6 @@ public partial class TargetMarkers : Control
                 DrawShipRoleTag(view, focusedShip.GlobalPosition, "CONSTRUCTOR");
         }
 
-        // A focused FRIENDLY ship gets the target tag + health arc + MINER role tag, but NEVER a lock
-        // arc — a teammate is a fly-to / escort target, not a missile lock. (WireLockId already strips
-        // a friendly focus from the wire lock slot.)
         if (focusedFriendly != null)
         {
             DrawFocusTag(view, focusedFriendly, local);
@@ -849,80 +906,76 @@ public partial class TargetMarkers : Control
             else if (focusedFriendly.IsConstructor)
                 DrawShipRoleTag(view, focusedFriendly.GlobalPosition, "CONSTRUCTOR");
         }
+    }
 
-        // The ship firing-line reticule (aim reticle + lead crosshair) and the incoming-missile
-        // banner are ship-centric combat readouts, meaningless in the F3 orbit view (and impossible
-        // without an own ship) — skip them there and pre-launch. The entity brackets/glyphs/ghosts
-        // above still reproject onto the map in every state.
-        if (local != null && !SectorOverview.Active)
+    // The shot leaves the muzzle along the ship's forward (+Z) axis, not the camera's
+    // view axis — and the chase camera is offset above/behind the ship, so screen
+    // center is NOT where shots go. Draw an aim reticle on the real firing line so the
+    // player has something to line up on the lead circle. The gun is resolved once per
+    // frame from the SAME streamed WeaponDef row PredictionController fires from, so the
+    // muzzle position and lead solve always match the shots that actually get fired.
+    private void DrawFiringSolution(Vector2 view, PredictionController local, RemoteShip? focusedShip)
+    {
+        Vector3 fwd = local.GlobalTransform.Basis.Z.Normalized();
+        var gunMount = ResolveLocalGun(local);
+        if (gunMount is { hp: var hp, gun: var gun })
         {
-            // The shot leaves the muzzle along the ship's forward (+Z) axis, not the camera's
-            // view axis — and the chase camera is offset above/behind the ship, so screen
-            // center is NOT where shots go. Draw an aim reticle on the real firing line so the
-            // player has something to line up on the lead circle. The gun is resolved once per
-            // frame from the SAME streamed WeaponDef row PredictionController fires from, so the
-            // muzzle position and lead solve always match the shots that actually get fired.
-            Vector3 fwd = local.GlobalTransform.Basis.Z.Normalized();
-            var gunMount = ResolveLocalGun(local);
-            if (gunMount is { hp: var hp, gun: var gun })
-            {
-                Vector3 muzzle = local.GlobalTransform.Basis * new Vector3(hp.OffX, hp.OffY, hp.OffZ) + local.GlobalPosition;
+            Vector3 muzzle = local.GlobalTransform.Basis * new Vector3(hp.OffX, hp.OffY, hp.OffZ) + local.GlobalPosition;
 
-                // Lead indicator for the focused target: TryLead returns the world point to aim
-                // the nose at (the target's position led by the RELATIVE velocity, so the shot's
-                // inherited ship velocity carries it onto the target). The aim reticle is ranged to
-                // match (gun.ProjectileSpeed·t), so overlaying the reticle on the lead circle is a
-                // hit; with no target it sits at the gun's effective range just to show the aim line.
-                float aimRange = LocalAimRange(local);
-                if (
-                    focusedShip != null
-                    && TryLead(
-                        muzzle,
-                        local.Velocity,
-                        focusedShip.GlobalPosition,
-                        focusedShip.Velocity,
-                        gun.ProjectileSpeed,
-                        gun.ProjectileLifeTicks * FlightModel.Dt,
-                        out Vector3 aimPoint,
-                        out float t
-                    )
+            // Lead indicator for the focused target: TryLead returns the world point to aim
+            // the nose at (the target's position led by the RELATIVE velocity, so the shot's
+            // inherited ship velocity carries it onto the target). The aim reticle is ranged to
+            // match (gun.ProjectileSpeed·t), so overlaying the reticle on the lead circle is a
+            // hit; with no target it sits at the gun's effective range just to show the aim line.
+            float aimRange = LocalAimRange(local);
+            if (
+                focusedShip != null
+                && TryLead(
+                    muzzle,
+                    local.Velocity,
+                    focusedShip.GlobalPosition,
+                    focusedShip.Velocity,
+                    gun.ProjectileSpeed,
+                    gun.ProjectileLifeTicks * FlightModel.Dt,
+                    out Vector3 aimPoint,
+                    out float t
                 )
-                {
-                    aimRange = gun.ProjectileSpeed * t;
-                    if (!Cam.IsPositionBehind(aimPoint))
-                    {
-                        Vector2 lp = Cam.UnprojectPosition(aimPoint);
-                        Vector2? targetSp = Cam.IsPositionBehind(focusedShip.GlobalPosition)
-                            ? null
-                            : Cam.UnprojectPosition(focusedShip.GlobalPosition);
-                        DrawLeadIndicator(targetSp, lp);
-                    }
-                }
-
-                Vector3 reticlePoint = muzzle + fwd * aimRange;
-                if (!Cam.IsPositionBehind(reticlePoint))
-                    DrawAimReticle(Cam.UnprojectPosition(reticlePoint));
-            }
-            else
+            )
             {
-                // No gun (a pod, an unarmed hull, or the def hasn't streamed yet): the server
-                // won't fire either, so there's no lead solution to draw — just a visual anchor
-                // reticle on the firing line at the default range.
-                Vector3 reticlePoint = local.GlobalPosition + fwd * DefaultAimRange;
-                if (!Cam.IsPositionBehind(reticlePoint))
-                    DrawAimReticle(Cam.UnprojectPosition(reticlePoint));
+                aimRange = gun.ProjectileSpeed * t;
+                if (!Cam.IsPositionBehind(aimPoint))
+                {
+                    Vector2 lp = Cam.UnprojectPosition(aimPoint);
+                    Vector2? targetSp = Cam.IsPositionBehind(focusedShip.GlobalPosition)
+                        ? null
+                        : Cam.UnprojectPosition(focusedShip.GlobalPosition);
+                    DrawLeadIndicator(targetSp, lp);
+                }
             }
 
-            // Incoming-missile threat: a flashing banner + an edge arrow pointing at the nearest
-            // missile homing on us (drawn last so it sits over everything). State cached in _Process.
-            DrawIncomingWarning(view);
-
-            // Being-locked banner: amber while an enemy lock is progressing, red once it completes.
-            DrawLockWarning(view);
-
-            // Autopilot: engaged banner + brief disengage toast (cyan chrome).
-            DrawAutopilotStatus(view);
+            Vector3 reticlePoint = muzzle + fwd * aimRange;
+            if (!Cam.IsPositionBehind(reticlePoint))
+                DrawAimReticle(Cam.UnprojectPosition(reticlePoint));
         }
+        else
+        {
+            // No gun (a pod, an unarmed hull, or the def hasn't streamed yet): the server
+            // won't fire either, so there's no lead solution to draw — just a visual anchor
+            // reticle on the firing line at the default range.
+            Vector3 reticlePoint = local.GlobalPosition + fwd * DefaultAimRange;
+            if (!Cam.IsPositionBehind(reticlePoint))
+                DrawAimReticle(Cam.UnprojectPosition(reticlePoint));
+        }
+
+        // Incoming-missile threat: a flashing banner + an edge arrow pointing at the nearest
+        // missile homing on us (drawn last so it sits over everything). State cached in _Process.
+        DrawIncomingWarning(view);
+
+        // Being-locked banner: amber while an enemy lock is progressing, red once it completes.
+        DrawLockWarning(view);
+
+        // Autopilot: engaged banner + brief disengage toast (cyan chrome).
+        DrawAutopilotStatus(view);
     }
 
     // Autopilot flight-HUD readout: a steady "◈ AUTOPILOT" chrome banner low-center while engaged, and
@@ -985,9 +1038,7 @@ public partial class TargetMarkers : Control
     // the same lock-progress arc as a locked ship.
     private void DrawLockArc(Vector3 worldPos, byte team)
     {
-        int raw = _net.LocalLockState;
-        bool locked = (raw & 0x80) != 0;
-        int progress = raw & 0x7F;
+        (bool locked, int progress) = WeaponsPanel.DecodeLockState(_net.LocalLockState);
         if (!locked && progress == 0)
             return;
 
@@ -1627,18 +1678,7 @@ public partial class TargetMarkers : Control
         if (!behind && onScreen.HasPoint(sp))
         {
             float r = GlyphSize * 1.15f;
-            _poly4[0] = sp + new Vector2(0f, -r);
-            _poly4[1] = sp + new Vector2(r, 0f);
-            _poly4[2] = sp + new Vector2(0f, r);
-            _poly4[3] = sp + new Vector2(-r, 0f);
-            DrawLine(_poly4[0], _poly4[1], WaypointColor, 1.75f, true);
-            DrawLine(_poly4[1], _poly4[2], WaypointColor, 1.75f, true);
-            DrawLine(_poly4[2], _poly4[3], WaypointColor, 1.75f, true);
-            DrawLine(_poly4[3], _poly4[0], WaypointColor, 1.75f, true);
-            DrawCircle(sp, r * 0.28f, WaypointColor);
-            const string tag = "NAV";
-            float tw = UiFonts.Mono.GetStringSize(tag, HorizontalAlignment.Left, -1, 9).X;
-            DrawString(UiFonts.Mono, sp + new Vector2(-tw * 0.5f, -r - 4f), tag, HorizontalAlignment.Left, -1, 9, WaypointColor);
+            UiDraw.HollowDiamondMarker(this, sp, r, WaypointColor, "NAV", UiFonts.Mono, 9);
             return;
         }
 
@@ -1713,28 +1753,17 @@ public partial class TargetMarkers : Control
     // center*2 - sp) and the viewport size, return the point on the EdgeMargin-inset rectangle
     // edge along the ray from center, and the outward unit direction along that ray. Shared by
     // every edge indicator — live entities, the incoming-missile threat arrow, and fog ghosts —
-    // so they all pin to the same border.
+    // so they all pin to the same border. Thin wrapper over UiDraw.ClampToEdge (the canonical
+    // math, also used by SectorOverview's rock-order glyph) that keeps the `out dir` shape so
+    // callers here don't need to change.
     private static Vector2 ClampToEdge(Vector2 sp, Vector2 view, out Vector2 dir)
     {
-        Vector2 center = view * 0.5f;
-        dir = sp - center;
-        if (dir.LengthSquared() < 1e-4f)
-            dir = Vector2.Down;
-        dir = dir.Normalized();
-        Vector2 half = center - new Vector2(EdgeMargin, EdgeMargin);
-        float scale = Mathf.Min(half.X / Mathf.Max(Mathf.Abs(dir.X), 1e-4f), half.Y / Mathf.Max(Mathf.Abs(dir.Y), 1e-4f));
-        return center + dir * scale;
+        (Vector2 edge, dir) = UiDraw.ClampToEdge(sp, view, EdgeMargin);
+        return edge;
     }
 
-    // A filled triangle at p pointing along dir (unit).
-    private void DrawArrow(Vector2 p, Vector2 dir, Color color)
-    {
-        Vector2 perp = new(-dir.Y, dir.X);
-        _poly3[0] = p + dir * ArrowSize;
-        _poly3[1] = p - dir * ArrowSize * 0.5f + perp * ArrowSize * 0.6f;
-        _poly3[2] = p - dir * ArrowSize * 0.5f - perp * ArrowSize * 0.6f;
-        DrawColoredPolygon(_poly3, color);
-    }
+    // A filled triangle at p pointing along dir (unit). Thin wrapper over UiDraw.DrawEdgeArrow.
+    private void DrawArrow(Vector2 p, Vector2 dir, Color color) => UiDraw.DrawEdgeArrow(this, p, dir, ArrowSize, color);
 
     // Solve the constant-velocity intercept in the SHOOTER's frame and return the world
     // point the player must aim the nose at to hit. Everything is relative to the

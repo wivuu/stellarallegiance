@@ -7,7 +7,7 @@ namespace PublicLobby;
 // server asserts as its reachable address (e.g. its host LAN/public address when it sits behind
 // container NAT or a proxy); the lobby probes it and advertises it only if it answers /health (see
 // ReachabilityProbe), so a server can't simply CLAIM to be directly joinable. When empty the lobby
-// probes the request's source IP instead. IceCandidates is legacy/unused.
+// probes the request's source IP instead.
 // Players/MaxPlayers/State seed the live status fields the browser shows (also refreshed by the
 // heartbeat) — current player count, capacity, and "lobby"/"in-progress"/"ended".
 // ProtocolVersion is the server's wire-protocol version (server/Net/Protocol.cs); clients filter the
@@ -17,7 +17,6 @@ public record RegisterRequest(
     string Name,
     int Port,
     string? PublicEndpoint,
-    string[]? IceCandidates,
     int Players = 0,
     int MaxPlayers = 0,
     string? State = null,

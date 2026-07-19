@@ -324,7 +324,7 @@ public partial class Hud : CanvasLayer
         // captured) and stays silent while chat/menus own the keyboard so typing F never blips.
         if (_emptyClickCd > 0)
             _emptyClickCd -= delta;
-        bool inputFree = !Chat.Capturing && !SectorOverview.Active && !ShipLoadout.Active && !EscapeMenu.Active && !SettingsDialog.Active;
+        bool inputFree = InputGate.FlightInputFree;
         bool firing2 =
             inputFree
             && (

@@ -388,7 +388,7 @@ public static class Protocol
         // o == ProbeRecordSize (29)
     }
 
-    // A probe was removed (19 bytes, mirrors BuildMissileGone exactly). reason: 0 expired, 1 match
+    // A probe was removed (18 bytes, mirrors BuildMissileGone exactly). reason: 0 expired, 1 match
     // cleanup, 2 destroyed by enemy fire (client plays an explosion). Layout: [19][u64 id][u8 reason]
     // [u16 sector][3x i16 pos]. Broadcast to every client (an unknown id no-ops client-side).
     public static byte[] BuildProbeGone(ulong id, byte reason, uint sector, Vec3 pos)
@@ -1302,7 +1302,44 @@ public static class Protocol
         using var w = new BinaryWriter(ms);
         w.Write(MsgDefs);
 
-        var ships = content.Ships;
+        WriteShipDefs(w, content.Ships);
+        WriteWeaponDefs(w, content.Weapons);
+        WriteCargoDefs(w, content.CargoItems);
+        WriteBaseDefs(w, content.Bases);
+
+        var cfg = content.World;
+        w.Write(cfg.Id);
+        w.Write(cfg.SectorScale);
+        w.Write(cfg.AsteroidDensity);
+        w.Write(cfg.DebugFreezeBrain);
+        w.Write(cfg.DebugNoFire);
+        // Per-server fog-of-war toggle (byte flag next to the other world flags). EyeballMultiplier
+        // stays server-side only — deliberately NOT written here.
+        w.Write(cfg.FogOfWar);
+
+        // ---- Tech-path catalog (v36), appended LAST so every block above stays byte-stable. ----
+        // Techs stream FIRST and fix the u16 index space every TechList below (and MsgTeamState /
+        // MsgResearchState) references. Reader: GameNetClient.ApplyDefs mirrors this order exactly.
+        WriteTechCatalog(w, content.Techs);
+        WriteDevelopmentDefs(w, content.Developments);
+        WriteStationCatalog(w, content.StationCatalog);
+
+        // ---- Faction identity + team-wide stat multipliers (v41), appended LAST. ----
+        // The single faction's display name + GAS block. The name enables an "Iron Coalition" identity
+        // display; the attributes stream for client visibility (the SIM resolves its per-team TeamAttr
+        // cache from Content.Catalog directly, not this block). Sorted by attr byte for determinism.
+        var start = content.Start;
+        WriteString(w, start.FactionName);
+        WriteAttrList(w, start.BaseAttributes);
+
+        w.Flush();
+        return ms.ToArray();
+    }
+
+    // ---- BuildDefs section writers (mechanical extraction — order below matches BuildDefs) ----
+
+    private static void WriteShipDefs(BinaryWriter w, IReadOnlyList<ShipClassDef> ships)
+    {
         w.Write((byte)ships.Count);
         foreach (var s in ships)
         {
@@ -1356,8 +1393,10 @@ public static class Protocol
             // the hangar's locked hull card + Research UNLOCKS name the gate. Reader mirrors.
             WriteTechList(w, s.RequiredTechIdx);
         }
+    }
 
-        var weapons = content.Weapons;
+    private static void WriteWeaponDefs(BinaryWriter w, IReadOnlyList<WeaponDef> weapons)
+    {
         w.Write((byte)weapons.Count);
         foreach (var wp in weapons)
         {
@@ -1416,8 +1455,10 @@ public static class Protocol
             WriteTechList(w, wp.ObsoletedByTechIdx);
             w.Write(wp.SucceededByWeaponId);
         }
+    }
 
-        var cargoItems = content.CargoItems;
+    private static void WriteCargoDefs(BinaryWriter w, IReadOnlyList<CargoItemDef> cargoItems)
+    {
         w.Write((byte)cargoItems.Count);
         foreach (var c in cargoItems)
         {
@@ -1429,8 +1470,10 @@ public static class Protocol
             WriteString(w, c.Description);
             w.Write(c.FuelPerCharge); // v35: 0 = not a fuel item
         }
+    }
 
-        var bases = content.Bases;
+    private static void WriteBaseDefs(BinaryWriter w, IReadOnlyList<BaseDef> bases)
+    {
         w.Write((byte)bases.Count);
         foreach (var b in bases)
         {
@@ -1451,21 +1494,10 @@ public static class Protocol
             // Station upgrades (v39): the base-type this base upgrades into (-1 = none). Appended last.
             w.Write(b.SuccessorBaseTypeId);
         }
+    }
 
-        var cfg = content.World;
-        w.Write(cfg.Id);
-        w.Write(cfg.SectorScale);
-        w.Write(cfg.AsteroidDensity);
-        w.Write(cfg.DebugFreezeBrain);
-        w.Write(cfg.DebugNoFire);
-        // Per-server fog-of-war toggle (byte flag next to the other world flags). EyeballMultiplier
-        // stays server-side only — deliberately NOT written here.
-        w.Write(cfg.FogOfWar);
-
-        // ---- Tech-path catalog (v36), appended LAST so every block above stays byte-stable. ----
-        // Techs stream FIRST and fix the u16 index space every TechList below (and MsgTeamState /
-        // MsgResearchState) references. Reader: GameNetClient.ApplyDefs mirrors this order exactly.
-        var techs = content.Techs;
+    private static void WriteTechCatalog(BinaryWriter w, IReadOnlyList<TechDef> techs)
+    {
         w.Write((ushort)techs.Count);
         foreach (var t in techs)
         {
@@ -1473,7 +1505,10 @@ public static class Protocol
             WriteString(w, t.Name);
             WriteString(w, t.Description);
         }
-        var devs = content.Developments;
+    }
+
+    private static void WriteDevelopmentDefs(BinaryWriter w, IReadOnlyList<DevelopmentDef> devs)
+    {
         w.Write((ushort)devs.Count);
         foreach (var d in devs)
         {
@@ -1494,7 +1529,10 @@ public static class Protocol
             // Team-wide stat multipliers (v41): u8 count + (u8 attr, f32 mult) pairs, sorted by attr.
             WriteAttrList(w, d.Attributes);
         }
-        var stations = content.StationCatalog;
+    }
+
+    private static void WriteStationCatalog(BinaryWriter w, IReadOnlyList<StationCatalogDef> stations)
+    {
         w.Write((ushort)stations.Count);
         foreach (var s in stations)
         {
@@ -1516,17 +1554,6 @@ public static class Protocol
             // Station upgrades (v39): the base-type this station upgrades into (-1 = none). Appended last.
             w.Write(s.SuccessorBaseTypeId);
         }
-
-        // ---- Faction identity + team-wide stat multipliers (v41), appended LAST. ----
-        // The single faction's display name + GAS block. The name enables an "Iron Coalition" identity
-        // display; the attributes stream for client visibility (the SIM resolves its per-team TeamAttr
-        // cache from Content.Catalog directly, not this block). Sorted by attr byte for determinism.
-        var start = content.Start;
-        WriteString(w, start.FactionName);
-        WriteAttrList(w, start.BaseAttributes);
-
-        w.Flush();
-        return ms.ToArray();
     }
 
     // A count-prefixed stat-multiplier list: u8 n, then n x (u8 attr, f32 mult) — mirror in ApplyDefs.

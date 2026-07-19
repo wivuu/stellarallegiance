@@ -237,7 +237,6 @@ public sealed class ClientHub
     private int _hostId = -1; // first pilot on the server; -1 when empty. TODO: allow explicit host transfer.
     private string _selectedMap; // the current/"next" map name (advertised only — see MsgSetMap)
     private readonly IReadOnlyList<MapCatalogEntry> _mapCatalog; // available maps, built once at boot
-    private long _bytesSent;
 
     // LOD effectiveness counters: total ship records streamed and how many snapshots carried
     // them, so the bench line can report avg records/snapshot — the LOD's real fan-out, which a
@@ -251,8 +250,6 @@ public sealed class ClientHub
     private byte _lastPhase = Simulation.PhaseLobby;
 
     public int ConnectionCount => _clients.Count;
-
-    public long TakeBytesSent() => Interlocked.Exchange(ref _bytesSent, 0);
 
     // Lobby-advertised liveness fields (reported in the heartbeat to the public lobby): how many
     // players are connected and whether we're waiting in the lobby, mid-match, or wrapping up.
@@ -478,6 +475,46 @@ public sealed class ClientHub
         }
     }
 
+    // Parses the MsgHello payload (v9 layout: u8 secretLen, secret…, u8 nameLen, name…, u8
+    // tokenLen, token…). The secret is an optional shared-secret password the server constant-time
+    // compares (open when the server runs without one); name labels the lobby roster; the trailing
+    // token (absent on a fresh join) is a reconnect token from a prior Welcome. Every field is
+    // optional — a frame that runs out of bytes at any point (the running cursor `o`) just leaves
+    // the remaining out params at their "" default. This never rejects a Hello (bad-secret handling
+    // happens afterward in the caller), so TryParseHello always returns true; the bool return keeps
+    // the Try* naming convention for a flat, early-return-guarded cursor walk.
+    private static bool TryParseHello(ReadOnlySpan<byte> frame, out string secret, out string name, out string token)
+    {
+        secret = "";
+        name = "";
+        token = "";
+
+        if (frame.Length <= 1)
+            return true;
+
+        int secLen = frame[1];
+        int o = 2 + secLen;
+        if (frame.Length < o + 1)
+            return true;
+        secret = System.Text.Encoding.UTF8.GetString(frame.Slice(2, secLen));
+
+        int nameLen = frame[o];
+        o += 1;
+        if (frame.Length < o + nameLen)
+            return true;
+        name = System.Text.Encoding.UTF8.GetString(frame.Slice(o, nameLen));
+        o += nameLen;
+
+        if (frame.Length < o + 1)
+            return true;
+        int tokLen = frame[o];
+        o += 1;
+        if (tokLen > 0 && frame.Length >= o + tokLen)
+            token = System.Text.Encoding.UTF8.GetString(frame.Slice(o, tokLen));
+
+        return true;
+    }
+
     private async Task ReceiveLoop(Client client, CancellationToken ct)
     {
         var buffer = new byte[2048];
@@ -494,36 +531,8 @@ public sealed class ClientHub
                 case Protocol.MsgHello:
                 {
                     // v9 layout: u8 secretLen, secret…, u8 nameLen, name…, u8 tokenLen, token…
-                    // The secret is an optional shared-secret password the server constant-time
-                    // compares (open when the server runs without one); name labels the lobby
-                    // roster; the trailing token (absent on a fresh join) is a reconnect token
-                    // from a prior Welcome. No class/team here — those are lobby actions.
-                    string secret = "",
-                        name = "",
-                        reconnectToken = "";
-                    if (count > 1)
-                    {
-                        int secLen = buffer[1];
-                        int o = 2 + secLen;
-                        if (count >= o + 1)
-                        {
-                            secret = System.Text.Encoding.UTF8.GetString(buffer, 2, secLen);
-                            int nameLen = buffer[o];
-                            o += 1;
-                            if (count >= o + nameLen)
-                            {
-                                name = System.Text.Encoding.UTF8.GetString(buffer, o, nameLen);
-                                o += nameLen;
-                                if (count >= o + 1)
-                                {
-                                    int tokLen = buffer[o];
-                                    o += 1;
-                                    if (tokLen > 0 && count >= o + tokLen)
-                                        reconnectToken = System.Text.Encoding.UTF8.GetString(buffer, o, tokLen);
-                                }
-                            }
-                        }
-                    }
+                    // No class/team here — those are lobby actions.
+                    TryParseHello(buffer.AsSpan(0, count), out string secret, out string name, out string reconnectToken);
 
                     if (!_auth.Authenticate(secret))
                     {
@@ -1084,15 +1093,9 @@ public sealed class ClientHub
             return;
         }
 
-        if (_lobby.CommanderOf(team) != client.Id)
-        {
-            int cmdr = _lobby.CommanderOf(team);
-            SystemTo(client, cmdr >= 0
-                ? $"Only the commander can command AI vessels — ask {_players.NameOf(cmdr)}."
-                : "Only the commander can command AI vessels.");
+        if (CommanderOrWarn(client) is not byte cmdTeam)
             return;
-        }
-        _sim.EnqueueCommandOrder(client.Id, _players.NameOf(client.Id), team, subject, targetKind, targetId, sector, pos);
+        _sim.EnqueueCommandOrder(client.Id, _players.NameOf(client.Id), cmdTeam, subject, targetKind, targetId, sector, pos);
     }
 
     // Advisory-directive verb+target for a HUMAN subject, composed from connection-layer data only:
@@ -1143,11 +1146,20 @@ public sealed class ClientHub
     // System line to every client currently on `team` (miner notices).
     private void SystemToTeam(byte team, string text)
     {
+        byte[] BuildFrame() => Protocol.BuildChatRelay(0, team, "★", text);
+        SendToTeam(team, BuildFrame);
+    }
+
+    // Lazily build one frame for `team` (via the caller's local-function builder), then RELIABLE-send
+    // it to every client currently on that team — the build runs at most once, only if the team has
+    // at least one client, and is skipped entirely for an empty team.
+    private void SendToTeam(byte team, Func<byte[]> buildFrame)
+    {
         byte[]? frame = null;
         foreach (var c in _clients.Values)
             if (_lobby.TeamOf(c.Id) == team)
             {
-                frame ??= Protocol.BuildChatRelay(0, team, "★", text);
+                frame ??= buildFrame();
                 SendReliable(c, OutFrame.Whole(frame));
             }
     }
@@ -1220,7 +1232,6 @@ public sealed class ClientHub
         await foreach (var frame in client.Outbound.Reader.ReadAllAsync(ct))
         {
             await client.Transport.SendAsync(frame.Buf.AsMemory(0, frame.Len), ct);
-            Interlocked.Add(ref _bytesSent, frame.Len);
             if (frame.Pooled)
                 ArrayPool<byte>.Shared.Return(frame.Buf); // safe: SendAsync has drained it
         }
@@ -1235,8 +1246,99 @@ public sealed class ClientHub
         // Surface queue pressure (dropped lossy frames / parked reliable frames) at most every ~5 s.
         LogQueuePressure(tick);
 
-        // Push a fresh lobby roster on every phase transition (Lobby->Active->Ended->Lobby)
-        // so clients flip their UI between lobby and match in lockstep with the authority.
+        // Push a fresh lobby roster on every phase transition (Lobby->Active->Ended->Lobby) so
+        // clients flip their UI between lobby and match in lockstep with the authority.
+        HandlePhaseTransition();
+
+        // System-chat / directive notices accumulated by the sim during Step (miner, constructor,
+        // research, commander-order), drained in the same order they were emitted.
+        DrainStepNotices();
+
+        SerializeRecords(ships);
+
+        bool coarse = tick % (uint)CoarseEveryTicks == 0;
+        bool mid = tick % (uint)MidEveryTicks == 0;
+        // Coarse ticks full-scan every ship (all sectors), so they don't need the grid; plain
+        // and mid ticks gather from it. The id->index map is always rebuilt for anchor lookup.
+        RebuildAoiIndex(ships, buildGrid: !coarse);
+
+        // Capture this tick's snapshot header once (identical for all clients).
+        _dispatchTick = tick;
+        _dispatchPhase = _sim.Phase;
+        _dispatchWinner = _sim.Winner;
+
+        // Build every broadcast/per-team frame this tick might send, once, before any client send.
+        var frames = PrepareBroadcastFrames(coarse);
+
+        // Sequential pre-pass: resolve each client's controlled ship (ShipIdOf takes the sim's
+        // queue lock — keep it off the parallel path), emit YouAre/Gone/Bases, cache the AOI
+        // anchor, and snapshot the client set into _dispatchList (a stable, exactly-counted
+        // roster the fan-out hands to the workers). After this, the snapshot build reads only
+        // shared, immutable-for-the-tick state.
+        _dispatchList.Clear();
+        // A spawn/death/respawn is processed by the sim a tick or more AFTER MsgSpawn enqueued it,
+        // so the controlled-ship id only becomes known here. Whenever one flips, the lobby roster's
+        // ShipId is stale, so re-broadcast it once after the pass — that roster is how every client
+        // maps a snapshot ship back to its pilot for the in-world nameplate (and the HasShip flag).
+        bool rosterDirty = false;
+        foreach (var kv in _clients)
+        {
+            var client = kv.Value;
+            if (SendPerClientFrames(client, ships, tick, coarse, frames))
+                rosterDirty = true;
+            _dispatchList.Add(client);
+        }
+
+        // Publish the corrected roster (ShipId now known for any ship that just spawned/changed).
+        if (rosterDirty)
+            BroadcastLobby();
+
+        FanOutSnapshots(ships, mid, coarse);
+    }
+
+    // Per-tick holder for every broadcast/per-team frame PrepareBroadcastFrames builds, so
+    // SendPerClientFrames (called once per client) reads from a single shared object instead of a
+    // long parameter list. Per-team dictionaries are lazily filled the first time a given team is
+    // seen in the per-client loop, and that single fill is shared by every later client on the team.
+    private sealed class BroadcastFrames
+    {
+        public bool Fog;
+        public byte[][]? GoneFrames;
+        public byte[][]? MissileGoneFrames;
+        public IReadOnlyList<Simulation.MissileSim> Missiles = System.Array.Empty<Simulation.MissileSim>();
+        public byte[][]? ChaffFrames;
+        public Dictionary<byte, HashSet<int>>? ChaffVisByTeam;
+        public byte[][]? MineGoneFrames;
+        public List<byte[]>? ProbeGoneFrames;
+        public bool SendProbes;
+        public Dictionary<byte, byte[]>? ProbeFramesByTeam;
+        public bool SendMinefields;
+        public Dictionary<byte, HashSet<ulong>>? MineVisCache;
+        public bool SendBases;
+        public byte[]? BasesFrame;
+        public Dictionary<byte, byte[]>? BaseFramesByTeam;
+        public Dictionary<byte, byte[]>? ContactFramesByTeam;
+        public Dictionary<byte, List<byte[]>>? LostByTeam;
+        public byte[]? TeamStateFrame;
+        public byte[]? LoadoutFrame;
+        public bool SendResearch;
+        public Dictionary<byte, byte[]>? ResearchFramesByTeam;
+        public bool SendConstructor;
+        public Dictionary<byte, byte[]>? ConstructorFramesByTeam;
+        public bool SendRocks;
+        public List<ulong>? ChangedRockList;
+        public List<byte[]>? RockBroadcast;
+        public Dictionary<byte, List<byte[]>>? RockFramesByTeam;
+        public byte[]? MinerTargetsFrame;
+        public byte[]? ConstructorBuildsFrame;
+        public byte[]? BaseRevealFrame;
+        public byte[]? RockGoneFrame;
+    }
+
+    // Push a fresh lobby roster on every phase transition (Lobby->Active->Ended->Lobby) so clients
+    // flip their UI between lobby and match in lockstep with the authority.
+    private void HandlePhaseTransition()
+    {
         if (_sim.Phase != _lastPhase)
         {
             _lastPhase = _sim.Phase;
@@ -1251,7 +1353,13 @@ public sealed class ClientHub
                 foreach (var c in _clients.Values)
                     SendWelcome(c);
         }
+    }
 
+    // Drain this step's accumulated notices (miner, constructor, research, commander-order),
+    // in the same order AfterStep always has, so multiple notices in one tick reach clients in a
+    // stable order.
+    private void DrainStepNotices()
+    {
         // Mining notices ("Miner purchased", "offloaded ore: +N", ...): team-scoped system chat,
         // accumulated by the sim during Step and cleared at the top of the next one.
         foreach (var (team, msg) in _sim.MinerNoticesThisStep)
@@ -1277,28 +1385,19 @@ public sealed class ClientHub
                 SystemTo(oc, msg);
         foreach (var (team, issuer, msg) in _sim.OrderDirectivesThisStep)
         {
-            byte[]? frame = null;
-            foreach (var c in _clients.Values)
-                if (_lobby.TeamOf(c.Id) == team)
-                {
-                    frame ??= Protocol.BuildChatRelay(2, team, issuer, msg);
-                    SendReliable(c, OutFrame.Whole(frame));
-                }
+            byte[] BuildDirectiveFrame() => Protocol.BuildChatRelay(2, team, issuer, msg);
+            SendToTeam(team, BuildDirectiveFrame);
         }
+    }
 
-        SerializeRecords(ships);
-
-        bool coarse = tick % (uint)CoarseEveryTicks == 0;
-        bool mid = tick % (uint)MidEveryTicks == 0;
-        // Coarse ticks full-scan every ship (all sectors), so they don't need the grid; plain
-        // and mid ticks gather from it. The id->index map is always rebuilt for anchor lookup.
-        RebuildAoiIndex(ships, buildGrid: !coarse);
-
-        // Capture this tick's snapshot header once (identical for all clients).
-        _dispatchTick = tick;
-        _dispatchPhase = _sim.Phase;
-        _dispatchWinner = _sim.Winner;
-
+    // Build every broadcast/per-team frame this tick might need to send, ONCE, before any client is
+    // touched — one-shot event frames (deaths, gone-events, reveals) plus the on-change/coarse-
+    // keepalive frames (bases, team state, loadouts, research, constructor, minefield/chaff
+    // visibility caches, rocks). Per-team dictionaries are returned empty-but-allocated (lazily
+    // filled by SendPerClientFrames, once per team) so the single-build-per-team behavior survives
+    // the extraction unchanged.
+    private BroadcastFrames PrepareBroadcastFrames(bool coarse)
+    {
         byte[][]? goneFrames = null;
         if (_sim.DeathsThisStep.Count > 0)
         {
@@ -1425,26 +1524,6 @@ public sealed class ClientHub
         // NoTeam client's team never keys the cache (MineVisFor returns null). Runs post-Step on the sim
         // thread inside the sequential pre-pass, so the TeamVision reads/point-visibility stay safe.
         Dictionary<byte, HashSet<ulong>>? mineVisCache = fog ? new() : null;
-        HashSet<ulong>? MineVisFor(byte team)
-        {
-            if (!fog || team > 1)
-                return null;
-            if (mineVisCache!.TryGetValue(team, out var cached))
-                return cached;
-            var fields = _sim.Minefields;
-            // Radar detections (VisibleEnemyMines, swapped whole at the vision apply — quiescent here)
-            // seed the set; direct LOS then unions in. Radar gives at-range discovery of an armed field
-            // without line of sight; LOS still reveals immediately through a window.
-            var tv = _sim.VisionFor(team);
-            HashSet<ulong>? vis = (tv != null && tv.VisibleEnemyMines.Count > 0)
-                ? new HashSet<ulong>(tv.VisibleEnemyMines) : null;
-            for (int i = 0; i < fields.Count; i++)
-                if (fields[i].Team != team && _sim.IsPointVisibleToTeam(team, fields[i].SectorId, fields[i].Center))
-                    (vis ??= new()).Add(fields[i].FieldId);
-            vis ??= new(); // cache an empty set so a second client on this team doesn't recompute
-            mineVisCache[team] = vis;
-            return vis;
-        }
 
         // Fog point-visibility for chaff pops (F10): same (target, team) precompute, still eager — a
         // chaff pop is a one-shot event tied to this exact tick, not a per-client anchor query.
@@ -1498,272 +1577,344 @@ public sealed class ClientHub
         // client no-op and a rock vanishing leaks nothing. null when no rock was removed this step.
         byte[]? rockGoneFrame = Protocol.BuildRockGone(_sim.World.RocksRemovedThisStep);
 
-        // Sequential pre-pass: resolve each client's controlled ship (ShipIdOf takes the sim's
-        // queue lock — keep it off the parallel path), emit YouAre/Gone/Bases, cache the AOI
-        // anchor, and snapshot the client set into _dispatchList (a stable, exactly-counted
-        // roster the fan-out hands to the workers). After this, the snapshot build reads only
-        // shared, immutable-for-the-tick state.
-        _dispatchList.Clear();
-        // A spawn/death/respawn is processed by the sim a tick or more AFTER MsgSpawn enqueued it,
-        // so the controlled-ship id only becomes known here. Whenever one flips, the lobby roster's
-        // ShipId is stale, so re-broadcast it once after the pass — that roster is how every client
-        // maps a snapshot ship back to its pilot for the in-world nameplate (and the HasShip flag).
-        bool rosterDirty = false;
-        foreach (var kv in _clients)
+        return new BroadcastFrames
         {
-            var client = kv.Value;
-            // The client's controlled ship changes over a match (combat -> escape pod ->
-            // respawn), so re-issue YouAre whenever it flips. A 0 id = dead/awaiting respawn
-            // (no ship to claim); the AOI then anchors on the home-sector origin.
-            // Parked reliable frames from earlier full-queue ticks go out before anything new.
-            FlushReliable(client);
+            Fog = fog,
+            GoneFrames = goneFrames,
+            MissileGoneFrames = missileGoneFrames,
+            Missiles = missiles,
+            ChaffFrames = chaffFrames,
+            ChaffVisByTeam = chaffVisByTeam,
+            MineGoneFrames = mineGoneFrames,
+            ProbeGoneFrames = probeGoneFrames,
+            SendProbes = sendProbes,
+            ProbeFramesByTeam = probeFramesByTeam,
+            SendMinefields = sendMinefields,
+            MineVisCache = mineVisCache,
+            SendBases = sendBases,
+            BasesFrame = basesFrame,
+            BaseFramesByTeam = baseFramesByTeam,
+            ContactFramesByTeam = contactFramesByTeam,
+            LostByTeam = lostByTeam,
+            TeamStateFrame = teamStateFrame,
+            LoadoutFrame = loadoutFrame,
+            SendResearch = sendResearch,
+            ResearchFramesByTeam = researchFramesByTeam,
+            SendConstructor = sendConstructor,
+            ConstructorFramesByTeam = constructorFramesByTeam,
+            SendRocks = sendRocks,
+            ChangedRockList = changedRockList,
+            RockBroadcast = rockBroadcast,
+            RockFramesByTeam = rockFramesByTeam,
+            MinerTargetsFrame = minerTargetsFrame,
+            ConstructorBuildsFrame = constructorBuildsFrame,
+            BaseRevealFrame = baseRevealFrame,
+            RockGoneFrame = rockGoneFrame,
+        };
+    }
 
-            ulong sid = _sim.ShipIdOf(client.Id);
-            if (sid != client.ShipId)
+    // Fog point-visibility for a minefield-owning team (F10): computed once per (tick, team) into
+    // `mineVisCache` (from BroadcastFrames), then reused for every client on that team — and for
+    // both the count + write passes inside BuildMinefieldsFor. Hoisted out of AfterStep's old local
+    // function of the same name; behavior (including the null-for-NoTeam/enemy-team short-circuit)
+    // is unchanged.
+    private HashSet<ulong>? MineVisFor(Dictionary<byte, HashSet<ulong>>? mineVisCache, bool fog, byte team)
+    {
+        if (!fog || team > 1)
+            return null;
+        if (mineVisCache!.TryGetValue(team, out var cached))
+            return cached;
+        var fields = _sim.Minefields;
+        // Radar detections (VisibleEnemyMines, swapped whole at the vision apply — quiescent here)
+        // seed the set; direct LOS then unions in. Radar gives at-range discovery of an armed field
+        // without line of sight; LOS still reveals immediately through a window.
+        var tv = _sim.VisionFor(team);
+        HashSet<ulong>? vis = (tv != null && tv.VisibleEnemyMines.Count > 0)
+            ? new HashSet<ulong>(tv.VisibleEnemyMines) : null;
+        for (int i = 0; i < fields.Count; i++)
+            if (fields[i].Team != team && _sim.IsPointVisibleToTeam(team, fields[i].SectorId, fields[i].Center))
+                (vis ??= new()).Add(fields[i].FieldId);
+        vis ??= new(); // cache an empty set so a second client on this team doesn't recompute
+        mineVisCache[team] = vis;
+        return vis;
+    }
+
+    // One client's slice of AfterStep's pre-pass: resolve its controlled ship / anchor / team (the
+    // ShipIdOf call needs the sim's queue lock, so this whole pass stays sequential/off the parallel
+    // snapshot path), then send every broadcast/per-team frame PrepareBroadcastFrames prepared, in
+    // the exact original order. Returns true if this client's roster-visible state (ShipId or Team)
+    // changed this tick, so AfterStep can re-broadcast the lobby roster once after the whole pass.
+    private bool SendPerClientFrames(
+        Client client,
+        IReadOnlyList<Simulation.ShipSim> ships,
+        uint tick,
+        bool coarse,
+        BroadcastFrames frames
+    )
+    {
+        bool fog = frames.Fog;
+        bool rosterDirty = false;
+
+        // Get-or-build cache idiom shared by every per-team lazy frame below: build once per team
+        // (not once per client), reusing the cached buffer for every later client on that team this
+        // tick. `cache` is one of BroadcastFrames' per-team dictionaries; `build` computes the frame
+        // only on a cache miss.
+        byte[] TeamFrame(Dictionary<byte, byte[]> cache, byte team, Func<byte[]> build)
+        {
+            if (!cache.TryGetValue(team, out var f))
+                cache[team] = f = build();
+            return f;
+        }
+
+        // The client's controlled ship changes over a match (combat -> escape pod ->
+        // respawn), so re-issue YouAre whenever it flips. A 0 id = dead/awaiting respawn
+        // (no ship to claim); the AOI then anchors on the home-sector origin.
+        // Parked reliable frames from earlier full-queue ticks go out before anything new.
+        FlushReliable(client);
+
+        ulong sid = _sim.ShipIdOf(client.Id);
+        if (sid != client.ShipId)
+        {
+            client.ShipId = sid;
+            rosterDirty = true;
+            // RELIABLE: this is the only time the flip is ever announced — losing it strands
+            // the client on a ship it doesn't know is its own (stuck "LAUNCHING…" hangar).
+            if (sid != 0)
+                SendReliable(client, OutFrame.Whole(Protocol.BuildYouAre(sid)));
+        }
+
+        if (sid != 0 && _shipIndexById.TryGetValue(sid, out int si))
+        {
+            client.AnchorPos = ships[si].State.Pos;
+            client.AnchorSector = ships[si].SectorId;
+
+            // Reconnect reclaim rebinds a held ship to this fresh connection on the sim thread, but
+            // the hub-side team (and the lobby record) were reset to NoTeam at this connection's
+            // Hello. Restore them from the reclaimed ship's authoritative team so its OWN records
+            // stream (Hidden()/coarse both team-gate on client.Team) and its fog vision is correct
+            // (F2). Sync the lobby exactly as MsgSetTeam does, then — since the reclaim resolved
+            // AFTER the join Welcome (which under fog carried NoTeam's empty world) — re-send a fog
+            // Welcome for the restored team (F1's team-change hook). A normal spawn already matches,
+            // so only a reclaim trips this.
+            byte shipTeam = ships[si].Team;
+            if (shipTeam != client.Team && (shipTeam == 0 || shipTeam == 1))
             {
-                client.ShipId = sid;
+                client.Team = shipTeam;
+                _lobby.SetTeam(client.Id, shipTeam);
                 rosterDirty = true;
-                // RELIABLE: this is the only time the flip is ever announced — losing it strands
-                // the client on a ship it doesn't know is its own (stuck "LAUNCHING…" hangar).
-                if (sid != 0)
-                    SendReliable(client, OutFrame.Whole(Protocol.BuildYouAre(sid)));
+                if (fog)
+                    SendWelcome(client);
+            }
+        }
+        else
+        {
+            client.AnchorPos = default;
+            // No live ship (spectator/dead): anchor on the client's team garrison sector if it has
+            // one, else the map's default sector. (No hardcoded "home" — home = your garrison.)
+            uint anchor = _sim.World.DefaultSector;
+            foreach (var b in _sim.World.Bases)
+                if (b.Team == client.Team)
+                {
+                    anchor = b.SectorId;
+                    break;
+                }
+            client.AnchorSector = anchor;
+        }
+
+        // RELIABLE: a ShipGone is sent exactly once, and the client never removes ships by
+        // omission — a lost one leaves a ghost hull (and a stuck "IN FLIGHT" hangar when it
+        // was the client's own dock/despawn).
+        if (frames.GoneFrames is not null)
+            foreach (var f in frames.GoneFrames)
+                SendReliable(client, OutFrame.Whole(f));
+
+        if (frames.BasesFrame is not null)
+            SendLossy(client, OutFrame.Whole(frames.BasesFrame));
+
+        if (frames.TeamStateFrame is not null)
+            SendLossy(client, OutFrame.Whole(frames.TeamStateFrame));
+
+        // Ship weapon-mount table (see the build note above): reliable one-shot per cadence tick.
+        if (frames.LoadoutFrame is not null)
+            SendReliable(client, OutFrame.Whole(frames.LoadoutFrame));
+
+        // Research orders (v36): per-team, lazy-built once per team; NoTeam spectators get none.
+        if (frames.SendResearch && client.Team <= 1)
+        {
+            byte[] BuildResearchFrame() => Protocol.BuildResearchStateFor(_sim.World, client.Team);
+            SendLossy(client, OutFrame.Whole(TeamFrame(frames.ResearchFramesByTeam!, client.Team, BuildResearchFrame)));
+        }
+
+        if (frames.MinerTargetsFrame is not null)
+            SendLossy(client, OutFrame.Whole(frames.MinerTargetsFrame));
+
+        if (frames.ConstructorBuildsFrame is not null)
+            SendLossy(client, OutFrame.Whole(frames.ConstructorBuildsFrame));
+
+        // Constructor roster (v38): per-team, lazy-built once per team; NoTeam spectators get none.
+        if (frames.SendConstructor && client.Team <= 1)
+        {
+            byte[] BuildConstructorFrame() => Protocol.BuildConstructorState(_sim, client.Team);
+            SendLossy(client, OutFrame.Whole(TeamFrame(frames.ConstructorFramesByTeam!, client.Team, BuildConstructorFrame)));
+        }
+
+        // Fog-off new-base reveal (reliable — a one-shot static the client must not miss).
+        if (frames.BaseRevealFrame is not null)
+            SendReliable(client, OutFrame.Whole(frames.BaseRevealFrame));
+
+        // Rock despawn (reliable — a one-shot removal the client must not miss, or a ghost rock
+        // lingers under the finished base). Broadcast to every client regardless of fog.
+        if (frames.RockGoneFrame is not null)
+            SendReliable(client, OutFrame.Whole(frames.RockGoneFrame));
+
+        // Fog-on per-team frames. All built lazily (once per team). This whole pre-pass runs on
+        // the sim thread with Step() done, so TeamVision reads/drains are safe (quiescent).
+        if (fog)
+        {
+            var vision = _sim.VisionFor(client.Team); // null for a NoTeam spectator
+
+            // MsgBases (per-team, discovered + remembered health) on the change/keepalive cadence.
+            if (frames.SendBases)
+            {
+                byte[] BuildBasesFrame() => Protocol.BuildBasesFor(_sim.World, vision);
+                SendLossy(client, OutFrame.Whole(TeamFrame(frames.BaseFramesByTeam!, client.Team, BuildBasesFrame)));
             }
 
-            if (sid != 0 && _shipIndexById.TryGetValue(sid, out int si))
+            // MsgReveal (per-team, PER-CLIENT cursor): stream the bounded slice of the reveal log
+            // this client is still behind on (F3). Lossless-by-cursor: the log is never drained, so
+            // a dropped frame is simply resent next tick, and a late joiner streams the whole match's
+            // discoveries in bounded slices. The cursor advances ONLY on a successful enqueue.
+            if (vision is not null)
             {
-                client.AnchorPos = ships[si].State.Pos;
-                client.AnchorSector = ships[si].SectorId;
-
-                // Reconnect reclaim rebinds a held ship to this fresh connection on the sim thread, but
-                // the hub-side team (and the lobby record) were reset to NoTeam at this connection's
-                // Hello. Restore them from the reclaimed ship's authoritative team so its OWN records
-                // stream (Hidden()/coarse both team-gate on client.Team) and its fog vision is correct
-                // (F2). Sync the lobby exactly as MsgSetTeam does, then — since the reclaim resolved
-                // AFTER the join Welcome (which under fog carried NoTeam's empty world) — re-send a fog
-                // Welcome for the restored team (F1's team-change hook). A normal spawn already matches,
-                // so only a reclaim trips this.
-                byte shipTeam = ships[si].Team;
-                if (shipTeam != client.Team && (shipTeam == 0 || shipTeam == 1))
+                var rf = Protocol.BuildRevealSlice(
+                    _sim.World, vision, RockIndexById(),
+                    client.RevealBaseCur, client.RevealRockCur, client.RevealAlephCur, client.RevealSectorCur,
+                    out int nb, out int nr, out int na, out int ns);
+                if (rf is not null && client.Outbound.Writer.TryWrite(OutFrame.Whole(rf)))
                 {
-                    client.Team = shipTeam;
-                    _lobby.SetTeam(client.Id, shipTeam);
-                    rosterDirty = true;
-                    if (fog)
-                        SendWelcome(client);
+                    client.RevealBaseCur = nb;
+                    client.RevealRockCur = nr;
+                    client.RevealAlephCur = na;
+                    client.RevealSectorCur = ns;
                 }
+            }
+
+            // MsgContacts (per-team) on ContactsDirty (ghost change) OR the coarse keepalive (the
+            // radar id-list changes without a ghost change, so it needs the periodic refresh).
+            if (vision is not null && (vision.ContactsDirty || coarse))
+            {
+                byte[] BuildContactsFrame()
+                {
+                    var f = Protocol.BuildContacts(vision);
+                    vision.ContactsDirty = false;
+                    return f;
+                }
+                SendLossy(client, OutFrame.Whole(TeamFrame(frames.ContactFramesByTeam!, client.Team, BuildContactsFrame)));
+            }
+
+            // Lost-contact quiet fades to this team only. RELIABLE: a reason-2 ShipGone is the
+            // only removal path for a faded contact's mesh (no omission reconcile client-side).
+            if (frames.LostByTeam is not null && frames.LostByTeam.TryGetValue(client.Team, out var lostFrames))
+                foreach (var f in lostFrames)
+                    SendReliable(client, OutFrame.Whole(f));
+        }
+
+        // RELIABLE: gone-events are one-shot removal/FX authority (a lost MissileGone leaves a
+        // ghost missile — in-flight streams stop, and the client only removes on the event).
+        if (frames.MissileGoneFrames is not null)
+            foreach (var f in frames.MissileGoneFrames)
+                SendReliable(client, OutFrame.Whole(f));
+
+        // Chaff spawns: broadcast when fog off. When fog on, an ENEMY team receives a pop only if
+        // its pop point is visible to that team at the spawn instant (own-team chaff always shown).
+        if (frames.ChaffFrames is not null)
+            for (int ci = 0; ci < frames.ChaffFrames.Length; ci++)
+            {
+                if (fog)
+                {
+                    var c = _sim.ChaffSpawnedThisStep[ci];
+                    // Enemy pops only when visible to this team at the spawn instant — using the
+                    // per-(team, chaff-index) precompute above (F10), not a per-client recompute.
+                    if (c.Team != client.Team
+                        && !(frames.ChaffVisByTeam is not null
+                            && frames.ChaffVisByTeam.TryGetValue(client.Team, out var cv)
+                            && cv.Contains(ci)))
+                        continue;
+                }
+                SendLossy(client, OutFrame.Whole(frames.ChaffFrames[ci]));
+            }
+
+        if (frames.MineGoneFrames is not null)
+            foreach (var f in frames.MineGoneFrames)
+                SendReliable(client, OutFrame.Whole(f));
+
+        // Recon probes: gone events broadcast to everyone (unknown ids no-op client-side).
+        // RELIABLE: MsgProbes has no reconcile-by-omission — ProbeGone is the ONLY removal.
+        if (frames.ProbeGoneFrames is not null)
+            foreach (var f in frames.ProbeGoneFrames)
+                SendReliable(client, OutFrame.Whole(f));
+
+        if (frames.SendProbes)
+        {
+            byte[] BuildProbesFrame() => BuildProbesFor(client.Team);
+            SendLossy(client, OutFrame.Whole(TeamFrame(frames.ProbeFramesByTeam!, client.Team, BuildProbesFrame)));
+        }
+
+        // Minefield frame for this client's anchor sector (change + coarse keepalive + anchor-sector
+        // change). Always sent when flagged — an empty frame is how a removal propagates. A warp
+        // changes AnchorSector (refreshed in the pre-pass above) without a global minefield change,
+        // so trigger on that too or the new sector's fields never stream in (and the old sector's
+        // never prune). Fog on: own-team fields always, enemy fields only while their anchor point is
+        // visible to this team. Advance LastMinefieldAnchor only on a successful enqueue.
+        bool wantMinefields = frames.SendMinefields || client.AnchorSector != client.LastMinefieldAnchor;
+        if (wantMinefields
+            && client.Outbound.Writer.TryWrite(
+                OutFrame.Whole(BuildMinefieldsFor(
+                    client.AnchorSector, client.Team, MineVisFor(frames.MineVisCache, fog, client.Team)))))
+            client.LastMinefieldAnchor = client.AnchorSector;
+
+        // Live rock shrink (mining). Fog off: the shared broadcast frames. Fog on: this team's
+        // discovered-only frames, built once per team (lazily) — a NoTeam spectator's null vision
+        // yields no frames. Frames are non-pooled byte[], safe to hand to multiple clients.
+        if (frames.SendRocks)
+        {
+            // RELIABLE: rock deltas are on-change only (no keepalive) — a lost one stays stale
+            // until the NEXT harvest tick on that rock, which may never come.
+            if (!fog)
+            {
+                foreach (var f in frames.RockBroadcast!)
+                    SendReliable(client, OutFrame.Whole(f));
             }
             else
             {
-                client.AnchorPos = default;
-                // No live ship (spectator/dead): anchor on the client's team garrison sector if it has
-                // one, else the map's default sector. (No hardcoded "home" — home = your garrison.)
-                uint anchor = _sim.World.DefaultSector;
-                foreach (var b in _sim.World.Bases)
-                    if (b.Team == client.Team)
-                    {
-                        anchor = b.SectorId;
-                        break;
-                    }
-                client.AnchorSector = anchor;
-            }
-
-            // RELIABLE: a ShipGone is sent exactly once, and the client never removes ships by
-            // omission — a lost one leaves a ghost hull (and a stuck "IN FLIGHT" hangar when it
-            // was the client's own dock/despawn).
-            if (goneFrames is not null)
-                foreach (var f in goneFrames)
+                if (!frames.RockFramesByTeam!.TryGetValue(client.Team, out var rkf))
+                    frames.RockFramesByTeam[client.Team] = rkf =
+                        Protocol.BuildRockUpdatesFor(_sim.World, _sim.VisionFor(client.Team), frames.ChangedRockList!);
+                foreach (var f in rkf)
                     SendReliable(client, OutFrame.Whole(f));
-
-            if (basesFrame is not null)
-                SendLossy(client, OutFrame.Whole(basesFrame));
-
-            if (teamStateFrame is not null)
-                SendLossy(client, OutFrame.Whole(teamStateFrame));
-
-            // Ship weapon-mount table (see the build note above): reliable one-shot per cadence tick.
-            if (loadoutFrame is not null)
-                SendReliable(client, OutFrame.Whole(loadoutFrame));
-
-            // Research orders (v36): per-team, lazy-built once per team; NoTeam spectators get none.
-            if (sendResearch && client.Team <= 1)
-            {
-                if (!researchFramesByTeam!.TryGetValue(client.Team, out var rf))
-                    researchFramesByTeam[client.Team] = rf = Protocol.BuildResearchStateFor(_sim.World, client.Team);
-                SendLossy(client, OutFrame.Whole(rf));
             }
-
-            if (minerTargetsFrame is not null)
-                SendLossy(client, OutFrame.Whole(minerTargetsFrame));
-
-            if (constructorBuildsFrame is not null)
-                SendLossy(client, OutFrame.Whole(constructorBuildsFrame));
-
-            // Constructor roster (v38): per-team, lazy-built once per team; NoTeam spectators get none.
-            if (sendConstructor && client.Team <= 1)
-            {
-                if (!constructorFramesByTeam!.TryGetValue(client.Team, out var cf))
-                    constructorFramesByTeam[client.Team] = cf = Protocol.BuildConstructorState(_sim, client.Team);
-                SendLossy(client, OutFrame.Whole(cf));
-            }
-
-            // Fog-off new-base reveal (reliable — a one-shot static the client must not miss).
-            if (baseRevealFrame is not null)
-                SendReliable(client, OutFrame.Whole(baseRevealFrame));
-
-            // Rock despawn (reliable — a one-shot removal the client must not miss, or a ghost rock
-            // lingers under the finished base). Broadcast to every client regardless of fog.
-            if (rockGoneFrame is not null)
-                SendReliable(client, OutFrame.Whole(rockGoneFrame));
-
-            // Fog-on per-team frames. All built lazily (once per team). This whole pre-pass runs on
-            // the sim thread with Step() done, so TeamVision reads/drains are safe (quiescent).
-            if (fog)
-            {
-                var vision = _sim.VisionFor(client.Team); // null for a NoTeam spectator
-
-                // MsgBases (per-team, discovered + remembered health) on the change/keepalive cadence.
-                if (sendBases)
-                {
-                    if (!baseFramesByTeam!.TryGetValue(client.Team, out var bf))
-                        baseFramesByTeam[client.Team] = bf = Protocol.BuildBasesFor(_sim.World, vision);
-                    SendLossy(client, OutFrame.Whole(bf));
-                }
-
-                // MsgReveal (per-team, PER-CLIENT cursor): stream the bounded slice of the reveal log
-                // this client is still behind on (F3). Lossless-by-cursor: the log is never drained, so
-                // a dropped frame is simply resent next tick, and a late joiner streams the whole match's
-                // discoveries in bounded slices. The cursor advances ONLY on a successful enqueue.
-                if (vision is not null)
-                {
-                    var rf = Protocol.BuildRevealSlice(
-                        _sim.World, vision, RockIndexById(),
-                        client.RevealBaseCur, client.RevealRockCur, client.RevealAlephCur, client.RevealSectorCur,
-                        out int nb, out int nr, out int na, out int ns);
-                    if (rf is not null && client.Outbound.Writer.TryWrite(OutFrame.Whole(rf)))
-                    {
-                        client.RevealBaseCur = nb;
-                        client.RevealRockCur = nr;
-                        client.RevealAlephCur = na;
-                        client.RevealSectorCur = ns;
-                    }
-                }
-
-                // MsgContacts (per-team) on ContactsDirty (ghost change) OR the coarse keepalive (the
-                // radar id-list changes without a ghost change, so it needs the periodic refresh).
-                if (vision is not null && (vision.ContactsDirty || coarse))
-                {
-                    if (!contactFramesByTeam!.TryGetValue(client.Team, out var cf))
-                    {
-                        cf = Protocol.BuildContacts(vision);
-                        vision.ContactsDirty = false;
-                        contactFramesByTeam[client.Team] = cf;
-                    }
-                    SendLossy(client, OutFrame.Whole(cf));
-                }
-
-                // Lost-contact quiet fades to this team only. RELIABLE: a reason-2 ShipGone is the
-                // only removal path for a faded contact's mesh (no omission reconcile client-side).
-                if (lostByTeam is not null && lostByTeam.TryGetValue(client.Team, out var lostFrames))
-                    foreach (var f in lostFrames)
-                        SendReliable(client, OutFrame.Whole(f));
-            }
-
-            // RELIABLE: gone-events are one-shot removal/FX authority (a lost MissileGone leaves a
-            // ghost missile — in-flight streams stop, and the client only removes on the event).
-            if (missileGoneFrames is not null)
-                foreach (var f in missileGoneFrames)
-                    SendReliable(client, OutFrame.Whole(f));
-
-            // Chaff spawns: broadcast when fog off. When fog on, an ENEMY team receives a pop only if
-            // its pop point is visible to that team at the spawn instant (own-team chaff always shown).
-            if (chaffFrames is not null)
-                for (int ci = 0; ci < chaffFrames.Length; ci++)
-                {
-                    if (fog)
-                    {
-                        var c = _sim.ChaffSpawnedThisStep[ci];
-                        // Enemy pops only when visible to this team at the spawn instant — using the
-                        // per-(team, chaff-index) precompute above (F10), not a per-client recompute.
-                        if (c.Team != client.Team
-                            && !(chaffVisByTeam is not null
-                                && chaffVisByTeam.TryGetValue(client.Team, out var cv)
-                                && cv.Contains(ci)))
-                            continue;
-                    }
-                    SendLossy(client, OutFrame.Whole(chaffFrames[ci]));
-                }
-
-            if (mineGoneFrames is not null)
-                foreach (var f in mineGoneFrames)
-                    SendReliable(client, OutFrame.Whole(f));
-
-            // Recon probes: gone events broadcast to everyone (unknown ids no-op client-side).
-            // RELIABLE: MsgProbes has no reconcile-by-omission — ProbeGone is the ONLY removal.
-            if (probeGoneFrames is not null)
-                foreach (var f in probeGoneFrames)
-                    SendReliable(client, OutFrame.Whole(f));
-
-            if (sendProbes)
-            {
-                if (!probeFramesByTeam!.TryGetValue(client.Team, out var pf))
-                    probeFramesByTeam[client.Team] = pf = BuildProbesFor(client.Team);
-                SendLossy(client, OutFrame.Whole(pf));
-            }
-
-            // Minefield frame for this client's anchor sector (change + coarse keepalive + anchor-sector
-            // change). Always sent when flagged — an empty frame is how a removal propagates. A warp
-            // changes AnchorSector (refreshed in the pre-pass above) without a global minefield change,
-            // so trigger on that too or the new sector's fields never stream in (and the old sector's
-            // never prune). Fog on: own-team fields always, enemy fields only while their anchor point is
-            // visible to this team. Advance LastMinefieldAnchor only on a successful enqueue.
-            bool wantMinefields = sendMinefields || client.AnchorSector != client.LastMinefieldAnchor;
-            if (wantMinefields
-                && client.Outbound.Writer.TryWrite(
-                    OutFrame.Whole(BuildMinefieldsFor(
-                        client.AnchorSector, client.Team, MineVisFor(client.Team)))))
-                client.LastMinefieldAnchor = client.AnchorSector;
-
-            // Live rock shrink (mining). Fog off: the shared broadcast frames. Fog on: this team's
-            // discovered-only frames, built once per team (lazily) — a NoTeam spectator's null vision
-            // yields no frames. Frames are non-pooled byte[], safe to hand to multiple clients.
-            if (sendRocks)
-            {
-                // RELIABLE: rock deltas are on-change only (no keepalive) — a lost one stays stale
-                // until the NEXT harvest tick on that rock, which may never come.
-                if (!fog)
-                {
-                    foreach (var f in rockBroadcast!)
-                        SendReliable(client, OutFrame.Whole(f));
-                }
-                else
-                {
-                    if (!rockFramesByTeam!.TryGetValue(client.Team, out var rkf))
-                        rockFramesByTeam[client.Team] = rkf =
-                            Protocol.BuildRockUpdatesFor(_sim.World, _sim.VisionFor(client.Team), changedRockList!);
-                    foreach (var f in rkf)
-                        SendReliable(client, OutFrame.Whole(f));
-                }
-            }
-
-            // In-flight missiles this client can see: same-sector within full-rate radius of its
-            // anchor, OR homing on its own ship (incoming warning at any range). Built from the
-            // shared record scratch. Cheap sequential build (rare, low count) off the parallel path.
-            // NOT fog-filtered by design (accepted leak): a target needs its incoming-missile warning
-            // even from an unseen attacker (RWR counterplay). See the plan's Fog-interactions note.
-            if (missiles.Count > 0)
-            {
-                byte[]? missileFrame = BuildMissilesFor(client, missiles, tick);
-                if (missileFrame is not null)
-                    SendLossy(client, OutFrame.Whole(missileFrame));
-            }
-
-            _dispatchList.Add(client);
         }
 
-        // Publish the corrected roster (ShipId now known for any ship that just spawned/changed).
-        if (rosterDirty)
-            BroadcastLobby();
+        // In-flight missiles this client can see: same-sector within full-rate radius of its
+        // anchor, OR homing on its own ship (incoming warning at any range). Built from the
+        // shared record scratch. Cheap sequential build (rare, low count) off the parallel path.
+        // NOT fog-filtered by design (accepted leak): a target needs its incoming-missile warning
+        // even from an unseen attacker (RWR counterplay). See the plan's Fog-interactions note.
+        if (frames.Missiles.Count > 0)
+        {
+            byte[]? missileFrame = BuildMissilesFor(client, frames.Missiles, tick);
+            if (missileFrame is not null)
+                SendLossy(client, OutFrame.Whole(missileFrame));
+        }
 
+        return rosterDirty;
+    }
+
+    // Snapshot fan-out stage: the shared/team-filtered coarse-tick fast path, and otherwise the
+    // (possibly parallel) per-client snapshot build. Reads _dispatchList as populated by AfterStep's
+    // per-client pre-pass loop.
+    private void FanOutSnapshots(IReadOnlyList<Simulation.ShipSim> ships, bool mid, bool coarse)
+    {
         int n = _dispatchList.Count;
 
         // Shared coarse snapshot: on a coarse tick where every alive ship fits under MaxRecords,
