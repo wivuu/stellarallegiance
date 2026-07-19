@@ -873,6 +873,12 @@ public partial class TargetMarkers : Control
     // enemy-only below. Pods can't be focused (excluded from the cycle), so a pod always draws quiet.
     private (RemoteShip? focusedFriendly, RemoteShip? focusedShip) DrawShipsPass(Vector2 view)
     {
+        // On the F3 tactical map every contact gets a text type caption ("Miner", "Outpost
+        // Constructor", the hull name) so roles read at a glance — the shared miner/constructor
+        // glyphs are ambiguous at map scale. The flight HUD stays uncluttered (only the focused
+        // ship is tagged there, via DrawFocusTagsPass), so this is gated on the map being open.
+        bool f3 = SectorOverview.Active;
+
         RemoteShip? focusedFriendly = null;
         foreach (var fr in _world.Ships.FriendlyShips())
         {
@@ -881,6 +887,10 @@ public partial class TargetMarkers : Control
                 focusedFriendly = fr;
             Color color = focused ? FocusTint(fr.Team) : TeamColor(fr.Team);
             DrawEntity(view, fr.GlobalPosition, KindOf(fr), color, focused, friendly: !focused, GlyphOf(fr));
+            // The focused ship already carries its role/target tag from DrawFocusTagsPass — skip it
+            // here so it isn't double-labelled.
+            if (f3 && !focused)
+                DrawShipTypeLabel(view, fr.GlobalPosition, ShipTypeLabel(fr), TeamColor(fr.Team));
         }
 
         RemoteShip? focusedShip = null;
@@ -891,9 +901,51 @@ public partial class TargetMarkers : Control
                 focusedShip = e;
             Color color = focused ? FocusTint(e.Team) : TeamColor(e.Team);
             DrawEntity(view, e.GlobalPosition, KindOf(e), color, focused, friendly: false, GlyphOf(e));
+            if (f3 && !focused)
+                DrawShipTypeLabel(view, e.GlobalPosition, ShipTypeLabel(e), TeamColor(e.Team));
         }
 
         return (focusedFriendly, focusedShip);
+    }
+
+    // The human-readable ship type for the F3 map caption. Utility drones read as their role (the
+    // map is where "which of these is my constructor / miner" matters most, and their glyphs are
+    // ambiguous there); combat hulls read as their authored hull name (Scout/Fighter/Bomber/...).
+    // Pods stay unlabelled — transient escape capsules with no tactical value on the map.
+    private string ShipTypeLabel(RemoteShip s) =>
+        s.Kind switch
+        {
+            ShipKind.Miner => "Miner",
+            ShipKind.Constructor => "Outpost Constructor",
+            ShipKind.Pod => "",
+            _ => _defs.TryGetShipDef((byte)s.Class, out ShipClassDef def) && def.Name.Length > 0 ? def.Name : "",
+        };
+
+    // A small mono type caption centred just below a ship's glyph on the F3 map. Team-coloured and
+    // slightly dimmed so it annotates without competing with the glyph. Skipped when the text is
+    // empty (pods) or the ship is behind the camera / projects off screen.
+    private void DrawShipTypeLabel(Vector2 view, Vector3 worldPos, string text, Color color)
+    {
+        if (text.Length == 0)
+            return;
+        Camera3D cam = Cam;
+        if (cam.IsPositionBehind(worldPos))
+            return;
+        Vector2 sp = cam.UnprojectPosition(worldPos);
+        if (!new Rect2(Vector2.Zero, view).HasPoint(sp))
+            return;
+        Font font = UiFonts.Mono;
+        const int fs = 9;
+        float w = font.GetStringSize(text, HorizontalAlignment.Left, -1, fs).X;
+        DrawString(
+            font,
+            sp + new Vector2(-w * 0.5f, GlyphSize + 12f),
+            text,
+            HorizontalAlignment.Left,
+            -1,
+            fs,
+            new Color(color, 0.85f)
+        );
     }
 
     // A mono "TARGET" tag + range over the focused enemy — a light echo of the design's
