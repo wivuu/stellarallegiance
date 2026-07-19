@@ -242,6 +242,14 @@ public partial class BuildTab : Control
         for (byte rc = 0; rc < 5; rc++)
             if (_world.TeamState.RockClassDiscovered(team, rc))
                 sig ^= (rc + 29L) * 15485863L;
+        // Fold per-card affordability so a card re-greys/re-enables the moment credits cross its price
+        // (a BIT per slot, not raw credits — the sig stays stable between threshold crossings, so a
+        // slowly-earning treasury doesn't rebuild the grid every tick).
+        for (int i = 0; i < catalog.Count; i++)
+            if (!_world.TeamState.CanAfford(team, catalog[i].Price))
+                sig ^= (i + 41L) * 2246822519L;
+        if (_defs?.MinerShipDef() is ShipClassDef minerDef && !_world.TeamState.CanAfford(team, minerDef.Cost))
+            sig ^= 916703L;
         return sig;
     }
 
@@ -415,7 +423,10 @@ public partial class BuildTab : Control
                 TechDetailPanel.PriceText(s.Price),
                 TechDetailPanel.Mmss(s.BuildTimeSeconds),
                 RockDiscovered(s) && !queueFull,
-                _selectedId == id
+                _selectedId == id,
+                // Can't afford it yet? Keep the card visible but greyed (a situational lock like
+                // rock/queue), not hidden — the amber price stays legible so the reason reads.
+                _world!.TeamState.CanAfford(Team, s.Price)
             );
             card.Pressed += () => SelectStation(id);
             _grid.AddChild(card);
@@ -450,6 +461,7 @@ public partial class BuildTab : Control
             miner.OrderTimeSeconds > 0 ? TechDetailPanel.Mmss(miner.OrderTimeSeconds) : "",
             count < cap && !BuildQueueFull(out _),
             _selectedId == MinerCardId,
+            _world.TeamState.CanAfford(team, miner.Cost),
             kindWord: "DRONE",
             statusText: $"{count} / {cap}"
         );
@@ -695,6 +707,17 @@ public partial class BuildTab : Control
             );
             return;
         }
+        if (!_world!.TeamState.CanAfford(Team, sel.Price))
+        {
+            _detail.SetFooter(
+                true,
+                "⊘ INSUFFICIENT CREDITS",
+                ButtonVariant.Secondary,
+                null,
+                $"This structure costs {TechDetailPanel.PriceText(sel.Price)}."
+            );
+            return;
+        }
         if (BuildQueueFull(out int qlimit))
         {
             _detail.SetFooter(
@@ -740,6 +763,8 @@ public partial class BuildTab : Control
         }
         StationCatalogDef? sel = Catalog().FirstOrDefault(s => s.Id == _selectedId);
         if (sel is null || !IsConstructible(sel) || !IsAvailable(sel) || !RockDiscovered(sel) || !_net.IsCommander)
+            return;
+        if (_world != null && !_world.TeamState.CanAfford(Team, sel.Price))
             return;
         _net.SendBuildConstructor((byte)sel.BaseTypeId, _baseId);
         SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
@@ -834,6 +859,7 @@ internal partial class StationCard : PanelContainer
     private Label _price = null!;
     private Label _build = null!;
     private bool _available;
+    private bool _affordable = true;
     private bool _selected;
 
     public override void _Ready() => EnsureBuilt();
@@ -921,6 +947,7 @@ internal partial class StationCard : PanelContainer
         string buildText,
         bool available,
         bool selected,
+        bool affordable = true,
         string kindWord = "STRUCTURE",
         string? statusText = null
     )
@@ -933,6 +960,7 @@ internal partial class StationCard : PanelContainer
         _price.Text = priceText;
         _build.Text = string.IsNullOrEmpty(buildText) ? "" : $"BUILD {buildText}";
         _available = available;
+        _affordable = affordable;
         _selected = selected;
         // statusText overrides the derived AVAILABLE/LOCKED label (e.g. the miner card's "X / N").
         _status.Text = statusText ?? (available ? "◈ AVAILABLE" : "⊘ LOCKED");
@@ -975,7 +1003,14 @@ internal partial class StationCard : PanelContainer
         sb.SetBorderWidthAll(_selected ? 2 : 1);
         sb.SetContentMarginAll(12);
         AddThemeStyleboxOverride("panel", sb);
-        Modulate = _available || _selected ? Colors.White : new Color(1, 1, 1, 0.62f);
+        // Dim precedence: a rock/queue LOCK (`!_available`) dims hardest (0.62); an available-but-
+        // unaffordable card is a softer situational grey (0.70, matching the hangar's TooPoor ship card)
+        // so its amber price stays readable; a selected card is always full-bright.
+        Modulate =
+            _selected ? Colors.White
+            : !_available ? new Color(1, 1, 1, 0.62f)
+            : !_affordable ? new Color(1, 1, 1, 0.70f)
+            : Colors.White;
     }
 
     public override void _GuiInput(InputEvent @event)
