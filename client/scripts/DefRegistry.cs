@@ -84,7 +84,7 @@ public partial class DefRegistry : Node
     // ---- Faction identity + team-wide stat multipliers (v41; empty until MsgDefs lands) ----
 
     // The streamed faction display name (e.g. "Iron Coalition"); "" until the defs arrive.
-    // TODO: no consumer yet — forward-looking for the future identity/stat panel.
+    // Surfaced via GameNetClient.FactionName in the lobby's SECTOR INTEL pane ("who am I" identity).
     public string FactionName { get; private set; } = "";
     private AttrMod[] _factionAttributes = System.Array.Empty<AttrMod>();
 

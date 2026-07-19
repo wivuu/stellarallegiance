@@ -78,6 +78,7 @@ public partial class Lobby : Control
     private Label _mapCta = null!; // CHANGE ▸ (host) / VIEW ▸ (non-host)
     private Label _mapHostBadge = null!; // HOST / LOCKED
     private Label _siMode = null!, _siSector = null!, _siGarrisons = null!, _siSize = null!;
+    private Label _siFaction = null!;
     private HBoxContainer _garrisonBar = null!; // proportional owner split
     private VBoxContainer _garrisonRows = null!; // per-faction node counts
 
@@ -144,6 +145,7 @@ public partial class Lobby : Control
 
         _net.LobbyChanged += OnLobbyChanged;
         _net.MapListChanged += OnLobbyChanged; // catalog arrival refreshes the sector pane too
+        _net.DefsReceived += OnLobbyChanged;   // defs carry the faction name; refresh the intel pane
         _net.ChatReceived += OnChat;
 
         UpdateChannelButtons();
@@ -154,6 +156,7 @@ public partial class Lobby : Control
     {
         _net.LobbyChanged -= OnLobbyChanged;
         _net.MapListChanged -= OnLobbyChanged;
+        _net.DefsReceived -= OnLobbyChanged;
         _net.ChatReceived -= OnChat;
     }
 
@@ -397,6 +400,8 @@ public partial class Lobby : Control
         grid.AddChild(StatCell("GARRISONS", out _siGarrisons, DesignTokens.TextHi));
         grid.AddChild(StatCell("MAP SIZE", out _siSize, DesignTokens.Data));
         intel.AddChild(grid);
+        // Faction identity ("who am I") — streamed on MsgDefs, full-width below the 2-col grid.
+        intel.AddChild(StatCell("FACTION", out _siFaction, DesignTokens.TeamAccent));
         col.AddChild(intel);
 
         // --- GARRISON CONTROL: proportional owner bar + per-faction node counts ---
@@ -447,6 +452,7 @@ public partial class Lobby : Control
         _siSector.Text = cm?.SectorLabel ?? "—";
         _siGarrisons.Text = cm != null ? cm.GarrisonCount.ToString() : "—";
         _siSize.Text = cm?.SizeLabel ?? "—";
+        _siFaction.Text = string.IsNullOrEmpty(_net.FactionName) ? "—" : _net.FactionName.ToUpperInvariant();
 
         // Garrison ownership counts across every sector base. Neutral (team != 0/1) is always 0 on
         // current maps — supported here for forward-compat but never fabricated.

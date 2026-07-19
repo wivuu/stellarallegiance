@@ -74,6 +74,10 @@ public partial class GameNetClient : Node
     private DefRegistry _defs = null!;
     private ConnectionManager _cm = null!;
 
+    // Streamed faction display name (e.g. "Iron Coalition"); "" until MsgDefs lands (DefsReceived).
+    // Passthrough so lobby/HUD overlays surface the "who am I" identity without reaching across the tree.
+    public string FactionName => _defs?.FactionName ?? "";
+
     private ClientWebSocket? _ws;
     private readonly CancellationTokenSource _cts = new();
     private CancellationTokenSource? _socketCts;

@@ -20,10 +20,7 @@ Archives:
 
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
-- Faction name "Iron Coalition" is streamed but never displayed.
 - Reloading things from cargo should take a configurable amount of time (i.e. ammo and fuel)
-- Make gun and missile weapon mounts not compatible with all gun and missiles (explore configuration style options in YAML)
-- hulls.yaml:264-266 comment wrongly claims collision is purely ShipRadius — ship-vs-ship uses the full model-length hull, so the Devastator body-blocks on its ~20u silhouette.
 ---
 
 ## Content philosophy (the through-line)
