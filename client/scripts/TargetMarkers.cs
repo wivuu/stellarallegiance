@@ -1659,7 +1659,10 @@ public partial class TargetMarkers : Control
 
     // Position-based overload so a focused BASE or ASTEROID (no RemoteShip) shares the same TARGET
     // tag + range readout as a focused ship. `tint` colors the tag; the range line is skipped when
-    // there's no local ship to measure from (pre-spawn / spectating).
+    // there's no local ship to measure from (pre-spawn / spectating), and when the viewed sector
+    // isn't the local ship's — a focus tag only draws for a target in ViewSector, and each sector is
+    // an origin-centered frame, so subtracting the local ship's position across sectors (e.g. an
+    // F3/commander view of another sector) yields a meaningless distance.
     private void DrawFocusTag(Vector2 view, Vector3 worldPos, Color tint, PredictionController? local)
     {
         Camera3D cam = Cam;
@@ -1673,7 +1676,7 @@ public partial class TargetMarkers : Control
         const string tag = "▣ TARGET";
         float tagW = font.GetStringSize(tag, HorizontalAlignment.Left, -1, 11).X;
         DrawString(font, sp + new Vector2(-tagW * 0.5f, -FocusHalf - 9f), tag, HorizontalAlignment.Left, -1, 11, tint);
-        if (local != null)
+        if (local != null && _world.LocalSector == _world.ViewSector)
         {
             string info = $"{(worldPos - local.GlobalPosition).Length():0} u";
             float infoW = font.GetStringSize(info, HorizontalAlignment.Left, -1, 10).X;
