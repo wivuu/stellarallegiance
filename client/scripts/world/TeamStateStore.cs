@@ -216,6 +216,12 @@ public sealed class TeamStateStore
     // server (credits read 0 when unknown, which must not be mistaken for "broke").
     public bool HasState(byte team) => _teamEconomy.ContainsKey(team);
 
+    // Client-side affordability pre-check for a station / development / miner buy (cost in credits).
+    // Mirrors the credit half of CheckSpawnGate: before the first team-state snapshot it defers to the
+    // server (credits read 0 when unknown, which must NOT grey a whole catalog), so this only reports
+    // "can't afford" once a snapshot positively proves it. Used to grey unaffordable Build/Research cards.
+    public bool CanAfford(byte team, int cost) => !HasState(team) || Credits(team) >= cost;
+
     // Whether this team may currently build the given hull ClassId (Stage-2 unlock gating). Meaningful
     // only once HasState(team) is true; the caller guards on that.
     public bool Unlocked(byte team, byte cls) => _teamUnlocks.TryGetValue(team, out var set) && set.Contains(cls);

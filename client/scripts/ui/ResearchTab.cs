@@ -263,6 +263,12 @@ public partial class ResearchTab : Control
             if (r.OnDeck is ushort od)
                 sig ^= (od + 11L) * 22013L;
         }
+        // Fold per-dev affordability so an Available node re-greys/re-brightens the moment credits cross
+        // its price (a BIT per node, not raw credits — the sig only changes on a threshold crossing, so a
+        // slowly-earning treasury doesn't rebuild the whole canvas every tick).
+        for (int i = 0; i < devs.Count; i++)
+            if (!_world.TeamState.CanAfford(team, devs[i].Price))
+                sig ^= (i + 43L) * 2246822519L;
         return sig;
     }
 
@@ -443,6 +449,9 @@ public partial class ResearchTab : Control
         bool hasChildren = node.Children.Count > 0;
         bool nodeCollapsed = _collapsedNodes.Contains(node.Index);
         ushort idx = node.Index;
+        // Affordability only greys an AVAILABLE node — Locked already dims, and Done/InProgress/OnDeck
+        // aren't buyable, so their look must not change with the treasury balance.
+        bool affordable = status != Status.Available || _world!.TeamState.CanAfford(Team, node.Dev.Price);
         card.Configure(
             _world!,
             status,
@@ -451,7 +460,8 @@ public partial class ResearchTab : Control
             hasChildren,
             nodeCollapsed,
             ActiveInfoFor(node.Index),
-            _selectedDev == node.Index
+            _selectedDev == node.Index,
+            affordable
         );
         card.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         card.Pressed += () => SelectDev(idx);
@@ -1099,7 +1109,8 @@ internal partial class NodeCard : PanelContainer
         bool hasChildren,
         bool collapsed,
         (uint start, uint dur)? active,
-        bool selected
+        bool selected,
+        bool affordable = true
     )
     {
         EnsureBuilt();
@@ -1120,7 +1131,12 @@ internal partial class NodeCard : PanelContainer
         _underlay.Progress = 0f;
         _underlay.Visible = status == ResearchTab.Status.InProgress;
 
-        Modulate = status == ResearchTab.Status.Locked ? new Color(1, 1, 1, 0.6f) : Colors.White;
+        // Locked dims hardest (0.6); an Available node the team can't yet afford is a softer situational
+        // grey (0.7, matching the hangar's TooPoor ship card) with its amber price still legible.
+        Modulate =
+            status == ResearchTab.Status.Locked ? new Color(1, 1, 1, 0.6f)
+            : status == ResearchTab.Status.Available && !affordable ? new Color(1, 1, 1, 0.7f)
+            : Colors.White;
         Restyle();
     }
 
