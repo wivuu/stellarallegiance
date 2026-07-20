@@ -500,7 +500,7 @@ Check(
     $"garrison merged hardpoints wrong (count {garrison.Hardpoints.Count}, kinds {string.Join(",", garrison.Hardpoints.Select(h => h.Kind))})"
 );
 Check(
-    garrison.VisionSphereRadius == 1500f && garrison.RadarSignature == 2.5f,
+    garrison.VisionSphereRadius == 3600f && garrison.RadarSignature == 2.5f,
     "loader projected garrison vision fields",
     $"garrison vision wrong (sphere {garrison.VisionSphereRadius}, sig {garrison.RadarSignature})"
 );

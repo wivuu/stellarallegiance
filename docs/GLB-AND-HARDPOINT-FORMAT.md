@@ -77,7 +77,7 @@ hardpoints (0 otherwise) and references a `WeaponDef.WeaponId`.
 **Empty weapon mounts** — a `Weapon` hardpoint whose `WeaponId == HardpointDef.NoWeapon`
 (`uint.MaxValue`) is an **empty mount**: it exists on the hull and streams to the client, but
 fires nothing and is assignable via the loadout UI. It never resolves in `WeaponDefs`, so
-every `TryGetValue`-guarded consumer (sim muzzles, client `DefRegistry.WeaponMounts`, payload
+every `TryGetValue`-guarded consumer (sim muzzles, client `DefRegistry.WeaponSlots`, payload
 mass) skips it. `0` cannot mean "empty" — `weapon-id 0` is a real weapon (the scout cannon).
 A GLB `HP_Weapon_N` node with no YAML entry binding it becomes exactly such an empty mount.
 
@@ -287,7 +287,7 @@ position by `ws` (see above), then:
    byte, then index). An appended `Weapon` node becomes an **empty mount** (`WeaponId =
    NoWeapon`); every other kind gets `0`. Appended empty weapon mounts land at the end and are
    skipped by every armed-weapon consumer, so the barrel spread-seed indices of the bound guns
-   (server `Simulation`, client `DefRegistry.WeaponMounts`) are unchanged.
+   (server `Simulation`, client `DefRegistry.WeaponSlots`) are unchanged.
 3. **No model / missing GLB ⇒ nodes is empty**, so every YAML entry must be fully authored
    (else boot error) and nothing is appended. Boot therefore requires the assets dir for stock
    content (the published layout and the test dirs both resolve it via `SimAssets.Resolve`).

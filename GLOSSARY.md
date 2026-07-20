@@ -422,7 +422,7 @@ The hangar's weapon-slot assignments (swap or leave-empty per Weapon hardpoint) 
   - `client/scripts/ui/LoadoutState.cs` — hangar model; WeaponOverridesFor / ExpectedEffectiveIds
   - `server/Sim/Simulation.cs` — ResolveLoadout (joint mount+cargo validation: mountable kind, team tech, PayloadCapacity), ShipSim.MountWeaponIds/MountLastFire, WeaponIdAt
   - `shared/FireCadence.cs` — THE per-mount gun-cadence rule shared by server TryFire, PredictionController, and WorldRenderer.SpawnBoltFor
-  - `client/scripts/DefRegistry.cs` — WeaponSlots (positional, empties kept) vs filtered WeaponMounts; SlotsForShip overlay
+  - `client/scripts/DefRegistry.cs` — WeaponSlots (positional, empties kept); SlotsForShip loadout overlay; MissileMount
 - **Related:** [[Projectile]], [[Dock Refund]], [[Held-Input Replay]]
 - **Notes:** Guns fire on PER-MOUNT cooldowns; the wire carries only LastFireTick — clients derive WHICH mounts fired by replaying FireCadence against a per-ship shadow, so hardpoint count is unlimited (no fired-mask field). Barrel index = position in the FULL Weapon-hardpoint list (empties included) and seeds the spread — barrel-indexed code must never use the filtered mount list. Whole-request reject → authored fallback (mounts AND cargo); empty cargo alongside overrides = deliberately empty hold, not "seed default". Mount TYPES gate what fits each slot (gun mounts take guns, missile mounts take racks, `any` mounts take either, and an UNAUTHORED empty mesh mount is `NonMountable` — hidden in the hangar, not a slot — via `HardpointDef.MountAccepts`, enforced hangar-side and in ResolveLoadout). Bots/pods always fly authored (MountWeaponIds null). tests/LoadoutTest covers the seams.
 
@@ -889,7 +889,7 @@ Per-team AI decision authority (proto 34): the ONE pilot whose orders AI vessels
 - **Notes:** Does NOT survive reconnect (new client id → rank falls to next senior; re-promote manually); host is a separate server-wide role
 
 ### Commander Order
-An F3-map command for a friendly ship (`MsgOrder`, proto 34): left-click SELECTS any entity (`SectorOverview.SelectedId`, separate from Tab focus), right-click names a target; the SERVER infers the verb — enemy ship/base → attack, anything else → go-to-and-idle, targetKind 255 = release. Anyone may issue; AI executes only the commander's (hub-gated) — orders to human teammates relay as gold advisory chat directives (`MsgChatRelay` scope 2, `DesignTokens.CmdrGold`).
+An F3-map command for a friendly ship (`MsgOrder`, proto 34): left-click SELECTS entities (multi-select set tracked in `SectorOverview`, separate from Tab focus), right-click names a target; the SERVER infers the verb — enemy ship/base → attack, anything else → go-to-and-idle, targetKind 255 = release. Anyone may issue; AI executes only the commander's (hub-gated) — orders to human teammates relay as gold advisory chat directives (`MsgChatRelay` scope 2, `DesignTokens.CmdrGold`).
 - **Frequency:** Common
 - **Key Files:**
   - `server/Sim/Simulation.Orders.cs` — `_pigOrders`, `ApplyCommandOrder` verb inference, `TryObeyOrder`
