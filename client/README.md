@@ -1,6 +1,6 @@
 # client/
 
-The **Godot 4.7 (C#/.NET 8) game client**. It renders the world, takes input, and runs
+The **Godot 4.7 (C#/.NET 10) game client**. It renders the world, takes input, and runs
 client-side prediction — but it is **never** authoritative. It predicts the local ship,
 interpolates remote ships, and reconciles everything against the authoritative 20 Hz snapshots
 streamed by [`server/`](../server). All content (world layout, ship/asteroid catalogs, tuning
@@ -34,7 +34,7 @@ Roughly grouped by responsibility:
   `DustField`, `EngineGlow`, `TeamTrail`, `ExplosionEffect`, `HitFlash`, `AlephView`.
 - **Models** — `GlbLoader`, `ShipModelLoader`, `BaseModelLoader` (load the GLBs from `assets/`).
 - **UI / HUD** — `Hud`, `Lobby`, `Chat`, `Minimap`, `SectorOverview`, `TargetMarkers`,
-  `ServerInputOverlay` — all built on the shared design system below.
+  `ServerLobbyOverlay` — all built on the shared design system below.
 - **UI design system** — `scripts/ui/` is one source of truth for the bracket / retro-futurism
   look imported from the Claude Design "Stellar Allegiance — System" spec. `DesignTokens`
   (palette / type scale), `UiFonts` (Saira + JetBrains Mono variable fonts → weighted
@@ -57,7 +57,7 @@ scripts/run-client.sh --local    # connects straight to localhost:8090
 `run-client.sh` rebuilds the client C# fresh before launching so Godot can't run a stale
 assembly against a rebuilt server (which would cause silent protocol skew). See the root
 [README](../README.md) and [QUICKSTART](../QUICKSTART.md) for prerequisites (Godot Mono build,
-.NET 8 SDK).
+.NET 10 SDK).
 
 ### Design-system gallery
 

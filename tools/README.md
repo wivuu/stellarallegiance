@@ -13,12 +13,11 @@ detailed asteroid: a low-poly mesh plus a full PBR texture set, packaged as a Go
 get a characteristic silhouette and material. See [`asteroid-gen/README.md`](asteroid-gen/README.md)
 for details; the pinned Docker image is the canonical, byte-reproducible producer.
 
-### `ship-gen/` — modular ship GLBs POC
-Generates the canonical ship meshes from **YAML modular part definitions** (cylinders,
-ellipsoids, etc., tagged with materials and `HP_` hardpoint nodes) and bakes them into GLBs with
-PBR materials. Outputs land in `ship-gen/build/` (gitignored) with a `manifest.json` recording
-each ship's parts, hardpoints, and sha256; the canonical scout/fighter/bomber/pod feed
-`ShipModelLoader` in the client.
+### `cursor-gen/` — procedural mouse cursors
+Draws the Stellar Allegiance mouse cursors (`client/assets/ui/cursor.png`,
+`cursor_ibeam.png`) procedurally with Pillow — 8x supersampled, Void-dark fill with the base
+cyan chrome accent, colors mirrored from `DesignTokens`. Run
+`python3 tools/cursor-gen/gen_cursor.py`.
 
 ### `collision-hull/` — compound collision baker
 Generates and bakes compound `COL_` convex collision parts into any mesh GLB from its visual
@@ -31,8 +30,8 @@ re-bake) output. See [`collision-hull/README.md`](collision-hull/README.md) and 
 ## Load testing
 
 ### `simbot/` — bot swarm
-A .NET console load generator that spins up N WebSocket bots against the sim server (current
-Protocol v7). Each bot does Hello → ready-up → Spawn, then sends 20 Hz input frames **every
+A .NET console load generator that spins up N WebSocket bots against the sim server (wire
+protocol single-sourced in `shared/Net/Wire.cs`). Each bot does Hello → ready-up → Spawn, then sends 20 Hz input frames **every
 tick** (worst-case ingest). `--orbit` keeps the swarm packed in one sector for sustained
 worst-case AOI overlap; it tracks received snapshot bytes/rate and the freshest server tick to
 report both directions of the pipe. Run the server with `--autostart` so the match goes live as
@@ -43,6 +42,11 @@ dotnet run --project tools/simbot -- --bots 50 --url ws://localhost:8090/game --
 ```
 
 ## Misc
+
+### `glb-gallery/`
+Renders a labeled contact sheet of every GLB in a source folder (defaults to `pick-assets/`) via
+Godot headless thumbnails composed into a grid. Run `tools/glb-gallery/gallery.sh [SRC_DIR]
+[OUT_PNG] [SIZE] [LIMIT]`.
 
 ### `godot-import.sh`
 Runs Godot's headless import pass (`godot --headless --import`) so freshly committed `.glb`s get
