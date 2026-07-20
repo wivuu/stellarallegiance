@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hardpoint Viewer</title>
+  <link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+  <aside id="sidebar">
+    <header class="brand">
+      <span class="bracket">[</span>
+      <div class="brand-text">
+        <span class="brand-title">HARDPOINT VIEWER</span>
+        <span class="brand-sub">Stellar Allegiance · GLB inspector</span>
+      </div>
+      <span class="bracket">]</span>
+    </header>
+
+    <section class="panel grow">
+      <div class="panel-head">
+        <span>Library <span id="lib-count" class="count"></span></span>
+        <button id="refresh" class="ghost" title="Rescan folder">⟳</button>
+      </div>
+      <div class="panel-sub">Serving <code id="library-root">…</code></div>
+      <input id="lib-search" class="lib-search" type="search" placeholder="Filter models…" autocomplete="off" spellcheck="false" />
+      <div id="library" class="library"></div>
+      <div class="open-row">
+        <button id="open-file" class="primary">Open .glb…</button>
+        <span class="hint">or drag a file onto the view</span>
+      </div>
+      <input id="file-input" type="file" accept=".glb" hidden />
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><span>Mesh</span></div>
+      <div id="stats" class="stats"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><span>Hardpoint kinds</span></div>
+      <div id="legend" class="legend"><div class="hint">Load a model to begin.</div></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><span>Hardpoints</span></div>
+      <div class="table-wrap">
+        <table class="hp-table">
+          <thead><tr><th>Node</th><th>Position</th><th>Forward</th></tr></thead>
+          <tbody id="hp-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </aside>
+
+  <main id="viewport">
+    <div class="topbar">
+      <span class="crumb" id="crumb">library</span>
+      <span class="status-pill" id="status" data-tone="idle">no model</span>
+      <button id="reset-view" class="ghost" title="Reset camera">reset view</button>
+    </div>
+    <canvas id="gl"></canvas>
+    <canvas id="overlay"></canvas>
+    <div id="empty" class="empty">
+      <div class="empty-inner">
+        <div class="empty-title">Select a model</div>
+        <div class="empty-hint">Click a file in the Library, press <strong>Open .glb…</strong>, or drag a <code>.glb</code> here.</div>
+        <div class="empty-hint dim">Drag to orbit · scroll to zoom · click a hardpoint row to spotlight it</div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/gltf.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -48,6 +48,15 @@ Renders a labeled contact sheet of every GLB in a source folder (defaults to `pi
 Godot headless thumbnails composed into a grid. Run `tools/glb-gallery/gallery.sh [SRC_DIR]
 [OUT_PNG] [SIZE] [LIMIT]`.
 
+### `hardpoint-viewer/`
+Interactive in-browser inspector for a GLB's `HP_<Kind>_<Index>` hardpoints — orbit the hull,
+toggle hardpoint kinds, and read each node's world position + forward. No LLM/build step; just
+`tools/hardpoint-viewer/view.ps1 [SRC_DIR]` starts a stdlib-only Python server (library defaults
+to `pick-assets/`) and opens the viewer. The parser (`js/gltf.js`) is a from-scratch,
+dependency-free glTF reader verifiable against the `hardpoints` skill's `glb_hardpoints.py`
+(`node tools/hardpoint-viewer/selftest.js <file.glb>`). See
+[`hardpoint-viewer/README.md`](hardpoint-viewer/README.md).
+
 ### `godot-import.sh`
 Runs Godot's headless import pass (`godot --headless --import`) so freshly committed `.glb`s get
 their `res://` import artifacts generated — required before headless/CI runs or exports, which
