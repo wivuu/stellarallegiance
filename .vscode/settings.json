@@ -7,16 +7,19 @@
     "task.allowAutomaticTasks": "on",
 
     // Godot (.NET/"mono") *executable* used by the VS Code tasks (run/export/import). Left
-    // empty on purpose — override it in your User settings (Cmd/Ctrl+, → "godot.executablePath")
-    // so your local path isn't committed. When empty, the scripts auto-detect Godot from PATH
-    // and standard install locations, so most setups need no value here.
-    //   macOS:   "/Applications/Godot_mono.app/Contents/MacOS/Godot"
-    //   Windows: "C:/Program Files/Godot_mono/Godot_v4.7.stable_mono_win64.exe"
-    //   on PATH: "godot-mono"
+    // empty on purpose — DO NOT put your local path here (it would be committed). The scripts
+    // auto-detect Godot from PATH and standard install locations, so most setups need no
+    // configuration at all. To pin a non-standard install per-workstation, run the
+    // "Godot: set executable path" task — it stores the path with `dotnet user-secrets`
+    // (outside the repo), which scripts/godot-bin.ps1 reads back. Equivalent CLI:
+    //   dotnet user-secrets set godot.executablePath "/path/to/Godot" --id stellarallegiance
+    // This key remains only as an escape hatch: a value set in VS Code *User* settings
+    // (never here) is passed to the scripts as $env:GODOT and takes top precedence.
     "godot.executablePath": "",
 
     // The godot-tools extension also needs your Godot path for editor/debug integration; set
-    // "godotTools.editorPath.godot4" in your User settings too (it wants the .app/.exe path).
+    // "godotTools.editorPath.godot4" in your User settings (extensions can't read user-secrets;
+    // it wants the .app/.exe path).
 
     // JSON-schema validation for the authored YAML content (needs the Red Hat "YAML" extension).
     // The schemas in ./schemas are GENERATED from the Allegiance.Factions POCOs (+ the server's

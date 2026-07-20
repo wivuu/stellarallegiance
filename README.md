@@ -30,9 +30,9 @@ by both sides so their physics and content stay bit-identical.
 
 - **.NET 10 SDK** (`dotnet --version` ≥ 10) — newer SDKs work too.
 **Godot 4.7 — Mono/.NET build**, to run the client. The scripts auto-detect it from your
-  PATH (`godot-mono`/`godot4`/`godot`) and standard install locations; point at a non-standard
-  install with the `GODOT` env var or the `godot.executablePath` VS Code setting (see
-  [Dev setup](#dev-setup-vs-code-tasks)).
+  PATH (`godot-mono`/`godot4`/`godot`) and standard install locations; pin a non-standard
+  install per-workstation with `dotnet user-secrets` (or a one-off `GODOT` env var) — see
+  [Dev setup](#dev-setup-vs-code-tasks).
 - **PowerShell 7+ (`pwsh`)** — required to run the repo scripts and VS Code tasks on all
   platforms. Preinstalled on Windows; on macOS/Linux install it (`brew install powershell`
   or your package manager's `apt`/`dnf` package).
@@ -81,12 +81,20 @@ The repo scripts are wired up as VS Code tasks (`.vscode/tasks.json`). Run them 
 The same scripts run from a terminal — the tasks are just a convenient front-end.
 
 **Godot path (configurable, not committed).** The scripts auto-detect Godot, so most setups
-need no configuration. To point at a non-standard install, set **`godot.executablePath`** in
-your **User** settings (Cmd/Ctrl+, → search "godot.executablePath") — keeping it in User scope
-(not the committed workspace `settings.json`) means your local path never lands in git. The
-tasks pass that value to the scripts; from a plain terminal, `$env:GODOT = '/path/to/Godot'`
-does the same. (The godot-tools extension's `godotTools.editorPath.godot4` is separate — also
-set it in User settings.)
+need no configuration. To pin a non-standard install per-workstation, run the
+**"Godot: set executable path"** VS Code task (it prompts for the path), or equivalently:
+
+```powershell
+dotnet user-secrets set godot.executablePath "/path/to/Godot" --id stellarallegiance
+```
+
+The value lives in the `dotnet user-secrets` store (`%APPDATA%\Microsoft\UserSecrets` /
+`~/.microsoft/usersecrets`) — outside the repo, so it can never dirty a committed file, and it
+survives `git clean`. `scripts/godot-bin.ps1` reads it back on every launch. A one-off
+`$env:GODOT = '/path/to/Godot'` (or the `godot.executablePath` VS Code **User** setting) still
+takes precedence over the stored value. (The godot-tools extension's
+`godotTools.editorPath.godot4` is separate — set it in User settings; extensions can't read
+user-secrets.)
 
 **PowerShell 7+ required.** The scripts and VS Code tasks run under `pwsh`, which must be on
 your PATH. It's preinstalled on Windows; on macOS/Linux install it with `brew install powershell`

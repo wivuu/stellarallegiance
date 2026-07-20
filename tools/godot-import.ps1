@@ -11,8 +11,9 @@
 #   tools/godot-import.ps1           # import only if something is missing (fresh clone / new asset)
 #   tools/godot-import.ps1 -Force    # always reimport (after editing an existing asset)
 #
-# The Godot (.NET/"mono") executable is resolved by scripts/godot-bin.ps1 — $env:GODOT, then PATH,
-# then standard install locations. Set the `godot.executablePath` VS Code setting to override.
+# The Godot (.NET/"mono") executable is resolved by scripts/godot-bin.ps1 — $env:GODOT, then the
+# `dotnet user-secrets` store (run the "Godot: set executable path" task to fill it), then PATH,
+# then standard install locations.
 param([switch]$Force)
 
 $ErrorActionPreference = 'Stop'

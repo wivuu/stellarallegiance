@@ -3,9 +3,10 @@
     //   Cmd/Ctrl+Shift+P → "Tasks: Run Task"
     //
     // All tasks run through PowerShell 7+ (`pwsh`), which must be on PATH (cross-platform:
-    // Windows/macOS/Linux). The Godot executable is taken from the `godot.executablePath`
-    // setting (set it in your *User* settings so it isn't committed — see README → Dev setup);
-    // when empty the scripts auto-detect Godot from PATH and standard install locations.
+    // Windows/macOS/Linux). The scripts auto-detect Godot from PATH and standard install
+    // locations; to pin a non-standard path per-workstation, run the "Godot: set executable
+    // path" task below (stored via `dotnet user-secrets`, outside the repo — never committed).
+    // The `godot.executablePath` setting / GODOT env var still take precedence if set.
     "version": "2.0.0",
     "options": {
         "env": { "GODOT": "${config:godot.executablePath}" }
@@ -98,6 +99,27 @@
             "problemMatcher": []
         },
         {
+            // Stores your machine's Godot path in the `dotnet user-secrets` store (outside the
+            // repo, never committed). scripts/godot-bin.ps1 reads it back when resolving Godot.
+            "label": "Godot: set executable path",
+            "type": "shell",
+            "command": "dotnet",
+            "args": [
+                "user-secrets",
+                "set",
+                "godot.executablePath",
+                "${input:godotPath}",
+                "--id",
+                "stellarallegiance"
+            ],
+            "presentation": {
+                "reveal": "never",
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
             "label": "Asteroid-gen: build catalog",
             "type": "shell",
             "command": "pwsh",
@@ -112,6 +134,13 @@
                 "clear": true
             },
             "problemMatcher": []
+        }
+    ],
+    "inputs": [
+        {
+            "id": "godotPath",
+            "type": "promptString",
+            "description": "Full path to the Godot 4 .NET (mono) executable (not a macOS .app folder)"
         }
     ]
 }
