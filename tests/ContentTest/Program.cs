@@ -163,17 +163,18 @@ Check(
     $"fighter vision wrong (cone {fighterVis.VisionConeLength}/{fighterVis.VisionConeAngleDeg}, sphere {fighterVis.VisionSphereRadius}, sig {fighterVis.RadarSignature})"
 );
 
-// Fighter: three bound guns (HP_Weapon_0/1 = id 1, HP_Weapon_2 = id 3 seeker), two boosters, the
-// authored cockpit, then appended Thruster_0 + Light_0..4. All three weapon mounts are armed (no
-// empty weapon mount on the fighter). hardpoint[0] inherits the GLB HP_Weapon_0 pos × (5.5/LongestAxis).
+// Fighter: three armed Gat guns (HP_Weapon_0/1 nose pair + an authored front-center barrel, IGC
+// fwepemt) plus an EMPTY belly missile mount (HP_Weapon_2, no weapon-id), two boosters, the authored
+// cockpit, then appended Thruster_0 + Light_0..4. So 4 weapon mounts, 3 of them armed. hardpoint[0]
+// inherits the GLB HP_Weapon_0 pos × (5.5/LongestAxis).
 Check(
-    fighterVis.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon) == 3
+    fighterVis.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon) == 4
         && fighterVis.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon && h.WeaponId != HardpointDef.NoWeapon) == 3
         && fighterVis.Hardpoints.Count(h => h.Kind == HardpointKind.Booster) == 2
         && fighterVis.Hardpoints.Count(h => h.Kind == HardpointKind.Light) == 5
         && fighterVis.Hardpoints[0].Kind == HardpointKind.Weapon
         && fighterVis.Hardpoints[0].WeaponId == GameContent.ScoutWeaponId,
-    "merged Enh Fighter hardpoints (3 armed Gat guns, 2 boosters, appended thruster + 5 lights)",
+    "merged Enh Fighter hardpoints (3 armed Gat guns + empty belly missile mount, 2 boosters, appended thruster + 5 lights)",
     $"fighter merged hardpoints wrong (count {fighterVis.Hardpoints.Count}, weapons {fighterVis.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon)})"
 );
 var fighterModel = SimServer.Assets.SimAssets.TryLoad("ships/wc_icfig.glb");

@@ -161,12 +161,17 @@ hulls:
     payload-capacity: 20 # 3x gat 3 + 2x decoy 2 = 5 -> 15 free
     required-capabilities: [base]
     required-techs: [supremacy-1]   # unbuildable until the team raises a Supremacy base
-    # wc_icfig carries HP_Weapon_0/1 (nose pair) + HP_Weapon_2 (belly). All three mount PW Gat Gun 1.
-    # Booster_0/1, Thruster_0, Light_0..4 append. Cockpit authored (no mesh node).
+    # wc_icfig carries HP_Weapon_0/1 (nose pair) + HP_Weapon_2 (belly). The IGC Enh Fighter (ac_20.igc)
+    # authors THREE gun mounts fwepemt/lwepemt/rwepemt = front-center/left/right — the third gun is a
+    # nose-CENTER barrel, not the belly. So the two nose nodes take the left/right guns, the belly
+    # (HP_Weapon_2) becomes an EMPTY missile mount, and the front-center gun (no mesh node) is authored
+    # on the centerline between the nose pair (coplanar, world-scaled units). Guns stay the first three
+    # entries so the barrel spread-seed slots (0,1,2) are unchanged. Booster/Thruster/Light append.
     hardpoints:
-      - { kind: weapon, index: 0, weapon-id: 0 }   # binds mesh HP_Weapon_0 (right nose PW Gat Gun 1)
-      - { kind: weapon, index: 1, weapon-id: 0 }   # binds mesh HP_Weapon_1 (left nose PW Gat Gun 1)
-      - { kind: weapon, index: 2, weapon-id: 0 }   # binds mesh HP_Weapon_2 (belly PW Gat Gun 1)
+      - { kind: weapon, index: 0, weapon-id: 0 }   # binds mesh HP_Weapon_0 (right nose PW Gat Gun 1 — IGC rwepemt)
+      - { kind: weapon, index: 1, weapon-id: 0 }   # binds mesh HP_Weapon_1 (left nose PW Gat Gun 1 — IGC lwepemt)
+      - { kind: weapon, index: 3, weapon-id: 0, off-x: 0, off-y: -0.65, off-z: 2.9, dir-z: 1 } # front-center PW Gat Gun 1 (IGC fwepemt; no mesh node)
+      - { kind: weapon, index: 2, mount: missile } # belly missile hardpoint (empty; inherits mesh HP_Weapon_2)
       - { kind: cockpit, off-y: 0.55, off-z: 1.4, dir-z: 1 }
     default-cargo:
       - { item: counter-1, count: 2 }
@@ -207,10 +212,16 @@ hulls:
     payload-capacity: 20 # 3x gat 3 + 2x decoy 2 = 5 -> 15 free
     required-capabilities: [base]
     required-techs: [supremacy-adv]   # unbuildable until the Supremacy (Adv) base grants it
+    # wc_icadv mirrors wc_icfig: HP_Weapon_0/1 (nose pair) + HP_Weapon_2 (belly). The IGC Adv Fighter
+    # (ac_20.igc) authors THREE gun mounts fwepemt/lwepemt/rwepemt = front-center/left/right (fwepemt is
+    # pm 0x5). Nose nodes take the left/right guns, the belly becomes an EMPTY missile mount, and the
+    # front-center gun (no mesh node) is authored on the centerline between the nose pair. Guns stay the
+    # first three entries so barrel spread-seed slots (0,1,2) are unchanged.
     hardpoints:
-      - { kind: weapon, index: 0, weapon-id: 0 }   # binds mesh HP_Weapon_0 (right nose PW Gat Gun 1)
-      - { kind: weapon, index: 1, weapon-id: 0 }   # binds mesh HP_Weapon_1 (left nose PW Gat Gun 1)
-      - { kind: weapon, index: 2, weapon-id: 0 }   # binds mesh HP_Weapon_2 (belly PW Gat Gun 1)
+      - { kind: weapon, index: 0, weapon-id: 0 }   # binds mesh HP_Weapon_0 (right nose PW Gat Gun 1 — IGC rwepemt)
+      - { kind: weapon, index: 1, weapon-id: 0 }   # binds mesh HP_Weapon_1 (left nose PW Gat Gun 1 — IGC lwepemt)
+      - { kind: weapon, index: 3, weapon-id: 0, off-x: 0, off-y: -0.65, off-z: 2.9, dir-z: 1 } # front-center PW Gat Gun 1 (IGC fwepemt; no mesh node)
+      - { kind: weapon, index: 2, mount: missile } # belly missile hardpoint (empty; inherits mesh HP_Weapon_2)
       - { kind: cockpit, off-y: 0.55, off-z: 1.4, dir-z: 1 }
     default-cargo:
       - { item: counter-1, count: 2 }

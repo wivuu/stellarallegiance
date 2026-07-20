@@ -21,10 +21,9 @@ Archives:
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
 - Reloading things from cargo should take a configurable amount of time (i.e. ammo and fuel)
-- Adv. Fighter's belly HP is mounted to a gun, but there should be 3 gun hardpoints and a belly missile hardpoint - Look for other mesh
 - Look for opportunities to utilize native vector3 and SIMD for performance improvements
 - Ship loadouts should not not persist between game matches
-- Prevent alephs from spawning too close together by chance
+- Improve heavy sector entrance performance - entering a sector with lots of dust and asteroids and potentially other things can cause lots of frames dropped as things appear
 ---
 
 ## Content philosophy (the through-line)
