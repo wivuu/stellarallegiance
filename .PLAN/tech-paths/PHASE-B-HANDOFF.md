@@ -105,8 +105,8 @@ Client data layer:
 dotnet build server/SimServer.csproj -c Release && dotnet build client/stellarallegiance.csproj
 for t in tests/*/; do dotnet run --project "$t" -c Release; done   # see baseline below
 dotnet test factions/tests/Allegiance.Factions.Tests               # 51/51
-scripts/run-server.sh --local --autostart &                        # wait for :8090
-scripts/run-client.sh --local -- --hangar-demo=/tmp/hd             # 8 shots; bomber card = ⚿ TECH LOCKED
+scripts/run-server.ps1 -Local --autostart &                        # wait for :8090
+scripts/run-client.ps1 -Local -- --hangar-demo=/tmp/hd             # 8 shots; bomber card = ⚿ TECH LOCKED
 # chat (as commander): /research            -> lists the 4 developments
 #                      /research dev-heavy-ordnance -> team notice, 90s later bomber unlocks
 kill $(lsof -tnP -iTCP:8090 -sTCP:LISTEN)

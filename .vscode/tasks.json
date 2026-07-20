@@ -2,10 +2,11 @@
     // Project scripts, exposed as VS Code tasks. Run them with
     //   Cmd/Ctrl+Shift+P → "Tasks: Run Task"
     //
-    // All tasks run through `bash`, so on Windows you need bash on PATH (ships with Git for
-    // Windows / "Git Bash"). The Godot executable is taken from the `godot.executablePath`
-    // setting (set it in your *User* settings so it isn't committed — see README → Dev setup);
-    // when empty the scripts auto-detect Godot from PATH and standard install locations.
+    // All tasks run through PowerShell 7+ (`pwsh`), which must be on PATH (cross-platform:
+    // Windows/macOS/Linux). The scripts auto-detect Godot from PATH and standard install
+    // locations; to pin a non-standard path per-workstation, run the "Godot: set executable
+    // path" task below (stored via `dotnet user-secrets`, outside the repo — never committed).
+    // The `godot.executablePath` setting / GODOT env var still take precedence if set.
     "version": "2.0.0",
     "options": {
         "env": { "GODOT": "${config:godot.executablePath}" }
@@ -14,9 +15,11 @@
         {
             "label": "Godot: import assets (if needed)",
             "type": "shell",
-            "command": "bash",
+            "command": "pwsh",
             "args": [
-                "${workspaceFolder}/tools/godot-import.sh"
+                "-NoProfile",
+                "-File",
+                "${workspaceFolder}/tools/godot-import.ps1"
             ],
             "runOptions": {
                 "runOn": "folderOpen"
@@ -31,10 +34,12 @@
         {
             "label": "Godot: reimport assets (force)",
             "type": "shell",
-            "command": "bash",
+            "command": "pwsh",
             "args": [
-                "${workspaceFolder}/tools/godot-import.sh",
-                "--force"
+                "-NoProfile",
+                "-File",
+                "${workspaceFolder}/tools/godot-import.ps1",
+                "-Force"
             ],
             "presentation": {
                 "reveal": "always",
@@ -46,9 +51,11 @@
         {
             "label": "Run server",
             "type": "shell",
-            "command": "bash",
+            "command": "pwsh",
             "args": [
-                "${workspaceFolder}/scripts/run-server.sh"
+                "-NoProfile",
+                "-File",
+                "${workspaceFolder}/scripts/run-server.ps1"
             ],
             "isBackground": true,
             "presentation": {
@@ -61,9 +68,11 @@
         {
             "label": "Run client",
             "type": "shell",
-            "command": "bash",
+            "command": "pwsh",
             "args": [
-                "${workspaceFolder}/scripts/run-client.sh"
+                "-NoProfile",
+                "-File",
+                "${workspaceFolder}/scripts/run-client.ps1"
             ],
             "isBackground": true,
             "presentation": {
@@ -76,9 +85,11 @@
         {
             "label": "Export clients (all platforms)",
             "type": "shell",
-            "command": "bash",
+            "command": "pwsh",
             "args": [
-                "${workspaceFolder}/scripts/export-clients.sh"
+                "-NoProfile",
+                "-File",
+                "${workspaceFolder}/scripts/export-clients.ps1"
             ],
             "presentation": {
                 "reveal": "always",
@@ -88,11 +99,34 @@
             "problemMatcher": []
         },
         {
+            // Stores your machine's Godot path in the `dotnet user-secrets` store (outside the
+            // repo, never committed). scripts/godot-bin.ps1 reads it back when resolving Godot.
+            "label": "Godot: set executable path",
+            "type": "shell",
+            "command": "dotnet",
+            "args": [
+                "user-secrets",
+                "set",
+                "godot.executablePath",
+                "${input:godotPath}",
+                "--id",
+                "stellarallegiance"
+            ],
+            "presentation": {
+                "reveal": "never",
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
             "label": "Asteroid-gen: build catalog",
             "type": "shell",
-            "command": "bash",
+            "command": "pwsh",
             "args": [
-                "${workspaceFolder}/tools/asteroid-gen/build.sh"
+                "-NoProfile",
+                "-File",
+                "${workspaceFolder}/tools/asteroid-gen/build.ps1"
             ],
             "presentation": {
                 "reveal": "always",
@@ -100,6 +134,13 @@
                 "clear": true
             },
             "problemMatcher": []
+        }
+    ],
+    "inputs": [
+        {
+            "id": "godotPath",
+            "type": "promptString",
+            "description": "Full path to the Godot 4 .NET (mono) executable (not a macOS .app folder)"
         }
     ]
 }

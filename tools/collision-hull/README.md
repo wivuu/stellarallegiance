@@ -47,8 +47,8 @@ distinct plane count, AABB, margin-to-visual-hull) plus a parts/verts/planes TOT
 `SphereVsBody` cost is O(planes) per sub-hull), the AABB + corridor + reachability results, and (on
 a real bake) the output size + SHA256. After a real bake, regenerate Godot's import artifacts:
 
-```bash
-tools/godot-import.sh --force
+```pwsh
+tools/godot-import.ps1 -Force
 ```
 
 ## Pipeline (why CoACD decomposes the voxel solid, not the raw mesh)

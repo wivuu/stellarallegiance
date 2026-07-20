@@ -45,8 +45,8 @@ dotnet run --project tools/simbot -- --bots 50 --url ws://localhost:8090/game --
 
 ### `glb-gallery/`
 Renders a labeled contact sheet of every GLB in a source folder (defaults to `pick-assets/`) via
-Godot headless thumbnails composed into a grid. Run `tools/glb-gallery/gallery.sh [SRC_DIR]
-[OUT_PNG] [SIZE] [LIMIT]`.
+Godot headless thumbnails composed into a grid. Run `tools/glb-gallery/gallery.ps1 [-SrcDir <dir>]
+[-OutPng <png>] [-Size <n>] [-Limit <n>]`.
 
 ### `hardpoint-viewer/`
 Interactive in-browser inspector for a GLB's `HP_<Kind>_<Index>` hardpoints — orbit the hull,
@@ -57,7 +57,7 @@ dependency-free glTF reader verifiable against the `hardpoints` skill's `glb_har
 (`node tools/hardpoint-viewer/selftest.js <file.glb>`). See
 [`hardpoint-viewer/README.md`](hardpoint-viewer/README.md).
 
-### `godot-import.sh`
+### `godot-import.ps1`
 Runs Godot's headless import pass (`godot --headless --import`) so freshly committed `.glb`s get
 their `res://` import artifacts generated — required before headless/CI runs or exports, which
 otherwise silently fall back.

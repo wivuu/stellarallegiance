@@ -50,9 +50,9 @@ capturing full-resolution detail at any mesh density.
 
 Everything runs in Docker (no host deps beyond Docker):
 
-```bash
-./build.sh                                                    # build image + generate the catalog into ./build
-./build.sh one --seed 4242 --kind metallic                   # one ad-hoc asteroid
+```pwsh
+./build.ps1                                                   # build image + generate the catalog into ./build
+./build.ps1 one --seed 4242 --kind metallic                  # one ad-hoc asteroid
 ```
 
 Or directly with [uv](https://docs.astral.sh/uv/):
@@ -162,4 +162,4 @@ Notes:
 | `bake.py`         | normal-map bake + albedo/ORM/height bake (chunked, latitude-band culled) |
 | `glb.py`          | GLB assembler (pygltflib) |
 | `generate.py`     | CLI orchestrator (`one` / `all`, parallel) |
-| `Dockerfile`, `build.sh` | headless containerized build |
+| `Dockerfile`, `build.ps1` | headless containerized build |

@@ -33,7 +33,7 @@ ship GLBs.** An `asteroid` kind is an explicit non-goal for now.
 cd tools/collision-hull
 uv run bake.py --kind base --glb ../../client/assets/bases/Outpost.glb --check   # validate only
 uv run bake.py --kind base --glb ../../client/assets/bases/Outpost.glb          # bake COL_ parts in place
-tools/godot-import.sh --force                       # ALWAYS after a REAL bake (client res:// reimport)
+tools/godot-import.ps1 -Force                       # ALWAYS after a REAL bake (client res:// reimport)
 
 # Any ship mesh — --model-length is REQUIRED (ws = model_length / LongestAxis); --check only, never commit
 uv run bake.py --kind ship --glb ../../client/assets/ships/fighter.glb --model-length 5.5 --check

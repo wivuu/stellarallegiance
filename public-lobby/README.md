@@ -134,10 +134,10 @@ scheme prefix is optional — a bare `host:port` becomes `http://host:port`; pas
 use TLS (see below).
 
 - **Game server** — set `SIM_PUBLIC_NAME` (3–50 chars; gates registration) and
-  `PUBLIC_LOBBY=<lobby-host>:8091`. With `scripts/run-server.sh` this is the default (no
-  `--local`); the name defaults to the hostname. Forward the game port (default `8090`) to be
+  `PUBLIC_LOBBY=<lobby-host>:8091`. With `scripts/run-server.ps1` this is the default (no
+  `-Local`); the name defaults to the hostname. Forward the game port (default `8090`) to be
   directly joinable; set `SIM_PUBLIC_PORT` if the forwarded external port differs.
-- **Client** — set `PUBLIC_LOBBY=<lobby-host>:8091` (or `--lobby host:port`). `scripts/run-client.sh`
+- **Client** — set `PUBLIC_LOBBY=<lobby-host>:8091` (or `--lobby host:port`). `scripts/run-client.ps1`
   opens the lobby browser by default; it joins direct servers over WebSocket and NAT'd ones over
   WebRTC automatically.
 

@@ -26,7 +26,7 @@ uv run bake.py --kind base --glb ../../client/assets/bases/ss90.glb             
 uv run bake.py --kind base --glb ../../client/assets/bases/ss21a.glb             # runtime Supremacy / Adv Supremacy
 uv run bake.py --kind base --glb ../../client/assets/bases/acs05.glb             # runtime Shipyard / Shipyard (Dry)
 uv run bake.py --kind base --glb ../../client/assets/bases/Outpost.glb           # retained-but-unused byte-identity fixture (bound by NO station; runtime 'Outpost' is ss90.glb)
-tools/godot-import.sh --force                    # ALWAYS after a rebake (client res:// import)
+tools/godot-import.ps1 -Force                    # ALWAYS after a rebake (client res:// import)
 ```
 
 To eyeball a rebake, add `--show` (interactive window, rotate/zoom the 3D view) or `--preview out.png`

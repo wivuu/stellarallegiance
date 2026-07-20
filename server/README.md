@@ -32,10 +32,10 @@ Sim/
 
 From the repo root:
 
-```bash
-scripts/run-server.sh --local                 # private, port 8090, lobby ready-up
-scripts/run-server.sh --local --autostart     # skip ready-up, perpetual match (bots/benchmark)
-scripts/run-server.sh                          # also publish to the public lobby for discovery
+```pwsh
+scripts/run-server.ps1 -Local                 # private, port 8090, lobby ready-up
+scripts/run-server.ps1 -Local --autostart     # skip ready-up, perpetual match (bots/benchmark)
+scripts/run-server.ps1                         # also publish to the public lobby for discovery
 ```
 
 Or directly: `dotnet run --project server [--port 8090] [--seed N] [--secret PW] [--autostart]`.
@@ -57,6 +57,6 @@ Or directly: `dotnet run --project server [--port 8090] [--seed N] [--secret PW]
 
 ## Deploy
 
-`docker compose -f docker-compose.server.yml up`, or `scripts/deploy-railway-server.sh` to push
+`docker compose -f docker-compose.server.yml up`, or `scripts/deploy-railway-server.ps1` to push
 a game server to Railway already wired to the default public lobby. The Docker build mounts the
 **repo root** (not just `server/`) so the `shared/` ProjectReference resolves.

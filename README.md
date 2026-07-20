@@ -30,34 +30,35 @@ by both sides so their physics and content stay bit-identical.
 
 - **.NET 10 SDK** (`dotnet --version` ≥ 10) — newer SDKs work too.
 **Godot 4.7 — Mono/.NET build**, to run the client. The scripts auto-detect it from your
-  PATH (`godot-mono`/`godot4`/`godot`) and standard install locations; point at a non-standard
-  install with the `GODOT` env var or the `godot.executablePath` VS Code setting (see
-  [Dev setup](#dev-setup-vs-code-tasks)).
-- **bash** — preinstalled on macOS/Linux; on Windows use **Git Bash** (ships with Git for
-  Windows), which the helper scripts and VS Code tasks run under.
+  PATH (`godot-mono`/`godot4`/`godot`) and standard install locations; pin a non-standard
+  install per-workstation with `dotnet user-secrets` (or a one-off `GODOT` env var) — see
+  [Dev setup](#dev-setup-vs-code-tasks).
+- **PowerShell 7+ (`pwsh`)** — required to run the repo scripts and VS Code tasks on all
+  platforms. Preinstalled on Windows; on macOS/Linux install it (`brew install powershell`
+  or your package manager's `apt`/`dnf` package).
 - Optional: **Docker** (to run the server via `docker compose`).
 
 ## Quick start (local)
 
-Two terminals from the repo root. For purely local dev, pass `--local` to both:
+Two terminals from the repo root. For purely local dev, pass `-Local` to both:
 
-```bash
+```pwsh
 # 1. start the server (local-only, port 8090, lobby ready-up)
-scripts/run-server.sh --local
+scripts/run-server.ps1 -Local
 
 # 2. launch the client (connects straight to localhost:8090)
-scripts/run-client.sh --local
+scripts/run-client.ps1 -Local
 ```
 
 Pick a side, ready up, and the match starts.
 
-**Public lobby (the default).** Without `--local`, `run-server.sh` publishes the server to the
+**Public lobby (the default).** Without `-Local`, `run-server.ps1` publishes the server to the
 public lobby (`PUBLIC_LOBBY`, default `https://wivuu-public-lobby-production.up.railway.app`) under your hostname — override the
-name with `SIM_PUBLIC_NAME="My Server"`. And `run-client.sh` opens the **server browser** against
+name with `SIM_PUBLIC_NAME="My Server"`. And `run-client.ps1` opens the **server browser** against
 that lobby so you can pick a server (or still type an address for a direct connect). See
 [Public lobby & NAT traversal](#public-lobby--nat-traversal).
 
-Solo testing tip: run the server with `scripts/run-server.sh --local --autostart` to skip the
+Solo testing tip: run the server with `scripts/run-server.ps1 -Local --autostart` to skip the
 ready-up gate and start a perpetual match immediately.
 
 See **[QUICKSTART.md](QUICKSTART.md)** for a step-by-step walkthrough and
@@ -70,30 +71,39 @@ The repo scripts are wired up as VS Code tasks (`.vscode/tasks.json`). Run them 
 
 | Task | Script | What it does |
 |------|--------|--------------|
-| **Run server** | `scripts/run-server.sh` | Rebuild + run the sim server on :8090 (publishes to the public lobby; `--local` to stay private). |
-| **Run client** | `scripts/run-client.sh` | Rebuild + launch the Godot client (public lobby browser; `--local` for direct localhost). |
-| **Export clients (all platforms)** | `scripts/export-clients.sh` | Export macOS/Windows/Linux builds (macOS `.app` only when run on macOS). |
-| **Godot: import assets (if needed)** | `tools/godot-import.sh` | Import GLB assets. Runs automatically on folder-open; a no-op unless something needs importing. |
-| **Godot: reimport assets (force)** | `tools/godot-import.sh --force` | Force a full reimport after editing a `.glb`. |
-| **Asteroid-gen: build catalog** | `tools/asteroid-gen/build.sh` | Regenerate the asteroid mesh catalog (Docker). |
+| **Run server** | `scripts/run-server.ps1` | Rebuild + run the sim server on :8090 (publishes to the public lobby; `-Local` to stay private). |
+| **Run client** | `scripts/run-client.ps1` | Rebuild + launch the Godot client (public lobby browser; `-Local` for direct localhost). |
+| **Export clients (all platforms)** | `scripts/export-clients.ps1` | Export macOS/Windows/Linux builds (macOS `.app` only when run on macOS). |
+| **Godot: import assets (if needed)** | `tools/godot-import.ps1` | Import GLB assets. Runs automatically on folder-open; a no-op unless something needs importing. |
+| **Godot: reimport assets (force)** | `tools/godot-import.ps1 -Force` | Force a full reimport after editing a `.glb`. |
+| **Asteroid-gen: build catalog** | `tools/asteroid-gen/build.ps1` | Regenerate the asteroid mesh catalog (Docker). |
 
 The same scripts run from a terminal — the tasks are just a convenient front-end.
 
 **Godot path (configurable, not committed).** The scripts auto-detect Godot, so most setups
-need no configuration. To point at a non-standard install, set **`godot.executablePath`** in
-your **User** settings (Cmd/Ctrl+, → search "godot.executablePath") — keeping it in User scope
-(not the committed workspace `settings.json`) means your local path never lands in git. The
-tasks pass that value to the scripts; from a plain terminal, `export GODOT=/path/to/Godot`
-does the same. (The godot-tools extension's `godotTools.editorPath.godot4` is separate — also
-set it in User settings.)
+need no configuration. To pin a non-standard install per-workstation, run the
+**"Godot: set executable path"** VS Code task (it prompts for the path), or equivalently:
 
-**Windows.** The scripts run under **Git Bash** (bundled with Git for Windows); make sure
-`bash` is on your PATH so the tasks can launch.
+```powershell
+dotnet user-secrets set godot.executablePath "/path/to/Godot" --id stellarallegiance
+```
+
+The value lives in the `dotnet user-secrets` store (`%APPDATA%\Microsoft\UserSecrets` /
+`~/.microsoft/usersecrets`) — outside the repo, so it can never dirty a committed file, and it
+survives `git clean`. `scripts/godot-bin.ps1` reads it back on every launch. A one-off
+`$env:GODOT = '/path/to/Godot'` (or the `godot.executablePath` VS Code **User** setting) still
+takes precedence over the stored value. (The godot-tools extension's
+`godotTools.editorPath.godot4` is separate — set it in User settings; extensions can't read
+user-secrets.)
+
+**PowerShell 7+ required.** The scripts and VS Code tasks run under `pwsh`, which must be on
+your PATH. It's preinstalled on Windows; on macOS/Linux install it with `brew install powershell`
+or your package manager.
 
 **GLB assets are one file each.** Only the `.glb` is committed (it embeds its own textures);
 Godot's `.import`/extracted-`.png` artifacts are gitignored and regenerated by the import task.
 A fresh clone imports automatically on first open; for headless/CI/export builds run
-`tools/godot-import.sh` (or `--force`) first, or `res://` asset loads fall back to placeholders.
+`tools/godot-import.ps1` (or `-Force`) first, or `res://` asset loads fall back to placeholders.
 
 ## Building manually
 
