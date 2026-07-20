@@ -40,8 +40,8 @@ of the old hardcoded placeholder. Launch base selection is real (MsgSpawn base i
 dotnet build server/SimServer.csproj -c Release && dotnet build client/stellarallegiance.csproj
 for t in tests/*/; do dotnet run --project "$t" -c Release; done
 dotnet test factions/tests/Allegiance.Factions.Tests    # 51/51
-scripts/run-server.sh --local --autostart &
-scripts/run-client.sh --local -- --hangar-demo=/tmp/demo   # 16 shots; self-quits
+scripts/run-server.ps1 -Local --autostart &
+scripts/run-client.ps1 -Local -- --hangar-demo=/tmp/demo   # 16 shots; self-quits
 kill $(lsof -tnP -iTCP:8090 -sTCP:LISTEN)
 ```
 

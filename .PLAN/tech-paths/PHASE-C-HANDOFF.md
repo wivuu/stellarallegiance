@@ -57,7 +57,7 @@ dotnet build client/stellarallegiance.csproj   # 0 errors
 # Live loop (shortened research): copy server/Content/core to /tmp, drop build-time-seconds to ~7,
 SIM_PUBLIC_NAME="" dotnet run --project server -c Release -- --port 8099 --autostart \
   --content /tmp/core/core.manifest.yaml &
-SIM_PORT=8099 scripts/run-client.sh --local -- --hangar-demo=/tmp/research-demo
+$env:SIM_PORT=8099; scripts/run-client.ps1 -Local -- --hangar-demo=/tmp/research-demo
 # expect shots 08-12: research tab, node detail, authorized (credits -400, amber banners),
 # complete (green + dependent available), bomber card unlocked in hangar; client self-quits.
 kill $(lsof -tnP -iTCP:8099 -sTCP:LISTEN)

@@ -45,8 +45,8 @@ a real spawn with `Reconciles: 0` and correct credit deduction (1000 + 100 paych
 - Sidebar map = **`SectorMapPreview` reuse**, not the mock's diamond node-map (embeddable, honors
   the secret-in-sector-base-position rule). Cosmetic diamond styling can come later.
 - `--hangar-demo` is a **UI-harness flag: it goes AFTER `--`** (`GetCmdlineUserArgs`), like
-  `--ui-shot`. Invocation: `scripts/run-client.sh --local -- --hangar-demo=<dir>` with
-  `scripts/run-server.sh --local --autostart` running.
+  `--ui-shot`. Invocation: `scripts/run-client.ps1 -Local -- --hangar-demo=<dir>` with
+  `scripts/run-server.ps1 -Local --autostart` running.
 - No new color tokens were needed in Phase A; the mock's amber/green/data-blue status hexes map to
   existing `DesignTokens.Warn/Ok/Data` and land properly in Phase C.
 - Headless (`--headless`) screenshot capture does NOT work (dummy rendering server → null viewport
@@ -57,8 +57,8 @@ a real spawn with `Reconciles: 0` and correct credit deduction (1000 + 100 paych
 ```sh
 dotnet build client/stellarallegiance.csproj   # 0 errors
 dotnet build server/SimServer.csproj           # 0 errors (untouched)
-scripts/run-server.sh --local --autostart &    # wait for :8090 LISTEN
-scripts/run-client.sh --local -- --hangar-demo=/tmp/hangar-demo   # quits itself; 8 PNGs
+scripts/run-server.ps1 -Local --autostart &    # wait for :8090 LISTEN
+scripts/run-client.ps1 -Local -- --hangar-demo=/tmp/hangar-demo   # quits itself; 8 PNGs
 # UiShowcase gallery: godot --path client res://scenes/UiShowcase.tscn -- --ui-shot=/tmp/ui.png --ui-scroll=1680
 kill $(lsof -tnP -iTCP:8090 -sTCP:LISTEN)
 ```
