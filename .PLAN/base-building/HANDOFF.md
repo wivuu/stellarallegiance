@@ -76,7 +76,7 @@ client decodes 2 bases / 6 ship classes / 8 stations, no crashes.
 
 ### Manual visual sign-off (recommended, not yet done)
 
-Run `scripts/run-server.sh --local --autostart &` + a windowed `scripts/run-client.sh --local`; as
+Run `scripts/run-server.ps1 -Local --autostart &` + a windowed `scripts/run-client.ps1 -Local`; as
 commander open the docked **BUILD** tab → Outpost → BUILD (or `/build outpost`); a constructor launches
 from the garrison. Press F3, left-click the constructor, right-click a Regolith rock. Watch it align,
 sink, the build sphere envelop the asteroid, and the outpost appear. (Shorten the outpost's

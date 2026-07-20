@@ -23,7 +23,7 @@ cd tools/collision-hull
 uv run bake.py --kind base --glb ../../client/assets/bases/garrison.glb --check  # validate only (all three validations)
 uv run bake.py --kind base --glb ../../client/assets/bases/garrison.glb          # bake COL_ parts in place (SHIPPING base)
 uv run bake.py --kind base --glb ../../client/assets/bases/Outpost.glb           # ...the retained-but-unused Outpost mesh
-tools/godot-import.sh --force                    # ALWAYS after a rebake (client res:// import)
+tools/godot-import.ps1 -Force                    # ALWAYS after a rebake (client res:// import)
 ```
 
 To eyeball a rebake, add `--show` (interactive window, rotate/zoom the 3D view) or `--preview out.png`

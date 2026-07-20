@@ -17,7 +17,7 @@ cp .env.example .env
 docker compose up --build           # serves ws://localhost:8090/game
 ```
 
-For a throwaway local server with bots, run it directly: `scripts/run-server.sh --local --autostart`.
+For a throwaway local server with bots, run it directly: `scripts/run-server.ps1 -Local --autostart`.
 
 ## Public lobby & NAT traversal (optional)
 
@@ -56,10 +56,10 @@ Two one-liner scripts wrap the whole flow (Railway CLI installed + `railway logi
 **idempotent** — re-running with the same project name UPDATES that project instead of creating a
 duplicate (so a server never gets advertised twice):
 
-```bash
-scripts/deploy-railway-lobby.sh                 # deploy/update the public lobby (wivuu-public-lobby)
-scripts/deploy-railway-server.sh                # deploy/update a game server (wivuu-game-server)
-scripts/deploy-railway-server.sh my-other-box   # a second, differently-named server
+```pwsh
+scripts/deploy-railway-lobby.ps1                 # deploy/update the public lobby (wivuu-public-lobby)
+scripts/deploy-railway-server.ps1                # deploy/update a game server (wivuu-game-server)
+scripts/deploy-railway-server.ps1 my-other-box   # a second, differently-named server
 ```
 
 The **lobby** script defaults to project `wivuu-public-lobby` (the domain baked into the

@@ -43,7 +43,7 @@ python3 .claude/skills/hardpoints/glb_hardpoints.py client/assets/bases/base.glb
   become **empty mounts** (`HardpointDef.NoWeapon`). No mesh node AND no authored geometry =
   boot error. `HP_Cockpit` exists in no mesh — always YAML-authored.
 - To verify what the server actually streamed after a change, `tests/ContentTest` asserts the
-  merged layouts, and a live check is `scripts/run-server.sh --local --autostart` + the
+  merged layouts, and a live check is `scripts/run-server.ps1 -Local --autostart` + the
   `verify` skill's autofly capture.
 - Changing hardpoints on canonical hulls = edit the part YAML in `tools/ship-gen` and rebake
   (nodes are baked into the GLB), NOT hand-editing hulls.yaml offsets — YAML offsets are the

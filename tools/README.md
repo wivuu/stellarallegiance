@@ -44,7 +44,7 @@ dotnet run --project tools/simbot -- --bots 50 --url ws://localhost:8090/game --
 
 ## Misc
 
-### `godot-import.sh`
+### `godot-import.ps1`
 Runs Godot's headless import pass (`godot --headless --import`) so freshly committed `.glb`s get
 their `res://` import artifacts generated — required before headless/CI runs or exports, which
 otherwise silently fall back.

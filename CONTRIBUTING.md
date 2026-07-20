@@ -26,12 +26,15 @@ When you change the wire format, bump `Protocol.Version` (server) and the matchi
 
 ## Building & running
 
-```bash
+The repo scripts require **PowerShell 7+ (`pwsh`)** on all platforms — preinstalled on Windows;
+on macOS/Linux install it with `brew install powershell` or your package manager.
+
+```pwsh
 dotnet build shared/Shared.csproj
 dotnet build server/SimServer.csproj -c Release
 dotnet build client/stellarallegiance.csproj
-scripts/run-server.sh        # server (rebuilds + runs)
-scripts/run-client.sh        # client (rebuilds + launches Godot)
+scripts/run-server.ps1        # server (rebuilds + runs)
+scripts/run-client.ps1        # client (rebuilds + launches Godot)
 ```
 
 See [QUICKSTART.md](QUICKSTART.md) for the full local loop.
