@@ -21,8 +21,7 @@ Archives:
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
 - Reloading things from cargo should take a configurable amount of time (i.e. ammo and fuel)
-- No way to research ship classes(hulls)?
-- Adv. Fighter's belly HP is mounted to a gun, but there should be 3 gun hardpoints and a belly missile hardpoint
+- Adv. Fighter's belly HP is mounted to a gun, but there should be 3 gun hardpoints and a belly missile hardpoint - Look for other mesh
 - Look for opportunities to utilize native vector3 and SIMD for performance improvements
 - Ship loadouts should not not persist between game matches
 - Prevent alephs from spawning too close together by chance
