@@ -18,6 +18,11 @@ assets/**/*.png
 # (regenerate with tools/logo-gen — see its README). Godot still re-imports it.
 !assets/ui/logo.png
 
+# ...and the custom mouse cursors, likewise committed source-of-truth assets
+# (regenerate with tools/cursor-gen — see gen_cursor.py). Godot still re-imports them.
+!assets/ui/cursor.png
+!assets/ui/cursor_ibeam.png
+
 # dotenv files
 .env
 
