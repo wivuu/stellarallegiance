@@ -13,7 +13,7 @@ constants.
 project.godot            Godot project (entry scene = scenes/Main.tscn)
 stellarallegiance.csproj    C# project compiled by Godot's Mono build; references ../shared
 stellarallegiance.sln       solution (client + shared)
-export_presets.cfg       macOS / Windows / Linux export presets (see scripts/export-clients.sh)
+export_presets.cfg       macOS / Windows / Linux export presets (see scripts/export-clients.ps1)
 default_bus_layout.tres  audio bus layout for the spatial-audio mixer
 scenes/Main.tscn         the single root scene; everything is spawned/driven from here
 scripts/                 all gameplay C# (see below)
@@ -49,12 +49,12 @@ Roughly grouped by responsibility:
 
 From the repo root (not this directory):
 
-```bash
-scripts/run-client.sh            # opens the public-lobby server browser
-scripts/run-client.sh --local    # connects straight to localhost:8090
+```pwsh
+scripts/run-client.ps1            # opens the public-lobby server browser
+scripts/run-client.ps1 -Local     # connects straight to localhost:8090
 ```
 
-`run-client.sh` rebuilds the client C# fresh before launching so Godot can't run a stale
+`run-client.ps1` rebuilds the client C# fresh before launching so Godot can't run a stale
 assembly against a rebuilt server (which would cause silent protocol skew). See the root
 [README](../README.md) and [QUICKSTART](../QUICKSTART.md) for prerequisites (Godot Mono build,
 .NET 8 SDK).

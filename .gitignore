@@ -8,7 +8,7 @@ pick-assets/
 
 graphify-out/cache/
 .serena/
-# screen-recording outputs (scripts/run-client.sh --write-movie)
+# screen-recording outputs (scripts/run-client.ps1 -WriteMovie)
 *.avi
 *.mp4
 *.mkv

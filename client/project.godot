@@ -32,7 +32,7 @@ project/assembly_name="stellarallegiance"
 
 ; Movie Maker (--write-movie) tuning. mjpeg_quality trims MJPEG encode time + file size
 ; vs the 0.75 default (encoding dominates record time at the 2560x1440 default viewport).
-; Recording fps is driven by scripts/run-client.sh (--fixed-fps, default 30 via MOVIE_FPS),
+; Recording fps is driven by scripts/run-client.ps1 (--fixed-fps, default 30 via MOVIE_FPS),
 ; but set a matching default here so editor-launched recordings are cheap too.
 movie_writer/mjpeg_quality=0.6
 movie_writer/fps=30

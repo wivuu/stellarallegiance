@@ -5,6 +5,8 @@ Get a match running locally in five steps.
 ### 1. Install prerequisites
 - **.NET 8 SDK** — verify with `dotnet --version` (≥ 8).
 - **Godot 4.7, Mono/.NET build** — the `godot-mono` binary on your PATH.
+- **PowerShell 7+ (`pwsh`)** — required to run the repo scripts on all platforms. Preinstalled on
+  Windows; on macOS/Linux install it (`brew install powershell` or your package manager).
 
 ### 2. Clone and restore
 ```bash
@@ -13,20 +15,20 @@ cd stellarallegiance
 dotnet build shared/Shared.csproj      # sanity-check the toolchain
 ```
 
-For a quick local game, pass `--local` to both scripts (skips the public lobby).
+For a quick local game, pass `-Local` to both scripts (skips the public lobby).
 
 ### 3. Start the server (terminal 1)
-```bash
-scripts/run-server.sh --local
+```pwsh
+scripts/run-server.ps1 -Local
 ```
 It rebuilds, then listens on `ws://localhost:8090/game`. You should see
 `[SimServer] ws://localhost:8090/game … 20 Hz`.
 
 ### 4. Launch the client (terminal 2)
-```bash
-scripts/run-client.sh --local
+```pwsh
+scripts/run-client.ps1 -Local
 ```
-`--local` connects straight to `localhost:8090`. (Drop it to open the **public lobby browser**
+`-Local` connects straight to `localhost:8090`. (Drop it to open the **public lobby browser**
 instead, or pass `--host hostname-or-ip:8090` to target a specific server.)
 
 ### 5. Play
@@ -37,14 +39,14 @@ fill out the opposition.
 ---
 
 ### Public lobby
-Without `--local`, `run-server.sh` publishes the server to the public lobby (`PUBLIC_LOBBY`,
-default `https://wivuu-public-lobby-production.up.railway.app`) and `run-client.sh` opens a browser of the servers listed there —
+Without `-Local`, `run-server.ps1` publishes the server to the public lobby (`PUBLIC_LOBBY`,
+default `https://wivuu-public-lobby-production.up.railway.app`) and `run-client.ps1` opens a browser of the servers listed there —
 including NAT'd ones, joined over WebRTC. See the README's *Public lobby & NAT traversal*.
 
 ### Solo / unattended
 Skip the ready-up gate and start a perpetual match immediately:
-```bash
-scripts/run-server.sh --local --autostart
+```pwsh
+scripts/run-server.ps1 -Local --autostart
 ```
 
 ### Two machines
@@ -54,8 +56,8 @@ the server with `--secret <password>` and set `SIM_SECRET=<password>` in the cli
 environment.
 
 ### Load test
-```bash
-scripts/run-server.sh --local --autostart
+```pwsh
+scripts/run-server.ps1 -Local --autostart
 dotnet run --project tools/simbot/SimBot.csproj -c Release -- --bots 100 --seconds 30
 ```
 
@@ -65,4 +67,4 @@ dotnet run --project tools/simbot/SimBot.csproj -c Release -- --bots 100 --secon
 - **`godot-mono: command not found`** — install the Mono/.NET build of Godot 4.7 and put it on
   your PATH (or run the client from the Godot editor by opening `client/`).
 - **Protocol mismatch warning** — the client and server were built from different revisions;
-  rebuild both (`run-server.sh` and `run-client.sh` rebuild on launch).
+  rebuild both (`run-server.ps1` and `run-client.ps1` rebuild on launch).

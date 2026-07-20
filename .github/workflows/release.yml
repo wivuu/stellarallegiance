@@ -21,7 +21,7 @@ env:
 jobs:
   # ---------------------------------------------------------------------------------------------
   # Godot client — Linux / macOS / Windows. Mirrors build-godot-client.yml's proven setup, then
-  # packages release-named zips (macOS re-signed ad-hoc per scripts/export-clients.sh).
+  # packages release-named zips (macOS re-signed ad-hoc per scripts/export-clients.ps1).
   # ---------------------------------------------------------------------------------------------
   client:
     name: Client (${{ matrix.name }})
@@ -117,7 +117,7 @@ jobs:
           test -e "$GITHUB_WORKSPACE/${{ matrix.output_path }}" || { echo "::error::export produced no output at ${{ matrix.output_path }}"; exit 1; }
 
       # Linux & Windows ship as the WHOLE export folder zipped — the executable needs its sibling
-      # .pck and data_* dir (see scripts/export-clients.sh).
+      # .pck and data_* dir (see scripts/export-clients.ps1).
       - name: Package Linux
         if: matrix.name == 'Linux'
         run: |
@@ -133,7 +133,7 @@ jobs:
 
       # macOS: Godot's signing enables the hardened runtime, which SIGKILLs an un-notarized build.
       # Strip it and re-sign plain ad-hoc, then ditto-zip to preserve the signature + symlinks
-      # (verbatim from scripts/export-clients.sh:51-58). Testers still clear quarantine once.
+      # (verbatim from scripts/export-clients.ps1). Testers still clear quarantine once.
       - name: Package macOS
         if: matrix.name == 'macOS'
         run: |
