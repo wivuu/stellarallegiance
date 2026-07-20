@@ -416,6 +416,9 @@ public sealed class WorldSeedingDef
 
     /// <summary>Radius multiplier for the rare special rocks (Carbonaceous/Silicon/Uranium); 1 = no change, 3 = oversized by 200%.</summary>
     public double? SpecialRockRadiusMult { get; set; }
+
+    /// <summary>Minimum clearance (world units) between a special rock's oversized surface and the sector boundary; 0 = specials may land anywhere. Keeps landmark rocks from spawning half-outside a sector.</summary>
+    public double? SpecialEdgeMargin { get; set; }
 }
 
 /// <summary>
@@ -679,6 +682,7 @@ public static class WorldLoader
             if (ParseSpecialWeights(se.SpecialWeights, "seeding.special-weights") is { } sw)
                 t.SpecialWeights = sw;
             t.SpecialRockRadiusMult = F(se.SpecialRockRadiusMult, t.SpecialRockRadiusMult);
+            t.SpecialEdgeMargin = F(se.SpecialEdgeMargin, t.SpecialEdgeMargin);
         }
         if (w.Mining is { } mi)
         {

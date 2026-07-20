@@ -145,7 +145,7 @@ seeding:
   base-y-jitter: 80          # garrison vertical jitter (y drawn in ± half this)
   rock-min-gap: 8            # min surface-to-surface gap between any two rocks (0 = allow overlap)
   base-clearance: 250        # min gap between a rock's surface and a base's collision sphere (0 = off)
-  aleph-min-gap: 1800         # min centre-to-centre gap between two gate mouths in ONE sector (0 = off)
+  aleph-min-gap: 2400         # min centre-to-centre gap between two gate mouths in ONE sector (0 = off)
   he3-per-sector: 4          # guaranteed He3 rocks per ordinary (non-home) sector
   he3-per-home-sector: 2     # a team's HOME (garrison) sector is leaner: exactly 2 He3 rocks
   special-per-sector: 1      # RARE special rocks per sector; everything else is common Regolith
@@ -156,6 +156,7 @@ seeding:
   # carbonaceous:1 silicon:0 uranium:0 forces Carbonaceous (the class the Supremacy Center builds on).
   # special-weights: { carbonaceous: 1, silicon: 1, uranium: 1 }
   special-rock-radius-mult: 3 # landmark sizing for the rare specials (1 = no change)
+  special-edge-margin: 200    # keep a special rock's (oversized) surface ≥ this far inside the sector edge (0 = off)
 
 # Mining + ore economy: how the AI miner economy is tuned and how much ore a He3 rock holds (which
 # rocks BECOME He3/special is decided by the rock-class knobs under `seeding:`). Per-rock He3

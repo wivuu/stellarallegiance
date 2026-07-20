@@ -24,6 +24,8 @@ Archives:
 - Look for opportunities to utilize native vector3 and SIMD for performance improvements
 - Ship loadouts should not not persist between game matches
 - Improve heavy sector entrance performance - entering a sector with lots of dust and asteroids and potentially other things can cause lots of frames dropped as things appear
+- Only allow ships that require shipyard to launch from shipyard/drydock; or add a 'launch-capbility' config attribute that restricts the types of bases that can launch them
+- Devastator has no momentum and a light thats RIGHT in front of the cockpit
 ---
 
 ## Content philosophy (the through-line)

@@ -887,6 +887,15 @@ namespace StellarAllegiance.Shared
         // radius (collision + visual) is multiplied by this so they stand out from the common field. 1 =
         // no change; 3 = oversized by 200%. He3 and common Regolith keep their rolled size.
         public float SpecialRockRadiusMult = 3f;
+
+        // Keep a special rock's OVERSIZED surface at least this many world units inside the sector
+        // boundary, so a landmark rock never spawns half-outside the sector. World-gen picks each special
+        // from rocks whose pos.Length() + rockRadius·SpecialRockRadiusMult + margin <= sectorRadius,
+        // preferring rank order; if too few qualify the most-interior of the rest fill in, so the
+        // guaranteed special count is never reduced. Decided from per-rock positions only (never the
+        // shared world-gen RNG), so the rock/aleph layout for a pinned seed is unaffected. 0 = off
+        // (specials may land anywhere — the pre-margin behavior).
+        public float SpecialEdgeMargin = 200f;
     }
 
     // Mining + ore economy tuning (world.yaml `mining:`) — harvest/economy mechanics only; the

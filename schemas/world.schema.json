@@ -423,6 +423,20 @@
             "null"
           ],
           "description": "Maximum damage-per-second the boundary erosion can ever deal."
+        },
+        "mine-speed-ref": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Closing speed (u/s) at which a minefield deals its full authored DPS; damage scales speed/ref."
+        },
+        "mine-max-speed-mult": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Cap on the minefield speed multiplier \u2014 a fast pass can\u0027t exceed this \u00D7 the authored DPS."
         }
       },
       "description": "Collision-damage / boundary-hazard tuning (server-side only). Null -\u003E stock.",
@@ -712,6 +726,13 @@
             "null"
           ],
           "description": "Radius multiplier for the rare special rocks (Carbonaceous/Silicon/Uranium); 1 = no change, 3 = oversized by 200%."
+        },
+        "special-edge-margin": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Minimum clearance (world units) between a special rock\u0027s oversized surface and the sector boundary; 0 = specials may land anywhere. Keeps landmark rocks from spawning half-outside a sector."
         }
       },
       "description": "Map-seeding shape tuning: asteroid fields/belts \u002B base placement. Null -\u003E stock.",

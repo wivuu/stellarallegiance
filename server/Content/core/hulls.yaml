@@ -317,7 +317,7 @@ hulls:
     price: 3500           # IGC 4000 x0.875 (bomber anchor: IGC 400 -> our 350)
     payload-capacity: 12 # 4x autocan (4) + 8 mine = 12
     required-capabilities: [base]
-    required-techs: [heavy-class, shipyard-dry]   # both granted by dev-upgrade-heavy-class
+    required-techs: [shipyard-1]   # both granted by shipyard-1 for now (should be heavy-class, shipyard-dry later)
     # cap09 carries HP_Weapon_0..3 (four hull mounts) — all four take the heavy PW AutoCan. Turret_0..3,
     # Thruster_0, Light_0..8 append. Cockpit authored (no mesh node).
     hardpoints:

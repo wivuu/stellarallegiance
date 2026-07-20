@@ -724,9 +724,64 @@ public sealed class World
                     specialCount = 0;
             }
             specialCount = Math.Clamp(specialCount, 0, Math.Max(0, n - he3Count));
+
+            // Pick which non-He3 rocks (the ranked candidates AFTER the He3 block) become special.
+            // Prefer rank order, but keep each special's OVERSIZED surface at least `special-edge-margin`
+            // world units inside the sector boundary, so a landmark rock never spawns half-outside the
+            // sector. A candidate is eligible when pos.Length() + rockRadius·mult + margin <= sectorRadius.
+            // If too few rocks qualify (a small or edge-heavy sector) the most-interior of the rest fill
+            // in, so the guaranteed special count is never reduced. With the margin off (<= 0) — or a
+            // boundless test sector — this reproduces the legacy "next specialCount ranked" pick exactly.
+            // Reads only per-rock positions/hashes (never the shared world-gen RNG), so the rock/aleph
+            // layout for a pinned seed stays byte-identical (the canary).
             var isSpecial = new bool[n];
-            for (int k = he3Count; k < he3Count + specialCount; k++)
-                isSpecial[order[k]] = true;
+            if (specialCount > 0)
+            {
+                float edgeMargin = _seed.SpecialEdgeMargin;
+                float sectorRadius = SectorRadius(sectorId);
+                float sizeMult = _seed.SpecialRockRadiusMult;
+                if (edgeMargin <= 0f || sectorRadius == float.MaxValue)
+                {
+                    // Margin off (or a boundless test sector): legacy pick — the next specialCount ranked.
+                    for (int k = he3Count; k < he3Count + specialCount; k++)
+                        isSpecial[order[k]] = true;
+                }
+                else
+                {
+                    // Pass 1: eligible candidates in rank order (best hash first).
+                    int picked = 0;
+                    for (int k = he3Count; k < n && picked < specialCount; k++)
+                    {
+                        int idx = order[k];
+                        float surface = rocks[idx].Pos.Length() + rocks[idx].Radius * sizeMult;
+                        if (surface + edgeMargin <= sectorRadius)
+                        {
+                            isSpecial[idx] = true;
+                            picked++;
+                        }
+                    }
+                    // Pass 2 (fallback): still short → fill from the remaining (edge-failing) candidates,
+                    // most-interior first (smallest distance-from-centre), rock id as the deterministic
+                    // tie-break, so exactly specialCount rocks become special no matter how tight the margin.
+                    if (picked < specialCount)
+                    {
+                        var rest = new List<int>();
+                        for (int k = he3Count; k < n; k++)
+                            if (!isSpecial[order[k]])
+                                rest.Add(order[k]);
+                        rest.Sort((a, b) =>
+                        {
+                            int c = rocks[a].Pos.LengthSquared().CompareTo(rocks[b].Pos.LengthSquared());
+                            return c != 0 ? c : rocks[a].Id.CompareTo(rocks[b].Id);
+                        });
+                        for (int t = 0; t < rest.Count && picked < specialCount; t++)
+                        {
+                            isSpecial[rest[t]] = true;
+                            picked++;
+                        }
+                    }
+                }
+            }
 
             // Which special CLASS a selected rock becomes is drawn from the sector's weights (its own
             // override else the world seeding default). Uniform weights reproduce the legacy hash%3.
@@ -1315,7 +1370,9 @@ public sealed class World
     // ore classes are assigned AFTER seeding (AssignOre) from the surviving rocks, so drops never
     // eat into a sector's guaranteed He3/special counts. Caveat: the rare special rocks are
     // inflated ×SpecialRockRadiusMult after seeding, so an oversized special (≤1/sector) may still
-    // brush a neighbour. At stock knobs the drop rate is ~0. ----
+    // brush a neighbour. At stock knobs the drop rate is ~0. (AssignOre keeps that oversized special
+    // clear of the SECTOR boundary via seeding.special-edge-margin — it picks the special from the
+    // sector's interior rocks rather than moving one, so this placement pass is untouched.) ----
     private const int MaxPlaceAttempts = 12;
 
     private bool RockFits(Vec3 pos, float radius, uint sector, PlacementGrid placed)
