@@ -1,6 +1,6 @@
 # server/
 
-The **standalone .NET 8 authoritative sim server** — the single source of truth for a match.
+The **standalone .NET 10 authoritative sim server** — the single source of truth for a match.
 A dedicated thread runs the fixed-dt **20 Hz** simulation against a wall-clock accumulator and
 fans out area-of-interest (AOI) snapshots after every step. The same process also **hosts the
 lobby** (teams + ready-up). Clients connect directly by `ip:port`, download all content from
@@ -11,11 +11,11 @@ the server, and never touch a database. The deterministic physics and content de
 
 ```
 Program.cs              entry point: Kestrel hosts /game (WebSocket), spins up the sim thread + lobby
-SimServer.csproj        .NET 8 console project; references ../shared
+SimServer.csproj        .NET 10 console project; references ../shared
 Dockerfile              container image (used by docker-compose.server.yml and Railway deploys)
 
 Net/
-  Protocol.cs           wire protocol (currently v7): Hello, Input, Spawn, snapshots, lobby msgs
+  Protocol.cs           wire protocol (version single-sourced in shared/Net/Wire.cs): Hello, Input, Spawn, snapshots, lobby msgs
   ClientHub.cs          per-connection plumbing + snapshot fan-out
   IClientTransport.cs   transport abstraction (WebSocket today, WebRTC alongside)
   WebRtcListener.cs     WebRTC data-channel transport (SIPSorcery) for public-lobby clients

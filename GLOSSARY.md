@@ -16,7 +16,7 @@ Single `ulong` from which the whole static arena — base positions, asteroid fi
   - `server/Sim/World.cs` — `Seed`; `DetRng` streams for bases (`seed ^ 0xB453…`), asteroids/alephs (`DetRng(seed)`), dust (own RNG)
   - `tests/FogTest/Program.cs` — same-seed identical / different-seed differ layout assertions
 - **Related:** [[Minefield]], [[Per-Sector Environment (God Rays / Nebula / Dust Clouds)]]
-- **Notes:** Each rolled match seed is logged (`match world: … seed=…`) so any live layout is reproducible with `--seed`. Asteroids + alephs share `DetRng(seed)` (reroll together by design); dust runs on its own RNG so it never perturbs rock/aleph placement. Rock placement enforces minimum spawn spacing (`seeding.rock-min-gap` rock↔rock, `seeding.base-clearance` rock↔base; surface-to-surface, 0 disables) by deterministic rejection sampling — a rock that can't fit after a fixed attempt count is dropped, and ore classes are assigned afterwards from the survivors so guaranteed He3/special counts are unaffected.
+- **Notes:** Each rolled match seed is logged (`match world: … seed=…`) so any live layout is reproducible with `--seed`. Asteroids + alephs share `DetRng(seed)` (reroll together by design); dust runs on its own RNG so it never perturbs rock/aleph placement. Rock placement enforces minimum spawn spacing (`seeding.rock-min-gap` rock↔rock, `seeding.base-clearance` rock↔base; surface-to-surface, 0 disables) by deterministic rejection sampling — a rock that can't fit after a fixed attempt count is dropped, and ore classes are assigned afterwards from the survivors so guaranteed He3/special counts are unaffected. Aleph gate mouths in the SAME sector are likewise spaced (`seeding.aleph-min-gap`, centre-to-centre, 0 disables) so two gates never overlap by chance — but a gate is REQUIRED for connectivity and is never dropped: if no roll clears the gap the best-separated one is kept.
 
 ### Flight Model
 Core deterministic physics system shared between server and client for ship movement, thrust, and rotation.
@@ -101,12 +101,12 @@ Stage-4 resource layer over the seeded asteroids. Every rock gets a `RockClass` 
 - **Notes:** Non-He3 classes are cosmetic v1 (future refinery/shipyard hooks). Vision occlusion + PIG avoidance stay at spawn radius (conservative, deferred). Grid membership stays spawn-size — rocks only shrink.
 
 ### Miner (AI ore drone)
-A team-owned, unarmed AI ship (`ShipSim.IsMiner`, `ShipFlagMiner = 32`, hull class-id 4 with `ore-capacity`) that harvests He3 rocks and offloads ore at friendly bases for team credits — alongside, not replacing, the flat paycheck. Each team seeds **one free miner slot** per match; more are bought (`/buyminer`, same `TryReserveSpawn` charge seam as player hulls) up to `mining.max-miners-per-team`. `MinerSlot` is a separate pool from `PigSlot`: purchased lifecycle, no wave respawn, no pod — a killed miner's slot is gone until repurchased. Brain at the PIG 5 Hz cadence (`MinerBrainStep`): picks **team-discovered** He3 rocks in **authorized sectors** (`TeamState.AuthorizedMiningSectors`, seeded to the garrison, extended via `/mine <sector>`; transit is free, only *selection* is gated), preferring its previous rock, avoiding friendly claims unless miners outnumber rocks, else nearest by gate hops. Steering at 20 Hz (`MinerExecute` via the `InputFor` seam) reuses `AutoSteer` + the 3-phase `DockApproach`; cross-sector legs route `World.NextGateTo`. The dock-trigger collision pass routes miners to `OffloadMiner` (credits + `GoneClean` despawn + delayed relaunch) — never `DockShip` (which refunds `PaidCost` and rebinds a client). `MinersEnabled` mirrors `PigsEnabled` as the test kill-switch; results/errors reach the team as `MinerNoticesThisStep` system chat. Miners collide like any ship (the ship-ship pass runs between ALL ships, friend or foe): any physical bump — ship, asteroid, or base, damaging or not — stamps `ShipSim.LastCollisionTick` and the `DisruptCollidedMiners` sweep knocks a Harvesting miner back to ToRock (beam reset, cargo + claim kept). A miner whose hull drops below `mining.retreat-health-frac` (stock 0.8) of max abandons the field (`GoHome`), offloads whatever it carries, and relaunches at full health.
+A team-owned, unarmed AI ship (`ShipSim.IsMiner`, `ShipFlagMiner = 32`, hull class-id 4 with `ore-capacity`) that harvests He3 rocks and offloads ore at friendly bases for team credits — alongside, not replacing, the flat paycheck. Each team seeds **one free miner slot** per match; more are bought from the docked **Build tab** (`MsgBuyMiner=16`, commander-gated, same `TryReserveSpawn` charge seam as player hulls) up to `mining.max-miners-per-team`. `MinerSlot` is a separate pool from `PigSlot`: purchased lifecycle, no wave respawn, no pod — a killed miner's slot is gone until repurchased. Brain at the PIG 5 Hz cadence (`MinerBrainStep`): picks **team-discovered** He3 rocks in **authorized sectors** (`TeamState.AuthorizedMiningSectors`, seeded to the garrison, extended by a commander's `MsgOrder=12` sector task from F3; transit is free, only *selection* is gated), preferring its previous rock, avoiding friendly claims unless miners outnumber rocks, else nearest by gate hops. Steering at 20 Hz (`MinerExecute` via the `InputFor` seam) reuses `AutoSteer` + the 3-phase `DockApproach`; cross-sector legs route `World.NextGateTo`. The dock-trigger collision pass routes miners to `OffloadMiner` (credits + `GoneClean` despawn + delayed relaunch) — never `DockShip` (which refunds `PaidCost` and rebinds a client). `MinersEnabled` mirrors `PigsEnabled` as the test kill-switch; results/errors reach the team as `MinerNoticesThisStep` system chat. Miners collide like any ship (the ship-ship pass runs between ALL ships, friend or foe): any physical bump — ship, asteroid, or base, damaging or not — stamps `ShipSim.LastCollisionTick` and the `DisruptCollidedMiners` sweep knocks a Harvesting miner back to ToRock (beam reset, cargo + claim kept). A miner whose hull drops below `mining.retreat-health-frac` (stock 0.8) of max abandons the field (`GoHome`), offloads whatever it carries, and relaunches at full health.
 - **Frequency:** Domain-specific
 - **Key Files:**
   - `server/Sim/Simulation.Mining.cs` — `HarvestStep`, `MinerSlot`/`MinerState`, brain + steering + offload + buy/order/status queues
   - `server/Sim/Simulation.cs` — `SeedMinerSlots` (StartMatch), `MinerBrainStep`/`MinerExecute`/`OffloadMiner`/`KillMiner` hook sites, `DrainMinerQueues`
-  - `server/Net/ClientHub.cs` — `/buyminer` `/mine` `/miners` in `HandleCommand`, `SystemToTeam` notice relay; `client/scripts/Chat.cs` — command relay + `/help`
+  - `server/Net/ClientHub.cs` — `MsgBuyMiner`/`MsgOrder` handling (commander-gated; miners are bought from the Build tab and sector/rock-tasked via F3, not chat commands), `SystemToTeam` notice relay; `client/scripts/Chat.cs` — command relay + `/help`
   - `server/Content/core/hulls.yaml` — `miner` (class-id 4, unarmed, `ore-capacity`); `client/assets/ships/miner.glb`
   - `tests/MiningTest` — full loop, claim rules, cross-sector return, authorization/discovery gating
 - **Related:** [[Rock Class / Ore (Mining)]], [[PigBrain]], [[Autopilot / AutoSteer]], [[Dock Refund]]
@@ -146,8 +146,8 @@ win-condition bases die, so a destroyed outpost never ends the match.
   - `server/Net/Protocol.cs` — `MsgBuildConstructor=14`, `MsgConstructorBuilds=25`, `MsgRockGone=27`/`BuildRockGone` (rock despawn), `BuildBaseReveal`, `WriteBaseStatic` (+baseTypeId/per-type radius); `server/Content/core/stations.yaml` (outpost) + `hulls.yaml` (constructor)
   - `client/scripts/BuildSphere.cs` — the enveloping VFX; `WorldRenderer.UpdateBuildSpheres`/`NetRemoveRock`, `CollisionWorld.RemoveAsteroid`; `ui/BuildTab.cs` — commander BUILD action (`GameNetClient.SendBuildConstructor`)
   - `tests/ConstructorTest` — full loop, rock-class gate, win-condition, def flags
-- **Related:** [[Miner (AI ore drone)]], [[Autopilot / AutoSteer]], [[Commander orders / F3 select-and-command]], [[Tech Paths / Research]], [[Build Tab (Construction Placeholder)]]
-- **Notes:** Outpost collision = convex hull from Outpost.glb (no COL_ parts, no dock faces → no docking yet). The other 6 station types are authored placeholders — add `base-type-id`+`model-name`+`build-on-rock-class` to activate, no code. Cost = station price. **All beats are YAML (v38)**: per-station `align-time-seconds` + `build-time-seconds` (stations.yaml, streamed on the catalog), drone-wide creep speeds / standoff / embed depth / production dwell under world.yaml `constructor:` (server-only, mirrors `mining:`). Gotcha: `AutoSteer.ApproachPoint` is bang-bang (thrust 0/1) — the slow legs instead COMMAND a speed (throttle = speed/hull-max via `SteerToPoint`, the `Creep` helper), so tuning a hull's max-speed is NOT how you pace the approach.
+- **Related:** [[Miner (AI ore drone)]], [[Autopilot / AutoSteer]], [[Commander orders / F3 select-and-command]], [[Tech Paths / Research]], [[Build Tab]]
+- **Notes:** The outpost base type binds `ss90.glb` (IGC Outpost Hvy), which carries real docking doors, for both server collision and client model. The other 6 station types are authored placeholders — add `base-type-id`+`model-name`+`build-on-rock-class` to activate, no code. Cost = station price. **All beats are YAML (v38)**: per-station `align-time-seconds` + `build-time-seconds` (stations.yaml, streamed on the catalog), drone-wide creep speeds / standoff / embed depth / production dwell under world.yaml `constructor:` (server-only, mirrors `mining:`). Gotcha: `AutoSteer.ApproachPoint` is bang-bang (thrust 0/1) — the slow legs instead COMMAND a speed (throttle = speed/hull-max via `SteerToPoint`, the `Creep` helper), so tuning a hull's max-speed is NOT how you pace the approach.
 
 ### Rock-Discovery Construction Gate (DiscoveredRockClasses)
 A constructor station is only buyable once the team's fog of war has **revealed at least one asteroid
@@ -372,7 +372,7 @@ delay. A per-weapon `shield-damage-multiplier` (default 1.0) is the damage-type 
 - **Key Files:**
   - `factions/src/Allegiance.Factions/Model/Hull.cs` — `ShieldCapacity/ShieldRecharge/ShieldDelay`; `Model/Parts/Part.cs` — `ShieldDamageMultiplier`
   - `server/Sim/Simulation.cs` — `ApplyDamage` (single damage seam for all 7 sites), spawn init, end-of-Step recharge sweep, `ShieldsEnabled` test toggle
-  - `server/Net/Protocol.cs` — shield f16 in the ship snapshot (ShipRecordSize 55) + 3 shield floats/1 shieldMult in MsgDefs (proto 19)
+  - `server/Net/Protocol.cs` — shield f16 rides the ship record (`ShipRecordSize`, single-sourced in Protocol.cs) + 3 shield floats/1 shieldMult in MsgDefs (proto 19)
   - `client/scripts/SystemRing.cs` — cyan SHLD solid arc wrapping the HULL gauge; `client/scripts/ShieldFlash.cs` — hemisphere hit flash
 - **Related:** [[Hull]], [[Blast Radius]], [[Direct Hit Multiplier]]
 - **Notes:** Proto v19; a pod uses the Pod def's shield (0). `ShieldsEnabled=false` lets damage-mechanic tests isolate raw damage. `tests/ShieldTest` is the determinism guard.
@@ -401,20 +401,19 @@ Client-side synthetic representation of ballistic fire (bolts, cannon rounds); n
 - **Frequency:** Very common
 - **Key Files:**
   - `client/scripts/ProjectileView.cs` — render and interpolation
-  - `server/Net/Protocol.cs` — ShotResolution message encodes hit position/time
+  - `server/Sim/Simulation.cs` — server-side ballistic hit detection (in-memory `ShotResolution`, no wire message)
   - `shared/Defs.cs` — projectile speed/lifetime constants
 - **Related:** [[ShotResolution]], [[Client-Side Hit Sparks]]
-- **Notes:** Phase 0: no Projectile table; client synthesizes bolts; server drains ShotResolution messages; Phase 1 = native sim server with server-side ballistic tracking
+- **Notes:** No server Projectile table — the client synthesizes bolts (and intercepts hit sparks locally), while the server tracks ballistic hits in-memory; the native sim is the sole gameplay path.
 
 ### ShotResolution
-Server message reporting ballistic projectile hits: target ship ID, impact position, time offset.
+In-memory, server-only ballistic hit record (target ship ID, impact position, time offset) — NOT a wire message (the old STDB `ShotResolution` table is gone).
 - **Frequency:** Common
 - **Key Files:**
-  - `server/Net/Protocol.cs` — MsgShotResolution structure
-  - `client/scripts/ProjectileView.cs` — consumes resolutions to spawn hit effects
-  - `server/Sim/Simulation.cs` — ballistic hit detection logic
+  - `server/Sim/Simulation.cs` — batched `ShotResolution` drain + ballistic hit detection (the in-memory equivalent of the removed module's table)
+  - `client/scripts/ProjectileView.cs` — client-side bolt render only (no resolution consumer)
 - **Related:** [[Projectile]], [[Client-Side Hit Sparks]]
-- **Notes:** Separate batch drained per SimTick; allows client to render bolts and confirm hits
+- **Notes:** Hit detection is server-authoritative; there is no `MsgShotResolution` and the client never consumes resolutions — hit VFX are client-side interception (`CheckBoltImpacts`) per [[Client-Side Hit Sparks]].
 
 ### Per-Ship Weapon Loadout (mount overrides)
 The hangar's weapon-slot assignments (swap or leave-empty per Weapon hardpoint) carried on MsgSpawn, validated + stored per-ship in the sim, and echoed to every client via MsgShipLoadout=28 (full table, reconcile-by-omission: an omitted ship flies its authored class loadout).
@@ -445,7 +444,7 @@ Server-driven content authoring: gameplay/balance values (hulls, weapons, techs,
 - **Notes:** Patchless runtime streaming; no client fallback (client holds authority until defs load)
 
 ### World Tuning Blocks
-Server-side sim tuning authored in the standalone `server/Content/core/world.yaml` (NOT part of the factions bundle manifest; loaded by `WorldLoader`, overridable via `SIM_WORLD`/`--world`) — `ai:` (PIG drone difficulty/behavior), `combat:` (collision damage + boundary hazard), `mechanics:` (gates/docking/pods/economy/match flow), `seeding:` (asteroid field/belt shapes + base placement), plus root `aleph-radar-signature`/`rock-radar-signature`. Every key optional; omitted keys keep stock values (the shared classes' field initializers). NEVER streamed — no protocol impact.
+Server-side sim tuning authored in the standalone `server/Content/core/world.yaml` (NOT part of the factions bundle manifest; loaded by `WorldLoader`, overridable via `SIM_WORLD`/`--world`) — `ai:` (PIG drone difficulty/behavior), `combat:` (collision damage + boundary hazard), `mechanics:` (gates/docking/pods/economy/match flow), `seeding:` (asteroid field/belt shapes + base placement), `mining:` (harvest/ore economy), `constructor:` (base-builder creep speeds/standoff/embed/dwell), `build:` (per-garrison build-queue parallel/queue limits), plus root radar-signature knobs (`aleph-radar-signature`/`rock-radar-signature`, the `boost/shield/dust-signature-mult` fog multipliers, and the `signature-min/max-mult` rails). Every key optional; omitted keys keep stock values (the shared classes' field initializers). NEVER streamed — no protocol impact.
 - **Frequency:** Common (any sim-balance sweep)
 - **Key Files:**
   - `server/Content/core/world.yaml` — authored values (stock = documented defaults); standalone, not a manifest fragment
@@ -470,7 +469,7 @@ Compiled gameplay constant: hull stats, weapon stats, tech gating, prices, etc. 
 Playable ship chassis with base stats (armor, speed, turn-rate) and hardpoints for weapons/payloads.
 - **Frequency:** Very common
 - **Key Files:**
-  - `factions/src/Allegiance.Factions/Model/Hulls/Hull.cs` — hull data model
+  - `factions/src/Allegiance.Factions/Model/Hull.cs` — hull data model
   - `server/Content/core/*.yaml` — hull definitions per faction
   - `client/scripts/ShipController.cs` — hull selection UI
   - `tools/ship-gen/` — modular hull generation from YAML parts
@@ -495,7 +494,7 @@ Armament with barrel, fire-rate, projectile type, and damage tuning.
 - **Key Files:**
   - `factions/src/Allegiance.Factions/Model/Parts/Weapon.cs` — weapon model
   - `server/Content/core/*.yaml` — weapon definitions
-  - `client/scripts/WeaponController.cs` — firing logic
+  - `client/scripts/WorldRenderer.cs` (`SpawnBoltFor`), `PredictionController.cs`, `shared/FireCadence.cs` — client firing/cadence seams (HUD panel = `client/scripts/WeaponsPanel.cs`)
   - `shared/FlightModel.cs` — barrel velocity and spread calculations
 - **Related:** [[Hull]], [[Projectile]], [[Blast Radius]]
 - **Notes:** Barrel-seed alignment: author weapon racks AFTER guns in YAML for consistent spawn positions
@@ -504,9 +503,9 @@ Armament with barrel, fire-rate, projectile type, and damage tuning.
 Cargo, expendables, or equipment slot on a hull (e.g., missiles, chaff, fuel pods).
 - **Frequency:** Common
 - **Key Files:**
-  - `factions/src/Allegiance.Factions/Model/Parts/Payload.cs` — payload model
+  - `factions/src/Allegiance.Factions/Model/Parts/Launcher.cs`, `Model/Expendables/` — payload/cargo models
   - `server/Content/core/*.yaml` — payload definitions
-  - `client/scripts/LoadoutController.cs` — loadout UI
+  - `client/scripts/ui/LoadoutState.cs`, `client/scripts/ui/ShipLoadout.cs` — loadout UI
 - **Related:** [[Hull]], [[Missile]], [[Chaff]], [[Expendables]]
 - **Notes:** Consumable slots track ammo; non-consumable payloads are always active
 
@@ -554,29 +553,31 @@ development started at the wrong family (mirrored derivation — keep the two in
   - `client/scripts/ui/ResearchTab.cs` — the RESEARCH docked-screen tab (clusters, rail-line nodes, banners)
   - `client/scripts/ui/TechDetailPanel.cs` — shared right-hand detail column (schematic / cost-time-at / prereqs / unlocks / action footer), reused by RESEARCH and BUILD
   - `shared/Net/Wire.cs`, `server/Net/Protocol.cs`, `client/scripts/GameNetClient.cs` — `MsgResearch` (13, c→s: start/queue/cancel) + `MsgResearchState` (24, s→c: per-team live progress)
-- **Related:** [[Tech Tree]], [[YAML Content Pipeline]], [[Def]], [[Build Tab (Construction Placeholder)]]
+- **Related:** [[Tech Tree]], [[YAML Content Pipeline]], [[Def]], [[Build Tab]]
 - **Notes:** Client status is derived from streamed data only (owned techs/caps + per-base research),
   never baked; non-commanders see a disabled affordance. Protocol v36 introduced the wire.
 
 ---
 
-### Build Tab (Construction Placeholder)
-The BUILD docked-screen tab: a responsive card grid of the **station catalog** — future structures
-(outpost, shipyard, refinery, tech-lab, supremacy-center, expansion-complex, teleport-receiver)
-authored with `base-type-id` omitted, so they never project to a runtime base (`BaseTypeId == -1`).
-Cards use the same owned-tech/cap rules as research, but an UNRESEARCHED structure is hidden
+### Build Tab
+The BUILD docked-screen tab: a responsive card grid of the **station catalog** from which a commander
+buys **constructor drones** to raise forward bases (`MsgBuildConstructor=14`, one per station TYPE via
+`GameNetClient.SendBuildConstructor`) and **miner drones** (`MsgBuyMiner=16`, `SendBuyMiner`). Runtime
+forward bases (`BaseTypeId >= 1` with a `build-on-rock-class`, e.g. the outpost / supremacy-center) are
+really constructible; the remaining authored-placeholder structures are display-only until their type is
+filled in. Cards use the same owned-tech/cap rules as research, but an UNRESEARCHED structure is hidden
 outright (no card until its prerequisites are owned); only situational locks — undiscovered build
-rock, full build queue — render as dim "⊘ LOCKED" cards. It reuses `TechDetailPanel`. Construction is **not wired** — the action footer is always
-disabled ("CONSTRUCTORS OFFLINE"); base-building lands in a later phase. No frames are sent from this tab.
+rock, full build queue — render as dim "⊘ LOCKED" cards. It reuses `TechDetailPanel`, whose action
+footer buys the drone (commander-only, rock-discovery + build-queue gated).
 - **Frequency:** Occasional
 - **Key Files:**
-  - `client/scripts/ui/BuildTab.cs` — the tab + `StationCard` grid cell
+  - `client/scripts/ui/BuildTab.cs` — the tab + `StationCard` grid cell (`SendBuildConstructor`/`SendBuyMiner`, `RockDiscovered` buy-gate)
   - `client/scripts/ui/TechDetailPanel.cs` — shared detail column
-  - `server/Content/core/stations.yaml` — catalog-only station entries (below the runtime garrison)
+  - `server/Content/core/stations.yaml` — the station catalog (runtime bases + authored placeholders)
   - `shared/Defs.cs` — `StationCatalogDef` (streamed catalog tail of `MsgDefs`)
-- **Related:** [[Tech Paths / Research]], [[YAML Content Pipeline]], [[Def]]
-- **Notes:** `DefRegistry.AllStationCatalog()` filtered to `BaseTypeId == -1`; empty catalog shows an
-  awaiting-uplink guard (no baked data).
+- **Related:** [[Constructor (AI base-builder drone) & per-type Bases]], [[Miner (AI ore drone)]], [[Tech Paths / Research]], [[YAML Content Pipeline]], [[Def]]
+- **Notes:** The `Catalog()` filter drops the garrison (type 0) and upgrade-tier runtime bases (reached
+  only via research, no `build-on-rock-class`); an empty catalog shows an awaiting-uplink guard (no baked data).
 
 ---
 
@@ -853,7 +854,7 @@ Gameplay variant: faction-specific hulls, weapons, techs. Loaded from YAML at se
 - **Key Files:**
   - `server/Content/core/*.yaml` — all faction content
   - `server/Content/FactionStart.cs` — faction startup
-  - `factions/src/Allegiance.Factions/Model/Factions/Faction.cs` — faction model
+  - `factions/src/Allegiance.Factions/Model/Faction.cs` — faction model
 - **Related:** [[YAML Content Pipeline]], [[Tech Tree]], [[Hull]]
 - **Notes:** Immutable after boot; factions are defs; team assignment determines which faction player uses
 
@@ -877,7 +878,7 @@ Server-side AI decision system: 5 Hz decision tick, evaluates targets/actions, s
 - **Notes:** Decoupled from SimTick (20 Hz vs 5 Hz); PigBrainTick evaluates fresh targets; SimTick re-steers from cache; safe to hot-swap scheduled table
 
 ### Commander
-Per-team AI decision authority (proto 34): the ONE pilot whose orders AI vessels execute; also gates `/mine` and `/buyminer`. Explicit STATE (not derived like the rename-gating LeaderOf): seeded to the first pilot to join the side, falls to the next-lowest client id when the commander leaves, manually handed off via `/commander <name>` (sitting commander or host). Streamed on the `MsgLobbyState` tail; gold CMDR badge in the roster.
+Per-team AI decision authority (proto 34): the ONE pilot whose orders AI vessels execute; also gates miner buys (`MsgBuyMiner`) and F3 miner orders (`MsgOrder`). Explicit STATE (not derived like the rename-gating LeaderOf): seeded to the first pilot to join the side, falls to the next-lowest client id when the commander leaves, manually handed off via `/commander <name>` (sitting commander or host). Streamed on the `MsgLobbyState` tail; gold CMDR badge in the roster.
 - **Frequency:** Common
 - **Key Files:**
   - `server/Net/Lobby.cs` — `CommanderOf` / `SetCommander` / `FixCommanderLocked` state
@@ -896,7 +897,7 @@ An F3-map command for a friendly ship (`MsgOrder`, proto 34): left-click SELECTS
   - `client/scripts/SectorOverview.cs` — selection + right-click dispatch
   - `tests/CommanderTest/` — 9 sim-level scenarios
 - **Related:** [[Commander]], [[PigBrain]], [[Fog of War]]
-- **Notes:** Orders complete-and-revert (target dead / radar contact lost / base destroyed → autonomy); rescue outranks orders; fog-gated at issue AND execution (no wallhack); keyed by ShipId so respawned drones never inherit; miner subjects map onto mining state (rock pins claim, point = per-miner `/mine`, friendly base = pinned offload)
+- **Notes:** Orders complete-and-revert (target dead / radar contact lost / base destroyed → autonomy); rescue outranks orders; fog-gated at issue AND execution (no wallhack); keyed by ShipId so respawned drones never inherit; miner subjects map onto mining state (rock pins claim, point authorizes + retargets that miner's sector — the old `/mine`, friendly base = pinned offload)
 
 ---
 
@@ -988,15 +989,10 @@ YAML-to-GLB pipeline: converts modular hull part definitions into 3D models with
 
 ## Common Pitfalls & Anti-Patterns
 
-### STDB SQL Limitations
-SpacetimeDB `sql` command has no ORDER BY; aggregates need explicit aliases.
-- **Fix:** Cache keys in memory using commutative (XOR/sum) hashes, not order-dependent FNV
-- **Key File:** `shared/Stdb/` — queries
-
-### Iter() Order Instability
-Iteration order over STDB tables is unstable across runs.
-- **Fix:** Use commutative aggregation (XOR/sum) for cache keys; never rely on sequential order
-- **Key File:** Various query loops
+### Order-Independent Cache / Signature Hashes
+When hashing a SET of rows into a cache key or status signature, aggregate COMMUTATIVELY (XOR/sum) so iteration order can't shift the key — never an order-dependent FNV or sequential fold, and fold each owned cap/base exactly ONCE. (Historical origin: the removed SpacetimeDB `sql` had no ORDER BY and `Iter()` order was unstable across runs; the trap now lives in the Godot UI catalog status signatures.)
+- **Fix:** Fold each row commutatively (XOR/sum); never rely on sequential iteration order.
+- **Key File:** `client/scripts/ui/RefreshGate.cs`, `ui/BuildTab.cs` (`ComputeStatusSig`), `ui/ResearchTab.cs` (`ComputeStatusSig`), `ui/ShipLoadout.cs` (`ComputeBaseSig`)
 
 ### Client No Baked Tuning Fallback
 Client reads tuning only from subscribed def tables; no compile-time constant fallback.

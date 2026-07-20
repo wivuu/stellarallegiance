@@ -395,6 +395,9 @@ public sealed class WorldSeedingDef
     /// <summary>Minimum gap between a rock's surface and a base's collision sphere, world units (0 = off).</summary>
     public double? BaseClearance { get; set; }
 
+    /// <summary>Minimum centre-to-centre gap between two aleph gate mouths in the same sector, world units (0 = allow overlap).</summary>
+    public double? AlephMinGap { get; set; }
+
     // Rock-class seeding: which rocks become He3 / special at world-gen.
     /// <summary>Guaranteed He3 rocks per ordinary sector (clamped to the sector's actual rock count). A map's per-sector he3-count override wins.</summary>
     public int? He3PerSector { get; set; }
@@ -668,6 +671,7 @@ public static class WorldLoader
             t.BaseYJitter = F(se.BaseYJitter, t.BaseYJitter);
             t.RockMinGap = F(se.RockMinGap, t.RockMinGap);
             t.BaseClearance = F(se.BaseClearance, t.BaseClearance);
+            t.AlephMinGap = F(se.AlephMinGap, t.AlephMinGap);
             t.He3PerSector = se.He3PerSector ?? t.He3PerSector;
             t.He3PerHomeSector = se.He3PerHomeSector ?? t.He3PerHomeSector;
             t.SpecialPerSector = se.SpecialPerSector ?? t.SpecialPerSector;

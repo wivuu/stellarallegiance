@@ -279,5 +279,78 @@ string GateStr(World.Gate? g) => g is World.Gate x ? $"{x.SectorId}->{x.DestSect
         "routing: next-hop table diverged between two same-seed Worlds");
 }
 
+// ================================================================================================
+// Aleph placement spacing (seeding.aleph-min-gap). Two gate mouths in the SAME sector are placed by
+// independent random draws, so by chance they can land on top of each other. World-gen rejection-
+// samples a sector's second+ mouth to keep every same-sector pair at least `aleph-min-gap` apart.
+// ================================================================================================
+
+// A hub sector (0) wired to three others, so sector 0 holds THREE mouths that could collide. Radius
+// is set wide enough that the gap is always satisfiable (so the "never closer than the gap" assertion
+// is exact, never a best-effort fallback). `gap` overrides seeding.aleph-min-gap (0 = spacing off).
+World BuildHub(ulong seed, float gap)
+{
+    var content = ContentLoader.Load(stockPath, worldPath);
+    var cfg = content.World;
+    cfg.Seeding.AlephMinGap = gap;
+    var secs = new (uint id, byte? team)[] { (0, 0), (1, null), (2, 1), (3, null) };
+    cfg.Sectors = secs
+        .Select(s => new WorldSectorConfig
+        {
+            Id = s.id,
+            Radius = 900f,
+            Asteroids = AsteroidKind.None,
+            Garrison = s.team is byte t ? new SectorGarrison { Team = t } : null,
+        })
+        .ToList();
+    cfg.Links = new List<SectorLink> { new(0, 1), new(0, 2), new(0, 3) };
+    return new World(seed, cfg, content.Bases[0].MaxHealth, content.Start, content.Ships);
+}
+
+// Smallest centre-to-centre distance between any two gate mouths that share a sector (∞ if none do).
+float ClosestSameSectorPair(World w)
+{
+    float min = float.MaxValue;
+    for (int i = 0; i < w.Alephs.Count; i++)
+        for (int j = i + 1; j < w.Alephs.Count; j++)
+            if (w.Alephs[i].SectorId == w.Alephs[j].SectorId)
+            {
+                float d = (w.Alephs[i].Pos - w.Alephs[j].Pos).Length();
+                if (d < min)
+                    min = d;
+            }
+    return min;
+}
+
+// ---- 8. Spacing: with the gap ON no two gates share a sector too closely; with it OFF some do ------
+{
+    const float Gap = 400f; // comfortably satisfiable in the radius-900 hub, so ON is never a fallback
+    bool violatedOn = false;   // gap ON: a same-sector pair closer than the gap (a real violation)
+    bool everCloseOff = false; // gap OFF: at least one seed lands a pair inside the gap (knob non-vacuous)
+    float worstOn = float.MaxValue;
+    for (ulong seed = 1; seed <= 60; seed++)
+    {
+        float on = ClosestSameSectorPair(BuildHub(seed, Gap));
+        float off = ClosestSameSectorPair(BuildHub(seed, 0f));
+        worstOn = MathF.Min(worstOn, on);
+        if (on < Gap - 0.5f) // tolerance for float rounding at the accept boundary
+            violatedOn = true;
+        if (off < Gap)
+            everCloseOff = true;
+    }
+    Check(!violatedOn, $"spacing: no two gates in a sector are ever closer than {Gap}u across 60 seeds (worst {worstOn:0}u)",
+        $"spacing: aleph-min-gap violated — a sector held two gates only {worstOn:0}u apart (< {Gap}u)");
+    Check(everCloseOff, "spacing: with the gap OFF some seed DOES pack two gates inside the gap (the knob isn't vacuous)",
+        "spacing: even with spacing off no seed produced a close pair — the test can't prove the gap does anything");
+}
+
+// ---- 9. The stock world.yaml ships a non-zero aleph-min-gap (spacing is on by default) -------------
+{
+    var content = ContentLoader.Load(stockPath, worldPath);
+    Check(content.World.Seeding.AlephMinGap > 0f,
+        $"spacing: stock world.yaml enables aleph spacing by default (aleph-min-gap = {content.World.Seeding.AlephMinGap:0})",
+        "spacing: stock world.yaml ships aleph-min-gap = 0 — gate spacing is off by default");
+}
+
 Console.WriteLine(failures == 0 ? "\nALL PASS" : $"\n{failures} FAILURE(S)");
 return failures == 0 ? 0 : 1;

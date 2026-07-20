@@ -3,7 +3,7 @@
 Get a match running locally in five steps.
 
 ### 1. Install prerequisites
-- **.NET 8 SDK** — verify with `dotnet --version` (≥ 8).
+- **.NET 10 SDK** — verify with `dotnet --version` (≥ 10).
 - **Godot 4.7, Mono/.NET build** — the `godot-mono` binary on your PATH.
 
 ### 2. Clone and restore

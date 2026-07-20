@@ -847,6 +847,12 @@ namespace StellarAllegiance.Shared
         // Minimum gap between a rock's surface and a base's collision sphere, world units (0 = off).
         public float BaseClearance = 250f;
 
+        // Minimum centre-to-centre gap between two aleph gate mouths in the SAME sector, world units
+        // (0 = allow them to land anywhere). Enforced by deterministic rejection sampling at world-gen
+        // so two gates in one sector never overlap by chance. Unlike a rock, a gate is REQUIRED for
+        // connectivity and is NEVER dropped — if no roll clears the gap the best-separated one is kept.
+        public float AlephMinGap = 1800f;
+
         // ---- Rock-class seeding (which rocks become He3 / special at world-gen) ----
 
         // Guaranteed He3 rocks per ordinary sector (clamped to the sector's actual rock count).

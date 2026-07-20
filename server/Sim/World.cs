@@ -508,16 +508,68 @@ public sealed class World
     {
         var links = cfg.Links.Count > 0 ? cfg.Links : DefaultRing(secCfg);
         ulong gateId = 1;
+        // Mouths already placed in each sector, so a sector's SECOND+ gate can be rejection-sampled
+        // away from its neighbours (see PlaceGateMouth). A sector's first mouth always accepts its
+        // first roll, so single-gate sectors — and the aleph-min-gap = 0 case — draw the `rng` stream
+        // exactly as the pre-spacing code did (keeps pinned-seed layouts stable where nothing overlapped).
+        var mouthsBySector = new Dictionary<uint, List<Vec3>>();
         foreach (var link in links)
         {
-            Vec3 aPos = RandomOuterPos(ref rng, RadiusOf(link.A, defaultRadius));
-            Vec3 bPos = RandomOuterPos(ref rng, RadiusOf(link.B, defaultRadius));
+            Vec3 aPos = PlaceGateMouth(ref rng, link.A, RadiusOf(link.A, defaultRadius), mouthsBySector);
+            Vec3 bPos = PlaceGateMouth(ref rng, link.B, RadiusOf(link.B, defaultRadius), mouthsBySector);
             Alephs.Add(new Gate(gateId++, link.A, link.B, aPos, bPos));
             Alephs.Add(new Gate(gateId++, link.B, link.A, bPos, aPos));
         }
 
         foreach (var sc in secCfg)
             SeedDustClouds(sc.Id, RadiusOf(sc.Id, defaultRadius), sc.Env?.Dust);
+    }
+
+    // Place one gate mouth toward the outer reaches of `sector` (RandomOuterPos), kept at least
+    // `seeding.aleph-min-gap` world units (centre-to-centre) from every mouth already placed in that
+    // sector so two alephs in one sector never overlap by chance. Deterministic rejection sampling:
+    // re-roll up to MaxPlaceAttempts times, take the first candidate that clears the gap, else keep the
+    // best-separated roll — a gate is REQUIRED for connectivity and, unlike a rock, is never dropped.
+    // With the gap disabled (<= 0) or for a sector's first mouth, this returns the first roll (one
+    // RandomOuterPos), so the `rng` stream matches the pre-spacing placement in those cases.
+    private Vec3 PlaceGateMouth(ref DetRng rng, uint sector, float sectorRadius, Dictionary<uint, List<Vec3>> mouthsBySector)
+    {
+        if (!mouthsBySector.TryGetValue(sector, out var placed))
+            mouthsBySector[sector] = placed = new List<Vec3>();
+
+        float gap = _seed.AlephMinGap;
+        Vec3 pos = RandomOuterPos(ref rng, sectorRadius);
+        if (gap > 0f && placed.Count > 0)
+        {
+            float gapSq = gap * gap;
+            Vec3 best = pos;
+            float bestSep = MinSepSq(pos, placed);
+            for (int attempt = 1; attempt < MaxPlaceAttempts && bestSep < gapSq; attempt++)
+            {
+                Vec3 cand = RandomOuterPos(ref rng, sectorRadius);
+                float sep = MinSepSq(cand, placed);
+                if (sep > bestSep)
+                {
+                    bestSep = sep;
+                    best = cand;
+                }
+            }
+            pos = best;
+        }
+        placed.Add(pos);
+        return pos;
+
+        static float MinSepSq(Vec3 p, List<Vec3> others)
+        {
+            float min = float.MaxValue;
+            foreach (var o in others)
+            {
+                float d = (p - o).LengthSquared();
+                if (d < min)
+                    min = d;
+            }
+            return min;
+        }
     }
 
     // Per-sector asteroid broad-phase grid, bucketed once from the fully-seeded Asteroids list. Must

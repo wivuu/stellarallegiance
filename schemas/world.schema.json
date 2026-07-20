@@ -640,6 +640,13 @@
           ],
           "description": "Minimum gap between a rock\u0027s surface and a base\u0027s collision sphere, world units (0 = off)."
         },
+        "aleph-min-gap": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Minimum centre-to-centre gap between two aleph gate mouths in the same sector, world units (0 = allow overlap)."
+        },
         "he3-per-sector": {
           "type": [
             "integer",

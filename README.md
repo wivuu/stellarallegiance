@@ -19,7 +19,7 @@ server/        .NET 10 console — authoritative 20 Hz sim + lobby host (the onl
 public-lobby/  .NET 10 web — PUBLIC LOBBY: game-server registry + WebRTC signaling relay
 shared/        deterministic FlightModel + content defs, compiled into BOTH client and server
 tools/         simbot (load bot swarm), asteroid-gen (mesh catalog)
-tests/         FlightModelTest (determinism/golden), CryptoTest
+tests/         ~20 test suites (FlightModel determinism/golden, Crypto, …) + factions/tests
 ```
 
 The client only ever **predicts**; the server is the single source of truth and reconciles
@@ -131,7 +131,7 @@ A player can reach a server two ways:
   reachable, advertises a direct `host:port` so clients connect **straight to it over WebSocket**
   (no traffic through the lobby). A server that isn't reachable (NAT, no port-forward) falls back
   to a **WebRTC DataChannel** (P2P hole-punching via public **STUN**), with only the SDP handshake
-  relayed through the lobby. The same v7 binary protocol rides both transports.
+  relayed through the lobby. The same binary protocol rides both transports.
 
 **There is no TURN relay** — the lobby never carries game traffic. The trade-off is that a client
 behind a symmetric NAT can't reach a *NAT'd* server; it can always join **direct** servers, so
@@ -177,9 +177,10 @@ a one-project-each **Railway** recipe for the lobby + a game server).
 - [QUICKSTART.md](QUICKSTART.md) — clone → run in a few steps.
 - [CONTRIBUTING.md](CONTRIBUTING.md) — layout, build, tests, formatting.
 - [docs/DEPLOY.md](docs/DEPLOY.md) — production deployment.
-- [docs/PROTOTYPE-ARCHITECTURE.md](docs/PROTOTYPE-ARCHITECTURE.md) — architecture overview.
-- [.PLAN/](.PLAN/) — roadmap (`README.md`), tuning spec (`CONFIG.md`), flight-model reference
-  (`ship_movement/`). Historical build-order notes are archived under `docs/archive/`.
+- [docs/PROTOTYPE-ARCHITECTURE.md](docs/PROTOTYPE-ARCHITECTURE.md) — historical STDB-era prototype
+  architecture (superseded; see [CONTRIBUTING.md](CONTRIBUTING.md) for the current design).
+- [.PLAN/](.PLAN/) — roadmap (`README.md`), flight-model reference (`ship_movement/`).
+  Historical build-order notes are archived under `docs/archive/`.
 
 ## Third-party assets
 
