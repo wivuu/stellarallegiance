@@ -28,7 +28,7 @@ public partial class SectorEnvironment : Node3D
     private WorldEnvironment _worldEnv = null!;
     private Sun? _sun;
     private Starscape? _starscape; // sky-shader sun glare must re-aim whenever ApplySun moves the light
-    private Node3D _dustRoot = null!; // parents the current sector's dust MultiMeshes
+    private Node3D _dustRoot = null!; // parents one (cached, visibility-toggled) cloud root per sector
 
     // Captured from Main.tscn at boot so a sector with no sun override restores the authored look.
     private Transform3D _defaultLightXform;
@@ -87,6 +87,13 @@ public partial class SectorEnvironment : Node3D
     private readonly System.Collections.Generic.Dictionary<Node3D, MeshInstance3D> _shadowByNode = new();
     private readonly System.Collections.Generic.HashSet<Node3D> _shadowWantScratch = new();
     private readonly System.Collections.Generic.List<Node3D> _shadowDropScratch = new();
+
+    // Baked shadow-volume meshes shared by hull-vert IDENTITY: every rock of a variant hands SyncShafts
+    // the same cached Vector3[] (EnvironmentRenderer's mesh-keyed vert cache), and the volume topology
+    // is a pure function of those verts — so all instances share one baked ArrayMesh instead of
+    // re-hulling per rock (63 builds in the sector-entry frame). Weak keys let vert arrays discarded on
+    // a world rebuild (base hierarchies are node-keyed) drop their entries with them.
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Vector3[], ArrayMesh> _volumeCache = new();
     private const float ShaftLength = 3500f; // how far downsun a shaft reaches (multiply fades it in dust)
     private const float ShaftDarkness = 0.98f; // multiply factor at the shaft core — lower = starker/darker
     // Distance (m) downsun over which the shadow fades to nothing: full-dark at the rock, gone a few
@@ -168,10 +175,20 @@ public partial class SectorEnvironment : Node3D
         _currentEnv = env;
         _occluders = occluders ?? System.Array.Empty<(Node3D, Vector3[])>();
 
+        ulong t0 = Time.GetTicksUsec();
         ApplySun(env);
-        BuildDust(env);
+        ulong t1 = Time.GetTicksUsec();
+        ShowDust(sector, env);
+        ulong t2 = Time.GetTicksUsec();
         SyncShafts();
+        ulong t3 = Time.GetTicksUsec();
         ApplyGodRays(env);
+        ulong t4 = Time.GetTicksUsec();
+        if (t4 - t0 > 2000)
+            Log.Print(
+                $"[perf] SectorEnvironment.Apply {sector}: sun {(t1 - t0) / 1000.0:0.0}ms dust {(t2 - t1) / 1000.0:0.0}ms "
+                    + $"shafts {(t3 - t2) / 1000.0:0.0}ms rays {(t4 - t3) / 1000.0:0.0}ms"
+            );
     }
 
     // Refresh ONLY the shadow-volume set for the CURRENT sector (sun + dust are static per sector). Called
@@ -196,6 +213,15 @@ public partial class SectorEnvironment : Node3D
         // The volumes parent to rock nodes the teardown frees; drop our refs (freeing the parents frees them)
         // so the next Apply rebuilds from an empty set instead of diffing against dead nodes.
         _shadowByNode.Clear();
+        // Cached dust roots die with the world: sector rows (and their env) re-stream on the rebuild and
+        // re-prewarm from scratch.
+        foreach (var root in _dustBySector.Values)
+            if (GodotObject.IsInstanceValid(root))
+                root.QueueFree();
+        _dustBySector.Clear();
+        _dustQueued.Clear();
+        _dustPending.Clear();
+        _dustShown = null;
     }
 
     private void ApplyGodRays(SectorEnv? env)
@@ -215,6 +241,11 @@ public partial class SectorEnvironment : Node3D
     // the view (behind camera → off). Only runs while god rays are enabled for the current sector.
     public override void _Process(double delta)
     {
+        // Prewarm pacing: build ONE queued dust cloud per frame (≈1-2ms) into its hidden sector root, so
+        // whole-map dust exists before the first warp without any single frame paying for a sector's worth.
+        if (_dustPending.Count > 0)
+            BuildPendingCloud(_dustPending.Dequeue());
+
         if (!_godRaysOn)
             return;
         var vp = GetViewport();
@@ -288,46 +319,73 @@ public partial class SectorEnvironment : Node3D
             e.AmbientLightEnergy = energy;
     }
 
-    // Rebuild the current sector's dust: every streamed cloud (server-authoritative position/radius/
-    // density) becomes a billboard-puff cluster. A null/dust-less env clears the previous sector's dust.
-    private void BuildDust(SectorEnv? env)
-    {
-        foreach (var child in _dustRoot.GetChildren())
-            child.QueueFree();
+    // ---- Dust clouds: built once per sector, cached hidden, toggled on sector swap -----------------
 
+    // One child root per sector under _dustRoot, holding that sector's built cloud MultiMeshes. Clouds
+    // are deterministic and STATIC per sector, so a sector swap toggles root visibility instead of the
+    // old rebuild+free (whose cost landed inside the covered warp frame — and again on every re-entry).
+    // Roots build HIDDEN via the prewarm queue (PrewarmDust, one cloud per frame) as sector rows stream
+    // in, so by the first warp the destination's dust usually already exists; ShowDust force-finishes
+    // any remainder synchronously. Torn down only by Invalidate (world rebuild).
+    private readonly System.Collections.Generic.Dictionary<uint, Node3D> _dustBySector = new();
+    private readonly System.Collections.Generic.HashSet<uint> _dustQueued = new(); // sectors already enqueued/built
+    private readonly System.Collections.Generic.Queue<(
+        uint Sector,
+        DustCloud Cloud,
+        Color Warm,
+        Color Cool,
+        Vector3 ToSun,
+        float Opacity
+    )> _dustPending = new();
+    private uint? _dustShown; // sector whose dust root is currently visible
+
+    // Resolve the sun colour/direction the dust bakes, straight from the ENV row (not the live light),
+    // so a hidden prewarm for a not-yet-current sector shades identically to an on-apply build. Mirrors
+    // ApplySun: the light's +Z basis ends up pointing AT the sun, and a sun-less/default sector keeps
+    // the authored boot light.
+    private (Color SunColor, Vector3 ToSun) ResolveSunForDust(SectorEnv env)
+    {
+        Color sunC = _defaultLightColor;
+        Vector3 toSun = _defaultLightXform.Basis.Z.Normalized();
+        if (env is { HasSun: true })
+        {
+            if (env.HasSunColor)
+                sunC = new Color(env.SunColorR, env.SunColorG, env.SunColorB);
+            var dir = new Vector3(env.SunDirX, env.SunDirY, env.SunDirZ);
+            if (dir.LengthSquared() > 1e-6f)
+                toSun = dir.Normalized();
+        }
+        return (sunC, toSun);
+    }
+
+    // Queue every cloud of `sector` for a (hidden, one-per-frame) build. Called from the sector-row
+    // stream (prewarm) and lazily by ShowDust; the _dustQueued guard makes repeats free.
+    public void PrewarmDust(uint sector, SectorEnv? env)
+    {
         if (env is not { HasDust: true } || env.DustClouds.Length == 0)
+            return;
+        if (!_dustQueued.Add(sector))
             return;
 
         // Default is a DARK, dusky tone: this is space dust (unshaded self-lit puffs, so the colour IS
-        // the on-screen brightness). Keep it dim so it reads as dust dimming the backdrop, not glowing gas.
+        // the on-screen brightness). Kept dim so it reads as dust dimming the backdrop, not glowing gas.
         Color dustColor = env.HasDustColor
             ? new Color(env.DustColorR, env.DustColorG, env.DustColorB)
             : new Color(0.22f, 0.2f, 0.26f);
 
         // Two tones around the authored colour give nebula-like colour variation; each puff blends
         // between them and the shader adds fbm noise on top. The tones derive from the SECTOR'S SUN
-        // COLOUR (ApplySun ran first, so _light.LightColor is the resolved streamed-or-default sun): the
-        // warm tone leans into the sun's own hue (an amber sun ambers its dust) and the cool tone drifts
-        // only slightly cool — a strong blue drift would grey warm dust into pastel. The dust is
-        // SUN-SHADED: the sector sun is static, so we bake each puff's sun exposure (its
-        // offset-from-cloud-centre vs the sun direction) into its brightness — the sun-facing side of a
-        // cloud reads bright, the far side falls to shadow.
-        Color sunC = _light.LightColor;
+        // COLOUR: the warm tone leans into the sun's own hue (an amber sun ambers its dust) and the cool
+        // tone drifts only slightly cool — a strong blue drift would grey warm dust into pastel. The dust
+        // is SUN-SHADED: the sector sun is static, so each puff's sun exposure (its offset-from-cloud-
+        // centre vs the sun direction) bakes into its brightness — the sun-facing side of a cloud reads
+        // bright, the far side falls to shadow.
+        var (sunC, toSun) = ResolveSunForDust(env);
         Color warm = new Color(
             dustColor.R * (0.6f + 0.8f * sunC.R),
             dustColor.G * (0.55f + 0.7f * sunC.G),
             dustColor.B * (0.5f + 0.6f * sunC.B));
         Color cool = new Color(dustColor.R * 0.72f, dustColor.G * 0.78f, dustColor.B * 0.95f);
-        Vector3 toSun = _light.GlobalTransform.Basis.Z.Normalized(); // +Z basis = toward the sun (Sun.cs)
-
-        // Forward-scatter uniforms: puffs IGNITE with the sun colour when the camera looks sunward
-        // through them (see PuffShaderCode), scaled by the authored god-ray strength so a rays-off
-        // sector keeps quiet dust; the floor keeps sunlit dust reading lit even at god-rays 0.
-        _puffMat.SetShaderParameter("sun_dir", toSun);
-        _puffMat.SetShaderParameter("sun_color", new Vector3(sunC.R, sunC.G, sunC.B));
-        _puffMat.SetShaderParameter(
-            "backlight",
-            env is { HasSun: true } ? 0.5f * env.GodRays + 0.15f : 0f);
 
         // Opacity scales how opaque the dust RENDERS (per-puff alpha), matching the radar attenuation the
         // server derives from the same knob — so low-opacity dust reads as a faint see-through haze and
@@ -335,11 +393,66 @@ public partial class SectorEnvironment : Node3D
         float opacity = Mathf.Clamp(env.DustOpacity, 0f, 1f);
 
         foreach (var dc in env.DustClouds)
+            if (dc.Radius > 0f)
+                _dustPending.Enqueue((sector, dc, warm, cool, toSun, opacity));
+    }
+
+    // The (created-on-demand, initially hidden) root that parents one sector's cloud MultiMeshes.
+    private Node3D DustRootFor(uint sector)
+    {
+        if (_dustBySector.TryGetValue(sector, out var root) && GodotObject.IsInstanceValid(root))
+            return root;
+        root = new Node3D { Name = $"Dust_{sector}", Visible = false };
+        _dustRoot.AddChild(root);
+        _dustBySector[sector] = root;
+        return root;
+    }
+
+    private void BuildPendingCloud((uint Sector, DustCloud Cloud, Color Warm, Color Cool, Vector3 ToSun, float Opacity) e) =>
+        DustRootFor(e.Sector).AddChild(BuildCloudBillboards(e.Cloud, e.Warm, e.Cool, e.ToSun, e.Opacity));
+
+    // Swap the visible dust to `sector`: hide the previous root, make sure this sector's clouds exist
+    // (force-finishing any still-pending builds — a warp can beat the one-per-frame prewarm pacing),
+    // aim the shared puff shader's forward-scatter at this sector's sun, and show the root.
+    private void ShowDust(uint sector, SectorEnv? env)
+    {
+        if (_dustShown is { } prev && prev != sector && _dustBySector.TryGetValue(prev, out var prevRoot)
+            && GodotObject.IsInstanceValid(prevRoot))
+            prevRoot.Visible = false;
+        _dustShown = sector;
+
+        if (env is not { HasDust: true } || env.DustClouds.Length == 0)
+            return;
+
+        ulong perfT0 = Time.GetTicksUsec();
+        PrewarmDust(sector, env); // no-op when already queued/built
+        int builtNow = 0;
+        int pending = _dustPending.Count;
+        for (int i = 0; i < pending; i++)
         {
-            if (dc.Radius <= 0f)
-                continue;
-            _dustRoot.AddChild(BuildCloudBillboards(dc, warm, cool, toSun, opacity));
+            var e = _dustPending.Dequeue();
+            if (e.Sector == sector)
+            {
+                BuildPendingCloud(e);
+                builtNow++;
+            }
+            else
+                _dustPending.Enqueue(e); // other sectors keep prewarming at one per frame
         }
+
+        // Forward-scatter uniforms: puffs IGNITE with the sun colour when the camera looks sunward
+        // through them (see PuffShaderCode), scaled by the authored god-ray strength so a rays-off
+        // sector keeps quiet dust; the floor keeps sunlit dust reading lit even at god-rays 0.
+        var (sunC, toSun) = ResolveSunForDust(env);
+        _puffMat.SetShaderParameter("sun_dir", toSun);
+        _puffMat.SetShaderParameter("sun_color", new Vector3(sunC.R, sunC.G, sunC.B));
+        _puffMat.SetShaderParameter("backlight", env is { HasSun: true } ? 0.5f * env.GodRays + 0.15f : 0f);
+
+        DustRootFor(sector).Visible = true;
+
+        ulong perfMs = (Time.GetTicksUsec() - perfT0) / 1000;
+        if (perfMs > 1)
+            Log.Print($"[perf] ShowDust {sector}: {builtNow} clouds built on-apply in {perfMs}ms");
     }
 
     // Sync the current sector's spin-tracking shadow volumes to the selected occluder set. Each occluder
@@ -370,6 +483,9 @@ public partial class SectorEnvironment : Node3D
         }
         _shaftMat.SetShaderParameter("downsun", -axis.Normalized());
 
+        ulong perfT0 = Time.GetTicksUsec();
+        int perfBuilt = 0;
+
         // Build a volume for every wanted occluder that doesn't already have one; record the wanted set.
         _shadowWantScratch.Clear();
         foreach (var (node, localVerts) in _occluders)
@@ -380,7 +496,13 @@ public partial class SectorEnvironment : Node3D
             if (_shadowByNode.ContainsKey(node))
                 continue; // already casting — leave its baked volume in place
 
-            var mesh = ShadowVolume.Build(localVerts);
+            if (!_volumeCache.TryGetValue(localVerts, out var mesh))
+            {
+                mesh = ShadowVolume.Build(localVerts);
+                if (mesh != null)
+                    _volumeCache.Add(localVerts, mesh); // degenerate (null) stays uncached — rare and cheap
+                perfBuilt++;
+            }
             if (mesh == null)
                 continue;
 
@@ -410,6 +532,10 @@ public partial class SectorEnvironment : Node3D
                 mi.QueueFree();
             _shadowByNode.Remove(node);
         }
+
+        ulong perfMs = (Time.GetTicksUsec() - perfT0) / 1000;
+        if (perfMs > 1)
+            Log.Print($"[perf] SyncShafts: built {perfBuilt} volumes ({_shadowByNode.Count} live) in {perfMs}ms");
     }
 
     // Free every live shadow volume and forget it (sunless sector, empty occluder set, or degenerate sun).
@@ -451,8 +577,11 @@ public partial class SectorEnvironment : Node3D
             rng.RandfRange(0.5f, 1.05f), // squash Y a touch — dust reads as a drifting sheet, not a ball
             rng.RandfRange(0.6f, 1.45f));
 
-        var xforms = new Transform3D[count];
-        var colors = new Color[count];
+        // Per-instance data goes straight into the MultiMesh's packed buffer — ONE bulk assignment
+        // instead of 2×count marshalled SetInstance* calls. Layout per instance (Transform3D format +
+        // UseColors): three 3×4 transform rows (basis row | origin component), then RGBA. Every puff is
+        // a pure uniform-scale + translation, so the rows are written directly.
+        var buf = new float[count * 16];
         for (int i = 0; i < count; i++)
         {
             // Rejection-sample toward the fractal filaments: try a handful of points in the ball and keep
@@ -496,8 +625,17 @@ public partial class SectorEnvironment : Node3D
             float bright = rng.RandfRange(0.8f, 1.25f) * exposure;
             Color baseC = warm.Lerp(cool, rng.Randf());
 
-            xforms[i] = new Transform3D(Basis.Identity.Scaled(new Vector3(size, size, size)), pos);
-            colors[i] = new Color(baseC.R * bright, baseC.G * bright, baseC.B * bright, alpha);
+            int o = i * 16;
+            buf[o + 0] = size;
+            buf[o + 3] = pos.X;
+            buf[o + 5] = size;
+            buf[o + 7] = pos.Y;
+            buf[o + 10] = size;
+            buf[o + 11] = pos.Z;
+            buf[o + 12] = baseC.R * bright;
+            buf[o + 13] = baseC.G * bright;
+            buf[o + 14] = baseC.B * bright;
+            buf[o + 15] = alpha;
         }
 
         var mm = new MultiMesh
@@ -506,12 +644,8 @@ public partial class SectorEnvironment : Node3D
             TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,
             UseColors = true, // per-instance colour carries dust tint + per-puff opacity
         };
-        mm.InstanceCount = count; // set AFTER the format flags, before writing instances
-        for (int i = 0; i < count; i++)
-        {
-            mm.SetInstanceTransform(i, xforms[i]);
-            mm.SetInstanceColor(i, colors[i]);
-        }
+        mm.InstanceCount = count; // set AFTER the format flags, before the buffer write (size-checked)
+        mm.Buffer = buf;
 
         // A real cloud-sized AABB so Godot frustum-culls clouds that are off-screen or behind the camera
         // — instead of the old effectively-infinite box that forced every sector cloud to draw every

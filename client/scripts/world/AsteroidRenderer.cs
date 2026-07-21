@@ -59,6 +59,15 @@ public sealed class AsteroidRenderer
 
     private readonly Dictionary<ulong, Node3D> _nodes = new();
 
+    // Rock rows awaiting a TIME-SLICED insert. Welcome/MsgReveal deliver a sector's whole field in one
+    // network frame (up to 512 rocks/slice); inserting them synchronously stalled that frame for
+    // ~2.5ms × N (≈0.5s for a 200-rock belt). NetAdd only enqueues; the coordinator drains the queue
+    // with a per-frame time budget (DrainInserts), so the field streams in over a few frames instead.
+    // Kept id-keyed so a re-send dedups and a queued rock can still be shrunk (MsgRockUpdate mutates
+    // the row in place) or removed (MsgRockGone drops it) before its node ever exists.
+    private readonly Dictionary<ulong, Asteroid> _pending = new();
+    private readonly Queue<ulong> _pendingOrder = new();
+
     // Purely cosmetic lazy tumble: each rock spins slowly about a fixed pseudo-random axis, derived once
     // from its id (stable across frames; the sim treats rocks as static spheres). Applied each Tick.
     private readonly Dictionary<ulong, (Node3D Node, Quaternion Base, Vector3 Axis, float Speed)> _spins = new();
@@ -82,7 +91,38 @@ public sealed class AsteroidRenderer
     // build spheres (until those extract in Milestone C/D).
     public IReadOnlyDictionary<ulong, Node3D> Nodes => _nodes;
 
-    public void NetAdd(Asteroid row) => Insert(row);
+    public void NetAdd(Asteroid row)
+    {
+        if (_nodes.ContainsKey(row.AsteroidId) || _pending.ContainsKey(row.AsteroidId))
+            return;
+        _pending[row.AsteroidId] = row;
+        _pendingOrder.Enqueue(row.AsteroidId);
+    }
+
+    // Insert queued rocks until `budgetMs` of this frame is spent (at least one per call so the queue
+    // always makes progress). Called once per frame by the coordinator. Returns true when THIS call
+    // finished the drain (inserted something and emptied the queue) — the coordinator then nudges the
+    // shadow-occluder re-gather, whose movement throttle would otherwise ignore the newly-present field.
+    public bool DrainInserts(float budgetMs)
+    {
+        if (_pendingOrder.Count == 0)
+            return false;
+        ulong t0 = Time.GetTicksUsec();
+        ulong budgetUs = (ulong)(budgetMs * 1000f);
+        bool inserted = false;
+        while (_pendingOrder.Count > 0)
+        {
+            ulong id = _pendingOrder.Dequeue();
+            if (_pending.Remove(id, out var row))
+            {
+                Insert(row);
+                inserted = true;
+            }
+            if (Time.GetTicksUsec() - t0 > budgetUs)
+                break;
+        }
+        return inserted && _pendingOrder.Count == 0;
+    }
 
     // The decoded rock row for a target readout (class name + depletion), or null. Read-only.
     public Asteroid? GetAsteroid(ulong id) => _rows.TryGetValue(id, out var a) ? a : null;
@@ -92,6 +132,14 @@ public sealed class AsteroidRenderer
     // new size (as the server's absolute rescale) so local prediction never bounces off empty space.
     public void NetUpdateRock(ulong id, float radius, int orePct)
     {
+        // Still queued (no node/collision yet): fold the shrink into the pending row so the eventual
+        // Insert spawns it at the correct current size.
+        if (_pending.TryGetValue(id, out var queued))
+        {
+            queued.CurrentRadius = radius;
+            queued.OrePct = orePct;
+            return;
+        }
         if (_rows.TryGetValue(id, out var row))
         {
             row.CurrentRadius = radius;
@@ -102,10 +150,9 @@ public sealed class AsteroidRenderer
             _shrinkTarget[id] = radius;
         // Client collision hull/sphere — rescaled absolutely so prediction tracks the shrunk rock.
         _collisionWorld.UpdateAsteroidRadius(id, radius);
-        // Cheap cosmetic caches keyed on radius: the bolt/sun-occlusion clip sphere + the shadow reach.
+        // Cheap cosmetic cache keyed on radius: the bolt/sun-occlusion clip sphere. (The shadow-occluder
+        // gather reads the rock ROW's CurrentRadius directly, so no per-node meta to refresh here.)
         _clip.SetAsteroidRadius(id, radius * AsteroidCollisionScale);
-        if (_nodes.TryGetValue(id, out var n))
-            n.SetMeta("shadowRadius", radius);
     }
 
     // MsgRockGone: a rock was fully consumed by a finished constructor base — delete it outright. Frees the
@@ -114,6 +161,15 @@ public sealed class AsteroidRenderer
     // sphere keeps growing after the node is gone. A no-op for an unknown id.
     public void NetRemoveRock(ulong id)
     {
+        // Still queued: it never had a node/collision — just drop the row (the stale id left in
+        // _pendingOrder is skipped by DrainInserts). Stash its radius first if a build sphere wants it.
+        if (_pending.Remove(id, out var queued))
+        {
+            if (_buildSink.HasBuildSphere(id))
+                _buildSink.StashRockRadius(id, queued.CurrentRadius > 0f ? queued.CurrentRadius : queued.Radius);
+            return;
+        }
+
         // If a build sphere is mid-flight on this rock, stash its last radius so the sphere keeps growing
         // after the node is gone (the prune loop clears the entry when the build ends).
         if (_buildSink.HasBuildSphere(id) && _rows.TryGetValue(id, out var row))
@@ -199,7 +255,6 @@ public sealed class AsteroidRenderer
             row.SectorId
         );
         _collisionWorld.AddAsteroid(row);
-        node.SetMeta("shadowRadius", rad); // extends its shadow-caster reach (big rocks cast from farther)
 
         // A rock landing in the sector we just warped into arrives UNDER the held WarpFlash: snap it in (no
         // fade) and push the settle window out so the flash holds until the field stops streaming.
@@ -275,6 +330,8 @@ public sealed class AsteroidRenderer
         _rows.Clear();
         _scaleBasis.Clear();
         _shrinkTarget.Clear();
+        _pending.Clear();
+        _pendingOrder.Clear();
     }
 
     // ---- Per-variant mesh cache (static: instance-independent, warmed by AssetPreloader) --------

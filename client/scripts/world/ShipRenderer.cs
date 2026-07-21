@@ -380,6 +380,7 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
             return;
         }
 
+        ulong perfT0 = Time.GetTicksUsec();
         var rs = new RemoteShip { Name = $"Ship_{row.ShipId}" };
         node = rs;
         _container.AddChild(rs);
@@ -390,6 +391,9 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
             rs.SetPilotName(pilot);
         _nodes[row.ShipId] = node;
         _sectors.SetNodeSector(node, row.SectorId);
+        ulong perfMs = (Time.GetTicksUsec() - perfT0) / 1000;
+        if (perfMs > 2)
+            Log.Print($"[perf] remote ship {row.ShipId} (class {row.Class}) insert {perfMs}ms");
     }
 
     private void UpdateShip(Ship oldRow, Ship newRow)

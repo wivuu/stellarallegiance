@@ -413,7 +413,10 @@ public partial class ShipController : Node
         // --autostart for a perpetual match (this readies straight through it).
         if ((_autoFly || _hangarDemo) && connected && !_autoJoined)
         {
-            _net?.SetTeam(0);
+            // AUTOFLY_TEAM overrides the default BLUE pick so a second harness client can take the
+            // other side (e.g. to spawn in that team's home sector for entrance/perf smokes).
+            byte team = byte.TryParse(OS.GetEnvironment("AUTOFLY_TEAM"), out byte tv) && tv <= 1 ? tv : (byte)0;
+            _net?.SetTeam(team);
             _net?.SetReady(true);
             _autoJoined = true;
         }

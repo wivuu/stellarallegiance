@@ -32,12 +32,6 @@ public sealed class EnvironmentRenderer
     private readonly List<(Node3D Node, Vector3[] LocalVerts)> _sectorEnvOccluders = new();
     private readonly Dictionary<Node3D, Vector3[]> _hullVertCache = new(); // per-node LOCAL hull verts (base hierarchies), built once
 
-    // Lone-mesh occluders (rocks): the collected local verts collapse to RAW MESH vertices (the root's own
-    // transform cancels out), identical for every instance sharing a variant Mesh — so the cache keys on the
-    // Mesh, not the node. Keyed per node, spawning into a 60-rock sector re-read the same handful of giant
-    // asteroid meshes ~10x each (~1s of SurfaceGetArrays + Extremes on the spawn frame). STATIC so
-    // AssetPreloader can warm it per variant at startup.
-    private static readonly Dictionary<Mesh, Vector3[]> _meshHullVertCache = new();
     private Vector3 _lastOccluderCamPos = new(float.MaxValue, float.MaxValue, float.MaxValue);
 
     // Whether the current sector casts shadow volumes (has a sun + dust). The coordinator guards its
@@ -51,6 +45,10 @@ public sealed class EnvironmentRenderer
         _lastOccluderCamPos = refPos;
         _sectorEnv?.Apply(sector, env, GatherShadowOccluders(sector, refPos));
     }
+
+    // A sector row just streamed in (Welcome / MsgReveal): queue its dust clouds for a hidden,
+    // one-per-frame prewarm build so the first warp there only toggles visibility.
+    public void PrewarmSector(uint sector, SectorEnv? env) => _sectorEnv?.PrewarmDust(sector, env);
 
     // Camera-distance occluder re-scan, throttled to when the camera has actually moved a meaningful step.
     // Sun + dust are static per sector, so this refreshes ONLY the shadow-volume set (SectorEnvironment
@@ -69,6 +67,12 @@ public sealed class EnvironmentRenderer
     // shadow volumes even for the same sector id (they parent to rock nodes Reset frees).
     public void Invalidate() => _sectorEnv?.Invalidate();
 
+    // Force the next Tick to re-gather the occluder set regardless of camera movement. Called when the
+    // time-sliced rock insert queue finishes draining: the field just materialized around a possibly
+    // stationary camera, which the movement throttle alone would never notice.
+    public void MarkOccludersDirty() =>
+        _lastOccluderCamPos = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
+
     // World teardown: clear the per-node hull cache (keyed by the freed rock nodes) + reset the throttle.
     public void ClearCaches()
     {
@@ -86,14 +90,19 @@ public sealed class EnvironmentRenderer
         foreach (var (node, _, _, _) in _bases.List)
             if (InSector(node, sector))
                 _occluderScratch.Add((node, 0f)); // bases always cast: sort ahead of every rock
-        foreach (var n in _rocks.Nodes.Values)
-            if (InSector(n, sector))
-            {
-                float reach = ShadowOccluderRadius + ShadowRadius(n); // big rocks cast from farther out
-                float d2 = n.GlobalPosition.DistanceSquaredTo(refPos);
-                if (d2 <= reach * reach)
-                    _occluderScratch.Add((n, d2));
-            }
+        foreach (var (id, n) in _rocks.Nodes)
+        {
+            // Sector + radius from the decoded rock ROW (plain C# dictionary hits) — reading the node's
+            // "sector"/"shadowRadius" metas instead cost two marshalled calls per rock per gather, which
+            // dominated the whole pass in a 200-rock belt (and gathers re-run every 150u of camera travel).
+            if (_rocks.GetAsteroid(id) is not { } row || row.SectorId != sector)
+                continue;
+            float rockRadius = row.CurrentRadius > 0f ? row.CurrentRadius : row.Radius;
+            float reach = ShadowOccluderRadius + rockRadius; // big rocks cast from farther out
+            float d2 = n.GlobalPosition.DistanceSquaredTo(refPos);
+            if (d2 <= reach * reach)
+                _occluderScratch.Add((n, d2));
+        }
         _occluderScratch.Sort((a, b) => a.D.CompareTo(b.D)); // nearest first (bases at 0)
 
         _sectorEnvOccluders.Clear();
@@ -109,17 +118,14 @@ public sealed class EnvironmentRenderer
     }
 
     // Cache the (static, LOCAL-frame) hull verts per node so the throttled re-gather doesn't re-walk a
-    // rock's meshes every time it re-selects the set. Cleared on world teardown (ClearCaches).
+    // rock's meshes every time it re-selects the set. A lone-mesh occluder (every rock) collapses to the
+    // mesh's own extremes — identical for every instance sharing a variant Mesh, so those share the
+    // static per-mesh cache directly (one array per variant, which also lets SectorEnvironment share one
+    // baked shadow volume per variant). Hierarchies stay node-keyed; cleared on world teardown.
     private Vector3[] HullVertsFor(Node3D node)
     {
         if (node is MeshInstance3D { Mesh: Mesh mesh } && !HasMeshDescendant(node))
-        {
-            if (_meshHullVertCache.TryGetValue(mesh, out var meshCached))
-                return meshCached;
-            var meshVerts = CollectHullVerts(node);
-            _meshHullVertCache[mesh] = meshVerts;
-            return meshVerts;
-        }
+            return MeshExtremesOf(mesh);
         if (_hullVertCache.TryGetValue(node, out var cached))
             return cached;
         var verts = CollectHullVerts(node);
@@ -139,8 +145,6 @@ public sealed class EnvironmentRenderer
 
     private static bool InSector(Node3D n, uint sector) => SectorView.InSector(n, sector);
 
-    private static float ShadowRadius(Node3D n) => n.HasMeta("shadowRadius") ? (float)n.GetMeta("shadowRadius") : 0f;
-
     // Collect an occluder's silhouette-relevant vertices in the occluder NODE's LOCAL frame, reduced to
     // directional extremes. Local (not world) so the baked shadow volume can parent to the node and tumble
     // with it — the shader re-derives the world silhouette each frame. Walks every MeshInstance3D under
@@ -155,14 +159,60 @@ public sealed class EnvironmentRenderer
         return _hullVertScratch.Count >= 4 ? ShadowVolume.Extremes(_hullVertScratch, 48) : Array.Empty<Vector3>();
     }
 
+    // Per-mesh LOCAL 48-direction extreme vertices. The raw surface readback (SurfaceGetArrays over
+    // every vert) + reduction runs ONCE per Mesh — it used to run per NODE per world rebuild, and a
+    // garrison-sized readback cost ~100ms inside the sector-apply frame. Hierarchy collection then just
+    // transforms these few points per part and re-reduces the small union. Static: meshes are shared
+    // resources, and AssetPreloader warms this per base/ship scene during the splash.
+    private static readonly Dictionary<Mesh, Vector3[]> _meshExtremes = new();
+
+    private static Vector3[] MeshExtremesOf(Mesh mesh)
+    {
+        if (_meshExtremes.TryGetValue(mesh, out var cached))
+            return cached;
+        var pts = new List<Vector3>();
+        CollectSurfaceVerts(mesh, Transform3D.Identity, pts);
+        var ext = pts.Count >= 4 ? ShadowVolume.Extremes(pts, 48) : Array.Empty<Vector3>();
+        _meshExtremes[mesh] = ext;
+        return ext;
+    }
+
     private static void CollectMeshVerts(Node node, Transform3D rootInv, List<Vector3> outVerts)
     {
         if (node is MeshInstance3D mi && mi.Mesh is Mesh mesh)
-            // Vertex into the occluder-root's local frame: undo the root, apply the sub-mesh's own world
-            // placement. For a lone-mesh rock (mi is the root) this collapses to the raw mesh vertices.
-            CollectSurfaceVerts(mesh, rootInv * mi.GlobalTransform, outVerts);
+        {
+            // The mesh's cached extremes into the occluder-root's local frame: undo the root, apply the
+            // sub-mesh's own world placement. For a lone-mesh rock (mi is the root) this collapses to the
+            // mesh extremes themselves. Extremes-of-transformed-extremes is the same 48-direction
+            // approximation the shadow volumes already live with.
+            Transform3D x = rootInv * mi.GlobalTransform;
+            foreach (var v in MeshExtremesOf(mesh))
+                outVerts.Add(x * v);
+        }
         foreach (var child in node.GetChildren())
             CollectMeshVerts(child, rootInv, outVerts);
+    }
+
+    // Warm every mesh under a base/ship scene: instantiate off-tree, bake each mesh's extreme-vert set
+    // (the expensive readback above) AND its raycast BVH, then free. Called by AssetPreloader during the
+    // splash so a first-sight base/ship insert does neither on a gameplay frame.
+    public static void WarmModelScene(PackedScene scene)
+    {
+        if (scene.Instantiate() is not Node root)
+            return;
+        WarmMeshesUnder(root);
+        root.QueueFree();
+    }
+
+    private static void WarmMeshesUnder(Node node)
+    {
+        if (node is MeshInstance3D mi && mi.Mesh is Mesh mesh)
+        {
+            MeshExtremesOf(mesh);
+            MeshRaycaster.WarmMesh(mesh);
+        }
+        foreach (var child in node.GetChildren())
+            WarmMeshesUnder(child);
     }
 
     private static void CollectSurfaceVerts(Mesh mesh, Transform3D xform, List<Vector3> outVerts)
@@ -186,11 +236,6 @@ public sealed class EnvironmentRenderer
         if (mesh is null)
             return;
         MeshRaycaster.WarmMesh(mesh); // beam/impact traces BVH, else baked at first in-flight hit
-        if (_meshHullVertCache.ContainsKey(mesh))
-            return;
-        _hullVertScratch.Clear();
-        CollectSurfaceVerts(mesh, Transform3D.Identity, _hullVertScratch);
-        _meshHullVertCache[mesh] =
-            _hullVertScratch.Count >= 4 ? ShadowVolume.Extremes(_hullVertScratch, 48) : Array.Empty<Vector3>();
+        MeshExtremesOf(mesh); // shadow-occluder extreme verts (shared by every rock of the variant)
     }
 }

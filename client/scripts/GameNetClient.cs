@@ -787,8 +787,16 @@ public partial class GameNetClient : Node
 
     public override void _Process(double delta)
     {
+        ulong perfT0 = Time.GetTicksUsec();
+        int perfFrames = 0;
         while (_rx.TryDequeue(out var frame))
+        {
             Apply(frame);
+            perfFrames++;
+        }
+        ulong perfMs = (Time.GetTicksUsec() - perfT0) / 1000;
+        if (perfMs > 5)
+            Log.Print($"[perf] net drain: {perfFrames} frames in {perfMs}ms");
 
         // Ghost-ship heal: the roster said we have no ship, the grace beat elapsed, and no
         // ShipGone/YouAre arrived to resolve it — drop the ghost like a clean despawn so the
@@ -1588,6 +1596,7 @@ public partial class GameNetClient : Node
     // base/aleph updates Bases.Teams/Alephs.Links the same way Welcome does — no extra refresh.
     private void ApplyReveal(BinaryReader r)
     {
+        ulong perfT0 = Time.GetTicksUsec();
         byte nBases = r.ReadByte();
         for (int i = 0; i < nBases; i++)
             _world.Bases.NetAdd(ReadBaseStatic(r));
@@ -1602,6 +1611,9 @@ public partial class GameNetClient : Node
         byte nSectors = r.ReadByte();
         for (int i = 0; i < nSectors; i++)
             _world.NetAddSector(ReadSectorStatic(r));
+        ulong perfMs = (Time.GetTicksUsec() - perfT0) / 1000;
+        if (perfMs > 1)
+            Log.Print($"[perf] reveal: {nBases} bases, {nRocks} rocks, {nAlephs} alephs in {perfMs}ms");
     }
 
     // MsgContacts (fog): the team's full last-known enemy ghost set + its radar-detected id list,
