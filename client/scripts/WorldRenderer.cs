@@ -232,10 +232,17 @@ public partial class WorldRenderer
     private void ApplySectorEnv(uint sector)
     {
         _sectorView.TryGetSector(sector, out var row);
+        ulong t0 = Time.GetTicksUsec();
         _starscape?.SetSector(sector, row?.Env);
+        ulong t1 = Time.GetTicksUsec();
         // Repaint the backdrop above, then hand the sun/dust/shadow driver its per-sector state — the
         // EnvironmentRenderer seeds the camera-near occluder set and anchors its move-throttle.
         _environment.ApplySector(sector, row?.Env, ShadowRefPos());
+        ulong t2 = Time.GetTicksUsec();
+        if (t2 - t0 > 2000)
+            Log.Print(
+                $"[perf] ApplySectorEnv {sector}: starscape {(t1 - t0) / 1000.0:0.0}ms envRenderer {(t2 - t1) / 1000.0:0.0}ms"
+            );
     }
 
     // The point the occluder distance-cut measures from: the active camera if there is one, else the local
@@ -551,6 +558,9 @@ public partial class WorldRenderer
     public void NetAddSector(Sector row)
     {
         _sectorView.AddSector(row);
+        // Kick the hidden dust prewarm for this sector so a later warp/spawn there only toggles
+        // visibility instead of building its clouds inside the swap frame.
+        _environment.PrewarmSector(row.SectorId, row.Env);
     }
 
     // ---- Sector visibility ---------------------------------------------
@@ -651,8 +661,17 @@ public partial class WorldRenderer
     public void EnterSector(uint sector)
     {
         _localSector = sector;
+        ulong t0 = Time.GetTicksUsec();
         ApplySectorEnv(sector);
+        ulong t1 = Time.GetTicksUsec();
         RefreshSectorVisibility();
+        ulong t2 = Time.GetTicksUsec();
+        // Unlike a warp this path runs UNCOVERED (spawn/home-reset — no flash), so its cost is a raw
+        // gameplay-frame hitch; keep the timing visible whenever it's non-trivial.
+        if (t2 - t0 > 2000)
+            Log.Print(
+                $"[perf] EnterSector {sector} (uncovered): env {(t1 - t0) / 1000.0:0.0}ms refresh {(t2 - t1) / 1000.0:0.0}ms"
+            );
     }
 
     // Advance the warp-settle window each frame; fire WarpSettled (clears the flash) when the destination
@@ -701,6 +720,11 @@ public partial class WorldRenderer
     // Per-frame upkeep: bolt impacts/expiry, deferred camera resets, cosmetic spins.
     public override void _Process(double delta)
     {
+        // Frame-spike breadcrumb: `delta` is the PREVIOUS frame's wall time, so a big value here means
+        // the last frame stalled (dropped frames). The [perf] seam logs nearby attribute the cause.
+        if (delta > 0.05 && _clock.ServerTick > 0)
+            Log.Print($"[perf] frame spike: previous frame {(delta * 1000.0):0}ms");
+
         // Warp Phase B (cover → swap → reveal): once the WarpFlash has ramped to peak, run the deferred
         // heavy sector swap fully covered — repaint the environment, show the destination sector's world
         // hard, and arm the settle window that holds the flash until rock streaming quiesces. Phase A
@@ -709,10 +733,16 @@ public partial class WorldRenderer
         if (_pendingWarpSector is { } pendingWarp && Time.GetTicksMsec() / 1000.0 >= _warpCoverAtSec)
         {
             _pendingWarpSector = null;
+            ulong warpT0 = Time.GetTicksUsec();
             ApplySectorEnv(pendingWarp);
+            ulong warpT1 = Time.GetTicksUsec();
             RefreshSectorVisibility();
+            ulong warpT2 = Time.GetTicksUsec();
             BeginWarpSettle();
-            Log.Print($"[WorldRenderer] warp swap applied (sector {pendingWarp}, covered)");
+            Log.Print(
+                $"[WorldRenderer] warp swap applied (sector {pendingWarp}, covered) "
+                    + $"[perf] env {(warpT1 - warpT0) / 1000.0:0.0}ms refresh {(warpT2 - warpT1) / 1000.0:0.0}ms"
+            );
         }
 
         // Death-cam expiry: once the ship renderer's brief hold on the death point is over, pull the world
@@ -729,6 +759,17 @@ public partial class WorldRenderer
 
         _bolts.CheckBoltImpacts(delta);
         _collision.CheckCollisions();
+
+        // Time-sliced rock inserts: drain the queued Welcome/MsgReveal rows under a per-frame budget so
+        // a 200-rock field streams in over a few frames instead of stalling one. Generous pre-spawn
+        // (only lobby UI to jank) and under the warp flash (covered, and the settle window holds until
+        // the drain quiesces); conservative in open flight. When a drain completes, nudge the shadow-
+        // occluder re-gather — its movement throttle would otherwise ignore the newly-present field.
+        float insertBudgetMs = _shipRenderer.LocalShip == null ? 8f
+            : _warp.Covering || _warp.Settling ? 6f
+            : 2.5f;
+        if (_rocks.DrainInserts(insertBudgetMs))
+            _environment.MarkOccludersDirty();
 
         // Rock tumble (absolute pose off the sim clock) + mining-shrink easing.
         _rocks.Tick(delta);

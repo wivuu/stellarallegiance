@@ -157,6 +157,8 @@ public sealed class BaseRenderer
             return;
         }
 
+        ulong perfT0 = Time.GetTicksUsec();
+
         // Procedural sphere + hardpoint markers + blinking nav beacons, all sized/placed from the
         // subscribed BaseDef. v37: the base type is streamed per-base (garrison 0, outpost 1).
         var node = BaseModelLoader.Build(
@@ -184,7 +186,11 @@ public sealed class BaseRenderer
         // A newly-streamed garrison may be what finally resolves the pre-launch home sector (the team was
         // already known but its base hadn't arrived yet). Cheap no-op unless it changes the home.
         _rehomePreLaunch();
-        Log.Print($"[WorldRenderer] Base {row.BaseId} (team {row.Team}) @ ({row.PosX}, {row.PosY}, {row.PosZ})");
+        ulong perfMs = (Time.GetTicksUsec() - perfT0) / 1000;
+        Log.Print(
+            $"[WorldRenderer] Base {row.BaseId} (team {row.Team}) @ ({row.PosX}, {row.PosY}, {row.PosZ})"
+                + (perfMs > 2 ? $" [perf] insert {perfMs}ms" : "")
+        );
     }
 
     // Streamed base health (MsgBases). Records the 0..1 fraction TargetMarkers reads for the damage bar,

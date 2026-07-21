@@ -710,6 +710,17 @@ Master 3D scene renderer: camera, world geometry, ships, projectiles, effects.
 - **Related:** [[GLB]], [[Collision]], [[Client Prediction]]
 - **Notes:** Uses Godot 4.6 .NET; GLB models imported per-hull
 
+### Sector-Entrance Streaming (Time-Sliced Inserts & Prewarm)
+How the client absorbs a heavy sector (dense belt + dust) without dropping frames as things appear. Welcome/MsgReveal rock rows are QUEUED, not inserted — `AsteroidRenderer.DrainInserts` spends a per-frame time budget (bigger pre-spawn and under the warp flash, small in open flight; a ~200-rock belt used to stall one frame ~0.5s). Dust clouds build ONCE per sector into hidden per-sector roots (prewarmed one cloud/frame as sector rows stream; `SectorEnvironment.ShowDust` just toggles visibility on entry). Shadow-volume meshes and hull-vert extremes are cached per MESH (all rocks of a variant share one baked volume), and `AssetPreloader` warms base/ship GLBs + SimModels + BVHs at boot so first-sight inserts don't cold-load.
+- **Frequency:** Occasional
+- **Key Files:**
+  - `client/scripts/world/AsteroidRenderer.cs` — pending-row queue + `DrainInserts` budget drain
+  - `client/scripts/SectorEnvironment.cs` — per-sector dust roots, prewarm queue, shadow-volume cache
+  - `client/scripts/world/EnvironmentRenderer.cs` — per-mesh occluder extremes cache, `WarmModelScene`
+  - `client/scripts/AssetPreloader.cs` — boot-time GLB/SimModel/BVH warming (asteroids + bases + ships)
+- **Related:** [[WorldRenderer]], [[Fog of War]], [[Per-Sector Environment (God Rays / Nebula / Dust Clouds)]]
+- **Notes:** Queued rocks still honor MsgRockUpdate/MsgRockGone (rows mutate/drop in the queue); the warp settle window stays open while the drain runs, so the flash covers the streaming. `[perf]`-tagged threshold logs at these seams stay in the build for future spike attribution.
+
 ### GLB
 3D model format (glTF binary): embeds textures, used for hulls, asteroids, and collision geometry.
 - **Frequency:** Very common
