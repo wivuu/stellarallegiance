@@ -38,13 +38,10 @@ public sealed class LoadoutState
     // the items themselves are streamed defs (DefRegistry.AllCargoItems).
     private readonly Dictionary<byte, Dictionary<uint, int>> _cargo = new();
 
-    // True while replaying authored defaults (SeedDefaults) or re-hydrating from disk (Load) — those
-    // aren't the pilot's choices, so they must not write back through to UserPrefs. Only genuine user
-    // edits (Assign / SetCargoCount / ResetClass called from the hangar UI) persist.
-    private bool _suppressPersist;
-
-    // Whether Load has already re-hydrated the saved loadouts this session (guards the one-shot).
-    private bool _hydrated;
+    // Loadouts are PER-MATCH and never touch disk: a customization lives only in this process-wide
+    // instance and is wiped at each match boundary via ResetAll (WorldRenderer.NetSetMatch on the
+    // return-to-lobby transition), so the next match opens the hangar on every hull's authored
+    // default. A fresh app launch starts empty for the same reason — nothing is restored.
 
     // The weapon currently shown in a slot: the player's override if one exists, else the
     // hull's authored weapon. An authored default of HardpointDef.NoWeapon (the GLB-merge
@@ -65,7 +62,6 @@ public sealed class LoadoutState
         if (!_weaponOverrides.TryGetValue(classId, out var slots))
             _weaponOverrides[classId] = slots = new Dictionary<byte, uint?>();
         slots[hpIndex] = weaponId;
-        PersistClass(classId);
     }
 
     // The MsgSpawn mount tail for a class: ONLY the slots whose current assignment differs from
@@ -102,13 +98,24 @@ public sealed class LoadoutState
         return list.ToArray();
     }
 
-    // RESET: back to the authored loadout and an empty hold. Also drops the persisted snapshot so a
-    // reset class doesn't come back customized after a restart.
+    // RESET one hull: back to the authored loadout and an empty hold (the hangar's per-hull reset).
     public void ResetClass(byte classId)
     {
         _weaponOverrides.Remove(classId);
         _cargo.Remove(classId);
-        PersistClass(classId); // both dicts now empty for the class → erases its disk rows
+    }
+
+    // RESET everything back to authored defaults — every hull's weapon overrides, holds, the seeded
+    // marks, and the launch-base pick. Called at a match boundary (WorldRenderer.NetSetMatch, on the
+    // return-to-lobby transition) so a loadout customized last match doesn't carry into the next one.
+    // Clearing _seeded lets SeedDefaults re-seed each hull's authored hold when the hangar next shows
+    // it; a mid-match reconnect stays in the Active phase, so it never reaches this reset.
+    public void ResetAll()
+    {
+        _weaponOverrides.Clear();
+        _cargo.Clear();
+        _seeded.Clear();
+        SelectedBaseId = 0;
     }
 
     // ---- Cargo (consumables) ----------------------------------------------
@@ -123,141 +130,19 @@ public sealed class LoadoutState
         if (!_cargo.TryGetValue(classId, out var hold))
             _cargo[classId] = hold = new Dictionary<uint, int>();
         hold[itemId] = Math.Max(0, count);
-        PersistClass(classId);
     }
 
     // Seed a class's hold from its authored DefaultCargo the first time it's shown, so the hangar
-    // opens on the hull's real default loadout (matching what the server would spawn). Idempotent.
+    // opens on the hull's real default loadout (matching what the server would spawn). Idempotent per
+    // class (via _seeded); ResetAll clears the marks so a new match re-seeds today's authored hold.
     public void SeedDefaults(byte classId, ShipClassDef def)
     {
         if (def is null || !_seeded.Add(classId))
             return;
         if (def.DefaultCargo is null)
             return;
-        // Seeding authored defaults is not a pilot edit — don't write it back to disk (that would
-        // freeze today's defaults and shadow a future content update to the default hold).
-        bool prev = _suppressPersist;
-        _suppressPersist = true;
-        try
-        {
-            foreach (var c in def.DefaultCargo)
-                SetCargoCount(classId, c.CargoId, c.Count);
-        }
-        finally
-        {
-            _suppressPersist = prev;
-        }
-    }
-
-    // ---- Cross-session persistence -----------------------------------------
-    // In-session this whole object is the process-wide LoadoutState.Shared, so edits already survive
-    // hangar open/close and docking. These methods extend that to disk via UserPrefs so a customized
-    // loadout also survives an app restart. Storage is a complete per-class SNAPSHOT (all overrides +
-    // the whole hold), rewritten on every edit, so disk always mirrors the live state for that class.
-
-    // Persist one class's current customization. No-op while seeding/hydrating (see _suppressPersist).
-    private void PersistClass(byte classId)
-    {
-        if (_suppressPersist)
-            return;
-
-        // Weapons: flat [hpIndex, weaponId, ...]; an emptied slot (null) rides as NoWeapon.
-        long[] weapons = Array.Empty<long>();
-        if (_weaponOverrides.TryGetValue(classId, out var slots) && slots.Count > 0)
-        {
-            weapons = new long[slots.Count * 2];
-            int i = 0;
-            foreach (var kv in slots)
-            {
-                weapons[i++] = kv.Key;
-                weapons[i++] = kv.Value ?? HardpointDef.NoWeapon;
-            }
-        }
-        UserPrefs.SetLoadoutWeapons(classId, weapons);
-
-        // Cargo: flat [cargoId, count, ...]; positive counts only.
-        long[] cargo = Array.Empty<long>();
-        if (_cargo.TryGetValue(classId, out var hold))
-        {
-            var list = new List<long>(hold.Count * 2);
-            foreach (var kv in hold)
-                if (kv.Value > 0)
-                {
-                    list.Add(kv.Key);
-                    list.Add(kv.Value);
-                }
-            cargo = list.ToArray();
-        }
-        UserPrefs.SetLoadoutCargo(classId, cargo);
-    }
-
-    // Re-hydrate the saved per-class loadouts from disk, VALIDATING every id against the streamed
-    // defs — a saved weapon/cargo/slot this match doesn't offer (different faction or map, or a
-    // content update that removed it) is silently dropped rather than poisoning the hold. A class
-    // that restores any saved entry is marked already-seeded so SeedDefaults won't overwrite the
-    // restored hold with authored defaults. One-shot; call once defs have landed, before the first
-    // SelectShip. `defs` is the global-namespace DefRegistry (the client's mirror of streamed content).
-    public void Load(DefRegistry defs)
-    {
-        if (_hydrated || defs is null)
-            return;
-        _hydrated = true;
-
-        bool prev = _suppressPersist;
-        _suppressPersist = true; // hydration isn't an edit — don't echo it straight back to disk
-        try
-        {
-            foreach (ShipClassDef ship in defs.BuildableShips())
-            {
-                byte classId = ship.ClassId;
-                List<HardpointDef>? hardpoints = defs.GetHardpoints(classId);
-                bool restored = false;
-
-                long[] weapons = UserPrefs.GetLoadoutWeapons(classId);
-                for (int i = 0; i + 1 < weapons.Length; i += 2)
-                {
-                    byte hpIndex = (byte)weapons[i];
-                    uint weaponId = (uint)weapons[i + 1];
-                    if (hardpoints is null || FindWeaponSlot(hardpoints, hpIndex) is not HardpointDef hp)
-                        continue; // slot no longer exists on this hull
-                    if (weaponId != HardpointDef.NoWeapon)
-                    {
-                        if (defs.GetWeapon(weaponId) is not WeaponDef w)
-                            continue; // weapon isn't in this match's content
-                        if (!Compatible(hp, w))
-                            continue; // saved before the slot's mount type restricted it
-                    }
-                    Assign(classId, hpIndex, weaponId == HardpointDef.NoWeapon ? (uint?)null : weaponId);
-                    restored = true;
-                }
-
-                long[] cargo = UserPrefs.GetLoadoutCargo(classId);
-                for (int i = 0; i + 1 < cargo.Length; i += 2)
-                {
-                    uint cargoId = (uint)cargo[i];
-                    int count = (int)cargo[i + 1];
-                    if (count <= 0 || defs.GetCargoItem(cargoId) is null)
-                        continue; // item isn't in this match's content
-                    SetCargoCount(classId, cargoId, count);
-                    restored = true;
-                }
-
-                if (restored)
-                    _seeded.Add(classId); // keep the restored hold; skip authored-default seeding
-            }
-        }
-        finally
-        {
-            _suppressPersist = prev;
-        }
-    }
-
-    private static HardpointDef? FindWeaponSlot(List<HardpointDef> hardpoints, byte hpIndex)
-    {
-        foreach (HardpointDef hp in hardpoints)
-            if (hp.Kind == HardpointKind.Weapon && hp.Index == hpIndex)
-                return hp;
-        return null;
+        foreach (var c in def.DefaultCargo)
+            SetCargoCount(classId, c.CargoId, c.Count);
     }
 
     // The class's current hold as (cargoId, count) pairs (positive counts only) — the array

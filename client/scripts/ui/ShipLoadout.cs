@@ -447,12 +447,11 @@ public partial class ShipLoadout : Control
         List<ShipClassDef> ships = _defs.BuildableShips();
         if (ships.Count != _builtShipCount && ships.Count > 0)
         {
-            // Re-hydrate saved loadouts before the first SelectShip so SeedDefaults doesn't overwrite
-            // a restored hold with authored defaults (one-shot; validates ids against these defs).
-            _state.Load(_defs);
             _builtShipCount = ships.Count;
             RebuildShipCards(ships);
-            // Prefer an in-session pick, then the persisted last-flown hull, else the first buildable.
+            // Prefer an in-session pick, then the last-flown hull, else the first buildable. Loadouts
+            // themselves aren't restored — SelectShip → SeedDefaults opens each hull on its authored
+            // default (loadouts are per-match; see LoadoutState).
             SelectShip(_classId ?? DefaultShipClassId(ships));
         }
 

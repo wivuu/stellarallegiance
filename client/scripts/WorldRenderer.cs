@@ -476,11 +476,15 @@ public partial class WorldRenderer
     {
         _clock.ServerTick = tick;
         var newPhase = (MatchPhase)phase;
-        // On the transition back to the lobby, drop transient chaff/minefield visuals so a stale
-        // hazard from the finished match doesn't linger into the next one.
+        // On the transition back to the lobby (a match just ended), drop transient chaff/minefield
+        // visuals so a stale hazard from the finished match doesn't linger into the next one, and wipe
+        // the pilot's hangar loadout so the next match opens on each hull's authored default. Loadouts
+        // are per-match. This fires only on Active/Ended → Lobby; a mid-match reconnect stays in the
+        // Active phase, so a reconnecting pilot keeps their customization.
         if (newPhase == MatchPhase.Lobby && Phase != MatchPhase.Lobby)
         {
             _minefield?.Clear();
+            StellarAllegiance.Ui.LoadoutState.Shared.ResetAll();
         }
         _clock.Phase = newPhase;
         _clock.Winner = winner == 255 ? (byte?)null : winner;
