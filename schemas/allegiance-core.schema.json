@@ -2233,13 +2233,6 @@
             "type": "number",
             "description": "Damage multiplier applied to Power on a direct (fuse-triggering) hit."
           },
-          "model-name": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "GLB model basename the client loads from assets/missiles/ (no extension)."
-          },
           "trail-lifetime": {
             "type": "number",
             "description": "Smoke-trail plume lifetime, in seconds (client EngineGlow tuning)."
@@ -2348,6 +2341,13 @@
               "null"
             ],
             "description": "Charges dispensed from one loaded pack; the hangar loads a number of PACKS (each costing one Mass) and every press distributes one charge. Total charges = packs \u00D7 charges-per-pack. Null \u2192 1 (a pack is a single charge \u2014 legacy one-for-one behavior)."
+          },
+          "model-name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "GLB model basename the client loads/instances from its per-kind assets folder (e.g. assets/missiles/, assets/mines/, assets/chaff/, assets/probes/; no extension); projected onto WeaponDef.ModelName. Shared by every expendable kind (a FuelPod inherits it too, though it is pure cargo and never renders one)."
           }
         },
         "description": "A guided missile. Mirrors the C\u002B\u002B DataMissileTypeIGC (igc.h:1960).",
@@ -2394,13 +2394,6 @@
             "type": "number",
             "description": "Field arm delay, in seconds \u2014 mines are inert until this elapses (projected onto WeaponDef.MineArmTicks after \u00D720 tick conversion)."
           },
-          "model-name": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "GLB model basename the client instances (once per visual mine) from assets/mines/ (no extension); projected onto WeaponDef.ModelName."
-          },
           "id": {
             "type": "string",
             "description": "Stable, unique id used for references (kebab-case by convention, e.g. \u0022seeker-missile\u0022)."
@@ -2490,6 +2483,13 @@
               "null"
             ],
             "description": "Charges dispensed from one loaded pack; the hangar loads a number of PACKS (each costing one Mass) and every press distributes one charge. Total charges = packs \u00D7 charges-per-pack. Null \u2192 1 (a pack is a single charge \u2014 legacy one-for-one behavior)."
+          },
+          "model-name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "GLB model basename the client loads/instances from its per-kind assets folder (e.g. assets/missiles/, assets/mines/, assets/chaff/, assets/probes/; no extension); projected onto WeaponDef.ModelName. Shared by every expendable kind (a FuelPod inherits it too, though it is pure cargo and never renders one)."
           }
         },
         "description": "A deployable mine. Mirrors the C\u002B\u002B DataMineTypeIGC (igc.h:1990).",
@@ -2513,13 +2513,6 @@
             "type": "number",
             "description": "Radius, in u, within which a missile can be decoyed onto this puff (projected onto WeaponDef.DecoyRadius)."
           },
-          "model-name": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "GLB model basename the client loads from assets/chaff/ (no extension); projected onto WeaponDef.ModelName."
-          },
           "id": {
             "type": "string",
             "description": "Stable, unique id used for references (kebab-case by convention, e.g. \u0022seeker-missile\u0022)."
@@ -2609,6 +2602,13 @@
               "null"
             ],
             "description": "Charges dispensed from one loaded pack; the hangar loads a number of PACKS (each costing one Mass) and every press distributes one charge. Total charges = packs \u00D7 charges-per-pack. Null \u2192 1 (a pack is a single charge \u2014 legacy one-for-one behavior)."
+          },
+          "model-name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "GLB model basename the client loads/instances from its per-kind assets folder (e.g. assets/missiles/, assets/mines/, assets/chaff/, assets/probes/; no extension); projected onto WeaponDef.ModelName. Shared by every expendable kind (a FuelPod inherits it too, though it is pure cargo and never renders one)."
           }
         },
         "description": "Countermeasure chaff. Mirrors the C\u002B\u002B DataChaffTypeIGC (igc.h:1998).",
@@ -2658,13 +2658,6 @@
           "sight-radius": {
             "type": "number",
             "description": "Radius of the team vision sphere this deployed probe grants while alive, in u (projected onto WeaponDef.ProbeSightRadius)."
-          },
-          "model-name": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "GLB model basename the client instances (once per deployed probe) from assets/probes/ (no extension); projected onto WeaponDef.ModelName."
           },
           "hit-radius": {
             "type": "number",
@@ -2763,6 +2756,13 @@
               "null"
             ],
             "description": "Charges dispensed from one loaded pack; the hangar loads a number of PACKS (each costing one Mass) and every press distributes one charge. Total charges = packs \u00D7 charges-per-pack. Null \u2192 1 (a pack is a single charge \u2014 legacy one-for-one behavior)."
+          },
+          "model-name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "GLB model basename the client loads/instances from its per-kind assets folder (e.g. assets/missiles/, assets/mines/, assets/chaff/, assets/probes/; no extension); projected onto WeaponDef.ModelName. Shared by every expendable kind (a FuelPod inherits it too, though it is pure cargo and never renders one)."
           }
         },
         "description": "A deployable sensor / turret probe. Mirrors the C\u002B\u002B DataProbeTypeIGC (igc.h:2003).",
@@ -2871,6 +2871,13 @@
               "null"
             ],
             "description": "Charges dispensed from one loaded pack; the hangar loads a number of PACKS (each costing one Mass) and every press distributes one charge. Total charges = packs \u00D7 charges-per-pack. Null \u2192 1 (a pack is a single charge \u2014 legacy one-for-one behavior)."
+          },
+          "model-name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "GLB model basename the client loads/instances from its per-kind assets folder (e.g. assets/missiles/, assets/mines/, assets/chaff/, assets/probes/; no extension); projected onto WeaponDef.ModelName. Shared by every expendable kind (a FuelPod inherits it too, though it is pure cargo and never renders one)."
           }
         },
         "description": "Auxiliary afterburner fuel carried in the hold. Pure cargo \u2014 nothing is fired or deployed: when a fuel-modeled hull\u0027s tank hits 0 while boost is held, one charge auto-loads and the tank refills by FuelPerCharge. No C\u002B\u002B IGC equivalent (StellarAllegiance-only).",

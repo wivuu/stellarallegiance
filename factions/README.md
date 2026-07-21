@@ -2,7 +2,7 @@
 
 A clean, idiomatic C# re-modeling of Allegiance's faction & tech-tree data, serializable to
 human-readable YAML. It is a homage-game data layer derived from the original C++ structures
-(see `../FACTION-AND-TECH-TREE-FORMAT.md` for the source mapping).
+(the per-type source mapping now lives in the model's XML-doc summaries).
 
 ## What it models
 
@@ -16,7 +16,7 @@ draw on it.
   `AmmoPack`/`Launcher`), **`Station`** (building), **`Development`** (research), **`Drone`**.
 - **`Expendable`** → `Missile`/`Mine`/`Chaff`/`Probe`; plus `Projectile`.
 - **`Capability`** — a closed enum of engine-checked gates (`base`, `shipyard-allowed`,
-  `expansion-allowed`, `tactical-allowed`). These are the things *code* branches on to decide what a
+  `expansion-allowed`, `tactical-allowed`, `supremacy-allowed`). These are the things *code* branches on to decide what a
   team may do, so they are strongly typed rather than free strings. Carried as `CapabilitySet`
   (`requiredCapabilities`/`grantedCapabilities`/`baseCapabilities`).
 - **`TechSet`** — a set of open-ended, authorable research-tech ids (e.g. `heavy-hulls`,
@@ -32,7 +32,7 @@ draw on it.
 src/Allegiance.Factions      class library (model + serialization + resolution + validation)
 src/Allegiance.Factions.Cli  validate / roundtrip CLI
 tests/Allegiance.Factions.Tests
-sample-data/                 a two-faction bundle: a manifest + shared catalog files + factions/
+sample-data/                 a three-faction bundle: a manifest + shared catalog files + factions/
 ```
 
 ## Usage
@@ -67,9 +67,7 @@ path — `allegiance-core.schema.json`, `allegiance-faction.schema.json`, and
 (catalog fragments → core, `factions/*.yaml` → faction, the manifest → manifest).
 
 The schema is generated from the model, so don't edit it by hand — regenerate it with the command
-above. The **Regenerate Faction JSON Schema** GitHub Actions workflow
-(`.github/workflows/regenerate-faction-schema.yml`) does this automatically on changes to the model
-or CLI and commits the result.
+above whenever the model or CLI changes.
 
 ## Build & test
 
@@ -77,5 +75,5 @@ or CLI and commits the result.
 dotnet test
 ```
 
-> Note: `global.json` pins the SDK to .NET 8. If a concurrent IDE build server causes MSBuild
-> node errors, build with `-m:1 -nodeReuse:false` (set `MSBUILDDISABLENODEREUSE=1`).
+> Note: If a concurrent IDE build server causes MSBuild node errors, build with
+> `-m:1 -nodeReuse:false` (set `MSBUILDDISABLENODEREUSE=1`).

@@ -140,6 +140,21 @@ public partial class Simulation
                         return;
                     }
                 }
+                else
+                {
+                    // Research-at-base rule: a non-upgrade development may only be started at a base whose
+                    // FAMILY (home base type + its upgrade tiers) matches the base family that unlocks it —
+                    // guns/missiles at the Supremacy, starter lines at the Garrison. Mirrors the client
+                    // ResearchTab family filter so the UI never offers a dev the server would reject.
+                    byte hostType = World.Bases[baseIdx].BaseTypeId;
+                    byte want = HomeBaseFamilyRoot(dev);
+                    if (FamilyRoot(hostType) != want)
+                    {
+                        string wantName = BaseDefForType(want)?.Name ?? "the correct base";
+                        ResearchNoticesThisStep.Add((cid, $"{dev.Name} must be researched at a {wantName}."));
+                        return;
+                    }
+                }
                 if (ts.Credits < dev.Price)
                 {
                     ResearchNoticesThisStep.Add((cid, $"Not enough credits for {dev.Name} ({dev.Price:N0})."));
@@ -294,6 +309,78 @@ public partial class Simulation
                 }
         }
         return res;
+    }
+
+    // ---- research-at-base family maps (mirrors client ResearchTab home-base derivation) -----------
+    // A base FAMILY is a root base type plus every tier reachable through its SuccessorBaseTypeId chain
+    // (Garrison ↔ Garrison Str, Supremacy ↔ Adv Supremacy, …). Built once — content is immutable after
+    // load (same lazy-cache pattern as _baseDefByType).
+    private Dictionary<byte, byte>? _famRoots; // base-type-id -> family-root base-type-id
+    private Dictionary<ushort, byte>? _techFamily; // tech idx -> family root whose base grants it
+
+    private void EnsureResearchFamilies()
+    {
+        if (_famRoots != null)
+            return;
+
+        // Family root = the base type at the head of the successor chain (the one that is nobody's
+        // successor). Walk predecessor links backward from each base type.
+        var predOf = new Dictionary<byte, byte>(); // successor type -> its predecessor type
+        foreach (var s in Content.StationCatalog)
+            if (s.BaseTypeId >= 0 && s.SuccessorBaseTypeId >= 0)
+                predOf[(byte)s.SuccessorBaseTypeId] = (byte)s.BaseTypeId;
+        var roots = new Dictionary<byte, byte>();
+        foreach (var s in Content.StationCatalog)
+        {
+            if (s.BaseTypeId < 0)
+                continue;
+            byte r = (byte)s.BaseTypeId;
+            var seen = new HashSet<byte> { r };
+            while (predOf.TryGetValue(r, out byte p) && seen.Add(p))
+                r = p;
+            roots[(byte)s.BaseTypeId] = r;
+        }
+
+        // tech idx -> family root: a station's granted techs map to that base's family (supremacy-1 →
+        // Supremacy, shipyard-1 → Shipyard); an upgrade dev's granted techs map to the family of the base
+        // it is authorized AT (garrison-str → Garrison, supremacy-adv → Supremacy, outpost-hvy → Outpost).
+        var techFam = new Dictionary<ushort, byte>();
+        foreach (var s in Content.StationCatalog)
+            if (s.BaseTypeId >= 0)
+                foreach (ushort t in s.GrantedTechIdx)
+                    techFam[t] = roots.TryGetValue((byte)s.BaseTypeId, out byte fr) ? fr : (byte)s.BaseTypeId;
+        foreach (var d in Content.Developments)
+        {
+            if (d.UpgradeScope != (byte)Allegiance.Factions.Model.UpgradeScope.Single)
+                continue;
+            var ups = TriggeredUpgrades(d);
+            if (ups.Count == 0)
+                continue;
+            byte ft = ups[0].FromType;
+            foreach (ushort t in d.GrantedTechIdx)
+                techFam[t] = roots.TryGetValue(ft, out byte fr) ? fr : ft;
+        }
+
+        _famRoots = roots;
+        _techFamily = techFam;
+    }
+
+    private byte FamilyRoot(byte type)
+    {
+        EnsureResearchFamilies();
+        return _famRoots!.TryGetValue(type, out byte r) ? r : type;
+    }
+
+    // The base family a non-upgrade development is researched at: the family that grants its gating tech,
+    // defaulting to the Garrison family (root 0) for devs gated only on the `base` capability. (Single-
+    // scope upgrades are pinned separately by the exact-from-type guard above.)
+    private byte HomeBaseFamilyRoot(DevelopmentDef dev)
+    {
+        EnsureResearchFamilies();
+        foreach (ushort req in dev.RequiredTechIdx)
+            if (_techFamily!.TryGetValue(req, out byte fam))
+                return fam;
+        return 0;
     }
 
     // A base built after its team already completed an `all`-scope upgrade dev spawns pre-upgraded.

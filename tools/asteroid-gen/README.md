@@ -142,9 +142,11 @@ lean a metallic warm — without adding a fourth material. Keep them subtle.
 The `.glb` imports directly: UVs, tangents, and the **normal + albedo + ORM** maps are bound
 to a standard glTF metallic-roughness material, so it lands on a `StandardMaterial3D` with
 colour, roughness, metalness and AO already wired. To use: copy the `.glb`s into
-`client/assets/asteroids/` and, in `WorldRenderer.OnAsteroidInsert`
-(`client/scripts/WorldRenderer.cs`), replace the `SphereMesh` + shared `_asteroidMat` with the
-loaded mesh, scaled by `row.Radius` (the GLB is authored at the catalog `radius`).
+`client/assets/asteroids/`; `AsteroidRenderer.Insert`
+(`client/scripts/world/AsteroidRenderer.cs`) loads the per-variant mesh from
+`res://assets/asteroids/`, scaled by `row.Radius` (the GLB is authored at the catalog
+`radius`), and falls back to a `SphereMesh` + shared `_asteroidMat` only when a variant is
+missing.
 
 Notes:
 - **Normal convention** is OpenGL-style (green = +Y), Godot's default `NormalMap` — no flip.

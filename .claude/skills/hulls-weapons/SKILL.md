@@ -27,17 +27,21 @@ The manifest `core.manifest.yaml` lists which files load; bump its `version:` wh
 `weapon-id` may resolve to either. Current stock ids (verify against the files — do not trust this
 table blindly after edits):
 
-| id | thing | file | mounted mass |
+| id(s) | thing | file | mounted mass |
 |----|-------|------|--------------|
-| 0 | scout-cannon | weapons | 2 |
-| 1 | fighter-cannon | weapons | 5 |
-| 2 | bomber-cannon (AP: `shield-damage-multiplier` 0.5) | weapons | 11 |
-| 3 | seeker-rack-1 (mrm-seeker-1) | launchers | 4 |
-| 4 | quickfire-rack-1 (mrm-quickfire-1) | launchers | 2 |
-| 5 | anti-base-rack-1 (srm-anti-base-1 — **`can-damage-base`**) | launchers | 4 |
-| 6/7/8 | counter / prox-mine / ews-probe dispenser tier 1 (NOT hull-mounted — dispensed from cargo) | launchers | 0 |
-| 18–26 | rack tiers 2/3 + dumbfire-rack-1/2/3 (`obsoleted-by-techs`/`successor-part-id` chains) | launchers | 4 or 2 |
-| 27–32 | dispenser tiers 2/3 (no cargo-id — spawn resolution walks the tier chain) | launchers | 0 |
+| 0/1/2 | PW Gat Gun 1/2/3 — the all-round gun | weapons | 1 |
+| 9/10/11 | PW Mini-Gun 1/2/3 — rapid-fire | weapons | 1 |
+| 12/13/14 | PW AutoCan 1/2/3 — heavy assault gun (AP: `shield-damage-multiplier` 0.5) | weapons | 1 |
+| 15/16/17 | ER Nanite 1/2/3 — the **healing** gun | weapons | 2 |
+| 3/18/19 | MRM Seeker 1/2/3 | launchers | 4 |
+| 4/20/21 | MRM Quickfire 1/2/3 | launchers | 2 |
+| 5/22/23 | SRM Anti-Base 1/2/3 (**`can-damage-base`**) | launchers | 4 |
+| 24/25/26 | SRM Dumbfire 1/2/3 (quick-lock, low-turn) | launchers | 4 |
+| 6/27/28 · 7/29/30 · 8/31/32 | counter / prox-mine / ews-probe dispenser tiers 1/2/3 (NOT hull-mounted — dispensed from cargo) | launchers | 0 |
+
+Tier-2/3 ids (18–32) are the appended higher tiers of each line, chained via
+`obsoleted-by-techs`/`successor-part-id`; dispenser tiers 2/3 carry no `cargo-id` (spawn resolution
+walks the tier chain).
 
 **Mounted mass is the launcher's own `mass`, not the missile's.** An anti-base rack costs 4 to
 mount even though the srm-anti-base-1 expendable is mass 6 — the rack supplies its magazine
@@ -76,7 +80,7 @@ hardpoints:
 ## Payload budgeting (boot gate — `CoreValidator`)
 
 Every armed hull must satisfy, or the server **refuses to boot**
-(`CoreValidator.cs` ~L44-82, "authored default loadout payload … exceeds payload-capacity"):
+(`CoreValidator.cs` `ValidateHulls` payload budget, throw ~L135: "authored default loadout payload … exceeds payload-capacity"):
 
 ```
 sum(mounted weapon/launcher mass)  +  sum(default-cargo count × expendable mass)   ≤   payload-capacity
@@ -91,7 +95,7 @@ it's the reviewer's check.
 
 ## Boot-time invariants that bite
 
-- **Win condition** (`shared/ContentValidator.cs` ~L199): at least one hull's *default* loadout must
+- **Win condition** (`shared/ContentValidator.cs` ~L330-348): at least one hull's *default* loadout must
   mount a `can-damage-base` weapon, else "bases can never be destroyed, matches can never end" and
   boot fails. Today only the **SRM Anti-Base line (weapon-ids 5/22/23)** is `can-damage-base`, and
   only the **bomber** mounts it (id 5) — do not strip it without giving another hull a base-cracker.
@@ -121,4 +125,6 @@ dotnet run --project tests/FactionsTest     # raw YAML field parsing
 those assertions when you change a hull's weapons or capacity** (they pin exact weapon-ids, mount
 counts, and `PayloadCapacity` floats). For a live in-client check, use the `verify` skill
 (server + autofly capture). If you added a new authored *field* (not just values), follow the
-`tech-tree-content` end-to-end checklist and bump both protocol-version constants.
+`tech-tree-content` end-to-end checklist and bump the wire protocol — the single
+`Wire.ProtocolVersion` constant (`shared/Net/Wire.cs`), which both `Protocol.Version` and
+`GameNetClient.ProtocolVersion` alias.

@@ -1,6 +1,6 @@
 ---
 name: base-collision
-description: Rebake the compound collision hull (COL_ convex parts) for a base/station GLB from its visual mesh volume with tools/collision-hull/bake.py --kind base. Use when adding a new base model, editing Outpost.glb/garrison.glb art, ships fly through or bounce off empty space near a station, dock/launch corridors get blocked, or a CollisionTest/SelfTest sub-hull or merged-metric assertion fails. Generic knob reference lives in the collision-hull-generator skill.
+description: Rebake the compound collision hull (COL_ convex parts) for a base/station GLB from its visual mesh volume with tools/collision-hull/bake.py --kind base. Use when adding a new base model, editing a base mesh (garrison.glb/ss90.glb/ss21a.glb/acs05.glb) art, ships fly through or bounce off empty space near a station, dock/launch corridors get blocked, or a CollisionTest/SelfTest sub-hull or merged-metric assertion fails. Generic knob reference lives in the collision-hull-generator skill.
 ---
 
 # Base collision hulls (compound COL_ parts from the mesh)
@@ -21,8 +21,11 @@ base-preset wrapper; the full pipeline, knob table, and visualizer reference is 
 ```sh
 cd tools/collision-hull
 uv run bake.py --kind base --glb ../../client/assets/bases/garrison.glb --check  # validate only (all three validations)
-uv run bake.py --kind base --glb ../../client/assets/bases/garrison.glb          # bake COL_ parts in place (SHIPPING base)
-uv run bake.py --kind base --glb ../../client/assets/bases/Outpost.glb           # ...the retained-but-unused Outpost mesh
+uv run bake.py --kind base --glb ../../client/assets/bases/garrison.glb          # bake COL_ parts in place (SHIPPING home base — Garrison, ss27)
+uv run bake.py --kind base --glb ../../client/assets/bases/ss90.glb              # runtime Outpost / Outpost (Hvy)
+uv run bake.py --kind base --glb ../../client/assets/bases/ss21a.glb             # runtime Supremacy / Adv Supremacy
+uv run bake.py --kind base --glb ../../client/assets/bases/acs05.glb             # runtime Shipyard / Shipyard (Dry)
+uv run bake.py --kind base --glb ../../client/assets/bases/Outpost.glb           # retained-but-unused byte-identity fixture (bound by NO station; runtime 'Outpost' is ss90.glb)
 tools/godot-import.ps1 -Force                    # ALWAYS after a rebake (client res:// import)
 ```
 
@@ -36,12 +39,14 @@ dotnet run --project tests/CollisionTest        # sub-hull count + bit-exact mer
 dotnet run --project server -- --selftest       # sub-hulls, spawn clearance, dock corridors
 ```
 
-Determinism / byte-identity: a no-override `--kind base` bake reproduces the committed GLB
-**byte-for-byte** — `garrison.glb` (SHIPPING base) sha256
-`78be8ae31f7c6a2763f3f970d4a1a982b0091df73b9b6751cb677609d0bf8b78` (12 parts), `Outpost.glb`
-(retained, unused) `179442182c80205d976f6b8780f14ab67e5f5d58df872b483eab1d0052f855e1` (41 parts)
-— verify with `git status` on the GLB showing NO change. The server's `.simmodel` sidecar cache
-self-heals on SHA change.
+Determinism / byte-identity: a no-override `--kind base` bake reproduces each committed base GLB
+**byte-for-byte** — home `garrison.glb` (ss27, SHIPPING) sha256
+`78be8ae31f7c6a2763f3f970d4a1a982b0091df73b9b6751cb677609d0bf8b78` (12 parts); the runtime forward
+bases reproduce identically too — `ss90.glb` (Outpost / Outpost Hvy, 6 parts), `ss21a.glb`
+(Supremacy / Adv Supremacy, 17 parts), `acs05.glb` (Shipyard / Shipyard Dry, 7 parts). `Outpost.glb`
+(retained, bound by NO station) `179442182c80205d976f6b8780f14ab67e5f5d58df872b483eab1d0052f855e1`
+(41 parts) is the labeled unused byte-identity fixture — verify with `git status` on the GLB showing
+NO change. The server's `.simmodel` sidecar cache self-heals on SHA change.
 
 ## What the base bake produces
 

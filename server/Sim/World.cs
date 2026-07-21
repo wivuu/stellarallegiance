@@ -508,16 +508,68 @@ public sealed class World
     {
         var links = cfg.Links.Count > 0 ? cfg.Links : DefaultRing(secCfg);
         ulong gateId = 1;
+        // Mouths already placed in each sector, so a sector's SECOND+ gate can be rejection-sampled
+        // away from its neighbours (see PlaceGateMouth). A sector's first mouth always accepts its
+        // first roll, so single-gate sectors — and the aleph-min-gap = 0 case — draw the `rng` stream
+        // exactly as the pre-spacing code did (keeps pinned-seed layouts stable where nothing overlapped).
+        var mouthsBySector = new Dictionary<uint, List<Vec3>>();
         foreach (var link in links)
         {
-            Vec3 aPos = RandomOuterPos(ref rng, RadiusOf(link.A, defaultRadius));
-            Vec3 bPos = RandomOuterPos(ref rng, RadiusOf(link.B, defaultRadius));
+            Vec3 aPos = PlaceGateMouth(ref rng, link.A, RadiusOf(link.A, defaultRadius), mouthsBySector);
+            Vec3 bPos = PlaceGateMouth(ref rng, link.B, RadiusOf(link.B, defaultRadius), mouthsBySector);
             Alephs.Add(new Gate(gateId++, link.A, link.B, aPos, bPos));
             Alephs.Add(new Gate(gateId++, link.B, link.A, bPos, aPos));
         }
 
         foreach (var sc in secCfg)
             SeedDustClouds(sc.Id, RadiusOf(sc.Id, defaultRadius), sc.Env?.Dust);
+    }
+
+    // Place one gate mouth toward the outer reaches of `sector` (RandomOuterPos), kept at least
+    // `seeding.aleph-min-gap` world units (centre-to-centre) from every mouth already placed in that
+    // sector so two alephs in one sector never overlap by chance. Deterministic rejection sampling:
+    // re-roll up to MaxPlaceAttempts times, take the first candidate that clears the gap, else keep the
+    // best-separated roll — a gate is REQUIRED for connectivity and, unlike a rock, is never dropped.
+    // With the gap disabled (<= 0) or for a sector's first mouth, this returns the first roll (one
+    // RandomOuterPos), so the `rng` stream matches the pre-spacing placement in those cases.
+    private Vec3 PlaceGateMouth(ref DetRng rng, uint sector, float sectorRadius, Dictionary<uint, List<Vec3>> mouthsBySector)
+    {
+        if (!mouthsBySector.TryGetValue(sector, out var placed))
+            mouthsBySector[sector] = placed = new List<Vec3>();
+
+        float gap = _seed.AlephMinGap;
+        Vec3 pos = RandomOuterPos(ref rng, sectorRadius);
+        if (gap > 0f && placed.Count > 0)
+        {
+            float gapSq = gap * gap;
+            Vec3 best = pos;
+            float bestSep = MinSepSq(pos, placed);
+            for (int attempt = 1; attempt < MaxPlaceAttempts && bestSep < gapSq; attempt++)
+            {
+                Vec3 cand = RandomOuterPos(ref rng, sectorRadius);
+                float sep = MinSepSq(cand, placed);
+                if (sep > bestSep)
+                {
+                    bestSep = sep;
+                    best = cand;
+                }
+            }
+            pos = best;
+        }
+        placed.Add(pos);
+        return pos;
+
+        static float MinSepSq(Vec3 p, List<Vec3> others)
+        {
+            float min = float.MaxValue;
+            foreach (var o in others)
+            {
+                float d = (p - o).LengthSquared();
+                if (d < min)
+                    min = d;
+            }
+            return min;
+        }
     }
 
     // Per-sector asteroid broad-phase grid, bucketed once from the fully-seeded Asteroids list. Must
@@ -672,9 +724,64 @@ public sealed class World
                     specialCount = 0;
             }
             specialCount = Math.Clamp(specialCount, 0, Math.Max(0, n - he3Count));
+
+            // Pick which non-He3 rocks (the ranked candidates AFTER the He3 block) become special.
+            // Prefer rank order, but keep each special's OVERSIZED surface at least `special-edge-margin`
+            // world units inside the sector boundary, so a landmark rock never spawns half-outside the
+            // sector. A candidate is eligible when pos.Length() + rockRadius·mult + margin <= sectorRadius.
+            // If too few rocks qualify (a small or edge-heavy sector) the most-interior of the rest fill
+            // in, so the guaranteed special count is never reduced. With the margin off (<= 0) — or a
+            // boundless test sector — this reproduces the legacy "next specialCount ranked" pick exactly.
+            // Reads only per-rock positions/hashes (never the shared world-gen RNG), so the rock/aleph
+            // layout for a pinned seed stays byte-identical (the canary).
             var isSpecial = new bool[n];
-            for (int k = he3Count; k < he3Count + specialCount; k++)
-                isSpecial[order[k]] = true;
+            if (specialCount > 0)
+            {
+                float edgeMargin = _seed.SpecialEdgeMargin;
+                float sectorRadius = SectorRadius(sectorId);
+                float sizeMult = _seed.SpecialRockRadiusMult;
+                if (edgeMargin <= 0f || sectorRadius == float.MaxValue)
+                {
+                    // Margin off (or a boundless test sector): legacy pick — the next specialCount ranked.
+                    for (int k = he3Count; k < he3Count + specialCount; k++)
+                        isSpecial[order[k]] = true;
+                }
+                else
+                {
+                    // Pass 1: eligible candidates in rank order (best hash first).
+                    int picked = 0;
+                    for (int k = he3Count; k < n && picked < specialCount; k++)
+                    {
+                        int idx = order[k];
+                        float surface = rocks[idx].Pos.Length() + rocks[idx].Radius * sizeMult;
+                        if (surface + edgeMargin <= sectorRadius)
+                        {
+                            isSpecial[idx] = true;
+                            picked++;
+                        }
+                    }
+                    // Pass 2 (fallback): still short → fill from the remaining (edge-failing) candidates,
+                    // most-interior first (smallest distance-from-centre), rock id as the deterministic
+                    // tie-break, so exactly specialCount rocks become special no matter how tight the margin.
+                    if (picked < specialCount)
+                    {
+                        var rest = new List<int>();
+                        for (int k = he3Count; k < n; k++)
+                            if (!isSpecial[order[k]])
+                                rest.Add(order[k]);
+                        rest.Sort((a, b) =>
+                        {
+                            int c = rocks[a].Pos.LengthSquared().CompareTo(rocks[b].Pos.LengthSquared());
+                            return c != 0 ? c : rocks[a].Id.CompareTo(rocks[b].Id);
+                        });
+                        for (int t = 0; t < rest.Count && picked < specialCount; t++)
+                        {
+                            isSpecial[rest[t]] = true;
+                            picked++;
+                        }
+                    }
+                }
+            }
 
             // Which special CLASS a selected rock becomes is drawn from the sector's weights (its own
             // override else the world seeding default). Uniform weights reproduce the legacy hash%3.
@@ -1263,7 +1370,9 @@ public sealed class World
     // ore classes are assigned AFTER seeding (AssignOre) from the surviving rocks, so drops never
     // eat into a sector's guaranteed He3/special counts. Caveat: the rare special rocks are
     // inflated ×SpecialRockRadiusMult after seeding, so an oversized special (≤1/sector) may still
-    // brush a neighbour. At stock knobs the drop rate is ~0. ----
+    // brush a neighbour. At stock knobs the drop rate is ~0. (AssignOre keeps that oversized special
+    // clear of the SECTOR boundary via seeding.special-edge-margin — it picks the special from the
+    // sector's interior rocks rather than moving one, so this placement pass is untouched.) ----
     private const int MaxPlaceAttempts = 12;
 
     private bool RockFits(Vec3 pos, float radius, uint sector, PlacementGrid placed)

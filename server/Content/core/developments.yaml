@@ -11,10 +11,15 @@
 # base tiers in Phase 3/4) — until then those tiers show truthfully LOCKED.
 developments:
   # ---- Hull unlock (researchable from match start) ----
+  # group: SHIPS gives hull-certifying research its own cluster in the Research canvas (distinct from
+  # WEAPONS/UPGRADES) so a ship reads as a ship. Future imported hull-research devs (Gunship, Hvy
+  # Bomber, Adv Scout, …) belong here too. Hulls unlocked as a side effect of a station UPGRADE
+  # (Adv Fighter ← Upgrade Supremacy, Devastator ← Upgrade Heavy Class) stay in UPGRADES — the upgrade
+  # is the real action and its detail panel already lists the hull it certifies.
   - id: dev-bomber
     name: Bomber Doctrine
     description: "Certify the team for the assault bomber and its base-cracking ordnance."
-    group: WEAPONS
+    group: SHIPS
     price: 600
     build-time-seconds: 120
     tech-only: true

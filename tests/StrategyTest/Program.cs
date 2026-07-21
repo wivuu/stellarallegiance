@@ -206,57 +206,60 @@ Check(world.TeamStates[team0].UnlockedClasses.Contains(2),
 Check(cCompletedFlag, "TeamStateChangedThisStep is flagged on the completing step", "the completing step did not flag TeamStateChangedThisStep");
 Check(research0.Active.Count == 0, "the completed order is removed from the active list", $"active not cleared on completion ({research0.Active.Count})");
 
-// ---- d. Dependent development: dev-gat-2 needs the (forward-declared) supremacy-1 tech first. ----
+// ---- d. Dependent development gating: dev-minigun-3 needs garrison-str + minigun-2 first. Both are
+//         Garrison-family techs, so minigun-3 stays researchable at the garrison — this isolates the
+//         AVAILABILITY gate from the research-at-base family rule exercised in section k3b. ----
 sim.ReturnToLobby();
 sim.StartMatch(); // fresh: no techs owned, credits re-seeded
-world.TeamStates[team0].Credits = 2000;
-var devGat2 = content.Developments[1]; // dev-gat-2 150, requires supremacy-1
+world.TeamStates[team0].Credits = 5000;
+var devMini3 = content.Developments[4]; // dev-minigun-3 300, requires garrison-str + minigun-2
 int dBefore = world.TeamStates[team0].Credits;
-sim.EnqueueResearchOp(0, team0, Simulation.ResearchOpStart, base0Id, 1); // requires supremacy-1 (unowned)
+sim.EnqueueResearchOp(0, team0, Simulation.ResearchOpStart, base0Id, 4); // prerequisites unowned
 sim.Step();
 Check(research0.Active.Count == 0 && world.TeamStates[team0].Credits == dBefore + LastStepIncome(),
-    "dev-gat-2 is rejected before supremacy-1 is owned (no charge, nothing active)",
+    "dev-minigun-3 is rejected before its prerequisites are owned (no charge, nothing active)",
     $"dependent dev wrongly accepted (active {research0.Active.Count}, credits {world.TeamStates[team0].Credits} vs {dBefore})");
-// Grant the prerequisite; the live offer check (BuildableResolver) now admits the dependent dev.
-world.TeamStates[team0].OwnedTechs.Add("supremacy-1");
+// Grant the prerequisites; the live offer check (BuildableResolver) now admits the dependent dev.
+world.TeamStates[team0].OwnedTechs.Add("minigun-2");
+world.TeamStates[team0].OwnedTechs.Add("garrison-str");
 int dBefore2 = world.TeamStates[team0].Credits;
-sim.EnqueueResearchOp(0, team0, Simulation.ResearchOpStart, base0Id, 1);
+sim.EnqueueResearchOp(0, team0, Simulation.ResearchOpStart, base0Id, 4);
 sim.Step();
-Check(research0.Active.Count == 1 && research0.Active[0].DevIndex == 1
-        && world.TeamStates[team0].Credits == dBefore2 - devGat2.Price + LastStepIncome(),
-    "dev-gat-2 is accepted once supremacy-1 is owned (charged its price, now active)",
-    $"dependent dev not accepted after prereq (active {research0.Active.Count}, credits {world.TeamStates[team0].Credits} vs {dBefore2 - devGat2.Price})");
+Check(research0.Active.Count == 1 && research0.Active[0].DevIndex == 4
+        && world.TeamStates[team0].Credits == dBefore2 - devMini3.Price + LastStepIncome(),
+    "dev-minigun-3 is accepted once its prerequisites are owned (charged its price, now active)",
+    $"dependent dev not accepted after prereq (active {research0.Active.Count}, credits {world.TeamStates[team0].Credits} vs {dBefore2 - devMini3.Price})");
 
 // ---- e. Slot cap (garrison = 1) + one on-deck queue + full-occupancy rejection + auto-promote. ----
-// Fill the queue with dev-minigun-2 (active) + dev-gat-2 (on deck) — both available once supremacy-1
-// is owned (gat-2's gate) — and reject a third distinct start (dev-autocan-2, also supremacy-1-gated).
+// Fill with dev-minigun-2 (active) + dev-bomber (on deck), then reject a third distinct start
+// (dev-nanite-2) — all three Garrison-family and researchable at match start (need only `base`), so
+// OCCUPANCY (not the research-at-base family rule) is the binding constraint at the garrison.
 sim.ReturnToLobby();
 sim.StartMatch();
-world.TeamStates[team0].OwnedTechs.Add("supremacy-1"); // opens gat-2 + autocan-2 (minigun-2 needs only base)
 Check(content.Bases[0].ResearchSlots == 1, "garrison authors exactly 1 research slot", $"garrison research slots wrong ({content.Bases[0].ResearchSlots})");
 world.TeamStates[team0].Credits = 5000; // ample funds so OCCUPANCY (not price) is the binding constraint
 var devMini2 = content.Developments[3]; // dev-minigun-2 300 / 60s (needs only base)
 int eBefore = world.TeamStates[team0].Credits;
 sim.EnqueueResearchOp(0, team0, Simulation.ResearchOpStart, base0Id, 3); // -> active (the one slot)
-sim.EnqueueResearchOp(0, team0, Simulation.ResearchOpStart, base0Id, 1); // -> on deck (slot full)
+sim.EnqueueResearchOp(0, team0, Simulation.ResearchOpStart, base0Id, 0); // -> on deck (slot full) [dev-bomber]
 sim.Step();
-Check(research0.Active.Count == 1 && research0.Active[0].DevIndex == 3 && research0.OnDeck == 1,
-    "with 1 slot: dev-minigun-2 runs active while dev-gat-2 waits on deck", $"slot/queue state wrong (active {research0.Active.Count}, ondeck {research0.OnDeck})");
-Check(world.TeamStates[team0].Credits == eBefore - devMini2.Price - devGat2.Price + LastStepIncome(),
+Check(research0.Active.Count == 1 && research0.Active[0].DevIndex == 3 && research0.OnDeck == 0,
+    "with 1 slot: dev-minigun-2 runs active while dev-bomber waits on deck", $"slot/queue state wrong (active {research0.Active.Count}, ondeck {research0.OnDeck})");
+Check(world.TeamStates[team0].Credits == eBefore - devMini2.Price - devBomber.Price + LastStepIncome(),
     "both the active AND the on-deck order deducted their price (queue = reservation)", $"queue reservation deduct wrong ({world.TeamStates[team0].Credits})");
 // A third distinct start is rejected: the base is fully occupied (all slots + on deck). Funds are
 // ample, so occupancy — not the credit check that precedes it — is the reason.
 int e3Before = world.TeamStates[team0].Credits;
-sim.EnqueueResearchOp(0, team0, Simulation.ResearchOpStart, base0Id, 5); // dev-autocan-2, available + affordable
+sim.EnqueueResearchOp(0, team0, Simulation.ResearchOpStart, base0Id, 10); // dev-nanite-2, Garrison-family, available + affordable
 sim.Step();
-Check(research0.Active.Count == 1 && research0.OnDeck == 1 && world.TeamStates[team0].Credits == e3Before + LastStepIncome(),
+Check(research0.Active.Count == 1 && research0.OnDeck == 0 && world.TeamStates[team0].Credits == e3Before + LastStepIncome(),
     "a third start is rejected while the base is fully occupied (no charge, state unchanged)", $"occupancy rejection wrong (active {research0.Active.Count}, ondeck {research0.OnDeck}, credits {world.TeamStates[team0].Credits})");
 // When the active order completes, the on-deck order auto-promotes into the freed slot with a FRESH
 // StartTick (the promotion tick), not the on-deck queue time.
 uint eStart = research0.Active[0].StartTick;
 uint eComplete = eStart + (uint)devMini2.BuildTimeSeconds * Simulation.TickHz;
-while (sim.Tick < eComplete) sim.Step(); // the eComplete-tick step completes dev-minigun-2 AND promotes dev-gat-2
-Check(research0.Active.Count == 1 && research0.Active[0].DevIndex == 1 && research0.Active[0].StartTick == eComplete && research0.OnDeck == null,
+while (sim.Tick < eComplete) sim.Step(); // the eComplete-tick step completes dev-minigun-2 AND promotes dev-bomber
+Check(research0.Active.Count == 1 && research0.Active[0].DevIndex == 0 && research0.Active[0].StartTick == eComplete && research0.OnDeck == null,
     "on completion the on-deck order auto-promotes to active with a fresh StartTick", $"promotion wrong (active {research0.Active.Count}, dev {(research0.Active.Count > 0 ? research0.Active[0].DevIndex : -1)}, start {(research0.Active.Count > 0 ? research0.Active[0].StartTick : 0)} vs {eComplete}, ondeck {research0.OnDeck})");
 
 // ---- f. Cancel refunds: cancel-active and cancel-on-deck both refund 100% and clear state; a
@@ -428,6 +431,28 @@ RunToCompletion(8, supBaseId); // dev-upgrade-supremacy at the supremacy base (c
 Check(worldU.Bases[supBaseIdx].BaseTypeId == 5, "researching dev-upgrade-supremacy at the Supremacy swaps it to type 5 (Adv)", $"supremacy not upgraded (type {worldU.Bases[supBaseIdx].BaseTypeId})");
 Check(tsU.OwnedTechs.Contains("supremacy-adv"), "the supremacy upgrade grants the supremacy-adv tech", "supremacy-adv tech not granted");
 Check(Offered("dev-gat-3"), "dev-gat-3 becomes researchable once supremacy-adv is owned", "dev-gat-3 not offered after the supremacy upgrade");
+
+// --- k3b. Research-at-base family rule: a Supremacy-family gun researches ONLY at a Supremacy base. ---
+// dev-autocan-2 (5) is Supremacy-family (gated on supremacy-1, owned above) and not yet researched. It
+// must be REJECTED at the Garrison (type 4, family root 0) and ACCEPTED at the Supremacy (family root 2)
+// — the server mirror of the client's per-base RESEARCH canvas filter.
+tsU.Credits = 5000;
+simU.ResearchNoticesThisStep.Clear();
+int famBefore = tsU.Credits;
+simU.EnqueueResearchOp(0, uTeam, Simulation.ResearchOpStart, uBaseId, 5); // dev-autocan-2 at the garrison (wrong family)
+simU.Step();
+bool famRejected = simU.ResearchNoticesThisStep.Exists(n => n.Text.Contains("must be researched at"));
+Check(!worldU.ResearchByBase[uBaseIdx].Active.Exists(a => a.DevIndex == 5) && famRejected && tsU.Credits == famBefore + UIncome(),
+    "a Supremacy-family gun (dev-autocan-2) is rejected at the Garrison (wrong base family, notice, no charge)",
+    $"family guard failed at the garrison (rejected {famRejected}, garrison-active {worldU.ResearchByBase[uBaseIdx].Active.Count}, credits {tsU.Credits} vs {famBefore})");
+tsU.Credits = 5000;
+int famBefore2 = tsU.Credits;
+simU.EnqueueResearchOp(0, uTeam, Simulation.ResearchOpStart, supBaseId, 5); // dev-autocan-2 at the supremacy (correct family)
+simU.Step();
+Check(worldU.ResearchByBase[supBaseIdx].Active.Exists(a => a.DevIndex == 5)
+        && tsU.Credits == famBefore2 - content.Developments[5].Price + UIncome(),
+    "the same Supremacy-family gun is accepted at the Supremacy base (correct base family, charged its price)",
+    $"family guard blocked the correct base (supremacy-active {worldU.ResearchByBase[supBaseIdx].Active.Count}, credits {tsU.Credits})");
 
 // --- k4. Match restart restores an upgraded garrison to type 0 (reused-World reset, v39). ---
 simU.ReturnToLobby();

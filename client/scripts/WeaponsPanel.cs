@@ -187,7 +187,7 @@ public partial class WeaponsPanel : Control
     }
 
     // The chaff/mine dispenser WeaponDef the local ship carries, or null if it carries none of that
-    // kind. Dispensers aren't hardpoint-mounted (not in WeaponMounts): the class's default hold names
+    // kind. Dispensers aren't hardpoint-mounted (not in WeaponSlots): the class's default hold names
     // one (shown EMPTY once spent), but live ammo alone also earns the row — the spawned hold can
     // differ from the default (e.g. decoys added to a scout in the hangar), and the authoritative
     // per-kind count is all the wire carries.

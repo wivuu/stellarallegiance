@@ -31,7 +31,7 @@ namespace SimServer.Content;
 //       YAML entry (`mount: any|gun|missile`, weapon-id omitted).
 //
 //  YAML weapon entries keep their YAML order at the head of the list, so the barrel spread-seed
-//  indices (server Simulation / client DefRegistry.WeaponMounts) are unchanged; appended empty
+//  indices (server Simulation / client DefRegistry.WeaponSlots) are unchanged; appended empty
 //  mounts land at the end and are skipped by every armed-weapon consumer (NoWeapon never resolves).
 //
 //  No GLB / missing asset ⇒ nodes is empty, so every YAML entry must be FULLY authored (else boot

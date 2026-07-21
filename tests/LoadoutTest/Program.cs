@@ -10,8 +10,11 @@
 //                                 mount, MISSILE-typed (authored `mount: missile`, no default weapon —
 //                                 armed by an override with a RACK; a gun rejects). default hold:
 //                                 3 mine + 1 decoy + 1 probe.
-//   Fighter (cls 1, payload 20): hp0/hp1/hp2 = gat-gun-1 (id 0, mass 1, interval 4). all-gun, no
-//                                 rack; every mount is GUN-typed (racks reject — scenario 4b).
+//   Fighter (cls 1, payload 20): hp0/hp1 = gat-gun-1 nose pair + hp3 = gat-gun-1 front-center barrel
+//                                 (id 0, mass 1, interval 4; IGC fwepemt, authored off-*) — three
+//                                 GUN-typed mounts (racks reject — scenario 4b). hp2 = EMPTY belly
+//                                 mount, MISSILE-typed (no default rack). Effective mount order is
+//                                 [hp0, hp1, hp3, hp2] = [gat, gat, gat, empty].
 //   Bomber (cls 2, payload 20):  hp0/hp3 gat, hp1/hp2 autocan (all gun-typed); hp4 = SRM anti-base
 //                                 rack (id 5, mass 4) — the one MISSILE-typed mount.
 //   Seeker rack 1:   weapon-id 3 (Missile, mass 4, magazine 6) — mountable with no tech; obsoleted by
@@ -235,20 +238,20 @@ Simulation.ShipSim Spawn(
         $"tech gate leaked (mounts {(ship.MountWeaponIds is null ? "null" : $"[{string.Join(",", ship.MountWeaponIds!)}]")})"
     );
 
-    // With the tech seeded at the faction base: the Gat Gun 2 override is accepted AND barrel 0's
-    // authored Gat Gun 1 auto-migrates to Gat Gun 2 — owning gat-2 obsoletes tier 1, so every gat
-    // barrel (authored default OR override) reflects the upgrade at spawn (Task 2 loadout migration).
-    // The emptied mount stays empty.
+    // With the tech seeded at the faction base: the Gat Gun 2 override is accepted AND every authored
+    // Gat Gun 1 barrel auto-migrates to Gat Gun 2 — owning gat-2 obsoletes tier 1, so every gat barrel
+    // (authored default OR override) reflects the upgrade at spawn (Task 2 loadout migration). The two
+    // default nose/front barrels (hp0, hp3) and the hp1 override all read gat-2; the belly stays empty.
     var sim2 = BootSim(seed: 3, "gat-2");
     var ship2 = Spawn(sim2, 1, team: 0, cls: FlightModel.ClassFighter, mounts: [(1, 1u), (2, NoWeapon)]);
     Check(
-        ship2.MountWeaponIds is [1u, 1u, NoWeapon],
-        "team-owned gat-2 accepts the swap AND upgrades the authored Gat Gun 1 (effective [gat-gun-2, gat-gun-2, empty])",
+        ship2.MountWeaponIds is [1u, 1u, 1u, NoWeapon],
+        "team-owned gat-2 accepts the swap AND upgrades every authored Gat Gun 1 (effective [gat-gun-2, gat-gun-2, gat-gun-2, empty])",
         $"accepted mounts wrong ([{string.Join(",", ship2.MountWeaponIds ?? [])}])"
     );
     Check(
         ship2.MissileAmmo == 0,
-        "an all-gun fighter seeds zero missiles",
+        "a fighter with an empty belly missile mount seeds zero missiles",
         $"fighter unexpectedly has {ship2.MissileAmmo} missiles"
     );
 }
@@ -418,10 +421,13 @@ Simulation.ShipSim Spawn(
         "FireCadence shadow replay over the observed LastFireTick sequence reconstructs WHICH mounts fired (the remote-render derivation invariant)",
         $"derivation diverged (shadow [{shadow[0]},{shadow[1]}], sim [{string.Join(",", mountLast)}])"
     );
+    // Mount order is [hp0 gat, hp1 mini-gun, hp3 gat (front-center), hp2 empty belly]. The front-center
+    // gat (slot 2) shares the nose gat's interval, so it stamps identically; the emptied belly (slot 3)
+    // never stamps — barrel indices are preserved for the spread seed.
     Check(
-        mountLast.Length >= 3 && mountLast[2] == 0,
-        "emptied slot never stamps (barrel indices preserved for the spread seed)",
-        $"emptied slot stamped ({(mountLast.Length >= 3 ? mountLast[2] : 0)})"
+        mountLast.Length >= 4 && mountLast[2] == serverStamps[0] && mountLast[3] == 0,
+        "front-center gat (slot 2) fires with the nose gat; emptied belly mount (slot 3) never stamps",
+        $"barrel stamps wrong (front-center {(mountLast.Length >= 3 ? mountLast[2] : 0)}, empty slot {(mountLast.Length >= 4 ? mountLast[3] : 0)})"
     );
 }
 
@@ -452,11 +458,12 @@ Simulation.ShipSim Spawn(
     );
     int o = 10; // [type][count][u64 shipId] -> nSlots at 10
     Check(
-        frame[o] == 3
+        frame[o] == 4
             && BitConverter.ToUInt32(frame, o + 1) == 0u
             && BitConverter.ToUInt32(frame, o + 5) == 0u
-            && BitConverter.ToUInt32(frame, o + 9) == NoWeapon,
-        "loadout record streams the effective per-barrel ids [gat, gat, empty]",
+            && BitConverter.ToUInt32(frame, o + 9) == 0u
+            && BitConverter.ToUInt32(frame, o + 13) == NoWeapon,
+        "loadout record streams the effective per-barrel ids [gat, gat, gat, empty]",
         "loadout record ids wrong"
     );
 }

@@ -20,7 +20,7 @@ python3 .claude/skills/hardpoints/glb_hardpoints.py client/assets/bases/base.glb
   longest axis (same math as `ConvexHull.LongestAxis` / `GlbLoader.MeshAabb`).
 - `--length` additionally prints **world-unit** positions via `ws = length / longest-axis` —
   the exact scale the sim and client apply. Pass the hull's `model-length` from
-  `server/Content/core/hulls.yaml` (scout 4.5, fighter 5.5, bomber 7.2, pod 2.8) or, for a
+  `server/Content/core/hulls.yaml` (scout 4.0, fighter 5.5, bomber 9.6, pod 2.8) or, for a
   base, `radius * 2` from `stations.yaml` (garrison: 180). The `world=` columns are what
   lands on the streamed `HardpointDef` (and what YAML `off-*` would override).
 - Stdlib-only; works on any .glb (canonical copies: `client/assets/ships|bases/`, identical

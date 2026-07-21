@@ -18,7 +18,6 @@ public static class UserPrefs
     private const string ViewSection = "view";
     private const string FirstPersonKey = "first_person";
     private const string BindingsSection = "bindings";
-    private const string LoadoutSection = "loadout";
 
     // The audio buses the settings sliders drive, mirroring the buses SfxManager/EngineGlow use.
     // Each stores a 0..1 linear volume (1 = full); applied as dB to the matching Godot bus.
@@ -247,52 +246,6 @@ public static class UserPrefs
 
     private static void SaveBindings() => Save();
 
-    // ---- Hangar loadout (per hull class) ------------------------------------
-    // The pilot's saved weapon overrides and cargo hold per hull, so a customized loadout survives a
-    // restart (in-session it already lives in LoadoutState.Shared). Each is a flat integer list —
-    // weapons as [hpIndex, weaponId, ...] (an emptied slot rides as HardpointDef.NoWeapon), cargo as
-    // [cargoId, count, ...]. Stored as long because a weapon/cargo id (and the NoWeapon sentinel =
-    // uint.MaxValue) overflows int32. LoadoutState owns the encoding and validates every id against
-    // the streamed defs on load, so this layer is pure storage — a stale id is dropped there, not here.
-
-    public static long[] GetLoadoutWeapons(byte classId) => GetLongArray(LoadoutSection, "w" + classId);
-
-    public static void SetLoadoutWeapons(byte classId, long[] flat) =>
-        SetLongArray(LoadoutSection, "w" + classId, flat);
-
-    public static long[] GetLoadoutCargo(byte classId) => GetLongArray(LoadoutSection, "c" + classId);
-
-    public static void SetLoadoutCargo(byte classId, long[] flat) =>
-        SetLongArray(LoadoutSection, "c" + classId, flat);
-
-    private static long[] GetLongArray(string section, string key)
-    {
-        Variant v = Cfg.GetValue(section, key, new Godot.Collections.Array());
-        if (v.VariantType != Variant.Type.Array)
-            return System.Array.Empty<long>();
-        var arr = v.AsGodotArray();
-        var res = new long[arr.Count];
-        for (int i = 0; i < arr.Count; i++)
-            res[i] = arr[i].AsInt64();
-        return res;
-    }
-
-    // An empty list erases the key (a pristine/reset class carries no row), matching ClearBinding.
-    private static void SetLongArray(string section, string key, long[] flat)
-    {
-        if (flat.Length == 0)
-        {
-            if (!Cfg.HasSectionKey(section, key))
-                return; // nothing stored — skip the disk write
-            Cfg.EraseSectionKey(section, key);
-        }
-        else
-        {
-            var arr = new Godot.Collections.Array();
-            foreach (long x in flat)
-                arr.Add(x);
-            Cfg.SetValue(section, key, arr);
-        }
-        Save();
-    }
+    // NOTE: hangar loadouts are deliberately NOT persisted here — they are per-match and live only in
+    // LoadoutState.Shared for the current process, reset at each match boundary (see LoadoutState).
 }

@@ -28,25 +28,27 @@ server/Content/core/*.yaml            authored bundle (manifest-driven, kebab-ca
   fields (wire ids, hardpoints, tick ballistics, payload) are optional "runtime extension"
   fields on the models — see `Model/RuntimeData.cs` header and the extension banners in
   `Hull.cs` / `Parts/Weapon.cs` / `Expendables/Expendable.cs`.
-- **Live bundle**: `server/Content/core/` (manifest `core.manifest.yaml`). Shallow today —
-  everything gated on the `base` capability. The **rich sample** with a real tech tree
-  (tech.yaml, developments.yaml, per-faction gating) is `factions/sample-data/`.
+- **Live bundle**: `server/Content/core/` (manifest `core.manifest.yaml`). Now carries a real
+  tech tree — `techs.yaml`, `developments.yaml`, and per-faction gating in
+  `factions/iron-coalition.yaml` (all listed in the manifest `catalog:`/`factions:`).
+  `factions/sample-data/` is a second worked example (tech.yaml, developments.yaml).
 - **Runtime entry with a wire id = streamed def**: `class-id` (hull), `weapon-id` (weapon),
   `base-type-id` (station), `cargo-id` (expendable). Catalog entries without one are
   tech-tree/catalog-only and never reach the wire.
 - **Tech gating today**: `Simulation.ResolveTeamUnlocks` (server/Sim/Simulation.cs) resolves
   buildable hull classes per team from the catalog (`BuildableResolver`). The stat-modifier
-  system (`AttributeResolver`, developments' `attributes:`) exists in the library but is NOT
-  wired into the sim yet.
+  system (`AttributeResolver`, developments' `attributes:`) is now wired into the sim
+  (`Simulation.cs`, gated by an `AttributesEnabled` kill-switch for tests).
 
 ## Iron rules
 
 1. **No compile-time gameplay values.** The client guards until defs arrive (empty
    lists/false getters from `DefRegistry`) — it never falls back to baked constants or stub
    catalogs. Server-side, the sim resolves stats only from `ContentSet`.
-2. **Wire layout changes bump BOTH versions together**: `Protocol.Version`
-   (server/Net/Protocol.cs) and `GameNetClient.ProtocolVersion` (client/scripts/GameNetClient.cs).
-   Writer (`BuildDefs`) and reader (`ApplyDefs`) must mirror field-for-field, in order.
+2. **Wire layout changes bump `Wire.ProtocolVersion`** (`shared/Net/Wire.cs`) — the single
+   source. `Protocol.Version` (server/Net/Protocol.cs) and `GameNetClient.ProtocolVersion`
+   (client/scripts/GameNetClient.cs) are aliases that auto-follow it. Writer (`BuildDefs`) and
+   reader (`ApplyDefs`) must mirror field-for-field, in order.
 3. **Append-only enums** (`HardpointKind`, `WeaponKind` + their `Runtime*` library mirrors) —
    the wire encodes them as bytes.
 4. **Runtime extension fields are omit-when-default** so the library's sample-data and tests
@@ -68,7 +70,7 @@ server/Content/core/*.yaml            authored bundle (manifest-driven, kebab-ca
 4. **Projection** — map it in `server/Content/FactionsContentProjection.cs` (and extend
    `ContentSet` if it's a new def kind).
 5. **Wire** — write it in `Protocol.BuildDefs`, read it in `GameNetClient.ApplyDefs`
-   (same position!), bump both protocol version constants.
+   (same position!), bump `Wire.ProtocolVersion` (`shared/Net/Wire.cs`) — the aliases follow.
 6. **Client store** — extend `DefRegistry.Load` + accessors if it's a new def kind. Sorted
    accessors (`All*` by id) keep UI order stable.
 7. **YAML** — author values in `server/Content/core/*.yaml`; add new files to the

@@ -11,8 +11,8 @@ surface you actually call.
 
 ## 1. What the library gives you
 
-`Allegiance.Factions` is a standalone **.NET 8 class library** (no game-engine dependencies, only
-`YamlDotNet`). It owns:
+`Allegiance.Factions` is a standalone **.NET (net10.0) class library** (no game-engine dependencies,
+only `YamlDotNet`). It owns:
 
 - **The data model** — a `Core` (the complete static dataset) holding catalogs of `Hull`, `Part`
   subtypes (`Weapon`/`Shield`/`Cloak`/`Afterburner`/`AmmoPack`/`Launcher`), `Station`, `Development`,
@@ -31,11 +31,9 @@ multipliers after these developments?". StellarAllegiance owns everything else.
 ### Project locations in this repo
 
 ```
-AllegianceModel/
-  AllegianceModel.sln
-  global.json                                   # pins SDK to .NET 8 (8.0.403, rollForward latestFeature)
+factions/                                       # vendored in-repo at the monorepo root
   src/Allegiance.Factions/                      # <-- the library you depend on
-    Allegiance.Factions.csproj                  #     net10.0, RootNamespace "Allegiance.Factions", refs YamlDotNet 16.2.1
+    Allegiance.Factions.csproj                  #     net10.0, RootNamespace "Allegiance.Factions", refs YamlDotNet 18.1.0
   src/Allegiance.Factions.Cli/                  # validate/roundtrip/schema CLI (optional tooling, do not ship)
   tests/Allegiance.Factions.Tests/              # xUnit tests (reference for usage patterns)
   sample-data/                                  # a runnable 3-faction bundle (manifest + catalog + factions/)
@@ -46,32 +44,30 @@ AllegianceModel/
 
 ## 2. How to take the dependency
 
-Pick one of these. **Project reference is recommended** if StellarAllegiance and AllegianceModel
-live in (or can live in) the same repo/solution; it keeps the data layer co-evolving with the game.
+> **Already done.** The library is vendored in-repo at `factions/` and is already referenced (Option A)
+> by `server/SimServer.csproj` via `../factions/src/Allegiance.Factions/Allegiance.Factions.csproj`,
+> and consumed by `server/Content/*.cs` (`ContentLoader`, `FactionStart`, `MapLoader`, `WorldLoader`).
+> `tests/FactionsTest` references it too. Options B/C below are historical/optional — moot now that the
+> source is co-located.
 
-### Option A — ProjectReference (recommended if co-located)
+### Option A — ProjectReference (in use)
 
-From the StellarAllegiance game project's `.csproj`:
+The server project's `.csproj` references the vendored library directly:
 
 ```xml
 <ItemGroup>
-  <ProjectReference Include="..\..\Allegiance\AllegianceModel\src\Allegiance.Factions\Allegiance.Factions.csproj" />
+  <ProjectReference Include="../factions/src/Allegiance.Factions/Allegiance.Factions.csproj" />
 </ItemGroup>
 ```
 
-(Adjust the relative path to wherever the two repos sit. Both target `net10.0`; if the game targets a
-later TFM that's fine, net10.0 libs load into later runtimes.)
-
-**SDK pin caveat:** this repo's `global.json` pins the SDK to 8.0.x. If StellarAllegiance pins a
-different SDK via its own `global.json`, the nearest `global.json` to the build root wins. Make sure
-the chosen SDK can still build `net10.0` (any SDK ≥ 8.0 can). Don't copy this repo's `global.json`
-into StellarAllegiance unless you actually want to pin to 8.0.403.
+(Adjust the relative path to wherever the consuming project sits. Both target `net10.0`; if the game
+targets a later TFM that's fine, net10.0 libs load into later runtimes.)
 
 ### Option B — Package it as NuGet
 
 If the repos are decoupled, `dotnet pack src/Allegiance.Factions/Allegiance.Factions.csproj -c Release`
 and consume the `.nupkg` (add `<PackageReference>`). You'll need to add package metadata
-(`<PackageId>`, `<Version>`) to the csproj first. Remember it pulls in `YamlDotNet 16.2.1`
+(`<PackageId>`, `<Version>`) to the csproj first. Remember it pulls in `YamlDotNet 18.1.0`
 transitively.
 
 ### Option C — Source include / submodule
@@ -294,17 +290,16 @@ public sealed class TeamState
   `shipyard-allowed`). Null/default/empty values are omitted on serialize.
 - For authoring, the repo ships JSON Schemas under `.vscode/` (core / faction / manifest) wired into
   `.vscode/settings.json` for validation + autocomplete. Regenerate them with
-  `dotnet run --project src/Allegiance.Factions.Cli -- schema --output .vscode/allegiance-core.schema.json`
-  (a GitHub Action also does this on model/CLI changes). The schema is generated from the model — do
-  not hand-edit it.
+  `dotnet run --project src/Allegiance.Factions.Cli -- schema --output .vscode/allegiance-core.schema.json`.
+  The schema is generated from the model — do not hand-edit it.
 
 ---
 
 ## 7. Build / test / verify
 
 ```bash
-# From AllegianceModel/
-dotnet build AllegianceModel.sln          # compiles clean on .NET 8
+# From factions/
+dotnet build src/Allegiance.Factions/Allegiance.Factions.csproj   # compiles clean on net10.0
 dotnet test                               # xUnit tests (model round-trip, resolution, validation)
 dotnet run --project src/Allegiance.Factions.Cli -- validate sample-data/core.manifest.yaml
 ```
@@ -314,7 +309,8 @@ dotnet run --project src/Allegiance.Factions.Cli -- validate sample-data/core.ma
 > Note `dotnet test` only builds the library + tests — if you change the model and want the CLI's
 > output to reflect it, rebuild the CLI project explicitly first.
 
-**Suggested first integration milestone in StellarAllegiance:**
+**Suggested first integration milestone in StellarAllegiance** (historical — steps 1-3 are already
+done; the library is referenced by `server/SimServer.csproj` and wired through `server/Content/*.cs`):
 1. Add the ProjectReference and get a clean build.
 2. Write a smoke test that loads `sample-data/core.manifest.yaml`, asserts `CoreValidator.Validate`
    passes, picks `iron-coalition`, and prints `GetBuildables(...).Count` — confirm it's non-zero and
@@ -331,7 +327,7 @@ dotnet run --project src/Allegiance.Factions.Cli -- validate sample-data/core.ma
 - Economy ticks, build timers, partial-build progress (it only gives you `Price` /
   `BuildTimeSeconds` / income fields as data).
 - Networking, persistence of live match state, ECS/rendering, hardpoints/GLB geometry (see
-  `GLB-AND-HARDPOINT-FORMAT.md`).
+  `docs/GLB-AND-HARDPOINT-FORMAT.md`).
 - Mutating per-team state — you keep the owned `TechSet`/`CapabilitySet` and union grants in as the
   match progresses.
 ```

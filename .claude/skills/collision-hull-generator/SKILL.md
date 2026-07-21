@@ -39,8 +39,8 @@ tools/godot-import.ps1 -Force                       # ALWAYS after a REAL bake (
 uv run bake.py --kind ship --glb ../../client/assets/ships/fighter.glb --model-length 5.5 --check
 ```
 
-`--model-length` values live in `server/Content/core/hulls.yaml` (`model-length:`): scout 4.5,
-fighter 5.5, bomber 7.2, pod 2.8. `--kind base` uses the `--world-diameter 180` scale basis
+`--model-length` values live in `server/Content/core/hulls.yaml` (`model-length:`): scout 4.0,
+fighter 5.5, bomber 9.6, pod 2.8. `--kind base` uses the `--world-diameter 180` scale basis
 (CollisionConfig.BaseRadius*2). No GLB paths are baked into the tool — always pass `--glb`.
 
 ## Pipeline (deterministic; corridors auto-gate on HP_Docking* presence)

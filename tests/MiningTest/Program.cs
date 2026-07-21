@@ -594,6 +594,58 @@ WorldConfig HomeMapConfig(MapDef map, WorldSeedingTuning? seeding = null)
         "the home-special roll is not seed-deterministic");
 }
 
+// ---- 7f. Special-edge-margin: a special rock's OVERSIZED surface stays `special-edge-margin` world
+//          units inside the sector boundary, so a landmark rock never spawns half-outside the sector.
+//          Enforced by biasing the special SELECTION toward interior rocks — never by moving a rock
+//          (test 2, the layout canary, pins that world-gen positions don't shift). Mirrors AlephTest's
+//          gate-spacing scenario: at this radius the margin is comfortably satisfiable, so a passing ON
+//          case is a real interior pick (never a fallback), and the OFF case proves the knob is not vacuous. ----
+{
+    const float Radius = 1500f;
+    const float Margin = 250f; // satisfiable in a radius-1500 field, so ON never falls back to the edge
+
+    // Smallest clearance between any special rock's oversized surface and the sector boundary for one
+    // seed (∞ if the build seeded no special). A special's r.Radius is ALREADY the oversized radius.
+    float ClosestSpecialClearance(WorldSeedingTuning seeding, ulong seed)
+    {
+        // Force 3 specials so the sample is never chance-0 (garrison sector, stock home-special-chance 0).
+        var w = MakeWorld(seed, FieldConfig(new WorldMiningTuning(), seeding: seeding, radius: Radius, specialCount: 3));
+        float min = float.MaxValue;
+        foreach (var r in w.Asteroids)
+            if (w.RockClassOf(r.Id) is RockClass.Carbonaceous or RockClass.Silicon or RockClass.Uranium)
+                min = MathF.Min(min, Radius - (r.Pos.Length() + r.Radius));
+        return min;
+    }
+
+    bool violatedOn = false;   // ON: a special whose surface sits closer to the edge than the margin
+    bool everCloseOff = false; // OFF: some seed DOES place a special inside the margin (knob non-vacuous)
+    float worstOn = float.MaxValue;
+    int specialsSeen = 0;
+    for (ulong seed = 1; seed <= 60; seed++)
+    {
+        float clrOn = ClosestSpecialClearance(new WorldSeedingTuning { He3PerSector = 2, SpecialEdgeMargin = Margin }, seed);
+        float clrOff = ClosestSpecialClearance(new WorldSeedingTuning { He3PerSector = 2, SpecialEdgeMargin = 0f }, seed);
+        if (clrOn != float.MaxValue) { specialsSeen++; worstOn = MathF.Min(worstOn, clrOn); }
+        if (clrOn < Margin - 0.5f) // tolerance for float rounding at the accept boundary
+            violatedOn = true;
+        if (clrOff != float.MaxValue && clrOff < Margin)
+            everCloseOff = true;
+    }
+    Check(specialsSeen > 0 && !violatedOn,
+        $"edge margin: every special's surface stays ≥ {Margin:0}u inside the sector edge across 60 seeds (worst {worstOn:0}u)",
+        $"edge margin violated — a special's surface came within {worstOn:0}u of the sector edge (< {Margin:0}u)");
+    Check(everCloseOff,
+        "edge margin: with the margin OFF some seed DOES place a special inside the margin (the knob isn't vacuous)",
+        "edge margin: even with the margin off no seed placed a special near the edge — the test can't prove the margin does anything");
+}
+
+// ---- 7g. The stock world.yaml ships a non-zero special-edge-margin (edge spacing on by default). ----
+{
+    Check(stockCfg.Seeding.SpecialEdgeMargin > 0f,
+        $"stock world.yaml enables special edge margin by default (special-edge-margin = {stockCfg.Seeding.SpecialEdgeMargin:0})",
+        "stock world.yaml ships special-edge-margin = 0 — special edge spacing is off by default");
+}
+
 // ---- 8. SetOreRemaining shrink helper: volume-proportional radius toward the floor. ----
 {
     var mining = new WorldMiningTuning { ShrinkFloorFrac = 0.4f };
