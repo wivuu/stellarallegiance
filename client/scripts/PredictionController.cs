@@ -153,6 +153,29 @@ public partial class PredictionController : Node3D
         var bodies = _bodies();
         if (bodies.Count == 0)
             return;
+        // Dock-pending latch: the tick the dock predicate passes, the SERVER consumes the ship —
+        // but ShipGone is an RTT away, so we keep predicting ghost ticks that would fly on into
+        // the now-solid station interior and bounce (and thud — CollisionSystem mutes the static
+        // thud while DockPending). Latch a short TTL, refreshed while the predicate holds, and
+        // skip statics entirely under it; if the server didn't dock after all, the TTL expires and
+        // normal collision resumes (the reconcile spring corrects any drift long before that).
+        if (
+            Collide.InOwnDockWindow(
+                st.Pos,
+                st.Vel,
+                bodies,
+                Team,
+                _launchClassMask,
+                CollisionConfig.DockFaceDepth,
+                CollisionConfig.ShipRadius
+            )
+        )
+            _dockPendingTicks = DockPendingTtlTicks;
+        if (_dockPendingTicks > 0)
+        {
+            _dockPendingTicks--;
+            return;
+        }
         Collide.ResolveStatics(
             ref st,
             CollisionConfig.ShipRadius,
@@ -164,6 +187,14 @@ public partial class PredictionController : Node3D
             out _
         );
     }
+
+    // Dock-pending latch state (see ResolveCollisions). TTL ~0.5 s: ShipGone lands well within it.
+    private const int DockPendingTtlTicks = 10;
+    private int _dockPendingTicks;
+
+    // True while the local ship has hit its own base's dock window and the despawn is in flight —
+    // the ghost-tick grace during which static collision (and its thud) is suppressed.
+    public bool DockPending => _dockPendingTicks > 0;
 
     // The local hull's ShipClassDef.LaunchClassMask (0 = unrestricted; pods always 0), set at
     // Initialize. Feeds ResolveStatics so a restricted hull predicts the same solid-wall bounce

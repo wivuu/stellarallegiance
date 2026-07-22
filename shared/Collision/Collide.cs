@@ -529,9 +529,10 @@ public static class Collide
     // the door — speed is irrelevant:
     //   vn = vel·Normal ≥ 0                    (not backing away)
     //   vn² ≥ DockApproachMinCosSq · |vel|²    (within the 45° approach cone, sqrt-free)
-    // A parked ship (zero velocity) passes both trivially — touching the face while not moving
-    // away docks. Then the position test above decides. A gate-failing ship in the window simply
-    // collides with the (uncarved) structure — the station is solid unless you move AT a door.
+    // Below DockDirectionDeadzoneSq the velocity has no meaningful direction and the gate passes
+    // outright — a parked or brake-wobbling ship touching the face docks instead of flickering the
+    // gate off on tiny negative vn. A gate-failing ship in the window simply collides with the
+    // (uncarved) structure — the station is solid unless you move AT a door.
     public static bool IntersectsDockFace(
         Vec3 d,
         Vec3 vel,
@@ -541,17 +542,59 @@ public static class Collide
         int onlyFace
     )
     {
+        float v2 = vel.LengthSquared();
+        bool directional = v2 > CollisionConfig.DockDirectionDeadzoneSq;
         int start = onlyFace >= 0 ? onlyFace : 0;
         int end = onlyFace >= 0 ? System.Math.Min(onlyFace + 1, faces.Length) : faces.Length;
         for (int i = start; i < end; i++)
         {
             DockFace f = faces[i];
-            float vn = Dot(vel, f.Normal);
-            if (vn < 0f)
-                continue;
-            if (vn * vn < CollisionConfig.DockApproachMinCosSq * vel.LengthSquared())
-                continue;
+            if (directional)
+            {
+                float vn = Dot(vel, f.Normal);
+                if (vn < 0f)
+                    continue;
+                if (vn * vn < CollisionConfig.DockApproachMinCosSq * v2)
+                    continue;
+            }
             if (IntersectsDockFace(d, faces, dockFaceDepth, shipRadius, i))
+                return true;
+        }
+        return false;
+    }
+
+    // True when the ship currently satisfies the OWN-BASE dock predicate against any body — the
+    // exact condition under which the server consumes it this tick. Client prediction uses this to
+    // latch "dock pending": ShipGone is an RTT away, and the ghost ticks predicted past the dock
+    // would fly into the now-solid station interior and bounce/thud (the pre-2026-07 carved
+    // corridors used to hide this by being empty space).
+    public static bool InOwnDockWindow(
+        Vec3 pos,
+        Vec3 vel,
+        System.Collections.Generic.IReadOnlyList<StaticBody> bodies,
+        int localTeam,
+        ushort launchClassMask,
+        float dockFaceDepth,
+        float shipRadius
+    )
+    {
+        for (int i = 0; i < bodies.Count; i++)
+        {
+            StaticBody b = bodies[i];
+            if (
+                b.BaseTeam >= 0
+                && b.BaseTeam == localTeam
+                && b.DockFaces != null
+                && DockRules.ClassAllowed(launchClassMask, b.StationClass)
+                && IntersectsDockFace(
+                    pos - b.Center,
+                    vel,
+                    b.DockFaces,
+                    dockFaceDepth,
+                    shipRadius,
+                    DockRules.AllowedFace(launchClassMask, b.LargestDockFace)
+                )
+            )
                 return true;
         }
         return false;

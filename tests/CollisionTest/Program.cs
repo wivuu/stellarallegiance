@@ -102,23 +102,30 @@ var slide = new ShipState { Pos = new Vec3(1.4f, 0, 0), Vel = new Vec3(0, 0, 5) 
 Collide.ResolveStatics(ref slide, shipR, new[] { baseBody }, localTeam: 0, 0, rest, CollisionConfig.DockFaceDepth, out _);
 Check("aoa gate: parallel slide across the door bounces", Near(slide.Pos.X, 1.5f));
 
-var shallow = new ShipState { Pos = new Vec3(1.4f, 0, 0), Vel = new Vec3(-1, 1.1f, 0) }; // ~47.7° off-normal
+// Cone probes sit ABOVE the direction deadzone (|v| > 2) so the angle itself is what's tested.
+var shallow = new ShipState { Pos = new Vec3(1.4f, 0, 0), Vel = new Vec3(-3, 3.3f, 0) }; // ~47.7° off-normal
 Collide.ResolveStatics(ref shallow, shipR, new[] { baseBody }, localTeam: 0, 0, rest, CollisionConfig.DockFaceDepth, out _);
 Check("aoa gate: just outside the 45° cone bounces", Near(shallow.Pos.X, 1.5f));
 
-var steep = new ShipState { Pos = new Vec3(1.4f, 0, 0), Vel = new Vec3(-1, 0.9f, 0) }; // ~42° off-normal
+var steep = new ShipState { Pos = new Vec3(1.4f, 0, 0), Vel = new Vec3(-3, 2.7f, 0) }; // ~42° off-normal
 Collide.ResolveStatics(ref steep, shipR, new[] { baseBody }, localTeam: 0, 0, rest, CollisionConfig.DockFaceDepth, out _);
-Check("aoa gate: just inside the 45° cone glides through", Near(steep.Pos.X, 1.4f) && Near(steep.Vel.Y, 0.9f));
+Check("aoa gate: just inside the 45° cone glides through", Near(steep.Pos.X, 1.4f) && Near(steep.Vel.Y, 2.7f));
 
-var crawl = new ShipState { Pos = new Vec3(1.4f, 0, 0), Vel = new Vec3(-0.5f, 0, 0) }; // face-on, arbitrarily slow
+var crawl = new ShipState { Pos = new Vec3(1.4f, 0, 0), Vel = new Vec3(-3, 0, 0) }; // face-on, directional but slow
 Collide.ResolveStatics(ref crawl, shipR, new[] { baseBody }, localTeam: 0, 0, rest, CollisionConfig.DockFaceDepth, out _);
-Check("aoa gate: slow face-on crawl glides through (no speed floor)", Near(crawl.Pos.X, 1.4f));
+Check("aoa gate: slow face-on approach glides through (no speed floor)", Near(crawl.Pos.X, 1.4f));
 
 var parked = new ShipState { Pos = new Vec3(1.4f, 0, 0), Vel = default }; // zero velocity = no direction to reject
 Collide.ResolveStatics(ref parked, shipR, new[] { baseBody }, localTeam: 0, 0, rest, CollisionConfig.DockFaceDepth, out _);
 Check("aoa gate: parked ship touching the face glides through", Near(parked.Pos.X, 1.4f));
 
-var receding = new ShipState { Pos = new Vec3(1.4f, 0, 0), Vel = new Vec3(1, 0, 0) }; // backing away
+// Sub-deadzone motion has no meaningful direction (brake wobble at the face must not flicker the
+// gate off), so even a tiny OUTWARD drift still counts as parked-on-face.
+var wobble = new ShipState { Pos = new Vec3(1.4f, 0, 0), Vel = new Vec3(0.9f, 0, 0) }; // |v| < 2 u/s deadzone
+Collide.ResolveStatics(ref wobble, shipR, new[] { baseBody }, localTeam: 0, 0, rest, CollisionConfig.DockFaceDepth, out _);
+Check("aoa gate: sub-deadzone brake wobble still glides through", Near(wobble.Pos.X, 1.4f));
+
+var receding = new ShipState { Pos = new Vec3(1.4f, 0, 0), Vel = new Vec3(5, 0, 0) }; // genuinely backing away
 Collide.ResolveStatics(ref receding, shipR, new[] { baseBody }, localTeam: 0, 0, rest, CollisionConfig.DockFaceDepth, out _);
 Check("aoa gate: receding ship gets pushed out, not docked", Near(receding.Pos.X, 1.5f));
 

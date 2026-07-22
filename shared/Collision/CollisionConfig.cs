@@ -38,10 +38,16 @@ public static class CollisionConfig
     // the face docks (zero velocity passes trivially); only a receding or off-cone velocity is
     // rejected. Bases bake FULLY SOLID (no corridor carve), so a gate-failing approach (parallel
     // slide, backing away, wild angle) bounces off the real structure instead of docking.
-    // Compile-time shared constant for the same reason as DockFaceDepth: the client prediction must
+    // Compile-time shared constants for the same reason as DockFaceDepth: the client prediction must
     // evaluate the exact predicate the server docks with. The cos is stored SQUARED so the gate is
     // a sqrt-free, bit-deterministic compare on both peers.
     public const float DockApproachMinCosSq = 0.5f; // cos²(45°) — velocity within 45° of the normal
+
+    // Below this speed² the velocity has no meaningful direction, so the gate treats the ship as
+    // parked (docks on touch). Without the deadzone, braking to a stop AT the face jitters vn
+    // through tiny negative values on the exact contact frames — the gate flickers off, and the
+    // ship thuds/bounces on the crust in the same breath as the dock.
+    public const float DockDirectionDeadzoneSq = 4f; // (2 u/s)²
     public const float AsteroidCollisionScale = 0.95f; // fraction of a rock's visual radius that's solid
     // ponytail: a FIXED fraction means the inward slop scales with the rock — 0.82 left a ~13-unit-deep
     // soft shell on the biggest rocks (R~70), enough to fly a whole ship inside before bouncing. 0.95

@@ -65,10 +65,15 @@ public sealed class CollisionSystem
                 bool buildContact = ship is RemoteShip { IsConstructor: true } && _build.HasBuildRow(shipId);
                 // Per-ship launch-class mask so a restricted hull THUDS where it now bounces
                 // (disallowed friendly base / side door) instead of silently gliding a dock face.
+                // The local ship's dock-pending grace mutes the static thud: once the dock
+                // predicate has fired the server is consuming the ship, and the ghost ticks
+                // predicted before ShipGone lands would otherwise thud on the station interior.
+                bool dockPending = ship is PredictionController { DockPending: true };
                 var (thudCls, thudPod) = ShipRenderer.ShipClassOf(ship);
                 Vector3 v = ShipRenderer.ShipVelocityOf(ship);
                 bool now =
                     !buildContact
+                    && !dockPending
                     && Collide.Touches(
                         new Vec3(c.X, c.Y, c.Z),
                         new Vec3(v.X, v.Y, v.Z),
