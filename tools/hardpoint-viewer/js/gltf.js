@@ -210,11 +210,14 @@
   function parseGLTFDocument(buffer) {
     const { json: gltf, bin } = parseGLB(buffer);
     const drawables = [];
+    const collision = []; // COL_ convex proxies, one entry per primitive, tagged with part name
     const hardpoints = [];
     const world = { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] };
     const mesh = { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] };
     let vertexCount = 0;
     let triangleCount = 0;
+    let collisionVertexCount = 0;
+    let collisionTriangleCount = 0;
 
     function growBounds(b, p) {
       for (let k = 0; k < 3; k++) {
@@ -223,7 +226,7 @@
       }
     }
 
-    function walk(nodeIndex, parent) {
+    function walk(nodeIndex, parent, colPart) {
       const node = gltf.nodes[nodeIndex];
       const worldMat = matMul(parent, matFromNode(node));
 
@@ -238,29 +241,23 @@
         });
       }
 
+      // A "COL_"-named node opens a compound-collision part; its own mesh and
+      // its whole subtree route into that part (mirrors shared/Collision/
+      // GlbReader.cs). A nested COL_ folds into the outer part, not a new one.
+      if (!colPart && node.name && node.name.startsWith("COL_")) colPart = node.name;
+
       if (node.mesh != null) {
         for (const prim of gltf.meshes[node.mesh].primitives) {
           if (prim.mode != null && prim.mode !== 4) continue; // triangles only
           if (prim.attributes.POSITION == null) continue;
           const posAcc = readAccessor(gltf, bin, prim.attributes.POSITION);
           const localPos = posAcc.data;
-          const uvs =
-            prim.attributes.TEXCOORD_0 != null
-              ? readAccessor(gltf, bin, prim.attributes.TEXCOORD_0).data
-              : new Float32Array((localPos.length / 3) * 2);
           const indices = prim.indices != null ? readIndices(gltf, bin, prim.indices) : null;
-
-          // mesh AABB from accessor min/max, transformed to world (matches the
-          // Python tool when node transforms are identity; correct otherwise).
-          if (posAcc.min && posAcc.max) {
-            for (const corner of aabbCorners(posAcc.min, posAcc.max)) growBounds(mesh, xformPoint(worldMat, corner));
-          }
 
           const worldPos = new Float32Array(localPos.length);
           for (let i = 0; i < localPos.length; i += 3) {
             const p = xformPoint(worldMat, [localPos[i], localPos[i + 1], localPos[i + 2]]);
             worldPos[i] = p[0]; worldPos[i + 1] = p[1]; worldPos[i + 2] = p[2];
-            growBounds(world, p);
           }
 
           let normals;
@@ -275,19 +272,43 @@
             normals = computeNormals(worldPos, indices);
           }
 
+          const tris = (indices ? indices.length : localPos.length / 3) / 3;
+
+          // COL_ collision proxies are a separate, toggleable layer. They never
+          // grow the visual bounds/stats — they sit strictly inside the visual
+          // hull, so the mesh AABB is identical whether or not we count them.
+          if (colPart) {
+            collision.push({ name: colPart, positions: worldPos, normals, indices });
+            collisionVertexCount += localPos.length / 3;
+            collisionTriangleCount += tris;
+            continue;
+          }
+
+          const uvs =
+            prim.attributes.TEXCOORD_0 != null
+              ? readAccessor(gltf, bin, prim.attributes.TEXCOORD_0).data
+              : new Float32Array((localPos.length / 3) * 2);
+
+          // mesh AABB from accessor min/max, transformed to world (matches the
+          // Python tool when node transforms are identity; correct otherwise).
+          if (posAcc.min && posAcc.max) {
+            for (const corner of aabbCorners(posAcc.min, posAcc.max)) growBounds(mesh, xformPoint(worldMat, corner));
+          }
+          for (let i = 0; i < worldPos.length; i += 3) growBounds(world, [worldPos[i], worldPos[i + 1], worldPos[i + 2]]);
+
           const material = extractTextureBytes(gltf, bin, prim.material);
           drawables.push({ positions: worldPos, normals, uvs, indices, material });
           vertexCount += localPos.length / 3;
-          triangleCount += (indices ? indices.length : localPos.length / 3) / 3;
+          triangleCount += tris;
         }
       }
 
-      for (const c of node.children || []) walk(c, worldMat);
+      for (const c of node.children || []) walk(c, worldMat, colPart);
     }
 
     const scene = gltf.scenes[gltf.scene || 0];
     const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
-    for (const rootNode of scene.nodes) walk(rootNode, identity);
+    for (const rootNode of scene.nodes) walk(rootNode, identity, null);
 
     const size = mesh.min[0] === Infinity ? [0, 0, 0] : [mesh.max[0] - mesh.min[0], mesh.max[1] - mesh.min[1], mesh.max[2] - mesh.min[2]];
     const longestAxis = Math.max(size[0], size[1], size[2]);
@@ -295,10 +316,16 @@
 
     return {
       drawables,
+      collision,
       hardpoints,
       bounds: world,
       meshAabb: mesh,
       stats: { vertexCount, triangleCount: Math.round(triangleCount), longestAxis, size },
+      collisionStats: {
+        partCount: new Set(collision.map((c) => c.name)).size,
+        vertexCount: collisionVertexCount,
+        triangleCount: Math.round(collisionTriangleCount),
+      },
     };
   }
 

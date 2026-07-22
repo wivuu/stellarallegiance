@@ -22,7 +22,12 @@ Archives:
 - **[M]** Code cleanup and refactor
 - Reloading things from cargo should take a configurable amount of time (i.e. ammo and fuel)
 - Look for opportunities to utilize native vector3 and SIMD for performance improvements
-- Devastator has no momentum and a light thats RIGHT in front of the cockpit
+- Shipyard constructor's label says "Outpost constructor"
+- Capital
+  - Devastator has no momentum - movement and turninng both immediately arrested
+  - Theres a light thats RIGHT in front of the cockpit - where is the cockpit in relation to the ship? Make your ships lights not visible from inside the cockpit.
+  - Shipyard can be flown through doublecheck collisions - show me an interactive visual debug of the collision mesh.
+- Docking algorithm is a bit too forgiving; ships should have to contact the face and avoid any collisions with the surrounding structure, but currently there is a generous carve out of the collision hull which lets ships enter from wild angles. If we could avoid the carve out entirely and instead focus on in-code exceptions collisions and focus on intersections on the docking face itself, potentially even narrowing the 'angle of attack' that is permissible for docking, this would let us clean up a lot of the collision mesh generation code and focus more on the game code
 ---
 
 ## Content philosophy (the through-line)

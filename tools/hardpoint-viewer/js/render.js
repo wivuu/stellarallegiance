@@ -61,6 +61,31 @@
   const LINE_FS = `
     precision mediump float; varying vec3 vColor;
     void main(){ gl_FragColor = vec4(vColor, 0.9); }`;
+  // Collision proxies: translucent flat shell, fresnel-brightened at silhouettes
+  // so the convex volume reads even when drawn as an overlay through the hull.
+  const COLL_VS = `
+    attribute vec3 aPos; attribute vec3 aNormal;
+    uniform mat4 uVP; varying vec3 vN; varying vec3 vWorld;
+    void main(){ vN = aNormal; vWorld = aPos; gl_Position = uVP * vec4(aPos, 1.0); }`;
+  const COLL_FS = `
+    precision mediump float;
+    varying vec3 vN; varying vec3 vWorld;
+    uniform vec3 uCam; uniform vec3 uColor; uniform float uAlpha;
+    void main(){
+      vec3 N = normalize(vN);
+      vec3 V = normalize(uCam - vWorld);
+      float facing = abs(dot(N, V));
+      float fres = pow(1.0 - facing, 2.0);
+      vec3 col = uColor * (0.45 + 0.55 * facing) + vec3(1.0) * fres * 0.25;
+      gl_FragColor = vec4(col, uAlpha * (0.35 + 0.65 * fres));
+    }`;
+
+  // Distinct warm/cool hues so adjacent convex parts stay tellable apart.
+  const COLLISION_PALETTE = [
+    [1.0, 0.55, 0.20], [1.0, 0.35, 0.55], [0.65, 0.85, 1.0],
+    [0.70, 1.0, 0.55], [0.85, 0.60, 1.0], [1.0, 0.82, 0.30],
+    [0.45, 0.90, 0.85], [1.0, 0.50, 0.35],
+  ];
 
   // ---- small mat4 helpers (column-major, row-vector-on-right) --------------
 
@@ -128,6 +153,7 @@
     const hullProg = program(gl, HULL_VS, HULL_FS);
     const pointProg = program(gl, POINT_VS, POINT_FS);
     const lineProg = program(gl, LINE_VS, LINE_FS);
+    const collProg = program(gl, COLL_VS, COLL_FS);
 
     // 1x1 white fallback so the hull sampler is always bound.
     const whiteTex = gl.createTexture();
@@ -159,6 +185,42 @@
       if (d.material.image) loadTexture(gl, d.material.image).then((t) => { if (t) { m.tex = t; m.hasTex = 1; requestRender(); } });
       return m;
     });
+
+    // COL_ collision proxies: translucent shell + wireframe edges, coloured per
+    // part, drawn as an overlay (depth off) so they read through the opaque hull.
+    const partColor = new Map();
+    const collMeshes = (doc.collision || []).map((c) => {
+      if (!partColor.has(c.name)) partColor.set(c.name, COLLISION_PALETTE[partColor.size % COLLISION_PALETTE.length]);
+      const col = partColor.get(c.name);
+      const idx = c.indices || makeSeq(c.positions.length / 3);
+      const useUint = c.indices ? c.indices.some((v) => v > 65535) : false;
+      let indexArray, indexType;
+      if (useUint && uintExt) { indexArray = idx; indexType = gl.UNSIGNED_INT; }
+      else { indexArray = idx instanceof Uint16Array ? idx : new Uint16Array(idx); indexType = gl.UNSIGNED_SHORT; }
+      const ib = gl.createBuffer();
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
+      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indexArray, gl.STATIC_DRAW);
+
+      // Explode triangles into wireframe edges (3 per tri, 2 endpoints each).
+      const edges = new Float32Array(idx.length * 6);
+      const edgeCol = new Float32Array(idx.length * 6);
+      let e = 0;
+      for (let t = 0; t + 2 < idx.length; t += 3) {
+        const tri = [idx[t], idx[t + 1], idx[t + 2]];
+        for (const [a, b] of [[0, 1], [1, 2], [2, 0]]) {
+          for (const vi of [tri[a], tri[b]]) {
+            edges[e] = c.positions[vi * 3]; edges[e + 1] = c.positions[vi * 3 + 1]; edges[e + 2] = c.positions[vi * 3 + 2];
+            edgeCol[e] = col[0]; edgeCol[e + 1] = col[1]; edgeCol[e + 2] = col[2];
+            e += 3;
+          }
+        }
+      }
+      return {
+        pos: buffer(gl, c.positions), norm: buffer(gl, c.normals), ib, count: idx.length, indexType, color: col,
+        edgePos: buffer(gl, edges.subarray(0, e)), edgeCol: buffer(gl, edgeCol.subarray(0, e)), edgeCount: e / 3,
+      };
+    });
+    let showCollision = !!opts.showCollision;
 
     // Hardpoint markers + forward ticks grouped by kind (toggleable).
     const byKind = {};
@@ -252,6 +314,38 @@
         gl.drawElements(gl.TRIANGLES, m.count, m.indexType, 0);
       }
 
+      // Collision proxies (translucent shell + wireframe), overlaid depth-off so
+      // they stay visible through the hull they sit inside.
+      if (showCollision && collMeshes.length) {
+        gl.disable(gl.DEPTH_TEST);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+        gl.useProgram(collProg);
+        setMat(gl, collProg, "uVP", vp);
+        gl.uniform3fv(gl.getUniformLocation(collProg, "uCam"), camPos);
+        const uColor = gl.getUniformLocation(collProg, "uColor");
+        const uAlpha = gl.getUniformLocation(collProg, "uAlpha");
+        for (const m of collMeshes) {
+          bindAttrib(gl, collProg, "aPos", m.pos, 3);
+          bindAttrib(gl, collProg, "aNormal", m.norm, 3);
+          gl.uniform3fv(uColor, m.color);
+          gl.uniform1f(uAlpha, 0.22);
+          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, m.ib);
+          gl.drawElements(gl.TRIANGLES, m.count, m.indexType, 0);
+        }
+
+        gl.useProgram(lineProg);
+        setMat(gl, lineProg, "uVP", vp);
+        gl.lineWidth(1);
+        for (const m of collMeshes) {
+          bindAttrib(gl, lineProg, "aPos", m.edgePos, 3);
+          bindAttrib(gl, lineProg, "aColor", m.edgeCol, 3);
+          gl.drawArrays(gl.LINES, 0, m.edgeCount);
+        }
+        gl.disable(gl.BLEND);
+      }
+
       // Forward ticks + markers, always visible (depth test off).
       gl.disable(gl.DEPTH_TEST);
       gl.enable(gl.BLEND);
@@ -340,6 +434,8 @@
 
     return {
       setVisibleKinds(set) { visibleKinds = set; requestRender(); },
+      setShowCollision(v) { showCollision = !!v; requestRender(); },
+      hasCollision: collMeshes.length > 0,
       focus(kind, index) { focus = { kind, index, start: performance.now() }; requestRender(); },
       clearFocus() { focus = null; requestRender(); },
       resetView() { cam.theta = 0.7; cam.phi = 1.12; cam.radius = radiusModel / Math.sin(Math.PI / 5); requestRender(); },

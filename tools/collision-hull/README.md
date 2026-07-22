@@ -106,8 +106,16 @@ validator is shared with the volume the guard floods.
 | `--hull-extremes INT` | 0 | 0 = full-cloud containment hull; >0 = N Fibonacci extremes (mirrors ConvexHull.cs 256) |
 | `--reach-guard` / `--no-reach-guard` | base on / ship off | sealed-interior fly-through guard |
 | `--corridor-check` / `--no-corridor-check` | auto (on iff HP_Docking*) | dock-corridor validator |
+| `--carve-mode {full,bays,passage,interior,off}` | full | dock carve: `full` = wide door-rectangle cylinder; `bays` = open each bay's marker-AABB, keep all other structure solid (open drydock cages — ships dock by flying in); `passage` = tight ship-radius tube to each entrance centroid; `interior` = reopen only sealed interior, never surface; `off` = no carve |
+| `--surface-check` / `--no-surface-check` | base on / ship off | visible-surface backing guard (fly-THROUGH) |
+| `--min-coverage` | base 0.50 / ship 0 | surface guard: FAIL below this solid-voxel coverage |
+| `--max-surface-unbacked` | base 0.60 / ship 1 | surface guard: FAIL above this fraction of un-backed visible surface |
 
 Part-count window per kind (the bake FAILS outside it): base **2..1024**, ship **1..100000**.
+
+Per-model knob/gate overrides live in `MODEL_PRESETS` (keyed by GLB stem) so a plain bake reproduces
+a fix byte-stably; explicit CLI args still win. `acs05` (open drydock cage) uses `voxel_res=0.30,
+mc_smooth=0.0, carve_mode="bays"`.
 
 ## Per-kind scale basis
 
@@ -132,7 +140,7 @@ also derives `LongestAxis` (base world-scale) and `BoundingRadius` from the merg
 client's `GlbLoader.MeshAabb` measures every mesh regardless of visibility. So the bake is only safe
 if **no COL vertex is ever a directional extreme, and none enlarges the AABB or bounding radius.**
 
-`bake.py` enforces exactly that with three HARD validations (the bake FAILS loudly otherwise):
+`bake.py` enforces exactly that with four HARD validations (the bake FAILS loudly otherwise):
 
 1. **Hull containment** — every COL vertex sits `--margin` (default 0.05 authored units) *inside*
    every face of the convex hull of the visual mesh (the clamp adds a small epsilon of headroom so
@@ -157,6 +165,14 @@ if **no COL vertex is ever a directional extreme, and none enlarges the AABB or 
    radius**. No cell of the *interior hollow* (a sealed cell where a ship of radius
    `CollisionConfig.ShipRadius` actually FITS) may be reached from outside, except inside a carved
    dock corridor. Default on for base, off for ship (`--reach-guard`).
+4. **Surface-backing guard** *(regression test for the fly-THROUGH bug)* — FAIL if solid-voxel
+   coverage falls below `--min-coverage` (base 0.50) or the fraction of visible-surface voxels with
+   no COL part within one ship radius exceeds `--max-surface-unbacked` (base 0.60). The reach-guard
+   only proves the sealed INTERIOR isn't fly-into-able; it says nothing about the visible skin, so a
+   shell / open frame can pass it while ships clip straight through the art (the acs05 shipyard:
+   20% coverage, 91% surface un-backed, reach-guard green). Default on for base, off for ship
+   (`--surface-check`). For a genuinely open shell whose openings are the docking passages, pair
+   `--carve-mode interior` with `--no-corridor-check`.
 
 ## Why CoACD (benchmark vs the retired greedy-box baker)
 
@@ -199,8 +215,10 @@ no-override `uv run bake.py --kind base --glb <committed GLB>` reproduces the co
 
 - `client/assets/bases/garrison.glb` (the shipping garrison base, pristine ss27 art + authored
   docking markers) — sha256
-  `78be8ae31f7c6a2763f3f970d4a1a982b0091df73b9b6751cb677609d0bf8b78`, 12 parts
-- `client/assets/bases/Outpost.glb` (retained, unused) — sha256
+  `9eaac7233fcf1502cfa9377a7b0622414cce122ac32617c216900aa189d54191`, 18 parts
+  (`MODEL_PRESETS["garrison"]` = `carve_mode="passage"`; the default 'full' carve left 36% of its
+  surface un-backed, passage → 0.5% with both doors 100% dock-reachable)
+- `client/assets/bases/Outpost.glb` (retained, unused, default full pipeline) — sha256
   `179442182c80205d976f6b8780f14ab67e5f5d58df872b483eab1d0052f855e1`, 41 parts
 
 keeping `tests/CollisionTest` (garrison: LongestAxis 59.849224 / BoundingRadius 30.681801 / 56

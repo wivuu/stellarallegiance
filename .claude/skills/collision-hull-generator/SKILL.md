@@ -86,6 +86,10 @@ reachability guard catches). The carved voxel solid encodes "interior filled, co
 | `--hull-extremes` | 0 | 0 | 0 = full-cloud containment hull; >0 = N Fibonacci extremes (mirrors ConvexHull.cs 256) |
 | `--reach-guard` / `--no-reach-guard` | on | off | sealed-interior fly-through guard |
 | `--corridor-check` / `--no-corridor-check` | auto | auto | on iff HP_Docking* present |
+| `--carve-mode` | full | full | dock carve: `full` (wide door cylinder) / `bays` (open each bay's marker-AABB, keep all other structure solid — open docking cages) / `passage` (tight ship-radius tube to each entrance centroid) / `interior` (never delete surface) / `off` |
+| `--surface-check` / `--no-surface-check` | on | off | visible-surface backing guard (the check reach-guard misses) |
+| `--min-coverage` | 0.50 | 0.0 | surface guard: FAIL if solid-voxel coverage below this (good bases ~0.90) |
+| `--max-surface-unbacked` | 0.60 | 1.0 | surface guard: FAIL if this fraction of the visible surface has no COL within 1 ship radius |
 | part-count window | 2..1024 | 1..100000 | bake FAILS outside it |
 
 `ws` (world-scale) = `--world-diameter / LongestAxis` for base, `--model-length / LongestAxis` for
@@ -129,9 +133,35 @@ provenance only, never consumed. The server `.simmodel` sidecar cache self-heals
 - **Pick `--voxel-res` per model scale.** Authored units vary per GLB; read the printed
   `longestAxis` / `worldScale` / `shipRadius(authored)` before overriding.
 - **Byte-identity contract:** a no-override `--kind base` bake reproduces the committed base GLBs
-  byte-for-byte (`garrison.glb` — the shipping base — sha256 `78be8ae3…`, unused `Outpost.glb`
-  `17944218…` — full hashes in `tools/collision-hull/README.md`). Any knob override breaks it —
+  byte-for-byte via each model's resolved preset (`garrison.glb` sha256 `9eaac723…` and `acs05.glb`
+  now resolve through `MODEL_PRESETS`; `ss90`/`ss21a`/unused `Outpost.glb` `17944218…` use the default
+  full pipeline — full hashes in `tools/collision-hull/README.md`). Any *CLI* knob override breaks it —
   verify with `git status`.
+- **Per-model knobs live in `MODEL_PRESETS` (bake.py), not the CLI.** When a mesh needs off-preset
+  knobs, add a stem-keyed entry there so a plain `--kind base --glb <stem>.glb` resolves through it
+  and reproduces the fix byte-stably (explicit CLI args still win). It can also set the gate toggles
+  (`corridor_check`, `reach_guard`, `surface_check`), not just cfg knobs. `acs05` (Shipyard, open
+  drydock cage) is the worked example: `voxel_res=0.30, mc_smooth=0.0, carve_mode="bays"`
+  (27 parts; structure 0% un-backed, both bays open+dockable, overall 18.6% un-backed = open bays).
+- **`--carve-mode` — the dock carve deletes surface by default.** The seal fills every hollow, then
+  the corridor carve reopens the docking passages. `full` (default) removes ALL solid in the WIDE
+  door-rectangle cylinder (half-diagonal radius) — a big bay door then bulldozes its own frame beams
+  (acs05: carve took the whole right bay, collision stopped at X=3.6 while the mesh ran to X=11).
+  `bays` carves each docking BAY volume fully open (the AABB of its five entrance markers + a ship
+  radius) and keeps EVERY other part solid — the right mode for an open drydock where ships dock BY
+  FLYING INTO a bay. Critically, **docking never gates on the baked hull**: the runtime dock-face
+  bypass (`Collide.ResolveStatics` does `continue` when a ship is within a `DockFace` rect) lets a
+  ship through once it REACHES a dock face — but a SOLID bay bounces it off before it arrives, so the
+  bay must be open (acs05 side-face docking broke exactly this way under `passage`/`interior`).
+  `passage` carves only a tight ship-radius tube to each entrance centroid (keeps frame, but a small
+  ship can't reach a side face — it can only thread the centre). `interior` reopens sealed interior
+  only, never surface. `off` carves nothing. Changing the default would break every committed base's
+  byte-identity.
+- **`--mc-smooth` erases thin geometry.** The sigma-1.0 default blurs the carved solid to kill the
+  voxel staircase, but a beam/wall ≲2·sigma cells thick blurs *below* the isosurface and vanishes —
+  the collision then wraps only the chunky masses. Open-frame / thin-beam meshes (drydock cages,
+  trusses) want a *finer* voxel and `--mc-smooth 0`, NOT a coarser voxel (coarsening drops the beams
+  entirely). Symptom: low coverage + high surface-unbacked despite a solid-looking mesh.
 - **Reach-guard failure after a clamp?** The containment clamp can re-open a gap at hull
   extremities; lower `--threshold` or `--voxel-res`. **Thin walls vanish?** Lower `--mc-smooth`.
 - World constants (`WORLD_SHIP_RADIUS` etc. in `bake.py`) MIRROR

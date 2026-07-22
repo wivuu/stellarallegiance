@@ -40,13 +40,21 @@ dotnet run --project server -- --selftest       # sub-hulls, spawn clearance, do
 ```
 
 Determinism / byte-identity: a no-override `--kind base` bake reproduces each committed base GLB
-**byte-for-byte** — home `garrison.glb` (ss27, SHIPPING) sha256
-`78be8ae31f7c6a2763f3f970d4a1a982b0091df73b9b6751cb677609d0bf8b78` (12 parts); the runtime forward
-bases reproduce identically too — `ss90.glb` (Outpost / Outpost Hvy, 6 parts), `ss21a.glb`
-(Supremacy / Adv Supremacy, 17 parts), `acs05.glb` (Shipyard / Shipyard Dry, 7 parts). `Outpost.glb`
-(retained, bound by NO station) `179442182c80205d976f6b8780f14ab67e5f5d58df872b483eab1d0052f855e1`
-(41 parts) is the labeled unused byte-identity fixture — verify with `git status` on the GLB showing
-NO change. The server's `.simmodel` sidecar cache self-heals on SHA change.
+**byte-for-byte** (via its resolved preset). Two bases resolve through per-model
+`MODEL_PRESETS` entries, not the kind preset: home `garrison.glb` (ss27, SHIPPING, sha256
+`9eaac7233fcf1502cfa9377a7b0622414cce122ac32617c216900aa189d54191`, **18 parts**,
+`carve_mode="passage"` — the default 'full' left 36% of its surface un-backed; passage drops that to
+0.5% with both flat quad-face doors 100% dock-reachable), and `acs05.glb` (Shipyard / Shipyard Dry,
+**27 parts**, `voxel_res=0.30, mc_smooth=0.0, carve_mode="bays"` — an open drydock cage that needs
+its bays open + structure solid; see below). `ss90.glb` (Outpost / Outpost Hvy, 6 parts) and
+`ss21a.glb` (Supremacy / Adv Supremacy, 17 parts) still reproduce under the default full pipeline.
+`bays` carves each docking bay open (ships dock by flying in — the runtime dock-face bypass needs the
+bay reachable) and keeps the cage/rails/pods solid; `passage` carves a tight ship-radius tube to each
+door centroid (right for flat-door hubs where the aperture is clear).
+`Outpost.glb` (retained, bound by NO station)
+`179442182c80205d976f6b8780f14ab67e5f5d58df872b483eab1d0052f855e1` (41 parts) is the labeled unused
+byte-identity fixture — verify with `git status` on the GLB showing NO change. The server's
+`.simmodel` sidecar cache self-heals on SHA change.
 
 ## What the base bake produces
 
@@ -60,17 +68,24 @@ mean visual sink ~0.25 world units. The bake-time corridor validator walks each 
 approach lane (the server's BaseRadius*2-world probe), so lane blockers fail the bake, not the
 deploy. Step-by-step in the `collision-hull-generator` skill.
 
-## The three hard validations (bake fails loudly)
+## The four hard validations (bake fails loudly)
 
 1. **Hull containment** — every COL vertex ≥ `margin` inside the visual convex hull. This is what
    keeps the merged hull **bit-unchanged**: `LongestAxis` **59.849224**, `BoundingRadius`
    **30.681801**, **56 planes** for the current garrison.glb — asserted in
    `tests/CollisionTest/Program.cs` and `server/Assets/SelfTest.cs`. A strictly-interior point can
    never be a directional extreme, so world-scale (`ws = BaseRadius*2/LongestAxis`) never drifts.
-2. **Dock corridor** — no part may cap an entrance/exit corridor.
+2. **Dock corridor** — no part may cap an entrance/exit corridor. Auto-gated on HP_Docking* presence;
+   a per-model preset can waive it (`corridor_check=False`) when the mesh's own openings are the
+   passages (acs05).
 3. **Reachability guard** (regression test for the fly-inside bug) — rasterize the FINAL parts,
    flood the exterior with free space eroded by the ship radius; no ship-fits interior-hollow cell
    may be reachable except via a carved corridor. Runs in `--check` too.
+4. **Surface-backing guard** (regression test for the fly-THROUGH bug) — FAIL if solid-voxel coverage
+   drops below `--min-coverage` (base 0.50) or the fraction of visible-surface voxels with no COL
+   within a ship radius exceeds `--max-surface-unbacked` (base 0.60). Catches a shell/open-frame the
+   reach-guard passes because its interior is (trivially) sealed while the visible skin is un-backed —
+   the acs05 shipyard's original fly-through (20% cover / 91% un-backed, yet reach-guard green).
 
 ## Downstream assertion map (touch when part count/metrics change)
 
