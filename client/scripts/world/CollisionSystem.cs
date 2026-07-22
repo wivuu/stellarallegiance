@@ -5,7 +5,7 @@ using StellarAllegiance.Shared;
 // Purely client-side collision AUDIO: a thud when a ship touches solid geometry (asteroid/base) or another
 // ship. A cosmetic interception like the hit-spark sweep — the sim resolves the real collision
 // server-side — tested against the SAME convex hulls the server uses (CollisionWorld). The own-base
-// dock-disc carve-out means flying into your dock no longer false-thuds. Ships are gated to the local
+// dock-face skip (with its angle-of-attack gate) means flying AT your dock no longer false-thuds. Ships are gated to the local
 // sector; the thud fires once on ENTRY (per-id / per-pair debounce) so grinding a hull doesn't machine-gun
 // the sound. Owns no scene nodes.
 public sealed class CollisionSystem
@@ -66,10 +66,12 @@ public sealed class CollisionSystem
                 // Per-ship launch-class mask so a restricted hull THUDS where it now bounces
                 // (disallowed friendly base / side door) instead of silently gliding a dock face.
                 var (thudCls, thudPod) = ShipRenderer.ShipClassOf(ship);
+                Vector3 v = ShipRenderer.ShipVelocityOf(ship);
                 bool now =
                     !buildContact
                     && Collide.Touches(
                         new Vec3(c.X, c.Y, c.Z),
+                        new Vec3(v.X, v.Y, v.Z),
                         CollisionConfig.ShipRadius,
                         bodies,
                         ShipRenderer.ShipTeamOf(ship),

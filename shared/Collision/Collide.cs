@@ -294,13 +294,14 @@ public static class Collide
                 && DockRules.ClassAllowed(launchClassMask, b.StationClass)
                 && IntersectsDockFace(
                     s.Pos - b.Center,
+                    s.Vel,
                     b.DockFaces,
                     dockFaceDepth,
                     shipRadius,
                     DockRules.AllowedFace(launchClassMask, b.LargestDockFace)
                 )
             )
-                continue; // your dock opening — let the ship through (server handles docking)
+                continue; // closing on your dock face inside the approach cone — let the ship through (server docks it)
             if (b.Hull != null)
             {
                 if (SphereVsBody(s.Pos, shipRadius, b, out Vec3 n, out float pen))
@@ -320,10 +321,14 @@ public static class Collide
     }
 
     // Non-mutating overlap test: does a ship sphere at `pos` touch any static body (skipping its own
-    // base's dock discs)? Used for the collision THUD — same geometry as ResolveStatics, no bounce.
-    // `launchClassMask` mirrors ResolveStatics: a restricted hull thuds where it would bounce.
+    // base's dock faces)? Used for the collision THUD — same geometry as ResolveStatics, no bounce.
+    // `launchClassMask` mirrors ResolveStatics: a restricted hull thuds where it would bounce. `vel`
+    // feeds the same angle-of-attack gate the resolver uses; for remote ships the caller's velocity
+    // is interpolation-smoothed, so a near-threshold thud may briefly disagree with the server's
+    // bounce — cosmetic only (the SFX debounce swallows it).
     public static bool Touches(
         Vec3 pos,
+        Vec3 vel,
         float shipRadius,
         System.Collections.Generic.IReadOnlyList<StaticBody> bodies,
         int localTeam,
@@ -341,6 +346,7 @@ public static class Collide
                 && DockRules.ClassAllowed(launchClassMask, b.StationClass)
                 && IntersectsDockFace(
                     pos - b.Center,
+                    vel,
                     b.DockFaces,
                     dockFaceDepth,
                     shipRadius,
@@ -507,10 +513,47 @@ public static class Collide
     // frame). Iterates EVERY face — a base may author N doors (each a group of 5 markers). The
     // inward-slack depth window [−dockFaceDepth, +shipRadius] keeps a fast ship (worst case Scout
     // ~8 world units/tick at 20 Hz) from tunneling the thin plane between ticks: the window spans
-    // dockFaceDepth+shipRadius ≈ 12 ≥ 8 with margin. NO facing/velocity requirement — pure geometry.
-    // This is the ONLY way to dock at a hull base — everything else is the solid shell.
+    // dockFaceDepth+shipRadius ≈ 12 ≥ 8 with margin.
+    //
+    // These position-only overloads answer "is this POINT in a door window" (validators, tests,
+    // launch placement). The LIVE dock/skip path is the (d, vel, ...) overload below: since bases
+    // bake fully solid (no corridor carve), docking additionally demands an angle of attack —
+    // velocity closing on the face within the CollisionConfig.DockApproachMinCosSq cone. A hull
+    // base docks ONLY through that gated test — everything else is the solid shell.
     public static bool IntersectsDockFace(Vec3 d, DockFace[] faces, float dockFaceDepth, float shipRadius) =>
         IntersectsDockFace(d, faces, dockFaceDepth, shipRadius, -1);
+
+    // Angle-of-attack-gated overload — the live dock trigger AND the own-base bounce-skip (the two
+    // must stay ONE predicate, evaluated bit-identically by server sim and client prediction, or
+    // the bay mouth rubber-bands). Per candidate face the ship's velocity must CLOSE on the door:
+    //   vn = vel·Normal ≥ DockMinClosingSpeed   (a parked/receding ship never docks — nudge in)
+    //   vn² ≥ DockApproachMinCosSq · |vel|²     (velocity within the 45° approach cone, sqrt-free)
+    // then the position test above decides. A gate-failing ship in the window simply collides with
+    // the (uncarved) structure — the station is solid unless you fly AT a door.
+    public static bool IntersectsDockFace(
+        Vec3 d,
+        Vec3 vel,
+        DockFace[] faces,
+        float dockFaceDepth,
+        float shipRadius,
+        int onlyFace
+    )
+    {
+        int start = onlyFace >= 0 ? onlyFace : 0;
+        int end = onlyFace >= 0 ? System.Math.Min(onlyFace + 1, faces.Length) : faces.Length;
+        for (int i = start; i < end; i++)
+        {
+            DockFace f = faces[i];
+            float vn = Dot(vel, f.Normal);
+            if (vn < CollisionConfig.DockMinClosingSpeed)
+                continue;
+            if (vn * vn < CollisionConfig.DockApproachMinCosSq * vel.LengthSquared())
+                continue;
+            if (IntersectsDockFace(d, faces, dockFaceDepth, shipRadius, i))
+                return true;
+        }
+        return false;
+    }
 
     // `onlyFace` (2026-07-21 launch-station-classes): -1 tests every door (stock behaviour); >= 0
     // tests ONLY that face index — a restricted hull may enter solely through the base's largest

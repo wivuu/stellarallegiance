@@ -198,6 +198,17 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
             _ => ((byte)0, false),
         };
 
+    // Velocity of a ship node, for the dock angle-of-attack gate in the thud test. The local
+    // predicted ship reports its exact predicted velocity; remote ships report the interpolator's
+    // smoothed velocity (close enough for a cosmetic thud).
+    public static Vector3 ShipVelocityOf(Node3D ship) =>
+        ship switch
+        {
+            PredictionController pc => pc.Velocity,
+            RemoteShip rs => rs.Velocity,
+            _ => Vector3.Zero,
+        };
+
     // The other ships the LOCAL predicted ship can bump into: every visible remote ship in the local
     // sector, as shared MovingShip obstacles. Fogged / other-sector ships aren't included — a small
     // predict-miss the server reconciles. One reusable buffer; PredictionController consumes it each tick.

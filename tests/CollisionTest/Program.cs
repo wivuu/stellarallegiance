@@ -94,14 +94,37 @@ var enemy = new ShipState { Pos = new Vec3(1.4f, 0, 0), Vel = new Vec3(-1, 0, 0)
 Collide.ResolveStatics(ref enemy, shipR, new[] { baseBody }, localTeam: 1, 0, rest, CollisionConfig.DockFaceDepth, out _);
 Check("enemy base: solid hull bounces ship out", Near(enemy.Pos.X, 1.5f));
 
+// 4b) Angle-of-attack gate: the dock skip demands velocity CLOSING on the door inside the 45°
+//     cone at ≥ DockMinClosingSpeed — otherwise the (uncarved) aperture is solid shell. Same
+//     door as above: inward normal −X; the ship overlaps the +X face (pen 0.1 ⇒ bounce → x=1.5).
+var slide = new ShipState { Pos = new Vec3(1.4f, 0, 0), Vel = new Vec3(0, 0, 5) };
+Collide.ResolveStatics(ref slide, shipR, new[] { baseBody }, localTeam: 0, 0, rest, CollisionConfig.DockFaceDepth, out _);
+Check("aoa gate: parallel slide across the door bounces", Near(slide.Pos.X, 1.5f));
+
+var shallow = new ShipState { Pos = new Vec3(1.4f, 0, 0), Vel = new Vec3(-1, 1.1f, 0) }; // ~47.7° off-normal
+Collide.ResolveStatics(ref shallow, shipR, new[] { baseBody }, localTeam: 0, 0, rest, CollisionConfig.DockFaceDepth, out _);
+Check("aoa gate: just outside the 45° cone bounces", Near(shallow.Pos.X, 1.5f));
+
+var steep = new ShipState { Pos = new Vec3(1.4f, 0, 0), Vel = new Vec3(-1, 0.9f, 0) }; // ~42° off-normal
+Collide.ResolveStatics(ref steep, shipR, new[] { baseBody }, localTeam: 0, 0, rest, CollisionConfig.DockFaceDepth, out _);
+Check("aoa gate: just inside the 45° cone glides through", Near(steep.Pos.X, 1.4f) && Near(steep.Vel.Y, 0.9f));
+
+var crawl = new ShipState { Pos = new Vec3(1.4f, 0, 0), Vel = new Vec3(-0.5f, 0, 0) }; // face-on but < floor
+Collide.ResolveStatics(ref crawl, shipR, new[] { baseBody }, localTeam: 0, 0, rest, CollisionConfig.DockFaceDepth, out _);
+Check("aoa gate: below the closing-speed floor bounces", Near(crawl.Pos.X, 1.5f));
+
+var receding = new ShipState { Pos = new Vec3(1.4f, 0, 0), Vel = new Vec3(1, 0, 0) }; // backing away
+Collide.ResolveStatics(ref receding, shipR, new[] { baseBody }, localTeam: 0, 0, rest, CollisionConfig.DockFaceDepth, out _);
+Check("aoa gate: receding ship gets pushed out, not docked", Near(receding.Pos.X, 1.5f));
+
 // 5) Touches (audio probe) agrees with the geometry: overlapping = true, clear = false.
 Check(
     "touches: overlapping ship reports contact",
-    Collide.Touches(new Vec3(1.4f, 0, 0), shipR, new[] { rock }, -1, 0, CollisionConfig.DockFaceDepth)
+    Collide.Touches(new Vec3(1.4f, 0, 0), default, shipR, new[] { rock }, -1, 0, CollisionConfig.DockFaceDepth)
 );
 Check(
     "touches: clear ship reports none",
-    !Collide.Touches(new Vec3(3f, 0, 0), shipR, new[] { rock }, -1, 0, CollisionConfig.DockFaceDepth)
+    !Collide.Touches(new Vec3(3f, 0, 0), default, shipR, new[] { rock }, -1, 0, CollisionConfig.DockFaceDepth)
 );
 
 // 6) Rock tumble: the spin is deterministic (server/client parity) and the live rotation actually
@@ -267,7 +290,7 @@ Collide.ResolveStatics(ref docker, shipR, new[] { discBody }, localTeam: 0, 0, r
 Check("compound: own dock door skips the whole body (no bounce)", Near(docker.Pos.X, -4.4f) && Near(docker.Vel.X, 1f));
 Check(
     "compound: dock door still bypasses when Touches probes",
-    !Collide.Touches(new Vec3(-4.4f, 0, 0), shipR, new[] { discBody }, localTeam: 0, 0, CollisionConfig.DockFaceDepth)
+    !Collide.Touches(new Vec3(-4.4f, 0, 0), new Vec3(1, 0, 0), shipR, new[] { discBody }, localTeam: 0, 0, CollisionConfig.DockFaceDepth)
 );
 
 // Regression guard: a SINGLE-hull StaticBody routed through SphereVsBody === the old SphereVsHull.
@@ -585,11 +608,11 @@ else
     // Touches mirrors the same gating (collision-thud parity with the bounce above).
     Check(
         "touches: restricted hull thuds in the side door",
-        Collide.Touches(new Vec3(-1.4f, 0, 0), shipR, new[] { shipyardBase }, 0, shipyardMask, CollisionConfig.DockFaceDepth)
+        Collide.Touches(new Vec3(-1.4f, 0, 0), new Vec3(1, 0, 0), shipR, new[] { shipyardBase }, 0, shipyardMask, CollisionConfig.DockFaceDepth)
     );
     Check(
         "touches: restricted hull silent in the largest door",
-        !Collide.Touches(new Vec3(1.4f, 0, 0), shipR, new[] { shipyardBase }, 0, shipyardMask, CollisionConfig.DockFaceDepth)
+        !Collide.Touches(new Vec3(1.4f, 0, 0), new Vec3(-1, 0, 0), shipR, new[] { shipyardBase }, 0, shipyardMask, CollisionConfig.DockFaceDepth)
     );
 
     // The onlyFace overload the filter rides on: exactly one door is tested.

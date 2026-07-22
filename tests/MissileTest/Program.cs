@@ -1077,10 +1077,12 @@ void DockAtOwnBase(Simulation sim, Simulation.ShipSim ship)
     int bi = sim.World.Bases.FindIndex(b => b.Team == ship.Team);
     var b = sim.World.Bases[bi];
     ship.SectorId = b.SectorId;
-    ship.State.Pos = sim.World.BaseHull is not null && sim.World.BaseDockFaces.Length > 0
+    bool onFace = sim.World.BaseHull is not null && sim.World.BaseDockFaces.Length > 0;
+    ship.State.Pos = onFace
         ? b.Pos + sim.World.BaseDockFaces[0].Center // land on a docking-door face centre
         : b.Pos; // legacy core-sphere dock
-    ship.State.Vel = new Vec3(0f, 0f, 0f);
+    // Close on the face inside the angle-of-attack cone — a parked ship no longer docks.
+    ship.State.Vel = onFace ? sim.World.BaseDockFaces[0].Normal * 2f : new Vec3(0f, 0f, 0f);
     ship.State.Rot = Quat.Identity;
     ship.State.AngVel = new Vec3(0f, 0f, 0f);
     ship.HeldInput = new ShipInputState();

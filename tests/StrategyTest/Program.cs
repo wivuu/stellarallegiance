@@ -785,8 +785,23 @@ Check(
     );
     if (dev42 is not null && garDoors.Length > 0 && yardDoors.Length == 2)
     {
-        dev42.State.Pos = garPos + garDoors[0].Center;
-        dev42.State.Vel = default;
+        // The dock predicate now demands velocity CLOSING on the face (angle-of-attack gate), and
+        // the velocity-command flight model arrests a seeded drift within a tick on a zero-input
+        // capital — so aim the hull at each face and hold gentle throttle. The class rules (not
+        // the AoA gate) stay what the negative cases exercise.
+        // Shortest-arc ship-local +Z onto dir (mirror of Simulation.LookRotationZ).
+        static Quat FaceAlong(Vec3 dir) =>
+            dir.Z < -0.99999f ? new Quat(1f, 0f, 0f, 0f) : new Quat(-dir.Y, dir.X, 0f, 1f + dir.Z).Normalized();
+        void CloseOnFace(Simulation.ShipSim ship, Vec3 basePos, DockFace f)
+        {
+            ship.State.Pos = basePos + f.Center;
+            ship.State.Rot = FaceAlong(f.Normal);
+            ship.State.AngVel = default;
+            ship.State.Vel = f.Normal * 2f;
+            ship.HeldInput = new ShipInputState { Thrust = 0.1f };
+        }
+
+        CloseOnFace(dev42, garPos, garDoors[0]);
         simL.Step();
         Check(
             simL.Ships.Any(s => s.OwnerClientId == 42),
@@ -794,8 +809,7 @@ Check(
             "Devastator wrongly docked at the garrison"
         );
 
-        dev42.State.Pos = yardPos + yardDoors[1 - yardLargest].Center;
-        dev42.State.Vel = default;
+        CloseOnFace(dev42, yardPos, yardDoors[1 - yardLargest]);
         simL.Step();
         Check(
             simL.Ships.Any(s => s.OwnerClientId == 42),
@@ -804,9 +818,9 @@ Check(
         );
 
         int dockBefore = tsL.Credits;
-        dev42.State.Pos = yardPos + yardDoors[yardLargest].Center;
-        dev42.State.Vel = default;
-        simL.Step();
+        CloseOnFace(dev42, yardPos, yardDoors[yardLargest]);
+        for (int i = 0; i < 5 && simL.Ships.Any(s => s.OwnerClientId == 42); i++)
+            simL.Step();
         Check(
             !simL.Ships.Any(s => s.OwnerClientId == 42) && tsL.Credits == dockBefore + devDef.Cost + LInc(),
             $"the same Devastator docks through the shipyard's LARGEST door (despawn + {devDef.Cost} refund)",

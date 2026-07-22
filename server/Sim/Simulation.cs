@@ -962,10 +962,11 @@ public sealed partial class Simulation
     }
 
     // Own-base branch of ResolveBoundaryCollisionsAndDocking: with a loaded hull you dock ONLY by
-    // flying your ship into a rectangular docking door (a bounded face authored as a group of 5
-    // HP_DockingEntrance markers) — the rest of the base is a solid hull that bounces you. Without
-    // a model, fall back to the legacy core-sphere dock so docking can't break. Returns true when
-    // the ship docked (or a miner offloaded) this tick.
+    // flying your ship AT a rectangular docking door (a bounded face authored as a group of 5
+    // HP_DockingEntrance markers) with velocity closing inside the shared angle-of-attack cone
+    // (Collide.IntersectsDockFace vel overload) — the rest of the base, door apertures included,
+    // is a solid hull that bounces you. Without a model, fall back to the legacy core-sphere dock
+    // so docking can't break. Returns true when the ship docked (or a miner offloaded) this tick.
     private bool ResolveOwnBaseDock(ShipSim s, World.BaseSite b, uint tick)
     {
         // Station-class dock gate (2026-07-21): a restricted hull docks only at bases whose class
@@ -983,6 +984,7 @@ public sealed partial class Simulation
             if (
                 Collide.IntersectsDockFace(
                     d,
+                    s.State.Vel,
                     World.BaseDockFacesOf(b.BaseTypeId),
                     World.DockFaceDepth,
                     World.ShipRadius,
