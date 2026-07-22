@@ -351,9 +351,10 @@ Where a ship docks at its own base. `HP_DockingEntrance_*` markers group in **fi
 face marker is detected by ORIENTATION within its five — rim forwards point outward in-plane — not
 assumed first); a base may author N doors. A ship (a `ShipRadius` sphere) docks by intersecting the
 face — inside the rectangle laterally and within a depth window `[−DockFaceDepth, +ShipRadius]`
-along the inward normal — while its VELOCITY closes on the door inside the **angle-of-attack gate**
-(within a 45° half-cone of the inward normal at ≥ `DockMinClosingSpeed`; `CollisionConfig`
-compile-time constants, sqrt-free cos² compare on both peers). Bases bake **fully solid** (no
+along the inward normal — while its VELOCITY direction closes on the door inside the
+**angle-of-attack gate** (within a 45° half-cone of the inward normal; direction only, no speed
+requirement — a parked ship touching the face docks; `CollisionConfig.DockApproachMinCosSq`
+compile-time constant, sqrt-free cos² compare on both peers). Bases bake **fully solid** (no
 corridor carve); the same gated test is the own-base no-bounce skip, so client prediction and
 server agree — a gate-failing approach (parallel slide, drift, wild angle) bounces off the real
 structure. `HP_DockingExit_*` (one = one exit) is the launch mouth. NOT the old "dock disc"

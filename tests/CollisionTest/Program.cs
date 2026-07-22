@@ -94,9 +94,10 @@ var enemy = new ShipState { Pos = new Vec3(1.4f, 0, 0), Vel = new Vec3(-1, 0, 0)
 Collide.ResolveStatics(ref enemy, shipR, new[] { baseBody }, localTeam: 1, 0, rest, CollisionConfig.DockFaceDepth, out _);
 Check("enemy base: solid hull bounces ship out", Near(enemy.Pos.X, 1.5f));
 
-// 4b) Angle-of-attack gate: the dock skip demands velocity CLOSING on the door inside the 45°
-//     cone at ≥ DockMinClosingSpeed — otherwise the (uncarved) aperture is solid shell. Same
-//     door as above: inward normal −X; the ship overlaps the +X face (pen 0.1 ⇒ bounce → x=1.5).
+// 4b) Angle-of-attack gate: the dock skip demands the velocity DIRECTION close on the door inside
+//     the 45° cone — speed is irrelevant, and a parked ship passes trivially — otherwise the
+//     (uncarved) aperture is solid shell. Same door as above: inward normal −X; the ship overlaps
+//     the +X face (pen 0.1 ⇒ bounce → x=1.5).
 var slide = new ShipState { Pos = new Vec3(1.4f, 0, 0), Vel = new Vec3(0, 0, 5) };
 Collide.ResolveStatics(ref slide, shipR, new[] { baseBody }, localTeam: 0, 0, rest, CollisionConfig.DockFaceDepth, out _);
 Check("aoa gate: parallel slide across the door bounces", Near(slide.Pos.X, 1.5f));
@@ -109,9 +110,13 @@ var steep = new ShipState { Pos = new Vec3(1.4f, 0, 0), Vel = new Vec3(-1, 0.9f,
 Collide.ResolveStatics(ref steep, shipR, new[] { baseBody }, localTeam: 0, 0, rest, CollisionConfig.DockFaceDepth, out _);
 Check("aoa gate: just inside the 45° cone glides through", Near(steep.Pos.X, 1.4f) && Near(steep.Vel.Y, 0.9f));
 
-var crawl = new ShipState { Pos = new Vec3(1.4f, 0, 0), Vel = new Vec3(-0.5f, 0, 0) }; // face-on but < floor
+var crawl = new ShipState { Pos = new Vec3(1.4f, 0, 0), Vel = new Vec3(-0.5f, 0, 0) }; // face-on, arbitrarily slow
 Collide.ResolveStatics(ref crawl, shipR, new[] { baseBody }, localTeam: 0, 0, rest, CollisionConfig.DockFaceDepth, out _);
-Check("aoa gate: below the closing-speed floor bounces", Near(crawl.Pos.X, 1.5f));
+Check("aoa gate: slow face-on crawl glides through (no speed floor)", Near(crawl.Pos.X, 1.4f));
+
+var parked = new ShipState { Pos = new Vec3(1.4f, 0, 0), Vel = default }; // zero velocity = no direction to reject
+Collide.ResolveStatics(ref parked, shipR, new[] { baseBody }, localTeam: 0, 0, rest, CollisionConfig.DockFaceDepth, out _);
+Check("aoa gate: parked ship touching the face glides through", Near(parked.Pos.X, 1.4f));
 
 var receding = new ShipState { Pos = new Vec3(1.4f, 0, 0), Vel = new Vec3(1, 0, 0) }; // backing away
 Collide.ResolveStatics(ref receding, shipR, new[] { baseBody }, localTeam: 0, 0, rest, CollisionConfig.DockFaceDepth, out _);

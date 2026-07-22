@@ -525,11 +525,13 @@ public static class Collide
 
     // Angle-of-attack-gated overload — the live dock trigger AND the own-base bounce-skip (the two
     // must stay ONE predicate, evaluated bit-identically by server sim and client prediction, or
-    // the bay mouth rubber-bands). Per candidate face the ship's velocity must CLOSE on the door:
-    //   vn = vel·Normal ≥ DockMinClosingSpeed   (a parked/receding ship never docks — nudge in)
-    //   vn² ≥ DockApproachMinCosSq · |vel|²     (velocity within the 45° approach cone, sqrt-free)
-    // then the position test above decides. A gate-failing ship in the window simply collides with
-    // the (uncarved) structure — the station is solid unless you fly AT a door.
+    // the bay mouth rubber-bands). Per candidate face the ship's velocity DIRECTION must close on
+    // the door — speed is irrelevant:
+    //   vn = vel·Normal ≥ 0                    (not backing away)
+    //   vn² ≥ DockApproachMinCosSq · |vel|²    (within the 45° approach cone, sqrt-free)
+    // A parked ship (zero velocity) passes both trivially — touching the face while not moving
+    // away docks. Then the position test above decides. A gate-failing ship in the window simply
+    // collides with the (uncarved) structure — the station is solid unless you move AT a door.
     public static bool IntersectsDockFace(
         Vec3 d,
         Vec3 vel,
@@ -545,7 +547,7 @@ public static class Collide
         {
             DockFace f = faces[i];
             float vn = Dot(vel, f.Normal);
-            if (vn < CollisionConfig.DockMinClosingSpeed)
+            if (vn < 0f)
                 continue;
             if (vn * vn < CollisionConfig.DockApproachMinCosSq * vel.LengthSquared())
                 continue;
