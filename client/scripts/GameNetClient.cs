@@ -1724,9 +1724,12 @@ public partial class GameNetClient : Node
         for (int c = 0; c < cargoN; c++)
             d.DefaultCargo.Add(new CargoLoadDef { CargoId = r.ReadUInt32(), Count = r.ReadByte() });
         d.IsConstructor = r.ReadBoolean(); // v37; mirror of BuildDefs — hidden from the buy menu
-        // Hull tech-gate (v43; mirror of BuildDefs — streamed LAST in the ship block). Display-only:
-        // the hangar's locked hull card + Research UNLOCKS name the gate from this.
+        // Hull tech-gate (v43; mirror of BuildDefs). Display-only: the hangar's locked hull card +
+        // Research UNLOCKS name the gate from this.
         d.RequiredTechIdx = ReadTechList(r);
+        // Station-class launch/dock restriction (2026-07-21; mirror of BuildDefs — streamed LAST
+        // in the ship block): u16 bitmask over StationClassId; 0 = unrestricted.
+        d.LaunchClassMask = r.ReadUInt16();
         return d;
     }
 

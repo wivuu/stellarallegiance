@@ -3,10 +3,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 using SimServer.Assets;
 using SimServer.Content;
 using StellarAllegiance.Shared;
+using CapabilitySet = Allegiance.Factions.Model.CapabilitySet;
 // Alias just the two library set types (TechSet/CapabilitySet) rather than `using` the whole model
 // namespace, which would collide with Shared.WorldConfig (the ctor's `cfg` type).
 using TechSet = Allegiance.Factions.Model.TechSet;
-using CapabilitySet = Allegiance.Factions.Model.CapabilitySet;
 
 namespace SimServer.Sim;
 
@@ -33,12 +33,14 @@ public sealed class World
     public readonly int GarrisonCount; // count of match-start garrisons (all type 0); runtime bases append after
     public const float AsteroidCollisionScale = CollisionConfig.AsteroidCollisionScale;
     public const float CollisionRestitution = CollisionConfig.CollisionRestitution;
+
     // Collision DAMAGE, boundary hazard, and warp-gate knobs are CONTENT now — authored in
     // world.yaml (`combat:` / `mechanics:`) and read by the sim from Content.World.
     // The SINGLE default sector radius (before × SectorScale) for any sector whose YAML omits `radius`
     // and whose map/world sets no `sector-radius`. Replaces the old per-sector-id CoreRadius/VergeRadius
     // — no value is chosen by sector id anymore.
     public const float DefaultSectorRadius = 700f;
+
     // World-scale knobs (SectorScale / AsteroidDensity) are CONTENT now: they arrive via the
     // WorldConfig passed to the ctor (authored in YAML), so a per-server world.yaml override changes
     // the generated map, not just what's streamed. No compile-in defaults live here.
@@ -68,8 +70,14 @@ public sealed class World
     // knobs); the seeded dust CLOUDS themselves live in DustClouds. Null Env → legacy backdrop. MapX/
     // MapY (valid when HasMapPos) are the authored 2D map-diagram position, streamed to the client.
     public readonly record struct Sector(
-        uint Id, float Radius, string Name, SectorEnvironment? Env = null,
-        float MapX = 0f, float MapY = 0f, bool HasMapPos = false);
+        uint Id,
+        float Radius,
+        string Name,
+        SectorEnvironment? Env = null,
+        float MapX = 0f,
+        float MapY = 0f,
+        bool HasMapPos = false
+    );
 
     // One procedurally-seeded dust cloud: a soft volumetric sphere that hazes visuals AND attenuates
     // radar/vision (Simulation.Vision). Immutable after the World ctor → the vision worker reads the
@@ -97,6 +105,7 @@ public sealed class World
     public readonly record struct Gate(ulong Id, uint SectorId, uint DestSectorId, Vec3 Pos, Vec3 PartnerPos);
 
     public readonly List<Sector> Sectors = new();
+
     // Bases grow at runtime (v37 base building appends constructor-built bases). Appending never
     // invalidates an existing index, so BaseHealth/ResearchByBase (indexed like Bases) stay in
     // lockstep — every consumer iterates `for i < Bases.Count`. Bases are never removed/reordered
@@ -195,6 +204,14 @@ public sealed class World
         public DockFace[] DockFaces = System.Array.Empty<DockFace>();
         public float Radius = BaseRadius; // world-unit collision radius for this type
         public float MaxHealth; // per-type base hull (from the base def's max-armor); 0 => fall back to World.BaseMaxHealth
+
+        // Launch-station-classes plumbing (2026-07-21). HasAuthoredExits distinguishes "GLB loaded
+        // with real HP_DockingExit nodes" from BOTH "GLB missing" and "GLB with zero exit nodes" —
+        // the two collapse to the same 1-element fallback Exits, but only a loaded-yet-exitless
+        // model means "this station has no launch bay" (model-less test-world bases keep spawning).
+        // LargestDockFace is the precomputed DockRules.LargestFaceIndex over DockFaces (-1 = none).
+        public bool HasAuthoredExits;
+        public int LargestDockFace = -1;
     }
 
     // Loaded base models keyed by BaseTypeId. Type 0 (garrison) is always present. Populated in the
@@ -207,17 +224,33 @@ public sealed class World
     private BaseModelData Model0 => _baseModels.TryGetValue(0, out var m) ? m : EmptyBaseModel;
     private static readonly BaseModelData EmptyBaseModel = new();
 
-    public BaseModelData BaseModelFor(byte typeId) =>
-        _baseModels.TryGetValue(typeId, out var m) ? m : Model0;
+    public BaseModelData BaseModelFor(byte typeId) => _baseModels.TryGetValue(typeId, out var m) ? m : Model0;
 
     // Per-type collision accessors — the call sites that iterate bases resolve by b.BaseTypeId.
     public ConvexHull? BaseHullOf(byte typeId) => BaseModelFor(typeId).Hull;
+
     public ConvexHull[] BaseSubHullsOf(byte typeId) => BaseModelFor(typeId).SubHulls;
+
     public BaseExit[] BaseExitsOf(byte typeId) => BaseModelFor(typeId).Exits;
+
     public Vec3 BaseDoorCenterOf(byte typeId) => BaseModelFor(typeId).DoorCenter;
+
     public Vec3 BaseEntryAxisOf(byte typeId) => BaseModelFor(typeId).EntryAxis;
+
     public DockFace[] BaseDockFacesOf(byte typeId) => BaseModelFor(typeId).DockFaces;
+
     public float BaseRadiusOf(byte typeId) => BaseModelFor(typeId).Radius;
+
+    public int BaseLargestDockFaceOf(byte typeId) => BaseModelFor(typeId).LargestDockFace;
+
+    // Can a base of this type launch ships at all? A loaded model with no authored HP_DockingExit
+    // nodes has no launch bay (the hangar greys LAUNCH; the sim rejects the spawn). A model-less
+    // base (missing assets / test worlds) keeps the legacy always-launchable fallback.
+    public bool BaseLaunchCapableOf(byte typeId)
+    {
+        var m = BaseModelFor(typeId);
+        return m.Model is null || m.HasAuthoredExits;
+    }
 
     // Per-type base max hull. Sourced from the type's projected BaseDef (max-armor); falls back to the
     // legacy single BaseMaxHealth (garrison, type 0) for a type with no def / no authored health —
@@ -266,7 +299,14 @@ public sealed class World
     // Scale is the LIVE scale (shrinks as a He3 rock is mined, kept in lockstep with CurrentRadius by
     // SetOreRemaining); SpawnScale is the immutable spawn-size scale, so a live re-scale recomputes
     // ABSOLUTELY (SpawnScale·currentRadius/spawnRadius) and repeated harvests never compound drift.
-    public readonly record struct RockBody(ConvexHull Hull, Quat Rot, float Scale, Vec3 SpinAxis, float SpinSpeed, float SpawnScale);
+    public readonly record struct RockBody(
+        ConvexHull Hull,
+        Quat Rot,
+        float Scale,
+        Vec3 SpinAxis,
+        float SpinSpeed,
+        float SpawnScale
+    );
 
     // Per-rock MUTABLE resource state, assigned once after asteroid seeding (AssignOre) and keyed by
     // rock id. Every rock gets an entry: its RockClass, plus (He3 rocks only) an ore hold that a miner
@@ -276,7 +316,7 @@ public sealed class World
     public sealed class OreState
     {
         public RockClass Class;
-        public float OreCapacity;  // total He3 units this rock holds (0 = non-He3)
+        public float OreCapacity; // total He3 units this rock holds (0 = non-He3)
         public float OreRemaining; // He3 units left to mine
         public float CurrentRadius; // live (shrunk) radius; == the spawn radius until mined
     }
@@ -305,7 +345,8 @@ public sealed class World
 
     // The collision hull for a ship of this class (pods ignore class and use the pod hull), or null
     // when its GLB is missing — the caller then falls back to the ShipRadius sphere.
-    public ShipBody? ShipHull(byte cls, bool isPod) => isPod ? _podHull : (_shipHulls.TryGetValue(cls, out var b) ? b : null);
+    public ShipBody? ShipHull(byte cls, bool isPod) =>
+        isPod ? _podHull : (_shipHulls.TryGetValue(cls, out var b) ? b : null);
 
     // Per-sector asteroid grid (static between regenerations, like the module's).
     private readonly Dictionary<uint, Dictionary<(int, int, int), List<Rock>>> _rockGrid = new();
@@ -321,7 +362,15 @@ public sealed class World
 
     public static int CellOf(float v) => (int)MathF.Floor(v / GridCell);
 
-    public World(ulong seed, WorldConfig cfg, float baseMaxHealth, FactionStart start, IReadOnlyList<ShipClassDef> ships, IReadOnlyList<BaseDef>? baseDefs = null, ILogger? log = null)
+    public World(
+        ulong seed,
+        WorldConfig cfg,
+        float baseMaxHealth,
+        FactionStart start,
+        IReadOnlyList<ShipClassDef> ships,
+        IReadOnlyList<BaseDef>? baseDefs = null,
+        ILogger? log = null
+    )
     {
         _baseDefs = baseDefs;
         _log = log ?? NullLogger.Instance;
@@ -388,9 +437,7 @@ public sealed class World
         {
             float radius = sc.Radius ?? defaultRadius;
             bool hasPos = sc.MapPosX.HasValue && sc.MapPosY.HasValue;
-            Sectors.Add(new Sector(
-                sc.Id, radius, sc.Name ?? "", sc.Env,
-                sc.MapPosX ?? 0f, sc.MapPosY ?? 0f, hasPos));
+            Sectors.Add(new Sector(sc.Id, radius, sc.Name ?? "", sc.Env, sc.MapPosX ?? 0f, sc.MapPosY ?? 0f, hasPos));
         }
         return (secCfg, defaultRadius, density);
     }
@@ -425,8 +472,8 @@ public sealed class World
         for (int i = 0; i < secCfg.Count; i++)
         {
             var sc = secCfg[i];
-            var garrison = sc.Garrison
-                ?? (!anyGarrison && i < DefaultTeamCount ? new SectorGarrison { Team = (byte)i } : null);
+            var garrison =
+                sc.Garrison ?? (!anyGarrison && i < DefaultTeamCount ? new SectorGarrison { Team = (byte)i } : null);
             if (garrison is null)
                 continue;
             float r = RadiusOf(sc.Id, defaultRadius);
@@ -434,8 +481,7 @@ public sealed class World
             Bases.Add(new BaseSite(_nextBaseId++, garrison.Team, sc.Id, pos)); // garrisons are type 0
         }
         if (Bases.Count == 0)
-            throw new InvalidOperationException(
-                "map declares no garrisons — at least one team home base is required.");
+            throw new InvalidOperationException("map declares no garrisons — at least one team home base is required.");
         // Fail fast: the map can DECLARE any number of garrisons, but the sim is currently 2-team
         // (Simulation.Pig.NumTeams, the win condition, lobby team validation). A map that asks for more
         // teams than the sim supports must error at boot rather than misbehave mid-match.
@@ -450,7 +496,8 @@ public sealed class World
         if (teams.Count > MaxSupportedTeams || maxTeam >= MaxSupportedTeams)
             throw new InvalidOperationException(
                 $"map declares {teams.Count} garrison team(s) (max id {maxTeam}) — the sim currently "
-                    + $"supports {MaxSupportedTeams} teams (ids 0..{MaxSupportedTeams - 1}).");
+                    + $"supports {MaxSupportedTeams} teams (ids 0..{MaxSupportedTeams - 1})."
+            );
     }
 
     // Per-base health stamp + per-team economy seed. `garrisonCount` is handed back via `out` because
@@ -682,7 +729,7 @@ public sealed class World
             for (int i = 0; i < n; i++)
             {
                 var rr = new DetRng(OreMix(Seed, rocks[i].Id));
-                hash[i] = rr.NextULong();       // ranking + cosmetic-class selector
+                hash[i] = rr.NextULong(); // ranking + cosmetic-class selector
             }
 
             // Guaranteed He3 count: the sector override ?? world default, clamped to the actual rock
@@ -696,11 +743,14 @@ public sealed class World
             var order = new int[n];
             for (int i = 0; i < n; i++)
                 order[i] = i;
-            Array.Sort(order, (a, b) =>
-            {
-                int c = hash[b].CompareTo(hash[a]); // descending hash
-                return c != 0 ? c : rocks[a].Id.CompareTo(rocks[b].Id); // ascending id tie-break
-            });
+            Array.Sort(
+                order,
+                (a, b) =>
+                {
+                    int c = hash[b].CompareTo(hash[a]); // descending hash
+                    return c != 0 ? c : rocks[a].Id.CompareTo(rocks[b].Id); // ascending id tie-break
+                }
+            );
             var isHe3 = new bool[n];
             for (int k = 0; k < he3Count; k++)
                 isHe3[order[k]] = true;
@@ -719,7 +769,14 @@ public sealed class World
                 // Salted per-sector sub-RNG: sector ids overlap the rock-id space, so a raw
                 // OreMix(Seed, sectorId) stream could collide with a rock's own sub-RNG. The salt
                 // keeps the domains disjoint; the shared world-gen RNG stream stays untouched.
-                var hr = new DetRng(OreMix(Seed ^ 0x484F4D45_53504543UL /* "HOMESPEC" */, sectorId));
+                var hr = new DetRng(
+                    OreMix(
+                        Seed
+                            ^ 0x484F4D45_53504543UL /* "HOMESPEC" */
+                        ,
+                        sectorId
+                    )
+                );
                 if (hr.NextDouble() >= _seed.HomeSpecialChance)
                     specialCount = 0;
             }
@@ -769,11 +826,13 @@ public sealed class World
                         for (int k = he3Count; k < n; k++)
                             if (!isSpecial[order[k]])
                                 rest.Add(order[k]);
-                        rest.Sort((a, b) =>
-                        {
-                            int c = rocks[a].Pos.LengthSquared().CompareTo(rocks[b].Pos.LengthSquared());
-                            return c != 0 ? c : rocks[a].Id.CompareTo(rocks[b].Id);
-                        });
+                        rest.Sort(
+                            (a, b) =>
+                            {
+                                int c = rocks[a].Pos.LengthSquared().CompareTo(rocks[b].Pos.LengthSquared());
+                                return c != 0 ? c : rocks[a].Id.CompareTo(rocks[b].Id);
+                            }
+                        );
                         for (int t = 0; t < rest.Count && picked < specialCount; t++)
                         {
                             isSpecial[rest[t]] = true;
@@ -817,9 +876,7 @@ public sealed class World
                     // Non-He3 rocks carry no ore hold — capacity 0, never shrinks. A selected special
                     // rock gets one of the three special classes by the weighted draw over the same
                     // per-rock hash (default uniform = legacy hash%3); every other rock is Regolith.
-                    RockClass cls = isSpecial[i]
-                        ? specialWeights.Pick(hash[i])
-                        : RockClass.Regolith;
+                    RockClass cls = isSpecial[i] ? specialWeights.Pick(hash[i]) : RockClass.Regolith;
 
                     // Special (rare) rocks are landmark-sized: scale the spawn radius (collision + visual)
                     // by the tuning mult and write it back to the canonical Asteroids list, so the rock is
@@ -845,8 +902,7 @@ public sealed class World
 
     // The resource class assigned to a rock at world-gen (default Carbonaceous for an unknown id, e.g.
     // a test-seam rock added after construction — those carry no ore state).
-    public RockClass RockClassOf(ulong id) =>
-        RockOre.TryGetValue(id, out var s) ? s.Class : RockClass.Carbonaceous;
+    public RockClass RockClassOf(ulong id) => RockOre.TryGetValue(id, out var s) ? s.Class : RockClass.Carbonaceous;
 
     // The rock's CURRENT (possibly shrunk) collision/render radius, falling back to its static spawn
     // radius for any id with no ore state (non-assigned/test rocks).
@@ -904,8 +960,8 @@ public sealed class World
         Asteroids.RemoveAll(x => x.Id == id);
         RockOre.Remove(id);
         RockBodies.Remove(id);
-        _rockById = null;                 // invalidate the lazy id→Rock cache (rebuilt on next RockById)
-        RocksChangedThisStep.Remove(id);  // a removed rock has no shrink delta to send
+        _rockById = null; // invalidate the lazy id→Rock cache (rebuilt on next RockById)
+        RocksChangedThisStep.Remove(id); // a removed rock has no shrink delta to send
         RocksRemovedThisStep.Add(id);
         return true;
     }
@@ -960,9 +1016,9 @@ public sealed class World
         // Keep the hop distances too (SectorHops) — consumers rank cross-sector candidates ("nearest
         // rock/base by route") without re-walking the gate graph.
         foreach (var src in sorted)
-            foreach (var (dst, hops) in dist[src])
-                if (dst != src)
-                    _hops[(src, dst)] = hops;
+        foreach (var (dst, hops) in dist[src])
+            if (dst != src)
+                _hops[(src, dst)] = hops;
 
         // Next hop: for each (S, D), the lowest-Id outgoing gate of S whose destination sits one hop
         // closer to D than S is. `outs` is Id-sorted, so the first match is the lowest-Id gate.
@@ -976,9 +1032,11 @@ public sealed class World
                 if (dst == src || !dSrc.TryGetValue(dst, out int need))
                     continue; // self, or unreachable from src
                 foreach (var g in outs)
-                    if (dist.TryGetValue(g.DestSectorId, out var dMid)
+                    if (
+                        dist.TryGetValue(g.DestSectorId, out var dMid)
                         && dMid.TryGetValue(dst, out int viaHop)
-                        && viaHop == need - 1)
+                        && viaHop == need - 1
+                    )
                     {
                         _nextHop[(src, dst)] = g;
                         break;
@@ -1142,6 +1200,8 @@ public sealed class World
             DoorCenter = doorCenter,
             DockFaces = faces,
             Radius = radius,
+            HasAuthoredExits = exits.Count > 0,
+            LargestDockFace = DockRules.LargestFaceIndex(faces),
         };
     }
 
@@ -1164,7 +1224,14 @@ public sealed class World
                 continue;
             float scale = r.Radius * AsteroidCollisionScale / vm.Hull.BoundingRadius;
             var (spinAxis, spinSpeed) = Collide.RockSpin(r.Id);
-            RockBodies[r.Id] = new RockBody(vm.Hull, Collide.RockRotation(r.RotX, r.RotY, r.RotZ), scale, spinAxis, spinSpeed, scale);
+            RockBodies[r.Id] = new RockBody(
+                vm.Hull,
+                Collide.RockRotation(r.RotX, r.RotY, r.RotZ),
+                scale,
+                spinAxis,
+                spinSpeed,
+                scale
+            );
         }
         // ponytail: one-line proof of hull-vs-sphere collision. 0/N here == every rock is a sphere
         // (assets dir not found by THIS running server — check the [SimAssets] line above it).
@@ -1401,15 +1468,10 @@ public sealed class World
         private readonly List<(Vec3 Pos, float Radius)> _placed = new();
         private readonly float _cell;
 
-        public PlacementGrid(float rockMax, float gap) =>
-            _cell = MathF.Max(2f * rockMax + MathF.Max(gap, 0f), 1f);
+        public PlacementGrid(float rockMax, float gap) => _cell = MathF.Max(2f * rockMax + MathF.Max(gap, 0f), 1f);
 
         private (int, int, int) KeyOf(Vec3 p) =>
-            (
-                (int)MathF.Floor(p.X / _cell),
-                (int)MathF.Floor(p.Y / _cell),
-                (int)MathF.Floor(p.Z / _cell)
-            );
+            ((int)MathF.Floor(p.X / _cell), (int)MathF.Floor(p.Y / _cell), (int)MathF.Floor(p.Z / _cell));
 
         public void Add(Vec3 pos, float radius)
         {
@@ -1424,18 +1486,18 @@ public sealed class World
         {
             var (cx, cy, cz) = KeyOf(pos);
             for (int dx = -1; dx <= 1; dx++)
-                for (int dy = -1; dy <= 1; dy++)
-                    for (int dz = -1; dz <= 1; dz++)
-                    {
-                        if (!_cells.TryGetValue((cx + dx, cy + dy, cz + dz), out var cell))
-                            continue;
-                        foreach (int j in cell)
-                        {
-                            float need = radius + _placed[j].Radius + gap;
-                            if ((pos - _placed[j].Pos).LengthSquared() < need * need)
-                                return true;
-                        }
-                    }
+            for (int dy = -1; dy <= 1; dy++)
+            for (int dz = -1; dz <= 1; dz++)
+            {
+                if (!_cells.TryGetValue((cx + dx, cy + dy, cz + dz), out var cell))
+                    continue;
+                foreach (int j in cell)
+                {
+                    float need = radius + _placed[j].Radius + gap;
+                    if ((pos - _placed[j].Pos).LengthSquared() < need * need)
+                        return true;
+                }
+            }
             return false;
         }
     }
@@ -1445,9 +1507,9 @@ public sealed class World
     // amount → cloud radius (a fraction of the sector radius), cloud count (enough to tile the covered
     // disc at an amount-scaled overlap, clamped for fill-rate), and per-puff density. Own DetRng
     // (authored seed, or world-seed ^ sector) keeps it independent of the asteroid/aleph draw.
-    private const int MaxDustClouds = 120;      // fill-rate cap; huge sectors use fewer, bigger clouds
+    private const int MaxDustClouds = 120; // fill-rate cap; huge sectors use fewer, bigger clouds
     private const float DustCoverageFrac = 0.9f; // clouds fill this fraction of the sector radius
-    private const float DustFlatten = 0.15f;     // shallow disc (Y half-thickness / coverage radius)
+    private const float DustFlatten = 0.15f; // shallow disc (Y half-thickness / coverage radius)
 
     private void SeedDustClouds(uint sector, float sectorRadius, SectorDust? dust)
     {
@@ -1499,6 +1561,7 @@ public sealed class World
 
     // Teams seeded by the default-arena fallback (below) when a config authors sectors but no garrison.
     private const int DefaultTeamCount = 2;
+
     // The number of teams the sim currently supports (Simulation.Pig.NumTeams / win condition / lobby).
     // A map that declares more garrison teams than this fails fast at World construction.
     public const int MaxSupportedTeams = 2;
@@ -1509,18 +1572,23 @@ public sealed class World
     // linked. Real maps author every sector explicitly and never touch this.
     private const float LegacyHomeRadius = 2100f; // before × sector-scale
     private const float LegacyVergeRadius = 700f;
+
     private static List<WorldSectorConfig> DefaultArena(float sectorScale) =>
         new()
         {
             new WorldSectorConfig
             {
-                Id = 0, Radius = LegacyHomeRadius * sectorScale,
-                Asteroids = AsteroidKind.Field, Garrison = new SectorGarrison { Team = 0 },
+                Id = 0,
+                Radius = LegacyHomeRadius * sectorScale,
+                Asteroids = AsteroidKind.Field,
+                Garrison = new SectorGarrison { Team = 0 },
             },
             new WorldSectorConfig
             {
-                Id = 1, Radius = LegacyVergeRadius * sectorScale,
-                Asteroids = AsteroidKind.Belt, Garrison = new SectorGarrison { Team = 1 },
+                Id = 1,
+                Radius = LegacyVergeRadius * sectorScale,
+                Asteroids = AsteroidKind.Belt,
+                Garrison = new SectorGarrison { Team = 1 },
             },
         };
 

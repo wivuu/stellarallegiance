@@ -158,11 +158,17 @@ public partial class PredictionController : Node3D
             CollisionConfig.ShipRadius,
             bodies,
             Team,
+            _launchClassMask,
             CollisionConfig.CollisionRestitution,
             CollisionConfig.DockFaceDepth,
             out _
         );
     }
+
+    // The local hull's ShipClassDef.LaunchClassMask (0 = unrestricted; pods always 0), set at
+    // Initialize. Feeds ResolveStatics so a restricted hull predicts the same solid-wall bounce
+    // at disallowed friendly bases / side doors the server resolves (no rubber-banding).
+    private ushort _launchClassMask;
 
     // Spring-eased corrections so a reconcile re-base never snaps the rendered
     // transform. Each is a visual offset (render = predicted + offset) driven to
@@ -378,6 +384,7 @@ public partial class PredictionController : Node3D
         // holds authority instead of flying stale numbers (defs arrive in the initial
         // snapshot, before spawn, so this is effectively always ready here).
         _hasStats = defs.TryGetStats((byte)row.Class, row.IsPod, out _stats);
+        _launchClassMask = defs.LaunchClassMask(row.IsPod ? DefRegistry.PodClassId : (byte)row.Class);
         _predFuelPods = row.FuelPodAmmo;
         _state = ShipMath.StateFromRow(row);
         _prevState = _state;

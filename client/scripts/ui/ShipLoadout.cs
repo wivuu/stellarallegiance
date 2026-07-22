@@ -475,6 +475,7 @@ public partial class ShipLoadout : Control
         {
             _baseSig = sig;
             _sidebar.Refresh();
+            RefreshBaseLaunchHints(); // fresh rows — re-dress them for the selected hull
         }
         UpdateBaseReadouts();
     }
@@ -499,17 +500,67 @@ public partial class ShipLoadout : Control
         if (flying || hint != null)
             _launchPending = false; // landed, or refused (the hint names why) — let the pilot retry
         bool overCap = IsOverCapacity();
-        var gate = _world.TeamState.CheckSpawnGate(team, classId);
-        _launch.Disabled = overCap || flying || _launchPending || gate != TeamStateStore.SpawnGate.Allow;
+        // Launch-base gates (2026-07-21 launch-station-classes): the SELECTED base must be able to
+        // launch this hull (station class) and must have a launch bay at all (authored exits).
+        // Both mirror the server's TryResolveLaunchSite, which rejects such picks pre-charge.
+        byte selBaseType = _sidebar.SelectedBaseType;
+        bool haveBase = _sidebar.SelectedBaseId != 0;
+        bool wrongBase = haveBase && !_defs.HullMayLaunchFrom(classId, selBaseType);
+        bool noBay = haveBase && !_defs.BaseLaunchCapable(selBaseType);
+        var gate = _world.TeamState.CheckSpawnGate(team, classId, wrongBase);
+        _launch.Disabled = overCap || flying || _launchPending || noBay || gate != TeamStateStore.SpawnGate.Allow;
         _launch.Text =
             flying ? "IN FLIGHT"
             : _launchPending ? "LAUNCHING…"
             : gate == TeamStateStore.SpawnGate.Locked ? "⚿ LOCKED"
+            : gate == TeamStateStore.SpawnGate.WrongBase ? $"⚿ {LaunchMaskLabel(classId)}"
+            : noBay ? "NO LAUNCH BAY"
             : overCap ? "OVER CAPACITY"
             : "◆ LAUNCH";
         _launchHint.Visible = hint != null;
         if (hint != null)
             _launchHint.Text = hint;
+    }
+
+    // "SHIPYARD ONLY" / "SHIPYARD/ORDNANCE ONLY" — names the hull's allowed station classes from
+    // its LaunchClassMask bits ("" for an unrestricted hull).
+    private string LaunchMaskLabel(byte classId)
+    {
+        ushort mask = _defs.LaunchClassMask(classId);
+        if (mask == 0)
+            return "";
+        var names = new List<string>();
+        for (int bit = 0; bit < 16; bit++)
+            if ((mask & (1 << bit)) != 0)
+                names.Add(
+                    bit <= (int)StationClassId.Electronics
+                        ? ((StationClassId)bit).ToString().ToUpperInvariant()
+                        : $"CLASS {bit}"
+                );
+        return string.Join("/", names) + " ONLY";
+    }
+
+    // Per-base launch hints for the sidebar: why the SELECTED hull can't launch from a given base
+    // ("NO LAUNCH BAY" beats the class mismatch — it blocks every hull). Recomputed on hull select
+    // + roster refresh; rows without an entry render normally.
+    private void RefreshBaseLaunchHints()
+    {
+        if (_classId is not byte classId)
+            return;
+        byte team = Team;
+        Dictionary<ulong, string>? hints = null;
+        foreach (var (id, _, bteam, _, typeId) in _world.Bases.Known())
+        {
+            if (bteam != team)
+                continue;
+            string? hint =
+                !_defs.BaseLaunchCapable(typeId) ? "NO LAUNCH BAY"
+                : !_defs.HullMayLaunchFrom(classId, typeId) ? LaunchMaskLabel(classId)
+                : null;
+            if (hint != null)
+                (hints ??= new Dictionary<ulong, string>())[id] = hint;
+        }
+        _sidebar.SetRowHints(hints);
     }
 
     // The card to highlight when the picker first opens with no in-session pick yet: the hull the
@@ -558,6 +609,7 @@ public partial class ShipLoadout : Control
             count.Text = _state.GetCargoCount(classId, itemId).ToString("00"); // counts are per-class
 
         RefreshLoadoutViews();
+        RefreshBaseLaunchHints(); // the hull changed — the sidebar's can't-launch hints follow it
     }
 
     // Normalize each stat against the biggest hull in the buildable set so the bars

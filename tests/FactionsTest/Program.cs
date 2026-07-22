@@ -32,7 +32,11 @@ var core = CoreSerializer.Load(manifest);
 
 // 1. The shipped sample bundle is valid content.
 var vr = CoreValidator.Validate(core);
-Check(vr.IsValid, "sample-data core.manifest.yaml passes CoreValidator", $"sample-data invalid: {string.Join("; ", vr.Errors)}");
+Check(
+    vr.IsValid,
+    "sample-data core.manifest.yaml passes CoreValidator",
+    $"sample-data invalid: {string.Join("; ", vr.Errors)}"
+);
 
 // 2 + 3. Per-faction gating: resolve each faction's reachable tech state, then its buildables.
 var iron = core.Factions.Single(f => f.Id == "iron-coalition");
@@ -40,10 +44,18 @@ var bios = core.Factions.Single(f => f.Id == "bios");
 var ironBuildables = BuildableResolver.GetBuildables(core, TechResolver.ResolveReachable(core, iron));
 var biosBuildables = BuildableResolver.GetBuildables(core, TechResolver.ResolveReachable(core, bios));
 
-Check(ironBuildables.Count > 0, $"iron-coalition resolves buildables ({ironBuildables.Count})", "iron-coalition resolved zero buildables");
+Check(
+    ironBuildables.Count > 0,
+    $"iron-coalition resolves buildables ({ironBuildables.Count})",
+    "iron-coalition resolved zero buildables"
+);
 var ironIds = ironBuildables.Select(b => b.Id).ToHashSet();
 var biosIds = biosBuildables.Select(b => b.Id).ToHashSet();
-Check(!ironIds.SetEquals(biosIds), "iron-coalition buildables differ from bios (per-faction gating flows)", "iron-coalition and bios resolved identical buildables (gating not flowing)");
+Check(
+    !ironIds.SetEquals(biosIds),
+    "iron-coalition buildables differ from bios (per-faction gating flows)",
+    "iron-coalition and bios resolved identical buildables (gating not flowing)"
+);
 
 // ---- Phase 1: the authored stock bundle loads, validates, and carries the runtime extend-fields.
 // The bundle is the canonical-format reproduction of the legacy server/Content/stock.yaml; it must
@@ -56,12 +68,19 @@ Check(stockVr.IsValid, "stock bundle passes CoreValidator", $"stock bundle inval
 
 var scout = stock.Hulls.Single(h => h.Id == "scout");
 Check(
-    scout.ClassId == 0 && scout.Mass == 48 && scout.Speed == 173.3 && scout.Thrust == 40
-        && scout.MaxTurnRates.Yaw == 50 && scout.ArmorHitPoints == 69
-        && scout.DriftYawDeg == 5 && scout.StrafeThrustMultiplier == 0.5 && scout.ReverseThrustMultiplier == 0.25,
+    scout.ClassId == 0
+        && scout.Mass == 48
+        && scout.Speed == 173.3
+        && scout.Thrust == 40
+        && scout.MaxTurnRates.Yaw == 50
+        && scout.ArmorHitPoints == 69
+        && scout.DriftYawDeg == 5
+        && scout.StrafeThrustMultiplier == 0.5
+        && scout.ReverseThrustMultiplier == 0.25,
     "stock scout carries derived + extend flight fields (Iron Coalition fig13)",
     $"stock scout fields wrong (class {scout.ClassId}, mass {scout.Mass}, speed {scout.Speed}, drift {scout.DriftYawDeg})"
 );
+
 // RAW (pre-merge) YAML shape: the GLB-authoritative merge runs server-side (SimServer's
 // ContentLoader), NOT in CoreSerializer.Load, so here the scout carries only its three AUTHORED
 // entries — the bound cannon (weapon-id 0, geometry inherited from the mesh at merge time), the
@@ -69,33 +88,45 @@ Check(
 // Boosters/thruster/lights are appended later by the merge.
 Check(
     scout.Hardpoints.Count == 3
-        && scout.Hardpoints[0].Kind == RuntimeHardpointKind.Weapon && scout.Hardpoints[0].WeaponId == 0
-        && scout.Hardpoints[1].Kind == RuntimeHardpointKind.Weapon && scout.Hardpoints[1].WeaponId is null
-            && scout.Hardpoints[1].Mount == RuntimeMountKind.Missile
+        && scout.Hardpoints[0].Kind == RuntimeHardpointKind.Weapon
+        && scout.Hardpoints[0].WeaponId == 0
+        && scout.Hardpoints[1].Kind == RuntimeHardpointKind.Weapon
+        && scout.Hardpoints[1].WeaponId is null
+        && scout.Hardpoints[1].Mount == RuntimeMountKind.Missile
         && scout.Hardpoints[2].Kind == RuntimeHardpointKind.Cockpit,
     "stock scout carries authored hardpoints (bound cannon + empty missile belly + cockpit)",
     $"stock scout hardpoints wrong (count {scout.Hardpoints.Count})"
 );
 var pod = stock.Hulls.Single(h => h.Id == "pod");
 Check(pod.ClassId == 255, "stock pod is class-id 255 (lifepod)", $"stock pod class-id wrong ({pod.ClassId})");
-Check(stock.Factions.Single().LifepodHullId == "pod", "stock faction lifepod resolves to pod hull", "stock lifepod-hull-id wrong");
+Check(
+    stock.Factions.Single().LifepodHullId == "pod",
+    "stock faction lifepod resolves to pod hull",
+    "stock lifepod-hull-id wrong"
+);
 
 // Phase 6: the live faction IS Iron Coalition, carrying the 8-multiplier GAS block (kebab-case
 // GameAttribute keys) imported from PCore014.igc + the ×0.875 economy modifier.
 var ironFaction = stock.Factions.Single();
 var ga = ironFaction.BaseAttributes;
 Check(
-    ironFaction.Id == "iron-coalition" && ironFaction.Name == "Iron Coalition"
-        && ironFaction.BonusMoney == 875 && ironFaction.IncomeMoney == 88,
+    ironFaction.Id == "iron-coalition"
+        && ironFaction.Name == "Iron Coalition"
+        && ironFaction.BonusMoney == 875
+        && ironFaction.IncomeMoney == 88,
     "live faction is Iron Coalition with ×0.875 economy (bonus 875, income 88)",
     $"faction identity/economy wrong (id {ironFaction.Id}, name {ironFaction.Name}, bonus {ironFaction.BonusMoney}, income {ironFaction.IncomeMoney})"
 );
 Check(
     ga.Count == 8
-        && ga.Get(GameAttribute.MaxArmorStation) == 1.15 && ga.Get(GameAttribute.MaxShieldStation) == 1.15
-        && ga.Get(GameAttribute.Signature) == 0.85 && ga.Get(GameAttribute.MaxEnergy) == 1.2
-        && ga.Get(GameAttribute.MiningRate) == 0.85 && ga.Get(GameAttribute.MiningCapacity) == 0.75
-        && ga.Get(GameAttribute.GunDamage) == 1.1 && ga.Get(GameAttribute.MissileDamage) == 1.1,
+        && ga.Get(GameAttribute.MaxArmorStation) == 1.15
+        && ga.Get(GameAttribute.MaxShieldStation) == 1.15
+        && ga.Get(GameAttribute.Signature) == 0.85
+        && ga.Get(GameAttribute.MaxEnergy) == 1.2
+        && ga.Get(GameAttribute.MiningRate) == 0.85
+        && ga.Get(GameAttribute.MiningCapacity) == 0.75
+        && ga.Get(GameAttribute.GunDamage) == 1.1
+        && ga.Get(GameAttribute.MissileDamage) == 1.1,
     "Iron Coalition carries the 8 base-attributes (station-armor/shield 1.15, sig 0.85, energy 1.2, mining 0.85/0.75, gun/missile 1.1)",
     $"Iron base-attributes wrong (count {ga.Count})"
 );
@@ -104,28 +135,37 @@ Check(
 // which CoreValidator accepts (proven above by the whole bundle validating green).
 var miner = stock.Hulls.Single(h => h.Id == "miner");
 Check(
-    miner.ClassId == 4 && miner.OreCapacity == 2000
-        && !miner.Hardpoints.Any(hp => hp.Kind == RuntimeHardpointKind.Weapon),
+    miner.ClassId == 4 && miner.OreCapacity == 2000 && !miner.Hardpoints.Any(hp => hp.Kind == RuntimeHardpointKind.Weapon),
     "stock miner is class-id 4, carries ore-capacity, and is unarmed",
     $"stock miner wrong (class {miner.ClassId}, ore {miner.OreCapacity}, weapon-hps {miner.Hardpoints.Count(hp => hp.Kind == RuntimeHardpointKind.Weapon)})"
 );
 
 var gatGun1 = stock.Weapons.Single(w => w.Id == "gat-gun-1");
 Check(
-    gatGun1.WeaponId == 0 && gatGun1.FireIntervalTicks == 4 && gatGun1.ProjectileLifeTicks == 20
+    gatGun1.WeaponId == 0
+        && gatGun1.FireIntervalTicks == 4
+        && gatGun1.ProjectileLifeTicks == 20
         && gatGun1.Dispersion == 0.005,
     "stock PW Gat Gun 1 carries weapon-id + tick ballistics + dispersion",
     $"stock gat gun 1 wrong (id {gatGun1.WeaponId}, fire {gatGun1.FireIntervalTicks}, disp {gatGun1.Dispersion})"
 );
 var gatBolt1 = stock.Projectiles.Single(p => p.Id == "gat-bolt-1");
-Check(gatBolt1.Power == 10 && gatBolt1.Speed == 200 && gatBolt1.Width == 1, "stock Gat Bolt 1 carries power/speed/width", $"stock gat bolt 1 wrong (power {gatBolt1.Power})");
+Check(
+    gatBolt1.Power == 10 && gatBolt1.Speed == 200 && gatBolt1.Width == 1,
+    "stock Gat Bolt 1 carries power/speed/width",
+    $"stock gat bolt 1 wrong (power {gatBolt1.Power})"
+);
 
 // ER Nanite (Phase 5): the healing gun carries is-healing: true + 10-tick cadence + mass 2; a normal
 // gun (Gat) leaves is-healing at its false default. Guards the YAML kebab-case bind for the flag.
 var nanite1 = stock.Weapons.Single(w => w.Id == "nanite-1");
 Check(
-    nanite1.WeaponId == 15 && nanite1.IsHealing && !nanite1.CanDamageBase
-        && nanite1.FireIntervalTicks == 10 && nanite1.Mass == 2 && !gatGun1.IsHealing,
+    nanite1.WeaponId == 15
+        && nanite1.IsHealing
+        && !nanite1.CanDamageBase
+        && nanite1.FireIntervalTicks == 10
+        && nanite1.Mass == 2
+        && !gatGun1.IsHealing,
     "stock ER Nanite 1 carries is-healing + weapon-id 15 + 10-tick cadence + mass 2 (Gat stays non-healing)",
     $"stock nanite 1 wrong (id {nanite1.WeaponId}, heal {nanite1.IsHealing}, base {nanite1.CanDamageBase}, fire {nanite1.FireIntervalTicks}, mass {nanite1.Mass})"
 );
@@ -137,6 +177,7 @@ Check(
     "stock hulls/weapons carry payload-capacity + mass",
     $"stock payload wrong (scout cap {scout.PayloadCapacity}, fighter cap {fighter.PayloadCapacity}, gun mass {gatGun1.Mass})"
 );
+
 // Booster fuel: kebab-case (max-fuel/ab-fuel-drain/ab-fuel-recharge) binds onto the fighter hull.
 Check(
     fighter.MaxFuel == 15 && fighter.AbFuelDrain == 3.0 && fighter.AbFuelRecharge == 0.5,
@@ -147,33 +188,53 @@ var seeker = stock.Missiles.Single(m => m.Id == "mrm-seeker-1");
 Check(
     // The seeker lost its cargo-id/glyph (missiles aren't hangar-stocked consumables — a fighter's
     // payload can't fit mass-4 seekers) and gained a chaff-resistance stat.
-    seeker.CargoId == null && seeker.Mass == 4 && string.IsNullOrEmpty(seeker.Glyph)
-        && seeker.ChaffResistance == 1.0 && !string.IsNullOrEmpty(seeker.Description),
+    seeker.CargoId == null
+        && seeker.Mass == 4
+        && string.IsNullOrEmpty(seeker.Glyph)
+        && seeker.ChaffResistance == 1.0
+        && !string.IsNullOrEmpty(seeker.Description),
     "stock mrm-seeker-1 carries mass + chaff-resistance and NO cargo-id/glyph",
     $"stock seeker wrong (cargo-id {seeker.CargoId}, mass {seeker.Mass}, chaff-res {seeker.ChaffResistance}, glyph '{seeker.Glyph}')"
 );
+
 // Guided-missile guidance/lock block + smoke-trail runtime extension fields (projected onto the
 // missile-kind WeaponDef).
 Check(
-    seeker.InitialSpeed == 90 && seeker.Acceleration == 40 && seeker.MaxSpeed == 220 && seeker.TurnRate == 80
-        && seeker.LockTime == 2.0 && seeker.LockAngle == 0.5 && seeker.MaxLock == 1200 && seeker.Power == 45
-        && seeker.Width == 1 && seeker.Lifespan == 8
-        && seeker.BlastPower == 30 && seeker.BlastRadius == 25 && seeker.DirectHitMultiplier == 1.5,
+    seeker.InitialSpeed == 90
+        && seeker.Acceleration == 40
+        && seeker.MaxSpeed == 220
+        && seeker.TurnRate == 80
+        && seeker.LockTime == 2.0
+        && seeker.LockAngle == 0.5
+        && seeker.MaxLock == 1200
+        && seeker.Power == 45
+        && seeker.Width == 1
+        && seeker.Lifespan == 8
+        && seeker.BlastPower == 30
+        && seeker.BlastRadius == 25
+        && seeker.DirectHitMultiplier == 1.5,
     "stock seeker carries guidance/lock stats",
     $"stock seeker guidance wrong (speed {seeker.InitialSpeed}/{seeker.MaxSpeed}, accel {seeker.Acceleration}, turn {seeker.TurnRate}, lock {seeker.LockTime}/{seeker.LockAngle}/{seeker.MaxLock}, power {seeker.Power})"
 );
 Check(
-    seeker.ModelName == "mis06" && seeker.TrailLifetime == 0.7 && seeker.TrailScale == 0.45 && seeker.TrailColor == "ffc890ff",
+    seeker.ModelName == "mis06"
+        && seeker.TrailLifetime == 0.7
+        && seeker.TrailScale == 0.45
+        && seeker.TrailColor == "ffc890ff",
     "stock seeker carries smoke-trail fields (model-name/trail-*)",
     $"stock seeker trail wrong (model {seeker.ModelName}, life {seeker.TrailLifetime}, scale {seeker.TrailScale}, color {seeker.TrailColor})"
 );
 var missileRack = stock.Launchers.Single(l => l.Id == "seeker-rack-1");
 Check(
-    missileRack.WeaponId == 3 && missileRack.Amount == 6 && missileRack.FireIntervalTicks == 30
-        && missileRack.ExpendableId == "mrm-seeker-1" && missileRack.Mass == 4,
+    missileRack.WeaponId == 3
+        && missileRack.Amount == 6
+        && missileRack.FireIntervalTicks == 30
+        && missileRack.ExpendableId == "mrm-seeker-1"
+        && missileRack.Mass == 4,
     "stock seeker-rack-1 carries weapon-id + amount + fire-interval-ticks",
     $"stock seeker-rack-1 wrong (weapon-id {missileRack.WeaponId}, amount {missileRack.Amount}, fire {missileRack.FireIntervalTicks}, expendable {missileRack.ExpendableId})"
 );
+
 // Tier succession (Iron ordnance import, D1/D6): seeker-rack-1 is obsoleted by the seeker-2 tech and
 // migrates a saved loadout to seeker-rack-2 (weapon-id 18) once owned.
 Check(
@@ -193,50 +254,76 @@ Check(
 );
 var torpedoRack = stock.Launchers.Single(l => l.Id == "anti-base-rack-1");
 Check(
-    torpedoRack.WeaponId == 5 && torpedoRack.Amount == 6 && torpedoRack.FireIntervalTicks == 60
+    torpedoRack.WeaponId == 5
+        && torpedoRack.Amount == 6
+        && torpedoRack.FireIntervalTicks == 60
         && torpedoRack.ExpendableId == "srm-anti-base-1",
     "stock anti-base-rack-1 carries weapon-id + amount + fire-interval-ticks + resolves to the torpedo",
     $"stock anti-base-rack-1 wrong (weapon-id {torpedoRack.WeaponId}, amount {torpedoRack.Amount}, fire {torpedoRack.FireIntervalTicks}, expendable {torpedoRack.ExpendableId})"
 );
+
 // MRM Quickfire 1 (weapon-id 4 rack, the dart-rack analog): fast, weak, barely tracks; mass drops
 // 3->2 and the rack keeps its harasser numbers (Iron ordnance import D5).
 var quickfire = stock.Missiles.Single(m => m.Id == "mrm-quickfire-1");
 Check(
-    quickfire.Mass == 3 && quickfire.InitialSpeed == 180 && quickfire.TurnRate == 120
-        && quickfire.LockTime == 0.25 && quickfire.Power == 30 && quickfire.ModelName == "mis08",
+    quickfire.Mass == 3
+        && quickfire.InitialSpeed == 180
+        && quickfire.TurnRate == 120
+        && quickfire.LockTime == 0.25
+        && quickfire.Power == 30
+        && quickfire.ModelName == "mis08",
     "stock mrm-quickfire-1 carries its fast/weak/barely-tracking harasser stats",
     $"mrm-quickfire-1 wrong (mass {quickfire.Mass}, speed {quickfire.InitialSpeed}, turn {quickfire.TurnRate}, lock {quickfire.LockTime}, power {quickfire.Power}, model {quickfire.ModelName})"
 );
 var quickfireRack = stock.Launchers.Single(l => l.Id == "quickfire-rack-1");
 Check(
-    quickfireRack.WeaponId == 4 && quickfireRack.Amount == 6 && quickfireRack.FireIntervalTicks == 10
-        && quickfireRack.ExpendableId == "mrm-quickfire-1" && quickfireRack.Mass == 2,
+    quickfireRack.WeaponId == 4
+        && quickfireRack.Amount == 6
+        && quickfireRack.FireIntervalTicks == 10
+        && quickfireRack.ExpendableId == "mrm-quickfire-1"
+        && quickfireRack.Mass == 2,
     "stock quickfire-rack-1 carries weapon-id + amount + fire-interval-ticks + mass 2 (dropped from 3)",
     $"stock quickfire-rack-1 wrong (weapon-id {quickfireRack.WeaponId}, amount {quickfireRack.Amount}, fire {quickfireRack.FireIntervalTicks}, mass {quickfireRack.Mass}, expendable {quickfireRack.ExpendableId})"
 );
+
 // Chaff / mine consumables + their dispensers (launcher-projected, NOT hull-mounted).
 var mine = stock.Mines.Single(m => m.Id == "prox-mine-1");
 Check(
-    mine.CargoId == 2 && mine.Mass == 1 && mine.Power == 60
-        && mine.CloudRadius == 80 && mine.CloudCount == 64
-        && mine.ArmDelay == 1 && mine.Lifespan == 60 && mine.ModelName == "dn_ptminprx",
+    mine.CargoId == 2
+        && mine.Mass == 1
+        && mine.Power == 60
+        && mine.CloudRadius == 80
+        && mine.CloudCount == 64
+        && mine.ArmDelay == 1
+        && mine.Lifespan == 60
+        && mine.ModelName == "dn_ptminprx",
     "stock prox-mine-1 carries field/blast/arming stats",
     $"prox-mine-1 wrong (cargo {mine.CargoId}, radius {mine.Radius}, cloud {mine.CloudCount}x{mine.CloudRadius}, arm {mine.ArmDelay}, model {mine.ModelName})"
 );
 var decoy = stock.Chaffs.Single(c => c.Id == "counter-1");
 Check(
-    decoy.CargoId == 3 && decoy.Mass == 1 && decoy.ChaffStrength == 1.0 && decoy.DecoyRadius == 60 && decoy.Lifespan == 3 && decoy.ModelName == "acs40",
+    decoy.CargoId == 3
+        && decoy.Mass == 1
+        && decoy.ChaffStrength == 1.0
+        && decoy.DecoyRadius == 60
+        && decoy.Lifespan == 3
+        && decoy.ModelName == "acs40",
     "stock counter-1 carries chaff-strength + decoy-radius",
     $"counter-1 wrong (cargo {decoy.CargoId}, strength {decoy.ChaffStrength}, decoy {decoy.DecoyRadius})"
 );
 var decoyDispenser = stock.Launchers.Single(l => l.Id == "counter-dispenser-1");
 var mineDispenser = stock.Launchers.Single(l => l.Id == "prox-mine-dispenser-1");
 Check(
-    decoyDispenser.WeaponId == 6 && decoyDispenser.ExpendableId == "counter-1" && decoyDispenser.FireIntervalTicks == 40
-        && mineDispenser.WeaponId == 7 && mineDispenser.ExpendableId == "prox-mine-1" && mineDispenser.FireIntervalTicks == 100,
+    decoyDispenser.WeaponId == 6
+        && decoyDispenser.ExpendableId == "counter-1"
+        && decoyDispenser.FireIntervalTicks == 40
+        && mineDispenser.WeaponId == 7
+        && mineDispenser.ExpendableId == "prox-mine-1"
+        && mineDispenser.FireIntervalTicks == 100,
     "stock chaff/mine dispensers carry weapon-id + expendable-id + cadence",
     $"dispensers wrong (chaff wid {decoyDispenser.WeaponId} exp {decoyDispenser.ExpendableId}, mine wid {mineDispenser.WeaponId} exp {mineDispenser.ExpendableId})"
 );
+
 // Fighter/bomber default-cargo (raw YAML): fighter 2x counter-1 (was sensor-decoy).
 Check(
     fighter.DefaultCargo.Count == 1 && fighter.DefaultCargo[0].Item == "counter-1" && fighter.DefaultCargo[0].Count == 2,
@@ -249,32 +336,65 @@ Check(
 var bomberHull = stock.Hulls.Single(h => h.Id == "bomber");
 Check(
     bomberHull.Hardpoints.Count > 4
-        && bomberHull.Hardpoints[4].Kind == RuntimeHardpointKind.Weapon && bomberHull.Hardpoints[4].WeaponId == 5,
+        && bomberHull.Hardpoints[4].Kind == RuntimeHardpointKind.Weapon
+        && bomberHull.Hardpoints[4].WeaponId == 5,
     "stock bomber weapon index 4 mounts the torpedo rack (weapon-id 5)",
     $"stock bomber hardpoint wrong ({(bomberHull.Hardpoints.Count > 4 ? bomberHull.Hardpoints[4].WeaponId.ToString() : "missing")})"
 );
 
 // Devastator (Phase 4 capital hull, class-id 7, cap09): four heavy PW AutoCan mounts (weapon-id 12),
-// gated behind BOTH heavy-class AND shipyard-dry. cap09.glb exposes exactly four HP_Weapon nodes.
+// tech-gated on shipyard-1 (the authored placeholder — heavy-class/shipyard-dry later, see hulls.yaml)
+// and base-gated on launch-station-classes: [shipyard] (2026-07-21 — launches from / docks at
+// shipyard-class stations only). cap09.glb exposes exactly four HP_Weapon nodes.
 var devastator = stock.Hulls.Single(h => h.Id == "devastator");
 int devAutoCans = devastator.Hardpoints.Count(hp => hp.Kind == RuntimeHardpointKind.Weapon && hp.WeaponId == 12);
 Check(
-    devastator.ClassId == 7 && devastator.ModelName == "cap09" && devastator.ArmorHitPoints == 1200
+    devastator.ClassId == 7
+        && devastator.ModelName == "cap09"
+        && devastator.ArmorHitPoints == 1200
         && devAutoCans == 4
-        && devastator.RequiredTechs.Contains("heavy-class") && devastator.RequiredTechs.Contains("shipyard-dry"),
-    "stock Devastator is class-id 7 (cap09), 4x PW AutoCan, gated on heavy-class + shipyard-dry",
-    $"Devastator wrong (class {devastator.ClassId}, model {devastator.ModelName}, autocans {devAutoCans}, hp {devastator.ArmorHitPoints})"
+        && devastator.RequiredTechs.Contains("shipyard-1")
+        && devastator.LaunchStationClasses.SequenceEqual(new[] { StationClass.Shipyard }),
+    "stock Devastator is class-id 7 (cap09), 4x PW AutoCan, gated on shipyard-1 + launch-station-classes [shipyard]",
+    $"Devastator wrong (class {devastator.ClassId}, model {devastator.ModelName}, autocans {devAutoCans}, hp {devastator.ArmorHitPoints}, launch [{string.Join(",", devastator.LaunchStationClasses)}])"
+);
+Check(
+    stock.Hulls.Where(h => h.Id != "devastator").All(h => h.LaunchStationClasses.Count == 0),
+    "every other stock hull authors NO launch-station-classes (unrestricted)",
+    "an unexpected stock hull authors launch-station-classes"
+);
+
+// launch-station-classes round-trip: the enum list serializes kebab-case and an empty list is
+// omitted entirely (OmitEmptyCollections keeps untouched hulls byte-stable).
+var rtHull = new Hull { Id = "rt-test", LaunchStationClasses = { StationClass.Shipyard, StationClass.Ordnance } };
+string rtYaml = CoreSerializer.Serialize(rtHull);
+var rtBack = CoreSerializer.Deserialize<Hull>(rtYaml);
+Check(
+    rtYaml.Contains("- shipyard")
+        && rtYaml.Contains("- ordnance")
+        && rtBack.LaunchStationClasses.SequenceEqual(new[] { StationClass.Shipyard, StationClass.Ordnance }),
+    "launch-station-classes round-trips (kebab enum keywords preserved in order)",
+    $"launch-station-classes round-trip broke (yaml: {rtYaml.Replace("\n", " / ")})"
+);
+Check(
+    !CoreSerializer.Serialize(new Hull { Id = "rt-empty" }).Contains("launch-station-classes"),
+    "an empty launch-station-classes list is omitted from YAML",
+    "empty launch-station-classes leaked into serialized YAML"
 );
 
 var garrison = stock.Stations.Single(s => s.Id == "garrison");
 Check(
     // RAW (pre-merge): the garrison authors NO hardpoints — garrison.glb supplies them all (docking
     // entrances/exits + nav lights + turrets) via the server-side merge. It binds the GLB by model-name.
-    garrison.BaseTypeId == 0 && garrison.Radius == 90 && garrison.MaxArmor == 2000
-        && garrison.ModelName == "garrison" && garrison.Hardpoints.Count == 0,
+    garrison.BaseTypeId == 0
+        && garrison.Radius == 90
+        && garrison.MaxArmor == 2000
+        && garrison.ModelName == "garrison"
+        && garrison.Hardpoints.Count == 0,
     "stock garrison carries base-type-id + radius/armor + model-name (hardpoints come from the GLB)",
     $"stock garrison wrong (id {garrison.BaseTypeId}, r {garrison.Radius}, hp {garrison.MaxArmor}, model {garrison.ModelName}, hardpoints {garrison.Hardpoints.Count})"
 );
+
 // (World/sim tuning is no longer part of the factions bundle — it lives in the server's standalone
 // content/core/world.yaml, parsed by SimServer's WorldLoader and covered by tests/ContentTest.)
 

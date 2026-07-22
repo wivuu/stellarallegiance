@@ -475,12 +475,27 @@ public partial class ShipController : Node
         else if (connected && !_spawnPending && _spawnRequest is { } cls)
         {
             // Stage-2 buy pre-check: don't spam a request the latest snapshot says will fail (locked
-            // hull / can't afford). The server stays authoritative; this only suppresses the doomed
-            // send and surfaces a reason. The request stays queued so it auto-fires once affordable
-            // (e.g. when the paycheck lands). Team pre-spawn comes from the Welcome assignment.
+            // hull / can't afford / a launch base that can't serve the hull). The server stays
+            // authoritative; this only suppresses the doomed send and surfaces a reason. The request
+            // stays queued so it auto-fires once affordable (e.g. when the paycheck lands) or once
+            // the pilot picks a legal base. Team pre-spawn comes from the Welcome assignment.
             byte team = _world.LocalTeam ?? _net?.MyTeam ?? 0;
-            var gate = _world.TeamState.CheckSpawnGate(team, (byte)cls);
-            if (gate == TeamStateStore.SpawnGate.Allow)
+            // Launch-base pre-checks (2026-07-21 launch-station-classes): resolve the sidebar pick
+            // to its base TYPE; 0 = "server default-resolves" (skip — the server scans for a legal
+            // base itself). Mirrors TryResolveLaunchSite's class + launch-bay gates.
+            bool wrongBase = false,
+                noBay = false;
+            ulong selBase = LoadoutState.Shared.SelectedBaseId;
+            if (_defs != null && selBase != 0)
+                foreach (var (id, _, bteam, _, typeId) in _world.Bases.Known())
+                    if (id == selBase && bteam == team)
+                    {
+                        wrongBase = !_defs.HullMayLaunchFrom((byte)cls, typeId);
+                        noBay = !_defs.BaseLaunchCapable(typeId);
+                        break;
+                    }
+            var gate = _world.TeamState.CheckSpawnGate(team, (byte)cls, wrongBase);
+            if (gate == TeamStateStore.SpawnGate.Allow && !noBay)
             {
                 // Spawn on the authoritative sim server (honored only while the match is Active;
                 // the request simply retries until then), carrying the hangar's chosen consumable
@@ -508,7 +523,11 @@ public partial class ShipController : Node
             }
             else
             {
-                SpawnHint = gate == TeamStateStore.SpawnGate.Locked ? $"{cls} is locked" : $"Not enough credits for {cls}";
+                SpawnHint =
+                    gate == TeamStateStore.SpawnGate.Locked ? $"{cls} is locked"
+                    : gate == TeamStateStore.SpawnGate.WrongBase ? $"{cls} can't launch from the selected base"
+                    : noBay ? "Selected base has no launch bay"
+                    : $"Not enough credits for {cls}";
             }
         }
     }

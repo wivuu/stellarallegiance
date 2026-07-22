@@ -60,7 +60,14 @@ public static class Collide
     // Sphere-vs-sphere static bounce (a rock without a hull, or a base fallback). Snaps the ship to
     // the contact surface and reflects inbound velocity. Reports `vn` for server-side damage.
     // Returns true on contact.
-    public static bool ResolveStaticSphere(ref ShipState s, float shipRadius, Vec3 center, float radius, float restitution, out float vn)
+    public static bool ResolveStaticSphere(
+        ref ShipState s,
+        float shipRadius,
+        Vec3 center,
+        float radius,
+        float restitution,
+        out float vn
+    )
     {
         vn = 0f;
         Vec3 d = s.Pos - center;
@@ -131,6 +138,13 @@ public static class Collide
         public readonly int BaseTeam; // -1 for an asteroid; the team id for a base (dock carve-out + ownership)
         public readonly DockFace[]? DockFaces; // own-base rectangular docking doors (base-local); null otherwise
 
+        // Station-class launch/dock restriction inputs (2026-07-21): the base's StationClassId
+        // byte (DockRules.UnknownStationClass when not a catalogued base) and its precomputed
+        // largest-door index (-1 = none). Non-base bodies keep the defaults; a mask-0 ship reads
+        // neither.
+        public readonly byte StationClass;
+        public readonly int LargestDockFace;
+
         // Authored compound collision parts (one per baked COL_ node), in this body's SAME local frame
         // as `Hull` (bases: already world-scaled ⇒ identity rot / scale 1). null ⇒ single-hull
         // semantics via `Hull` — every asteroid/ship/un-baked base keeps exactly today's behaviour.
@@ -146,7 +160,9 @@ public static class Collide
             float sphereRadius,
             int baseTeam,
             DockFace[]? dockFaces,
-            ConvexHull[]? subHulls
+            ConvexHull[]? subHulls,
+            byte stationClass = DockRules.UnknownStationClass,
+            int largestDockFace = -1
         )
         {
             Hull = hull;
@@ -157,6 +173,8 @@ public static class Collide
             BaseTeam = baseTeam;
             DockFaces = dockFaces;
             SubHulls = subHulls;
+            StationClass = stationClass;
+            LargestDockFace = largestDockFace;
         }
 
         public static StaticBody AsteroidHull(ConvexHull hull, Vec3 center, Quat rot, float scale) =>
@@ -166,19 +184,31 @@ public static class Collide
             new(null, center, Quat.Identity, 1f, radius, -1, null, null);
 
         // A base hull (already world-scaled, so identity rot + scale 1, local frame == world).
-        public static StaticBody BaseHull(ConvexHull hull, Vec3 center, int team, DockFace[] faces) =>
-            new(hull, center, Quat.Identity, 1f, 0f, team, faces, null);
+        public static StaticBody BaseHull(
+            ConvexHull hull,
+            Vec3 center,
+            int team,
+            DockFace[] faces,
+            byte stationClass,
+            int largestDockFace
+        ) => new(hull, center, Quat.Identity, 1f, 0f, team, faces, null, stationClass, largestDockFace);
 
         // A COMPOUND base: `merged` is the shrink-wrap hull (broadphase/metrics parity with the
         // single-hull form); `subHulls` are the authored convex parts a ship actually bounces off,
         // in the same already-world-scaled local frame. The dock faces still gate on the merged
-        // envelope. B3 migrates the base-insert callers onto this overload; the 4-arg one stays.
-        public static StaticBody BaseHull(ConvexHull merged, ConvexHull[] subHulls, Vec3 center, int team, DockFace[] faces) =>
-            new(merged, center, Quat.Identity, 1f, 0f, team, faces, subHulls);
+        // envelope. B3 migrates the base-insert callers onto this overload; the 6-arg one stays.
+        public static StaticBody BaseHull(
+            ConvexHull merged,
+            ConvexHull[] subHulls,
+            Vec3 center,
+            int team,
+            DockFace[] faces,
+            byte stationClass,
+            int largestDockFace
+        ) => new(merged, center, Quat.Identity, 1f, 0f, team, faces, subHulls, stationClass, largestDockFace);
 
         public static StaticBody BaseSphere(Vec3 center, float radius, int team) =>
             new(null, center, Quat.Identity, 1f, radius, team, null, null);
-
 
         // A deployed recon probe: a plain solid sphere, team-agnostic (no ownership carve-out — you
         // bounce off your own probes too), matching the server's ResolveProbeCollisions footprint.
@@ -221,7 +251,10 @@ public static class Collide
         bool any = false;
         for (int i = 0; i < b.SubHulls.Length; i++)
         {
-            if (SphereVsHull(pos, radius, b.SubHulls[i], b.Center, b.Rot, b.Scale, out Vec3 n, out float pen) && (!any || pen > penetration))
+            if (
+                SphereVsHull(pos, radius, b.SubHulls[i], b.Center, b.Rot, b.Scale, out Vec3 n, out float pen)
+                && (!any || pen > penetration)
+            )
             {
                 normal = n;
                 penetration = pen;
@@ -235,11 +268,15 @@ public static class Collide
     // same way the server does: bounce off every asteroid/base hull, EXCEPT skip the bounce at the
     // ship's OWN base docking discs (so prediction doesn't fight the server's docking). Returns true
     // if any contact occurred and reports the last contact position (for the collision thud).
+    // `launchClassMask` is the ship hull's ShipClassDef.LaunchClassMask (0 = unrestricted): a
+    // restricted hull gets NO dock carve-out at own bases of a disallowed station class, and at an
+    // allowed base only its largest door opens (DockRules) — matching the server's dock pass.
     public static bool ResolveStatics(
         ref ShipState s,
         float shipRadius,
         System.Collections.Generic.IReadOnlyList<StaticBody> bodies,
         int localTeam,
+        ushort launchClassMask,
         float restitution,
         float dockFaceDepth,
         out Vec3 hitPos
@@ -251,7 +288,18 @@ public static class Collide
         {
             StaticBody b = bodies[i];
             bool ownBase = b.BaseTeam >= 0 && b.BaseTeam == localTeam;
-            if (ownBase && b.DockFaces != null && IntersectsDockFace(s.Pos - b.Center, b.DockFaces, dockFaceDepth, shipRadius))
+            if (
+                ownBase
+                && b.DockFaces != null
+                && DockRules.ClassAllowed(launchClassMask, b.StationClass)
+                && IntersectsDockFace(
+                    s.Pos - b.Center,
+                    b.DockFaces,
+                    dockFaceDepth,
+                    shipRadius,
+                    DockRules.AllowedFace(launchClassMask, b.LargestDockFace)
+                )
+            )
                 continue; // your dock opening — let the ship through (server handles docking)
             if (b.Hull != null)
             {
@@ -273,11 +321,13 @@ public static class Collide
 
     // Non-mutating overlap test: does a ship sphere at `pos` touch any static body (skipping its own
     // base's dock discs)? Used for the collision THUD — same geometry as ResolveStatics, no bounce.
+    // `launchClassMask` mirrors ResolveStatics: a restricted hull thuds where it would bounce.
     public static bool Touches(
         Vec3 pos,
         float shipRadius,
         System.Collections.Generic.IReadOnlyList<StaticBody> bodies,
         int localTeam,
+        ushort launchClassMask,
         float dockFaceDepth
     )
     {
@@ -285,7 +335,18 @@ public static class Collide
         {
             StaticBody b = bodies[i];
             bool ownBase = b.BaseTeam >= 0 && b.BaseTeam == localTeam;
-            if (ownBase && b.DockFaces != null && IntersectsDockFace(pos - b.Center, b.DockFaces, dockFaceDepth, shipRadius))
+            if (
+                ownBase
+                && b.DockFaces != null
+                && DockRules.ClassAllowed(launchClassMask, b.StationClass)
+                && IntersectsDockFace(
+                    pos - b.Center,
+                    b.DockFaces,
+                    dockFaceDepth,
+                    shipRadius,
+                    DockRules.AllowedFace(launchClassMask, b.LargestDockFace)
+                )
+            )
                 continue;
             if (b.Hull != null)
             {
@@ -409,7 +470,21 @@ public static class Collide
         for (int i = 0; i < ships.Count; i++)
         {
             MovingShip o = ships[i];
-            if (!ShipShipContact(s.Pos, s.Rot, localHull, localBound, o.Pos, o.Rot, o.Hull, o.BoundingRadius, shipRadius, out Vec3 n, out float pen))
+            if (
+                !ShipShipContact(
+                    s.Pos,
+                    s.Rot,
+                    localHull,
+                    localBound,
+                    o.Pos,
+                    o.Rot,
+                    o.Hull,
+                    o.BoundingRadius,
+                    shipRadius,
+                    out Vec3 n,
+                    out float pen
+                )
+            )
                 continue;
             // The local half of the server's ResolveShipImpulse (n points other → local).
             float iA = s.Mass > 0f ? 1f / s.Mass : 1f;
@@ -434,9 +509,17 @@ public static class Collide
     // ~8 world units/tick at 20 Hz) from tunneling the thin plane between ticks: the window spans
     // dockFaceDepth+shipRadius ≈ 12 ≥ 8 with margin. NO facing/velocity requirement — pure geometry.
     // This is the ONLY way to dock at a hull base — everything else is the solid shell.
-    public static bool IntersectsDockFace(Vec3 d, DockFace[] faces, float dockFaceDepth, float shipRadius)
+    public static bool IntersectsDockFace(Vec3 d, DockFace[] faces, float dockFaceDepth, float shipRadius) =>
+        IntersectsDockFace(d, faces, dockFaceDepth, shipRadius, -1);
+
+    // `onlyFace` (2026-07-21 launch-station-classes): -1 tests every door (stock behaviour); >= 0
+    // tests ONLY that face index — a restricted hull may enter solely through the base's largest
+    // door (DockRules.AllowedFace), so every other door acts as solid shell for it.
+    public static bool IntersectsDockFace(Vec3 d, DockFace[] faces, float dockFaceDepth, float shipRadius, int onlyFace)
     {
-        for (int i = 0; i < faces.Length; i++)
+        int start = onlyFace >= 0 ? onlyFace : 0;
+        int end = onlyFace >= 0 ? System.Math.Min(onlyFace + 1, faces.Length) : faces.Length;
+        for (int i = start; i < end; i++)
         {
             DockFace f = faces[i];
             Vec3 rel = d - f.Center;
@@ -444,8 +527,10 @@ public static class Collide
             if (along > shipRadius || along < -dockFaceDepth)
                 continue;
             Vec3 lateral = rel - f.Normal * along;
-            if (System.Math.Abs(Dot(lateral, f.U)) <= f.Eu + shipRadius
-                && System.Math.Abs(Dot(lateral, f.V)) <= f.Ev + shipRadius)
+            if (
+                System.Math.Abs(Dot(lateral, f.U)) <= f.Eu + shipRadius
+                && System.Math.Abs(Dot(lateral, f.V)) <= f.Ev + shipRadius
+            )
                 return true;
         }
         return false;

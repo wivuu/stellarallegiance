@@ -371,9 +371,16 @@ public sealed class ClientHub
     private void BroadcastLobby()
     {
         var frame = Protocol.BuildLobbyState(
-            _sim.Phase, _sim.Winner, _lobby.Snapshot(id => _sim.ShipIdOf(id)),
-            _teamNames[0], _teamNames[1], _hostId, _selectedMap,
-            _lobby.CommanderOf(0), _lobby.CommanderOf(1));
+            _sim.Phase,
+            _sim.Winner,
+            _lobby.Snapshot(id => _sim.ShipIdOf(id)),
+            _teamNames[0],
+            _teamNames[1],
+            _hostId,
+            _selectedMap,
+            _lobby.CommanderOf(0),
+            _lobby.CommanderOf(1)
+        );
         foreach (var c in _clients.Values)
             SendReliable(c, OutFrame.Whole(frame));
     }
@@ -400,14 +407,28 @@ public sealed class ClientHub
                 client.RevealAlephCur = vision.RevealLogAlephs.Count;
                 client.RevealSectorCur = vision.RevealLogSectors.Count;
                 frame = Protocol.BuildWelcome(
-                    client.Id, client.Team, _sim.World, _sim.Tick, Convert.FromHexString(client.Token), fog, vision);
+                    client.Id,
+                    client.Team,
+                    _sim.World,
+                    _sim.Tick,
+                    Convert.FromHexString(client.Token),
+                    fog,
+                    vision
+                );
             }
         }
         else
         {
             client.RevealBaseCur = client.RevealRockCur = client.RevealAlephCur = client.RevealSectorCur = 0;
             frame = Protocol.BuildWelcome(
-                client.Id, client.Team, _sim.World, _sim.Tick, Convert.FromHexString(client.Token), fog, vision);
+                client.Id,
+                client.Team,
+                _sim.World,
+                _sim.Tick,
+                Convert.FromHexString(client.Token),
+                fog,
+                vision
+            );
         }
         SendReliable(client, OutFrame.Whole(frame));
     }
@@ -550,7 +571,9 @@ public sealed class ClientHub
                             // (rejected-join) path; harmless for WS.
                             await Task.Delay(150, CancellationToken.None);
                         }
-                        catch { /* best-effort — closing anyway */ }
+                        catch
+                        { /* best-effort — closing anyway */
+                        }
                         await client.Transport.CloseAsync("bad secret", ct);
                         return;
                     }
@@ -596,8 +619,11 @@ public sealed class ClientHub
                     // [nMounts][nMounts x (u8 hpIndex, u32 weaponId)] — the mount tail is the
                     // hangar's weapon-slot overrides (u32.Max = leave empty); it's optional, so
                     // a frame ending after the cargo block parses as zero overrides.
-                    // launchBaseId 0 = server default base; the sim validates friendly+alive and
-                    // falls back silently. A bare length-10 frame carries no cargo (hull default).
+                    // launchBaseId 0 = server default base; the sim validates friendly+alive+
+                    // launch-capable+station-class (TryResolveLaunchSite) and REJECTS pre-charge a
+                    // pick that can't serve the hull (wrong class / exitless); only an unrestricted
+                    // hull with a stale/dead pick falls back silently. A bare length-10 frame
+                    // carries no cargo (hull default).
                     byte cls = buffer[1];
                     // Def-driven class gate (was a hardcoded `cls > 2 -> scout` clamp): unknown
                     // hulls, the pod, and miner drones are dropped to scout; the lock/cost gate
@@ -714,8 +740,9 @@ public sealed class ClientHub
                         if (count >= 3 + len)
                         {
                             string want = System.Text.Encoding.UTF8.GetString(buffer, 3, len).Trim();
-                            var match = _mapCatalog.FirstOrDefault(
-                                m => string.Equals(m.Name, want, StringComparison.OrdinalIgnoreCase));
+                            var match = _mapCatalog.FirstOrDefault(m =>
+                                string.Equals(m.Name, want, StringComparison.OrdinalIgnoreCase)
+                            );
                             if (match != null)
                             {
                                 _selectedMap = match.Name;
@@ -787,7 +814,8 @@ public sealed class ClientHub
                     var pos = new Vec3(
                         BitConverter.ToSingle(buffer, 15),
                         BitConverter.ToSingle(buffer, 19),
-                        BitConverter.ToSingle(buffer, 23));
+                        BitConverter.ToSingle(buffer, 23)
+                    );
                     _sim.EnqueueSetAutopilot(client.Id, mode, kind, id, sector, pos);
                     break;
                 }
@@ -803,7 +831,8 @@ public sealed class ClientHub
                     var pos = new Vec3(
                         BitConverter.ToSingle(buffer, 22),
                         BitConverter.ToSingle(buffer, 26),
-                        BitConverter.ToSingle(buffer, 30));
+                        BitConverter.ToSingle(buffer, 30)
+                    );
                     HandleOrder(client, subject, targetKind, targetId, sector, pos);
                     break;
                 }
@@ -936,9 +965,12 @@ public sealed class ClientHub
                 if (arg.Length == 0)
                 {
                     var names = _sim.Content.Developments.Select(d => d.Id);
-                    SystemTo(client, _sim.Content.Developments.Count == 0
-                        ? "No developments in this server's catalog."
-                        : $"Usage: /research <id>. Catalog: {string.Join(", ", names)}");
+                    SystemTo(
+                        client,
+                        _sim.Content.Developments.Count == 0
+                            ? "No developments in this server's catalog."
+                            : $"Usage: /research <id>. Catalog: {string.Join(", ", names)}"
+                    );
                     break;
                 }
                 if (CommanderOrWarn(client) is not byte rTeam)
@@ -996,7 +1028,10 @@ public sealed class ClientHub
                 if (_lobby.SetCommander(team, targetId))
                 {
                     BroadcastLobby(); // CMDR badge + IsCommander flip everywhere
-                    SystemToTeam(team, $"{_players.NameOf(targetId)} now commands the team (handed off by {_players.NameOf(client.Id)}).");
+                    SystemToTeam(
+                        team,
+                        $"{_players.NameOf(targetId)} now commands the team (handed off by {_players.NameOf(client.Id)})."
+                    );
                 }
                 break;
             }
@@ -1024,9 +1059,12 @@ public sealed class ClientHub
         int cmdr = _lobby.CommanderOf(team);
         if (cmdr == client.Id)
             return team;
-        SystemTo(client, cmdr >= 0
-            ? $"Only the commander can direct AI vessels — ask {_players.NameOf(cmdr)}."
-            : "Only the commander can direct AI vessels.");
+        SystemTo(
+            client,
+            cmdr >= 0
+                ? $"Only the commander can direct AI vessels — ask {_players.NameOf(cmdr)}."
+                : "Only the commander can direct AI vessels."
+        );
         return null;
     }
 
@@ -1568,9 +1606,10 @@ public sealed class ClientHub
         // Fog-off ONLY: a mid-match constructor-built base has no per-team reveal log to ride, so
         // broadcast a one-slice MsgReveal carrying its static to every client (fog-on streams it via
         // the per-team reveal cursor in RevealBaseToTeam). Idempotent client-side (InsertBase dedups).
-        byte[]? baseRevealFrame = (!fog && _sim.BasesCreatedThisStep.Count > 0)
-            ? Protocol.BuildBaseReveal(_sim.World, _sim.BasesCreatedThisStep)
-            : null;
+        byte[]? baseRevealFrame =
+            (!fog && _sim.BasesCreatedThisStep.Count > 0)
+                ? Protocol.BuildBaseReveal(_sim.World, _sim.BasesCreatedThisStep)
+                : null;
 
         // Rock despawns (a constructor's finished base consumed its asteroid): one reliable broadcast so
         // every client that has the rock deletes it (node + collision). Fog-agnostic — an unknown id is a
@@ -1629,8 +1668,8 @@ public sealed class ClientHub
         // seed the set; direct LOS then unions in. Radar gives at-range discovery of an armed field
         // without line of sight; LOS still reveals immediately through a window.
         var tv = _sim.VisionFor(team);
-        HashSet<ulong>? vis = (tv != null && tv.VisibleEnemyMines.Count > 0)
-            ? new HashSet<ulong>(tv.VisibleEnemyMines) : null;
+        HashSet<ulong>? vis =
+            (tv != null && tv.VisibleEnemyMines.Count > 0) ? new HashSet<ulong>(tv.VisibleEnemyMines) : null;
         for (int i = 0; i < fields.Count; i++)
             if (fields[i].Team != team && _sim.IsPointVisibleToTeam(team, fields[i].SectorId, fields[i].Center))
                 (vis ??= new()).Add(fields[i].FieldId);
@@ -1755,7 +1794,10 @@ public sealed class ClientHub
         if (frames.SendConstructor && client.Team <= 1)
         {
             byte[] BuildConstructorFrame() => Protocol.BuildConstructorState(_sim, client.Team);
-            SendLossy(client, OutFrame.Whole(TeamFrame(frames.ConstructorFramesByTeam!, client.Team, BuildConstructorFrame)));
+            SendLossy(
+                client,
+                OutFrame.Whole(TeamFrame(frames.ConstructorFramesByTeam!, client.Team, BuildConstructorFrame))
+            );
         }
 
         // Fog-off new-base reveal (reliable — a one-shot static the client must not miss).
@@ -1787,9 +1829,18 @@ public sealed class ClientHub
             if (vision is not null)
             {
                 var rf = Protocol.BuildRevealSlice(
-                    _sim.World, vision, RockIndexById(),
-                    client.RevealBaseCur, client.RevealRockCur, client.RevealAlephCur, client.RevealSectorCur,
-                    out int nb, out int nr, out int na, out int ns);
+                    _sim.World,
+                    vision,
+                    RockIndexById(),
+                    client.RevealBaseCur,
+                    client.RevealRockCur,
+                    client.RevealAlephCur,
+                    client.RevealSectorCur,
+                    out int nb,
+                    out int nr,
+                    out int na,
+                    out int ns
+                );
                 if (rf is not null && client.Outbound.Writer.TryWrite(OutFrame.Whole(rf)))
                 {
                     client.RevealBaseCur = nb;
@@ -1835,10 +1886,14 @@ public sealed class ClientHub
                     var c = _sim.ChaffSpawnedThisStep[ci];
                     // Enemy pops only when visible to this team at the spawn instant — using the
                     // per-(team, chaff-index) precompute above (F10), not a per-client recompute.
-                    if (c.Team != client.Team
-                        && !(frames.ChaffVisByTeam is not null
+                    if (
+                        c.Team != client.Team
+                        && !(
+                            frames.ChaffVisByTeam is not null
                             && frames.ChaffVisByTeam.TryGetValue(client.Team, out var cv)
-                            && cv.Contains(ci)))
+                            && cv.Contains(ci)
+                        )
+                    )
                         continue;
                 }
                 SendLossy(client, OutFrame.Whole(frames.ChaffFrames[ci]));
@@ -1867,10 +1922,14 @@ public sealed class ClientHub
         // never prune). Fog on: own-team fields always, enemy fields only while their anchor point is
         // visible to this team. Advance LastMinefieldAnchor only on a successful enqueue.
         bool wantMinefields = frames.SendMinefields || client.AnchorSector != client.LastMinefieldAnchor;
-        if (wantMinefields
+        if (
+            wantMinefields
             && client.Outbound.Writer.TryWrite(
-                OutFrame.Whole(BuildMinefieldsFor(
-                    client.AnchorSector, client.Team, MineVisFor(frames.MineVisCache, fog, client.Team)))))
+                OutFrame.Whole(
+                    BuildMinefieldsFor(client.AnchorSector, client.Team, MineVisFor(frames.MineVisCache, fog, client.Team))
+                )
+            )
+        )
             client.LastMinefieldAnchor = client.AnchorSector;
 
         // Live rock shrink (mining). Fog off: the shared broadcast frames. Fog on: this team's
@@ -1888,8 +1947,11 @@ public sealed class ClientHub
             else
             {
                 if (!frames.RockFramesByTeam!.TryGetValue(client.Team, out var rkf))
-                    frames.RockFramesByTeam[client.Team] = rkf =
-                        Protocol.BuildRockUpdatesFor(_sim.World, _sim.VisionFor(client.Team), frames.ChangedRockList!);
+                    frames.RockFramesByTeam[client.Team] = rkf = Protocol.BuildRockUpdatesFor(
+                        _sim.World,
+                        _sim.VisionFor(client.Team),
+                        frames.ChangedRockList!
+                    );
                 foreach (var f in rkf)
                     SendReliable(client, OutFrame.Whole(f));
             }
@@ -2054,7 +2116,10 @@ public sealed class ClientHub
         if (_missileScratch.Length < need)
             _missileScratch = new byte[Math.Max(need, _missileScratch.Length * 2)];
         for (int i = 0; i < n; i++)
-            Protocol.WriteMissile(_missileScratch.AsSpan(i * Protocol.MissileRecordSize, Protocol.MissileRecordSize), missiles[i]);
+            Protocol.WriteMissile(
+                _missileScratch.AsSpan(i * Protocol.MissileRecordSize, Protocol.MissileRecordSize),
+                missiles[i]
+            );
     }
 
     // Build one client's MsgMissiles frame from the shared scratch, or null if none are in view.

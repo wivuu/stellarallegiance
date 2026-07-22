@@ -63,6 +63,9 @@ public sealed class CollisionSystem
                 // touch is not an impact — no thud. Gated on the build stream (a row exists from Aligning
                 // on), so a constructor merely flying past rocks (ToRock/MoveTo) still thuds.
                 bool buildContact = ship is RemoteShip { IsConstructor: true } && _build.HasBuildRow(shipId);
+                // Per-ship launch-class mask so a restricted hull THUDS where it now bounces
+                // (disallowed friendly base / side door) instead of silently gliding a dock face.
+                var (thudCls, thudPod) = ShipRenderer.ShipClassOf(ship);
                 bool now =
                     !buildContact
                     && Collide.Touches(
@@ -70,6 +73,7 @@ public sealed class CollisionSystem
                         CollisionConfig.ShipRadius,
                         bodies,
                         ShipRenderer.ShipTeamOf(ship),
+                        _defs.LaunchClassMask(thudPod ? DefRegistry.PodClassId : thudCls),
                         CollisionConfig.DockFaceDepth
                     );
                 if (now && _collidingShips.Add(shipId))

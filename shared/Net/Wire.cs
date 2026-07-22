@@ -95,6 +95,11 @@ public static class Wire
     // (ShipRecordSize 56 → 57) — reserve afterburner fuel auto-consumed when the tank empties
     // mid-boost; the MsgDefs cargo-item block appends f32 FuelPerCharge after Description
     // (0 = not a fuel item). Writer Protocol.WriteShip/BuildDefs ↔ reader GameNetClient mirror.
+    // (2026-07-21) launch-station-classes: ShipClassDef appends u16 LaunchClassMask (bitmask over
+    // StationClassId; 0 = unrestricted) at the tail of the ship block after RequiredTechIdx — a
+    // restricted hull launches from / docks at only bases of the listed station classes, through
+    // the base's largest door only (shared DockRules; server rejects illegal spawns pre-charge,
+    // client greys the card/LAUNCH). Writer Protocol.BuildDefs ↔ reader GameNetClient.ApplyDefs.
     public const byte ProtocolVersion = 35;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It

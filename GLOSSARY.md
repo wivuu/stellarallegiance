@@ -361,7 +361,30 @@ mouth. NOT the old "dock disc" per-hardpoint model (retired 2026-07).
   - `server/Sim/World.cs` — `LoadBase` → `BaseDockFaces`; `Simulation.cs` dock trigger
   - `client/scripts/CollisionWorld.cs` — client-prediction mirror (bit-identical parse)
   - `tools/collision-hull/bake.py` — per-door corridor carve; `docs/GLB-AND-HARDPOINT-FORMAT.md` — spec
-- **Related:** [[Hardpoint]], [[SimModel]], [[Dock Refund]]
+- **Related:** [[Hardpoint]], [[SimModel]], [[Dock Refund]], [[Launch Station Classes]]
+
+### Launch Station Classes (hull base restriction)
+Per-hull authored `launch-station-classes: [shipyard]` (hulls.yaml, list of station `class:`
+keywords) restricting which base CLASSES the hull may LAUNCH from and DOCK at. Omitted = anywhere
+(stock). Restricted hulls (Devastator → shipyard, covering Shipyard(3) + Shipyard Dry(6)): other
+friendly bases are fully solid (bounce like an enemy base), and at an allowed base only the
+**largest docking door** (by rectangle area, `DockRules.LargestFaceIndex`) admits them — side doors
+stay small-ship-only. Projected to `ShipClassDef.LaunchClassMask` (u16 bitmask over
+`StationClassId`; streamed LAST in the ship block); base class resolved via the station catalog's
+`BaseTypeId → StationClass` map on BOTH peers. Server rejects an illegal spawn pre-charge
+(`TryResolveLaunchSite`); the hangar shows the card visible-greyed "SHIPYARD ONLY" (situational
+lock — never hidden). Related rule: a base whose loaded model has **no authored `HP_DockingExit`**
+can't launch anything ("NO LAUNCH BAY" grey; `World.BaseLaunchCapableOf`; model-less test bases
+stay launch-capable).
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `shared/Collision/DockRules.cs` — `ClassAllowed` / `LargestFaceIndex` / `AllowedFace` (both peers)
+  - `factions/src/Allegiance.Factions/Model/Hull.cs` — `LaunchStationClasses` authoring
+  - `server/Content/FactionsContentProjection.cs` — `LaunchMask` projection
+  - `server/Sim/Simulation.cs` — `TryResolveLaunchSite` spawn gate; `ResolveOwnBaseDock` dock gate; `SelectDockDoor` autopilot pin
+  - `client/scripts/DefRegistry.cs` — `HullMayLaunchFrom` / `BaseLaunchCapable` mirrors
+  - `client/scripts/ui/ShipLoadout.cs` + `.Hangar.cs` — WrongBase / NO LAUNCH BAY UX
+- **Related:** [[Docking Door]], [[Dock Refund]], [[Def (Definition)]]
 
 ### Shield
 Regenerating energy layer over the raw-health model, authored per hull/faction (`shield-capacity`,

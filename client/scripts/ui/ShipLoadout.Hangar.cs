@@ -146,11 +146,14 @@ public partial class ShipLoadout
 
     // Apply the launch gate to the card strip: tech-locked hulls are HIDDEN outright (the strip only
     // lists what the team can actually field — researching a hull makes its card appear), unaffordable
-    // ones grey. Reads the same gate as the LAUNCH button; only reruns when the gate inputs
-    // (credits/unlocks) change.
+    // ones grey, and hulls the SELECTED base can't launch grey with the class hint ("SHIPYARD ONLY" —
+    // situational like TooPoor, never hidden). Reads the same gate as the LAUNCH button; only reruns
+    // when the gate inputs (credits/unlocks/selected base) change.
     private void RefreshShipCardStates(byte team)
     {
-        long sig = team + 1L + (long)_world.TeamState.Credits(team) * 131L;
+        byte selBaseType = _sidebar.SelectedBaseType;
+        bool haveBase = _sidebar.SelectedBaseId != 0;
+        long sig = team + 1L + (long)_world.TeamState.Credits(team) * 131L + (haveBase ? (selBaseType + 2L) * 65537L : 0L);
         foreach (var (classId, _) in _shipCards)
             if (_world.TeamState.CheckSpawnGate(team, classId) == TeamStateStore.SpawnGate.Locked)
                 sig ^= (long)(classId + 1) * 1000003L; // fold in lock state so an unlock re-styles
@@ -160,9 +163,10 @@ public partial class ShipLoadout
 
         foreach (var (classId, card) in _shipCards)
         {
-            var gate = _world.TeamState.CheckSpawnGate(team, classId);
+            bool wrongBase = haveBase && !_defs.HullMayLaunchFrom(classId, selBaseType);
+            var gate = _world.TeamState.CheckSpawnGate(team, classId, wrongBase);
             card.Visible = gate != TeamStateStore.SpawnGate.Locked;
-            card.SetGate(gate);
+            card.SetGate(gate, gate == TeamStateStore.SpawnGate.WrongBase ? LaunchMaskLabel(classId) : null);
         }
 
         // The selected hull can go hidden under us (a persisted last-ship pick landing before the
@@ -765,9 +769,11 @@ public partial class ShipLoadout
             Restyle();
         }
 
-        // Reflect the launch gate: unaffordable greys the card and warns the cost line. The Locked
-        // style is showcase-only in practice — the hangar hides locked cards instead of greying them.
-        public void SetGate(TeamStateStore.SpawnGate gate)
+        // Reflect the launch gate: unaffordable greys the card and warns the cost line; WrongBase
+        // (selected base's class can't launch this hull) greys it with the class hint — situational,
+        // so the card stays VISIBLE (hidden-not-greyed is for tech locks only). The Locked style is
+        // showcase-only in practice — the hangar hides locked cards instead of greying them.
+        public void SetGate(TeamStateStore.SpawnGate gate, string? wrongBaseLabel = null)
         {
             EnsureBuilt();
             switch (gate)
@@ -776,6 +782,11 @@ public partial class ShipLoadout
                     _sub.Text = "⚿ TECH LOCKED";
                     _sub.AddThemeColorOverride("font_color", DesignTokens.TextDim);
                     Modulate = new Color(1, 1, 1, 0.6f);
+                    break;
+                case TeamStateStore.SpawnGate.WrongBase:
+                    _sub.Text = $"⚿ {wrongBaseLabel ?? "WRONG BASE"}";
+                    _sub.AddThemeColorOverride("font_color", DesignTokens.Warn);
+                    Modulate = new Color(1, 1, 1, 0.7f);
                     break;
                 case TeamStateStore.SpawnGate.TooPoor:
                     _sub.Text = _normalSub;
