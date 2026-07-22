@@ -7,11 +7,14 @@ collide with an invisible convex balloon rather than the visible surface. For BA
 a COMPOUND hull instead: one convex hull per COL_ part node this tool appends.
 
 This tool GENERATES those parts straight from the mesh volume — there is no hand-authored spec. It
-voxel solid-fills the visual triangles, seals the hollow interior, carves any dock corridors back
-open, marching-cubes the carved solid into a watertight surface, decomposes it into convex parts
-with CoACD (https://github.com/SarahWeiii/CoACD), clamps each part strictly inside the visual
-convex hull, and APPENDS one small triangulated `COL_<name>` mesh node per part. The visual mesh,
-its material, and every `HP_` empty are left untouched.
+voxel solid-fills the visual triangles, seals the hollow interior, marching-cubes the solid into a
+watertight surface, decomposes it into convex parts with CoACD
+(https://github.com/SarahWeiii/CoACD), clamps each part strictly inside the visual convex hull, and
+APPENDS one small triangulated `COL_<name>` mesh node per part. The visual mesh, its material, and
+every `HP_` empty are left untouched. There is NO dock-corridor carve: bases bake fully solid —
+docking is handled entirely in code by the runtime dock-face skip (Collide.IntersectsDockFace with
+its angle-of-attack gate), whose depth window a docking ship enters before it ever contacts the
+aperture crust.
 
 All tuning is via CLI args resolved from a per-`--kind` preset (there is no YAML config). The bake
 is metric-neutral for the pre-compound-hull collision code — two hard, load-bearing validations
@@ -23,9 +26,10 @@ enforce that (the bake FAILS loudly otherwise):
      be a directional extreme, never enlarge the AABB, and never enlarge the bounding radius.
      Hence ConvexHull.Build's ReduceToExtremes(256) still selects only visual vertices — the
      merged hull, its LongestAxis, and its BoundingRadius are bit-unchanged.
-  2. DOCK CORRIDOR — every docking-entrance disc centre, and a swept segment from it toward the
-     bay-door centre and outward along its approach, lies OUTSIDE all COL parts, so no part ever
-     caps a corridor a ship must fly through. (Auto-skipped when the mesh has no HP_Docking* nodes.)
+  2. DOCK APPROACH — each door's straight-in approach lane (and each exit's outward launch ray)
+     lies OUTSIDE all COL parts beyond the runtime dock trigger's depth window, so a face-on ship
+     always reaches the skip window before the solid bounces it. Crust AT the face plane is legal —
+     the window owns that zone. (Auto-skipped when the mesh has no HP_Docking* nodes.)
 
 A weaker AABB-containment check is also asserted (the explicit MeshAabb scale contract the client
 relies on), and the output is written deterministically (fixed ordering, cleaned float32) so a
@@ -40,8 +44,8 @@ Usage (via uv — deps in pyproject.toml; --glb is always required):
   uv run bake.py --kind base --glb PATH --dump snap.txt    # provenance snapshot of resolved args
 
 All tunables (--voxel-res --margin --threshold --max-hulls --max-ch-vertex --seed --mc-smooth
---corridor-* --ship-radius --hull-extremes --reach-guard/--no-reach-guard
---corridor-check/--no-corridor-check) default to the kind preset; pass one to override it.
+--ship-radius --hull-extremes --reach-guard/--no-reach-guard --dock-check/--no-dock-check
+--surface-check/--no-surface-check) default to the kind preset; pass one to override it.
 """
 
 from __future__ import annotations
@@ -68,13 +72,21 @@ COL_PREFIX = "COL_"
 # reasons in AUTHORED mesh units, then converts these via the SAME world-scale the server/client
 # derive at load: ws = WORLD_BASE_RADIUS*2 / mesh.LongestAxis (server/Sim/World.cs LoadBase). A ship
 # is WORLD_SHIP_RADIUS in world units, so only WORLD_SHIP_RADIUS/ws authored units — size the
-# voxel/gap/corridor thresholds off that, never the raw world number. Keep these in sync with
+# voxel/gap thresholds off that, never the raw world number. Keep these in sync with
 # CollisionConfig or the generated coverage will be sized wrong.
 WORLD_BASE_RADIUS = 90.0      # CollisionConfig.BaseRadius
 WORLD_SHIP_RADIUS = 3.0       # CollisionConfig.ShipRadius
-WORLD_DOCK_FACE_DEPTH = 9.0   # CollisionConfig.DockFaceDepth (docking-door depth window; lateral
-                              # extent is now authored per-door by the 4 boundary markers, so the
-                              # corridor width is derived from the door rectangle, not this constant)
+WORLD_DOCK_FACE_DEPTH = 9.0   # CollisionConfig.DockFaceDepth — the dock trigger's depth window; the
+                              # dock-approach validator only requires lanes clear beyond this window
+                              # (crust at the face plane is legal, the runtime skip owns that zone)
+
+# Exit launch rays are validated this many authored units outward from each HP_DockingExit (the
+# historical corridor-approach distance; launch spawns sit within it).
+EXIT_RAY_AUTHORED = 8.0
+
+# Validator sample tolerance (authored units): a lane/ray sample this close to a part counts as
+# inside it.
+LANE_TOL = 0.05
 
 
 # ---------------------------------------------------------------------------
@@ -515,12 +527,12 @@ def render_preview(verts, hps, parts, stem: str, kind: str,
 #      reach is sealed interior → mark solid. This fills the hollow the player flies around inside.
 #      (No outward inflation: a radius-0 boundary flood reaches every exterior cell up to the
 #      surface, so only genuinely-enclosed cells are filled.)
-#   3. Carve swept-cylinder DOCK CORRIDORS back open so docking/launch approaches stay clear.
-#   4. Marching-cubes the carved solid and decompose it into convex parts with CoACD (see the
-#      coacd section below).
-#   5. Clamp every part strictly inside the visual convex hull (metric-neutrality contract).
-#   6. Reachability ASSERT: no ship-radius exterior path may reach a sealed-interior cell through
-#      the FINAL part set (except inside a corridor) — the regression guard for this very bug.
+#   3. Marching-cubes the solid and decompose it into convex parts with CoACD (see the coacd
+#      section below). NO dock-corridor carve — docking rides the runtime dock-face skip, and the
+#      dock-approach validator proves each face window is reachable from open space.
+#   4. Clamp every part strictly inside the visual convex hull (metric-neutrality contract).
+#   5. Reachability ASSERT: no ship-radius exterior path may reach a sealed-interior cell through
+#      the FINAL part set — the regression guard for this very bug.
 
 
 class VoxelGrid:
@@ -670,9 +682,9 @@ def dock_doors(hps):
     is the face centre and its forward (local +Z) is the INWARD normal (the direction a ship
     travels entering); the OTHER FOUR mark the rectangle boundary. Returns
     [(face_pos, inward_normal, half_diagonal)] per full group (authored mesh units). Mirrors
-    shared/Collision/DockFace.cs DockFaceParser — KEEP IN SYNC: the bake carves corridors from the
-    same door geometry the sim/client dock against. Leftover (<5) markers are ignored here (the
-    sim treats them as legacy discs; a corridor for them isn't worth the risk)."""
+    shared/Collision/DockFace.cs DockFaceParser — KEEP IN SYNC: the dock-approach validator probes
+    the same door geometry the sim/client dock against. Leftover (<5) markers are ignored here
+    (the sim treats them as legacy discs; validating them isn't worth the risk)."""
     ent = [(_hp_index(n), np.asarray(p, float), np.asarray(f, float))
            for n, p, f in hps if "Entrance" in n]
     ent.sort(key=lambda t: t[0])
@@ -703,84 +715,6 @@ def dock_doors(hps):
     return doors
 
 
-def corridor_segments(hps, corridor_r: float, approach: float, ship_r: float = 0.0):
-    """Swept-cylinder DOCK CORRIDORS that must stay open (never solid). Under the GROUPED-door
-    convention each door is a rectangle (dock_doors): we carve one cylinder per door from
-    `approach` units OUTSIDE the face (opposite the inward normal) to the face centre, widened
-    PER DOOR to that door's half-diagonal + a ship radius (floored at `corridor_r`, the
-    ship-clearance minimum) so no COL part can cap a corner a ship may legally dock through —
-    but a big door never inflates the carve at a small one (a single global max radius once ate
-    60% of a two-door station's collision). Each HP_DockingExit catapults ships outward along
-    normalize(exitPos): sweep from the exit point out along that axis only — never from the door
-    reference across the body (with far-apart doors that carved straight through the hub). Falls
-    back to the legacy mean-of-entrances sweep for a non-grouped asset. Returns [(a, b, radius)]."""
-    ext = [np.asarray(p, float) for n, p, f in hps if "Exit" in n]
-
-    def radial(p):
-        l = float(np.linalg.norm(p))
-        return p / l if l > 1e-6 else np.array([0.0, 0.0, 1.0])
-
-    doors = dock_doors(hps)
-    if not doors:
-        ent = [np.asarray(p, float) for n, p, f in hps if "Entrance" in n]
-        if not ent:
-            return []
-        door = np.mean(ent, axis=0)
-        segs = [(e + radial(e) * approach, door, corridor_r) for e in ent]
-        for x in ext:
-            segs.append((door, x + radial(x) * approach, corridor_r))
-        return segs
-
-    segs = []
-    for pos, n, hd in doors:
-        segs.append((pos - n * approach, pos, max(corridor_r, hd + ship_r)))  # approach → face
-    for x in ext:
-        segs.append((x, x + radial(x) * approach, corridor_r))  # exit launch ray, outward only
-    return segs
-
-
-def passage_segments(hps, ship_r: float, approach: float, clearance: float = 0.5):
-    """TIGHT ship-clearance corridors aimed at each door's ENTRANCE CENTROID — the actual point the
-    docking AI flies a ShipRadius sphere toward (ship-vs-BASE collision & docking treat every hull,
-    Devastator included, as that one global sphere; the visual door RECTANGLE is irrelevant to it).
-    Radius is `ship_r + clearance`, NOT the door half-diagonal — it opens just the ship-sized passage
-    a ship threads, so the surrounding frame beams survive (the `passage` carve mode). Returns
-    [(approach_point, centroid, radius)] per door + each exit's outward launch ray. Door di pairs with
-    the di-th group of five entrance markers (the DockFace grouping order)."""
-    ent = [np.asarray(p, float) for n, p, f in hps if "Entrance" in (n or "")]
-    doors = dock_doors(hps)
-    ext = [np.asarray(p, float) for n, p, f in hps if "Exit" in (n or "")]
-    r = ship_r + clearance
-    segs = []
-    for di, (pos, n, hd) in enumerate(doors):
-        grp = ent[di * 5:(di + 1) * 5]
-        centroid = np.mean(grp, axis=0) if grp else pos
-        segs.append((centroid - n * approach, centroid, r))  # n inward ⇒ start sits `approach` OUTSIDE
-    for x in ext:
-        l = float(np.linalg.norm(x))
-        rad = x / l if l > 1e-6 else np.array([0.0, 0.0, 1.0])
-        segs.append((x, x + rad * approach, r))
-    return segs
-
-
-def corridor_mask(grid: VoxelGrid, segs) -> np.ndarray:
-    """Cells within `radius` of any corridor segment (a swept cylinder / capsule)."""
-    if not segs:
-        return np.zeros(grid.dims, dtype=bool)
-    centers = grid.centers_flat()
-    inside = np.zeros(len(centers), dtype=bool)
-    for a, b, r in segs:
-        a = np.asarray(a)
-        b = np.asarray(b)
-        ab = b - a
-        L2 = float(ab @ ab) or 1.0
-        t = np.clip((centers - a) @ ab / L2, 0.0, 1.0)
-        proj = a + t[:, None] * ab
-        d = np.linalg.norm(centers - proj, axis=1)
-        inside |= d < r
-    return inside.reshape(grid.dims)
-
-
 def rasterize_parts(part_eqs_list, grid: VoxelGrid) -> np.ndarray:
     """Solid grid = cell centre inside ANY part's convex hull (works for boxes and general parts)."""
     centers = grid.centers_flat()
@@ -790,13 +724,13 @@ def rasterize_parts(part_eqs_list, grid: VoxelGrid) -> np.ndarray:
     return inside.reshape(grid.dims)
 
 
-def reachability_leaks(part_eqs_list, gfine, interior_hollow, corridor_fine, ship_r) -> int:
+def reachability_leaks(part_eqs_list, gfine, interior_hollow, ship_r) -> int:
     """THE REGRESSION GUARD. Rasterize the FINAL parts into the fine grid, then flood the exterior
     with the free space eroded by the ship radius (a ship CENTRE can sit only >= ship_r from solid).
     Any INTERIOR-HOLLOW cell (a sealed cell where a ship actually fits — the fly-around-inside space)
-    that this exterior ship-flood reaches, and that is NOT inside a carved dock corridor, is a hole a
-    ship can fly through into the station interior. Returns that count; >0 must FAIL the bake. The
-    sparse hand-authored layout leaks badly here (by design — it's the bug this guard catches)."""
+    that this exterior ship-flood reaches is a hole a ship can fly through into the station interior.
+    Returns that count; >0 must FAIL the bake. The sparse hand-authored layout leaks badly here (by
+    design — it's the bug this guard catches)."""
     from scipy.ndimage import label, distance_transform_edt
 
     solidF = rasterize_parts(part_eqs_list, gfine)
@@ -804,60 +738,41 @@ def reachability_leaks(part_eqs_list, gfine, interior_hollow, corridor_fine, shi
     ship_free = dist > ship_r
     lab, _ = label(ship_free)
     ext = np.isin(lab, list(_boundary_labels(lab))) & ship_free
-    leaked = interior_hollow & ext & ~corridor_fine
+    leaked = interior_hollow & ext
     return int(leaked.sum())
 
 
 # Per-kind pipeline presets — the resolution baseline for every knob. A no-override `--kind base`
 # bake of an unchanged GLB MUST reproduce the committed bytes (the determinism contract), so these
 # are a hard contract, not a default to tweak. `ship` shares the coverage knobs but tightens the
-# CoACD threshold (finer parts on small meshes), widens the part-count window, and leaves the reach
-# guard / corridor validator off (turned on by --kind auto-detection or an explicit flag).
-# ship_radius / corridor_radius are filled from the world constants via `ws` below.
+# CoACD threshold (finer parts on small meshes), widens the part-count window, and leaves the
+# reach/surface guards off (turned on by --kind auto-detection or an explicit flag). ship_radius
+# is filled from the world constants via `ws` below.
 KIND_PRESETS = {
-    "base": dict(voxel_res=0.5, margin=0.05, corridor_tol=0.05,
-                 corridor_clearance=0.5, corridor_approach=8.0,
+    "base": dict(voxel_res=0.5, margin=0.05,
                  count_lo=2, count_hi=1024, threshold=0.1,
-                 min_coverage=0.50, max_surface_unbacked=0.60, carve_mode="full"),
-    "ship": dict(voxel_res=0.5, margin=0.05, corridor_tol=0.05,
-                 corridor_clearance=0.5, corridor_approach=8.0,
+                 min_coverage=0.50, max_surface_unbacked=0.60),
+    "ship": dict(voxel_res=0.5, margin=0.05,
                  count_lo=1, count_hi=100000, threshold=0.05,
-                 min_coverage=0.0, max_surface_unbacked=1.0, carve_mode="full"),
+                 min_coverage=0.0, max_surface_unbacked=1.0),
 }
 
 # Per-MODEL knob overrides, keyed by GLB stem — the reproducible home for a bake that needs
 # off-preset knobs. A no-override `--kind base --glb <stem>.glb` resolves through this, so the fix
 # regenerates byte-stably instead of silently reverting to the broken preset result. Explicit CLI
-# args still win over both. acs05 (Shipyard) is an open-truss mesh: at the 0.5 preset voxel the
-# truss gaps stay open, the exterior flood never seals the silhouette, and CoACD wraps only the
-# dense vertex clusters (20% coverage, 91% of the surface un-backed — ships fly through). A coarser
-# voxel closes the gaps so classify_solid seals the body; heavier mc-smooth bridges the lattice.
+# args still win over both.
 MODEL_PRESETS = {
     # acs05 (Shipyard) is an open drydock CAGE — thin square-section beams around deliberately open
-    # docking bays (capital ships dock INSIDE), not a hollow-but-closed hull. Two fixes stack:
-    #   1. voxel_res 0.30 + mc_smooth 0.0 — the 0.5/sigma-1.0 preset BLURS the 1-voxel beams below the
-    #      marching-cubes isosurface so they vanish (CoACD then wraps only the dense pods: 20% cover,
-    #      91% surface un-backed). Finer voxel + no smooth keeps the beams. Coarsening is the WRONG
-    #      instinct — it drops the beams entirely (res 1.0 -> 4% coverage).
-    #   2. carve_mode "bays" — the shipyard is an open DRYDOCK: ships (miner/scout/capital) DOCK BY
-    #      FLYING INTO a bay, so the two bay volumes must be OPEN, the cage/rails/pods SOLID. The docks
-    #      don't gate on the baked hull at all (the runtime Collide.ResolveStatics `continue` bypasses
-    #      it once a ship reaches a dock face) — but a SOLID bay bounces the ship off before it arrives.
-    #      'full' opened the bays but its wide approach cylinder also ate the rails (collision stopped
-    #      at X=3.6); 'passage'/'interior' kept the frame but SOLIDIFIED the bays, so small ships could
-    #      no longer dock at a side face. 'bays' carves exactly each bay's marker-AABB open and keeps
-    #      everything else: structure 0% un-backed (no fly-through), both bays dockable from any face,
-    #      overall 18.6% un-backed = the open bay mouths (correct).
-    "acs05": dict(voxel_res=0.30, mc_smooth=0.0, carve_mode="bays"),
-    # garrison (ss27 home hub) is a CLOSED station with two flat quad-face doors (hd~11.4) into a
-    # sealed interior — not an open cage. The default 'full' carve's wide door cylinders left 36% of
-    # the visible surface un-backed (ships clip the superstructure around the bays). 'passage' (tight
-    # ship-radius tube to each door centroid) drops that to 0.5% while both doors stay 100%
-    # dock-reachable — the doors are clean apertures with no frame across them, so a small ship reaches
-    # anywhere in the rectangle (unlike acs05's 3D bays, which needed 'bays'). Chunky hub ⇒ keep the
-    # default res 0.5 / smooth 1.0; only the carve mode changes. 18 sub-hulls (was 12; CollisionTest
-    # window 8..512, merged metrics clamp-preserved). New SHA — see tools/collision-hull/README.md.
-    "garrison": dict(carve_mode="passage"),
+    # docking bays, not a hollow-but-closed hull. voxel_res 0.30 + mc_smooth 0.0: the 0.5/sigma-1.0
+    # preset BLURS the 1-voxel beams below the marching-cubes isosurface so they vanish (CoACD then
+    # wraps only the dense pods: 20% cover, 91% surface un-backed — ships fly through the frame).
+    # Finer voxel + no smooth keeps the beams. Coarsening is the WRONG instinct — it drops the beams
+    # entirely (res 1.0 -> 4% coverage). The bays themselves stay open naturally (the exterior flood
+    # reaches them), so docking = threading the real cage geometry onto a face window. threshold
+    # 0.05 (ship-grade): at the base 0.1 CoACD bridges the open top-bay aperture with a convex part
+    # spanning between roof beams (no visual geometry there — verified), which blocks the top door's
+    # approach lane; the finer tolerance makes parts follow the beams and reopens the aperture.
+    "acs05": dict(voxel_res=0.30, mc_smooth=0.0, threshold=0.05),
 }
 
 
@@ -866,9 +781,8 @@ def resolve_cfg(args, kind: str, ws: float) -> dict:
     tunable defaults to None so 'unset' is distinguishable from a passed value). Authored-unit
     thresholds fall back to the world collision constants via world-scale `ws`, exactly as the
     sim/client derive them at load. Returns the cfg dict shape generate_coacd_parts consumes,
-    plus the per-kind count window + the resolved corridor_tol / hull_extremes the validators read.
-    A per-model preset (keyed by GLB stem) layers over the kind preset; explicit CLI args win over
-    both."""
+    plus the per-kind count window + the resolved hull_extremes the validators read. A per-model
+    preset (keyed by GLB stem) layers over the kind preset; explicit CLI args win over both."""
     p = dict(KIND_PRESETS[kind])
     stem = getattr(args, "glb", None).stem if getattr(args, "glb", None) is not None else ""
     p.update(MODEL_PRESETS.get(stem, {}))
@@ -877,19 +791,11 @@ def resolve_cfg(args, kind: str, ws: float) -> dict:
         v = getattr(args, name, None)
         return default if v is None else v
 
-    clearance = pick("corridor_clearance", p["corridor_clearance"])
     ship_r = pick("ship_radius", WORLD_SHIP_RADIUS / ws)
-    # The corridor-width FLOOR (ship radius + clearance). Each door's carve segment is widened to
-    # that door's own rectangle half-diagonal + ship radius in corridor_segments — the lateral
-    # extent is authored by the 4 boundary markers, not a global disc-radius constant.
-    corridor_r = pick("corridor_radius", ship_r + clearance)
     return dict(
         voxel_res=float(pick("voxel_res", p["voxel_res"])),
         margin=float(pick("margin", p["margin"])),
         ship_r=float(ship_r),
-        corridor_r=float(corridor_r),
-        corridor_approach=float(pick("corridor_approach", p["corridor_approach"])),
-        corridor_tol=float(pick("corridor_tol", p["corridor_tol"])),
         hull_extremes=int(pick("hull_extremes", p.get("hull_extremes", 0))),
         count_lo=p["count_lo"],
         count_hi=p["count_hi"],
@@ -900,22 +806,21 @@ def resolve_cfg(args, kind: str, ws: float) -> dict:
         mc_smooth=float(pick("mc_smooth", p.get("mc_smooth", 1.0))),
         min_coverage=float(pick("min_coverage", p["min_coverage"])),
         max_surface_unbacked=float(pick("max_surface_unbacked", p["max_surface_unbacked"])),
-        carve_mode=str(pick("carve_mode", p["carve_mode"])),
     )
 
 
 # ---------------------------------------------------------------------------
-#  CoACD convex decomposition of the carved voxel solid
+#  CoACD convex decomposition of the sealed voxel solid
 # ---------------------------------------------------------------------------
 #
 # CoACD (https://github.com/SarahWeiii/CoACD) splits a watertight mesh into convex parts that hug
 # concave detail far more tightly than fitted boxes. It is NOT run on the raw visual mesh: that
 # would hug the hangar walls and leave the sealed interior HOLLOW (the fly-inside bug the
-# reachability guard exists to catch). Instead it decomposes the SAME carved voxel solid the box
-# path merges — interior sealed by classify_solid, dock corridors carved back open by
-# corridor_mask — turned into a watertight surface by marching cubes. Each resulting hull is then
-# clamped strictly inside the visual hull (the metric-neutrality contract), so all downstream
-# validation/bake machinery is shared unchanged.
+# reachability guard exists to catch). Instead it decomposes the SEALED voxel solid — interior
+# filled by classify_solid, NO corridor carve (docking rides the runtime dock-face skip) — turned
+# into a watertight surface by marching cubes. Each resulting hull is then clamped strictly inside
+# the visual hull (the metric-neutrality contract), so all downstream validation/bake machinery is
+# shared unchanged.
 
 def _chebyshev_center(halfspaces: np.ndarray):
     """Deepest interior point (Chebyshev centre) of {x | n_i.x + d_i <= 0}, or None when the
@@ -963,9 +868,9 @@ def clamp_part_to_hull(pv: np.ndarray, eqs: np.ndarray, margin: float, max_verts
 
 def generate_coacd_parts(verts, V, F, hps, eqs, cfg):
     """CoACD pipeline; returns (yparts, stats) with parts in the raw-verts schema
-    [{'name': 'CoACD000', 'verts': hull_verts}]. Reuses the box path's fine voxel stage (solid
-    fill + seal + corridor carve) and reports the same coverage/sink stats so the generators
-    compare like-for-like."""
+    [{'name': 'CoACD000', 'verts': hull_verts}]. Fine voxel stage = solid fill + interior seal —
+    no dock-corridor carve: bases bake fully solid and docking rides the runtime dock-face skip
+    (the dock-approach validator proves each face window is reachable)."""
     import coacd
     from scipy.ndimage import distance_transform_edt as _edt
     from skimage.measure import marching_cubes
@@ -973,63 +878,26 @@ def generate_coacd_parts(verts, V, F, hps, eqs, cfg):
     ship_r = cfg["ship_r"]
     voxel_res = cfg["voxel_res"]
     margin = cfg["margin"]
-    segs = corridor_segments(hps, cfg["corridor_r"], cfg["corridor_approach"], ship_r)
 
     gfine = grid_for(V, voxel_res)
     Sfine = voxelize_surface(V, F, gfine)
     solid_fine, sealed_fine, _ = classify_solid(Sfine)
-    corridor_fine = corridor_mask(gfine, segs)
     interior_hollow = sealed_fine & ((_edt(~Sfine) * gfine.res) > ship_r)
 
-    # Corridor carve mode (see --carve-mode). The seal (classify_solid) filled every hollow the
-    # exterior couldn't reach — including the docking bays — so a corridor carve reopens the docking
-    # passages. 'full' bulldozes the whole ship-clearance cylinder (surface beams included — a wide
-    # bay door then eats its own frame, the acs05 fly-through). 'interior' honours the carve's actual
-    # job: reopen only what the SEAL closed, never delete original surface. 'off' skips it entirely.
-    carve_mode = cfg.get("carve_mode", "full")
-    if carve_mode == "interior":
-        carved = Sfine | (sealed_fine & ~corridor_fine)
-    elif carve_mode == "passage":
-        # Full carve, but through TIGHT ship-radius tubes aimed at each door's entrance centroid
-        # instead of the wide face cylinders — opens the real docking passage while keeping the frame.
-        pas_fine = corridor_mask(gfine, passage_segments(hps, ship_r, cfg["corridor_approach"]))
-        carved = solid_fine & ~pas_fine
-    elif carve_mode == "bays":
-        # Carve each docking BAY volume fully OPEN (the AABB of its five entrance markers, padded by a
-        # ship radius) and keep ALL non-bay structure solid. For an open docking CAGE where docking =
-        # flying INTO the bay: the runtime dock-face bypass (Collide.ResolveStatics `continue`) only
-        # lets a ship through once it reaches a dock face, so the bay must be reachable — a solid bay
-        # bounces the ship off before it arrives. Bays open ⇒ ships dock at ANY face (incl. sides);
-        # the cage/rails/pods stay fully backed (no fly-through). The AABB is tight to the markers, so
-        # it opens only the bay, not the neighbouring rails.
-        ent_pts = [np.asarray(p, float) for n, p, f in hps if "Entrance" in (n or "")]
-        centers = gfine.centers_flat().reshape(gfine.dims + (3,))
-        bay = np.zeros(gfine.dims, dtype=bool)
-        pad = ship_r + 0.3
-        for gi in range(0, len(ent_pts), 5):
-            grp = np.array(ent_pts[gi:gi + 5])
-            if not len(grp):
-                continue
-            lo, hi = grp.min(0) - pad, grp.max(0) + pad
-            bay |= np.all((centers >= lo) & (centers <= hi), axis=-1)
-        carved = solid_fine & ~bay
-    elif carve_mode == "off":
-        carved = solid_fine
-    else:
-        carved = solid_fine & ~corridor_fine
-    if not carved.any():
-        sys.exit("ERROR: carved voxel solid is empty — nothing to decompose")
+    solid = solid_fine
+    if not solid.any():
+        sys.exit("ERROR: voxel solid is empty — nothing to decompose")
 
-    # Watertight input surface: marching-cubes the carved solid. Sample (i,j,k) is the CELL CENTRE
+    # Watertight input surface: marching-cubes the sealed solid. Sample (i,j,k) is the CELL CENTRE
     # at origin + (ijk + 0.5)*res, and grid_for pads 3 empty cells on every side so the isosurface
     # always closes inside the grid. The binary volume is gaussian-smoothed first (sigma in CELLS,
     # --mc-smooth): the raw voxel STAIRCASE reads as concavity to CoACD, which then shatters curved
     # or diagonal geometry into hundreds of thin crust plates that the hull clamp can only drop
-    # (measured: 367 parts for a plain sphere). Smoothing restores the true surface shape; walls or
-    # corridors thinner than ~2*sigma cells can blur away, which the reachability/corridor
-    # validators catch — lower --mc-smooth if that happens.
+    # (measured: 367 parts for a plain sphere). Smoothing restores the true surface shape; walls
+    # thinner than ~2*sigma cells can blur away, which the validators catch — lower --mc-smooth if
+    # that happens.
     from scipy.ndimage import gaussian_filter
-    vol = carved.astype(np.float32)
+    vol = solid.astype(np.float32)
     if cfg["mc_smooth"] > 0.0:
         vol = gaussian_filter(vol, sigma=cfg["mc_smooth"])
         if vol.max() <= 0.5:
@@ -1065,13 +933,13 @@ def generate_coacd_parts(verts, V, F, hps, eqs, cfg):
     yparts = [{"name": f"CoACD{i:03d}", "verts": h} for i, h in enumerate(clamped)]
 
     # Coverage + visual-sink metrics: rasterize the FINAL clamped parts on the fine grid, measure
-    # carved-solid and surface-voxel coverage plus the world-unit distance a ship sinks past the
+    # sealed-solid and surface-voxel coverage plus the world-unit distance a ship sinks past the
     # visible skin before it bounces (sink_all = over ALL surface voxels, the typical-case feel;
     # sink_unc = over only the still-uncovered voxels, the residual worst case — it conditions on
     # the hardest voxels, so read it alongside surface_cov, not alone).
     part_eqs_list = [hull_equations(h) for h in clamped]
     solid_final = rasterize_parts(part_eqs_list, gfine)
-    coverage = float((carved & solid_final).sum() / carved.sum()) if carved.any() else 1.0
+    coverage = float((solid & solid_final).sum() / solid.sum()) if solid.any() else 1.0
     ws = world_scale(verts)  # authored -> world units, same derivation the sim/client use
     surf_cov = float((Sfine & solid_final).sum() / Sfine.sum()) if Sfine.any() else 1.0
     sink_world = _edt(~solid_final) * gfine.res * ws
@@ -1079,7 +947,7 @@ def generate_coacd_parts(verts, V, F, hps, eqs, cfg):
     sink_unc = sink_world[Sfine & ~solid_final]
 
     stats = dict(
-        gfine=gfine, interior_hollow=interior_hollow, corridor_fine=corridor_fine,
+        gfine=gfine, interior_hollow=interior_hollow,
         ship_r=ship_r, dropped=dropped, part_count=len(yparts),
         mc_verts=len(mv), mc_faces=len(mf), raw_parts=len(raw),
         coverage=coverage, surface_cov=surf_cov, solid_fine=int(solid_fine.sum()),
@@ -1090,7 +958,7 @@ def generate_coacd_parts(verts, V, F, hps, eqs, cfg):
         sink_unc_mean=float(sink_unc.mean()) if sink_unc.size else 0.0,
         sink_unc_max=float(sink_unc.max()) if sink_unc.size else 0.0,
         sink_over_1r=float((sink_all > WORLD_SHIP_RADIUS).mean()) if sink_all.size else 0.0,
-        voxel_res=voxel_res, segs=segs,
+        voxel_res=voxel_res,
     )
     return yparts, stats
 
@@ -1105,9 +973,8 @@ def write_snapshot(path: Path, yparts, cfg, kind: str, glb: Path, ws: float):
         "# A record of the deterministic voxel solid-fill + CoACD decomposition output for a bake.",
         f"# kind={kind}  glb={glb}  worldScale={ws:.6f}",
         f"# voxel_res={cfg['voxel_res']}  margin={cfg['margin']}  hull_extremes={cfg['hull_extremes']}  "
-        f"corridor_tol={cfg['corridor_tol']}",
-        f"# ship_radius(authored)={cfg['ship_r']:.4f}  corridor_radius={cfg['corridor_r']:.4f}  "
-        f"corridor_approach={cfg['corridor_approach']}",
+        f"lane_tol={LANE_TOL}",
+        f"# ship_radius(authored)={cfg['ship_r']:.4f}  exit_ray(authored)={EXIT_RAY_AUTHORED}",
         f"# coacd: threshold={cfg['threshold']}  max_hulls={cfg['max_hulls']}  "
         f"max_ch_vertex={cfg['max_ch_vertex']}  seed={cfg['seed']}  mc_smooth={cfg['mc_smooth']}",
         f"# {len(yparts)} parts",
@@ -1131,8 +998,8 @@ def write_snapshot(path: Path, yparts, cfg, kind: str, glb: Path, ws: float):
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Generate + bake convex COL_ collision parts into a mesh GLB")
     ap.add_argument("--kind", choices=["base", "ship"], required=True,
-                    help="preset selector: base = station (corridors + reach guard); "
-                         "ship = any ship/model mesh (guard/corridors off unless present)")
+                    help="preset selector: base = station (reach + surface guards, dock-approach "
+                         "check); ship = any ship/model mesh (guards off unless present)")
     ap.add_argument("--glb", type=Path, required=True, help="source mesh GLB to validate/bake")
     ap.add_argument("--out", type=Path, default=None, help="default: rewrite --glb in place")
     ap.add_argument("--check", action="store_true", help="validate only; do not write")
@@ -1153,28 +1020,17 @@ def main(argv=None):
     # --- pipeline knobs: all default None so 'unset' falls through to the kind preset ---
     ap.add_argument("--voxel-res", type=float, default=None)
     ap.add_argument("--margin", type=float, default=None)
-    ap.add_argument("--corridor-clearance", type=float, default=None)
-    ap.add_argument("--corridor-approach", type=float, default=None)
-    ap.add_argument("--corridor-radius", type=float, default=None)
-    ap.add_argument("--corridor-tol", type=float, default=None)
     ap.add_argument("--ship-radius", type=float, default=None)
     ap.add_argument("--hull-extremes", type=int, default=None,
                     help="0 = full-cloud containment hull (default); >0 = reduce the visual cloud to N "
                          "Fibonacci directional extremes before the hull build (mirrors ConvexHull.cs 256)")
     ap.add_argument("--reach-guard", action=argparse.BooleanOptionalAction, default=None,
                     help="sealed-interior reachability guard (default on for base, off for ship)")
-    ap.add_argument("--corridor-check", action=argparse.BooleanOptionalAction, default=None,
-                    help="dock-corridor validator (default auto: on iff the mesh has HP_Docking* nodes)")
-    ap.add_argument("--carve-mode", choices=["full", "interior", "passage", "bays", "off"], default=None,
-                    help="dock-corridor carve behaviour (default 'full'): how much solid the docking "
-                         "corridors reopen. 'full' removes ALL solid in the wide door-rectangle "
-                         "cylinder (half-diagonal radius) — a big bay door then bulldozes its own "
-                         "frame. 'passage' carves a TIGHT ship-radius tube to each door's entrance "
-                         "CENTROID (what docking actually needs — a ShipRadius sphere to the dock "
-                         "point), keeping the frame beams a wide door would eat: the balance for open "
-                         "docking cages. 'interior' reopens ONLY sealed interior, never surface (max "
-                         "coverage, but a beam across a door mouth stays — may block docking). 'off' "
-                         "carves nothing. Overriding it breaks byte-identity.")
+    ap.add_argument("--dock-check", action=argparse.BooleanOptionalAction, default=None,
+                    help="dock-approach validator: each door's straight-in lane must be clear of COL "
+                         "parts beyond the runtime dock trigger's depth window, and each exit's "
+                         "outward launch ray clear (default auto: on iff the mesh has HP_Docking* "
+                         "nodes)")
     ap.add_argument("--surface-check", action=argparse.BooleanOptionalAction, default=None,
                     help="visible-surface backing guard (default on for base, off for ship) — the "
                          "check the reach-guard misses: a shell whose visible skin has no COL part "
@@ -1199,7 +1055,7 @@ def main(argv=None):
                     help="CoACD RNG seed (default 0, fixed for determinism)")
     ap.add_argument("--mc-smooth", type=float, default=None,
                     help="gaussian sigma (in voxel CELLS, default 1.0; 0 = off) applied to the "
-                         "carved solid before marching cubes — kills the voxel staircase that "
+                         "sealed solid before marching cubes — kills the voxel staircase that "
                          "CoACD reads as concavity; walls thinner than ~2*sigma cells may blur "
                          "away (the validators catch it)")
     ap.add_argument("--min-extent", type=float, default=0.0,
@@ -1237,12 +1093,10 @@ def main(argv=None):
     if not len(F):
         sys.exit(f"ERROR: {glb} has no indexed triangles (unindexed prims are skipped) — nothing to voxelize")
 
-    # Resolve the two auto-gated validators. reach-guard: base on / ship off unless overridden.
-    # corridor-check: auto = on iff the mesh actually carries dock hardpoints (self-gates for ships).
+    # Resolve the auto-gated validators. reach-guard: base on / ship off unless overridden.
+    # dock-check: auto = on iff the mesh actually carries dock hardpoints (self-gates for ships).
     has_dock = any((n or "").startswith("HP_Docking") for n, p, f in hps)
-    # Gate resolution precedence: explicit CLI arg > per-model preset > kind/auto default. A model
-    # whose mesh openings ARE its docking passages (acs05) can waive the corridor check in its preset
-    # so a plain bake reproduces the fix.
+    # Gate resolution precedence: explicit CLI arg > per-model preset > kind/auto default.
     mp = MODEL_PRESETS.get(glb.stem, {})
 
     def gate(cli_val, key, auto_default):
@@ -1251,12 +1105,11 @@ def main(argv=None):
         return mp[key] if key in mp else auto_default
 
     reach_guard = gate(args.reach_guard, "reach_guard", args.kind == "base")
-    corridor_check = gate(args.corridor_check, "corridor_check", has_dock)
+    dock_check = gate(args.dock_check, "dock_check", has_dock)
     surface_check = gate(args.surface_check, "surface_check", args.kind == "base")
 
-    print(f"\npipeline: voxel_res={cfg['voxel_res']}  corridorRadius={cfg['corridor_r']:.4f}  "
-          f"carve={cfg['carve_mode']}  reach_guard={reach_guard}  corridor_check={corridor_check}  "
-          f"surface_check={surface_check}")
+    print(f"\npipeline: voxel_res={cfg['voxel_res']}  reach_guard={reach_guard}  "
+          f"dock_check={dock_check}  surface_check={surface_check}")
     yparts, autostats = generate_coacd_parts(verts, V, F, hps, eqs, cfg)
     a = autostats
     print(f"pipeline: {a['surface']} surface + {a['sealed']} sealed voxels "
@@ -1280,7 +1133,6 @@ def main(argv=None):
         sys.exit(f"ERROR: produced {len(yparts)} parts (expected {lo}..{hi})")
 
     margin = cfg["margin"]
-    corridor_tol = cfg["corridor_tol"]
 
     # Build each part's convex mesh (deterministic order: sort by name).
     yparts = sorted(yparts, key=lambda p: p["name"])
@@ -1322,85 +1174,56 @@ def main(argv=None):
         print(f"\nAABB containment OK: COL [{np.round(clo,2)}..{np.round(chi,2)}] "
               f"within visual [{np.round(vlo,2)}..{np.round(vhi,2)}]")
 
-    # Dock-corridor clearance (auto-gated: only runs when the mesh carries dock hardpoints). The bay
-    # doors face INWARD (each entrance sits on a face of the bay box and its +Z forward points toward
-    # the bay centre), so the meaningful corridor is the entrance disc itself plus the swept segment
-    # from it toward the door centre (the mean of the entrance positions) — and the exit toward that
-    # same centre. Every such sample must sit outside all COL parts so no part ever caps a corridor.
-    if corridor_check:
+    # Dock-approach validator (auto-gated: only runs when the mesh carries dock hardpoints). Per
+    # DOOR (a base may author N): walk the inward-normal approach axis straight at the face centre —
+    # the exact ray the server SelfTest fires (from BaseRadius*2 world = longestAxis authored
+    # outside the face). The runtime dock trigger skips collision inside its depth window, so the
+    # lane only has to be clear until WITHIN (DockFaceDepth − ShipRadius) world units of the face —
+    # an uncarved aperture crust sitting AT the face plane is fine (a face-on ship enters the skip
+    # window before contact). Structure further out blocks the approach and fails the bake. Each
+    # exit's outward launch ray must also stay clear (launch spawns sit along it).
+    if dock_check:
         doors = dock_doors(hps)
         ext = [(n, p, f) for n, p, f in hps if "Exit" in n]
-        approach = cfg["corridor_approach"]
-        lane = max(approach, longest)  # authored units == the server's BaseRadius*2-world probe
-        corridor_fail = 0
+        lane = longest  # authored units == the server's BaseRadius*2-world probe
+        lane_fail = 0
         part_names = [x[0] for x in parts]
-        if cfg["carve_mode"] == "passage":
-            # Passage mode carves only a ship-radius tube to each entrance centroid, so validate what
-            # docking ACTUALLY needs (not the wide rectangle): a ShipRadius sphere must travel the
-            # approach axis to that centroid clear of every part. Frame beams outside the tube are
-            # meant to stay — the door-width lateral probe would wrongly flag them.
-            ent = [np.asarray(p, float) for nn, p, f in hps if "Entrance" in (nn or "")]
-            ship_r = cfg["ship_r"]
-            print(f"\ndock doors parsed: {len(doors)}; passage mode — a ship-radius sphere must reach "
-                  f"each entrance centroid clear of all parts")
-            for di, (pos, n, hd) in enumerate(doors):
-                grp = ent[di * 5:(di + 1) * 5]
-                centroid = np.mean(grp, axis=0) if len(grp) else pos
-                for t in np.arange(0.0, lane, cfg["voxel_res"] * 0.5):
-                    s = centroid - n * t  # centroid -> outward along the approach axis
-                    for name, peq in zip(part_names, part_eqs):
-                        if point_inside_part(s, peq, ship_r):  # sphere of radius ship_r overlaps part
-                            if corridor_fail < 8:
-                                print(f"  VIOLATION: door {di} passage point {np.round(s,2)} within a "
-                                      f"ship radius of part {name}")
-                            corridor_fail += 1
-                            break
-        else:
-            # Per DOOR (a base may author N): walk the inward-normal approach axis straight at the face
-            # centre — the exact ray the server SelfTest fires (from BaseRadius*2 world = longestAxis
-            # authored outside the face). The runtime dock trigger skips collision inside its depth
-            # window, so the lane only has to be clear until WITHIN (DockFaceDepth − ShipRadius) world
-            # units of the face — an uncarved aperture crust sitting AT the face plane is fine (a
-            # face-on ship enters the skip window before contact). Structure further out blocks the
-            # approach and fails the bake.
-            win = (WORLD_DOCK_FACE_DEPTH - WORLD_SHIP_RADIUS) / ws  # window edge, authored units
-            print(f"\ndock doors parsed: {len(doors)}; approach lanes must stay OUTSIDE all parts "
-                  f"beyond {win:.2f} authored units of each face (the dock trigger's skip window)")
-            for di, (pos, n, hd) in enumerate(doors):
-                for t in np.arange(win, lane, cfg["voxel_res"] * 0.5):
-                    s = pos - n * t  # window edge -> outside, sampled at half-voxel steps
-                    for name, peq in zip(part_names, part_eqs):
-                        if point_inside_part(np.asarray(s, float), peq, corridor_tol):
-                            print(f"  VIOLATION: door {di} approach point {np.round(s,2)} is inside part {name}")
-                            corridor_fail += 1
+        win = (WORLD_DOCK_FACE_DEPTH - WORLD_SHIP_RADIUS) / ws  # window edge, authored units
+        print(f"\ndock doors parsed: {len(doors)}; approach lanes must stay OUTSIDE all parts "
+              f"beyond {win:.2f} authored units of each face (the dock trigger's skip window)")
+        for di, (pos, n, hd) in enumerate(doors):
+            for t in np.arange(win, lane, cfg["voxel_res"] * 0.5):
+                s = pos - n * t  # window edge -> outside, sampled at half-voxel steps
+                for name, peq in zip(part_names, part_eqs):
+                    if point_inside_part(np.asarray(s, float), peq, LANE_TOL):
+                        print(f"  VIOLATION: door {di} approach point {np.round(s,2)} is inside part {name}")
+                        lane_fail += 1
         # Exit radial rays (launch mouth): from the exit hardpoint out along normalize(pos).
         for n_, p_, f_ in ext:
             l = float(np.linalg.norm(p_)); rad = p_ / l if l > 1e-6 else np.array([0.0, 0.0, 1.0])
             for t in np.linspace(0.0, 1.0, 9):
-                s = p_ + rad * approach * t
+                s = p_ + rad * EXIT_RAY_AUTHORED * t
                 for name, peq in zip([x[0] for x in parts], part_eqs):
-                    if point_inside_part(np.asarray(s, float), peq, corridor_tol):
+                    if point_inside_part(np.asarray(s, float), peq, LANE_TOL):
                         print(f"  VIOLATION: {n_} exit point {np.round(s,2)} is inside part {name}")
-                        corridor_fail += 1
-        if corridor_fail == 0:
-            print(f"  corridor clearance OK ({len(doors)} doors + {len(ext)} exit swept)")
+                        lane_fail += 1
+        if lane_fail == 0:
+            print(f"  dock approach OK ({len(doors)} doors + {len(ext)} exits swept)")
         else:
             ok = False
     else:
-        print("\ncorridor check: skipped (no HP_Docking* nodes / disabled).")
+        print("\ndock-approach check: skipped (no HP_Docking* nodes / disabled).")
 
     # REACHABILITY GUARD (the regression test for the fly-inside bug), auto-gated per kind. Rasterize
     # the FINAL parts into a fine voxel grid and flood the exterior with the free space eroded by the
     # ship radius: no ship-radius exterior path may reach a sealed-interior cell (a hollow the player
-    # could fly into), except inside a carved dock corridor. The pipeline already computed the fine
-    # grid + interior hollow + corridor mask; reuse them.
+    # could fly into). The pipeline already computed the fine grid + interior hollow; reuse them.
     if reach_guard:
         gfine = autostats["gfine"]
         interior_hollow = autostats["interior_hollow"]
-        corridor_fine = autostats["corridor_fine"]
-        leaks = reachability_leaks(part_eqs, gfine, interior_hollow, corridor_fine, cfg["ship_r"])
+        leaks = reachability_leaks(part_eqs, gfine, interior_hollow, cfg["ship_r"])
         print(f"\nreachability guard: sealed-interior voxels a ship (r={cfg['ship_r']:.3f} authored) can "
-              f"reach from OUTSIDE the FINAL parts (excl. corridors) = {leaks}")
+              f"reach from OUTSIDE the FINAL parts = {leaks}")
         if leaks > 0:
             print(f"  VIOLATION: {leaks} sealed-interior voxels are ship-reachable — the parts leave a "
                   f"gap a ship can fly through into the station interior.")

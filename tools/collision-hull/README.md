@@ -7,9 +7,12 @@ fatter than the visible superstructure, so ships and bolts bounce off empty spac
 and over the docking bay.
 
 `bake.py` replaces that single hull with a **compound hull: one convex hull per part**. It GENERATES
-those parts straight from the mesh volume (voxel solid-fill → seal → carve corridors → marching
-cubes → **CoACD convex decomposition** → hull-clamp) and bakes each into the GLB as a small
-triangulated convex mesh node named `COL_<Name>`. The visual mesh, its material, and every `HP_`
+those parts straight from the mesh volume (voxel solid-fill → seal → marching cubes → **CoACD
+convex decomposition** → hull-clamp) and bakes each into the GLB as a small triangulated convex
+mesh node named `COL_<Name>`. There is **no dock-corridor carve**: bases bake fully solid — docking
+is handled in code by the runtime dock-face skip (`Collide.IntersectsDockFace` with its
+angle-of-attack gate), whose depth window a docking ship enters before it contacts the aperture
+crust. The visual mesh, its material, and every `HP_`
 empty are left untouched; the client hides `COL_*` meshes at load so they never render
 (`client/scripts/GlbLoader.HideCollisionProxies`). There is **no hand-authored spec** — the parts
 are always regenerated from the mesh.
@@ -44,8 +47,8 @@ uv run bake.py --kind ship --glb ../../client/assets/ships/fighter.glb --model-l
 
 `bake.py` prints the mesh AABB / longest axis / world-scale, a per-part summary (vertex count,
 distinct plane count, AABB, margin-to-visual-hull) plus a parts/verts/planes TOTAL line (server
-`SphereVsBody` cost is O(planes) per sub-hull), the AABB + corridor + reachability results, and (on
-a real bake) the output size + SHA256. After a real bake, regenerate Godot's import artifacts:
+`SphereVsBody` cost is O(planes) per sub-hull), the AABB + dock-approach + reachability results, and
+(on a real bake) the output size + SHA256. After a real bake, regenerate Godot's import artifacts:
 
 ```pwsh
 tools/godot-import.ps1 -Force
@@ -56,31 +59,30 @@ tools/godot-import.ps1 -Force
 1. **Voxelize** the visual TRIANGLES at `--voxel-res` (robust for a concave, non-watertight shell).
 2. **Seal the interior** — flood the exterior from the grid boundary; free cells it can't reach are
    the hollow the player could fly around inside ⇒ mark solid.
-3. **Carve dock corridors** — swept cylinders per authored docking door (+ exit launch rays), same
-   geometry as `World.LoadBase`. Auto-skipped when the mesh has no `HP_Docking*` nodes.
-4. **Marching-cubes** the carved solid into a watertight surface. The binary volume is
+3. **Marching-cubes** the sealed solid into a watertight surface. The binary volume is
    gaussian-smoothed first (`--mc-smooth`, sigma in cells): the raw voxel STAIRCASE reads as
    concavity to CoACD, which then shatters curved geometry into hundreds of thin crust plates
    (measured: 367 parts for a plain sphere; smoothed: 1). The faces are also rewound — skimage
    emits them inside-out for CoACD, with the same shattering symptom.
-5. **CoACD** ([SarahWeiii/CoACD](https://github.com/SarahWeiii/CoACD), the `coacd` PyPI package)
+4. **CoACD** ([SarahWeiii/CoACD](https://github.com/SarahWeiii/CoACD), the `coacd` PyPI package)
    decomposes that solid into convex parts (`--threshold` concavity tolerance, `seed=0`,
    `--max-ch-vertex` cap).
-6. **Hull-containment clamp** — each part's halfspaces are intersected with the visual-hull planes
+5. **Hull-containment clamp** — each part's halfspaces are intersected with the visual-hull planes
    offset inward by `--margin` (Chebyshev-centre + halfspace intersection); parts that collapse are
    dropped. This is the metric-neutrality contract (below).
 
 CoACD is deliberately NOT run on the raw visual mesh: it would hug the hangar walls and leave the
-sealed interior **hollow**, so a ship could fly through a dock door past the corridor into the
-station — the exact fly-inside bug the reachability guard exists to catch. The carved voxel solid
-already encodes "interior filled, corridors open", so all corridor/sealing logic and every
-validator is shared with the volume the guard floods.
+sealed interior **hollow**, so a ship could fly through into the station — the exact fly-inside bug
+the reachability guard exists to catch. The sealed voxel solid encodes "interior filled", so every
+validator is shared with the volume the guard floods. Docking needs no hole in any of this: the
+runtime skips a base's collision for a ship closing on a dock face inside the approach cone, and
+the dock-approach validator (below) proves each face's window is reachable from open space.
 
 ## Args
 
 | arg | default | meaning |
 |---|---|---|
-| `--kind {base,ship}` | required | preset selector (base = station + corridors + reach guard; ship = guard/corridors off unless present) |
+| `--kind {base,ship}` | required | preset selector (base = station + reach/surface guards + dock-approach check; ship = guards off unless present) |
 | `--glb PATH` | required | source mesh |
 | `--out PATH` | rewrite `--glb` in place | output path |
 | `--check` | off | validate only, do not write |
@@ -98,15 +100,10 @@ validator is shared with the volume the guard floods.
 | `--seed` | 0 | CoACD RNG seed — keep 0 (determinism contract) |
 | `--mc-smooth` | 1.0 | gaussian sigma (cells) on the solid before marching cubes; 0 = off. Walls thinner than ~2·sigma cells can blur away — the validators catch it; lower it then |
 | `--min-extent` | 0.0 | skip visual prims with AABB extent below this (tiny marker/placeholder meshes in FOREIGN preview assets). Changes the containment hull — committed bakes keep 0 |
-| `--corridor-clearance` | 0.5 | added to ship radius for the default corridor radius |
-| `--corridor-approach` | 5.0 | how far outside each HP the corridor is swept |
-| `--corridor-radius` | `ship_r+clearance` floor, widened per-bake to each door's half-diagonal + ship_r | swept corridor capsule radius |
-| `--corridor-tol` | 0.05 | corridor-clearance validator tolerance |
 | `--ship-radius` | `3.0/ws` | ship radius in authored units |
 | `--hull-extremes INT` | 0 | 0 = full-cloud containment hull; >0 = N Fibonacci extremes (mirrors ConvexHull.cs 256) |
 | `--reach-guard` / `--no-reach-guard` | base on / ship off | sealed-interior fly-through guard |
-| `--corridor-check` / `--no-corridor-check` | auto (on iff HP_Docking*) | dock-corridor validator |
-| `--carve-mode {full,bays,passage,interior,off}` | full | dock carve: `full` = wide door-rectangle cylinder; `bays` = open each bay's marker-AABB, keep all other structure solid (open drydock cages — ships dock by flying in); `passage` = tight ship-radius tube to each entrance centroid; `interior` = reopen only sealed interior, never surface; `off` = no carve |
+| `--dock-check` / `--no-dock-check` | auto (on iff HP_Docking*) | dock-approach validator (lanes clear beyond the face window + exit rays clear) |
 | `--surface-check` / `--no-surface-check` | base on / ship off | visible-surface backing guard (fly-THROUGH) |
 | `--min-coverage` | base 0.50 / ship 0 | surface guard: FAIL below this solid-voxel coverage |
 | `--max-surface-unbacked` | base 0.60 / ship 1 | surface guard: FAIL above this fraction of un-backed visible surface |
@@ -115,7 +112,8 @@ Part-count window per kind (the bake FAILS outside it): base **2..1024**, ship *
 
 Per-model knob/gate overrides live in `MODEL_PRESETS` (keyed by GLB stem) so a plain bake reproduces
 a fix byte-stably; explicit CLI args still win. `acs05` (open drydock cage) uses `voxel_res=0.30,
-mc_smooth=0.0, carve_mode="bays"`.
+mc_smooth=0.0, threshold=0.05` (fine voxel + no smooth keeps the 1-voxel cage beams; the ship-grade
+threshold stops CoACD bridging the open top-bay aperture with a part spanning between roof beams).
 
 ## Per-kind scale basis
 
@@ -150,29 +148,27 @@ if **no COL vertex is ever a directional extreme, and none enlarges the AABB or 
    and never grow the bounding radius. Result: the merged hull, its `LongestAxis`, and its
    `BoundingRadius` are **bit-unchanged**. (A weaker explicit AABB-containment check is also
    asserted, matching the `MeshAabb` scale contract.)
-2. **Dock corridor** — `HP_DockingEntrance` markers group in FIVES into rectangular docking DOORS
+2. **Dock approach** — `HP_DockingEntrance` markers group in FIVES into rectangular docking DOORS
    (1 face marker + 4 boundary markers, the face marker detected by ORIENTATION within its group,
    not assumed first; see `docs/GLB-AND-HARDPOINT-FORMAT.md` and the shared `DockFaceParser`).
-   A base may author N doors. Per door the bake sweeps ONE fat cylinder from
-   `--corridor-approach` units outside the face (opposite its inward normal) to the face centre, with
-   the corridor radius **widened to the door rectangle's half-diagonal + a ship radius** so no COL
-   part can cap any corner a ship may now legally dock through; the `HP_DockingExit` adds its radial
-   launch ray. The validator walks each door's inward-normal approach axis (the exact ray the server
-   SelfTest fires) plus an in-plane cross and asserts the samples lie **outside** all COL parts.
-   Auto-skipped when the mesh has no `HP_Docking*` nodes.
+   A base may author N doors. The validator walks each door's inward-normal approach axis (the
+   exact ray the server SelfTest fires) and asserts every sample beyond the runtime dock trigger's
+   depth window — within `WORLD_DOCK_FACE_DEPTH − WORLD_SHIP_RADIUS` (6 world units) of the face —
+   lies **outside** all COL parts, plus each `HP_DockingExit`'s outward launch ray. Crust AT the
+   face plane is legal (the runtime skip window owns that zone); structure further out blocks the
+   approach and fails the bake. Auto-skipped when the mesh has no `HP_Docking*` nodes.
 3. **Reachability guard** *(regression test for the fly-inside bug)* — the FINAL parts are rasterized
    into a fine voxel grid and the exterior is flooded with the free space **eroded by the ship
    radius**. No cell of the *interior hollow* (a sealed cell where a ship of radius
-   `CollisionConfig.ShipRadius` actually FITS) may be reached from outside, except inside a carved
-   dock corridor. Default on for base, off for ship (`--reach-guard`).
+   `CollisionConfig.ShipRadius` actually FITS) may be reached from outside. Default on for base,
+   off for ship (`--reach-guard`).
 4. **Surface-backing guard** *(regression test for the fly-THROUGH bug)* — FAIL if solid-voxel
    coverage falls below `--min-coverage` (base 0.50) or the fraction of visible-surface voxels with
    no COL part within one ship radius exceeds `--max-surface-unbacked` (base 0.60). The reach-guard
    only proves the sealed INTERIOR isn't fly-into-able; it says nothing about the visible skin, so a
-   shell / open frame can pass it while ships clip straight through the art (the acs05 shipyard:
-   20% coverage, 91% surface un-backed, reach-guard green). Default on for base, off for ship
-   (`--surface-check`). For a genuinely open shell whose openings are the docking passages, pair
-   `--carve-mode interior` with `--no-corridor-check`.
+   shell / open frame can pass it while ships clip straight through the art (the acs05 shipyard
+   once shipped 20% coverage, 91% surface un-backed, reach-guard green). Default on for base, off
+   for ship (`--surface-check`).
 
 ## Why CoACD (benchmark vs the retired greedy-box baker)
 
@@ -215,23 +211,28 @@ no-override `uv run bake.py --kind base --glb <committed GLB>` reproduces the co
 
 - `client/assets/bases/garrison.glb` (the shipping garrison base, pristine ss27 art + authored
   docking markers) — sha256
-  `9eaac7233fcf1502cfa9377a7b0622414cce122ac32617c216900aa189d54191`, 18 parts
-  (`MODEL_PRESETS["garrison"]` = `carve_mode="passage"`; the default 'full' carve left 36% of its
-  surface un-backed, passage → 0.5% with both doors 100% dock-reachable)
-- `client/assets/bases/Outpost.glb` (retained, unused, default full pipeline) — sha256
-  `179442182c80205d976f6b8780f14ab67e5f5d58df872b483eab1d0052f855e1`, 41 parts
+  `9eaac7233fcf1502cfa9377a7b0622414cce122ac32617c216900aa189d54191`, 18 parts.
+  (Byte-identical to the last carve-era bake: its "passage" tubes only carved open space outside
+  the visually-closed apertures, so removing the carve changed nothing — the runtime face window
+  was already doing all the docking work.)
+- `client/assets/bases/acs05.glb` (Shipyard drydock cage; `MODEL_PRESETS["acs05"]`) — sha256
+  `7b4e37aa7db6a60646b6c47c1ce1e48ac0d82fb9bedbdca1b1484e08e12eb485`, 59 parts
+- `client/assets/bases/ss21a.glb` (Supremacy) — sha256
+  `62ca5640b068e8a4bac2bac03dab58b5dc403b08648559ed69502932a2c9114d`, 17 parts
+- `client/assets/bases/ss90.glb` (Outpost) — sha256
+  `076b9ec6f1bf9e7298305da217ecf1f9bbdf329e664e68225999dfaa547112bb`, 8 parts
+- `client/assets/bases/Outpost.glb` (retained, unused determinism fixture) — sha256
+  `f3332b2f8df57b9689eaf275513423c12af520b1decef9c30263373acf87b0a9`, 35 parts
 
 keeping `tests/CollisionTest` (garrison: LongestAxis 59.849224 / BoundingRadius 30.681801 / 56
 merged planes / 8..512 sub-hulls) and `server --selftest` green. Any knob override breaks
 byte-identity — verify with `git status` on the GLB. `--dump PATH` records the resolved-arg
 provenance (never consumed; the bake regenerates from the mesh each run).
 
-The bake-time corridor validator walks each door's FULL approach lane (`longestAxis` authored
-units out — the same `BaseRadius*2`-world probe the server SelfTest fires), not just the carved
-`--corridor-approach` stretch, so a part crossing the lane far outside the carve fails the bake
-instead of the deploy. Corridor carve radii are PER DOOR (that door's rectangle half-diagonal +
-a ship radius, floored at `ship_r + clearance`); exit launch rays sweep from the exit point
-outward only.
+The dock-approach validator walks each door's FULL approach lane (`longestAxis` authored units out
+— the same `BaseRadius*2`-world probe the server SelfTest fires) starting at the runtime skip
+window's edge, so a part crossing the lane anywhere outside the window fails the bake instead of
+the deploy. Exit launch rays sweep from the exit point outward only.
 
 ## Visualizer
 
