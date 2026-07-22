@@ -1356,28 +1356,22 @@ def main(argv=None):
                             corridor_fail += 1
                             break
         else:
-            print(f"\ndock doors parsed: {len(doors)}; corridor samples must stay OUTSIDE all parts")
-            # Per DOOR (a base may author N): walk the inward-normal approach axis straight to the face
-            # centre — the exact ray the server SelfTest fires. SelfTest probes from BaseRadius*2 world
-            # (= longestAxis authored) outside the face, so walk that FULL lane, not just the carved
-            # `approach` stretch: structure crossing the lane beyond the carve blocks docking just the
-            # same (a two-door hub failed exactly this way). We also probe a small in-plane cross at
-            # half the door's half-diagonal (well inside the rectangle) to catch a part that laterally
-            # pinches the doorway without blocking the centre axis.
+            # Per DOOR (a base may author N): walk the inward-normal approach axis straight at the face
+            # centre — the exact ray the server SelfTest fires (from BaseRadius*2 world = longestAxis
+            # authored outside the face). The runtime dock trigger skips collision inside its depth
+            # window, so the lane only has to be clear until WITHIN (DockFaceDepth − ShipRadius) world
+            # units of the face — an uncarved aperture crust sitting AT the face plane is fine (a
+            # face-on ship enters the skip window before contact). Structure further out blocks the
+            # approach and fails the bake.
+            win = (WORLD_DOCK_FACE_DEPTH - WORLD_SHIP_RADIUS) / ws  # window edge, authored units
+            print(f"\ndock doors parsed: {len(doors)}; approach lanes must stay OUTSIDE all parts "
+                  f"beyond {win:.2f} authored units of each face (the dock trigger's skip window)")
             for di, (pos, n, hd) in enumerate(doors):
-                seed = np.array([0.0, 1.0, 0.0]) if abs(n[1]) < 0.9 else np.array([1.0, 0.0, 0.0])
-                u = np.cross(n, seed); u /= (np.linalg.norm(u) or 1.0)
-                v = np.cross(n, u); v /= (np.linalg.norm(v) or 1.0)
-                samples = []
-                for t in np.arange(0.0, lane, cfg["voxel_res"] * 0.5):
-                    samples.append(pos - n * t)  # face centre -> outside, sampled at half-voxel steps
-                lat = hd * 0.5  # inside the rectangle (hd is the corner radius) for a lateral pinch probe
-                for s in (u, -u, v, -v):
-                    samples.append(pos + s * lat)
-                for s in samples:
+                for t in np.arange(win, lane, cfg["voxel_res"] * 0.5):
+                    s = pos - n * t  # window edge -> outside, sampled at half-voxel steps
                     for name, peq in zip(part_names, part_eqs):
                         if point_inside_part(np.asarray(s, float), peq, corridor_tol):
-                            print(f"  VIOLATION: door {di} corridor point {np.round(s,2)} is inside part {name}")
+                            print(f"  VIOLATION: door {di} approach point {np.round(s,2)} is inside part {name}")
                             corridor_fail += 1
         # Exit radial rays (launch mouth): from the exit hardpoint out along normalize(pos).
         for n_, p_, f_ in ext:
