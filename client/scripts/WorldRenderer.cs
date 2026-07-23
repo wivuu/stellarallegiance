@@ -720,6 +720,7 @@ public partial class WorldRenderer
     // Per-frame upkeep: bolt impacts/expiry, deferred camera resets, cosmetic spins.
     public override void _Process(double delta)
     {
+        var worldT0 = PerfBuckets.Now();
         // Frame-spike breadcrumb: `delta` is the PREVIOUS frame's wall time, so a big value here means
         // the last frame stalled (dropped frames). The [perf] seam logs nearby attribute the cause.
         if (delta > 0.05 && _clock.ServerTick > 0)
@@ -757,8 +758,12 @@ public partial class WorldRenderer
             _shipRenderer.ClearPendingHomeReset();
         }
 
+        var boltT0 = PerfBuckets.Now();
         _bolts.CheckBoltImpacts(delta);
+        PerfBuckets.Add(PerfBuckets.Bolt, boltT0);
+        var colT0 = PerfBuckets.Now();
         _collision.CheckCollisions();
+        PerfBuckets.Add(PerfBuckets.Col, colT0);
 
         // Time-sliced rock inserts: drain the queued Welcome/MsgReveal rows under a per-frame budget so
         // a 200-rock field streams in over a few frames instead of stalling one. Generous pre-spawn
@@ -795,5 +800,6 @@ public partial class WorldRenderer
         // Cull bolts whose (obstruction-clipped) flight life has elapsed (a bolt clipped against a base's
         // visible surface sparks + sounds at its stored impact point before it frees).
         _bolts.CullTick();
+        PerfBuckets.Add(PerfBuckets.World, worldT0);
     }
 }

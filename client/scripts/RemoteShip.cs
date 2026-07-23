@@ -183,6 +183,7 @@ public partial class RemoteShip : Node3D
 
     public override void _Process(double delta)
     {
+        var t0 = PerfBuckets.Now();
         // Ease the smoothed velocity toward the latest authoritative value (frame-rate
         // independent), tweening out the snapshot-rate steps the lead reticle reads.
         Velocity = Velocity.Lerp(_velTarget, 1f - Mathf.Exp(-VelSmoothRate * (float)delta));
@@ -218,6 +219,7 @@ public partial class RemoteShip : Node3D
             Position = p;
             Quaternion = q;
         }
+        PerfBuckets.Add(PerfBuckets.RShip, t0);
     }
 
     // Cosmetic barrel-roll of the ShipModel child while mining, eased in/out on the IsMining flag.

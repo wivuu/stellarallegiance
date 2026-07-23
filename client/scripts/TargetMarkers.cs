@@ -223,6 +223,7 @@ public partial class TargetMarkers : Control
 
     public override void _Process(double delta)
     {
+        var t0 = PerfBuckets.Now();
         // Stay visible in the F3 sector map too — the markers reproject through the overview
         // camera (see Cam) so the same indicators track each entity over the map. Hidden while
         // the telescopic scope is up: brackets/reticle/lead project through the MAIN camera and
@@ -236,6 +237,7 @@ public partial class TargetMarkers : Control
             _focused is ulong ff && !GameContent.IsBaseLock(ff) && !GameContent.IsAsteroidFocus(ff) && IsFriendlyShipId(ff);
         UpdateMissileHud(delta);
         QueueRedraw();
+        PerfBuckets.Add(PerfBuckets.MkProc, t0);
     }
 
     private static Color TeamColor(byte team) => team == 0 ? Team0Color : Team1Color;
@@ -599,6 +601,7 @@ public partial class TargetMarkers : Control
 
     public override void _Draw()
     {
+        var t0 = PerfBuckets.Now();
         // Use the viewport rect (what UnprojectPosition is relative to) rather than this
         // Control's own Size: a code-created Control under a CanvasLayer doesn't reliably
         // resolve its rect to the viewport, which would misplace the edge-clamped arrows.
@@ -644,6 +647,7 @@ public partial class TargetMarkers : Control
         // above still reproject onto the map in every state.
         if (local != null && !SectorOverview.Active)
             DrawFiringSolution(view, local, focusedShip);
+        PerfBuckets.Add(PerfBuckets.MkDraw, t0);
     }
 
     // The focused base's world position, or null if focus isn't a base right now. Resolved via

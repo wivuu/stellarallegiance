@@ -203,7 +203,35 @@ public partial class ShipController : Node
                 _autoFly = true;
                 _warpTest = true;
             }
+            // Render stress-test knobs (see StressRender / the --stress-fighters server harness).
+            // --render-stats alone just shows the counters; --stress-fx=<mode> also strips ship fx
+            // in stages and, for the dressed modes, lights the parked fleet's plume so the A/B
+            // reflects a MOVING fleet rather than the throttle-gated-dark inert default.
+            if (a == "--render-stats")
+            {
+                StressRender.ShowStats = true;
+                PerfBuckets.Enabled = true; // gate the [perf-buckets] frame-time attribution alongside the counters
+            }
+            if (a.StartsWith("--stress-fx="))
+            {
+                StressRender.Fx = a["--stress-fx=".Length..] switch
+                {
+                    "none" or "nofx" => StressRender.FxMode.NoFx,
+                    "nolights" => StressRender.FxMode.NoLights,
+                    _ => StressRender.FxMode.Full,
+                };
+                StressRender.ForceGlow = StressRender.Fx != StressRender.FxMode.NoFx;
+                StressRender.ShowStats = true;
+                PerfBuckets.Enabled = true;
+            }
         }
+        // Self-report the managed build config so perf runs can't silently execute unoptimized C#
+        // (Godot run from `--path` normally loads the Debug assembly regardless of `dotnet -c Release`).
+#if DEBUG
+        Log.Print("[build-config] managed=DEBUG (unoptimized C#)");
+#else
+        Log.Print("[build-config] managed=RELEASE (optimized C#)");
+#endif
         // --hangar-demo drives the docked screen itself; it only needs the QuickJoin
         // (team + ready) so the match starts and the mandatory spawn hangar opens. It is a
         // UI-harness flag (after `--`, GetCmdlineUserArgs) like --ui-shot — see ShipLoadout.
