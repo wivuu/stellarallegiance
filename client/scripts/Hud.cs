@@ -20,6 +20,7 @@ public partial class Hud : CanvasLayer
     private Label _sectorShips = null!;
     private Label _credits = null!;
     private Label _warning = null!;
+    private Label _fps = null!;
 
     // Edge-detect the secondary-fire keys so an empty-rack click plays its "no rounds" blip once
     // per press (not every held frame), and a short cooldown so mashing F doesn't machine-gun it.
@@ -121,21 +122,27 @@ public partial class Hud : CanvasLayer
         AddChild(viewMode);
         viewMode.Init();
 
-        // Active-ship count for the local sector, pinned to the very top-left. Hidden until a
-        // match is live (the lobby overlay owns the screen otherwise). Telemetry → mono Data style.
+        // Live framerate, pinned to the very top-left corner. Always on (unlike the match-gated
+        // readouts below), so it's useful on the menus/lobby too. Mono Data style, muted color.
+        _fps = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.TextDim);
+        _fps.Position = new Vector2(16, 12);
+        AddChild(_fps);
+
+        // Active-ship count for the local sector. Hidden until a match is live (the lobby overlay
+        // owns the screen otherwise). Telemetry → mono Data style. Sits under the FPS readout.
         _sectorShips = UiKit.MakeLabel("", UiKit.TextStyle.Data);
-        _sectorShips.Position = new Vector2(16, 12);
+        _sectorShips.Position = new Vector2(16, 38);
         _sectorShips.Visible = false;
         AddChild(_sectorShips);
 
         _label = UiKit.MakeLabel("", UiKit.TextStyle.Data);
-        _label.Position = new Vector2(16, 38);
+        _label.Position = new Vector2(16, 64);
         AddChild(_label);
 
         // Team credits readout (Stage-2 economy), under the flight/controls line. Hidden until a
         // match is live. The Secondary token replaces the old inline gold.
         _credits = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.Secondary);
-        _credits.Position = new Vector2(16, 64);
+        _credits.Position = new Vector2(16, 90);
         _credits.Visible = false;
         AddChild(_credits);
 
@@ -263,6 +270,10 @@ public partial class Hud : CanvasLayer
 
     public override void _Process(double delta)
     {
+        // Live framerate, always on (top-left corner). Engine.GetFramesPerSecond is a smoothed
+        // per-second reading, so this stays legible without extra averaging.
+        _fps.Text = $"FPS: {Engine.GetFramesPerSecond()}";
+
         var ship = _world.Ships.LocalShip;
         bool flying = ship != null;
 
