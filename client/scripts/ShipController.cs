@@ -83,6 +83,11 @@ public partial class ShipController : Node
     // detection — clears it here so the HUD banner/toggle track truth even when the client didn't ask.
     public static void SyncApEngaged(bool on) => ApEngagedLocal = on;
 
+    // Flight-HUD contact-marker cap override (--marker-cap=N). -1 = unset (TargetMarkers uses its
+    // authored MaxEnemyMarkers / MaxFriendlyMarkers defaults), 0 = uncapped (the A/B knob), N>0 = N
+    // enemy markers with N*3/4 friendly. Read by TargetMarkers.DrawShipsPass; parsed in _Ready below.
+    public static int MarkerCap = -1;
+
     private bool _apActivePrev; // edge-detect follow-authority exit to re-anchor the prediction clock
 
     // Mouse-look aiming (Allegiance style). The M0 flight model integrates yaw/pitch as
@@ -223,6 +228,13 @@ public partial class ShipController : Node
                 StressRender.ForceGlow = StressRender.Fx != StressRender.FxMode.NoFx;
                 StressRender.ShowStats = true;
                 PerfBuckets.Enabled = true;
+            }
+            // Flight-HUD marker-cap override (A/B knob for the distance-based contact cap). N = enemy
+            // cap (friendly = N*3/4); 0 = uncapped. Left at -1 (unset) TargetMarkers uses its defaults.
+            if (a.StartsWith("--marker-cap="))
+            {
+                if (int.TryParse(a["--marker-cap=".Length..], out int mc) && mc >= 0)
+                    MarkerCap = mc;
             }
         }
         // Self-report the managed build config so perf runs can't silently execute unoptimized C#
