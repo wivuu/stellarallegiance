@@ -23,10 +23,16 @@ using StellarAllegiance.Shared;
 //    Tangents are EMA-smoothed over ~TangentSmoothTauMs of server time (raw Vel is kept for
 //    dead-reckoning): the f16 wire velocity is coarse near zero, and unsmoothed it re-bends
 //    the curve at every segment seam on a slow ship watched up close.
-//  - VELOCITY dead-reckoning past the newest sample (bounded), replacing hold-then-snap when a
+//  - VELOCITY-DECAY dead-reckoning past the newest sample, replacing hold-then-snap when a
 //    packet is late/dropped — the stutter that reads worst on slow station-keeping ships (a
-//    mining drone) next to the predicted own ship. Orientation advances by the wire LOCAL
-//    angular velocity, right-composed yaw→pitch→roll like FlightModel.Step.
+//    mining drone) next to the predicted own ship. Instead of dead-reckoning at constant wire
+//    velocity for a HARD-CAPPED horizon and then FREEZING (a C¹ break at the cap plus a hold-
+//    then-jump when the next sample lands — the visible skip on coarse-cadence ships), the wire
+//    velocity is DECAYED exponentially with a gap-scaled time constant τd: the pose eases to a
+//    smooth asymptotic stop τd·|v| ahead, C¹ everywhere, with no cap discontinuity and no freeze
+//    transition to jump out of. See EvaluateRaw for the closed-form derivation. Orientation
+//    advances by the wire LOCAL angular velocity under the SAME decay envelope, right-composed
+//    yaw→pitch→roll like FlightModel.Step.
 //  - ERROR-CORRECTION BLENDING: when a fresh authoritative sample lands mid-extrapolation, the
 //    raw curve jumps. Instead of teleporting, the offset between the last rendered pose and the
 //    new curve is captured and exponentially decayed to zero, so the correction is a glide.
@@ -35,36 +41,52 @@ public sealed class MotionInterpolator
 {
     public struct Tunables
     {
-        public double FloorDelayMs;     // render at least this far behind (~2 server ticks)
-        public double MaxDelayMs;       // cap on the adaptive delay; < MaxSamples × gap
-        public float GapDelayFactor;    // render this many smoothed inter-arrival gaps behind
-        public float GapEmaAlpha;       // inter-arrival EMA responsiveness
-        public float ClockOffsetAlpha;  // wall→server offset EMA (heavy jitter rejection)
-        public double MaxExtrapolateMs; // dead-reckon horizon past the newest sample
-        public float ErrorDecayRate;    // 1/s exponential decay of the correction offset
-        public float SnapDistance;      // pos error beyond this snaps instead of blending
+        public double FloorDelayMs; // render at least this far behind (~2 server ticks)
+        public double MaxDelayMs; // cap on the adaptive delay; < MaxSamples × gap
+        public float GapDelayFactor; // render this many smoothed inter-arrival gaps behind
+        public float GapEmaAlpha; // inter-arrival EMA responsiveness
+        public float ClockOffsetAlpha; // wall→server offset EMA (heavy jitter rejection)
+
+        // Velocity-decay dead-reckoning past the newest sample (EvaluateRaw). The decay time
+        // constant is τd = Clamp(GapFactor × _gapEma, MinMs, MaxMs): a coarse-cadence entity's
+        // wide gap earns a longer glide (it needs to bridge more), a full-rate one decays fast.
+        public double ExtrapDecayGapFactor; // τd = this × smoothed inter-arrival gap …
+        public double ExtrapDecayMinMs; // … clamped to this floor …
+        public double ExtrapDecayMaxMs; // … and this ceiling (bounds the asymptotic glide reach)
+        public float ErrorDecayRate; // 1/s exp decay of the correction offset at FULL rate (fastest
+
+        // glide); coarse ships glide slower — see Evaluate's gap-adaptive rate
+        public float SnapDistance; // pos error beyond this snaps instead of blending
         public double TangentSmoothTauMs; // EMA time-constant for Hermite TANGENT velocities; 0 = raw
 
-        public static Tunables Default => new()
-        {
-            FloorDelayMs = 100.0,
-            MaxDelayMs = 800.0,
-            GapDelayFactor = 1.5f,
-            GapEmaAlpha = 0.3f,
-            ClockOffsetAlpha = 0.05f,
-            // Velocity-based extrapolation tracks truth far better than the old
-            // finite-difference glide, so the horizon can safely cover a whole coarse
-            // gap (~500 ms) minus the delay margin without rubber-banding fast ships.
-            MaxExtrapolateMs = 250.0,
-            ErrorDecayRate = 10f,  // ~100 ms correction glide
-            SnapDistance = 100f,   // a teleport-sized error is not worth gliding across
-            // The f16 wire velocity is coarse near zero (a slow miner's tangent flicks
-            // direction sample to sample, visibly bending the curve at each segment seam
-            // up close). ~1.5 full-rate gaps of smoothing steadies the tangents; the
-            // time-constant form means a coarse-AOI entity's long gaps pass through
-            // near-raw (k → 1), keeping real curvature for the segments that need it.
-            TangentSmoothTauMs = 80.0,
-        };
+        public static Tunables Default =>
+            new()
+            {
+                FloorDelayMs = 100.0,
+                MaxDelayMs = 800.0,
+                GapDelayFactor = 1.5f,
+                GapEmaAlpha = 0.3f,
+                ClockOffsetAlpha = 0.05f,
+                // Velocity-decay horizon: τd = 1.5 × gap, clamped [250, 800] ms. At full/mid cadence
+                // (gap ≤ ~150 ms) τd pins to the 250 ms floor, so a rare full-rate extrapolation decays
+                // over the same short horizon the old 250 ms cap used — but smoothly, never freezing.
+                // At coarse cadence (gap ~500 ms) τd widens toward the 800 ms ceiling so a dropped
+                // packet's gap is bridged by a gentle asymptotic glide instead of a hold-then-jump.
+                // The ceiling bounds the worst-case dead-reckon reach (τd·|v|) so a fast ship that
+                // actually turned/braked mid-gap can't be flung arbitrarily far before the error-blend
+                // reels it back in on the next sample.
+                ExtrapDecayGapFactor = 1.5,
+                ExtrapDecayMinMs = 250.0,
+                ExtrapDecayMaxMs = 800.0,
+                ErrorDecayRate = 10f, // ~100 ms correction glide
+                SnapDistance = 100f, // a teleport-sized error is not worth gliding across
+                // The f16 wire velocity is coarse near zero (a slow miner's tangent flicks
+                // direction sample to sample, visibly bending the curve at each segment seam
+                // up close). ~1.5 full-rate gaps of smoothing steadies the tangents; the
+                // time-constant form means a coarse-AOI entity's long gaps pass through
+                // near-raw (k → 1), keeping real curvature for the segments that need it.
+                TangentSmoothTauMs = 80.0,
+            };
     }
 
     private struct Sample
@@ -72,8 +94,8 @@ public sealed class MotionInterpolator
         public double T; // server-time stamp (ms) = serverTick * MsPerTick
         public Vector3 Pos;
         public Quaternion Rot;
-        public Vector3 Vel;         // world-space, u/s (zero when HasVel is false)
-        public Vector3 TanVel;      // EMA-smoothed Vel used ONLY as the Hermite tangent
+        public Vector3 Vel; // world-space, u/s (zero when HasVel is false)
+        public Vector3 TanVel; // EMA-smoothed Vel used ONLY as the Hermite tangent
         public Vector3 AngVelLocal; // ship-local rad/s (X=pitch, Y=yaw, Z=roll)
         public bool HasVel;
     }
@@ -104,13 +126,14 @@ public sealed class MotionInterpolator
     // --- InterpStats (opt-in motion-fidelity instrumentation; see InterpStats.cs) ---
     // StatsId is stamped once by the consuming node (RemoteShip.ShipId) so this interpolator's
     // per-ship stats land in the right bucket; _statRec caches the accumulator (a dictionary lookup
-    // runs at most once per ship). _rawExtrapolated/_rawFrozen are set inside EvaluateRaw and read
-    // by Evaluate to classify the frame (past-newest / clamped-at-cap). All strictly no-ops unless
-    // InterpStats.Enabled — a normal run never touches any of this.
+    // runs at most once per ship). _rawExtrapolated/_rawExtrapAgeMs are set inside EvaluateRaw and
+    // read by Evaluate to classify the frame (whether renderT is past the newest sample, and by how
+    // long). All strictly no-ops unless InterpStats.Enabled — a normal run never touches any of this.
     public ulong StatsId;
     private InterpStats.ShipRec? _statRec;
     private bool _rawExtrapolated;
-    private bool _rawFrozen;
+    private double _rawExtrapAgeMs;
+
     private InterpStats.ShipRec Stats() => _statRec ??= InterpStats.Get(StatsId);
 
     public MotionInterpolator(Tunables tunables)
@@ -142,8 +165,15 @@ public sealed class MotionInterpolator
     // or duplicate packet on an unreliable channel; the segment search assumes chronological T).
     // Pass hasVel=false for streams that carry no velocity — those samples interpolate linearly
     // and extrapolate by finite difference.
-    public bool Push(uint serverTick, Vector3 pos, Quaternion rot,
-                     Vector3 vel, Vector3 angVelLocal, bool hasVel, double nowWallMs)
+    public bool Push(
+        uint serverTick,
+        Vector3 pos,
+        Quaternion rot,
+        Vector3 vel,
+        Vector3 angVelLocal,
+        bool hasVel,
+        double nowWallMs
+    )
     {
         double serverMs = serverTick * MsPerTick;
         if (_samples.Count > 0 && serverMs <= _samples[^1].T)
@@ -254,10 +284,18 @@ public sealed class MotionInterpolator
         EvaluateRaw(renderT, out var rawPos, out var rawRot);
 
         // Decay the correction offset toward zero/identity (frame-rate independent), then apply.
+        // Gap-ADAPTIVE glide time: a coarse-cadence ship dead-reckons further before a fresh sample
+        // lands, so its landing offset is bigger — decaying that large offset over the full-rate
+        // ~100 ms would spike the jerk. Spread it instead over ~0.3× the observed inter-sample gap
+        // (empirically the landing correction rides in on roughly the next segment), clamped so a
+        // full-rate ship keeps the snappy ErrorDecayRate glide and no ship glides longer than 300 ms.
+        // Straight-line motion (the common cruise) lands with a near-zero offset regardless, so this
+        // only softens the corrections that actually hurt — the post-multi-drop landings on movers.
         float dt = _rendered ? (float)((nowWallMs - _lastEvalWallMs) / 1000.0) : 0f;
         if (dt > 0f)
         {
-            float keep = Mathf.Exp(-_t.ErrorDecayRate * dt);
+            double glideMs = System.Math.Clamp(0.3 * _gapEma, 1000.0 / _t.ErrorDecayRate, 300.0);
+            float keep = Mathf.Exp(-(float)(dt * 1000.0 / glideMs));
             _posErr *= keep;
             _rotErr = Quaternion.Identity.Slerp(_rotErr, keep).Normalized();
         }
@@ -265,9 +303,9 @@ public sealed class MotionInterpolator
         pos = rawPos + _posErr;
         rot = (_rotErr * rawRot).Normalized();
 
-        // Fidelity instrumentation: EvaluateRaw stamped _rawExtrapolated/_rawFrozen for this renderT.
+        // Fidelity instrumentation: EvaluateRaw stamped _rawExtrapolated/_rawExtrapAgeMs for this renderT.
         if (InterpStats.Enabled)
-            InterpStats.OnEvaluate(Stats(), _rawExtrapolated, _rawFrozen, delay, _posErr.Length(), pos, dt);
+            InterpStats.OnEvaluate(Stats(), _rawExtrapolated, _rawExtrapAgeMs, delay, _posErr.Length(), pos, dt);
 
         _lastRenderT = renderT;
         _lastOutPos = pos;
@@ -286,7 +324,7 @@ public sealed class MotionInterpolator
         if (InterpStats.Enabled)
         {
             _rawExtrapolated = false;
-            _rawFrozen = false;
+            _rawExtrapAgeMs = 0.0;
         }
         int n = _samples.Count;
         if (n == 0)
@@ -311,54 +349,85 @@ public sealed class MotionInterpolator
             {
                 float segDt = (float)(b.T - a.T);
                 float u = segDt > 0f ? Mathf.Clamp((float)(t - a.T) / segDt, 0f, 1f) : 1f;
-                pos = a.HasVel && b.HasVel
-                    ? Hermite(a.Pos, a.TanVel, b.Pos, b.TanVel, u, segDt / 1000f)
-                    : a.Pos.Lerp(b.Pos, u);
+                pos =
+                    a.HasVel && b.HasVel
+                        ? Hermite(a.Pos, a.TanVel, b.Pos, b.TanVel, u, segDt / 1000f)
+                        : a.Pos.Lerp(b.Pos, u);
                 // Rotation stays Slerp: at these gaps an angular Hermite adds nothing visible.
                 rot = a.Rot.Slerp(b.Rot, u);
                 return;
             }
         }
 
-        // Past the newest sample (late/dropped data): dead-reckon a bounded horizon along the wire
-        // velocity — the server's own integrated state, so a cruising or station-keeping ship
-        // glides on-truth instead of hold-then-snapping. No-velocity streams fall back to the last
-        // segment's finite difference.
+        // Past the newest sample (late/dropped data): VELOCITY-DECAY dead-reckoning. The wire
+        // velocity is not held constant to a hard cap and then frozen (a C¹ break plus a hold-then-
+        // jump when the next packet lands — the skip). Instead the extrapolated velocity is decayed:
+        //
+        //     v(age) = v₀ · e^(−age/τd)                      (v₀ = last wire velocity)
+        //
+        // so the pose eases to a smooth asymptotic stop. Integrating v(age) from 0 gives the
+        // closed-form position, whose scalar "effective seconds" factor is DIMENSIONALLY a time and
+        // is SHARED by the orientation integral (angular velocity decays under the same envelope):
+        //
+        //     decayS(age) = ∫₀^age e^(−s/τd) ds = τd · (1 − e^(−age/τd))            [seconds]
+        //     pos(age)    = last.Pos + v₀ · decayS(age)
+        //     Δattitude   = ω₀ · decayS(age)   (per axis, then right-composed yaw→pitch→roll)
+        //
+        // Properties — all continuous, no special cases:
+        //   • age → 0⁺ : decayS → 0, so pos → last.Pos, Δattitude → 0 (matches the bracketed end).
+        //   • d(pos)/d(age) = v₀·e^(−age/τd) → v₀ at the seam and → 0 as age grows: C¹ (in fact C^∞),
+        //     never a kink, so there is no cap to cross and nothing to jump out of.
+        //   • age → ∞ : pos → last.Pos + v₀·τd (a FINITE glide of τd·|v₀|, then a smooth stop) and
+        //     Δattitude → ω₀·τd. τd's clamp ceiling bounds this worst-case reach.
+        // When a fresh sample lands mid-glide, Push captures the (now-bounded) offset and Evaluate
+        // decays it to zero — the correction is a glide, not a teleport.
         var last = _samples[n - 1];
         var prev = _samples[n - 2];
-        double overRaw = t - last.T;
-        double over = System.Math.Min(overRaw, _t.MaxExtrapolateMs);
+        double ageMs = t - last.T; // > 0 here: the bracket loop covered everything up to last.T
         if (InterpStats.Enabled)
         {
-            _rawExtrapolated = overRaw > 0.0; // renderT past the newest sample
-            _rawFrozen = overRaw >= _t.MaxExtrapolateMs; // clamped at the cap — the freeze/skip signature
+            _rawExtrapolated = ageMs > 0.0; // renderT past the newest sample
+            _rawExtrapAgeMs = ageMs > 0.0 ? ageMs : 0.0; // how far past — the smooth-extrapolation reach
         }
-        if (over <= 0.0)
+        if (ageMs <= 0.0)
         {
             pos = last.Pos;
             rot = last.Rot;
             return;
         }
-        float overS = (float)(over / 1000.0);
+        double tauMs = System.Math.Clamp(_t.ExtrapDecayGapFactor * _gapEma, _t.ExtrapDecayMinMs, _t.ExtrapDecayMaxMs);
+        double tauS = tauMs / 1000.0;
+        double ageS = ageMs / 1000.0;
+        // decayS ∈ [0, tauS): effective integrated seconds under the decay envelope. Drives BOTH the
+        // position dead-reckon and the attitude advance, so a single scalar keeps them in lock-step.
+        float decayS = (float)(tauS * (1.0 - System.Math.Exp(-ageS / tauS)));
         if (last.HasVel)
         {
-            pos = last.Pos + last.Vel * overS;
-            // Advance attitude by the LOCAL angular velocity, composed on the right in the same
-            // yaw→pitch→roll sequence FlightModel.Step integrates (sequence is part of the feel).
+            pos = last.Pos + last.Vel * decayS;
+            // Advance attitude by the LOCAL angular velocity under the same decay envelope, composed
+            // on the right in the same yaw→pitch→roll sequence FlightModel.Step integrates (sequence
+            // is part of the feel). decayS replaces the old constant window seconds, so the attitude
+            // eases to a stop in lock-step with the position instead of freezing at a cap.
             var w = last.AngVelLocal;
-            rot = (last.Rot
-                * RotVec(new Vector3(0f, w.Y * overS, 0f))
-                * RotVec(new Vector3(w.X * overS, 0f, 0f))
-                * RotVec(new Vector3(0f, 0f, w.Z * overS))).Normalized();
+            rot = (
+                last.Rot
+                * RotVec(new Vector3(0f, w.Y * decayS, 0f))
+                * RotVec(new Vector3(w.X * decayS, 0f, 0f))
+                * RotVec(new Vector3(0f, 0f, w.Z * decayS))
+            ).Normalized();
         }
         else
         {
-            double segDt = last.T - prev.T;
-            if (segDt > 1.0)
+            // No-velocity stream: estimate velocity by finite difference over the last segment and
+            // apply the SAME decay envelope (v_fd = Δpos/segS ⇒ pos = last.Pos + v_fd·decayS). The
+            // rotation extends the prev→last Slerp by the decayed fraction (decayS/segS) past its
+            // end, so this branch also eases to an asymptotic stop rather than freezing at a cap.
+            double segMs = last.T - prev.T;
+            if (segMs > 1.0)
             {
-                float ef = (float)(over / segDt); // fraction of the last segment extended past its end
-                pos = last.Pos + (last.Pos - prev.Pos) * ef;
-                rot = prev.Rot.Slerp(last.Rot, 1f + ef).Normalized();
+                float segS = (float)(segMs / 1000.0);
+                pos = last.Pos + (last.Pos - prev.Pos) * (decayS / segS);
+                rot = prev.Rot.Slerp(last.Rot, 1f + decayS / segS).Normalized();
             }
             else
             {

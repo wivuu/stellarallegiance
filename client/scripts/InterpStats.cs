@@ -4,10 +4,11 @@ using Godot;
 // =====================================================================
 //  InterpStats.cs — REMOTE-SHIP MOTION-FIDELITY INSTRUMENTATION (opt-in)
 //
-//  Phase-0 measurement aid for the remote-ship motion-fidelity work: it watches the
-//  shared MotionInterpolator to quantify HOW badly coarse-cadence ships skip/freeze,
-//  so later phases (server cadence generalization, interpolator graceful degradation)
-//  can be ranked against a baseline. Enabled by the --interp-stats CLI flag in
+//  Measurement aid for the remote-ship motion-fidelity work: it watches the shared
+//  MotionInterpolator to quantify how roughly coarse-cadence ships move — the jerk (acc)
+//  of the rendered pose and how far past the newest sample the interpolator has to reach
+//  (extrap_pct / extrap_age_p95) — so each phase (server cadence generalization,
+//  interpolator graceful degradation) can be ranked against a baseline. Enabled by the --interp-stats CLI flag in
 //  ShipController — INDEPENDENT of StressRender/PerfBuckets, so it runs on a plain
 //  --autofly session with no stress-fx.
 //
@@ -28,10 +29,6 @@ public static class InterpStats
 {
     // Set from ShipController's CLI parse (--interp-stats). Independent of PerfBuckets.Enabled.
     public static bool Enabled;
-
-    // The interpolator's MaxExtrapolateMs cap (the horizon past which EvaluateRaw clamps and the
-    // pose "freezes"). Kept here as the freeze-detection threshold; mirrors Tunables.Default.
-    public const double FreezeCapMs = 250.0;
 
     // Bound on the per-metric sample lists so a long window / very high frame-rate can't grow them
     // without limit. A 2s window at 60fps yields ~120 eval samples — far under this — so the cap
@@ -56,14 +53,12 @@ public static class InterpStats
         // Evaluate counters.
         public int Evals;
         public int ExtrapEvals; // renderT past the newest sample T
-        public int FreezeEvals; // clamped at the MaxExtrapolateMs cap
-        public int FreezeEvents; // transitions INTO the clamped state (the skip signature)
-        public bool WasFrozen; // edge-detect for FreezeEvents
         public int Snaps; // SnapDistance firings (from Push)
         public double DelaySum; // Σ adaptive delay actually used (delay_avg = DelaySum/Evals)
 
         // Distributions (sorted at report time).
         public readonly List<float> Errs = new(); // |_posErr| magnitude at Evaluate
+        public readonly List<float> ExtrapAges = new(); // ms past newest sample, on extrapolating frames
         public readonly List<float> Accs = new(); // jerk proxy (u/s²), post error-blend
         public float AccMax;
 
@@ -82,15 +77,14 @@ public static class InterpStats
             Gaps.Clear();
             Evals = 0;
             ExtrapEvals = 0;
-            FreezeEvals = 0;
-            FreezeEvents = 0;
             Snaps = 0;
             DelaySum = 0.0;
             Errs.Clear();
+            ExtrapAges.Clear();
             Accs.Clear();
             AccMax = 0f;
-            // WasFrozen / the jerk history / AccWarm carry across windows — they describe continuous
-            // motion state, not per-window totals.
+            // The jerk history / AccWarm carry across windows — they describe continuous motion
+            // state, not per-window totals.
         }
     }
 
@@ -141,13 +135,15 @@ public static class InterpStats
         r.MarkDiscontinuity();
     }
 
-    // One Evaluate produced a rendered pose. extrap/frozen come from the interpolator's last
-    // EvaluateRaw; delay is the adaptive delay actually used; posErrLen = |_posErr| applied this
-    // frame; pos = the FINAL output position (post error-blend); dtSec = the frame's wall dt.
+    // One Evaluate produced a rendered pose. extrap = renderT was past the newest sample this frame;
+    // extrapAgeMs = how far past (0 when not extrapolating) — its p95 replaces the old freeze count,
+    // since velocity-decay extrapolation can no longer freeze: it just reaches further, smoothly.
+    // delay is the adaptive delay actually used; posErrLen = |_posErr| applied this frame; pos = the
+    // FINAL output position (post error-blend); dtSec = the frame's wall dt.
     public static void OnEvaluate(
         ShipRec r,
         bool extrap,
-        bool frozen,
+        double extrapAgeMs,
         double delay,
         float posErrLen,
         Vector3 pos,
@@ -158,16 +154,11 @@ public static class InterpStats
         r.Evals++;
         r.DelaySum += delay;
         if (extrap)
-            r.ExtrapEvals++;
-        if (frozen)
         {
-            r.FreezeEvals++;
-            if (!r.WasFrozen)
-                r.FreezeEvents++;
-            r.WasFrozen = true;
+            r.ExtrapEvals++;
+            if (r.ExtrapAges.Count < SampleCap)
+                r.ExtrapAges.Add((float)extrapAgeMs);
         }
-        else
-            r.WasFrozen = false;
         if (r.Errs.Count < SampleCap)
             r.Errs.Add(posErrLen);
 
@@ -198,6 +189,7 @@ public static class InterpStats
     // in steady state. Cleared and refilled each window from the surviving ships' per-ship lists.
     private static readonly List<float>[] _tGaps = { new(), new(), new() };
     private static readonly List<float>[] _tErrs = { new(), new(), new() };
+    private static readonly List<float>[] _tExtrapAges = { new(), new(), new() };
     private static readonly List<float>[] _tAccs = { new(), new(), new() };
     private static readonly List<ulong> _dead = new();
 
@@ -232,16 +224,15 @@ public static class InterpStats
         var delaySum = new double[3];
         var evals = new long[3];
         var extrap = new long[3];
-        var freezeEvals = new long[3];
-        var freezeEvents = new long[3];
         var snaps = new long[3];
         var accMax = new float[3];
         var worstId = new ulong[3];
-        var worstFreeze = new int[3];
+        var worstAcc = new float[3];
         for (int t = 0; t < 3; t++)
         {
             _tGaps[t].Clear();
             _tErrs[t].Clear();
+            _tExtrapAges[t].Clear();
             _tAccs[t].Clear();
         }
 
@@ -259,18 +250,18 @@ public static class InterpStats
             delaySum[t] += r.DelaySum;
             evals[t] += r.Evals;
             extrap[t] += r.ExtrapEvals;
-            freezeEvals[t] += r.FreezeEvals;
-            freezeEvents[t] += r.FreezeEvents;
             snaps[t] += r.Snaps;
             if (r.AccMax > accMax[t])
                 accMax[t] = r.AccMax;
-            if (r.FreezeEvents > worstFreeze[t])
+            // worst = the ship with the single largest jerk spike this window (the roughest mover).
+            if (r.AccMax > worstAcc[t])
             {
-                worstFreeze[t] = r.FreezeEvents;
+                worstAcc[t] = r.AccMax;
                 worstId[t] = r.Id;
             }
             _tGaps[t].AddRange(r.Gaps);
             _tErrs[t].AddRange(r.Errs);
+            _tExtrapAges[t].AddRange(r.ExtrapAges);
             _tAccs[t].AddRange(r.Accs);
         }
 
@@ -282,12 +273,11 @@ public static class InterpStats
             long ev = evals[t];
             double delayAvg = ev > 0 ? delaySum[t] / ev : 0.0;
             double extrapPct = ev > 0 ? 100.0 * extrap[t] / ev : 0.0;
-            double freezePct = ev > 0 ? 100.0 * freezeEvals[t] / ev : 0.0;
             Log.Print(
                 $"[interp-stats] tier={names[t]} n={n[t]} "
                     + $"gap_p50={Pct(_tGaps[t], 0.50):F1} gap_p95={Pct(_tGaps[t], 0.95):F1} "
                     + $"delay_avg={delayAvg:F0} extrap_pct={extrapPct:F1} "
-                    + $"freeze_pct={freezePct:F1} freeze_events={freezeEvents[t]} "
+                    + $"extrap_age_p95={Pct(_tExtrapAges[t], 0.95):F0} "
                     + $"err_p95={Pct(_tErrs[t], 0.95):F2} snaps={snaps[t]} "
                     + $"acc_p95={Pct(_tAccs[t], 0.95):F1} acc_max={accMax[t]:F1} "
                     + $"hitch_frames={_hitchFrames} worst={worstId[t]}"
