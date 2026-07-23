@@ -24,8 +24,11 @@ public sealed class CollisionSystem
     // Ship-PAIR thud debounce (id-ordered key), mirroring _collidingShips for ship-vs-ship contacts.
     private readonly HashSet<(ulong, ulong)> _collidingPairs = new();
 
-    // Visible local-sector ships collected each CheckCollisions sweep (reused buffer).
-    private readonly List<(ulong Id, Node3D Node)> _pairScratch = new();
+    // Visible local-sector ships collected each CheckCollisions sweep (reused buffer). Per-ship pose +
+    // collision hull + bounding radius is captured ONCE here so the O(n²) pair sweep does no per-pair
+    // interop reads (GlobalPosition/Quaternion) or ShipClassOf/ShipHull lookups — it reads these fields.
+    private readonly List<(ulong Id, Vector3 Pos, Quaternion Rot, ConvexHull? Hull, float Bound)> _pairScratch =
+        new();
 
     public CollisionSystem(
         CollisionWorld collisionWorld,
@@ -50,12 +53,14 @@ public sealed class CollisionSystem
             return;
         var bodies = _collisionWorld.BodiesIn(_sectors.LocalSector, _clock.Seconds);
 
+        var statT0 = PerfBuckets.Now();
         _pairScratch.Clear();
         foreach (var (shipId, ship) in _ships.Nodes)
         {
             if (!ship.Visible)
                 continue;
             Vector3 c = ship.GlobalPosition;
+            var (thudCls, thudPod) = ShipRenderer.ShipClassOf(ship);
             if (bodies.Count > 0)
             {
                 // A constructor on an active build job (align → build) deliberately contacts and embeds in
@@ -69,7 +74,6 @@ public sealed class CollisionSystem
                 // predicate has fired the server is consuming the ship, and the ghost ticks
                 // predicted before ShipGone lands would otherwise thud on the station interior.
                 bool dockPending = ship is PredictionController { DockPending: true };
-                var (thudCls, thudPod) = ShipRenderer.ShipClassOf(ship);
                 Vector3 v = ShipRenderer.ShipVelocityOf(ship);
                 bool now =
                     !buildContact
@@ -88,44 +92,54 @@ public sealed class CollisionSystem
                 else if (!now)
                     _collidingShips.Remove(shipId);
             }
-            _pairScratch.Add((shipId, ship));
+            // Cache pose + hull once for the pair sweep. ShipHull is memoized per class, so this is the
+            // ONLY ShipHull lookup per ship; bound falls back to the ShipRadius sphere exactly like the
+            // old per-pair `ha?.Bound ?? ShipRadius`.
+            var hull = _collisionWorld.ShipHull(_defs, thudCls, thudPod);
+            _pairScratch.Add((shipId, c, ship.Quaternion, hull?.Hull, hull?.Bound ?? CollisionConfig.ShipRadius));
         }
+        PerfBuckets.Add(PerfBuckets.ColStatic, statT0);
 
         // Ship-vs-ship thud: same hull-aware contact the sim resolves (shared kernel), over the visible
         // local-sector ships — few enough that the O(n²) pair sweep is trivial. Entry-edge debounce per
         // id-ordered pair, exactly like the static _collidingShips gate above.
+        var pairT0 = PerfBuckets.Now();
         for (int i = 0; i < _pairScratch.Count; i++)
         for (int j = i + 1; j < _pairScratch.Count; j++)
         {
-            var (idA, a) = _pairScratch[i];
-            var (idB, b) = _pairScratch[j];
-            var (clsA, podA) = ShipRenderer.ShipClassOf(a);
-            var (clsB, podB) = ShipRenderer.ShipClassOf(b);
-            var ha = _collisionWorld.ShipHull(_defs, clsA, podA);
-            var hb = _collisionWorld.ShipHull(_defs, clsB, podB);
-            Vector3 pa = a.GlobalPosition,
-                pb = b.GlobalPosition;
-            Quaternion qa = a.Quaternion,
-                qb = b.Quaternion;
+            var (idA, pa, qa, ha, ba) = _pairScratch[i];
+            var (idB, pb, qb, hb, bb) = _pairScratch[j];
+            var key = idA < idB ? (idA, idB) : (idB, idA);
+            // Radius-sum broad-phase: a pair beyond the summed bounding radii can't contact. This is
+            // EXACTLY ShipShipContact's own first-line reject (`bound = boundA + boundB`; both hulls null
+            // ⇒ 2·ShipRadius, identical to its legacy sphere branch), so treating it as the no-contact
+            // case — dropping the pair from the debounce set, mirroring the `!now` branch — is
+            // bit-identical to calling through, but skips the Vec3/Quat marshalling + convex test.
+            float bsum = ba + bb;
+            if (pa.DistanceSquaredTo(pb) >= bsum * bsum)
+            {
+                _collidingPairs.Remove(key);
+                continue;
+            }
             bool now = Collide.ShipShipContact(
                 new Vec3(pa.X, pa.Y, pa.Z),
                 new Quat(qa.X, qa.Y, qa.Z, qa.W),
-                ha?.Hull,
-                ha?.Bound ?? CollisionConfig.ShipRadius,
+                ha,
+                ba,
                 new Vec3(pb.X, pb.Y, pb.Z),
                 new Quat(qb.X, qb.Y, qb.Z, qb.W),
-                hb?.Hull,
-                hb?.Bound ?? CollisionConfig.ShipRadius,
+                hb,
+                bb,
                 CollisionConfig.ShipRadius,
                 out _,
                 out _
             );
-            var key = idA < idB ? (idA, idB) : (idB, idA);
             if (now && _collidingPairs.Add(key))
                 PlayCollisionSfx((pa + pb) * 0.5f);
             else if (!now)
                 _collidingPairs.Remove(key);
         }
+        PerfBuckets.Add(PerfBuckets.ColPair, pairT0);
     }
 
     // Drop a ship from the contact-debounce set (called when it's promoted to the local predicted ship,

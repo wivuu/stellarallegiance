@@ -35,7 +35,9 @@ public static class PerfBuckets
     public const int Beacon = 7; // BaseBeacon._Process
     public const int World = 8; // WorldRenderer._Process whole body (Col + Bolt are subsets of it)
     public const int Hud = 9; // Hud._Process, excluding its own render-stats/report block
-    private const int Count = 10;
+    public const int ColStatic = 10; // CheckCollisions static-touches loop (subset of Col)
+    public const int ColPair = 11; // CheckCollisions ship-vs-ship pair sweep (subset of Col)
+    private const int Count = 12;
 
     // Monotonic per-bucket tick accumulators. Never cleared — the reporter deltas its snapshots.
     private static readonly long[] _acc = new long[Count];

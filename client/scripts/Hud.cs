@@ -501,6 +501,8 @@ public partial class Hud : CanvasLayer
             double glow = MsPer(PerfBuckets.Glow);
             double trail = MsPer(PerfBuckets.Trail);
             double col = MsPer(PerfBuckets.Col);
+            double colStat = MsPer(PerfBuckets.ColStatic);
+            double colPair = MsPer(PerfBuckets.ColPair);
             double bolt = MsPer(PerfBuckets.Bolt);
             double beacon = MsPer(PerfBuckets.Beacon);
             double worldOther = MsPer(PerfBuckets.World) - col - bolt;
@@ -511,7 +513,7 @@ public partial class Hud : CanvasLayer
             Log.Print(
                 $"[perf-buckets] frames={dFrames} ships={_world.Ships.Count} "
                     + $"mk_proc={mkProc:F1} mk_draw={mkDraw:F1} rship={rship:F1} glow={glow:F1} trail={trail:F1} "
-                    + $"col={col:F1} bolt={bolt:F1} beacon={beacon:F1} world_other={worldOther:F1} hud={hud:F1} "
+                    + $"col={col:F1} col_stat={colStat:F1} col_pair={colPair:F1} bolt={bolt:F1} beacon={beacon:F1} world_other={worldOther:F1} hud={hud:F1} "
                     + $"other={other:F1} sum={sum:F1}"
             );
         }
