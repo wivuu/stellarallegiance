@@ -90,6 +90,14 @@ public static class InterpStats
 
     private static readonly Dictionary<ulong, ShipRec> _recs = new();
 
+    // [predict-stats] sep_at_hit: RENDERED separation (own predicted position → nearest remote ship's
+    // rendered pose, minus radii) captured on each LIVE ship-vs-ship prediction contact. It quantifies
+    // how far the visibly-rendered obstacle sits from where the predictor resolved a time-aligned ram —
+    // the residual visible offset that feeds the deferred Phase-5 forward-rendering design note. Recorded
+    // only under Enabled (from PredictionController.ResolveCollisions); drained + reported by the Hud's 2s
+    // [predict-stats] line.
+    private static readonly List<float> _sepAtHit = new();
+
     // Global (not per-tier) count of frames whose wall dt exceeded 25 ms this window — the render
     // hitch signal. Fed once per frame from the Hud via NoteFrame.
     private static int _hitchFrames;
@@ -112,6 +120,25 @@ public static class InterpStats
     {
         if (dtSeconds > 0.025)
             _hitchFrames++;
+    }
+
+    // Record one sep_at_hit sample (surface separation, units — may be negative if the rendered ships
+    // also overlap). Called from the predictor on a live contact; capped like the other lists.
+    public static void OnLocalHitSep(float sepUnits)
+    {
+        if (_sepAtHit.Count < SampleCap)
+            _sepAtHit.Add(sepUnits);
+    }
+
+    // Drain the window's sep_at_hit samples into (count, p50, p95) and clear. Called from the Hud's
+    // [predict-stats] line so it reports the window distribution rather than a single last value.
+    public static (int N, float P50, float P95) DrainSepAtHit()
+    {
+        int n = _sepAtHit.Count;
+        float p50 = Pct(_sepAtHit, 0.50); // Pct sorts in place — fine, the list is cleared right after
+        float p95 = Pct(_sepAtHit, 0.95);
+        _sepAtHit.Clear();
+        return (n, p50, p95);
     }
 
     // ---- Interpolator hooks (all invoked only under InterpStats.Enabled) ----

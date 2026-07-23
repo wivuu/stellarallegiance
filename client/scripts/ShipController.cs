@@ -141,6 +141,8 @@ public partial class ShipController : Node
     private bool _selfTestDone; // autofly fires one divergence injection
     private bool _combatTest; // --combat-test: fly straight + fire (head-on damage check)
     private bool _warpTest; // --warp-test: mine-drop run, then manual-steer into the sector's aleph (warp smoke)
+    private bool _ramTest; // --ram-test: autofly chases + rams the nearest remote ship (ram-prediction measurement harness)
+    private ulong _ramTargetId; // committed ram target (survives frame-to-frame so the rammer doesn't orbit a cluster)
 
     // Round-trip latency. STDB mode times each ApplyInput against its own reducer callback
     // (clientTick echoed back); native mode times an explicit Ping/Pong nonce (no reducer to
@@ -207,6 +209,14 @@ public partial class ShipController : Node
             {
                 _autoFly = true;
                 _warpTest = true;
+            }
+            // Ram-prediction measurement harness: fly autofly, but chase + ram the nearest visible remote
+            // ship so the local predictor repeatedly resolves genuine ship-vs-ship contacts (two same-team
+            // autofly clients on the default weave never touch). Implies the autofly join/spawn flow.
+            if (a == "--ram-test")
+            {
+                _autoFly = true;
+                _ramTest = true;
             }
             // Render stress-test knobs (see StressRender / the --stress-fighters server harness).
             // --render-stats alone just shows the counters; --stress-fx=<mode> also strips ship fx
@@ -917,6 +927,96 @@ public partial class ShipController : Node
         // deterministic hit/damage/death check.
         if (_combatTest)
             return new ShipInputState { Thrust = 1f, Firing = true };
+
+        // Ram test harness (--ram-test): chase a MOVING remote ship and ride onto it so the local
+        // predictor repeatedly resolves a real ship-vs-ship contact — the ram-time-alignment work needs
+        // genuine per-tick contacts against MOVING obstacles to measure (a stationary obstacle makes the
+        // time-alignment a no-op, and two same-team autofly clients on the default weave never touch).
+        //   • Target the nearest ship whose speed exceeds RamMinTargetSpeed (skip parked/idle ships — a
+        //     stationary target just makes the fast Scout orbit it fruitlessly and wouldn't exercise the
+        //     fix). COMMIT to it (re-picking "nearest" every frame orbits a cluster without committing)
+        //     until it despawns / drifts past RamReacquire, then re-acquire.
+        //   • Lead-pursuit steering (aim where the target WILL be when we arrive: target.Pos +
+        //     target.Vel × leadT), proportional yaw/pitch from the local-frame error, replicating
+        //     AutoSteer.SteerToPoint's sign convention INLINE (local +Z forward; yaw = +local.X, pitch =
+        //     −local.Y; bang-bang while behind) so shared/AutoSteer stays untouched.
+        //   • THROTTLE-DOWN when close (dist ≤ RamCloseDist): a Scout at full speed (~173) has a turn
+        //     radius far larger than the ram distance, so it orbits a target ~15u out and rarely touches;
+        //     easing the throttle shrinks the turn radius so it RIDES right onto the target's pose. This
+        //     is the measurement's engine: it parks the predicted ship on the remote ship's collision
+        //     silhouette every tick, so the predictor resolves a contact every tick — a stress version of
+        //     the plan's exact bug (per-tick collision against a remote ship's pose). Zero effect w/o flag.
+        if (_ramTest && _world.Ships.LocalShip is { } rammer)
+        {
+            const float ramReacquire = 1200f; // drop a target that has drifted this far, re-pick nearest mover
+            const float ramMinTargetSpeed = 20f; // ignore ~parked ships — the fix only matters for movers
+            const float ramCloseDist = 120f; // within this, throttle down to ride onto the target
+            Vector3 gp = rammer.GlobalPosition;
+            RemoteShip? target = null;
+
+            // Keep the committed target while it's still a valid, reasonably-near, still-MOVING obstacle
+            // (drop it if it stopped — otherwise the rammer gets stuck fruitlessly orbiting a parked ship).
+            if (
+                _ramTargetId != 0
+                && _world.Ships.Nodes.TryGetValue(_ramTargetId, out var held)
+                && held is RemoteShip heldRs
+                && heldRs.Visible
+                && SectorView.InSector(heldRs, _world.LocalSector)
+                && heldRs.Velocity.Length() >= ramMinTargetSpeed
+                && gp.DistanceSquaredTo(heldRs.GlobalPosition) <= ramReacquire * ramReacquire
+            )
+                target = heldRs;
+
+            if (target is null) // (re)acquire the nearest visible MOVING remote ship in the local sector
+            {
+                float bestD2 = float.MaxValue;
+                foreach (var node in _world.Ships.Nodes.Values)
+                {
+                    if (node is not RemoteShip rs || !rs.Visible)
+                        continue;
+                    if (!SectorView.InSector(rs, _world.LocalSector))
+                        continue;
+                    if (rs.Velocity.Length() < ramMinTargetSpeed)
+                        continue;
+                    float d2 = gp.DistanceSquaredTo(rs.GlobalPosition);
+                    if (d2 < bestD2)
+                    {
+                        bestD2 = d2;
+                        target = rs;
+                    }
+                }
+                _ramTargetId = target?.ShipId ?? 0;
+            }
+
+            if (target is not null)
+            {
+                float dist = (target.GlobalPosition - gp).Length();
+                float ownSpeed = Mathf.Max(rammer.Speed, 50f); // Scout cruise ~173; floor avoids /0 at spawn
+                float leadT = Mathf.Clamp(dist / ownSpeed, 0f, 1.0f);
+                Vector3 aim = target.GlobalPosition + target.Velocity * leadT;
+                var q = rammer.GlobalBasis.GetRotationQuaternion();
+                float yaw = 0f,
+                    pitch = 0f;
+                Vector3 toT = aim - gp;
+                if (toT.LengthSquared() > 1e-6f)
+                {
+                    Vector3 local = (q.Inverse() * toT.Normalized()); // ship frame, +Z forward
+                    const float turnGain = 4f;
+                    yaw = local.Z < 0f ? (local.X >= 0f ? 1f : -1f) : Mathf.Clamp(local.X * turnGain, -1f, 1f);
+                    pitch = local.Z < 0f ? (local.Y >= 0f ? -1f : 1f) : Mathf.Clamp(-local.Y * turnGain, -1f, 1f);
+                }
+                // Ease the throttle for the final approach so the turn radius shrinks enough to ride onto
+                // the target instead of orbiting it; full thrust (+boost) to close the gap from range.
+                bool close = dist <= ramCloseDist;
+                return new ShipInputState
+                {
+                    Thrust = close ? 0.45f : 1f,
+                    Yaw = yaw,
+                    Pitch = pitch,
+                    Boost = !close,
+                };
+            }
+        }
 
         // Warp test: drop a few mines on a short straight run, then steer MANUALLY straight into the
         // sector's gate to fire the real warp path (cover → swap → reveal + minefield reconcile) this

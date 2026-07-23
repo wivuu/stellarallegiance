@@ -118,16 +118,28 @@ public partial class PredictionController : Node3D
     // authoritative push-out snaps it back. The remote poses are the client's best estimate
     // (interp delay ≈ a few ticks behind authority), so a hard bump may still reconcile — the
     // spring absorbs that; the win is never visibly interpenetrating another ship.
-    private System.Func<IReadOnlyList<Collide.MovingShip>>? _shipObstacles;
+    // The ship obstacles are TIME-ALIGNED to the tick being resolved: the provider takes the predicted
+    // server tick and returns each remote ship dead-reckoned to where it IS at that tick (see
+    // ShipRenderer.ShipObstacles), so a contact is tested against pose+velocity from the SAME instant
+    // the local ship is predicting — not the rendered (interp-delayed) pose. Reconcile replay passes each
+    // replayed entry's own tick, so replay is time-aligned too.
+    private System.Func<uint, IReadOnlyList<Collide.MovingShip>>? _shipObstacles;
     private System.Func<(ConvexHull Hull, float Bound)?>? _localHull;
 
+    // [predict-stats] sep_at_hit probe (measurement only): given the local ship's predicted position
+    // (Godot space) returns the surface separation to the nearest remote ship's RENDERED pose. Invoked
+    // only on a live contact under InterpStats.Enabled; null in normal play.
+    private System.Func<Vector3, float>? _renderedSep;
+
     public void SetShipCollisionProvider(
-        System.Func<IReadOnlyList<Collide.MovingShip>> ships,
-        System.Func<(ConvexHull Hull, float Bound)?> localHull
+        System.Func<uint, IReadOnlyList<Collide.MovingShip>> ships,
+        System.Func<(ConvexHull Hull, float Bound)?> localHull,
+        System.Func<Vector3, float>? renderedSep = null
     )
     {
         _shipObstacles = ships;
         _localHull = localHull;
+        _renderedSep = renderedSep;
     }
 
     // [predict-stats] instrumentation: count of LIVE prediction ticks that resolved a genuine
@@ -136,13 +148,16 @@ public partial class PredictionController : Node3D
     // replay ticks (live:false) are excluded so a reconcile storm can't inflate the count.
     public static int LocalContactTicks;
 
-    private void ResolveCollisions(ref ShipState st, bool live = true)
+    private void ResolveCollisions(ref ShipState st, uint predTick, bool live = true)
     {
         // Ships first, then statics — the server's per-tick order (Pass C, then the asteroid/base pass).
-        var ships = _shipObstacles?.Invoke();
+        // Obstacles are time-aligned to predTick (the tick `st` was integrated for), so the contact
+        // tests pose+velocity from the same instant the prediction is at.
+        var ships = _shipObstacles?.Invoke(predTick);
         if (ships is { Count: > 0 })
         {
             var lh = _localHull?.Invoke();
+            Vec3 prePos = st.Pos; // pre-push-out predicted position, for the sep_at_hit metric
             bool shipHit = Collide.ResolveShipsLocal(
                 ref st,
                 CollisionConfig.ShipRadius,
@@ -153,7 +168,13 @@ public partial class PredictionController : Node3D
                 out _
             );
             if (live && shipHit && InterpStats.Enabled)
+            {
                 LocalContactTicks++;
+                // sep_at_hit: how far the visibly-rendered obstacle sits from where the predictor just
+                // resolved a (time-aligned) contact — feeds the Phase-5 forward-rendering design note.
+                if (_renderedSep is not null)
+                    InterpStats.OnLocalHitSep(_renderedSep(new Vector3(prePos.X, prePos.Y, prePos.Z)));
+            }
         }
 
         if (_bodies is null)
@@ -478,7 +499,7 @@ public partial class PredictionController : Node3D
         _throttle = Mathf.Clamp(input.Thrust, 0f, 1f); // forward thrust drives the engine glow
         ConsumeFuelPod(ref _state, input, ref _predFuelPods); // mirror of the server's pre-Integrate auto-load
         _state = FlightModel.Integrate(_state, input, _stats);
-        ResolveCollisions(ref _state);
+        ResolveCollisions(ref _state, clientTick);
         _buffer.Add(
             new Entry
             {
@@ -642,7 +663,9 @@ public partial class PredictionController : Node3D
         {
             ConsumeFuelPod(ref s, replay[i].Input, ref pods);
             s = FlightModel.Integrate(s, replay[i].Input, _stats);
-            ResolveCollisions(ref s, live: false); // replay: excluded from the local_hits contact count
+            // Replay: time-align obstacles to each replayed entry's own tick (this fixes the
+            // present-time-pose replay flaw too); excluded from the local_hits contact count.
+            ResolveCollisions(ref s, replay[i].Tick, live: false);
             var e = replay[i];
             e.Predicted = s;
             e.PredictedPods = pods;

@@ -580,6 +580,13 @@ public partial class Hud : CanvasLayer
         float recErrMax = PredictionController.WindowMaxReconcileErr;
         PredictionController.WindowMaxReconcileErr = 0f;
 
-        Log.Print($"[predict-stats] reconciles={reconciles} rec_err_max={recErrMax:F1} local_hits={localHits}");
+        // sep_at_hit (rendered separation at each in-window local_hit): p50/p95 over the window, feeding
+        // the Phase-5 forward-rendering design note. sep_n = how many hits contributed.
+        var (sepN, sepP50, sepP95) = InterpStats.DrainSepAtHit();
+
+        Log.Print(
+            $"[predict-stats] reconciles={reconciles} rec_err_max={recErrMax:F1} local_hits={localHits} "
+                + $"sep_n={sepN} sep_at_hit_p50={sepP50:F1} sep_at_hit_p95={sepP95:F1}"
+        );
     }
 }

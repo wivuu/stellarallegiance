@@ -101,8 +101,9 @@ public sealed class MotionInterpolator
     }
 
     // Server-tick → server-time conversion: the sim integrates at a fixed dt, so a tick number
-    // maps to an exact stamp on a jitter-free axis.
-    private const double MsPerTick = FlightModel.Dt * 1000.0;
+    // maps to an exact stamp on a jitter-free axis. Public so the ram-fix obstacle time-alignment
+    // (ShipRenderer) converts a predicted server tick onto the SAME timeline the samples live on.
+    public const double MsPerTick = FlightModel.Dt * 1000.0;
     private const int MaxSamples = 16;
 
     private readonly Tunables _t;
@@ -147,6 +148,38 @@ public sealed class MotionInterpolator
 
     // Newest raw wire velocity (consumers smooth it themselves, e.g. the lead reticle).
     public Vector3 LatestVelocity => _samples.Count > 0 ? _samples[^1].Vel : Vector3.Zero;
+
+    // Newest authoritative sample, unsmoothed, for the local predictor's TIME-ALIGNED ram obstacles.
+    // Position/rotation/velocity/ang-velocity all come from the SAME server instant (serverMs = tick ×
+    // MsPerTick, on the same timeline as the predictor's server-tick counter) so the predictor can
+    // dead-reckon this pose forward to its predicted contact tick — pos and vel from one instant, not
+    // the rendered pose (interp-delayed) paired with a differently-lagged eased velocity. Vel is the RAW
+    // wire velocity, NOT the smoothed Hermite tangent. Returns false before the first sample lands.
+    public bool TryGetLatest(
+        out double serverMs,
+        out Vector3 pos,
+        out Quaternion rot,
+        out Vector3 vel,
+        out Vector3 angVelLocal
+    )
+    {
+        if (_samples.Count == 0)
+        {
+            serverMs = 0.0;
+            pos = Vector3.Zero;
+            rot = Quaternion.Identity;
+            vel = Vector3.Zero;
+            angVelLocal = Vector3.Zero;
+            return false;
+        }
+        var s = _samples[^1];
+        serverMs = s.T;
+        pos = s.Pos;
+        rot = s.Rot;
+        vel = s.Vel;
+        angVelLocal = s.AngVelLocal;
+        return true;
+    }
 
     // Drop all state (teleport/respawn/despawn): the next Push seeds fresh.
     public void Reset()
@@ -408,13 +441,7 @@ public sealed class MotionInterpolator
             // on the right in the same yaw→pitch→roll sequence FlightModel.Step integrates (sequence
             // is part of the feel). decayS replaces the old constant window seconds, so the attitude
             // eases to a stop in lock-step with the position instead of freezing at a cap.
-            var w = last.AngVelLocal;
-            rot = (
-                last.Rot
-                * RotVec(new Vector3(0f, w.Y * decayS, 0f))
-                * RotVec(new Vector3(w.X * decayS, 0f, 0f))
-                * RotVec(new Vector3(0f, 0f, w.Z * decayS))
-            ).Normalized();
+            rot = AdvanceRot(last.Rot, last.AngVelLocal, decayS);
         }
         else
         {
@@ -460,6 +487,21 @@ public sealed class MotionInterpolator
     {
         float len = v.Length();
         return len > max && len > 1e-6f ? v * (max / len) : v;
+    }
+
+    // Advance an orientation by a ship-LOCAL angular velocity (rad/s, X=pitch Y=yaw Z=roll) over
+    // `seconds`, right-composed yaw→pitch→roll exactly as FlightModel.Step / EvaluateRaw integrate it
+    // (the sequence is part of the feel). Shared so the ram-fix obstacle time-alignment (ShipRenderer)
+    // rolls a remote ship's attitude forward the identical way the extrapolator does.
+    public static Quaternion AdvanceRot(Quaternion rot, Vector3 angVelLocal, float seconds)
+    {
+        var w = angVelLocal;
+        return (
+            rot
+            * RotVec(new Vector3(0f, w.Y * seconds, 0f))
+            * RotVec(new Vector3(w.X * seconds, 0f, 0f))
+            * RotVec(new Vector3(0f, 0f, w.Z * seconds))
+        ).Normalized();
     }
 
     // A rotation-vector (axis × angle) quaternion; identity for a negligible angle.

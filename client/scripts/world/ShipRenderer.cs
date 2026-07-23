@@ -91,6 +91,11 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
     private readonly List<RemoteShip> _friendlyScratch = new();
     private readonly List<Collide.MovingShip> _shipObstacleScratch = new();
 
+    // Parallel to _shipObstacleScratch (same order): each obstacle's RENDERED position + bound, stashed
+    // ONLY under InterpStats.Enabled for the [predict-stats] sep_at_hit probe (NearestRenderedSep) — how
+    // far the visibly-rendered ship sits from where the predictor resolved a time-aligned contact.
+    private readonly List<(Vector3 Pos, float Bound)> _shipObstacleRendered = new();
+
     // Death-cam: on local death the chase camera holds on the death point for a beat (DeathCamSec) so the
     // player watches their own blast up close; the home-overview reset is deferred to the coordinator's
     // _Process (see NeedsHomeReset) so the death sector — and the blast — stay visible through the hold.
@@ -212,9 +217,21 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
     // The other ships the LOCAL predicted ship can bump into: every visible remote ship in the local
     // sector, as shared MovingShip obstacles. Fogged / other-sector ships aren't included — a small
     // predict-miss the server reconciles. One reusable buffer; PredictionController consumes it each tick.
-    public IReadOnlyList<Collide.MovingShip> ShipObstacles()
+    //
+    // TIME-ALIGNMENT (ram fix): the local ship predicts `targetTick` (a few ticks AHEAD of authority),
+    // so an obstacle must be where the remote ship IS at that tick — not its rendered pose (interp-
+    // delayed ~100 ms BEHIND authority) paired with a differently-lagged eased velocity. Take the newest
+    // authoritative sample and dead-reckon it forward by dt = (targetTick − sampleTick) on the shared
+    // server-tick timeline (MotionInterpolator.MsPerTick), clamped [0, 300] ms so a stale coarse sample
+    // can't be flung far; ram targets are near ⇒ full-rate ⇒ the cap rarely binds. Position advances at
+    // the raw wire velocity, attitude by the local angular velocity (same convention the interpolator
+    // extrapolates with), and vel = the SAME wire velocity — so pos and vel come from one instant. When
+    // the sample is missing, fall back to today's rendered pose + eased velocity.
+    public IReadOnlyList<Collide.MovingShip> ShipObstacles(uint targetTick)
     {
         _shipObstacleScratch.Clear();
+        _shipObstacleRendered.Clear();
+        double targetMs = targetTick * MotionInterpolator.MsPerTick;
         foreach (var node in _nodes.Values)
         {
             if (node is not RemoteShip rs || !rs.Visible)
@@ -222,9 +239,24 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
             if (!SectorView.InSector(rs, _sectors.LocalSector))
                 continue;
             var hull = _collision.ShipHull(_defs, (byte)rs.Class, rs.IsPod);
-            Vector3 p = rs.Position;
-            Quaternion q = rs.Quaternion;
-            Vector3 v = rs.Velocity;
+            float bound = hull?.Bound ?? CollisionConfig.ShipRadius;
+
+            Vector3 p,
+                v;
+            Quaternion q;
+            if (rs.TryGetLatestSample(out double sampleMs, out var lp, out var lrot, out var lvel, out var lang))
+            {
+                float dt = (float)(System.Math.Clamp(targetMs - sampleMs, 0.0, 300.0) / 1000.0);
+                p = lp + lvel * dt;
+                q = MotionInterpolator.AdvanceRot(lrot, lang, dt);
+                v = lvel;
+            }
+            else
+            {
+                p = rs.Position;
+                q = rs.Quaternion;
+                v = rs.Velocity;
+            }
             _shipObstacleScratch.Add(
                 new Collide.MovingShip(
                     new Vec3(p.X, p.Y, p.Z),
@@ -232,11 +264,33 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
                     new Vec3(v.X, v.Y, v.Z),
                     rs.Mass,
                     hull?.Hull,
-                    hull?.Bound ?? CollisionConfig.ShipRadius
+                    bound
                 )
             );
+            // Rendered pose stash for the sep_at_hit probe (measurement only). rs.Position is the pose
+            // actually on screen this frame — the visible obstacle the predicted contact should be
+            // compared against.
+            if (InterpStats.Enabled)
+                _shipObstacleRendered.Add((rs.Position, bound));
         }
         return _shipObstacleScratch;
+    }
+
+    // [predict-stats] sep_at_hit probe: surface separation from `predictedPos` (the local ship's
+    // predicted position, Godot space — identical to sim space, ShipMath.ToGodot is identity) to the
+    // NEAREST remote obstacle's RENDERED position, minus both bounding radii. Reads the rendered poses
+    // stashed by the ShipObstacles pass that ran this same tick (no re-scan, no allocation). Only called
+    // on a LIVE prediction contact under InterpStats.Enabled; a big sentinel when no obstacles exist.
+    public float NearestRenderedSep(Vector3 predictedPos)
+    {
+        float best = float.MaxValue;
+        foreach (var (pos, bound) in _shipObstacleRendered)
+        {
+            float sep = predictedPos.DistanceTo(pos) - bound - CollisionConfig.ShipRadius;
+            if (sep < best)
+                best = sep;
+        }
+        return best;
     }
 
     // ---- Network entry points -------------------------------------------------------------------
@@ -374,7 +428,11 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
             pc.SetCollisionProvider(() => _collision.BodiesIn(_sectors.LocalSector, _clock.Seconds));
             // ... and against the other SHIPS in the local sector (interpolated remote poses), with this
             // hull's own collision hull for the hull-aware contact — mirroring server Pass C.
-            pc.SetShipCollisionProvider(ShipObstacles, () => _collision.ShipHull(_defs, (byte)pc.Class, pc.IsPod));
+            pc.SetShipCollisionProvider(
+                ShipObstacles,
+                () => _collision.ShipHull(_defs, (byte)pc.Class, pc.IsPod),
+                NearestRenderedSep
+            );
             if (_pilotNames.TryGetValue(row.ShipId, out var localPilot))
                 pc.SetPilotName(localPilot);
             LocalShip = pc;
