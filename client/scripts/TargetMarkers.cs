@@ -213,8 +213,8 @@ public partial class TargetMarkers : Control
     // tactical map (commander full-picture) stays uncapped — and the focused/locked target is always
     // drawn even beyond the cap. Override at runtime with --marker-cap=N (N enemy / N*3/4 friendly;
     // 0 = uncapped) via ShipController.MarkerCap. Tab targeting is unaffected (the cap is draw-only).
-    private const int MaxEnemyMarkers = 16;
-    private const int MaxFriendlyMarkers = 12;
+    private const int MaxEnemyMarkers = 32;
+    private const int MaxFriendlyMarkers = 24;
 
     // Scratch for the marker-cap distance sort (squared distance to the anchor, nearest-first). Reused
     // across the friendly and enemy passes each frame so the cap allocates nothing — same idiom as
