@@ -101,6 +101,18 @@ public sealed class MotionInterpolator
     private bool _rendered;
     private double _lastEvalWallMs;
 
+    // --- InterpStats (opt-in motion-fidelity instrumentation; see InterpStats.cs) ---
+    // StatsId is stamped once by the consuming node (RemoteShip.ShipId) so this interpolator's
+    // per-ship stats land in the right bucket; _statRec caches the accumulator (a dictionary lookup
+    // runs at most once per ship). _rawExtrapolated/_rawFrozen are set inside EvaluateRaw and read
+    // by Evaluate to classify the frame (past-newest / clamped-at-cap). All strictly no-ops unless
+    // InterpStats.Enabled — a normal run never touches any of this.
+    public ulong StatsId;
+    private InterpStats.ShipRec? _statRec;
+    private bool _rawExtrapolated;
+    private bool _rawFrozen;
+    private InterpStats.ShipRec Stats() => _statRec ??= InterpStats.Get(StatsId);
+
     public MotionInterpolator(Tunables tunables)
     {
         _t = tunables;
@@ -122,6 +134,8 @@ public sealed class MotionInterpolator
         _posErr = Vector3.Zero;
         _rotErr = Quaternion.Identity;
         _rendered = false;
+        if (InterpStats.Enabled)
+            Stats().MarkDiscontinuity(); // a teleport/respawn is a jerk discontinuity — exclude the jump
     }
 
     // Feed one authoritative sample. Returns false when rejected (stale/out-of-order — a reordered
@@ -191,6 +205,15 @@ public sealed class MotionInterpolator
             double gap = s.T - _samples[^1].T; // > 0 by the stale guard above
             if (gap < 4000.0)
                 _gapEma += (gap - _gapEma) * _t.GapEmaAlpha;
+            if (InterpStats.Enabled)
+                InterpStats.OnPush(Stats(), gap < 4000.0 ? gap : 0.0, _gapEma);
+        }
+        else if (InterpStats.Enabled)
+        {
+            var r = Stats();
+            r.Touched = true;
+            r.GapEma = _gapEma;
+            r.MarkDiscontinuity(); // first sample: seed the jerk history fresh
         }
 
         _samples.Add(s);
@@ -211,6 +234,8 @@ public sealed class MotionInterpolator
             {
                 _posErr = Vector3.Zero;
                 _rotErr = Quaternion.Identity;
+                if (InterpStats.Enabled)
+                    InterpStats.OnSnap(Stats());
             }
         }
 
@@ -240,6 +265,10 @@ public sealed class MotionInterpolator
         pos = rawPos + _posErr;
         rot = (_rotErr * rawRot).Normalized();
 
+        // Fidelity instrumentation: EvaluateRaw stamped _rawExtrapolated/_rawFrozen for this renderT.
+        if (InterpStats.Enabled)
+            InterpStats.OnEvaluate(Stats(), _rawExtrapolated, _rawFrozen, delay, _posErr.Length(), pos, dt);
+
         _lastRenderT = renderT;
         _lastOutPos = pos;
         _lastOutRot = rot;
@@ -251,6 +280,14 @@ public sealed class MotionInterpolator
     // Hermite (or linear) between brackets, bounded velocity dead-reckon past the newest.
     private void EvaluateRaw(double t, out Vector3 pos, out Quaternion rot)
     {
+        // Default: this sample time falls within (or before) the bracketed range — not extrapolating.
+        // The past-newest branch below overrides. Set unconditionally-cheap under the Enabled gate;
+        // Evaluate reads these immediately after ITS EvaluateRaw call, so Push's call can't race it.
+        if (InterpStats.Enabled)
+        {
+            _rawExtrapolated = false;
+            _rawFrozen = false;
+        }
         int n = _samples.Count;
         if (n == 0)
         {
@@ -289,7 +326,13 @@ public sealed class MotionInterpolator
         // segment's finite difference.
         var last = _samples[n - 1];
         var prev = _samples[n - 2];
-        double over = System.Math.Min(t - last.T, _t.MaxExtrapolateMs);
+        double overRaw = t - last.T;
+        double over = System.Math.Min(overRaw, _t.MaxExtrapolateMs);
+        if (InterpStats.Enabled)
+        {
+            _rawExtrapolated = overRaw > 0.0; // renderT past the newest sample
+            _rawFrozen = overRaw >= _t.MaxExtrapolateMs; // clamped at the cap — the freeze/skip signature
+        }
         if (over <= 0.0)
         {
             pos = last.Pos;

@@ -1,0 +1,306 @@
+using System.Collections.Generic;
+using Godot;
+
+// =====================================================================
+//  InterpStats.cs — REMOTE-SHIP MOTION-FIDELITY INSTRUMENTATION (opt-in)
+//
+//  Phase-0 measurement aid for the remote-ship motion-fidelity work: it watches the
+//  shared MotionInterpolator to quantify HOW badly coarse-cadence ships skip/freeze,
+//  so later phases (server cadence generalization, interpolator graceful degradation)
+//  can be ranked against a baseline. Enabled by the --interp-stats CLI flag in
+//  ShipController — INDEPENDENT of StressRender/PerfBuckets, so it runs on a plain
+//  --autofly session with no stress-fx.
+//
+//  Each live RemoteShip's MotionInterpolator, when Enabled, calls the hooks below from
+//  Push / Evaluate / EvaluateRaw into a per-ship ShipRec (keyed by the ship id the
+//  consumer stamps into MotionInterpolator.StatsId). Ships are classified into cadence
+//  TIERS by their OBSERVED smoothed inter-sample gap (never by ship kind): full <75ms,
+//  mid <250ms, coarse >=250ms. The Hud's 2s report block folds every live ship into its
+//  tier and prints one [interp-stats] line per non-empty tier (percentiles sorted once,
+//  at report time — cheap). A ship that stops reporting for a whole window is pruned.
+//
+//  ZERO-IMPACT when disabled: every hook and the per-frame NoteFrame no-op behind the
+//  Enabled flag (checked by the caller), so a normal game run allocates and does nothing.
+//  Sibling in spirit to PerfBuckets.cs (frame-time buckets) — this one is trajectory
+//  fidelity rather than CPU cost.
+// =====================================================================
+public static class InterpStats
+{
+    // Set from ShipController's CLI parse (--interp-stats). Independent of PerfBuckets.Enabled.
+    public static bool Enabled;
+
+    // The interpolator's MaxExtrapolateMs cap (the horizon past which EvaluateRaw clamps and the
+    // pose "freezes"). Kept here as the freeze-detection threshold; mirrors Tunables.Default.
+    public const double FreezeCapMs = 250.0;
+
+    // Bound on the per-metric sample lists so a long window / very high frame-rate can't grow them
+    // without limit. A 2s window at 60fps yields ~120 eval samples — far under this — so the cap
+    // effectively never trims; it's just a safety valve (drop excess, per the plan).
+    private const int SampleCap = 8192;
+
+    // Tier boundaries on the observed smoothed gap (ms). Classification is by MOTION cadence only.
+    private const double FullMaxMs = 75.0;
+    private const double MidMaxMs = 250.0;
+
+    // Per-ship accumulator over the current 2s window. Created lazily on the first Enabled hook,
+    // keyed by MotionInterpolator.StatsId. Reused across windows (ResetWindow clears the buffers).
+    public sealed class ShipRec
+    {
+        public ulong Id;
+        public double GapEma; // latest smoothed inter-sample gap (ms) — tier classification key
+        public bool Touched; // written this window (false after a full idle window ⇒ pruned)
+
+        // Push: server-time inter-sample gaps (ms).
+        public readonly List<float> Gaps = new();
+
+        // Evaluate counters.
+        public int Evals;
+        public int ExtrapEvals; // renderT past the newest sample T
+        public int FreezeEvals; // clamped at the MaxExtrapolateMs cap
+        public int FreezeEvents; // transitions INTO the clamped state (the skip signature)
+        public bool WasFrozen; // edge-detect for FreezeEvents
+        public int Snaps; // SnapDistance firings (from Push)
+        public double DelaySum; // Σ adaptive delay actually used (delay_avg = DelaySum/Evals)
+
+        // Distributions (sorted at report time).
+        public readonly List<float> Errs = new(); // |_posErr| magnitude at Evaluate
+        public readonly List<float> Accs = new(); // jerk proxy (u/s²), post error-blend
+        public float AccMax;
+
+        // Jerk second-difference history of the FINAL output position. AccWarm counts evaluations
+        // since the last discontinuity (Reset / snap / first sample); the first 2 are excluded so a
+        // teleport's own jump never lands in the distribution.
+        public Vector3 H1; // p_{t-1}
+        public Vector3 H2; // p_{t-2}
+        public double Dt1; // dt of the h2→h1 step
+        public int AccWarm;
+
+        public void MarkDiscontinuity() => AccWarm = 0;
+
+        public void ResetWindow()
+        {
+            Gaps.Clear();
+            Evals = 0;
+            ExtrapEvals = 0;
+            FreezeEvals = 0;
+            FreezeEvents = 0;
+            Snaps = 0;
+            DelaySum = 0.0;
+            Errs.Clear();
+            Accs.Clear();
+            AccMax = 0f;
+            // WasFrozen / the jerk history / AccWarm carry across windows — they describe continuous
+            // motion state, not per-window totals.
+        }
+    }
+
+    private static readonly Dictionary<ulong, ShipRec> _recs = new();
+
+    // Global (not per-tier) count of frames whose wall dt exceeded 25 ms this window — the render
+    // hitch signal. Fed once per frame from the Hud via NoteFrame.
+    private static int _hitchFrames;
+
+    // Fetch (creating on first use) the accumulator for a ship. Called from the interpolator only
+    // when Enabled; the interpolator caches the returned reference, so this dictionary lookup runs
+    // at most once per ship (never per frame).
+    public static ShipRec Get(ulong id)
+    {
+        if (!_recs.TryGetValue(id, out var r))
+        {
+            r = new ShipRec { Id = id };
+            _recs[id] = r;
+        }
+        return r;
+    }
+
+    // One frame elapsed (called once per frame from the Hud while Enabled): tally a render hitch.
+    public static void NoteFrame(double dtSeconds)
+    {
+        if (dtSeconds > 0.025)
+            _hitchFrames++;
+    }
+
+    // ---- Interpolator hooks (all invoked only under InterpStats.Enabled) ----
+
+    // A fresh authoritative sample landed: record the true server-time inter-sample gap and refresh
+    // the tier-classification key. gap<=0 means "first sample" (no predecessor) — skip the gap add.
+    public static void OnPush(ShipRec r, double gapMs, double gapEma)
+    {
+        r.Touched = true;
+        r.GapEma = gapEma;
+        if (gapMs > 0.0 && r.Gaps.Count < SampleCap)
+            r.Gaps.Add((float)gapMs);
+    }
+
+    // A SnapDistance-sized correction fired in Push (teleport-class error): count it and mark the
+    // jerk discontinuity so the induced jump is excluded from the acceleration distribution.
+    public static void OnSnap(ShipRec r)
+    {
+        r.Touched = true;
+        r.Snaps++;
+        r.MarkDiscontinuity();
+    }
+
+    // One Evaluate produced a rendered pose. extrap/frozen come from the interpolator's last
+    // EvaluateRaw; delay is the adaptive delay actually used; posErrLen = |_posErr| applied this
+    // frame; pos = the FINAL output position (post error-blend); dtSec = the frame's wall dt.
+    public static void OnEvaluate(
+        ShipRec r,
+        bool extrap,
+        bool frozen,
+        double delay,
+        float posErrLen,
+        Vector3 pos,
+        double dtSec
+    )
+    {
+        r.Touched = true;
+        r.Evals++;
+        r.DelaySum += delay;
+        if (extrap)
+            r.ExtrapEvals++;
+        if (frozen)
+        {
+            r.FreezeEvals++;
+            if (!r.WasFrozen)
+                r.FreezeEvents++;
+            r.WasFrozen = true;
+        }
+        else
+            r.WasFrozen = false;
+        if (r.Errs.Count < SampleCap)
+            r.Errs.Add(posErrLen);
+
+        // Jerk proxy: second difference of the final output position, |(v_now − v_prev)/dt| in u/s².
+        // Emit only once ≥2 clean evaluations have elapsed since the last discontinuity, so a
+        // teleport/snap jump never enters the distribution. Compute against the stored history
+        // FIRST, then roll the current pose in (dt1 becomes this frame's dt for the next step).
+        if (r.AccWarm >= 2 && dtSec > 1e-4 && r.Dt1 > 1e-4)
+        {
+            Vector3 vNow = (pos - r.H1) / (float)dtSec;
+            Vector3 vPrev = (r.H1 - r.H2) / (float)r.Dt1;
+            float acc = ((vNow - vPrev) / (float)dtSec).Length();
+            if (r.Accs.Count < SampleCap)
+                r.Accs.Add(acc);
+            if (acc > r.AccMax)
+                r.AccMax = acc;
+        }
+        r.H2 = r.H1;
+        r.H1 = pos;
+        r.Dt1 = dtSec;
+        if (r.AccWarm < 8)
+            r.AccWarm++;
+    }
+
+    // ---- Report (called from the Hud 2s block while Enabled) ----
+
+    // Reusable per-tier merge buffers (3 tiers × {gaps, errs, accs}) so the report allocates nothing
+    // in steady state. Cleared and refilled each window from the surviving ships' per-ship lists.
+    private static readonly List<float>[] _tGaps = { new(), new(), new() };
+    private static readonly List<float>[] _tErrs = { new(), new(), new() };
+    private static readonly List<float>[] _tAccs = { new(), new(), new() };
+    private static readonly List<ulong> _dead = new();
+
+    private static int TierOf(double gapEma) =>
+        gapEma < FullMaxMs ? 0
+        : gapEma < MidMaxMs ? 1
+        : 2;
+
+    private static float Pct(List<float> xs, double q)
+    {
+        int n = xs.Count;
+        if (n == 0)
+            return 0f;
+        xs.Sort();
+        int idx = (int)(q * (n - 1) + 0.5);
+        if (idx < 0)
+            idx = 0;
+        if (idx >= n)
+            idx = n - 1;
+        return xs[idx];
+    }
+
+    // Fold every live ship into its cadence tier and print one [interp-stats] line per non-empty
+    // tier, then reset the window. Prunes ships that reported nothing this window (despawned).
+    public static void Report()
+    {
+        if (!Enabled)
+            return;
+
+        // Per-tier scalar accumulators.
+        var n = new int[3];
+        var delaySum = new double[3];
+        var evals = new long[3];
+        var extrap = new long[3];
+        var freezeEvals = new long[3];
+        var freezeEvents = new long[3];
+        var snaps = new long[3];
+        var accMax = new float[3];
+        var worstId = new ulong[3];
+        var worstFreeze = new int[3];
+        for (int t = 0; t < 3; t++)
+        {
+            _tGaps[t].Clear();
+            _tErrs[t].Clear();
+            _tAccs[t].Clear();
+        }
+
+        _dead.Clear();
+        foreach (var kv in _recs)
+        {
+            var r = kv.Value;
+            if (!r.Touched)
+            {
+                _dead.Add(kv.Key); // idle a whole window ⇒ the ship despawned ⇒ prune it
+                continue;
+            }
+            int t = TierOf(r.GapEma);
+            n[t]++;
+            delaySum[t] += r.DelaySum;
+            evals[t] += r.Evals;
+            extrap[t] += r.ExtrapEvals;
+            freezeEvals[t] += r.FreezeEvals;
+            freezeEvents[t] += r.FreezeEvents;
+            snaps[t] += r.Snaps;
+            if (r.AccMax > accMax[t])
+                accMax[t] = r.AccMax;
+            if (r.FreezeEvents > worstFreeze[t])
+            {
+                worstFreeze[t] = r.FreezeEvents;
+                worstId[t] = r.Id;
+            }
+            _tGaps[t].AddRange(r.Gaps);
+            _tErrs[t].AddRange(r.Errs);
+            _tAccs[t].AddRange(r.Accs);
+        }
+
+        string[] names = { "full", "mid", "coarse" };
+        for (int t = 0; t < 3; t++)
+        {
+            if (n[t] == 0)
+                continue;
+            long ev = evals[t];
+            double delayAvg = ev > 0 ? delaySum[t] / ev : 0.0;
+            double extrapPct = ev > 0 ? 100.0 * extrap[t] / ev : 0.0;
+            double freezePct = ev > 0 ? 100.0 * freezeEvals[t] / ev : 0.0;
+            Log.Print(
+                $"[interp-stats] tier={names[t]} n={n[t]} "
+                    + $"gap_p50={Pct(_tGaps[t], 0.50):F1} gap_p95={Pct(_tGaps[t], 0.95):F1} "
+                    + $"delay_avg={delayAvg:F0} extrap_pct={extrapPct:F1} "
+                    + $"freeze_pct={freezePct:F1} freeze_events={freezeEvents[t]} "
+                    + $"err_p95={Pct(_tErrs[t], 0.95):F2} snaps={snaps[t]} "
+                    + $"acc_p95={Pct(_tAccs[t], 0.95):F1} acc_max={accMax[t]:F1} "
+                    + $"hitch_frames={_hitchFrames} worst={worstId[t]}"
+            );
+        }
+
+        foreach (var id in _dead)
+            _recs.Remove(id);
+        foreach (var kv in _recs)
+        {
+            kv.Value.ResetWindow();
+            kv.Value.Touched = false;
+        }
+        _hitchFrames = 0;
+    }
+}

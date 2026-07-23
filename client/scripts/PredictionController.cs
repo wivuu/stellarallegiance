@@ -130,14 +130,20 @@ public partial class PredictionController : Node3D
         _localHull = localHull;
     }
 
-    private void ResolveCollisions(ref ShipState st)
+    // [predict-stats] instrumentation: count of LIVE prediction ticks that resolved a genuine
+    // ship-vs-ship contact — the ram-recipe frequency signal. Static + only incremented under
+    // InterpStats.Enabled (zero behavior change); the Hud windows it into local_hits. Reconcile
+    // replay ticks (live:false) are excluded so a reconcile storm can't inflate the count.
+    public static int LocalContactTicks;
+
+    private void ResolveCollisions(ref ShipState st, bool live = true)
     {
         // Ships first, then statics — the server's per-tick order (Pass C, then the asteroid/base pass).
         var ships = _shipObstacles?.Invoke();
         if (ships is { Count: > 0 })
         {
             var lh = _localHull?.Invoke();
-            Collide.ResolveShipsLocal(
+            bool shipHit = Collide.ResolveShipsLocal(
                 ref st,
                 CollisionConfig.ShipRadius,
                 lh?.Hull,
@@ -146,6 +152,8 @@ public partial class PredictionController : Node3D
                 CollisionConfig.CollisionRestitution,
                 out _
             );
+            if (live && shipHit && InterpStats.Enabled)
+                LocalContactTicks++;
         }
 
         if (_bodies is null)
@@ -219,6 +227,11 @@ public partial class PredictionController : Node3D
     // Reconciliation instrumentation (T5).
     public int ReconcileCount { get; private set; }
     public float LastReconcileError { get; private set; } // posErr at the most recent correction
+
+    // [predict-stats]: peak reconcile position-error since the Hud last sampled it. Only written under
+    // InterpStats.Enabled (zero behavior change); the Hud reads and zeroes it each 2s report, so it
+    // reports the window max rather than just the last correction (which the 2s poll would alias).
+    public static float WindowMaxReconcileErr;
 
     public ulong ShipId { get; private set; }
     public byte Team { get; private set; }
@@ -618,6 +631,8 @@ public partial class PredictionController : Node3D
         // consumption re-derives from the authoritative count + fuel exactly like the live path.
         ReconcileCount++;
         LastReconcileError = posErr;
+        if (InterpStats.Enabled && posErr > WindowMaxReconcileErr)
+            WindowMaxReconcileErr = posErr; // window peak for [predict-stats] (zeroed by the Hud each report)
 
         var replay = _buffer.GetRange(idx + 1, _buffer.Count - (idx + 1));
         _buffer.Clear();
@@ -627,7 +642,7 @@ public partial class PredictionController : Node3D
         {
             ConsumeFuelPod(ref s, replay[i].Input, ref pods);
             s = FlightModel.Integrate(s, replay[i].Input, _stats);
-            ResolveCollisions(ref s);
+            ResolveCollisions(ref s, live: false); // replay: excluded from the local_hits contact count
             var e = replay[i];
             e.Predicted = s;
             e.PredictedPods = pods;

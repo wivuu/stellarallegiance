@@ -217,6 +217,11 @@ public partial class ShipController : Node
                 StressRender.ShowStats = true;
                 PerfBuckets.Enabled = true; // gate the [perf-buckets] frame-time attribution alongside the counters
             }
+            // Remote-ship motion-fidelity instrumentation (InterpStats). Independent of the render-stats
+            // knobs above, so it runs on a plain --autofly session with no stress-fx; gates the
+            // [interp-stats]/[predict-stats] lines the Hud prints on its 2s cadence.
+            if (a == "--interp-stats")
+                InterpStats.Enabled = true;
             if (a.StartsWith("--stress-fx="))
             {
                 StressRender.Fx = a["--stress-fx=".Length..] switch

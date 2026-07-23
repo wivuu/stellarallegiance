@@ -143,6 +143,7 @@ public partial class RemoteShip : Node3D
             _canBoost = s.AbThrust > 0f;
         }
         _burnCooldown = (float)GD.RandRange(1.0, 3.0); // stagger drones' first burst roll
+        _interp.StatsId = row.ShipId; // fidelity-instrumentation bucket key (no-op unless InterpStats.Enabled)
         Push(row, serverTick);
     }
 

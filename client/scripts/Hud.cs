@@ -35,6 +35,12 @@ public partial class Hud : CanvasLayer
     private ulong _lastBucketFrames;
     private double _procMsAccum;
 
+    // [predict-stats] windowing (see ReportPredictStats): the own-ship reconcile count + the global
+    // live-contact tick count at the previous 2s report, so each report prints in-window deltas.
+    // Only touched while InterpStats.Enabled.
+    private int _lastReconcileCount;
+    private int _lastLocalContacts;
+
     // Edge-detect the secondary-fire keys so an empty-rack click plays its "no rounds" blip once
     // per press (not every held frame), and a short cooldown so mashing F doesn't machine-gun it.
     private bool _firing2Held;
@@ -287,7 +293,13 @@ public partial class Hud : CanvasLayer
         // per-second reading, so this stays legible without extra averaging. Under --render-stats the
         // draw-call / primitive counters ride alongside it — the FPS says frames dropped, these say
         // WHY (draw calls vs geometry), which is what the render stress A/B is measuring.
-        if (StressRender.ShowStats)
+        ulong draws = 0,
+            prims = 0;
+        double gpuMs = 0,
+            rcpuMs = 0,
+            procMs = 0;
+        bool showStats = StressRender.ShowStats;
+        if (showStats)
         {
             // Enable the viewport's per-frame GPU + render-thread-CPU meters once. These are Godot's
             // own NATIVE (C++) timings — identical in Debug and Release — so they cut cleanly through
@@ -300,30 +312,49 @@ public partial class Hud : CanvasLayer
                 RenderingServer.ViewportSetMeasureRenderTime(_viewportRid, true);
                 _measureEnabled = true;
             }
-            ulong draws = RenderingServer.GetRenderingInfo(RenderingServer.RenderingInfo.TotalDrawCallsInFrame);
-            ulong prims = RenderingServer.GetRenderingInfo(RenderingServer.RenderingInfo.TotalPrimitivesInFrame);
-            double gpuMs = RenderingServer.ViewportGetMeasuredRenderTimeGpu(_viewportRid);
-            double rcpuMs = RenderingServer.ViewportGetMeasuredRenderTimeCpu(_viewportRid);
-            double procMs = Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000.0;
+            draws = RenderingServer.GetRenderingInfo(RenderingServer.RenderingInfo.TotalDrawCallsInFrame);
+            prims = RenderingServer.GetRenderingInfo(RenderingServer.RenderingInfo.TotalPrimitivesInFrame);
+            gpuMs = RenderingServer.ViewportGetMeasuredRenderTimeGpu(_viewportRid);
+            rcpuMs = RenderingServer.ViewportGetMeasuredRenderTimeCpu(_viewportRid);
+            procMs = Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000.0;
             _fps.Text =
                 $"FPS {Engine.GetFramesPerSecond()}  DRAW {draws}  GPU {gpuMs:F1}  RCPU {rcpuMs:F1}  PROC {procMs:F1}ms  fx={StressRender.Fx}";
             // Accumulate proc_ms EVERY frame so the [perf-buckets] report can average it over the same
             // window as the buckets (the monitor above is a per-frame instantaneous value).
             if (PerfBuckets.Enabled)
                 _procMsAccum += procMs;
-            _statLogAccum += delta;
-            if (_statLogAccum >= 2.0)
-            {
-                _statLogAccum = 0.0;
-                Log.Print(
-                    $"[render-stats] fps={Engine.GetFramesPerSecond()} draws={draws} prims={prims} gpu_ms={gpuMs:F1} rcpu_ms={rcpuMs:F1} proc_ms={procMs:F1} fx={StressRender.Fx}"
-                );
-                ReportPerfBuckets();
-            }
         }
         else
         {
             _fps.Text = $"FPS: {Engine.GetFramesPerSecond()}";
+        }
+
+        // Per-frame render-hitch tally for the [interp-stats] report (global, not per-tier).
+        if (InterpStats.Enabled)
+            InterpStats.NoteFrame(delta);
+
+        // The 2s report cadence ticks whenever EITHER measurement family is live; each report line
+        // then respects its OWN gate — [render-stats]/[perf-buckets] only under ShowStats/PerfBuckets,
+        // [interp-stats]/[predict-stats] only under InterpStats.Enabled.
+        if (showStats || InterpStats.Enabled)
+        {
+            _statLogAccum += delta;
+            if (_statLogAccum >= 2.0)
+            {
+                _statLogAccum = 0.0;
+                if (showStats)
+                {
+                    Log.Print(
+                        $"[render-stats] fps={Engine.GetFramesPerSecond()} draws={draws} prims={prims} gpu_ms={gpuMs:F1} rcpu_ms={rcpuMs:F1} proc_ms={procMs:F1} fx={StressRender.Fx}"
+                    );
+                    ReportPerfBuckets();
+                }
+                if (InterpStats.Enabled)
+                {
+                    InterpStats.Report();
+                    ReportPredictStats();
+                }
+            }
         }
 
         // Time only the non-report remainder into the Hud bucket — the render-stats/report block above
@@ -520,5 +551,35 @@ public partial class Hud : CanvasLayer
         (_bucketPrev, _bucketNow) = (_bucketNow, _bucketPrev); // this snapshot becomes next window's baseline
         _lastBucketFrames = nowFrames;
         _procMsAccum = 0.0;
+    }
+
+    // Print the own-ship ram/prediction line on the same 2s cadence as [interp-stats] (see
+    // InterpStats). reconciles = in-window server corrections (delta of the PredictionController's
+    // monotonic ReconcileCount); rec_err_max = the largest position error any of those corrections
+    // spanned this window (peak captured at the reconcile site, then zeroed); local_hits = in-window
+    // count of LIVE prediction ticks that resolved a genuine ship-vs-ship contact (the ram-recipe
+    // frequency signal). All counters reset across a respawn, so negative deltas clamp to 0.
+    private void ReportPredictStats()
+    {
+        if (!InterpStats.Enabled)
+            return;
+
+        var ship = _world.Ships.LocalShip;
+        int recNow = ship?.ReconcileCount ?? 0;
+        int reconciles = recNow - _lastReconcileCount;
+        if (reconciles < 0)
+            reconciles = 0; // a respawn built a fresh PredictionController — counter restarted at 0
+        _lastReconcileCount = recNow;
+
+        int hitsNow = PredictionController.LocalContactTicks;
+        int localHits = hitsNow - _lastLocalContacts;
+        if (localHits < 0)
+            localHits = 0;
+        _lastLocalContacts = hitsNow;
+
+        float recErrMax = PredictionController.WindowMaxReconcileErr;
+        PredictionController.WindowMaxReconcileErr = 0f;
+
+        Log.Print($"[predict-stats] reconciles={reconciles} rec_err_max={recErrMax:F1} local_hits={localHits}");
     }
 }
