@@ -39,6 +39,7 @@ public static class ShipModelLoader
     // A Light counts as a "wing" light when its lateral |X| offset is at least this fraction of the
     // widest light's — nose/tail/centreline lights fall below it and stay white.
     private const float WingLightFrac = 0.45f;
+
     // Ship beacons are sized off the hull silhouette length (so a Scout's aren't as big as a
     // Bomber's) and kept well under the base-beacon defaults.
     private const float BeaconMoteFactor = 0.03375f; // mote diameter = silhouette length * this
@@ -123,6 +124,17 @@ public static class ShipModelLoader
         if (StressRender.Fx == StressRender.FxMode.NoFx)
             return;
 
+        // Everything cosmetic parents under the "ShipModel" container Build() attached, NOT the
+        // ship root: that container IS the hull's external appearance, so first person hides it
+        // with a single Visible flip (PredictionController.ApplyViewMode) and a future cosmetic
+        // node can't miss the hide seam by landing on the root as a sibling — exactly how the
+        // nose nav beacon once ended up floating in front of the cockpit camera. The container
+        // is unscaled (world-unit offsets stay valid, same frame as the HP_ markers) and carries
+        // the miner's cosmetic mining roll, so hull-fixed lights/exhaust ride the roll; the
+        // trail's rear anchor sits on the roll axis, so it is unaffected. Root fallback only for
+        // an exotic caller that never ran Build().
+        Node3D visuals = shipNode.GetNodeOrNull<Node3D>("ShipModel") ?? shipNode;
+
         // Hot exhaust tinted toward the team hue so friend/foe still reads in a dogfight.
         Color hot = team == 0 ? new Color(0.5f, 0.78f, 1f) : new Color(1f, 0.62f, 0.4f);
         List<HardpointDef>? hardpoints = defs.GetHardpoints(DefId(cls, isPod));
@@ -174,7 +186,7 @@ public static class ShipModelLoader
                     LightRange = range,
                     CoreColor = hot,
                 };
-                shipNode.AddChild(glow);
+                visuals.AddChild(glow);
                 switch (shipNode)
                 {
                     case PredictionController pc:
@@ -198,7 +210,7 @@ public static class ShipModelLoader
         {
             const float trailGap = 3f;
             float trailZ = (nozzles.Count > 0 ? AvgZ(nozzles) : 0f) - trailGap;
-            shipNode.AddChild(
+            visuals.AddChild(
                 new TeamTrail
                 {
                     Name = "TeamTrail",
@@ -244,7 +256,7 @@ public static class ShipModelLoader
                         Color color = BaseModelLoader.NavWhite;
                         if (maxAbsX > 0.1f && Mathf.Abs(hp.OffX) >= wingThreshold)
                             color = hp.OffX < 0f ? BaseModelLoader.NavGreen : BaseModelLoader.NavRed;
-                        shipNode.AddChild(
+                        visuals.AddChild(
                             new BaseBeacon
                             {
                                 Name = $"Beacon_{beaconIndex++}",

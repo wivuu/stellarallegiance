@@ -38,12 +38,6 @@ public partial class EngineGlow : Node3D
     // reads at a glance. The afterburner blends this toward BoostColor.
     public Color CoreColor = new(0.6f, 0.8f, 1f);
 
-    // Force the whole glow dark regardless of throttle. Set by PredictionController when the local
-    // ship is in first person (the camera sits inside the hull, so its own exhaust glare must not
-    // wash out the view). Folded into the per-frame Visible recompute below so a plain Visible=false
-    // can't be stomped the next frame.
-    public bool Suppressed;
-
     // --- Tuning ---------------------------------------------------------
 
     private const float IdleThrottle = 0.12f; // engines never go fully black while alive
@@ -120,6 +114,7 @@ public partial class EngineGlow : Node3D
     private const float BoostReleaseRate = 12f; // release fade rate (1/s); ~0.25s to settle near -80dB
     private bool _boosting;
     private float _boostAudioDb = -80f; // actual played volume for _boostSfx: tracks DriveToDb on the
+
     // way up (riding the existing spool-up ramp) but eases independently on the way down, since
     // _shownBoost itself snaps straight to 0 (EaseToward cuts down instantly for the visual flame).
 
@@ -456,7 +451,10 @@ public partial class EngineGlow : Node3D
         bool burning = boost > 0.02f;
         if (burning)
             _smokeFade = SmokeLifetime;
-        Visible = !Suppressed && (glow > 0.001f || _smokeFade > 0f);
+        // First person hides the glow too — via the parent "ShipModel" container (ancestor
+        // visibility beats this per-frame recompute), not a flag here, so its own exhaust glare
+        // can't wash out the cockpit view.
+        Visible = glow > 0.001f || _smokeFade > 0f;
         if (!Visible)
         {
             _light.LightEnergy = 0f;
