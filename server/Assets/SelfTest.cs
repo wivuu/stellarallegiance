@@ -209,7 +209,7 @@ public static class SelfTest
             (1, false, "fighter", 5.5f),
             (2, false, "bomber", 9.6f),
             (4, false, "miner", 6.5f),
-            (7, false, "devastator", 20.0f), // v39 capital hull (cap09) — collision-hull load + silhouette
+            (7, false, "devastator", 75.0f), // v39 capital hull (cap09) — collision-hull load + silhouette
             (0, true, "pod", 2.8f),
         };
         foreach (var (cls, pod, name, target) in kinds)

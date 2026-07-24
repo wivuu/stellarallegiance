@@ -324,7 +324,9 @@ hulls:
     required-techs: [shipyard-1]   # both granted by shipyard-1 for now (should be heavy-class, shipyard-dry later)
     launch-station-classes: [shipyard]  # capital hull: launches from / docks at Shipyard(3) + Shipyard Dry(6) only (both class: shipyard), largest door only
     # cap09 carries HP_Weapon_0..3 (four hull mounts) — all four take the heavy PW AutoCan. Turret_0..3,
-    # Thruster_0, Light_0..8 append. Cockpit authored (no mesh node).
+    # Thruster_0, Light_0..8 append. Cockpit authored (no mesh node). The stern HP_Thruster_0 (world
+    # z ≈ -35 at model-length 75) is the capital's engine nozzle — the client glows Thruster hardpoints
+    # at full size (ShipModelLoader.BuildEngineGlow), so no authored main-engine is needed.
     hardpoints:
       - { kind: weapon, index: 0, weapon-id: 12 }   # HP_Weapon_0 (PW AutoCan 1)
       - { kind: weapon, index: 1, weapon-id: 12 }   # HP_Weapon_1 (PW AutoCan 1)
@@ -376,11 +378,10 @@ hulls:
     required-capabilities: [base]
     # No weapon hardpoints (unarmed) — utl19's GLB carries HP_Weapon_0, but no YAML loadout binds it,
     # so it merges as an APPENDED EMPTY mount that armed-weapon consumers skip (HardpointGeometryMerge
-    # .cs:30-32), leaving the hull unarmed. The GLB's thruster/light HP nodes merge in (engine glow +
-    # nav beacons); the main-engine nozzle + cockpit eye are fully authored here (no HP_MainEngine/
-    # HP_Cockpit mesh nodes), like the pod. main-engine anchors the client engine glow / team trail.
+    # .cs:30-32), leaving the hull unarmed. The GLB's thruster/booster/light HP nodes merge in and
+    # anchor the client engine glow / team trail / nav beacons (stern HP_Thruster_0 = the main nozzle);
+    # only the cockpit eye is authored here (no HP_Cockpit mesh node), like the pod.
     hardpoints:
-      - { kind: main-engine, off-z: -3.0, dir-z: -1 }
       # Cockpit eye point for the first-person camera (client-only).
       - { kind: cockpit, off-y: 0.6, off-z: 1.6, dir-z: 1 }
 
@@ -419,10 +420,10 @@ hulls:
     price: 500
     abilities: [is-builder]   # marks this hull a constructor chassis (ShipClassDef.IsConstructor)
     required-capabilities: [base]
-    # Unarmed: utl11's HP_Weapon_* (if any) merges as an appended empty mount. main-engine + cockpit
-    # authored here (no HP_MainEngine/HP_Cockpit mesh nodes), like the miner.
+    # Unarmed: utl11's HP_Weapon_* (if any) merges as an appended empty mount. The GLB's stern
+    # HP_Thruster_0 + HP_Booster_* anchor the client engine glow / team trail; only the cockpit
+    # is authored here (no HP_Cockpit mesh node), like the miner.
     hardpoints:
-      - { kind: main-engine, off-z: -3.2, dir-z: -1 }
       - { kind: cockpit, off-y: 0.6, off-z: 1.6, dir-z: 1 }
 
   # Escape pod (class-id 255): slow, unarmed lifeboat (no weapon hardpoint). The faction's lifepod.

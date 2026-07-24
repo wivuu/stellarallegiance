@@ -25,10 +25,10 @@ Archives:
 - Shipyard constructor's label says "Outpost constructor"
 - Capital
   - Shipyard can be flown through doublecheck collisions - show me an interactive visual debug of the collision mesh.
-  - Devastator has been made larger, engine glow is not visible
-  - Scale teamtrail to the length of a ship; have it emit behind engine hardpoint
 - Strip references from code and memory about this being a 'scaled down' allegiance - in terms of world scale, we have larger sectors and able to accommodate bigger ships and bases.
 - F3 scroll in could zoom to where the pointer is pointing
+- If cockpit is unspecified, put it at 0,0,0 relative to the mesh
+- Make aoi-state logging on server diagnostic instead of info, dont log it to console by default
 ---
 
 ## Content philosophy (the through-line)
