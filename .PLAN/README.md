@@ -24,9 +24,11 @@ Archives:
 - Look for opportunities to utilize native vector3 and SIMD for performance improvements
 - Shipyard constructor's label says "Outpost constructor"
 - Capital
-  - Devastator has no momentum - movement and turninng both immediately arrested
-  - Theres a light thats RIGHT in front of the cockpit - where is the cockpit in relation to the ship? Make your ships lights not visible from inside the cockpit.
   - Shipyard can be flown through doublecheck collisions - show me an interactive visual debug of the collision mesh.
+  - Devastator has been made larger, engine glow is not visible
+  - Scale teamtrail to the length of a ship; have it emit behind engine hardpoint
+- Strip references from code and memory about this being a 'scaled down' allegiance - in terms of world scale, we have larger sectors and able to accommodate bigger ships and bases.
+- F3 scroll in could zoom to where the pointer is pointing
 ---
 
 ## Content philosophy (the through-line)

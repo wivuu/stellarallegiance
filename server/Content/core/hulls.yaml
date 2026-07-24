@@ -297,7 +297,7 @@ hulls:
     role: ASSAULT
     description: "The Iron capital hull — four heavy auto-cannons and a frame that shrugs off a squadron. The fleet's hammer."
     model-name: cap09   # res://assets/ships/cap09.glb (4x HP_Weapon nodes -> 4x AutoCan)
-    model-length: 20    # capped for playability (IGC length 225 untranslatable); base collision = ShipRadius sphere, ship-vs-ship = full model hull
+    model-length: 75    # capped for playability (IGC length 225 untranslatable); base collision = ShipRadius sphere, ship-vs-ship = full model hull
     class-id: 7
     mass: 3000
     speed: 62.5
