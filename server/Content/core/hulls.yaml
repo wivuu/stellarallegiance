@@ -279,7 +279,11 @@ hulls:
   # 4×0xc000; the 0xc400 (SkyRip) mount is unauthored (cap09.glb exposes exactly four HP_Weapon nodes,
   # all bound to AutoCan 1). Gated behind BOTH heavy-class AND shipyard-dry (granted together by
   # dev-upgrade-heavy-class at the Shipyard). Flight stats are the --iron-slice translation (mass 3000,
-  # speed 62.5, thrust 833, armor 1200, turn 10°/s, side/back-mult 0.5).
+  # speed 62.5, armor 1200, turn 10°/s, side/back-mult 0.5) — EXCEPT thrust: the blanket ×0.03333
+  # rule gave 833.33, but our `thrust` field is an ACCELERATION (u/s²), and the rule only equals
+  # IGC thrust/mass at the anchor hull's mass 30. At the capital's IGC mass 2500 it overshot the
+  # real IGC acceleration (25000/2500 = 10 u/s²) 83× — full stop in 0.1 s, zero capital momentum.
+  # Authored as the IGC acceleration instead (same hand-correction the miner got).
   #   model-length: the IGC hull is enormous (length 225 ≈ a real capital ship) — untranslatable to our
   #   smaller world. Capped to 20 (≈2× the bomber's 9.6, within the plan's ≤3×-bomber ceiling). Note:
   #   ship-vs-BASE collision + docking use the global World.ShipRadius sphere (model-length is purely the
@@ -297,7 +301,7 @@ hulls:
     class-id: 7
     mass: 3000
     speed: 62.5
-    thrust: 833.33
+    thrust: 10       # IGC thrust/mass (25000/2500) — see block comment; NOT the ×0.03333 rule
     max-turn-rates: { yaw: 10, pitch: 10, roll: 10 }
     strafe-thrust-multiplier: 0.5   # IGC sideMult
     reverse-thrust-multiplier: 0.5  # IGC backMult
