@@ -24,8 +24,6 @@ Archives:
 - Look for opportunities to utilize native vector3 and SIMD for performance improvements
 - Capital
   - Shipyard can be flown through doublecheck collisions - show me an interactive visual debug of the collision mesh.
-- Strip references from code and memory about this being a 'scaled down' allegiance - in terms of world scale, we have larger sectors and able to accommodate bigger ships and bases.
-- Make F3 camera isometric
 ---
 
 ## Content philosophy (the through-line)
