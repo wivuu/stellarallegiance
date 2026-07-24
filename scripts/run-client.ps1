@@ -8,6 +8,8 @@
 # to Godot.
 #   scripts/run-client.ps1                          # public lobby server browser
 #   scripts/run-client.ps1 -Local                   # connect directly to localhost:8090
+#   scripts/run-client.ps1 -Release                 # run OPTIMIZED (Release) C# — mirrors bin/Release into
+#                                                    # the bin/Debug load path Godot --path uses; logs [build-config] managed=RELEASE
 #   scripts/run-client.ps1 --host some.host:8090    # connect to a specific server
 #   scripts/run-client.ps1 -WriteMovie out.avi      # record Movie Maker video to out.avi
 #   $env:PUBLIC_LOBBY="host:port"; scripts/run-client.ps1   # browse a different lobby
@@ -24,6 +26,7 @@
 # required path argument.
 param(
     [switch]$Local,
+    [switch]$Release,
     [string]$WriteMovie,
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$GodotArgs
 )
@@ -53,8 +56,27 @@ if ($Local) {
 $Godot = Resolve-Godot
 if (-not $Godot) { exit 1 }
 
-Write-Host "[run-client] building client C# (Debug)"
-dotnet build "$RepoRoot/client/stellarallegiance.csproj" -c Debug
+$Config = if ($Release) { 'Release' } else { 'Debug' }
+Write-Host "[run-client] building client C# ($Config)"
+dotnet build "$RepoRoot/client/stellarallegiance.csproj" -c $Config
+
+if ($Release) {
+    # Godot run from `--path` (player-from-source) ALWAYS loads the managed assembly from
+    # .godot/mono/temp/bin/Debug and does NOT rebuild on launch (verified: no MSBuild on run, the
+    # Debug dll mtime is untouched). So a plain `dotnet build -c Release` is loaded by nobody — the
+    # process still executes the unoptimized Debug C#. Mirror the Release-compiled assemblies into
+    # the Debug load path so the running client actually runs optimized IL. The client logs
+    # `[build-config] managed=RELEASE` at boot to confirm. Self-correcting: the next default (Debug)
+    # run rebuilds bin/Debug and restores unoptimized bits.
+    $BinRoot = "$RepoRoot/client/.godot/mono/temp/bin"
+    if (Test-Path "$BinRoot/Release") {
+        Write-Host "[run-client] -Release: mirroring optimized assemblies into the Debug load path (Godot --path loads bin/Debug)"
+        Copy-Item "$BinRoot/Release/*.dll" "$BinRoot/Debug/" -Force
+    }
+    else {
+        Write-Warning "[run-client] -Release: $BinRoot/Release not found — client may run Debug C#. Launch once in the editor to generate the bin dirs."
+    }
+}
 
 Set-Location $RepoRoot
 if ($WriteMovie) {

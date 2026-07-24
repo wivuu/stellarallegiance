@@ -208,6 +208,20 @@ public partial class TargetMarkers : Control
     // a dim class/ore caption). Reused each frame so the pass allocates nothing.
     private readonly List<(float Dist, ulong Id, Vector3 Pos)> _nearRocks = new();
 
+    // Distance-based flight-HUD marker cap: only the nearest N ship contacts draw while flying, so a
+    // huge contact count (100+ ships) can't flood the HUD. Applies to the flight HUD only — the F3
+    // tactical map (commander full-picture) stays uncapped — and the focused/locked target is always
+    // drawn even beyond the cap. Override at runtime with --marker-cap=N (N enemy / N*3/4 friendly;
+    // 0 = uncapped) via ShipController.MarkerCap. Tab targeting is unaffected (the cap is draw-only).
+    private const int MaxEnemyMarkers = 50;
+    private const int MaxFriendlyMarkers = 50;
+
+    // Scratch for the marker-cap distance sort (squared distance to the anchor, nearest-first). Reused
+    // across the friendly and enemy passes each frame so the cap allocates nothing — same idiom as
+    // _nearRocks. RemoteShip refs are stable nodes, so caching them across the shared FriendlyShips()/
+    // EnemyShips() scratch (which a second call would clear) is safe.
+    private readonly List<(float D2, RemoteShip S)> _shipSort = new();
+
     // Wired up by the Hud (which already resolves these siblings).
     public void Init(WorldRenderer world, Camera3D camera, GameNetClient net, DefRegistry defs)
     {
@@ -223,6 +237,7 @@ public partial class TargetMarkers : Control
 
     public override void _Process(double delta)
     {
+        var t0 = PerfBuckets.Now();
         // Stay visible in the F3 sector map too — the markers reproject through the overview
         // camera (see Cam) so the same indicators track each entity over the map. Hidden while
         // the telescopic scope is up: brackets/reticle/lead project through the MAIN camera and
@@ -236,6 +251,7 @@ public partial class TargetMarkers : Control
             _focused is ulong ff && !GameContent.IsBaseLock(ff) && !GameContent.IsAsteroidFocus(ff) && IsFriendlyShipId(ff);
         UpdateMissileHud(delta);
         QueueRedraw();
+        PerfBuckets.Add(PerfBuckets.MkProc, t0);
     }
 
     private static Color TeamColor(byte team) => team == 0 ? Team0Color : Team1Color;
@@ -599,6 +615,7 @@ public partial class TargetMarkers : Control
 
     public override void _Draw()
     {
+        var t0 = PerfBuckets.Now();
         // Use the viewport rect (what UnprojectPosition is relative to) rather than this
         // Control's own Size: a code-created Control under a CanvasLayer doesn't reliably
         // resolve its rect to the viewport, which would misplace the edge-clamped arrows.
@@ -644,6 +661,7 @@ public partial class TargetMarkers : Control
         // above still reproject onto the map in every state.
         if (local != null && !SectorOverview.Active)
             DrawFiringSolution(view, local, focusedShip);
+        PerfBuckets.Add(PerfBuckets.MkDraw, t0);
     }
 
     // The focused base's world position, or null if focus isn't a base right now. Resolved via
@@ -879,33 +897,100 @@ public partial class TargetMarkers : Control
         // ship is tagged there, via DrawFocusTagsPass), so this is gated on the map being open.
         bool f3 = SectorOverview.Active;
 
+        // Distance-cap anchor: the local ship while flying, else the active camera (pre-launch / F3
+        // orbit). Squared distance to this point ranks which contacts survive the cap (nearest kept).
+        // The cap applies to the flight HUD only — F3 (commander full-picture) and the --marker-cap=0
+        // A/B knob stay uncapped. focusedShip / focusedFriendly are still resolved from the FULL lists
+        // below so a beyond-cap focused target keeps its focus tag + firing solution, and the focused
+        // ship is always drawn even past the cap. Tab targeting is untouched — this is draw-only.
+        Vector3 anchor = _world.Ships.LocalShip?.GlobalPosition ?? Cam.GlobalPosition;
+        int cap = ShipController.MarkerCap;
+        bool capped = !f3 && cap != 0;
+        int enemyCap = cap > 0 ? cap : MaxEnemyMarkers;
+        int friendlyCap = cap > 0 ? cap * 3 / 4 : MaxFriendlyMarkers;
+
+        // ---- Friendly ships ----
         RemoteShip? focusedFriendly = null;
+        _shipSort.Clear();
         foreach (var fr in _world.Ships.FriendlyShips())
         {
-            bool focused = !fr.IsPod && _focused is ulong ff && ff == fr.ShipId;
-            if (focused)
+            if (!fr.IsPod && _focused is ulong ff && ff == fr.ShipId)
                 focusedFriendly = fr;
-            Color color = focused ? FocusTint(fr.Team) : TeamColor(fr.Team);
-            DrawEntity(view, fr.GlobalPosition, KindOf(fr), color, focused, friendly: !focused, GlyphOf(fr));
-            // The focused ship already carries its role/target tag from DrawFocusTagsPass — skip it
-            // here so it isn't double-labelled.
-            if (f3 && !focused)
-                DrawShipTypeLabel(view, fr.GlobalPosition, ShipTypeLabel(fr), TeamColor(fr.Team));
+            if (capped)
+                _shipSort.Add(((fr.GlobalPosition - anchor).LengthSquared(), fr));
+            else
+                DrawFriendlyShip(view, f3, fr);
         }
+        if (capped)
+            DrawNearestCapped(view, f3, friendlyCap, focusedFriendly, friendly: true);
 
+        // ---- Enemy ships ---- (already fog-filtered by EnemyShips(), so the cap can only hide, not leak)
         RemoteShip? focusedShip = null;
+        _shipSort.Clear();
         foreach (var e in _world.Ships.EnemyShips())
         {
-            bool focused = _focused is ulong f && f == e.ShipId;
-            if (focused)
+            if (_focused is ulong f && f == e.ShipId)
                 focusedShip = e;
-            Color color = focused ? FocusTint(e.Team) : TeamColor(e.Team);
-            DrawEntity(view, e.GlobalPosition, KindOf(e), color, focused, friendly: false, GlyphOf(e));
-            if (f3 && !focused)
-                DrawShipTypeLabel(view, e.GlobalPosition, ShipTypeLabel(e), TeamColor(e.Team));
+            if (capped)
+                _shipSort.Add(((e.GlobalPosition - anchor).LengthSquared(), e));
+            else
+                DrawEnemyShip(view, f3, e);
         }
+        if (capped)
+            DrawNearestCapped(view, f3, enemyCap, focusedShip, friendly: false);
 
         return (focusedFriendly, focusedShip);
+    }
+
+    // Draw the nearest `limit` ships from the pre-filled _shipSort (squared distance, nearest-first),
+    // plus the focused/locked target if it fell beyond the cap (exemption). One pass over the shared
+    // scratch; `friendly` picks the friendly vs enemy per-ship draw. Called only in the capped path.
+    private void DrawNearestCapped(Vector2 view, bool f3, int limit, RemoteShip? focusedExempt, bool friendly)
+    {
+        _shipSort.Sort(static (a, b) => a.D2.CompareTo(b.D2));
+        int n = Mathf.Min(limit, _shipSort.Count);
+        bool focusDrawn = false;
+        for (int i = 0; i < n; i++)
+        {
+            RemoteShip s = _shipSort[i].S;
+            if (friendly)
+                DrawFriendlyShip(view, f3, s);
+            else
+                DrawEnemyShip(view, f3, s);
+            focusDrawn |= ReferenceEquals(s, focusedExempt);
+        }
+        // Exemption: the focused/locked target always draws, even past the cap, so its bracket/tag/lock
+        // arc never vanishes just because it's the (N+1)th-nearest contact.
+        if (focusedExempt != null && !focusDrawn)
+        {
+            if (friendly)
+                DrawFriendlyShip(view, f3, focusedExempt);
+            else
+                DrawEnemyShip(view, f3, focusedExempt);
+        }
+    }
+
+    // Draw one friendly ship's marker (subtle team glyph, or the bright focus bracket when Tab-focused).
+    // The F3 map adds a type caption under each non-focused contact (the focused one is tagged by
+    // DrawFocusTagsPass — skip it here so it isn't double-labelled).
+    private void DrawFriendlyShip(Vector2 view, bool f3, RemoteShip fr)
+    {
+        bool focused = !fr.IsPod && _focused is ulong ff && ff == fr.ShipId;
+        Color color = focused ? FocusTint(fr.Team) : TeamColor(fr.Team);
+        DrawEntity(view, fr.GlobalPosition, KindOf(fr), color, focused, friendly: !focused, GlyphOf(fr));
+        if (f3 && !focused)
+            DrawShipTypeLabel(view, fr.GlobalPosition, ShipTypeLabel(fr), TeamColor(fr.Team));
+    }
+
+    // Draw one enemy ship's marker (bracket reticle + class glyph, brighter when Tab-focused). Same F3
+    // type-caption rule as the friendly draw above.
+    private void DrawEnemyShip(Vector2 view, bool f3, RemoteShip e)
+    {
+        bool focused = _focused is ulong f && f == e.ShipId;
+        Color color = focused ? FocusTint(e.Team) : TeamColor(e.Team);
+        DrawEntity(view, e.GlobalPosition, KindOf(e), color, focused, friendly: false, GlyphOf(e));
+        if (f3 && !focused)
+            DrawShipTypeLabel(view, e.GlobalPosition, ShipTypeLabel(e), TeamColor(e.Team));
     }
 
     // The human-readable ship type for the F3 map caption. Utility drones read as their role (the

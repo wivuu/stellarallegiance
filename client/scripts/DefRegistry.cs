@@ -79,6 +79,42 @@ public partial class DefRegistry : Node, IShipCostSource
         // Faction identity + team-wide stat multipliers (v41).
         FactionName = factionName;
         _factionAttributes = factionAttributes ?? System.Array.Empty<AttrMod>();
+        // BaseTypeId -> StationClassId map (2026-07-21 launch-station-classes), rebuilt from the
+        // streamed station catalog — the SAME source the server fills its map from, so both peers
+        // resolve identical classes. Unknown types stay 255 (restricted hulls never use them).
+        System.Array.Fill(_stationClassByBaseType, DockRules.UnknownStationClass);
+        foreach (var sc in _stationCatalog)
+            if (sc.BaseTypeId >= 0 && sc.BaseTypeId <= byte.MaxValue)
+                _stationClassByBaseType[(byte)sc.BaseTypeId] = sc.StationClass;
+    }
+
+    // ---- Station-class launch/dock restriction (2026-07-21; mirrors Simulation's map) ----
+
+    private readonly byte[] _stationClassByBaseType = new byte[256];
+
+    public byte StationClassOfBaseType(byte baseTypeId) => _stationClassByBaseType[baseTypeId];
+
+    // The hull's ShipClassDef.LaunchClassMask (0 = unrestricted; unknown class ids resolve 0 so
+    // pods and pre-defs guards stay permissive — the server is authoritative anyway).
+    public ushort LaunchClassMask(byte classId) => _ships.TryGetValue(classId, out var d) ? d.LaunchClassMask : (ushort)0;
+
+    // May this hull launch from / dock at a base of this type? The client-side mirror of the
+    // server's TryResolveLaunchSite / ResolveOwnBaseDock class gate.
+    public bool HullMayLaunchFrom(byte classId, byte baseTypeId) =>
+        DockRules.ClassAllowed(LaunchClassMask(classId), StationClassOfBaseType(baseTypeId));
+
+    // Does a base of this type have a launch bay at all? A streamed BaseDef with a model but no
+    // DockingExit hardpoint can't launch anything (the sim rejects; the hangar greys LAUNCH).
+    // No def / model-less types stay launch-capable — mirrors World.BaseLaunchCapableOf's legacy
+    // fallback for sphere bases.
+    public bool BaseLaunchCapable(byte baseTypeId)
+    {
+        if (!_bases.TryGetValue(baseTypeId, out var b) || string.IsNullOrEmpty(b.ModelName))
+            return true;
+        foreach (var hp in b.Hardpoints)
+            if (hp.Kind == HardpointKind.DockingExit)
+                return true;
+        return false;
     }
 
     // ---- Faction identity + team-wide stat multipliers (v41; empty until MsgDefs lands) ----

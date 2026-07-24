@@ -114,6 +114,18 @@ YAML → runtime `ShipClassDef` (see `hulls.yaml` header comment): `mass`→mass
 `strafe/reverse-thrust-multiplier`→side/back-mult. `class-id`, `drift-*-deg`, `ab-*`, vision-*, and
 `hardpoints` are explicit runtime extensions.
 
+## Launch/dock base restriction (`launch-station-classes`)
+
+`launch-station-classes: [shipyard]` (list of station `class:` keywords from stations.yaml) restricts
+which base CLASSES the hull may **launch from and dock at**. Omitted = anywhere (every hull but the
+Devastator). A restricted hull bounces off other friendly bases like an enemy one, and at an allowed
+base enters only through the **largest docking door** (side doors stay small-ship-only). Projected to
+`ShipClassDef.LaunchClassMask` (u16 bitmask over `StationClassId`); shared rules live in
+`shared/Collision/DockRules.cs`, server gate in `Simulation.TryResolveLaunchSite` (spawn, pre-charge
+reject) + `ResolveOwnBaseDock` (dock). An unknown keyword fails YAML enum parse at boot; authoring it
+on a hull with no `class-id` is a `CoreValidator` error. Distinct from `required-techs` (team-wide
+unlock) — this gates WHERE, not WHETHER.
+
 ## Verify
 
 ```sh

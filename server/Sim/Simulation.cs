@@ -608,6 +608,14 @@ public sealed partial class Simulation
         foreach (var d in content.Ships)
             _stats[d.ClassId] = ShipStats.FromDef(d); // same path the client takes → identical flight
 
+        // BaseTypeId -> StationClassId byte, from the station catalog (which streams EVERY authored
+        // station, tech-gated or not, so the map is complete on both peers). Unknown types (raw
+        // test-world bases) stay 255 = a restricted hull never launches from / docks at them.
+        System.Array.Fill(_stationClassByBaseType, DockRules.UnknownStationClass);
+        foreach (var sc in content.StationCatalog)
+            if (sc.BaseTypeId >= 0 && sc.BaseTypeId <= byte.MaxValue)
+                _stationClassByBaseType[(byte)sc.BaseTypeId] = sc.StationClass;
+
         // Dispenser (chaff/mine/probe) WeaponDefs indexed by the cargo item they consume, + cargo
         // masses for the spawn-time payload check. Dispensers aren't mounted on hardpoints (D8).
         foreach (var w in content.Weapons)
@@ -640,9 +648,12 @@ public sealed partial class Simulation
 
     // Join with an explicit consumable hold (chaff/mine counts from MsgSpawn). Empty cargo ⇒ the
     // hull's authored DefaultCargo is seeded at spawn. launchBaseId picks the friendly base to
-    // launch from (v36 hangar sidebar); 0/invalid ⇒ the first team base (legacy behavior).
-    // `mounts` = the hangar's weapon-slot overrides ((hardpoint Index, weaponId) pairs; weaponId
-    // HardpointDef.NoWeapon = deliberately empty); empty ⇒ the authored class loadout.
+    // launch from (v36 hangar sidebar); TryResolveLaunchSite validates it at spawn time — 0 or an
+    // unrestricted hull's stale/dead pick falls back to the first launch-capable team base, while
+    // a pick that can't serve the hull (launch-station-classes / exitless model) DROPS the join
+    // pre-charge (2026-07-21). `mounts` = the hangar's weapon-slot overrides ((hardpoint Index,
+    // weaponId) pairs; weaponId HardpointDef.NoWeapon = deliberately empty); empty ⇒ the authored
+    // class loadout.
     public void EnqueueJoin(
         int clientId,
         byte team,
@@ -951,17 +962,36 @@ public sealed partial class Simulation
     }
 
     // Own-base branch of ResolveBoundaryCollisionsAndDocking: with a loaded hull you dock ONLY by
-    // flying your ship into a rectangular docking door (a bounded face authored as a group of 5
-    // HP_DockingEntrance markers) — the rest of the base is a solid hull that bounces you. Without
-    // a model, fall back to the legacy core-sphere dock so docking can't break. Returns true when
-    // the ship docked (or a miner offloaded) this tick.
+    // flying your ship AT a rectangular docking door (a bounded face authored as a group of 5
+    // HP_DockingEntrance markers) with velocity closing inside the shared angle-of-attack cone
+    // (Collide.IntersectsDockFace vel overload) — the rest of the base, door apertures included,
+    // is a solid hull that bounces you. Without a model, fall back to the legacy core-sphere dock
+    // so docking can't break. Returns true when the ship docked (or a miner offloaded) this tick.
     private bool ResolveOwnBaseDock(ShipSim s, World.BaseSite b, uint tick)
     {
+        // Station-class dock gate (2026-07-21): a restricted hull docks only at bases whose class
+        // its LaunchClassMask lists — every other OWN base is fully solid, exactly like an enemy
+        // one. Pods resolve the pod hull's mask (0), so a capital pilot's pod still docks anywhere.
+        ushort mask = LaunchClassMaskFor(s.IsPod ? GameContent.PodClassId : s.Class);
+        if (!DockRules.ClassAllowed(mask, StationClassOfBaseType(b.BaseTypeId)))
+        {
+            ResolveBaseCollision(s, b.Pos, b.BaseTypeId);
+            return false;
+        }
         Vec3 d = s.State.Pos - b.Pos;
         if (World.BaseHullOf(b.BaseTypeId) is not null)
         {
             if (
-                Collide.IntersectsDockFace(d, World.BaseDockFacesOf(b.BaseTypeId), World.DockFaceDepth, World.ShipRadius)
+                Collide.IntersectsDockFace(
+                    d,
+                    s.State.Vel,
+                    World.BaseDockFacesOf(b.BaseTypeId),
+                    World.DockFaceDepth,
+                    World.ShipRadius,
+                    // Restricted hull at an allowed base: only the LARGEST door admits it — the
+                    // side doors act as solid shell (small-ship-only).
+                    DockRules.AllowedFace(mask, World.BaseLargestDockFaceOf(b.BaseTypeId))
+                )
             )
             {
                 // Intersected a rectangular docking door. Miners never enter DockShip
@@ -977,7 +1007,13 @@ public sealed partial class Simulation
             // predicts the identical bounce (same contact-selection rule — deepest wins). A
             // partless base collapses to the single merged hull, matching the old behaviour.
             if (
-                Collide.SphereVsBody(s.State.Pos, World.ShipRadius, BaseBody(b.Pos, b.BaseTypeId), out Vec3 bn, out float bpen)
+                Collide.SphereVsBody(
+                    s.State.Pos,
+                    World.ShipRadius,
+                    BaseBody(b.Pos, b.BaseTypeId),
+                    out Vec3 bn,
+                    out float bpen
+                )
             )
                 BounceShip(s, bn, bpen);
             return false;
@@ -1284,7 +1320,7 @@ public sealed partial class Simulation
         byte cls,
         uint tick,
         (uint cargoId, byte count)[] cargo,
-        ulong launchBaseId = 0,
+        World.BaseSite? launchSite = null,
         (byte hpIndex, uint weaponId)[]? mounts = null
     )
     {
@@ -1296,7 +1332,7 @@ public sealed partial class Simulation
             Class = cls,
             Alive = true,
         };
-        PlaceAtBase(s, World.ShipRadius, tick, ResolveLaunchBase(team, launchBaseId));
+        PlaceAtBase(s, World.ShipRadius, tick, launchSite);
         s.State.Mass = StatsFor(cls, false).Mass;
         s.State.Fuel = StatsFor(cls, false).MaxFuel; // dock-refill: dock despawns, relaunch = full tank
         s.Health = HullFor(cls);
@@ -1632,29 +1668,81 @@ public sealed partial class Simulation
             // when a client fails to hide ore hulls from its hangar.
             if (IsMinerClass(info.cls))
                 continue;
+            // Launch-base gate FIRST (2026-07-21): a hull restricted to certain station classes
+            // must resolve a legal launch site before any credits move; a doomed pick is dropped
+            // exactly like a locked class below.
+            if (!TryResolveLaunchSite(info.team, info.cls, info.launchBaseId, out var launchSite))
+                continue; // rejected: wrong-class / dead / exitless launch base — no ship, no charge
             // Stage-2 economy gate: a locked or unaffordable buy is dropped (no ship, no charge,
             // no reschedule). The client's spawn-pending retry times out and its pre-check stops it
             // re-spamming a request it can predict will fail.
             if (TryReserveSpawn(info.team, info.cls) != SpawnDecision.Allowed)
                 continue;
-            SpawnCombatShip(cid, info.team, info.cls, tick, info.cargo, info.launchBaseId, info.mounts);
+            SpawnCombatShip(cid, info.team, info.cls, tick, info.cargo, launchSite, info.mounts);
         }
     }
 
-    // Resolve a client-picked launch base id to a validated friendly, alive base site — anything
-    // else (0, unknown id, enemy base, dead base) silently falls back to the default first-team-base
-    // pick inside PlaceAtBase (null).
-    private World.BaseSite? ResolveLaunchBase(byte team, ulong launchBaseId)
+    // BaseTypeId -> StationClassId byte, filled in the ctor from the station catalog (255 = no
+    // catalog entry). The launch/dock class gate for restricted hulls reads through these.
+    private readonly byte[] _stationClassByBaseType = new byte[256];
+
+    private byte StationClassOfBaseType(byte typeId) => _stationClassByBaseType[typeId];
+
+    // The hull's authored launch/dock restriction (ShipClassDef.LaunchClassMask); 0 = unrestricted.
+    // Unknown classes (pods, raw test hulls) resolve 0, so every non-player path stays untouched.
+    private ushort LaunchClassMaskFor(byte cls) => ShipDefs.TryGetValue(cls, out var d) ? d.LaunchClassMask : (ushort)0;
+
+    // Resolve where this class launches (2026-07-21 launch-station-classes; replaced the old
+    // ResolveLaunchBase). TRUE + site = spawn there; TRUE + null = legacy "team has no bases"
+    // sector default (unrestricted hulls only); FALSE = REJECT the join (no ship, no charge).
+    // A base can serve a launch when it is friendly + alive, its model has a launch bay
+    // (BaseLaunchCapableOf — exitless stations can't launch anything), and its station class is
+    // allowed for the hull. An explicit pick that fails those rejects for restricted hulls and
+    // exitless picks; an unrestricted hull with a merely stale/dead/enemy pick keeps the legacy
+    // silent fall-back scan so reconnect races don't strand pilots in the hangar.
+    private bool TryResolveLaunchSite(byte team, byte cls, ulong requestedBaseId, out World.BaseSite? site)
     {
-        if (launchBaseId == 0)
-            return null;
-        for (int i = 0; i < World.Bases.Count; i++)
+        site = null;
+        ushort mask = LaunchClassMaskFor(cls);
+        bool CanLaunchFrom(int i)
         {
             var b = World.Bases[i];
-            if (b.Id == launchBaseId)
-                return (b.Team == team && World.BaseHealth[i] > 0f) ? b : null;
+            return b.Team == team
+                && World.BaseHealth[i] > 0f
+                && World.BaseLaunchCapableOf(b.BaseTypeId)
+                && DockRules.ClassAllowed(mask, StationClassOfBaseType(b.BaseTypeId));
         }
-        return null;
+        bool teamHasAnyBase = false;
+        if (requestedBaseId != 0)
+            for (int i = 0; i < World.Bases.Count; i++)
+                if (World.Bases[i].Id == requestedBaseId)
+                {
+                    if (CanLaunchFrom(i))
+                    {
+                        site = World.Bases[i];
+                        return true;
+                    }
+                    // The pick can't serve this hull. Restricted hulls always reject (never
+                    // silently launch a capital from an illegal base); an alive friendly pick that
+                    // still failed must be exitless — reject that too (mirrors the greyed LAUNCH).
+                    bool aliveFriendly = World.Bases[i].Team == team && World.BaseHealth[i] > 0f;
+                    if (mask != 0 || aliveFriendly)
+                        return false;
+                    break; // unrestricted + stale/dead/enemy pick: legacy silent fallback below
+                }
+        for (int i = 0; i < World.Bases.Count; i++)
+        {
+            if (CanLaunchFrom(i))
+            {
+                site = World.Bases[i];
+                return true;
+            }
+            teamHasAnyBase |= World.Bases[i].Team == team;
+        }
+        // No launchable base at all: unrestricted hulls keep the legacy sector-default spawn only
+        // when the team has NO bases (PlaceAtBase(null)); with bases that all failed (exitless /
+        // dead) — or any restricted hull — the join is rejected.
+        return mask == 0 && !teamHasAnyBase;
     }
 
     // A class id a PLAYER may request via MsgSpawn: a known hull def that isn't the pod or a miner
@@ -1885,7 +1973,13 @@ public sealed partial class Simulation
                     if (CrossSector(eb.SectorId, out var xin))
                         return xin;
                 }
-                if (eb.Team == s.Team)
+                if (
+                    eb.Team == s.Team
+                    && DockRules.ClassAllowed(
+                        LaunchClassMaskFor(s.IsPod ? GameContent.PodClassId : s.Class),
+                        StationClassOfBaseType(eb.BaseTypeId)
+                    )
+                )
                 {
                     // Friendly base: proper 3-phase docking maneuver (decelerate to a standoff point
                     // outside the door, align + roll to the door, creep down the corridor until the
@@ -1906,6 +2000,9 @@ public sealed partial class Simulation
                     }
                     return DockApproach(s, tick, eb, stats, Avoid);
                 }
+                // Enemy base — or a FRIENDLY base this hull's launch-station-classes forbids
+                // docking at (it's fully solid for the ship): park at a standoff instead of
+                // grinding the shell with the dock maneuver.
                 float hostileR = World.BaseRadiusOf(eb.BaseTypeId); // per-type — enemy base need not be a garrison
                 return ArriveAt(eb.Pos, hostileR + PigStandoff, hostileR + PigStandoff * ApArrivalBandMult);
             }
@@ -1974,7 +2071,20 @@ public sealed partial class Simulation
         switch (s.ApDockPhase)
         {
             case 1: // ALIGN — hold at the standoff point (throttle 0 = active brake) and turn+roll onto the door
-                return DockAlign(s, tick, myPos, myRot, angVel, f, doorW, pstand, stats, angAccelPitch, angAccelYaw, angAccelRoll);
+                return DockAlign(
+                    s,
+                    tick,
+                    myPos,
+                    myRot,
+                    angVel,
+                    f,
+                    doorW,
+                    pstand,
+                    stats,
+                    angAccelPitch,
+                    angAccelYaw,
+                    angAccelRoll
+                );
             case 2: // CREEP — slow throttle down the corridor; the collision-pass dock trigger ends the run
                 return DockCreep(s, tick, myPos, myRot, angVel, f, doorW, stats, angAccelPitch, angAccelYaw, angAccelRoll);
             default: // 0 TRANSIT — acquire the corridor axis outside the door, then descend it governed
@@ -2264,6 +2374,19 @@ public sealed partial class Simulation
     {
         if (s.ApDockDoor >= 0 && s.ApDockDoor < faces.Length)
             return s.ApDockDoor; // already chosen — keep it for the whole engagement
+
+        // A restricted hull (launch-station-classes) may only enter through the base's LARGEST
+        // door — the collision pass keeps every other door solid for it, so steering at a nearer
+        // side door would just bounce. Pin the choice before the argmin.
+        int forced = DockRules.AllowedFace(
+            LaunchClassMaskFor(s.IsPod ? GameContent.PodClassId : s.Class),
+            World.BaseLargestDockFaceOf(eb.BaseTypeId)
+        );
+        if (forced >= 0 && forced < faces.Length)
+        {
+            s.ApDockDoor = forced;
+            return forced;
+        }
 
         Vec3 myPos = s.State.Pos;
         float baseRadius = World.BaseRadiusOf(eb.BaseTypeId); // per-type — eb may be a non-garrison base
@@ -3414,6 +3537,9 @@ public sealed partial class Simulation
             float dmg = CollisionDamage(-relVn, (1f / invSum) * _combat.ShipShipDamageScale);
             ApplyDamage(a, dmg, _tick);
             ApplyDamage(b, dmg, _tick);
+            // Ground-truth ram line (logging only, zero sim effect): correlates the client's local_hits
+            // windows against the server's actual same-tick contacts to catch client-only phantom hits.
+            _log.LogInformation("[ram] a={A} b={B} tick={Tick} closing={Closing:F1}", a.ShipId, b.ShipId, _tick, -relVn);
         }
         a.State.Pos += n * (pen * (iA / invSum));
         b.State.Pos -= n * (pen * (iB / invSum));
@@ -3486,7 +3612,9 @@ public sealed partial class Simulation
             World.BaseSubHullsOf(baseTypeId),
             center,
             0,
-            World.BaseDockFacesOf(baseTypeId)
+            World.BaseDockFacesOf(baseTypeId),
+            StationClassOfBaseType(baseTypeId),
+            World.BaseLargestDockFaceOf(baseTypeId)
         );
 
     // Min-entry-t of a ray (mp + mv·t) across the base's authored sub-hulls (world-scaled, identity

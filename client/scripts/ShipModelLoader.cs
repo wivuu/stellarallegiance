@@ -118,6 +118,11 @@ public static class ShipModelLoader
     // the glow at once even while the hull still drifts under residual velocity/drag.
     public static void AttachEngineGlow(Node3D shipNode, DefRegistry defs, ShipClass cls, bool isPod, byte team)
     {
+        // Render stress-test (hull-only): skip glow/trail/beacons entirely so only the identical,
+        // MultiMesh-able hull remains — the floor an ideal instancing pass could reach. See StressRender.
+        if (StressRender.Fx == StressRender.FxMode.NoFx)
+            return;
+
         // Hot exhaust tinted toward the team hue so friend/foe still reads in a dogfight.
         Color hot = team == 0 ? new Color(0.5f, 0.78f, 1f) : new Color(1f, 0.62f, 0.4f);
         List<HardpointDef>? hardpoints = defs.GetHardpoints(DefId(cls, isPod));
@@ -125,6 +130,12 @@ public static class ShipModelLoader
         List<Vector3> nozzleOffsets = BuildEngineGlow();
         BuildTeamTrail(nozzleOffsets);
         BuildNavBeacons();
+
+        // Render stress-test (NoLights): keep the additive glow/mote meshes + particles but drop the
+        // per-ship real-time OmniLights — the prime suspect in a 100-ship forward+ scene — so their
+        // share of the frame can be attributed against the mesh/particle cost.
+        if (StressRender.Fx == StressRender.FxMode.NoLights)
+            StressRender.HideLightsUnder(shipNode);
 
         // Collect engine nozzle offsets from the engine-class hardpoints (a Scout's single
         // MainEngine, a Fighter's twin Boosters, a Bomber's twin MainEngines). Thruster (RCS

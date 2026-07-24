@@ -60,10 +60,12 @@ public interface IShipQuery
     int Count { get; }
 }
 
-// The other ships the local predicted ship can bump into (for its collision provider).
+// The other ships the local predicted ship can bump into (for its collision provider). The obstacles
+// are TIME-ALIGNED to `targetTick` (the predictor's predicted server tick) so the predicted ship
+// collides against where each remote ship IS at that tick, not its interp-delayed rendered pose.
 public interface IShipObstacleSource
 {
-    IReadOnlyList<Collide.MovingShip> ShipObstacles();
+    IReadOnlyList<Collide.MovingShip> ShipObstacles(uint targetTick);
 }
 
 // Read-only view of the live probe nodes, for the bolt-impact sweep (coordinator → ProbeRenderer in C3).

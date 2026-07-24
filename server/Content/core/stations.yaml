@@ -153,7 +153,7 @@ stations:
     max-armor: 1333      # IGC 13333 x0.1 kept-magnitude
     vision-sphere-radius: 2400
     radar-signature: 2.0
-    price: 900
+    price: 100
     income: 0
     align-time-seconds: 5
     build-time-seconds: 60

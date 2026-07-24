@@ -440,6 +440,23 @@
             },
             "description": "Default consumable hold this hull spawns with: each entry names an expendable (by id) and a count. Consumes payload-capacity alongside mounted weapon mass \u2014 CoreValidator proves the summed loadout fits at load. Omit-when-empty. Projected onto ShipClassDef.DefaultCargo (resolving each expendable id to its cargo-id)."
           },
+          "launch-station-classes": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "starbase",
+                "garrison",
+                "shipyard",
+                "ripcord",
+                "mining",
+                "research",
+                "ordnance",
+                "electronics"
+              ],
+              "description": "Functional category of a station. Mirrors StationClassID (igc.h:625-633)."
+            },
+            "description": "Station classes (kebab-case keywords, e.g. shipyard) this hull may LAUNCH from and DOCK at. Empty/omitted = any friendly base (stock behavior). Non-empty = the hull launches only from bases whose station Class is listed, docks only at such bases (every other friendly base is solid, like an enemy base), and must use the base\u0027s LARGEST docking door \u2014 side doors stay small-ship-only. Omit-when-empty. Projected onto ShipClassDef.LaunchClassMask."
+          },
           "id": {
             "type": "string",
             "description": "Stable, unique id used for references (kebab-case by convention, e.g. \u0022heavy-fighter\u0022)."

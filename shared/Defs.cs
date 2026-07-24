@@ -175,6 +175,13 @@ namespace StellarAllegiance.Shared
         // UNLOCKS list can NAME the gate ("REQUIRES SUPREMACY FIELDED") instead of a bare boolean.
         // Streamed at the tail of the ship block in Protocol.BuildDefs (v43).
         public ushort[] RequiredTechIdx = System.Array.Empty<ushort>();
+
+        // Station-class launch/dock restriction (2026-07-21): one bit per allowed station class
+        // (1 << StationClassId). 0 = unrestricted (launch from / dock at any friendly base). A
+        // restricted hull may only launch from bases of a listed class, bounces off every other
+        // friendly base like an enemy one, and docks only through the base's LARGEST door
+        // (DockRules). Streamed LAST in the ship block.
+        public ushort LaunchClassMask;
     }
 
     // How a weapon behaves when fired. A byte (wire-safe) and APPEND-ONLY, like HardpointKind.
@@ -372,6 +379,22 @@ namespace StellarAllegiance.Shared
         ExpansionAllowed = 2,
         TacticalAllowed = 3,
         SupremacyAllowed = 4,
+    }
+
+    // Mirror of the factions library's StationClass enum (Allegiance.Factions.Model.StationClass),
+    // as the wire byte carried by StationCatalogDef.StationClass and ShipClassDef.LaunchClassMask
+    // bits. APPEND-ONLY and must match the library's declaration order — the projection casts
+    // between them (shared/ deliberately does not reference the authoring library).
+    public enum StationClassId : byte
+    {
+        Starbase = 0,
+        Garrison = 1,
+        Shipyard = 2,
+        Ripcord = 3,
+        Mining = 4,
+        Research = 5,
+        Ordnance = 6,
+        Electronics = 7,
     }
 
     // One team-wide stat multiplier: (GameAttribute byte, multiplier). Mirrors the factions library's

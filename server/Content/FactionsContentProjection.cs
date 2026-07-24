@@ -294,7 +294,18 @@ public static class FactionsContentProjection
             // locked hull card + the Research UNLOCKS list can NAME the gate. Server gating stays in
             // BuildableResolver; this is display-only.
             RequiredTechIdx = TechIdxArray(h.RequiredTechs, techIdx),
+            // Station-class launch/dock restriction (2026-07-21): authored launch-station-classes
+            // list -> one bit per StationClassId; 0 = unrestricted.
+            LaunchClassMask = LaunchMask(h.LaunchStationClasses),
         };
+
+    private static ushort LaunchMask(List<Factions.StationClass> classes)
+    {
+        ushort m = 0;
+        foreach (var c in classes)
+            m |= (ushort)(1 << ((int)c & 15)); // enum is 0..7 today; &15 guards the shift width
+        return m;
+    }
 
     private static WeaponDef ProjectWeapon(
         Factions.Weapon w,

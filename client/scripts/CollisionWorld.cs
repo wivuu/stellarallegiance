@@ -23,6 +23,7 @@ public sealed class CollisionWorld
     // compose the live rotation at query time, so the predicted hull spins in lockstep with the
     // rendered rock and the server (Collide.RockSpin / RockRotationAt — one shared source).
     private readonly record struct Entry(Collide.StaticBody Base, Vec3 SpinAxis, float SpinSpeed);
+
     private readonly Dictionary<uint, List<Entry>> _src = new();
     private readonly Dictionary<uint, List<Collide.StaticBody>> _live = new(); // reused output buffers
     private static readonly Collide.StaticBody[] Empty = System.Array.Empty<Collide.StaticBody>();
@@ -30,7 +31,16 @@ public sealed class CollisionWorld
     // Per-rock rebuild info so a live mining shrink (MsgRockUpdate) can rescale a rock's body ABSOLUTELY
     // to the new radius (matching the server's absolute rescale), not by compounding a factor. Index is
     // stable (rocks are only appended to _src until Clear). Model null ⇒ the sphere-fallback rock.
-    private readonly record struct RockRef(uint Sector, int Index, SimModel? Model, Vec3 Center, Quat Rot, Vec3 SpinAxis, float SpinSpeed);
+    private readonly record struct RockRef(
+        uint Sector,
+        int Index,
+        SimModel? Model,
+        Vec3 Center,
+        Quat Rot,
+        Vec3 SpinAxis,
+        float SpinSpeed
+    );
+
     private readonly Dictionary<ulong, RockRef> _rockRefs = new();
 
     // Deployed probes are DYNAMIC solid bodies (added/removed mid-match, unlike Welcome-time
@@ -144,7 +154,13 @@ public sealed class CollisionWorld
         {
             // Sphere fallback — matches the server's ResolveStaticCollision for a hull-less rock.
             // A sphere is rotation-invariant, so it carries no spin.
-            list.Add(new Entry(Collide.StaticBody.AsteroidSphere(center, rad * CollisionConfig.AsteroidCollisionScale), default, 0f));
+            list.Add(
+                new Entry(
+                    Collide.StaticBody.AsteroidSphere(center, rad * CollisionConfig.AsteroidCollisionScale),
+                    default,
+                    0f
+                )
+            );
             _rockRefs[row.AsteroidId] = new RockRef(row.SectorId, index, null, center, rot, default, 0f);
             return;
         }
@@ -166,13 +182,19 @@ public sealed class CollisionWorld
         if (rr.Model is null || rr.Model.Hull.BoundingRadius <= 1e-3f)
         {
             list[rr.Index] = new Entry(
-                Collide.StaticBody.AsteroidSphere(rr.Center, newRadius * CollisionConfig.AsteroidCollisionScale), default, 0f);
+                Collide.StaticBody.AsteroidSphere(rr.Center, newRadius * CollisionConfig.AsteroidCollisionScale),
+                default,
+                0f
+            );
         }
         else
         {
             float scale = newRadius * CollisionConfig.AsteroidCollisionScale / rr.Model.Hull.BoundingRadius;
             list[rr.Index] = new Entry(
-                Collide.StaticBody.AsteroidHull(rr.Model.Hull, rr.Center, rr.Rot, scale), rr.SpinAxis, rr.SpinSpeed);
+                Collide.StaticBody.AsteroidHull(rr.Model.Hull, rr.Center, rr.Rot, scale),
+                rr.SpinAxis,
+                rr.SpinSpeed
+            );
         }
     }
 
@@ -222,7 +244,23 @@ public sealed class CollisionWorld
         // client's DockFace[] is bit-identical to World.LoadBase's and prediction agrees with the
         // server at the bay mouth (no rubber-banding). N doors supported (each a group of 5 markers).
         DockFace[] faces = DockFaceParser.Build(model.Hardpoints, ws, msg => Log.Warn($"[CollisionWorld] {msg}"));
-        list.Add(new Entry(Collide.StaticBody.BaseHull(hull, subs, center, row.Team, faces), default, 0f));
+        // Station class + largest door (2026-07-21 launch-station-classes): the dock carve-out
+        // inputs for restricted hulls — same catalog map + same DockRules pick as the server.
+        list.Add(
+            new Entry(
+                Collide.StaticBody.BaseHull(
+                    hull,
+                    subs,
+                    center,
+                    row.Team,
+                    faces,
+                    defs.StationClassOfBaseType(row.BaseTypeId),
+                    DockRules.LargestFaceIndex(faces)
+                ),
+                default,
+                0f
+            )
+        );
     }
 
     // Per-class ship collision hulls, mirroring server World.LoadShipBodies: each ship def's GLB

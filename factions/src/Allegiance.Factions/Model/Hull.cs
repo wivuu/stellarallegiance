@@ -9,49 +9,61 @@ public record Hull : Buildable
 {
     /// <summary>Ship mass; affects acceleration/inertia in the flight model.</summary>
     public double Mass { get; set; }
+
     /// <summary>Base radar cross-section from the original Core model; the fog-of-war vision system instead uses <c>radar-signature</c> below.</summary>
     public double Signature { get; set; }
+
     /// <summary>Maximum forward flight speed, in world units/second.</summary>
     public double Speed { get; set; }
 
     /// <summary>Peak yaw/pitch/roll turn rates this hull can reach, in degrees/second.</summary>
     public TurnRates MaxTurnRates { get; set; } = new();
+
     /// <summary>Legacy Core turn-acceleration stat (not currently used by the flight model); drift-*-deg below governs runtime turn feel instead.</summary>
     public TurnRates TurnTorques { get; set; } = new();
 
     /// <summary>Forward thrust acceleration.</summary>
     public double Thrust { get; set; }
+
     /// <summary>Fraction of forward thrust available when strafing sideways (1.0 = full thrust).</summary>
     public double StrafeThrustMultiplier { get; set; } = 1.0;
+
     /// <summary>Fraction of forward thrust available when reversing (1.0 = full thrust).</summary>
     public double ReverseThrustMultiplier { get; set; } = 1.0;
 
     /// <summary>Legacy Core sensor-range stat; fog-of-war instead uses the vision-cone/vision-sphere fields below.</summary>
     public double ScannerRange { get; set; }
+
     /// <summary>Afterburner fuel tank size; pairs with ab-fuel-drain/ab-fuel-recharge below (0 = no afterburner fuel modeled).</summary>
     public double MaxFuel { get; set; }
+
     /// <summary>Legacy Core electronic-countermeasures stat (not currently used by the runtime).</summary>
     public double Ecm { get; set; }
+
     /// <summary>Legacy Core hull length stat; model-length below sizes the runtime GLB instead.</summary>
     public double Length { get; set; }
 
     /// <summary>Legacy Core energy-pool stat (not currently used by the runtime).</summary>
     public double MaxEnergy { get; set; }
+
     /// <summary>Legacy Core energy-regen stat (not currently used by the runtime).</summary>
     public double EnergyRechargeRate { get; set; }
 
     /// <summary>Legacy Core ripcord (emergency warp) departure speed (not currently used by the runtime).</summary>
     public double RipcordSpeed { get; set; }
+
     /// <summary>Legacy Core ripcord (emergency warp) money cost (not currently used by the runtime).</summary>
     public double RipcordCost { get; set; }
 
     /// <summary>Legacy Core max carried ammo stat (not currently used by the runtime).</summary>
     public int MaxAmmo { get; set; }
+
     /// <summary>Hull points before the ship is destroyed.</summary>
     public double ArmorHitPoints { get; set; }
 
     /// <summary>Legacy Core cap on mountable weapons (not currently enforced by the runtime, which derives loadout from hardpoints).</summary>
     public int MaxWeapons { get; set; }
+
     /// <summary>Legacy Core cap on fixed (forward-firing) weapons (not currently enforced by the runtime).</summary>
     public int MaxFixedWeapons { get; set; }
 
@@ -60,8 +72,10 @@ public record Hull : Buildable
 
     /// <summary>Legacy Core magazine (missile rack) capacity stat (not currently used by the runtime).</summary>
     public int MagazineCapacity { get; set; }
+
     /// <summary>Legacy Core dispenser (mine/chaff pack) capacity stat (not currently used by the runtime).</summary>
     public int DispenserCapacity { get; set; }
+
     /// <summary>Legacy Core chaff-launcher capacity stat (not currently used by the runtime).</summary>
     public int ChaffLauncherCapacity { get; set; }
 
@@ -95,6 +109,7 @@ public record Hull : Buildable
     /// role tag (e.g. RECON). Both omit-when-null; empty falls back to a generic client default.
     /// </summary>
     public string? Glyph { get; set; }
+
     /// <summary>Short hangar role tag (e.g. RECON, INTERCEPT, ASSAULT); empty falls back to a generic client default.</summary>
     public string? Role { get; set; }
 
@@ -132,18 +147,22 @@ public record Hull : Buildable
 
     /// <summary>Drift (turn-rate slop) knobs the game's flight model needs; no clean Core source.</summary>
     public double DriftYawDeg { get; set; }
+
     /// <summary>Pitch-axis drift (turn-rate slop) knob, in degrees; pairs with drift-yaw-deg above.</summary>
     public double DriftPitchDeg { get; set; }
 
     /// <summary>Afterburner flight knobs (extra accel + spool on/off rates); no clean Core source.</summary>
     public double AbAccel { get; set; }
+
     /// <summary>How fast the afterburner boost spools up to full extra accel once engaged (per second).</summary>
     public double AbOnRate { get; set; }
+
     /// <summary>How fast the afterburner boost spools back down once released (per second).</summary>
     public double AbOffRate { get; set; }
 
     /// <summary>Afterburner fuel drain/recharge (per second); pairs with the Core <see cref="MaxFuel"/> field above.</summary>
     public double AbFuelDrain { get; set; }
+
     /// <summary>Afterburner fuel regained per second while boost is released (0 = dock-only refill, no in-flight regen).</summary>
     public double AbFuelRecharge { get; set; }
 
@@ -155,8 +174,10 @@ public record Hull : Buildable
     /// shield damage. All omit-when-default; projected onto the ShipClassDef shield fields.
     /// </summary>
     public double ShieldCapacity { get; set; }
+
     /// <summary>Shield regen rate, in points/second, once recharge resumes.</summary>
     public double ShieldRecharge { get; set; }
+
     /// <summary>Seconds after the last shield hit before recharge resumes.</summary>
     public double ShieldDelay { get; set; }
 
@@ -169,10 +190,13 @@ public record Hull : Buildable
     /// easier to spot). All omit-when-default; projected onto the ShipClassDef vision fields.
     /// </summary>
     public double VisionConeLength { get; set; }
+
     /// <summary>Half-angle of the forward vision cone, in degrees.</summary>
     public double VisionConeAngleDeg { get; set; }
+
     /// <summary>Radius of the unoccluded omnidirectional proximity sensor, in world units.</summary>
     public double VisionSphereRadius { get; set; }
+
     /// <summary>Detection-range multiplier applied to every viewer's range against this hull (omitted/0 resolves to 1.0; below 1 is stealthier, above 1 easier to spot).</summary>
     public double RadarSignature { get; set; }
 
@@ -186,6 +210,16 @@ public record Hull : Buildable
     /// (resolving each expendable id to its cargo-id).
     /// </summary>
     public List<CargoLoad> DefaultCargo { get; set; } = new();
+
+    /// <summary>
+    /// Station classes (kebab-case keywords, e.g. <c>shipyard</c>) this hull may LAUNCH from and
+    /// DOCK at. Empty/omitted = any friendly base (stock behavior). Non-empty = the hull launches
+    /// only from bases whose station <see cref="Station.Class"/> is listed, docks only at such
+    /// bases (every other friendly base is solid, like an enemy base), and must use the base's
+    /// LARGEST docking door — side doors stay small-ship-only. Omit-when-empty. Projected onto
+    /// <c>ShipClassDef.LaunchClassMask</c>.
+    /// </summary>
+    public List<StationClass> LaunchStationClasses { get; set; } = new();
 }
 
 /// <summary>One entry in a hull's default consumable hold: an expendable id + a count.</summary>

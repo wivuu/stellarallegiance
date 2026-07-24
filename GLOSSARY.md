@@ -69,7 +69,7 @@ Two-tier write discipline on the per-client outbound frame queue (bounded, `Full
 Per-part convex collision for a station: `COL_`-prefixed mesh nodes baked into the base GLB (`garrison.glb` — the shipping base; `Outpost.glb` is retained but unused) each become one sub-hull, replacing the single QuickHull shrink-wrap so ships bounce off the real superstructure and cannot fly into the hollow interior. Parts are GENERATED from the visual mesh volume (voxel solid-fill → marching cubes → CoACD convex decomposition) by `tools/collision-hull/bake.py --kind base --glb <glb>` — never hand-placed.
 - **Frequency:** Domain-specific
 - **Key Files:**
-  - `tools/collision-hull/` — args-driven bake tool for any mesh GLB (per-kind presets, hull-containment / dock-corridor / reachability validations)
+  - `tools/collision-hull/` — args-driven bake tool for any mesh GLB (per-kind presets, hull-containment / dock-approach / reachability / surface-backing validations; no dock carve — bases bake fully solid)
   - `shared/Collision/GlbReader.cs` (`CollisionParts`), `SimModel.cs` (`Hulls`), `Collide.cs` (`SphereVsBody` deepest-contact)
   - `server/Sim/World.cs` — `BaseSubHulls`; `server/Assets/SelfTest.cs` + `tests/CollisionTest` — deploy-guard assertions
 - **Related:** [[Hull]], [[Dock Refund]]
@@ -349,19 +349,50 @@ net-free rearm/repair); death refunds nothing (pods don't inherit PaidCost).
 Where a ship docks at its own base. `HP_DockingEntrance_*` markers group in **fives** into one bounded
 **rectangular face** (1 face marker whose +Z is the inward normal + 4 boundary side-midpoints; the
 face marker is detected by ORIENTATION within its five — rim forwards point outward in-plane — not
-assumed first); a base may author N doors. A ship (a `ShipRadius` sphere) docks by pure geometric intersection — inside the
-rectangle laterally and within a depth window `[−DockFaceDepth, +ShipRadius]` along the inward normal
-(no facing/velocity gate). The rest of the base is a solid hull; the same test carves the no-bounce
-carve-out so client prediction and server agree. `HP_DockingExit_*` (one = one exit) is the launch
-mouth. NOT the old "dock disc" per-hardpoint model (retired 2026-07).
+assumed first); a base may author N doors. A ship (a `ShipRadius` sphere) docks by intersecting the
+face — inside the rectangle laterally and within a depth window `[−DockFaceDepth, +ShipRadius]`
+along the inward normal — while its VELOCITY direction closes on the door inside the
+**angle-of-attack gate** (within a 45° half-cone of the inward normal; direction only, no speed
+requirement — below the ~2 u/s direction deadzone a ship counts as parked and docks on touch;
+`CollisionConfig.DockApproachMinCosSq`/`DockDirectionDeadzoneSq` compile-time constants, sqrt-free
+cos² compare on both peers). The client latches **dock-pending** the tick the predicate passes
+(`PredictionController.DockPending`): statics and the collision thud are suppressed for the ghost
+ticks predicted before `ShipGone` lands, so a dock never pops/thuds. Bases bake **fully solid** (no
+corridor carve); the same gated test is the own-base no-bounce skip, so client prediction and
+server agree — a gate-failing approach (parallel slide, drift, wild angle) bounces off the real
+structure. `HP_DockingExit_*` (one = one exit) is the launch mouth. NOT the old "dock disc"
+per-hardpoint model (retired 2026-07).
 - **Frequency:** Domain-specific
 - **Key Files:**
   - `shared/Collision/DockFace.cs` — `DockFace` struct + `DockFaceParser.Build` (the ONE parser both peers call)
-  - `shared/Collision/Collide.cs` — `IntersectsDockFace` test + dock carve-out
+  - `shared/Collision/Collide.cs` — `IntersectsDockFace` (vel-gated overload) + own-base skip in `ResolveStatics`/`Touches`
   - `server/Sim/World.cs` — `LoadBase` → `BaseDockFaces`; `Simulation.cs` dock trigger
   - `client/scripts/CollisionWorld.cs` — client-prediction mirror (bit-identical parse)
-  - `tools/collision-hull/bake.py` — per-door corridor carve; `docs/GLB-AND-HARDPOINT-FORMAT.md` — spec
-- **Related:** [[Hardpoint]], [[SimModel]], [[Dock Refund]]
+  - `tools/collision-hull/bake.py` — dock-approach window validator; `docs/GLB-AND-HARDPOINT-FORMAT.md` — spec
+- **Related:** [[Hardpoint]], [[SimModel]], [[Dock Refund]], [[Launch Station Classes]]
+
+### Launch Station Classes (hull base restriction)
+Per-hull authored `launch-station-classes: [shipyard]` (hulls.yaml, list of station `class:`
+keywords) restricting which base CLASSES the hull may LAUNCH from and DOCK at. Omitted = anywhere
+(stock). Restricted hulls (Devastator → shipyard, covering Shipyard(3) + Shipyard Dry(6)): other
+friendly bases are fully solid (bounce like an enemy base), and at an allowed base only the
+**largest docking door** (by rectangle area, `DockRules.LargestFaceIndex`) admits them — side doors
+stay small-ship-only. Projected to `ShipClassDef.LaunchClassMask` (u16 bitmask over
+`StationClassId`; streamed LAST in the ship block); base class resolved via the station catalog's
+`BaseTypeId → StationClass` map on BOTH peers. Server rejects an illegal spawn pre-charge
+(`TryResolveLaunchSite`); the hangar shows the card visible-greyed "SHIPYARD ONLY" (situational
+lock — never hidden). Related rule: a base whose loaded model has **no authored `HP_DockingExit`**
+can't launch anything ("NO LAUNCH BAY" grey; `World.BaseLaunchCapableOf`; model-less test bases
+stay launch-capable).
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `shared/Collision/DockRules.cs` — `ClassAllowed` / `LargestFaceIndex` / `AllowedFace` (both peers)
+  - `factions/src/Allegiance.Factions/Model/Hull.cs` — `LaunchStationClasses` authoring
+  - `server/Content/FactionsContentProjection.cs` — `LaunchMask` projection
+  - `server/Sim/Simulation.cs` — `TryResolveLaunchSite` spawn gate; `ResolveOwnBaseDock` dock gate; `SelectDockDoor` autopilot pin
+  - `client/scripts/DefRegistry.cs` — `HullMayLaunchFrom` / `BaseLaunchCapable` mirrors
+  - `client/scripts/ui/ShipLoadout.cs` + `.Hangar.cs` — WrongBase / NO LAUNCH BAY UX
+- **Related:** [[Docking Door]], [[Dock Refund]], [[Def (Definition)]]
 
 ### Shield
 Regenerating energy layer over the raw-health model, authored per hull/faction (`shield-capacity`,

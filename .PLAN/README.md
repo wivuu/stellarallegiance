@@ -22,9 +22,11 @@ Archives:
 - **[M]** Code cleanup and refactor
 - Reloading things from cargo should take a configurable amount of time (i.e. ammo and fuel)
 - Look for opportunities to utilize native vector3 and SIMD for performance improvements
-- Improve heavy sector entrance performance - entering a sector with lots of dust and asteroids and potentially other things can cause lots of frames dropped as things appear
-- Only allow ships that require shipyard to launch from shipyard/drydock; or add a 'launch-capbility' config attribute that restricts the types of bases that can launch them
-- Devastator has no momentum and a light thats RIGHT in front of the cockpit
+- Shipyard constructor's label says "Outpost constructor"
+- Capital
+  - Devastator has no momentum - movement and turninng both immediately arrested
+  - Theres a light thats RIGHT in front of the cockpit - where is the cockpit in relation to the ship? Make your ships lights not visible from inside the cockpit.
+  - Shipyard can be flown through doublecheck collisions - show me an interactive visual debug of the collision mesh.
 ---
 
 ## Content philosophy (the through-line)

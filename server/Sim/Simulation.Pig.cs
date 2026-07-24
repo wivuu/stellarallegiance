@@ -985,11 +985,22 @@ public sealed partial class Simulation
                 foreach (var b in World.Bases)
                     if (b.Team == me.Team)
                     {
-                        // Aim at the docking-bay mouth (the entrance-hardpoint centroid) so the
-                        // now-solid hull funnels the pod onto the doorway faces instead of bouncing
-                        // it off. Without a model, fall back to the base center (pre-hull target).
-                        Vec3 aim = World.BaseHullOf(b.BaseTypeId) is not null ? b.Pos + World.BaseDoorCenterOf(b.BaseTypeId) : b.Pos;
-                        return PigSteerTo(me, myPos, myRot, aim, 1f, excludeBaseId: b.Id);
+                        // Door geometry + hull present: the same 3-phase dock maneuver miners and
+                        // the player autopilot fly (Transit→Align→Creep straight down the door
+                        // normal). The dock trigger demands a closing, in-cone approach — a naive
+                        // door-centroid steer arrives off-axis and grinds on the solid aperture.
+                        // A fresh pod's ApDock* FSM starts clean (field initializers); a mid-
+                        // approach retarget self-heals via SelectDockDoor + the phase timeouts.
+                        if (World.BaseDockFacesOf(b.BaseTypeId).Length > 0 && World.BaseHullOf(b.BaseTypeId) is not null)
+                            return DockApproach(
+                                me,
+                                tick,
+                                b,
+                                StatsFor(me.Class, me.IsPod),
+                                (p, d) => AvoidObstacles(me.SectorId, p, d, excludeBaseId: b.Id)
+                            );
+                        // Without a model, fall back to the base center (pre-hull legacy dock sphere).
+                        return PigSteerTo(me, myPos, myRot, b.Pos, 1f, excludeBaseId: b.Id);
                     }
             }
         }

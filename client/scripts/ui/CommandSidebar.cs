@@ -279,6 +279,26 @@ public partial class CommandSidebar : Control
                         pick = lastDocked;
         }
         Select(pick);
+        ApplyRowHints(); // rows were rebuilt — re-dress them with the current launch hints
+    }
+
+    // Per-base launch hints (2026-07-21 launch-station-classes): base id -> the reason the
+    // currently selected hull can't launch there ("SHIPYARD ONLY" / "NO LAUNCH BAY"); a missing id
+    // means no hint. Hinted rows dim + surface the reason on their status line but STAY clickable —
+    // the Build/Research tabs still need those bases selectable. ShipLoadout recomputes the map on
+    // hull selection + roster refresh; null clears everything.
+    public void SetRowHints(IReadOnlyDictionary<ulong, string>? hints)
+    {
+        _rowHints = hints;
+        ApplyRowHints();
+    }
+
+    private IReadOnlyDictionary<ulong, string>? _rowHints;
+
+    private void ApplyRowHints()
+    {
+        foreach (var (id, _, _, _, _, row) in _rows)
+            row.SetLaunchHint(_rowHints != null && _rowHints.TryGetValue(id, out string? h) ? h : null);
     }
 
     private void Select(ulong id)
@@ -411,8 +431,36 @@ public partial class CommandSidebar : Control
             EnsureBuilt();
             _title.Text = title;
             _sector.Text = sectorName;
-            _status.Text = alive ? "ACTIVE" : "DESTROYED";
-            _status.AddThemeColorOverride("font_color", alive ? DesignTokens.Ok : DesignTokens.Danger);
+            _alive = alive;
+            ApplyStatus();
+        }
+
+        // Launch hint (2026-07-21 launch-station-classes): a non-null reason dims the row and
+        // takes over the status line ("SHIPYARD ONLY" / "NO LAUNCH BAY"); null restores the
+        // ACTIVE/DESTROYED readout. The row stays clickable either way.
+        public void SetLaunchHint(string? hint)
+        {
+            EnsureBuilt();
+            _launchHint = string.IsNullOrEmpty(hint) ? null : hint;
+            Modulate = _launchHint is null ? Colors.White : new Color(1, 1, 1, 0.55f);
+            ApplyStatus();
+        }
+
+        private bool _alive;
+        private string? _launchHint;
+
+        private void ApplyStatus()
+        {
+            if (_launchHint is string hint)
+            {
+                _status.Text = hint;
+                _status.AddThemeColorOverride("font_color", DesignTokens.Warn);
+            }
+            else
+            {
+                _status.Text = _alive ? "ACTIVE" : "DESTROYED";
+                _status.AddThemeColorOverride("font_color", _alive ? DesignTokens.Ok : DesignTokens.Danger);
+            }
         }
 
         private void Restyle()

@@ -58,6 +58,13 @@ public static class CoreValidator
             foreach (var (slot, allowed) in hull.AllowedParts)
             foreach (var partId in allowed)
                 CheckRef(result, partIds, partId, $"hull '{hull.Id}' allowed-parts[{slot}]");
+            // launch-station-classes only gates runtime spawns/docks; on a non-runtime hull it can
+            // never take effect, which is always an authoring mistake (keyword typos already fail
+            // at YAML enum parse).
+            if (hull.LaunchStationClasses.Count > 0 && hull.ClassId is null)
+                result.Error(
+                    $"hull '{hull.Id}' launch-station-classes has no effect: the hull has no class-id (not a runtime hull)"
+                );
         }
 
         // Runtime hulls: the authored default loadout (hardpoint weapons) must fit the payload budget.
@@ -379,7 +386,12 @@ public static class CoreValidator
         }
     }
 
-    private static void ValidateDrones(ValidationResult result, Core core, HashSet<string> hullIds, HashSet<string> expendableIds)
+    private static void ValidateDrones(
+        ValidationResult result,
+        Core core,
+        HashSet<string> hullIds,
+        HashSet<string> expendableIds
+    )
     {
         // Drones.
         foreach (var drone in core.Drones)

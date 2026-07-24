@@ -1389,9 +1389,12 @@ public static class Protocol
                 w.Write(c.Count);
             }
             w.Write(s.IsConstructor); // v37: constructor chassis (hidden from the buy menu, like miners)
-            // Hull tech-gate (v43), streamed LAST in the ship block (append-only). Display-only: lets
+            // Hull tech-gate (v43), streamed after IsConstructor (append-only). Display-only: lets
             // the hangar's locked hull card + Research UNLOCKS name the gate. Reader mirrors.
             WriteTechList(w, s.RequiredTechIdx);
+            // Station-class launch/dock restriction (2026-07-21), streamed LAST in the ship block
+            // (append-only): u16 bitmask over StationClassId; 0 = unrestricted. Reader mirrors.
+            w.Write(s.LaunchClassMask);
         }
     }
 

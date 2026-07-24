@@ -36,6 +36,7 @@
   let viewer = null;
   let doc = null;
   const visibleKinds = new Set();
+  let showCollision = false; // persists across model loads
   let selectedRow = null;
 
   // ---- loading -------------------------------------------------------------
@@ -60,7 +61,7 @@
       }
       visibleKinds.clear();
       for (const hp of parsed.hardpoints) visibleKinds.add(hp.kind);
-      viewer = Viewer.createViewer(canvas, parsed, { colorFor: (k) => hexToRgb(kindColor(k)), onFrame: drawOverlay });
+      viewer = Viewer.createViewer(canvas, parsed, { colorFor: (k) => hexToRgb(kindColor(k)), onFrame: drawOverlay, showCollision });
       viewer.setVisibleKinds(visibleKinds);
       $("#empty").style.display = "none";
       $("#viewport").classList.add("loaded");
@@ -222,6 +223,19 @@
       legend.appendChild(row);
     }
 
+    // collision panel — only shown for models that carry COL_ proxy parts
+    const cs = parsed.collisionStats || { partCount: 0 };
+    const collPanel = $("#collision-panel");
+    if (cs.partCount > 0) {
+      collPanel.hidden = false;
+      $("#collision-toggle").checked = showCollision;
+      $("#collision-count").textContent = cs.partCount + (cs.partCount === 1 ? " part" : " parts");
+      $("#collision-info").textContent =
+        `${cs.vertexCount.toLocaleString()} verts · ${cs.triangleCount.toLocaleString()} tris`;
+    } else {
+      collPanel.hidden = true;
+    }
+
     // table
     const tbody = $("#hp-body");
     tbody.innerHTML = "";
@@ -276,6 +290,10 @@
   $("#file-input").addEventListener("change", (e) => { if (e.target.files[0]) loadFile(e.target.files[0]); });
   $("#refresh").addEventListener("click", refreshLibrary);
   $("#reset-view").addEventListener("click", () => viewer && viewer.resetView());
+  $("#collision-toggle").addEventListener("change", (e) => {
+    showCollision = e.target.checked;
+    if (viewer) viewer.setShowCollision(showCollision);
+  });
   $("#lib-search").addEventListener("input", renderLibrary);
   $("#lib-search").addEventListener("keydown", (e) => {
     if (e.key === "Escape") { e.target.value = ""; renderLibrary(); }

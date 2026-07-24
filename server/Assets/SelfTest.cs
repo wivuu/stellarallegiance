@@ -130,11 +130,13 @@ public static class SelfTest
             );
         }
 
-        // Dock CORRIDOR: for EVERY door (a base may author N), fire a ray from well outside along the
-        // face's INWARD normal straight at the face centre. A clear corridor means the ray REACHES the
-        // face (t ≈ probe distance) without entering any sub-hull first — i.e. no authored part caps
-        // the docking mouth. (Past the face the ray enters the core; we only test the segment up to the
-        // face.) This mirrors the bake-time corridor validation and guards the dock/spawn-regression.
+        // Dock-face WINDOW reachability: for EVERY door (a base may author N), fire a ray from well
+        // outside along the face's INWARD normal straight at the face centre. The bake no longer
+        // carves an approach corridor — the aperture crust may sit AT the face plane — so the ray
+        // only has to reach the dock trigger's depth window (within DockFaceDepth − ShipRadius of
+        // the face): a face-on ship enters the skip window, and everything past that is skipped
+        // geometry. A sub-hull further out than the window blocks the approach and fails the boot.
+        // This mirrors the bake-time face-window validation.
         bool corridorsClear = true;
         foreach (var f in world.BaseDockFaces)
         {
@@ -142,12 +144,13 @@ public static class SelfTest
             Vec3 origin = f.Center - f.Normal * probe; // approach side (opposite the inward normal)
             Vec3 dir = f.Normal;
             foreach (var sub in world.BaseSubHulls)
-                // The face sits at t == probe; a sub-hull entered at t < probe (small margin) blocks the
-                // corridor. Base sub-hulls are identity-frame, world-scaled ⇒ ray in local == world.
-                if (sub.RayEntry(origin, dir, probe, 0f, out float th) && th < probe - 0.5f)
+                // The face sits at t == probe; a sub-hull entered before the depth window begins
+                // (t < probe − (DockFaceDepth − ShipRadius)) blocks the approach. Base sub-hulls
+                // are identity-frame, world-scaled ⇒ ray in local == world.
+                if (sub.RayEntry(origin, dir, probe, 0f, out float th) && th < probe - (World.DockFaceDepth - World.ShipRadius))
                     corridorsClear = false;
         }
-        Check("world: every dock corridor reaches its face without hitting a sub-hull", corridorsClear);
+        Check("world: every dock approach reaches its face window without hitting a sub-hull", corridorsClear);
 
         // Per-type base roster (v37+): the garrison above is type 0; every OTHER runtime base type
         // (Outpost/Supremacy/Shipyard on ss90/ss21a/acs05) must also load a compound hull with docking
@@ -183,10 +186,13 @@ public static class SelfTest
                 float probe = typeR * 2f;
                 Vec3 origin = f.Center - f.Normal * probe;
                 foreach (var sub in subs)
-                    if (sub.RayEntry(origin, f.Normal, probe, 0f, out float th) && th < probe - 0.5f)
+                    // Same window semantics as the garrison check above: the approach only has to
+                    // stay clear until the dock trigger's depth window (uncarved aperture crust
+                    // may sit at the face plane).
+                    if (sub.RayEntry(origin, f.Normal, probe, 0f, out float th) && th < probe - (World.DockFaceDepth - World.ShipRadius))
                         typeCorridorsClear = false;
             }
-            Check($"world: base type {t} every dock corridor reaches its face", typeCorridorsClear);
+            Check($"world: base type {t} every dock approach reaches its face window", typeCorridorsClear);
             Console.WriteLine($"  base type {t} ({bd.Name}): {subs.Length} sub-hulls, {exits.Length} exits, {doors.Length} doors, radius {typeR:0.#}");
         }
 

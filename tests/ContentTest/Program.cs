@@ -462,6 +462,20 @@ Check(
     $"interceptor default-cargo wrong ([{string.Join(",", interceptor.DefaultCargo.Select(l => $"({l.CargoId},{l.Count})"))}])"
 );
 
+// launch-station-classes (2026-07-21): the Devastator's authored [shipyard] list projects to
+// LaunchClassMask 1 << StationClassId.Shipyard(2); every other stock hull stays 0 (unrestricted).
+var devastatorDef = stock.Ships.First(s => s.ClassId == 7);
+Check(
+    devastatorDef.LaunchClassMask == 1 << 2,
+    "loader projected Devastator launch-station-classes [shipyard] to LaunchClassMask 1 << 2",
+    $"Devastator LaunchClassMask wrong (got {devastatorDef.LaunchClassMask})"
+);
+Check(
+    stock.Ships.Where(s => s.ClassId != 7).All(s => s.LaunchClassMask == 0),
+    "every other stock hull projects LaunchClassMask 0 (unrestricted)",
+    $"unexpected LaunchClassMask on [{string.Join(",", stock.Ships.Where(s => s.ClassId != 7 && s.LaunchClassMask != 0).Select(s => s.Name))}]"
+);
+
 // Bomber (wc_icbmb): 5 armed weapon mounts — Gat 1 (mesh HP_Weapon_0), two AutoCan 1 (mesh
 // HP_Weapon_1/2 nose pair), a second Gat 1 (authored index 3, mirror of node 0), and the anti-base
 // torpedo rack (authored index 4, weapon-id 5). Guns at the low indices, rack last. wc_icbmb carries

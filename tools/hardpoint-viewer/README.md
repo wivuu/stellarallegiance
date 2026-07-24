@@ -40,23 +40,31 @@ options.)
   the load debounces so it settles on the one you stop at.
 - **Filter box** — narrow the Library by name or subfolder path; Esc clears.
 - **Legend checkboxes** — show/hide hardpoints by kind.
+- **Collision hull toggle** — overlay the baked `COL_` convex collision proxies as a
+  translucent, per-part-coloured wireframe (drawn depth-off so they read through the hull
+  they sit inside). The panel appears only for models that carry `COL_` parts — i.e. bases
+  and other meshes baked by `tools/collision-hull`; ships that collide via a single
+  whole-mesh convex hull have none.
 - **Hardpoint table row** — click to spotlight that hardpoint (pulses in the view).
 - **reset view** — recenter the camera.
 
 Each hardpoint is drawn as a colored marker with a short tick along its **forward** (local
 +Z) and an on-canvas label. The sidebar shows the mesh AABB, longest axis (the normalize
-scale ships/bases use), vertex/triangle counts, and the full `HP_` table.
+scale ships/bases use), vertex/triangle counts (of the **visual** mesh — the `COL_` proxies
+are counted separately in the Collision hull panel), and the full `HP_` table.
 
 ## How it works
 
 - `serve.py` — stdlib `http.server` that serves this folder plus two endpoints:
   `GET /list` (JSON catalog of `.glb` under the library root) and `GET /asset/<relpath>`
   (the model bytes, with a path-traversal guard).
-- `js/gltf.js` — dependency-free glTF/GLB parser: drawables in world space, embedded
-  baseColor texture, bounds, and `HP_` hardpoints (world translation = position, world +Z =
-  forward). Runs in the browser **and** under Node.
-- `js/render.js` — from-scratch WebGL1 renderer (hull + markers + forward ticks + orbit
-  camera + label projection).
+- `js/gltf.js` — dependency-free glTF/GLB parser: visual drawables in world space, embedded
+  baseColor texture, bounds, `HP_` hardpoints (world translation = position, world +Z =
+  forward), and the `COL_` compound-collision parts split out as a separate layer (same
+  `COL_`-node subtree routing as `shared/Collision/GlbReader.cs`). Runs in the browser
+  **and** under Node.
+- `js/render.js` — from-scratch WebGL1 renderer (hull + collision-proxy overlay + markers +
+  forward ticks + orbit camera + label projection).
 - `js/app.js` — file loading, sidebar, legend, table, and the label overlay.
 
 ## Verifying the parser

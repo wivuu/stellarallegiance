@@ -63,12 +63,18 @@ public sealed class TeamStateStore
         public ulong LaunchBaseId; // the garrison whose build pipeline this order sits in (0 = default)
     }
 
-    // Client-side pre-flight verdict for a spawn (the buy seam), mirroring the server's TryReserveSpawn.
+    // Client-side pre-flight verdict for a spawn (the buy seam), mirroring the server's TryReserveSpawn
+    // + TryResolveLaunchSite gates.
     public enum SpawnGate
     {
         Allow,
         Locked,
         TooPoor,
+
+        // The SELECTED launch base's station class can't launch this hull (launch-station-classes,
+        // 2026-07-21). Situational like TooPoor — the card stays visible-greyed (never hidden) and
+        // clears when the pilot picks an allowed base.
+        WrongBase,
     }
 
     // ---- Economy / unlock / research-ownership state -----------------------------------------
@@ -230,12 +236,20 @@ public sealed class TeamStateStore
     // returns a positive block when the latest snapshot proves it, so a doomed buy isn't spammed; before
     // the first snapshot (or for an unknown cost) it returns Allow and defers to the server's authoritative
     // gate (the spawn-pending timeout backstops any race-reject). Cost = ShipClassDef.Cost.
-    public SpawnGate CheckSpawnGate(byte team, byte cls)
+    public SpawnGate CheckSpawnGate(byte team, byte cls) => CheckSpawnGate(team, cls, wrongBase: false);
+
+    // `wrongBase` = the caller's DefRegistry verdict that the SELECTED launch base can't launch
+    // this hull (HullMayLaunchFrom); the store stays defs/Godot-free by taking the boolean.
+    // Ordered after Locked (hidden-not-greyed stands untouched) but before TooPoor: "pick a
+    // shipyard" is more actionable than a cost warning that may resolve itself.
+    public SpawnGate CheckSpawnGate(byte team, byte cls, bool wrongBase)
     {
         if (!HasState(team))
             return SpawnGate.Allow; // no economy data yet — let the server decide
         if (!Unlocked(team, cls))
             return SpawnGate.Locked;
+        if (wrongBase)
+            return SpawnGate.WrongBase;
         int cost = _costs.ShipCost(cls);
         if (Credits(team) < cost)
             return SpawnGate.TooPoor;
