@@ -27,7 +27,13 @@ public partial class EngineGlow : Node3D
     // Scout's single thruster, two for a Fighter's heavier twin engines.
     public Vector3[] Nozzles = [Vector3.Zero];
 
-    // Flame plume size at full throttle (before the afterburner stretch).
+    // Per-nozzle size multiplier, parallel to Nozzles (1 = full size). Lets a hull's
+    // secondary Booster nozzles burn smaller than its main engine while sharing one
+    // glow node/throttle. Null = every nozzle at full size.
+    public float[]? NozzleScales;
+
+    // Flame plume size at full throttle (before the afterburner stretch), for a
+    // scale-1 nozzle; each nozzle multiplies in its own NozzleScales entry.
     public float NozzleRadius = 0.9f;
     public float PlumeLength = 5.5f;
 
@@ -37,12 +43,6 @@ public partial class EngineGlow : Node3D
     // Hot exhaust colour, tinted toward the ship's team hue so friend/foe still
     // reads at a glance. The afterburner blends this toward BoostColor.
     public Color CoreColor = new(0.6f, 0.8f, 1f);
-
-    // Force the whole glow dark regardless of throttle. Set by PredictionController when the local
-    // ship is in first person (the camera sits inside the hull, so its own exhaust glare must not
-    // wash out the view). Folded into the per-frame Visible recompute below so a plain Visible=false
-    // can't be stomped the next frame.
-    public bool Suppressed;
 
     // --- Tuning ---------------------------------------------------------
 
@@ -120,6 +120,7 @@ public partial class EngineGlow : Node3D
     private const float BoostReleaseRate = 12f; // release fade rate (1/s); ~0.25s to settle near -80dB
     private bool _boosting;
     private float _boostAudioDb = -80f; // actual played volume for _boostSfx: tracks DriveToDb on the
+
     // way up (riding the existing spool-up ramp) but eases independently on the way down, since
     // _shownBoost itself snaps straight to 0 (EaseToward cuts down instantly for the visual flame).
 
@@ -151,10 +152,10 @@ public partial class EngineGlow : Node3D
         var smoke = SmokeMote();
 
         var avg = Vector3.Zero;
-        foreach (var n in Nozzles)
+        for (int i = 0; i < Nozzles.Length; i++)
         {
-            avg += n;
-            BuildNozzle(n, dot, smoke);
+            avg += Nozzles[i];
+            BuildNozzle(Nozzles[i], NozzleScale(i), dot, smoke);
         }
         avg /= Nozzles.Length;
 
@@ -238,8 +239,16 @@ public partial class EngineGlow : Node3D
     private static float DriveToDb(float level) =>
         level <= 0.001f ? -80f : Mathf.Lerp(-27.4f, -3.4f, Mathf.Clamp(level, 0f, 1f));
 
-    private void BuildNozzle(Vector3 pos, Texture2D dot, Texture2D smoke)
+    private float NozzleScale(int i) => NozzleScales != null && i < NozzleScales.Length ? NozzleScales[i] : 1f;
+
+    private void BuildNozzle(Vector3 pos, float scale, Texture2D dot, Texture2D smoke)
     {
+        // This nozzle's built size: the shared per-ship base × its own multiplier (a
+        // Booster burns smaller than the main engine). ApplyVisual's per-frame holder
+        // scales are relative, so they ride on top unchanged.
+        float radius = NozzleRadius * scale;
+        float plumeLength = PlumeLength * scale;
+
         // Holder sits at the nozzle, axis-aligned with the hull, so scaling its Z
         // stretches the plume backward (afterburner) while pinning the wide end to
         // the hull. 90° child rotations keep the basis axis-aligned, so this
@@ -268,16 +277,16 @@ public partial class EngineGlow : Node3D
             {
                 Mesh = new CylinderMesh
                 {
-                    TopRadius = NozzleRadius * 0.22f, // cut-off tail (exhaust mouth, not a point)
-                    BottomRadius = NozzleRadius, // wide at the nozzle
-                    Height = PlumeLength,
+                    TopRadius = radius * 0.22f, // cut-off tail (exhaust mouth, not a point)
+                    BottomRadius = radius, // wide at the nozzle
+                    Height = plumeLength,
                     RadialSegments = 12,
                 },
                 MaterialOverride = plumeMat,
                 // +Y wide-end -> -Z (backward); offset back by half-length so the wide end sits
                 // on the nozzle and growth extends behind the ship.
                 RotationDegrees = new Vector3(-90f, 0f, 0f),
-                Position = new Vector3(0f, 0f, -PlumeLength * 0.5f),
+                Position = new Vector3(0f, 0f, -plumeLength * 0.5f),
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             }
         );
@@ -301,14 +310,14 @@ public partial class EngineGlow : Node3D
             EmissionEnergyMultiplier = 5f,
         };
         _innerMats.Add(innerMat);
-        float innerLen = PlumeLength * 0.55f;
+        float innerLen = plumeLength * 0.55f;
         innerHolder.AddChild(
             new MeshInstance3D
             {
                 Mesh = new CylinderMesh
                 {
-                    TopRadius = NozzleRadius * 0.1f,
-                    BottomRadius = NozzleRadius * 0.55f,
+                    TopRadius = radius * 0.1f,
+                    BottomRadius = radius * 0.55f,
                     Height = innerLen,
                     RadialSegments = 12,
                 },
@@ -339,7 +348,7 @@ public partial class EngineGlow : Node3D
         AddChild(
             new MeshInstance3D
             {
-                Mesh = new QuadMesh { Size = new Vector2(NozzleRadius * 2.2f, NozzleRadius * 2.2f) },
+                Mesh = new QuadMesh { Size = new Vector2(radius * 2.2f, radius * 2.2f) },
                 MaterialOverride = coreMat,
                 Position = pos,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
@@ -357,10 +366,10 @@ public partial class EngineGlow : Node3D
         procMat.SetShaderParameter("life_s", SmokeLifetime);
         procMat.SetShaderParameter("speed", SmokeSpeed);
         procMat.SetShaderParameter("speed_var", SmokeSpeedVar);
-        procMat.SetShaderParameter("spawn_radius", NozzleRadius * 0.3f);
-        procMat.SetShaderParameter("bell_amp", NozzleRadius * SmokeBell);
+        procMat.SetShaderParameter("spawn_radius", radius * 0.3f);
+        procMat.SetShaderParameter("bell_amp", radius * SmokeBell);
         procMat.SetShaderParameter("bell_at", SmokeBellAt);
-        procMat.SetShaderParameter("size_base", NozzleRadius * SmokeSize);
+        procMat.SetShaderParameter("size_base", radius * SmokeSize);
         procMat.SetShaderParameter("size_var", SmokeSizeVar);
         procMat.SetShaderParameter("grow", SmokeGrow);
         procMat.SetShaderParameter("grow_at", SmokeGrowAt);
@@ -456,7 +465,10 @@ public partial class EngineGlow : Node3D
         bool burning = boost > 0.02f;
         if (burning)
             _smokeFade = SmokeLifetime;
-        Visible = !Suppressed && (glow > 0.001f || _smokeFade > 0f);
+        // First person hides the glow too — via the parent "ShipModel" container (ancestor
+        // visibility beats this per-frame recompute), not a flag here, so its own exhaust glare
+        // can't wash out the cockpit view.
+        Visible = glow > 0.001f || _smokeFade > 0f;
         if (!Visible)
         {
             _light.LightEnergy = 0f;

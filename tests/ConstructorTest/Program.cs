@@ -236,6 +236,28 @@ int outpostPriceConst = content.StationCatalog.First(s => s.BaseTypeId == Outpos
         + $"states {string.Join(",", sim.ConstructorStatesView().Select(r => $"{(r.ProducesMiner ? "M" : "C")}:{r.State}@{r.LaunchBaseId}"))})");
 }
 
+// ---- Scenario 1e: the roster row carries the launched drone's SHIP id + its station type ----------
+// The row's Id is a slot ordinal (what a cancel names) and can never be matched against a rendered
+// ship; ShipId is the only key that ties a flying drone to the station it is delivering, which is how
+// the client's F3 map captions it ("Outpost Constructor" vs "Shipyard Constructor"). It stays 0 until
+// the drone actually launches.
+{
+    var (sim, _) = NewSim();
+    sim.EnqueueConstructorBuy(0, OutpostType, 0);
+    sim.Step();
+    var producing = sim.ConstructorStatesView().Single(r => r.Team == 0);
+    Check(producing.State == 0 && producing.ShipId == 0,
+        "a still-producing constructor has no ship id on the roster (nothing is flying yet)",
+        $"producing row wrong (state {producing.State}, shipId {producing.ShipId})");
+
+    var ship = StepUntilLaunched(sim);
+    var launched = sim.ConstructorStatesView().Single(r => r.Team == 0);
+    Check(ship is Simulation.ShipSim s && launched.ShipId == s.ShipId && launched.StationType == OutpostType,
+        "a launched constructor's roster row names its ship id and the station type it will build",
+        $"launched row wrong (shipId {launched.ShipId}, ship {(ship is Simulation.ShipSim l ? l.ShipId : 0)}, "
+        + $"stationType {launched.StationType}, want {OutpostType})");
+}
+
 // ---- Scenario 2: order to a Regolith rock → base appears, drone consumed ------------------------
 {
     var (sim, world) = NewSim();

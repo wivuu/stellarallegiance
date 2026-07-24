@@ -21,7 +21,7 @@ internal static partial class Log
         Message = "outbound queue pressure: {Dropped} lossy frame(s) dropped, {Parked} reliable frame(s) parked for retry")]
     public static partial void OutboundQueuePressure(ILogger logger, long dropped, long parked);
 
-    [LoggerMessage(EventId = 1105, Level = LogLevel.Information,
+    [LoggerMessage(EventId = 1105, Level = LogLevel.Debug,
         Message = "[aoi-stats] records/s={RecordsPerSec} snapshots/s={SnapshotsPerSec} moving={Moving} lossy_dropped={LossyDropped}")]
     public static partial void AoiStats(ILogger logger, long recordsPerSec, long snapshotsPerSec, int moving, long lossyDropped);
 

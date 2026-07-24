@@ -39,11 +39,23 @@ public static class ShipModelLoader
     // A Light counts as a "wing" light when its lateral |X| offset is at least this fraction of the
     // widest light's — nose/tail/centreline lights fall below it and stay white.
     private const float WingLightFrac = 0.45f;
+
     // Ship beacons are sized off the hull silhouette length (so a Scout's aren't as big as a
     // Bomber's) and kept well under the base-beacon defaults.
     private const float BeaconMoteFactor = 0.03375f; // mote diameter = silhouette length * this
     private const float BeaconRangeFactor = 0.225f; // OmniLight reach = silhouette length * this
     private const float BeaconIntensity = 0.4f;
+
+    // Secondary Booster nozzles burn at this fraction of the main (MainEngine/Thruster) flame,
+    // which itself is sized off the hull's silhouette length in BuildEngineGlow.
+    private const float BoosterGlowScale = 0.6f;
+
+    // Team-trail ribbon width and its behind-the-exhaust anchor gap, as fractions of the hull's
+    // silhouette length (replaces the old per-class hand-tuned constants; 0.09 ≈ the fighter's
+    // former 0.5 at length 5.5). The gap clears the flame plume even at full afterburner
+    // stretch (~0.17 × length, see BuildEngineGlow sizing + EngineGlow.ApplyVisual baseLen).
+    private const float TrailWidthFactor = 0.09f;
+    private const float TrailGapFactor = 0.2f;
 
     // Build the ship's model node: the authored `<class>.glb` hull if one is present (else the
     // procedural placeholder for `cls`) plus a HP_ marker for every hardpoint on the class's
@@ -123,6 +135,17 @@ public static class ShipModelLoader
         if (StressRender.Fx == StressRender.FxMode.NoFx)
             return;
 
+        // Everything cosmetic parents under the "ShipModel" container Build() attached, NOT the
+        // ship root: that container IS the hull's external appearance, so first person hides it
+        // with a single Visible flip (PredictionController.ApplyViewMode) and a future cosmetic
+        // node can't miss the hide seam by landing on the root as a sibling — exactly how the
+        // nose nav beacon once ended up floating in front of the cockpit camera. The container
+        // is unscaled (world-unit offsets stay valid, same frame as the HP_ markers) and carries
+        // the miner's cosmetic mining roll, so hull-fixed lights/exhaust ride the roll; the
+        // trail's rear anchor sits on the roll axis, so it is unaffected. Root fallback only for
+        // an exotic caller that never ran Build().
+        Node3D visuals = shipNode.GetNodeOrNull<Node3D>("ShipModel") ?? shipNode;
+
         // Hot exhaust tinted toward the team hue so friend/foe still reads in a dogfight.
         Color hot = team == 0 ? new Color(0.5f, 0.78f, 1f) : new Color(1f, 0.62f, 0.4f);
         List<HardpointDef>? hardpoints = defs.GetHardpoints(DefId(cls, isPod));
@@ -137,11 +160,11 @@ public static class ShipModelLoader
         if (StressRender.Fx == StressRender.FxMode.NoLights)
             StressRender.HideLightsUnder(shipNode);
 
-        // Collect engine nozzle offsets from the engine-class hardpoints (a Scout's single
-        // MainEngine, a Fighter's twin Boosters, a Bomber's twin MainEngines). Thruster (RCS
-        // maneuvering ports) is deliberately excluded — those stream on every hull now (GLB
-        // merge), and an RCS port is not an engine nozzle; including it would sprout a
-        // constant engine plume from every ship's attitude thrusters. Returns the nozzle
+        // Collect engine nozzle offsets from the engine-class hardpoints. Across the re-used
+        // Allegiance art set every hull bakes ONE stern HP_Thruster_0 as its PRIMARY nozzle
+        // (cap09's only engine node) with HP_Booster_* as smaller secondary engines, so all
+        // three engine kinds glow: MainEngine/Thruster at full size, Booster shrunk by
+        // BoosterGlowScale (per-nozzle scale on the shared EngineGlow). Returns the nozzle
         // offsets so BuildTeamTrail can anchor off the same cluster.
         //
         // A pod is a powered-down lifeboat — no engine glow even though its def carries an
@@ -151,30 +174,39 @@ public static class ShipModelLoader
         List<Vector3> BuildEngineGlow()
         {
             var nozzles = new List<Vector3>();
+            var scales = new List<float>();
             if (hardpoints != null)
                 foreach (HardpointDef hp in hardpoints)
-                    if (hp.Kind is HardpointKind.MainEngine or HardpointKind.Booster)
+                    if (hp.Kind is HardpointKind.MainEngine or HardpointKind.Booster or HardpointKind.Thruster)
+                    {
                         nozzles.Add(new Vector3(hp.OffX, hp.OffY, hp.OffZ));
+                        scales.Add(hp.Kind == HardpointKind.Booster ? BoosterGlowScale : 1f);
+                    }
 
             if (!isPod && nozzles.Count > 0)
             {
                 // Size the flame off the hull's silhouette length so a Scout's exhaust isn't as big
-                // as a Bomber's, and keep it deliberately small relative to the hull (the old
-                // per-class constants over-sized the glow — the Scout worst of all).
-                float len = TargetLength(defs, cls, isPod);
-                float radius = len * 0.10f; // flame mouth radius
-                float plume = len * 0.55f; // plume length (before the afterburner stretch)
-                float range = len * 2.6f; // engine-wash light reach
+                // as a Bomber's, and keep it deliberately small relative to the hull (2026-07-24:
+                // factors cut to a quarter of the originals — at capital scale the old ones read
+                // as a building on fire, not an engine). AFFINE in length, not proportional:
+                // play-testing pure len×factor left the scout ~30% too small while the capital sat
+                // about right, so a +1u floor lifts the small end (fades to nothing at capital
+                // scale) and the ×1.05 nudges the whole curve up a touch.
+                float glowLen = (TargetLength(defs, cls, isPod) + 1f) * 1.05f;
+                float radius = glowLen * 0.025f; // flame mouth radius
+                float plume = glowLen * 0.1375f; // plume length (before the afterburner stretch)
+                float range = glowLen * 0.65f; // engine-wash light reach
                 var glow = new EngineGlow
                 {
                     Name = "EngineGlow",
                     Nozzles = nozzles.ToArray(),
+                    NozzleScales = scales.ToArray(),
                     NozzleRadius = radius,
                     PlumeLength = plume,
                     LightRange = range,
                     CoreColor = hot,
                 };
-                shipNode.AddChild(glow);
+                visuals.AddChild(glow);
                 switch (shipNode)
                 {
                     case PredictionController pc:
@@ -189,25 +221,22 @@ public static class ShipModelLoader
         }
 
         // Ghostly team-coloured ribbon tracing the ship's path. Anchored at the engine
-        // cluster (the average nozzle Z) so the ribbon streams off the hull's BACK — this
-        // replaces the per-class hard-coded -2.25/-2.75/-3.4 anchor floats with the same
-        // value derived from the seeded hardpoints. Width stays a cosmetic per-class lever.
-        // Pushed a few metres further back (forward is +Z) so the ribbon starts behind the
-        // exhaust rather than clipping the hull.
+        // cluster (the average nozzle Z) so the ribbon streams off the hull's BACK, then
+        // pushed further back (forward is +Z) so it starts behind the exhaust rather than
+        // clipping the hull. Both the ribbon width and that gap scale with the hull's
+        // silhouette length (TrailWidthFactor/TrailGapFactor), so a capital's wake reads
+        // as wide as its hull deserves and a scout's stays a thread.
         void BuildTeamTrail(List<Vector3> nozzles)
         {
-            const float trailGap = 3f;
-            float trailZ = (nozzles.Count > 0 ? AvgZ(nozzles) : 0f) - trailGap;
-            shipNode.AddChild(
+            float len = TargetLength(defs, cls, isPod);
+            float trailZ = (nozzles.Count > 0 ? AvgZ(nozzles) : 0f) - len * TrailGapFactor;
+            visuals.AddChild(
                 new TeamTrail
                 {
                     Name = "TeamTrail",
                     Position = new Vector3(0f, 0f, trailZ),
                     TeamColor = hot,
-                    Width =
-                        cls == ShipClass.Bomber ? 0.65f
-                        : cls == ShipClass.Fighter ? 0.5f
-                        : 0.4f,
+                    Width = len * TrailWidthFactor,
                 }
             );
         }
@@ -244,7 +273,7 @@ public static class ShipModelLoader
                         Color color = BaseModelLoader.NavWhite;
                         if (maxAbsX > 0.1f && Mathf.Abs(hp.OffX) >= wingThreshold)
                             color = hp.OffX < 0f ? BaseModelLoader.NavGreen : BaseModelLoader.NavRed;
-                        shipNode.AddChild(
+                        visuals.AddChild(
                             new BaseBeacon
                             {
                                 Name = $"Beacon_{beaconIndex++}",

@@ -775,11 +775,11 @@ public partial class SectorOverview : Node3D
                 {
                     case MouseButton.WheelUp:
                         if (mb.Pressed)
-                            Zoom(1f / ZoomStep);
+                            ZoomAt(1f / ZoomStep, mb.Position);
                         break;
                     case MouseButton.WheelDown:
                         if (mb.Pressed)
-                            Zoom(ZoomStep);
+                            ZoomAt(ZoomStep, mb.Position);
                         break;
                     case MouseButton.Left:
                         if (mb.Pressed)
@@ -845,7 +845,7 @@ public partial class SectorOverview : Node3D
 
             // Apple trackpad: pinch to zoom.
             case InputEventMagnifyGesture mag:
-                Zoom(1f / mag.Factor);
+                ZoomAt(1f / mag.Factor, mag.Position);
                 break;
 
             // Apple trackpad: two-finger drag orbits (shift to pan).
@@ -1371,6 +1371,22 @@ public partial class SectorOverview : Node3D
     {
         float max = Mathf.Max(_gridRadius, 1f) * 3f;
         _dist = Mathf.Clamp(_dist * factor, MinDist, max);
+    }
+
+    // Zoom toward/away from whatever the cursor is over (grid-plane point under the pointer),
+    // so scrolling in walks the view to that spot instead of the current orbit focus. Scaling
+    // BOTH the camera distance and the target about the anchor keeps the anchor pinned to the
+    // same pixel; because the anchor scaling uses the clamped effective factor, scrolling back
+    // out retraces the same path. Falls back to a plain dolly when the ray misses the plane
+    // (grazing angle) — otherwise the anchor would fly off to infinity.
+    private void ZoomAt(float factor, Vector2 screenPos)
+    {
+        float before = _dist;
+        Zoom(factor);
+        float eff = before > 0f ? _dist / before : 1f;
+        if (Mathf.IsEqualApprox(eff, 1f) || !TryGridPoint(_cam, screenPos, out Vector3 anchor))
+            return;
+        _target = anchor + (_target - anchor) * eff;
     }
 
     // Blue reference grid on the Y=0 plane. A single quad spanning the sector,

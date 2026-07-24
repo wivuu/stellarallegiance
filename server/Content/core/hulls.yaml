@@ -279,25 +279,29 @@ hulls:
   # 4×0xc000; the 0xc400 (SkyRip) mount is unauthored (cap09.glb exposes exactly four HP_Weapon nodes,
   # all bound to AutoCan 1). Gated behind BOTH heavy-class AND shipyard-dry (granted together by
   # dev-upgrade-heavy-class at the Shipyard). Flight stats are the --iron-slice translation (mass 3000,
-  # speed 62.5, thrust 833, armor 1200, turn 10°/s, side/back-mult 0.5).
-  #   model-length: the IGC hull is enormous (length 225 ≈ a real capital ship) — untranslatable to our
-  #   smaller world. Capped to 20 (≈2× the bomber's 9.6, within the plan's ≤3×-bomber ceiling). Note:
+  # speed 62.5, armor 1200, turn 10°/s, side/back-mult 0.5) — EXCEPT thrust: the blanket ×0.03333
+  # rule gave 833.33, but our `thrust` field is an ACCELERATION (u/s²), and the rule only equals
+  # IGC thrust/mass at the anchor hull's mass 30. At the capital's IGC mass 2500 it overshot the
+  # real IGC acceleration (25000/2500 = 10 u/s²) 83× — full stop in 0.1 s, zero capital momentum.
+  # Authored as the IGC acceleration instead (same hand-correction the miner got).
+  #   model-length: 75 — a true capital silhouette, near the strict IGC length ratio
+  #   (5.5 × 225/14.9 ≈ 83); sectors and stations are sized to carry a hull this big. Note:
   #   ship-vs-BASE collision + docking use the global World.ShipRadius sphere (model-length is purely the
   #   client mesh scale there), so the Devastator launches/re-docks through base doors exactly like any
   #   other ship. Ship-vs-SHIP collision, HOWEVER, uses the full model hull (CollideShips →
   #   Collide.ShipShipContact, falling back to ShipRadius only when a GLB is missing), so the Devastator
-  #   body-blocks on its ~20u silhouette. The base-door parity is a DELIBERATE fidelity deviation (plan Phase 4).
+  #   body-blocks on its ~75u silhouette. The base-door parity is a DELIBERATE fidelity deviation (plan Phase 4).
   - id: devastator
     name: Devastator
     glyph: "✦"
     role: ASSAULT
     description: "The Iron capital hull — four heavy auto-cannons and a frame that shrugs off a squadron. The fleet's hammer."
     model-name: cap09   # res://assets/ships/cap09.glb (4x HP_Weapon nodes -> 4x AutoCan)
-    model-length: 20    # capped for playability (IGC length 225 untranslatable); base collision = ShipRadius sphere, ship-vs-ship = full model hull
+    model-length: 75    # full capital scale (≈ IGC length 225 at our ratio); base collision = ShipRadius sphere, ship-vs-ship = full model hull
     class-id: 7
     mass: 3000
     speed: 62.5
-    thrust: 833.33
+    thrust: 10       # IGC thrust/mass (25000/2500) — see block comment; NOT the ×0.03333 rule
     max-turn-rates: { yaw: 10, pitch: 10, roll: 10 }
     strafe-thrust-multiplier: 0.5   # IGC sideMult
     reverse-thrust-multiplier: 0.5  # IGC backMult
@@ -320,7 +324,9 @@ hulls:
     required-techs: [shipyard-1]   # both granted by shipyard-1 for now (should be heavy-class, shipyard-dry later)
     launch-station-classes: [shipyard]  # capital hull: launches from / docks at Shipyard(3) + Shipyard Dry(6) only (both class: shipyard), largest door only
     # cap09 carries HP_Weapon_0..3 (four hull mounts) — all four take the heavy PW AutoCan. Turret_0..3,
-    # Thruster_0, Light_0..8 append. Cockpit authored (no mesh node).
+    # Thruster_0, Light_0..8 append. Cockpit authored (no mesh node). The stern HP_Thruster_0 (world
+    # z ≈ -35 at model-length 75) is the capital's engine nozzle — the client glows Thruster hardpoints
+    # at full size (ShipModelLoader.BuildEngineGlow), so no authored main-engine is needed.
     hardpoints:
       - { kind: weapon, index: 0, weapon-id: 12 }   # HP_Weapon_0 (PW AutoCan 1)
       - { kind: weapon, index: 1, weapon-id: 12 }   # HP_Weapon_1 (PW AutoCan 1)
@@ -372,13 +378,10 @@ hulls:
     required-capabilities: [base]
     # No weapon hardpoints (unarmed) — utl19's GLB carries HP_Weapon_0, but no YAML loadout binds it,
     # so it merges as an APPENDED EMPTY mount that armed-weapon consumers skip (HardpointGeometryMerge
-    # .cs:30-32), leaving the hull unarmed. The GLB's thruster/light HP nodes merge in (engine glow +
-    # nav beacons); the main-engine nozzle + cockpit eye are fully authored here (no HP_MainEngine/
-    # HP_Cockpit mesh nodes), like the pod. main-engine anchors the client engine glow / team trail.
-    hardpoints:
-      - { kind: main-engine, off-z: -3.0, dir-z: -1 }
-      # Cockpit eye point for the first-person camera (client-only).
-      - { kind: cockpit, off-y: 0.6, off-z: 1.6, dir-z: 1 }
+    # .cs:30-32), leaving the hull unarmed. The GLB's thruster/booster/light HP nodes merge in and
+    # anchor the client engine glow / team trail / nav beacons (stern HP_Thruster_0 = the main nozzle).
+    # No cockpit authored: an unspecified cockpit defaults client-side to the mesh origin (0,0,0)
+    # (CameraRig.CockpitFallback).
 
   # Constructor (class-id 5): a slow, unarmed AI utility drone that builds forward bases. Bought from
   # the docked Build tab bound to a station type, launches from a garrison, and — F3-ordered to a
@@ -415,11 +418,8 @@ hulls:
     price: 500
     abilities: [is-builder]   # marks this hull a constructor chassis (ShipClassDef.IsConstructor)
     required-capabilities: [base]
-    # Unarmed: utl11's HP_Weapon_* (if any) merges as an appended empty mount. main-engine + cockpit
-    # authored here (no HP_MainEngine/HP_Cockpit mesh nodes), like the miner.
-    hardpoints:
-      - { kind: main-engine, off-z: -3.2, dir-z: -1 }
-      - { kind: cockpit, off-y: 0.6, off-z: 1.6, dir-z: 1 }
+    # Unarmed: utl11's HP_Weapon_* (if any) merges as an appended empty mount. The GLB's stern
+    # HP_Thruster_0 + HP_Booster_* anchor the client engine glow / team trail; only the cockpit
 
   # Escape pod (class-id 255): slow, unarmed lifeboat (no weapon hardpoint). The faction's lifepod.
   - id: pod

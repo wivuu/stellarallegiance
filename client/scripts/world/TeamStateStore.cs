@@ -53,7 +53,8 @@ public sealed class TeamStateStore
     // queue-full gray-out.
     public struct ConstructorStatus
     {
-        public ulong Id;
+        public ulong Id; // slot ordinal (what a cancel names) — NOT a ship id
+        public ulong ShipId; // the launched drone's ship id, 0 while queued/producing (F3 map label lookup)
         public byte StationTypeId;
         public byte State;
         public uint StartTick;
@@ -192,6 +193,20 @@ public sealed class TeamStateStore
     // A world rebuild (reconnect / phase change) drops the constructor roster; the economy/research dicts
     // deliberately persist (the next MsgTeamState overwrites them).
     public void ClearConstructorStates() => _constructorStates.Clear();
+
+    // The station type a LAUNCHED constructor drone is delivering, or null when this ship isn't one of
+    // our drones. Only our own team's roster streams, so an enemy constructor never resolves — callers
+    // must have a role-only fallback. Miner orders share the roster and carry no station, so they're
+    // skipped.
+    public byte? ConstructorStationTypeForShip(ulong shipId)
+    {
+        if (shipId == 0)
+            return null;
+        foreach (var c in _constructorStates)
+            if (c.ShipId == shipId && !c.ProducesMiner)
+                return c.StationTypeId;
+        return null;
+    }
 
     // Items in a garrison's build pipeline (queued + producing), mirroring the server's
     // BuildPipelineCountForBase — the divisor for the Build-tab queue-full gray-out.

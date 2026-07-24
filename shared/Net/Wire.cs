@@ -100,6 +100,12 @@ public static class Wire
     // restricted hull launches from / docks at only bases of the listed station classes, through
     // the base's largest door only (shared DockRules; server rejects illegal spawns pre-charge,
     // client greys the card/LAUNCH). Writer Protocol.BuildDefs ↔ reader GameNetClient.ApplyDefs.
+    // (2026-07-24) constructor map labels: each MsgConstructorState row appends u64 shipId after
+    // launchBaseId — the LAUNCHED drone's ship id (0 while queued/producing). The row's `id` is a
+    // slot ordinal (what a cancel names), so it could never be matched against a rendered ship; the
+    // F3 map now resolves a constructor's station type through this id and captions it by the
+    // station it carries ("Shipyard Constructor") instead of a hardcoded "Outpost Constructor".
+    // Writer Protocol.BuildConstructorState ↔ reader GameNetClient.ApplyConstructorState.
     public const byte ProtocolVersion = 35;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It

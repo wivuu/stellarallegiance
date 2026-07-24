@@ -381,14 +381,16 @@ public partial class PredictionController : Node3D
     // Hand over the engine glow built by WorldRenderer; driven from _Process.
     public void AttachEngine(EngineGlow engine) => _engine = engine;
 
-    // The own hull's visual nodes, cached once the model is built (both exist by Initialize time —
-    // WorldRenderer builds ShipModel + TeamTrail before calling Initialize). Toggled off in first
-    // person so the camera, parked at the cockpit, doesn't stare through the inside of the hull.
+    // The own hull's whole external appearance: the "ShipModel" container Build() attaches, which
+    // AttachEngineGlow parents the team trail / nav beacons / engine glow under too. Toggled off in
+    // first person so the camera, parked at the cockpit, doesn't stare through the inside of the
+    // hull — or at the nose nav light, which sits directly ahead of and below the cockpit eye on
+    // every hull.
     private Node3D? _shipModel;
-    private Node3D? _teamTrail;
 
-    // Hide the own hull's visuals when the local camera is actually inside the cockpit. Idempotent
-    // per frame, so a respawn's brand-new nodes are handled automatically. FirstPersonActive only
+    // Hide the own hull when the local camera is actually inside the cockpit — one Visible flip on
+    // the container covers every cosmetic (§ ShipModelLoader.AttachEngineGlow). Idempotent per
+    // frame, so a respawn's brand-new nodes are handled automatically. FirstPersonActive only
     // flips once the view transition completes, so the hull stays drawn while the camera dollies
     // in/out and hides only at the very end (§ CameraRig). The F3 sector overview un-hides it (you
     // watch your own ship from outside there).
@@ -397,10 +399,6 @@ public partial class PredictionController : Node3D
         bool fp = CameraRig.FirstPersonActive && !SectorOverview.Active;
         if (_shipModel is not null)
             _shipModel.Visible = !fp;
-        if (_teamTrail is not null)
-            _teamTrail.Visible = !fp;
-        if (_engine is not null)
-            _engine.Suppressed = fp;
         return fp;
     }
 
@@ -472,7 +470,6 @@ public partial class PredictionController : Node3D
         // apply the current view mode once, so a ship spawning straight into first person shows no
         // one-frame hull flash.
         _shipModel = GetNodeOrNull<Node3D>("ShipModel");
-        _teamTrail = GetNodeOrNull<Node3D>("TeamTrail");
         ApplyViewMode();
         ApplyVisual(1f);
     }

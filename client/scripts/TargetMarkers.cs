@@ -891,7 +891,7 @@ public partial class TargetMarkers : Control
     // enemy-only below. Pods can't be focused (excluded from the cycle), so a pod always draws quiet.
     private (RemoteShip? focusedFriendly, RemoteShip? focusedShip) DrawShipsPass(Vector2 view)
     {
-        // On the F3 tactical map every contact gets a text type caption ("Miner", "Outpost
+        // On the F3 tactical map every contact gets a text type caption ("Miner", "Shipyard
         // Constructor", the hull name) so roles read at a glance — the shared miner/constructor
         // glyphs are ambiguous at map scale. The flight HUD stays uncluttered (only the focused
         // ship is tagged there, via DrawFocusTagsPass), so this is gated on the map being open.
@@ -1001,10 +1001,23 @@ public partial class TargetMarkers : Control
         s.Kind switch
         {
             ShipKind.Miner => "Miner",
-            ShipKind.Constructor => "Outpost Constructor",
+            ShipKind.Constructor => ConstructorLabel(s.ShipId),
             ShipKind.Pod => "",
             _ => _defs.TryGetShipDef((byte)s.Class, out ShipClassDef def) && def.Name.Length > 0 ? def.Name : "",
         };
+
+    // Every constructor flies the SAME chassis, so the useful caption is the STATION it is delivering
+    // ("Shipyard Constructor") — resolved through our team's roster (MsgConstructorState carries the
+    // station type per launched drone) against the streamed station catalog. An enemy drone is not in
+    // that roster and a name can't be invented for it, so it reads as a plain "Constructor".
+    private string ConstructorLabel(ulong shipId)
+    {
+        if (_world.TeamState.ConstructorStationTypeForShip(shipId) is byte stationType)
+            foreach (var st in _defs.AllStationCatalog())
+                if (st.BaseTypeId == stationType && st.Name.Length > 0)
+                    return $"{st.Name} Constructor";
+        return "Constructor";
+    }
 
     // A small mono type caption centred just below a ship's glyph on the F3 map. Team-coloured and
     // slightly dimmed so it annotates without competing with the glyph. Skipped when the text is
