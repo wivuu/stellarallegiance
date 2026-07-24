@@ -62,9 +62,21 @@ Full-20Hz for close movers: **not now** — parked as `SIM_MOVING_FULLRATE_RADIU
 
 **Gate (B3):** median LastReconcileError in windows containing local_hits reduced ≥50% vs baseline; reconciles-per-contact down; local_hits vs server `[ram]` lines show no increase in client-only hits; near-miss run (autofly past the parked stress line) keeps local_hits=0. Subjective A/B: one human-piloted ram each way — "hit registers where the ship is."
 
-## Phase 4 (conditional) — Render clock unification
+## Phase 4 (conditional) — Render clock unification — **RESOLVED 2026-07-23: NOT NEEDED**
 
+The two-clocks jank this phase targeted was root-caused elsewhere: the OWN ship's render
+interpolation (`_tickTimer/Dt` alpha clamp in PredictionController) stalled a frame and
+double-stepped on the tick/frame beat — 0.9–2u one-frame camera kinks that dwarfed the
+~0.1u wall-clock shimmer. Fixed by driving alpha from ShipController's tick accumulator
+(`pc.RenderAlpha = _acc/Dt`); bolts moved to accumulated-delta time in the same pass.
+Post-fix close-follow chase (--ram-test <80u, interpolator STILL on GetTicksMsec):
+chased-ship camera-space kink med 0.104u / p90 0.276u — the wall-clock term is
+second-order, below perception. See memory `own-ship-render-alpha`. Do not execute this
+phase unless close-follow jank is still reported in real play after the RenderAlpha fix.
+
+<details><summary>Original (superseded) sketch</summary>
 Execute ONLY if post-P2 logs show acc spikes on **full-rate** ships coinciding with `hitch_frames` (two-clocks jank). Sketch: shared accumulated-delta render clock (own-ship slew term) fed to both `Push` and `Evaluate` wall-clock args — `_clockOffset` EMA adapts transparently; samples stay tick-stamped (this is NOT the arrival-time stamping the header :9-14 rejects). Risk: couples remote smoothness to own-ship corrections — gate must include a reconcile-storm run (P-key divergence injection, ShipController.cs:716-720). High-risk, discard readily.
+</details>
 
 ## Phase 5 (deferred — design note only, produced with Phase 3)
 
