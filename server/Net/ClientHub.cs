@@ -20,24 +20,35 @@ public sealed class ClientHub
 {
     // AOI is a distance LOD, not a fixed count: a same-sector ship streams at a cadence
     // chosen by its distance from the viewer — full rate (every tick) inside FullRateRadius,
-    // every MidEveryTicks out to MidRateRadius, every CoarseEveryTicks beyond. EVERY
-    // other-sector ship also refreshes at the coarse rate so radar/minimap awareness stays
-    // whole. Tiering by distance instead of ranking the nearest N drops the per-client
-    // per-tick sort: we threshold rather than order. MaxRecords is only a worst-case backstop
-    // for a furball packed inside R1 — that rare overflow is the one path that still sorts.
-    // All tunable from the environment so the LOD can be swept without recompiling.
+    // every MidEveryTicks out to MidRateRadius, every CoarseEveryTicks beyond. A same-sector
+    // ship that is MOVING (see the motion policy below) rides the MID cadence at ANY distance
+    // regardless of the tiers, and — with the full-rate radius knob on — the FULL cadence out
+    // to MovingFullRateRadius. EVERY other-sector ship also refreshes at the coarse rate so
+    // radar/minimap awareness stays whole. Tiering by distance instead of ranking the nearest
+    // N drops the per-client per-tick sort: we threshold rather than order. MaxRecords is only a
+    // worst-case backstop for a furball packed inside R1 — that rare overflow is the one path
+    // that still sorts. All tunable from the environment so the LOD can be swept without recompiling.
     private static readonly float FullRateRadius = EnvF("SIM_FULLRATE_RADIUS", 600f);
     private static readonly float MidRateRadius = EnvF("SIM_MIDRATE_RADIUS", 1500f);
     private static readonly int MidEveryTicks = Math.Max(1, EnvI("SIM_MID_EVERY", 3));
     private static readonly int CoarseEveryTicks = Math.Max(1, EnvI("SIM_COARSE_EVERY", 10));
     private static readonly int MaxRecords = Math.Max(1, EnvI("SIM_MAX_RECORDS", 96));
 
-    // Miners in the viewer's sector ride the MID cadence regardless of distance (default on).
-    // A distant same-sector miner would otherwise refresh only on the ~500 ms coarse keepalive,
-    // which reads as jerky station-keeping against the smoothly-predicted own ship — and miner
-    // motion is exactly the slow, watchable kind that exposes it. A handful of miners at mid
-    // rate is negligible bandwidth; cross-sector miners stay coarse (radar blips).
-    private static readonly bool MinerMidRate = EnvI("SIM_MINER_MIDRATE", 1) != 0;
+    // Motion-based streaming policy (general — NOT a ship-kind special case). A same-sector ship
+    // whose speed exceeds the moving threshold streams at least at the MID cadence regardless of
+    // distance: a distant mover would otherwise refresh only on the ~500 ms coarse keepalive,
+    // which reads as jerky station-keeping against the smoothly-predicted own ship — and the
+    // watchable slow-mover motion (miners, drifting hulls, any ship under thrust) is exactly what
+    // exposes it. Bang-bang trajectories in particular undersample badly below mid rate. Speed is
+    // hysteretic (enter high, exit low) so a ship hovering at the boundary doesn't flap its
+    // cadence tick-to-tick; the per-ship bit is computed once per tick in AfterStep and keyed by
+    // ShipId (the ships list is index-unstable — despawns compact it). MovingFullRateRadius
+    // additionally promotes movers inside that radius to the FULL cadence (0 = off); a promoted
+    // mid->full mover costs ~+760 B/s (57 B x ~13.3 extra ticks/s). A handful of movers at mid (or
+    // full) rate is negligible bandwidth; cross-sector movers stay coarse (radar blips).
+    private static readonly float MovingEnterSpeed = EnvF("SIM_MOVING_SPEED_ENTER", 2.0f);
+    private static readonly float MovingExitSpeed = EnvF("SIM_MOVING_SPEED_EXIT", 1.0f);
+    private static readonly float MovingFullRateRadius = EnvF("SIM_MOVING_FULLRATE_RADIUS", 1500f);
 
     // Per-client outbound queue depth. The queue is FullMode.Wait (TryWrite fails when full),
     // NEVER DropOldest: evicting the oldest frame silently discards one-shot control frames
@@ -69,6 +80,13 @@ public sealed class ClientHub
     // Squared radii precomputed once (the LOD thresholds are constants) instead of per snapshot.
     private static readonly float FullRateRadiusSq = FullRateRadius * FullRateRadius;
     private static readonly float MidRateRadiusSq = MidRateRadius * MidRateRadius;
+
+    // Squared motion thresholds. Enter/exit form the hysteresis band (a ship becomes "moving" only
+    // above enter, and stays moving until it drops below exit). MovingFullRateRadiusSq <= 0 disables
+    // the full-rate promotion, leaving only the mid-rate floor.
+    private static readonly float MovingEnterSpeedSq = MovingEnterSpeed * MovingEnterSpeed;
+    private static readonly float MovingExitSpeedSq = MovingExitSpeed * MovingExitSpeed;
+    private static readonly float MovingFullRateRadiusSq = MovingFullRateRadius * MovingFullRateRadius;
 
     private static float EnvF(string k, float d) => float.TryParse(Environment.GetEnvironmentVariable(k), out var v) ? v : d;
 
@@ -173,6 +191,18 @@ public sealed class ClientHub
     private readonly Dictionary<uint, Dictionary<(int, int, int), List<int>>> _aoiGrid = new();
     private readonly Stack<List<int>> _cellPool = new();
     private readonly Dictionary<ulong, int> _shipIndexById = new();
+
+    // Per-ship motion classification for the motion-based streaming policy (computed once per tick
+    // in AfterStep, then only read by the fan-out). _moving is index-aligned to the ships list for
+    // O(1) lookup in the snapshot build; _movingIndices is the (small) set of moving ship indices
+    // walked directly by the full-rate promotion (the plain-tick neighborhood gather only reaches
+    // ~R1, so a promoted mover past it wouldn't otherwise be visited). _wasMoving is the persistent
+    // hysteresis memory keyed by ShipId (survives tick-to-tick; the ships list index is not stable),
+    // pruned of despawned ids on the [aoi-stats] cadence. _movingCount is this tick's total, logged.
+    private readonly Dictionary<ulong, bool> _wasMoving = new();
+    private bool[] _moving = System.Array.Empty<bool>();
+    private readonly List<int> _movingIndices = new();
+    private int _movingCount;
 
     // Snapshot worker pool. The sim thread publishes this tick's clients to _workQueue (a
     // lock-free MPMC channel); SnapshotWorkers persistent threads drain it in parallel, each
@@ -1265,6 +1295,43 @@ public sealed class ClientHub
         _nextDropLogTick = tick + 100; // ~5 s at 20 Hz between reports
     }
 
+    // AOI/bandwidth telemetry: the LOD's real fan-out (ship records + snapshots streamed per second),
+    // this tick's moving-ship count (the motion policy's promotion pressure), and lossy frames dropped
+    // since the last report (backpressure). Reported on the same ~5 s cadence as the queue-pressure
+    // line; the first call just seeds the baselines. Piggybacks the prune of despawned motion memory.
+    private long _lastRecordsLogged;
+    private long _lastSnapshotsLogged;
+    private long _lastAoiLossyLogged;
+    private uint _lastAoiLogTick;
+    private uint _nextAoiLogTick;
+
+    private void LogAoiStats(uint tick)
+    {
+        if (tick < _nextAoiLogTick)
+            return;
+        PruneMotionMemory();
+        long records = Interlocked.Read(ref _recordsSent);
+        long snaps = Interlocked.Read(ref _snapshotCount);
+        long lossy = Interlocked.Read(ref _lossyDropped);
+        if (_nextAoiLogTick != 0) // skip the seed call (no window yet)
+        {
+            float secs = (tick - _lastAoiLogTick) / (float)Simulation.TickHz;
+            if (secs > 0f)
+                Log.AoiStats(
+                    _log,
+                    (long)((records - _lastRecordsLogged) / secs),
+                    (long)((snaps - _lastSnapshotsLogged) / secs),
+                    _movingCount,
+                    lossy - _lastAoiLossyLogged
+                );
+        }
+        _lastRecordsLogged = records;
+        _lastSnapshotsLogged = snaps;
+        _lastAoiLossyLogged = lossy;
+        _lastAoiLogTick = tick;
+        _nextAoiLogTick = tick + 100; // ~5 s at 20 Hz between reports
+    }
+
     private async Task SendLoop(Client client, CancellationToken ct)
     {
         await foreach (var frame in client.Outbound.Reader.ReadAllAsync(ct))
@@ -1299,6 +1366,14 @@ public sealed class ClientHub
         // Coarse ticks full-scan every ship (all sectors), so they don't need the grid; plain
         // and mid ticks gather from it. The id->index map is always rebuilt for anchor lookup.
         RebuildAoiIndex(ships, buildGrid: !coarse);
+
+        // Classify each ship moving/not for the motion-based streaming policy (see the knob block
+        // near the top). Once per tick, shared read-only by the per-client snapshot build below.
+        ComputeMotionBits(ships);
+
+        // AOI/bandwidth telemetry (records/s, snapshots/s, moving count, lossy drops) on the same
+        // ~5 s cadence — and prune despawned ships from the motion memory while _shipIndexById is fresh.
+        LogAoiStats(tick);
 
         // Capture this tick's snapshot header once (identical for all clients).
         _dispatchTick = tick;
@@ -2078,6 +2153,58 @@ public sealed class ClientHub
         }
     }
 
+    // Classify every alive ship as moving/not for this tick (sim thread, before the fan-out).
+    // moving = speedSq > (wasMoving ? exit : enter) — hysteretic so a ship idling near the
+    // threshold doesn't flap its streaming cadence. Keyed by ShipId so the bit survives across
+    // ticks even as the ships list compacts on despawn. Index-aligned _moving + the small
+    // _movingIndices set are consumed read-only by BuildSnapshotFor.
+    private void ComputeMotionBits(IReadOnlyList<Simulation.ShipSim> ships)
+    {
+        int n = ships.Count;
+        if (_moving.Length < n)
+            _moving = new bool[Math.Max(n, _moving.Length * 2)];
+        _movingIndices.Clear();
+        int moving = 0;
+        for (int i = 0; i < n; i++)
+        {
+            var s = ships[i];
+            if (!s.Alive)
+            {
+                _moving[i] = false;
+                continue;
+            }
+            float speedSq = s.State.Vel.LengthSquared();
+            bool was = _wasMoving.TryGetValue(s.ShipId, out var w) && w;
+            bool now = speedSq > (was ? MovingExitSpeedSq : MovingEnterSpeedSq);
+            _wasMoving[s.ShipId] = now;
+            _moving[i] = now;
+            if (now)
+            {
+                _movingIndices.Add(i);
+                moving++;
+            }
+        }
+        _movingCount = moving;
+    }
+
+    // Drop hysteresis memory for despawned ships (called on the ~5 s [aoi-stats] cadence, not
+    // per tick — a stale entry is never READ, since ComputeMotionBits only looks up currently
+    // alive ships and ShipIds are never reused; this only bounds the dictionary's size). Prunes
+    // against _shipIndexById, which RebuildAoiIndex refreshes to exactly the alive set each tick.
+    private void PruneMotionMemory()
+    {
+        if (_wasMoving.Count <= _shipIndexById.Count)
+            return;
+        _motionPrune.Clear();
+        foreach (var id in _wasMoving.Keys)
+            if (!_shipIndexById.ContainsKey(id))
+                _motionPrune.Add(id);
+        foreach (var id in _motionPrune)
+            _wasMoving.Remove(id);
+    }
+
+    private readonly List<ulong> _motionPrune = new();
+
     // Serialize each alive ship's record once into _recordScratch (sim thread, no clients
     // touch these arrays); fills _recordOffset[i] with the byte offset for ship index i.
     private void SerializeRecords(IReadOnlyList<Simulation.ShipSim> ships)
@@ -2356,9 +2483,10 @@ public sealed class ClientHub
                     if (RadarSeen(ships[i]))
                         continue; // streamed live above, distance-independent
                     float d2 = (ships[i].State.Pos - myPos).LengthSquared();
-                    // Same-sector miners bypass the distance gate (see MinerMidRate) — this
-                    // loop only walks the viewer's sector grid, so sector scope is implicit.
-                    if (d2 <= r2sq || (MinerMidRate && ships[i].IsMiner))
+                    // Distance gate OR the motion floor: a MOVING same-sector ship rides the mid
+                    // cadence at any distance (see the motion policy near the top). This loop only
+                    // walks the viewer's sector grid, so sector scope is implicit.
+                    if (d2 <= r2sq || _moving[i])
                         picks.Add((d2, i));
                 }
         }
@@ -2386,6 +2514,28 @@ public sealed class ClientHub
                             if (d2 <= r1sq)
                                 picks.Add((d2, i));
                         }
+            }
+
+            // Motion full-rate promotion (SIM_MOVING_FULLRATE_RADIUS): a same-sector MOVING ship
+            // inside movingFullSq streams every tick, not just mid. The neighborhood gather above
+            // only reaches ~R1, so a mover past it wouldn't be visited on a plain tick — walk the
+            // small moving set directly instead. d2 > r1sq skips movers the neighborhood already
+            // added (dedup, since it covers exactly the same-sector d2<=R1 set); Hidden/RadarSeen
+            // mirror the branch filters (a radar-seen enemy was already streamed live above).
+            if (MovingFullRateRadiusSq > 0f)
+            {
+                float mfsq = MovingFullRateRadiusSq;
+                foreach (int i in _movingIndices)
+                {
+                    var s = ships[i];
+                    if (s.SectorId != mySector)
+                        continue;
+                    if (Hidden(s) || RadarSeen(s))
+                        continue;
+                    float d2 = (s.State.Pos - myPos).LengthSquared();
+                    if (d2 > r1sq && d2 <= mfsq)
+                        picks.Add((d2, i));
+                }
             }
         }
 

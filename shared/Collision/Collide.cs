@@ -356,6 +356,19 @@ public static class Collide
                 continue;
             if (b.Hull != null)
             {
+                // Broad-phase for the single-hull (asteroid) path. SphereVsBody only broad-phases the
+                // COMPOUND (base sub-hull) case; a lone asteroid hull otherwise runs ResolveSphere over
+                // ALL its planes even for a sphere far outside its reach — the dominant thud cost when
+                // many rocks share a sector with many ships. `BoundingRadius·Scale + 4·shipRadius` is the
+                // SAME conservative envelope SphereVsBody uses for its compound scan (it covers
+                // ResolveSphere's approximate corner over-report), so a sphere beyond it provably cannot
+                // contact this hull — bit-identical to SphereVsBody returning false here.
+                if (b.SubHulls is null)
+                {
+                    float reach = b.Hull.BoundingRadius * b.Scale + shipRadius * 4f;
+                    if ((pos - b.Center).LengthSquared() > reach * reach)
+                        continue;
+                }
                 if (SphereVsBody(pos, shipRadius, b, out _, out _))
                     return true;
             }

@@ -61,6 +61,7 @@ public partial class TeamTrail : Node3D
 
     public override void _Process(double delta)
     {
+        var t0 = PerfBuckets.Now();
         double now = Time.GetTicksMsec() / 1000.0;
         Vector3 raw = GlobalPosition; // rear anchor: ShipModelLoader offsets this node behind the hull
 
@@ -98,6 +99,7 @@ public partial class TeamTrail : Node3D
             _samples.RemoveRange(0, _samples.Count - MaxSamples);
 
         Rebuild(now);
+        PerfBuckets.Add(PerfBuckets.Trail, t0);
     }
 
     private void Rebuild(double now)

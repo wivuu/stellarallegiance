@@ -302,12 +302,14 @@ public partial class BaseBeacon : Node3D
 
     public override void _Process(double delta)
     {
+        var t0 = PerfBuckets.Now();
         _phase += (float)delta;
         // A soft on pulse: a half-sine bump during the lit window, dark the rest of the
         // cycle, so it reads as a pulsing nav light rather than a hard strobe.
         float t = Mathf.PosMod(_phase, Period) / Period;
         float lit = t < OnFraction ? Mathf.Sin(t / OnFraction * Mathf.Pi) : 0f;
         ApplyBlink(lit);
+        PerfBuckets.Add(PerfBuckets.Beacon, t0);
     }
 
     private void ApplyBlink(float lit)

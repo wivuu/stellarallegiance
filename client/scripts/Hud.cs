@@ -21,6 +21,25 @@ public partial class Hud : CanvasLayer
     private Label _credits = null!;
     private Label _warning = null!;
     private Label _fps = null!;
+    private double _statLogAccum; // throttles the [render-stats] log line (see StressRender.ShowStats)
+    private bool _measureEnabled; // one-shot: turn on the viewport's GPU/CPU render-time meters
+    private Rid _viewportRid;
+
+    // [perf-buckets] reporter state (see PerfBuckets): the last snapshot of the monotonic bucket
+    // totals + the frame counter at that snapshot, so a report deltas both against the current
+    // values. `_procMsAccum` sums proc_ms EVERY frame so `other`/`sum` compare against a WINDOW-
+    // averaged proc — the TimeProcess monitor is an instantaneous last-frame value, while the
+    // buckets are window averages, so mixing them would skew `other`. Only touched while Enabled.
+    private long[]? _bucketPrev;
+    private long[]? _bucketNow;
+    private ulong _lastBucketFrames;
+    private double _procMsAccum;
+
+    // [predict-stats] windowing (see ReportPredictStats): the own-ship reconcile count + the global
+    // live-contact tick count at the previous 2s report, so each report prints in-window deltas.
+    // Only touched while InterpStats.Enabled.
+    private int _lastReconcileCount;
+    private int _lastLocalContacts;
 
     // Edge-detect the secondary-fire keys so an empty-rack click plays its "no rounds" blip once
     // per press (not every held frame), and a short cooldown so mashing F doesn't machine-gun it.
@@ -271,8 +290,76 @@ public partial class Hud : CanvasLayer
     public override void _Process(double delta)
     {
         // Live framerate, always on (top-left corner). Engine.GetFramesPerSecond is a smoothed
-        // per-second reading, so this stays legible without extra averaging.
-        _fps.Text = $"FPS: {Engine.GetFramesPerSecond()}";
+        // per-second reading, so this stays legible without extra averaging. Under --render-stats the
+        // draw-call / primitive counters ride alongside it — the FPS says frames dropped, these say
+        // WHY (draw calls vs geometry), which is what the render stress A/B is measuring.
+        ulong draws = 0,
+            prims = 0;
+        double gpuMs = 0,
+            rcpuMs = 0,
+            procMs = 0;
+        bool showStats = StressRender.ShowStats;
+        if (showStats)
+        {
+            // Enable the viewport's per-frame GPU + render-thread-CPU meters once. These are Godot's
+            // own NATIVE (C++) timings — identical in Debug and Release — so they cut cleanly through
+            // the "is it the managed build?" confound: gpu_ms high ⇒ GPU-bound; rcpu_ms high ⇒ native
+            // draw-submission/cull bound (where fewer draw calls / a MultiMesh would help); proc_ms
+            // high ⇒ main-thread _Process (C# + native node work), the only config-sensitive one.
+            if (!_measureEnabled)
+            {
+                _viewportRid = GetViewport().GetViewportRid();
+                RenderingServer.ViewportSetMeasureRenderTime(_viewportRid, true);
+                _measureEnabled = true;
+            }
+            draws = RenderingServer.GetRenderingInfo(RenderingServer.RenderingInfo.TotalDrawCallsInFrame);
+            prims = RenderingServer.GetRenderingInfo(RenderingServer.RenderingInfo.TotalPrimitivesInFrame);
+            gpuMs = RenderingServer.ViewportGetMeasuredRenderTimeGpu(_viewportRid);
+            rcpuMs = RenderingServer.ViewportGetMeasuredRenderTimeCpu(_viewportRid);
+            procMs = Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000.0;
+            _fps.Text =
+                $"FPS {Engine.GetFramesPerSecond()}  DRAW {draws}  GPU {gpuMs:F1}  RCPU {rcpuMs:F1}  PROC {procMs:F1}ms  fx={StressRender.Fx}";
+            // Accumulate proc_ms EVERY frame so the [perf-buckets] report can average it over the same
+            // window as the buckets (the monitor above is a per-frame instantaneous value).
+            if (PerfBuckets.Enabled)
+                _procMsAccum += procMs;
+        }
+        else
+        {
+            _fps.Text = $"FPS: {Engine.GetFramesPerSecond()}";
+        }
+
+        // Per-frame render-hitch tally for the [interp-stats] report (global, not per-tier).
+        if (InterpStats.Enabled)
+            InterpStats.NoteFrame(delta);
+
+        // The 2s report cadence ticks whenever EITHER measurement family is live; each report line
+        // then respects its OWN gate — [render-stats]/[perf-buckets] only under ShowStats/PerfBuckets,
+        // [interp-stats]/[predict-stats] only under InterpStats.Enabled.
+        if (showStats || InterpStats.Enabled)
+        {
+            _statLogAccum += delta;
+            if (_statLogAccum >= 2.0)
+            {
+                _statLogAccum = 0.0;
+                if (showStats)
+                {
+                    Log.Print(
+                        $"[render-stats] fps={Engine.GetFramesPerSecond()} draws={draws} prims={prims} gpu_ms={gpuMs:F1} rcpu_ms={rcpuMs:F1} proc_ms={procMs:F1} fx={StressRender.Fx}"
+                    );
+                    ReportPerfBuckets();
+                }
+                if (InterpStats.Enabled)
+                {
+                    InterpStats.Report();
+                    ReportPredictStats();
+                }
+            }
+        }
+
+        // Time only the non-report remainder into the Hud bucket — the render-stats/report block above
+        // (its own RenderingServer queries + logging) isn't part of the per-frame HUD cost we attribute.
+        var hudT0 = PerfBuckets.Now();
 
         var ship = _world.Ships.LocalShip;
         bool flying = ship != null;
@@ -416,5 +503,90 @@ public partial class Hud : CanvasLayer
                 // line keeps only the network telemetry: ping and reconcile stats.
                 : $"Ping: {_ship.PingMs, 3:0} ms (±{_ship.JitterMs:0})   Reconciles: {ship.ReconcileCount} (last err {ship.LastReconcileError:0.0}u)"
             : "";
+        PerfBuckets.Add(PerfBuckets.Hud, hudT0);
+    }
+
+    // Print one [perf-buckets] line of per-frame bucket averages over the window since the last report
+    // (see PerfBuckets). Buckets are monotonic tick totals, so we delta the current snapshot against the
+    // previous one and divide by the frames elapsed (Engine.GetProcessFrames). world_other = world − col
+    // − bolt (the collision + bolt-impact passes nested inside WorldRenderer._Process); other =
+    // window-avg proc − Σ(printed C# buckets), the native/uninstrumented remainder; sum = Σ(printed C#
+    // buckets) so a reader can eyeball sum vs proc. Called from the 2s [render-stats] block, Enabled only.
+    private void ReportPerfBuckets()
+    {
+        if (!PerfBuckets.Enabled)
+            return;
+        int n = PerfBuckets.BucketCount;
+        _bucketPrev ??= new long[n];
+        _bucketNow ??= new long[n];
+        PerfBuckets.Snapshot(_bucketNow);
+        ulong nowFrames = Engine.GetProcessFrames();
+        ulong dFrames = nowFrames - _lastBucketFrames;
+        if (dFrames > 0)
+        {
+            double freq = PerfBuckets.Frequency;
+            double MsPer(int b) => (_bucketNow[b] - _bucketPrev[b]) * 1000.0 / freq / dFrames;
+            double mkProc = MsPer(PerfBuckets.MkProc);
+            double mkDraw = MsPer(PerfBuckets.MkDraw);
+            double rship = MsPer(PerfBuckets.RShip);
+            double glow = MsPer(PerfBuckets.Glow);
+            double trail = MsPer(PerfBuckets.Trail);
+            double col = MsPer(PerfBuckets.Col);
+            double colStat = MsPer(PerfBuckets.ColStatic);
+            double colPair = MsPer(PerfBuckets.ColPair);
+            double bolt = MsPer(PerfBuckets.Bolt);
+            double beacon = MsPer(PerfBuckets.Beacon);
+            double worldOther = MsPer(PerfBuckets.World) - col - bolt;
+            double hud = MsPer(PerfBuckets.Hud);
+            double sum = mkProc + mkDraw + rship + glow + trail + col + bolt + beacon + worldOther + hud;
+            double procAvg = _procMsAccum / dFrames; // window-averaged, matching the buckets' window
+            double other = procAvg - sum;
+            Log.Print(
+                $"[perf-buckets] frames={dFrames} ships={_world.Ships.Count} "
+                    + $"mk_proc={mkProc:F1} mk_draw={mkDraw:F1} rship={rship:F1} glow={glow:F1} trail={trail:F1} "
+                    + $"col={col:F1} col_stat={colStat:F1} col_pair={colPair:F1} bolt={bolt:F1} beacon={beacon:F1} world_other={worldOther:F1} hud={hud:F1} "
+                    + $"other={other:F1} sum={sum:F1}"
+            );
+        }
+        (_bucketPrev, _bucketNow) = (_bucketNow, _bucketPrev); // this snapshot becomes next window's baseline
+        _lastBucketFrames = nowFrames;
+        _procMsAccum = 0.0;
+    }
+
+    // Print the own-ship ram/prediction line on the same 2s cadence as [interp-stats] (see
+    // InterpStats). reconciles = in-window server corrections (delta of the PredictionController's
+    // monotonic ReconcileCount); rec_err_max = the largest position error any of those corrections
+    // spanned this window (peak captured at the reconcile site, then zeroed); local_hits = in-window
+    // count of LIVE prediction ticks that resolved a genuine ship-vs-ship contact (the ram-recipe
+    // frequency signal). All counters reset across a respawn, so negative deltas clamp to 0.
+    private void ReportPredictStats()
+    {
+        if (!InterpStats.Enabled)
+            return;
+
+        var ship = _world.Ships.LocalShip;
+        int recNow = ship?.ReconcileCount ?? 0;
+        int reconciles = recNow - _lastReconcileCount;
+        if (reconciles < 0)
+            reconciles = 0; // a respawn built a fresh PredictionController — counter restarted at 0
+        _lastReconcileCount = recNow;
+
+        int hitsNow = PredictionController.LocalContactTicks;
+        int localHits = hitsNow - _lastLocalContacts;
+        if (localHits < 0)
+            localHits = 0;
+        _lastLocalContacts = hitsNow;
+
+        float recErrMax = PredictionController.WindowMaxReconcileErr;
+        PredictionController.WindowMaxReconcileErr = 0f;
+
+        // sep_at_hit (rendered separation at each in-window local_hit): p50/p95 over the window, feeding
+        // the Phase-5 forward-rendering design note. sep_n = how many hits contributed.
+        var (sepN, sepP50, sepP95) = InterpStats.DrainSepAtHit();
+
+        Log.Print(
+            $"[predict-stats] reconciles={reconciles} rec_err_max={recErrMax:F1} local_hits={localHits} "
+                + $"sep_n={sepN} sep_at_hit_p50={sepP50:F1} sep_at_hit_p95={sepP95:F1}"
+        );
     }
 }

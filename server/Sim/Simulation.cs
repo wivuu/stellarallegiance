@@ -3537,6 +3537,9 @@ public sealed partial class Simulation
             float dmg = CollisionDamage(-relVn, (1f / invSum) * _combat.ShipShipDamageScale);
             ApplyDamage(a, dmg, _tick);
             ApplyDamage(b, dmg, _tick);
+            // Ground-truth ram line (logging only, zero sim effect): correlates the client's local_hits
+            // windows against the server's actual same-tick contacts to catch client-only phantom hits.
+            _log.LogInformation("[ram] a={A} b={B} tick={Tick} closing={Closing:F1}", a.ShipId, b.ShipId, _tick, -relVn);
         }
         a.State.Pos += n * (pen * (iA / invSum));
         b.State.Pos -= n * (pen * (iB / invSum));

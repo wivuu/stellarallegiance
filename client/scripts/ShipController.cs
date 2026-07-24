@@ -83,6 +83,11 @@ public partial class ShipController : Node
     // detection — clears it here so the HUD banner/toggle track truth even when the client didn't ask.
     public static void SyncApEngaged(bool on) => ApEngagedLocal = on;
 
+    // Flight-HUD contact-marker cap override (--marker-cap=N). -1 = unset (TargetMarkers uses its
+    // authored MaxEnemyMarkers / MaxFriendlyMarkers defaults), 0 = uncapped (the A/B knob), N>0 = N
+    // enemy markers with N*3/4 friendly. Read by TargetMarkers.DrawShipsPass; parsed in _Ready below.
+    public static int MarkerCap = -1;
+
     private bool _apActivePrev; // edge-detect follow-authority exit to re-anchor the prediction clock
 
     // Mouse-look aiming (Allegiance style). The M0 flight model integrates yaw/pitch as
@@ -136,6 +141,9 @@ public partial class ShipController : Node
     private bool _selfTestDone; // autofly fires one divergence injection
     private bool _combatTest; // --combat-test: fly straight + fire (head-on damage check)
     private bool _warpTest; // --warp-test: mine-drop run, then manual-steer into the sector's aleph (warp smoke)
+    private bool _ramTest; // --ram-test: autofly chases + rams the nearest remote ship (ram-prediction measurement harness)
+    private bool _strafeTest; // --strafe-test: pure lateral strafe + continuous fire (bolt-smoothness measurement harness)
+    private ulong _ramTargetId; // committed ram target (survives frame-to-frame so the rammer doesn't orbit a cluster)
 
     // Round-trip latency. STDB mode times each ApplyInput against its own reducer callback
     // (clientTick echoed back); native mode times an explicit Ping/Pong nonce (no reducer to
@@ -203,7 +211,63 @@ public partial class ShipController : Node
                 _autoFly = true;
                 _warpTest = true;
             }
+            // Ram-prediction measurement harness: fly autofly, but chase + ram the nearest visible remote
+            // ship so the local predictor repeatedly resolves genuine ship-vs-ship contacts (two same-team
+            // autofly clients on the default weave never touch). Implies the autofly join/spawn flow.
+            if (a == "--ram-test")
+            {
+                _autoFly = true;
+                _ramTest = true;
+            }
+            // Bolt-smoothness measurement harness: strafe laterally while firing so the bolt stream's
+            // camera-relative path can be measured/eyeballed (the "bolts jerk sideways while strafing"
+            // repro). Pair with BOLT_DEBUG=1 for the per-frame camera-space bolt log.
+            if (a == "--strafe-test")
+            {
+                _autoFly = true;
+                _strafeTest = true;
+            }
+            // Render stress-test knobs (see StressRender / the --stress-fighters server harness).
+            // --render-stats alone just shows the counters; --stress-fx=<mode> also strips ship fx
+            // in stages and, for the dressed modes, lights the parked fleet's plume so the A/B
+            // reflects a MOVING fleet rather than the throttle-gated-dark inert default.
+            if (a == "--render-stats")
+            {
+                StressRender.ShowStats = true;
+                PerfBuckets.Enabled = true; // gate the [perf-buckets] frame-time attribution alongside the counters
+            }
+            // Remote-ship motion-fidelity instrumentation (InterpStats). Independent of the render-stats
+            // knobs above, so it runs on a plain --autofly session with no stress-fx; gates the
+            // [interp-stats]/[predict-stats] lines the Hud prints on its 2s cadence.
+            if (a == "--interp-stats")
+                InterpStats.Enabled = true;
+            if (a.StartsWith("--stress-fx="))
+            {
+                StressRender.Fx = a["--stress-fx=".Length..] switch
+                {
+                    "none" or "nofx" => StressRender.FxMode.NoFx,
+                    "nolights" => StressRender.FxMode.NoLights,
+                    _ => StressRender.FxMode.Full,
+                };
+                StressRender.ForceGlow = StressRender.Fx != StressRender.FxMode.NoFx;
+                StressRender.ShowStats = true;
+                PerfBuckets.Enabled = true;
+            }
+            // Flight-HUD marker-cap override (A/B knob for the distance-based contact cap). N = enemy
+            // cap (friendly = N*3/4); 0 = uncapped. Left at -1 (unset) TargetMarkers uses its defaults.
+            if (a.StartsWith("--marker-cap="))
+            {
+                if (int.TryParse(a["--marker-cap=".Length..], out int mc) && mc >= 0)
+                    MarkerCap = mc;
+            }
         }
+        // Self-report the managed build config so perf runs can't silently execute unoptimized C#
+        // (Godot run from `--path` normally loads the Debug assembly regardless of `dotnet -c Release`).
+#if DEBUG
+        Log.Print("[build-config] managed=DEBUG (unoptimized C#)");
+#else
+        Log.Print("[build-config] managed=RELEASE (optimized C#)");
+#endif
         // --hangar-demo drives the docked screen itself; it only needs the QuickJoin
         // (team + ready) so the match starts and the mandatory spawn hangar opens. It is a
         // UI-harness flag (after `--`, GetCmdlineUserArgs) like --ui-shot — see ShipLoadout.
@@ -668,6 +732,11 @@ public partial class ShipController : Node
                         shot.IsHeal
                     );
         }
+
+        // The accumulator's leftover fraction IS the render phase between the last two predicted
+        // ticks — hand it to the ship's visual so it advances continuously through tick boundaries
+        // (see PredictionController.RenderAlpha for why a self-timed clock can't do this).
+        pc.RenderAlpha = (float)(_acc / FlightModel.Dt);
     }
 
     private void TickDivergenceDebug(PredictionController pc)
@@ -680,7 +749,7 @@ public partial class ShipController : Node
             pc.InjectDivergence(new Vector3(25f, 0f, 0f));
         _perturbHeld = perturb;
 
-        if (_autoFly && !_combatTest && !_selfTestDone && _stepsSinceSpawn >= 100)
+        if (_autoFly && !_combatTest && !_strafeTest && !_selfTestDone && _stepsSinceSpawn >= 100)
         {
             pc.InjectDivergence(new Vector3(25f, 0f, 0f));
             _selfTestDone = true;
@@ -873,6 +942,96 @@ public partial class ShipController : Node
         if (_combatTest)
             return new ShipInputState { Thrust = 1f, Firing = true };
 
+        // Ram test harness (--ram-test): chase a MOVING remote ship and ride onto it so the local
+        // predictor repeatedly resolves a real ship-vs-ship contact — the ram-time-alignment work needs
+        // genuine per-tick contacts against MOVING obstacles to measure (a stationary obstacle makes the
+        // time-alignment a no-op, and two same-team autofly clients on the default weave never touch).
+        //   • Target the nearest ship whose speed exceeds RamMinTargetSpeed (skip parked/idle ships — a
+        //     stationary target just makes the fast Scout orbit it fruitlessly and wouldn't exercise the
+        //     fix). COMMIT to it (re-picking "nearest" every frame orbits a cluster without committing)
+        //     until it despawns / drifts past RamReacquire, then re-acquire.
+        //   • Lead-pursuit steering (aim where the target WILL be when we arrive: target.Pos +
+        //     target.Vel × leadT), proportional yaw/pitch from the local-frame error, replicating
+        //     AutoSteer.SteerToPoint's sign convention INLINE (local +Z forward; yaw = +local.X, pitch =
+        //     −local.Y; bang-bang while behind) so shared/AutoSteer stays untouched.
+        //   • THROTTLE-DOWN when close (dist ≤ RamCloseDist): a Scout at full speed (~173) has a turn
+        //     radius far larger than the ram distance, so it orbits a target ~15u out and rarely touches;
+        //     easing the throttle shrinks the turn radius so it RIDES right onto the target's pose. This
+        //     is the measurement's engine: it parks the predicted ship on the remote ship's collision
+        //     silhouette every tick, so the predictor resolves a contact every tick — a stress version of
+        //     the plan's exact bug (per-tick collision against a remote ship's pose). Zero effect w/o flag.
+        if (_ramTest && _world.Ships.LocalShip is { } rammer)
+        {
+            const float ramReacquire = 1200f; // drop a target that has drifted this far, re-pick nearest mover
+            const float ramMinTargetSpeed = 20f; // ignore ~parked ships — the fix only matters for movers
+            const float ramCloseDist = 120f; // within this, throttle down to ride onto the target
+            Vector3 gp = rammer.GlobalPosition;
+            RemoteShip? target = null;
+
+            // Keep the committed target while it's still a valid, reasonably-near, still-MOVING obstacle
+            // (drop it if it stopped — otherwise the rammer gets stuck fruitlessly orbiting a parked ship).
+            if (
+                _ramTargetId != 0
+                && _world.Ships.Nodes.TryGetValue(_ramTargetId, out var held)
+                && held is RemoteShip heldRs
+                && heldRs.Visible
+                && SectorView.InSector(heldRs, _world.LocalSector)
+                && heldRs.Velocity.Length() >= ramMinTargetSpeed
+                && gp.DistanceSquaredTo(heldRs.GlobalPosition) <= ramReacquire * ramReacquire
+            )
+                target = heldRs;
+
+            if (target is null) // (re)acquire the nearest visible MOVING remote ship in the local sector
+            {
+                float bestD2 = float.MaxValue;
+                foreach (var node in _world.Ships.Nodes.Values)
+                {
+                    if (node is not RemoteShip rs || !rs.Visible)
+                        continue;
+                    if (!SectorView.InSector(rs, _world.LocalSector))
+                        continue;
+                    if (rs.Velocity.Length() < ramMinTargetSpeed)
+                        continue;
+                    float d2 = gp.DistanceSquaredTo(rs.GlobalPosition);
+                    if (d2 < bestD2)
+                    {
+                        bestD2 = d2;
+                        target = rs;
+                    }
+                }
+                _ramTargetId = target?.ShipId ?? 0;
+            }
+
+            if (target is not null)
+            {
+                float dist = (target.GlobalPosition - gp).Length();
+                float ownSpeed = Mathf.Max(rammer.Speed, 50f); // Scout cruise ~173; floor avoids /0 at spawn
+                float leadT = Mathf.Clamp(dist / ownSpeed, 0f, 1.0f);
+                Vector3 aim = target.GlobalPosition + target.Velocity * leadT;
+                var q = rammer.GlobalBasis.GetRotationQuaternion();
+                float yaw = 0f,
+                    pitch = 0f;
+                Vector3 toT = aim - gp;
+                if (toT.LengthSquared() > 1e-6f)
+                {
+                    Vector3 local = (q.Inverse() * toT.Normalized()); // ship frame, +Z forward
+                    const float turnGain = 4f;
+                    yaw = local.Z < 0f ? (local.X >= 0f ? 1f : -1f) : Mathf.Clamp(local.X * turnGain, -1f, 1f);
+                    pitch = local.Z < 0f ? (local.Y >= 0f ? -1f : 1f) : Mathf.Clamp(-local.Y * turnGain, -1f, 1f);
+                }
+                // Ease the throttle for the final approach so the turn radius shrinks enough to ride onto
+                // the target instead of orbiting it; full thrust (+boost) to close the gap from range.
+                bool close = dist <= ramCloseDist;
+                return new ShipInputState
+                {
+                    Thrust = close ? 0.45f : 1f,
+                    Yaw = yaw,
+                    Pitch = pitch,
+                    Boost = !close,
+                };
+            }
+        }
+
         // Warp test: drop a few mines on a short straight run, then steer MANUALLY straight into the
         // sector's gate to fire the real warp path (cover → swap → reveal + minefield reconcile) this
         // mode exists to smoke. Manual AutoSteer with a NO-OP avoid delegate (unlike the server
@@ -906,6 +1065,19 @@ public partial class ShipController : Node
                 avoid: (_, dir) => dir
             );
             return steer;
+        }
+
+        // Strafe-fire harness: burn straight for 8 s to get clear of the garrison (a pure-strafe ship
+        // otherwise slides onto the dock face and DOCKS — the velocity-direction gate has no speed
+        // floor), then hold a PURE lateral strafe (no yaw/pitch/thrust) while firing, flipping
+        // direction every 6 s so the ship stays put. With no steering, any lateral motion of the bolt
+        // stream relative to the camera is measurement signal, not commanded flight.
+        if (_strafeTest)
+        {
+            float ts = _stepsSinceSpawn * FlightModel.Dt;
+            if (ts < 8f)
+                return new ShipInputState { Thrust = 1f };
+            return new ShipInputState { StrafeX = ((int)((ts - 8f) / 6f) & 1) == 0 ? 1f : -1f, Firing = true };
         }
 
         float t = _stepsSinceSpawn * FlightModel.Dt; // sim seconds

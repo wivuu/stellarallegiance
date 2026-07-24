@@ -77,10 +77,8 @@ public partial class RemoteShip : Node3D
     // Authoritative instance mass off the Ship row — the local ship's ship-ship collision
     // prediction weights its impulse share by it, matching the server's ResolveShipImpulse.
     public float Mass { get; private set; }
-    public float MaxHealth =>
-        _defs != null && _defs.TryGetShipDef((byte)Class, out var d) ? d.MaxHull : 0f;
-    public float MaxShield =>
-        _defs != null && _defs.TryGetShipDef((byte)Class, out var d) ? d.ShieldCapacity : 0f;
+    public float MaxHealth => _defs != null && _defs.TryGetShipDef((byte)Class, out var d) ? d.MaxHull : 0f;
+    public float MaxShield => _defs != null && _defs.TryGetShipDef((byte)Class, out var d) ? d.ShieldCapacity : 0f;
     private DefRegistry _defs = null!;
 
     // Dynamic engine glow. A remote ship has no input to read, so its throttle is
@@ -143,10 +141,22 @@ public partial class RemoteShip : Node3D
             _canBoost = s.AbThrust > 0f;
         }
         _burnCooldown = (float)GD.RandRange(1.0, 3.0); // stagger drones' first burst roll
+        _interp.StatsId = row.ShipId; // fidelity-instrumentation bucket key (no-op unless InterpStats.Enabled)
         Push(row, serverTick);
     }
 
     public void OnAuthoritative(Ship row, uint serverTick) => Push(row, serverTick);
+
+    // Newest raw authoritative sample (server instant + pose + wire velocity + local ang-velocity),
+    // for the local predictor's TIME-ALIGNED ram obstacles. Delegates to the interpolator; returns
+    // false before the first sample. See MotionInterpolator.TryGetLatest / ShipRenderer.ShipObstacles.
+    public bool TryGetLatestSample(
+        out double serverMs,
+        out Vector3 pos,
+        out Quaternion rot,
+        out Vector3 vel,
+        out Vector3 angVelLocal
+    ) => _interp.TryGetLatest(out serverMs, out pos, out rot, out vel, out angVelLocal);
 
     private void Push(Ship row, uint serverTick)
     {
@@ -158,7 +168,8 @@ public partial class RemoteShip : Node3D
             new Vector3(row.VelX, row.VelY, row.VelZ),
             new Vector3(row.AngVelX, row.AngVelY, row.AngVelZ),
             hasVel: true,
-            Time.GetTicksMsec());
+            Time.GetTicksMsec()
+        );
         if (!accepted)
             return; // stale/out-of-order frame — per-tick state below would regress too
 
@@ -183,6 +194,7 @@ public partial class RemoteShip : Node3D
 
     public override void _Process(double delta)
     {
+        var t0 = PerfBuckets.Now();
         // Ease the smoothed velocity toward the latest authoritative value (frame-rate
         // independent), tweening out the snapshot-rate steps the lead reticle reads.
         Velocity = Velocity.Lerp(_velTarget, 1f - Mathf.Exp(-VelSmoothRate * (float)delta));
@@ -218,6 +230,7 @@ public partial class RemoteShip : Node3D
             Position = p;
             Quaternion = q;
         }
+        PerfBuckets.Add(PerfBuckets.RShip, t0);
     }
 
     // Cosmetic barrel-roll of the ShipModel child while mining, eased in/out on the IsMining flag.

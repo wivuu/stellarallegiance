@@ -130,6 +130,11 @@ public partial class EngineGlow : Node3D
     // lights the exhaust smoke. Both clamped; reverse thrust simply reads as idle.
     public void SetThrottle(float throttle, float boost)
     {
+        // Render stress-test: the inert stress fleet feeds throttle 0, which would gate the whole
+        // glow node dark (ApplyVisual) — so a parked ship costs nothing to draw and the measurement
+        // lies about a real, moving fleet. Floor the plume lit so it renders like a ship under power.
+        if (StressRender.ForceGlow)
+            throttle = Mathf.Max(throttle, 0.9f);
         _target = Mathf.Clamp(throttle, 0f, 1f);
         _targetBoost = Mathf.Clamp(boost, 0f, 1f);
     }
@@ -380,6 +385,7 @@ public partial class EngineGlow : Node3D
 
     public override void _Process(double delta)
     {
+        var t0 = PerfBuckets.Now();
         // Ease the rendered throttle toward the request (frame-rate independent) so
         // power ramps smoothly. A ship sitting at zero throttle eases to true zero and
         // goes fully dark (ApplyVisual) — no idle pilot glow on a parked engine.
@@ -423,6 +429,7 @@ public partial class EngineGlow : Node3D
             _boostSfx.VolumeDb = _boostAudioDb;
             _boostSfx.PitchScale = Mathf.Lerp(0.9f, 1.3f, _shownBoost);
         }
+        PerfBuckets.Add(PerfBuckets.Glow, t0);
     }
 
     // Spool UP smoothly; cut DOWN instantly. The flame must die the frame the pilot drops
