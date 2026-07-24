@@ -19,7 +19,12 @@ public partial class ProjectileView : Node3D
     private Vector3 _pos;
     private Vector3 _vel;
     private Vector3 _aimDir; // normalized muzzle/shot direction, used only to orient the tracer
-    private double _t0; // seconds, when _pos/_vel were sampled (spawn)
+    // Flight time since spawn, accumulated from _Process delta — NOT wall clock. The ship and
+    // camera render on the accumulated-delta timeline (PredictionController._tickTimer, CameraRig),
+    // and a bolt inherits the firing ship's velocity, so the strafe component only cancels in the
+    // camera frame when both advance on the SAME clock. GetTicksMsec (integer ms, wall time)
+    // jitters against vsync-aligned delta and made bolts judder sideways while strafing.
+    private double _elapsed;
     private float _ttlSec; // flight life (already obstruction-clipped by the spawner)
 
     // Enemy-shot masking: remote shots are observed ~one-way latency after they were
@@ -74,14 +79,14 @@ public partial class ProjectileView : Node3D
         _ttlSec = ttlSec;
         _renderLeadSec = renderLeadSec;
         OwnerShipId = ownerShipId;
-        _t0 = Time.GetTicksMsec() / 1000.0;
+        _elapsed = 0;
         OrientAlongAim();
         Position = pos + vel * renderLeadSec; // honour the lead immediately (no 1-frame muzzle pop)
     }
 
     // The render lead counts against the TTL: a remote bolt drawn `lead` ahead was fired
     // that much earlier, so it also expires that much sooner on our screen.
-    public bool Expired => Time.GetTicksMsec() / 1000.0 - _t0 + _renderLeadSec >= _ttlSec;
+    public bool Expired => _elapsed + _renderLeadSec >= _ttlSec;
 
     // Aim the bolt's local +Z down the fired direction so the cylinder tracer points where
     // the gun aimed (not skewed by the ship's strafe). Set once at spawn, never per frame.
@@ -93,7 +98,7 @@ public partial class ProjectileView : Node3D
 
     public override void _Process(double delta)
     {
-        float e = (float)(Time.GetTicksMsec() / 1000.0 - _t0);
-        Position = _pos + _vel * (e + _renderLeadSec);
+        _elapsed += delta;
+        Position = _pos + _vel * ((float)_elapsed + _renderLeadSec);
     }
 }

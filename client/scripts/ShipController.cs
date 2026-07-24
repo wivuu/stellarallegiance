@@ -142,6 +142,7 @@ public partial class ShipController : Node
     private bool _combatTest; // --combat-test: fly straight + fire (head-on damage check)
     private bool _warpTest; // --warp-test: mine-drop run, then manual-steer into the sector's aleph (warp smoke)
     private bool _ramTest; // --ram-test: autofly chases + rams the nearest remote ship (ram-prediction measurement harness)
+    private bool _strafeTest; // --strafe-test: pure lateral strafe + continuous fire (bolt-smoothness measurement harness)
     private ulong _ramTargetId; // committed ram target (survives frame-to-frame so the rammer doesn't orbit a cluster)
 
     // Round-trip latency. STDB mode times each ApplyInput against its own reducer callback
@@ -217,6 +218,14 @@ public partial class ShipController : Node
             {
                 _autoFly = true;
                 _ramTest = true;
+            }
+            // Bolt-smoothness measurement harness: strafe laterally while firing so the bolt stream's
+            // camera-relative path can be measured/eyeballed (the "bolts jerk sideways while strafing"
+            // repro). Pair with BOLT_DEBUG=1 for the per-frame camera-space bolt log.
+            if (a == "--strafe-test")
+            {
+                _autoFly = true;
+                _strafeTest = true;
             }
             // Render stress-test knobs (see StressRender / the --stress-fighters server harness).
             // --render-stats alone just shows the counters; --stress-fx=<mode> also strips ship fx
@@ -723,6 +732,11 @@ public partial class ShipController : Node
                         shot.IsHeal
                     );
         }
+
+        // The accumulator's leftover fraction IS the render phase between the last two predicted
+        // ticks — hand it to the ship's visual so it advances continuously through tick boundaries
+        // (see PredictionController.RenderAlpha for why a self-timed clock can't do this).
+        pc.RenderAlpha = (float)(_acc / FlightModel.Dt);
     }
 
     private void TickDivergenceDebug(PredictionController pc)
@@ -735,7 +749,7 @@ public partial class ShipController : Node
             pc.InjectDivergence(new Vector3(25f, 0f, 0f));
         _perturbHeld = perturb;
 
-        if (_autoFly && !_combatTest && !_selfTestDone && _stepsSinceSpawn >= 100)
+        if (_autoFly && !_combatTest && !_strafeTest && !_selfTestDone && _stepsSinceSpawn >= 100)
         {
             pc.InjectDivergence(new Vector3(25f, 0f, 0f));
             _selfTestDone = true;
@@ -1051,6 +1065,19 @@ public partial class ShipController : Node
                 avoid: (_, dir) => dir
             );
             return steer;
+        }
+
+        // Strafe-fire harness: burn straight for 8 s to get clear of the garrison (a pure-strafe ship
+        // otherwise slides onto the dock face and DOCKS — the velocity-direction gate has no speed
+        // floor), then hold a PURE lateral strafe (no yaw/pitch/thrust) while firing, flipping
+        // direction every 6 s so the ship stays put. With no steering, any lateral motion of the bolt
+        // stream relative to the camera is measurement signal, not commanded flight.
+        if (_strafeTest)
+        {
+            float ts = _stepsSinceSpawn * FlightModel.Dt;
+            if (ts < 8f)
+                return new ShipInputState { Thrust = 1f };
+            return new ShipInputState { StrafeX = ((int)((ts - 8f) / 6f) & 1) == 0 ? 1f : -1f, Firing = true };
         }
 
         float t = _stepsSinceSpawn * FlightModel.Dt; // sim seconds

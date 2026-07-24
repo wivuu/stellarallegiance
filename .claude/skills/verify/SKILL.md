@@ -27,6 +27,13 @@ $env:MOVIE_RESOLUTION='1280x720'; scripts/run-client.ps1 -Local -WriteMovie <scr
 
 ## Gotchas
 
+- WITHOUT -WriteMovie, pwsh binds the first `--flag` as the VALUE of `-WriteMovie` — Movie
+  Maker mode silently activates with a fixed 1/30 delta and uncapped fps, time-warping the
+  client sim (~3× real: runaway prediction lead, buffer overflow, reconcile spam). Any
+  motion/timing measurement made that way is garbage. Pass game flags explicitly instead:
+  `scripts/run-client.ps1 -Local -GodotArgs '--autofly','--strafe-test','--','--ui-shot=...'`
+  (a bare unquoted `--` also fails to parse — keep it inside the -GodotArgs list).
+
 - Default camera is FIRST-PERSON (own ship invisible). To see the own ship, temporarily set
   `[view] first_person=false` in
   `~/Library/Application Support/Godot/app_userdata/stellarallegiance/settings.cfg`

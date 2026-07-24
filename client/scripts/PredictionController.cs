@@ -102,7 +102,15 @@ public partial class PredictionController : Node3D
     private readonly List<PredictedShot> _shotsOut = new(); // reused per-Step fire output (0, 1, or twin bolts)
     private readonly List<Entry> _buffer = new();
 
-    private double _tickTimer; // seconds since last prediction step
+    // Fraction [0,1) of the way from _prevState's tick to _state's tick to render at, pushed by
+    // ShipController every frame from its prediction-tick accumulator (_acc / Dt) AFTER stepping.
+    // That accumulator is the authoritative tick phase — deriving alpha from it (instead of a
+    // self-timed "seconds since last Step" clock) keeps the rendered ship advancing continuously
+    // through tick boundaries. The old clock restarted at 0 each Step and clamped at 1, so
+    // whenever the slewed tick generator drifted against the frame clock the visual stalled a
+    // frame at alpha=1 then double-stepped — the camera is rigid to this ship, so every stall
+    // read as the whole world (bolts especially) jerking sideways while strafing.
+    public float RenderAlpha { get; set; } = 1f;
 
     // Supplies the local sector's static collision bodies (set by WorldRenderer). After each
     // Integrate — in live prediction AND in reconcile replay — the predicted ship is resolved
@@ -454,7 +462,6 @@ public partial class PredictionController : Node3D
         _state = ShipMath.StateFromRow(row);
         _prevState = _state;
         _buffer.Clear();
-        _tickTimer = 0;
         _posErr = Vector3.Zero;
         _posErrVel = Vector3.Zero;
         _rotErr = Quaternion.Identity;
@@ -511,7 +518,6 @@ public partial class PredictionController : Node3D
         );
         if (_buffer.Count > BufferLen)
             _buffer.RemoveRange(0, _buffer.Count - BufferLen);
-        _tickTimer = 0;
 
         // Slots + weapons come from data (M3): every Weapon hardpoint on this class — POSITIONAL,
         // empties included, with this ship's effective loadout overlaid — the SAME resolution the
@@ -703,7 +709,6 @@ public partial class PredictionController : Node3D
         _predFuelPods = row.FuelPodAmmo;
         ReconcileFire(row);
         _buffer.Clear();
-        _tickTimer = 0;
         _posErr = Vector3.Zero;
         _posErrVel = Vector3.Zero;
         _rotErr = Quaternion.Identity;
@@ -729,13 +734,10 @@ public partial class PredictionController : Node3D
 
         _state = newState;
         _prevState = newState;
-        _tickTimer = 0;
     }
 
     public override void _Process(double delta)
     {
-        _tickTimer += delta;
-
         // Drive both corrections toward zero with a critically-damped spring. Clamp
         // dt so a frame hitch can't destabilise the explicit integrator. The rotation
         // offset is sprung in rotation-vector space and rebuilt as a unit quaternion.
@@ -746,7 +748,7 @@ public partial class PredictionController : Node3D
         SpringToZero(ref rotVec, ref _rotErrVel, SmoothFreq, dt);
         _rotErr = RotVecToQuat(rotVec);
 
-        ApplyVisual(Mathf.Min((float)(_tickTimer / FlightModel.Dt), 1f));
+        ApplyVisual(Mathf.Min(RenderAlpha, 1f));
         _engine?.SetThrottle(_throttle, _afterburner);
 
         // Hide the own hull / trail / glow while inside the cockpit (idempotent each frame).
