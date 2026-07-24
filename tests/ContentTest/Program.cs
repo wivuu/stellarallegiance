@@ -113,7 +113,8 @@ Check(
 // Mining hull (class-id 4): the projection carries Hull.OreCapacity onto ShipClassDef.OreCapacity;
 // a non-mining hull projects 0. The miner's GLB (utl19.glb) carries an HP_Weapon_0 node with no
 // YAML weapon binding, so it merges as ONE appended EMPTY mount (WeaponId == NoWeapon) alongside
-// the authored main-engine + cockpit hardpoints — the hull stays deliberately unarmed.
+// the mesh's engine/light nodes — the hull stays deliberately unarmed. The miner authors NO YAML
+// hardpoints at all (its cockpit is unspecified; the client eye defaults to the mesh origin).
 var miner = stock.Ships.First(s => s.ClassId == 4);
 var minerWeaponHps = miner.Hardpoints.Where(h => h.Kind == HardpointKind.Weapon).ToList();
 Check(

@@ -379,11 +379,9 @@ hulls:
     # No weapon hardpoints (unarmed) — utl19's GLB carries HP_Weapon_0, but no YAML loadout binds it,
     # so it merges as an APPENDED EMPTY mount that armed-weapon consumers skip (HardpointGeometryMerge
     # .cs:30-32), leaving the hull unarmed. The GLB's thruster/booster/light HP nodes merge in and
-    # anchor the client engine glow / team trail / nav beacons (stern HP_Thruster_0 = the main nozzle);
-    # only the cockpit eye is authored here (no HP_Cockpit mesh node), like the pod.
-    hardpoints:
-      # Cockpit eye point for the first-person camera (client-only).
-      - { kind: cockpit, off-y: 0.6, off-z: 1.6, dir-z: 1 }
+    # anchor the client engine glow / team trail / nav beacons (stern HP_Thruster_0 = the main nozzle).
+    # No cockpit authored: an unspecified cockpit defaults client-side to the mesh origin (0,0,0)
+    # (CameraRig.CockpitFallback).
 
   # Constructor (class-id 5): a slow, unarmed AI utility drone that builds forward bases. Bought from
   # the docked Build tab bound to a station type, launches from a garrison, and — F3-ordered to a
@@ -422,9 +420,6 @@ hulls:
     required-capabilities: [base]
     # Unarmed: utl11's HP_Weapon_* (if any) merges as an appended empty mount. The GLB's stern
     # HP_Thruster_0 + HP_Booster_* anchor the client engine glow / team trail; only the cockpit
-    # is authored here (no HP_Cockpit mesh node), like the miner.
-    hardpoints:
-      - { kind: cockpit, off-y: 0.6, off-z: 1.6, dir-z: 1 }
 
   # Escape pod (class-id 255): slow, unarmed lifeboat (no weapon hardpoint). The faction's lifepod.
   - id: pod
