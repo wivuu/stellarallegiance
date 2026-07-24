@@ -164,11 +164,13 @@ public sealed partial class Simulation
     // every owned constructor, producing or launched. StartTick/DurationTicks describe the current timed
     // phase (production, or align/sink/build) so the client animates a smooth bar; 0/0 for untimed states
     // (idle / en route / move). TargetId carries the rock (build orders) or sector (move orders) so the
-    // client can name the destination. Sim thread only.
-    public IReadOnlyList<(ulong Id, byte Team, byte StationType, byte State, uint StartTick, uint DurationTicks, ulong TargetId, bool ProducesMiner, ulong LaunchBaseId)>
+    // client can name the destination. Id is the slot ordinal (what a cancel names); ShipId is the
+    // LAUNCHED drone's ship id (0 while queued/producing), the only key that ties a rendered ship back
+    // to the station type it carries — the F3 map labels a drone from it. Sim thread only.
+    public IReadOnlyList<(ulong Id, byte Team, byte StationType, byte State, uint StartTick, uint DurationTicks, ulong TargetId, bool ProducesMiner, ulong LaunchBaseId, ulong ShipId)>
         ConstructorStatesView()
     {
-        var rows = new List<(ulong, byte, byte, byte, uint, uint, ulong, bool, ulong)>(_constructors.Count);
+        var rows = new List<(ulong, byte, byte, byte, uint, uint, ulong, bool, ulong, ulong)>(_constructors.Count);
         foreach (var c in _constructors)
         {
             // Queued (and Idle) leave start/dur/target at 0 → the client renders an untimed note row
@@ -192,7 +194,7 @@ public sealed partial class Simulation
                 case ConstructorState.Building:
                     start = c.PhaseStartTick; dur = BuildTicksFor(c.BuildStationTypeId); target = c.TargetRockId; break;
             }
-            rows.Add((c.ConstructorId, c.Team, c.BuildStationTypeId, (byte)c.State, start, dur, target, c.ProducesMiner, c.LaunchBaseId));
+            rows.Add((c.ConstructorId, c.Team, c.BuildStationTypeId, (byte)c.State, start, dur, target, c.ProducesMiner, c.LaunchBaseId, c.Ship?.ShipId ?? 0));
         }
         return rows;
     }

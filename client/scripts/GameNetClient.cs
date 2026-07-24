@@ -983,10 +983,12 @@ public partial class GameNetClient : Node
             ulong targetId = r.ReadUInt64();
             bool producesMiner = r.ReadBoolean();
             ulong launchBaseId = r.ReadUInt64();
+            ulong shipId = r.ReadUInt64(); // 0 until the drone launches
             list.Add(
                 new TeamStateStore.ConstructorStatus
                 {
                     Id = id,
+                    ShipId = shipId,
                     StationTypeId = stationType,
                     State = state,
                     StartTick = startTick,
