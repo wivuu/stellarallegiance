@@ -120,9 +120,23 @@ public partial class SystemRing : Control
         );
         string leftTag = hasFuel ? "FUEL" : "BST";
         DrawTagValue(c + new Vector2(-(Radius + 12f), 4f), leftTag, $"{leftFrac * 100f:0}", leftColor, rightAlign: true);
-        // Fuel-pod reserve under the FUEL tag (predicted count — drops the instant one
-        // auto-loads). Hidden at zero so the legacy layout is untouched without pods.
-        if (hasFuel && local.FuelPods > 0)
+        // Fuel-pod reserve under the FUEL tag (predicted count — drops the instant one is committed
+        // to the loader). Hidden at zero so the legacy layout is untouched without pods. While a pod
+        // is LOADING the tank is dead, so the line becomes a load readout in the danger tone with a
+        // sweep arc wrapping the FUEL blocks (mirroring the SHLD band on the right) — the pilot can
+        // see how long the afterburner stays out.
+        if (hasFuel && local.FuelLoading)
+        {
+            SolidArc(c, ShieldRadius, 180f, local.FuelLoadFrac, DesignTokens.Danger, track, ShieldWidth);
+            DrawTagValue(
+                c + new Vector2(-(Radius + 12f), 22f),
+                "LOAD",
+                $"{local.FuelLoadFrac * 100f:0}%",
+                DesignTokens.Danger,
+                rightAlign: true
+            );
+        }
+        else if (hasFuel && local.FuelPods > 0)
             DrawTagValue(
                 c + new Vector2(-(Radius + 12f), 22f),
                 "POD",

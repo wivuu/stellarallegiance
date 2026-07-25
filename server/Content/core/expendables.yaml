@@ -7,6 +7,14 @@
 # NOTE: hulls.yaml default-cargo counts are therefore PACK counts. Streamed to clients as
 # CargoItemDef; the missile racks below carry their own magazine (launchers.yaml amount) instead.
 #
+# load-time (SECONDS, core Allegiance field) is how long a charge takes to come out of the hold once
+# the previous one is spent — the RELOAD. Projected to ticks (round(load-time*20)) onto the launcher's
+# WeaponDef, and for the fuel pod onto its CargoItemDef. The slot is usable again after
+# max(fire-interval-ticks, load-time-in-ticks): one window, longest wins, so 0/omitted keeps the
+# legacy cadence-only behavior. EVERY TIER MUST AUTHOR IT — mines/chaff/probes keep one tier-neutral
+# cargo row but the FIRED tier is the researched successor, and a tier that omits load-time deploys
+# instantly. The fuel pod's value is how long the tank (and the afterburner) stays dead mid-boost.
+#
 # Missiles that a launcher fires (launchers.yaml, weapon-id racks) also carry a guidance/lock stat
 # block projected onto the missile-kind WeaponDef: acceleration/turn-rate (deg/s)/initial-speed/
 # max-speed drive flight; lock-time (s)/lock-angle (rad cone half-angle)/max-lock (u range) drive the
@@ -48,6 +56,7 @@ missiles:
     name: MRM Seeker 1
     description: Lock-on ordnance. Fired from the hold.
     mass: 4
+    load-time: 2.0      # seconds to load the next round out of the hold
     lifespan: 8
     initial-speed: 90
     acceleration: 40
@@ -70,6 +79,7 @@ missiles:
     name: MRM Seeker 2
     description: Lock-on ordnance. Fired from the hold.
     mass: 4
+    load-time: 2.0
     lifespan: 8
     initial-speed: 90
     acceleration: 40
@@ -92,6 +102,7 @@ missiles:
     name: MRM Seeker 3
     description: Lock-on ordnance. Fired from the hold.
     mass: 4
+    load-time: 2.0
     lifespan: 9
     initial-speed: 90
     acceleration: 40
@@ -118,6 +129,7 @@ missiles:
     name: MRM Quickfire 1
     description: Fast fire-and-forget harasser missile. Barely tracks.
     mass: 3
+    load-time: 0.75     # fast reload — the line's identity is volume of fire
     lifespan: 5
     initial-speed: 180
     acceleration: 52
@@ -140,6 +152,7 @@ missiles:
     name: MRM Quickfire 2
     description: Fast fire-and-forget harasser missile. Barely tracks.
     mass: 3
+    load-time: 0.75
     lifespan: 5
     initial-speed: 180
     acceleration: 57
@@ -162,6 +175,7 @@ missiles:
     name: MRM Quickfire 3
     description: Fast fire-and-forget harasser missile. Barely tracks.
     mass: 3
+    load-time: 0.75
     lifespan: 5
     initial-speed: 180
     acceleration: 63
@@ -188,6 +202,7 @@ missiles:
     name: SRM Dumbfire 1
     description: Quick-lock, low-turn missile. Short-range punch.
     mass: 4
+    load-time: 1.75      # quick-lock brawling rounds cycle faster than the MRM Seeker
     lifespan: 5
     initial-speed: 120
     acceleration: 67
@@ -210,6 +225,7 @@ missiles:
     name: SRM Dumbfire 2
     description: Quick-lock, low-turn missile. Short-range punch.
     mass: 4
+    load-time: 1.75
     lifespan: 6
     initial-speed: 120
     acceleration: 67
@@ -232,6 +248,7 @@ missiles:
     name: SRM Dumbfire 3
     description: Quick-lock, low-turn missile. Short-range punch.
     mass: 4
+    load-time: 1.75
     lifespan: 6
     initial-speed: 120
     acceleration: 67
@@ -258,6 +275,7 @@ missiles:
     name: SRM Anti-Base 1
     description: Heavy siege ordnance. Locks onto enemy stations.
     mass: 6
+    load-time: 3.5      # heavy siege torpedo — slowest thing to wrestle out of the hold
     lifespan: 12
     initial-speed: 60
     acceleration: 40
@@ -281,6 +299,7 @@ missiles:
     name: SRM Anti-Base 2
     description: Heavy siege ordnance. Locks onto enemy stations.
     mass: 6
+    load-time: 3.5
     lifespan: 12
     initial-speed: 60
     acceleration: 40
@@ -304,6 +323,7 @@ missiles:
     name: SRM Anti-Base 3
     description: Heavy siege ordnance. Locks onto enemy stations.
     mass: 6
+    load-time: 3.5
     lifespan: 12
     initial-speed: 60
     acceleration: 40
@@ -340,6 +360,7 @@ mines:
     description: Dropped behind the ship; arms after 1s.
     cargo-id: 2
     mass: 1             # payload cost per PACK (one hangar count = one pack)
+    load-time: 5.5      # seconds to load the next field out of the hold
     charges-per-pack: 1 # fields deployable from one loaded pack (one field per press)
     glyph: "◈"
     model-name: dn_ptminprx  # GLB instanced per visual mine (assets/mines/dn_ptminprx.glb)
@@ -353,6 +374,7 @@ mines:
     name: Prox Mine 2
     description: Dropped behind the ship; arms after 1s.
     mass: 1
+    load-time: 5.5
     model-name: dn_ptminprx
     lifespan: 75
     power: 75
@@ -364,6 +386,7 @@ mines:
     name: Prox Mine 3
     description: Dropped behind the ship; arms after 1s.
     mass: 1
+    load-time: 5.5
     model-name: dn_ptminprx
     lifespan: 90
     power: 90
@@ -381,6 +404,7 @@ chaffs:
     description: Fakes the ship's signature for pursuers.
     cargo-id: 3
     mass: 1              # payload cost per PACK (one hangar count = one pack)
+    load-time: 2.5      # seconds to load the next puff (fastest — it is a panic button)
     charges-per-pack: 8 # puffs dispensable from one loaded pack (one puff per press)
     glyph: "◇"
     model-name: acs40    # GLB the client instances for the decoy (assets/chaff/acs40.glb)
@@ -391,6 +415,7 @@ chaffs:
     name: Counter 2
     description: Fakes the ship's signature for pursuers.
     mass: 1
+    load-time: 2.5
     model-name: acs40
     lifespan: 3
     chaff-strength: 1.5
@@ -399,6 +424,7 @@ chaffs:
     name: Counter 3
     description: Fakes the ship's signature for pursuers.
     mass: 1
+    load-time: 2.5
     model-name: acs40
     lifespan: 3
     chaff-strength: 2.25
@@ -419,6 +445,7 @@ probes:
     description: Deployable sensor buoy. Destructible; expires after 10 minutes.
     cargo-id: 4
     mass: 2              # payload cost per PACK (one hangar count = one pack)
+    load-time: 5.5      # seconds to load the next buoy out of the hold
     charges-per-pack: 2 # probes deployable from one loaded pack (one probe per press)
     glyph: "◉"
     model-name: utl23    # GLB the client instances per deployed probe (assets/probes/utl23.glb)
@@ -432,6 +459,7 @@ probes:
     name: EWS Probe 2
     description: Deployable sensor buoy. Destructible; expires after 10 minutes.
     mass: 2
+    load-time: 5.5
     model-name: utl23
     model-size: 4.0
     lifespan: 1200
@@ -443,6 +471,7 @@ probes:
     name: EWS Probe 3
     description: Deployable sensor buoy. Destructible; expires after 10 minutes.
     mass: 2
+    load-time: 5.5
     model-name: utl23
     model-size: 4.0
     lifespan: 1200
@@ -461,6 +490,7 @@ fuels:
     description: Reserve afterburner fuel. Auto-loads when the tank runs dry.
     cargo-id: 5
     mass: 1               # payload cost per PACK (one hangar count = one pack)
+    load-time: 2.0      # seconds the tank stays dry while the pod loads
     charges-per-pack: 1   # one refill per pack
     glyph: "◒"            # geometric like the other cargo glyphs (◈ ◇ ◉) — HUD font has no emoji
     fuel-per-charge: 999  # >= every tank => full refill (clamped to max-fuel); lower for partials

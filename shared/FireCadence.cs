@@ -16,4 +16,14 @@ public static class FireCadence
     // single-gate rule; tick 0 itself is pre-match, no ship fires on it).
     public static bool MountFires(uint tick, uint lastFireTick, uint intervalTicks) =>
         lastFireTick == 0 || tick - lastFireTick >= intervalTicks;
+
+    // Cargo-fed launchers/dispensers (missile rack, chaff/mine/probe) also have to LOAD the next
+    // charge out of the hold, which takes the expendable's authored load time. The two gates are ONE
+    // window, not two: whichever is longer decides when the slot is usable again — so an authored
+    // reload-ticks of 0 is exactly the legacy cadence-only behavior, and an author can never
+    // double-count a load against a cadence. Mirrors (must never drift):
+    //   - server Simulation.TryFireMissile / TryDropChaff / TryDeployMine / TryDeployProbe (authority)
+    //   - client WeaponsPanel (the RELOADING / CYCLE readout and its progress bar)
+    public static uint LoadIntervalTicks(uint fireIntervalTicks, uint reloadTicks) =>
+        reloadTicks > fireIntervalTicks ? reloadTicks : fireIntervalTicks;
 }

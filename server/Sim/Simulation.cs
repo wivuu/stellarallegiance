@@ -319,6 +319,13 @@ public sealed partial class Simulation
         // input: a charge auto-consumes in Pass A when the tank empties while boost is held. ----
         public byte FuelPodAmmo; // charges left (packs × ChargesPerPack, capped 255)
         public float FuelPodFuelPerCharge; // tank refill per consumed charge (clamped to MaxFuel)
+        public uint FuelPodReloadTicks; // ticks a charge takes to load out of the hold (0 = instant)
+
+        // Tick the in-progress pod load completes on, or 0 when no load is pending. The pod is
+        // already spent (FuelPodAmmo decremented) — the tank stays EMPTY until this tick, so the
+        // afterburner really does die while the charge is loading. Mirrored client-side by
+        // PredictionController.ConsumeFuelPod. (Tick 0 never runs a Step, so 0 is a safe sentinel.)
+        public uint FuelLoadEndTick;
 
         // Last tick this ship spawned a minefield hit-FX ping (rate-limits the client's small
         // explosion + pop while it sits inside a lethal field — StepMines throttles off this).
@@ -467,6 +474,7 @@ public sealed partial class Simulation
     private readonly Dictionary<uint, float> _cargoMass = new();
     private readonly Dictionary<uint, byte> _chargesPerPack = new(); // dispenser ammo = packs × this
     private readonly Dictionary<uint, float> _fuelPerCharge = new(); // fuel cargo: tank refill per charge
+    private readonly Dictionary<uint, uint> _cargoReloadTicks = new(); // ticks a charge takes to load out of the hold
 
     // Clients with no live ship and a scheduled respawn tick (set when a player pod resolves).
     private readonly Dictionary<int, uint> _clientRespawn = new();
@@ -625,6 +633,7 @@ public sealed partial class Simulation
         {
             _cargoMass[c.CargoId] = c.Mass;
             _chargesPerPack[c.CargoId] = System.Math.Max((byte)1, c.ChargesPerPack);
+            _cargoReloadTicks[c.CargoId] = c.ReloadTicks;
             if (c.FuelPerCharge > 0f)
                 _fuelPerCharge[c.CargoId] = c.FuelPerCharge; // fuel cargo — no dispenser WeaponDef
         }
@@ -806,22 +815,32 @@ public sealed partial class Simulation
         {
             var input = InputFor(s, tick);
             var stats = StatsFor(s.Class, s.IsPod);
-            // Fuel-pod auto-load: Integrate's afterburner gate reads PRE-tick fuel (the tick that
-            // empties the tank still burns), so refilling here — on the first tick the tank sits
-            // empty while boost is held — keeps the afterburner lit with no gap and no AbPower
-            // decay. Server-side only; FlightModel.Integrate stays untouched (PIG determinism).
-            // The client mirrors this rule in PredictionController.
-            if (
-                !s.IsPod
-                && s.FuelPodAmmo > 0
-                && input.Boost
-                && stats.MaxFuel > 0f
-                && stats.AbThrust > 0f
-                && s.State.Fuel <= 0f
-            )
+            // Fuel-pod auto-load, resolved BETWEEN InputFor and Integrate: Integrate's afterburner
+            // gate reads PRE-tick fuel (the tick that empties the tank still burns), so the tank is
+            // topped up here rather than inside the flight model — FlightModel.Integrate stays
+            // untouched (PIG determinism). The client mirrors this rule in PredictionController.
+            // A pod does NOT arrive instantly: it takes FuelPodReloadTicks to come out of the hold,
+            // and the tank stays at 0 for the whole load, so the afterburner really does die while
+            // the charge is loading. An authored load time of 0 completes in this same tick —
+            // byte-identical to the pre-reload "no gap, no AbPower decay" behavior.
+            if (!s.IsPod && stats.MaxFuel > 0f && stats.AbThrust > 0f)
             {
-                s.FuelPodAmmo--;
-                s.State.Fuel = MathF.Min(stats.MaxFuel, s.FuelPodFuelPerCharge);
+                if (
+                    s.FuelLoadEndTick == 0
+                    && s.FuelPodAmmo > 0
+                    && input.Boost
+                    && s.State.Fuel <= 0f
+                    && s.FuelPodFuelPerCharge > 0f
+                )
+                {
+                    s.FuelPodAmmo--; // committed to the loader the moment the tank runs dry
+                    s.FuelLoadEndTick = tick + s.FuelPodReloadTicks;
+                }
+                if (s.FuelLoadEndTick != 0 && tick >= s.FuelLoadEndTick)
+                {
+                    s.State.Fuel = MathF.Min(stats.MaxFuel, s.FuelPodFuelPerCharge);
+                    s.FuelLoadEndTick = 0;
+                }
             }
             s.State = FlightModel.Integrate(s.State, input, stats);
             s.LastInputTick = tick;
@@ -1373,6 +1392,8 @@ public sealed partial class Simulation
                 byte fuelPackSize = _chargesPerPack.TryGetValue(cargoId, out var fpk) ? fpk : (byte)1;
                 s.FuelPodAmmo = (byte)System.Math.Min(255, s.FuelPodAmmo + count * fuelPackSize);
                 s.FuelPodFuelPerCharge = perCharge;
+                // Cached on the ship so Pass A stays a dictionary-free hot loop (like the yield).
+                s.FuelPodReloadTicks = _cargoReloadTicks.TryGetValue(cargoId, out uint rt) ? rt : 0u;
                 continue;
             }
             if (!_dispenserByCargo.TryGetValue(cargoId, out var w))
@@ -1640,6 +1661,7 @@ public sealed partial class Simulation
         };
         s.LastFireTick = 0;
         s.MountLastFire = null; // per-mount cadence gates restart with the fresh LastFireTick
+        s.FuelLoadEndTick = 0; // a pod half-loaded at the old sortie's end is not still loading
         s.LastInputTick = tick;
         s.Alive = true;
     }
@@ -2942,7 +2964,14 @@ public sealed partial class Simulation
             return; // no effective rack (none authored, or emptied in the hangar)
         if (ship.MissileAmmo == 0)
             return;
-        if (ship.LastMissileTick != 0 && tick - ship.LastMissileTick < w.FireIntervalTicks)
+        // Cadence AND the time to load the next round out of the hold — one window, longest wins.
+        if (
+            !FireCadence.MountFires(
+                tick,
+                ship.LastMissileTick,
+                FireCadence.LoadIntervalTicks(w.FireIntervalTicks, w.ReloadTicks)
+            )
+        )
             return;
 
         ship.MissileAmmo--;

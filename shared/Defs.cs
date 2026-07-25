@@ -294,6 +294,14 @@ namespace StellarAllegiance.Shared
         // server-side, ShipLoadout client-side) so a saved Gat Gun 1 becomes Gat Gun 2 once gat-2 is
         // owned. Streamed after ObsoletedByTechIdx (v43).
         public uint SucceededByWeaponId = uint.MaxValue;
+
+        // Sim ticks to LOAD the next charge out of the hold after this launcher/dispenser is used
+        // (round(expendable load-time * 20)); 0 = instant (legacy). Cargo-fed kinds only — a Bolt gun
+        // feeds from no hold and always projects 0. The usable-again gate is
+        // FireCadence.LoadIntervalTicks(FireIntervalTicks, ReloadTicks) — ONE rule, read by the
+        // server gates and the HUD's RELOADING readout. Streamed after SucceededByWeaponId so every
+        // block above stays byte-stable (v36).
+        public uint ReloadTicks;
     }
 
     // One entry in a hull's default consumable hold — an item id + a count. Mirrors the authored
@@ -317,6 +325,12 @@ namespace StellarAllegiance.Shared
         public byte ChargesPerPack = 1; // charges dispensed per loaded pack (one per press); >=1
         public string Description = "";
         public float FuelPerCharge; // afterburner fuel restored per consumed charge; 0 = not a fuel item
+
+        // Sim ticks a charge takes to LOAD out of the hold (round(load-time * 20)); 0 = instant
+        // (legacy). Only fuel items read it today — a dispenser's load time rides its WeaponDef
+        // (WeaponDef.ReloadTicks), since that is where its cadence already lives. Streamed after
+        // FuelPerCharge (v36).
+        public uint ReloadTicks;
     }
 
     // One per base type.

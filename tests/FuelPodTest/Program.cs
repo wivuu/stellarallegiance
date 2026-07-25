@@ -2,27 +2,31 @@
 // (mirrors LoadoutTest): exits non-zero on any failure.
 //
 // Boots the real Simulation from the live content bundle and proves the fuel-pod cargo seam:
-// pods seed from spawn cargo, auto-consume in Pass A the first tick the tank sits empty while
-// boost is held (pre-Integrate, so the afterburner never blinks), and never ride an escape pod.
+// pods seed from spawn cargo, commit in Pass A the first tick the tank sits empty while boost is
+// held, take the authored LOAD TIME to reach the tank (the afterburner dies meanwhile), and never
+// ride an escape pod.
 //
 // Content facts this suite leans on (server/Content/core):
 //   Lt Interceptor (cls 3, payload 12): max-fuel 60, ab-fuel-drain 4.0 (0.2/tick at 20 Hz →
 //                                        300 ticks per tank), ab-fuel-recharge 0 (dock-only),
 //                                        ab-accel 14 / ab-on-rate 2.5 / ab-off-rate 1.5.
 //                                        default hold: 2 decoy + 2 fuel pod.
-//   fuel-pod-1: cargo-id 5, mass 1, charges-per-pack 1, fuel-per-charge 999 (≥ tank ⇒ full refill).
+//   fuel-pod-1: cargo-id 5, mass 1, charges-per-pack 1, fuel-per-charge 999 (≥ tank ⇒ full refill),
+//               load-time 2.0 s ⇒ FuelPodReloadTicks 40.
 //
 // Scenarios:
 //   1. Seed: requested pods land in FuelPodAmmo (charges = packs × 1); duplicate cargo lines
-//      accumulate; spawn fuel is the full tank.
+//      accumulate; spawn fuel is the full tank; the authored load time projects to ticks.
 //   2. No boost, no burn: an empty tank with pods in reserve consumes nothing while boost is
 //      released (recharge-0 hull: fuel pins at 0).
-//   3. Auto-load: the first held-boost tick after empty consumes ONE pod pre-Integrate — the
-//      tank refills to max (999 clamps) minus that tick's drain.
-//   4. Boost continuity: a continuous burn through both reserve pods never dips AbPower until
-//      the FINAL tank runs dry (the refill lands before the gate reads fuel), then the
-//      afterburner dies exactly like a legacy empty tank.
-//   5. Death-eject: the escape pod spawned from a killed interceptor carries no fuel pods.
+//   3. Timed load: the first held-boost tick after empty COMMITS one pod (count drops, tank stays
+//      dry), the tank stays at 0 for the whole load — exactly once, not once per tick — and fills
+//      on the completion tick. Releasing boost mid-load does not abort the charge already spent.
+//   4. Boost gap: a continuous burn through both reserve pods dies at each swap (the tank is empty
+//      for the load), relights at full ramp after each, and stays dead once the reserve is spent.
+//   5. Legacy 0-tick load: a pod with no authored load time refills in the same tick, AbPower
+//      unbroken — the pre-reload behavior, byte for byte.
+//   6. Death-eject: the escape pod spawned from a killed interceptor carries no fuel pods.
 
 using System.Linq;
 using SimServer.Content;
@@ -47,6 +51,7 @@ string worldPath = Path.Combine(AppContext.BaseDirectory, "content", "core", "wo
 const uint EmptySector = 999; // unregistered sector: boundless, rock-free (MissileTest's trick)
 const byte ClassInterceptor = 3; // lt-interceptor (no FlightModel constant — content class-id)
 const uint FuelPodCargoId = 5;
+const uint LoadTicks = 40; // fuel-pod-1 load-time 2.0 s at 20 Hz (expendables.yaml)
 
 // Boot a fresh Simulation the way SimServer's Program.cs does, PIGs/miners/shields/fog off so
 // nothing but the ship under test moves (LoadoutTest's idiom).
@@ -114,6 +119,13 @@ float maxFuel;
         "authored default hold seeds 2 fuel pods alongside the decoys",
         $"authored hold wrong (pods {authored.FuelPodAmmo}, chaff {authored.ChaffAmmo})"
     );
+
+    // The expendable's authored load-time (seconds) reaches the ship as ticks, cached at spawn.
+    Check(
+        ship.FuelPodReloadTicks == LoadTicks && ship.FuelLoadEndTick == 0,
+        $"authored fuel load-time projects to {LoadTicks} ticks, with nothing in the loader at spawn",
+        $"load ticks wrong (reload {ship.FuelPodReloadTicks} vs {LoadTicks}, pending {ship.FuelLoadEndTick})"
+    );
 }
 
 // ---- 2/3. Empty tank: no burn without boost; first held-boost tick auto-loads -------------------
@@ -147,46 +159,80 @@ float maxFuel;
         $"idle consume leaked (fuel {ship.State.Fuel}, pods {ship.FuelPodAmmo})"
     );
 
-    // First held-boost tick: ONE pod auto-loads pre-Integrate — full tank minus that tick's drain.
+    // First held-boost tick: ONE pod is committed to the loader — the count drops immediately, the
+    // tank does NOT (it has to wait out the authored load time).
     ship.HeldInput = new ShipInputState { Boost = true };
     sim.Step();
     Check(
-        ship.FuelPodAmmo == 1 && ship.State.Fuel > maxFuel - 1f && ship.State.Fuel < maxFuel,
-        $"first held-boost tick consumes one pod and refills to ~max ({ship.State.Fuel:0.0}/{maxFuel})",
-        $"auto-load wrong (pods {ship.FuelPodAmmo}, fuel {ship.State.Fuel})"
+        ship.FuelPodAmmo == 1 && ship.State.Fuel <= 0f && ship.FuelLoadEndTick != 0,
+        "first held-boost tick commits one pod to the loader (count drops, tank still dry)",
+        $"commit wrong (pods {ship.FuelPodAmmo}, fuel {ship.State.Fuel}, pending {ship.FuelLoadEndTick})"
+    );
+
+    // The whole load window: the tank stays at 0 and NO further pod is spent (one commit, not one
+    // per tick), and boost released mid-load does not abort the charge already taken from the hold.
+    for (int i = 0; i < (int)LoadTicks - 1; i++)
+    {
+        ship.HeldInput = new ShipInputState { Boost = i % 4 != 0 }; // let go periodically
+        sim.Step();
+    }
+    Check(
+        ship.FuelPodAmmo == 1 && ship.State.Fuel <= 0f && ship.FuelLoadEndTick != 0,
+        $"the tank stays dry for the full {LoadTicks}-tick load and only ONE pod is spent",
+        $"mid-load wrong (pods {ship.FuelPodAmmo}, fuel {ship.State.Fuel}, pending {ship.FuelLoadEndTick})"
+    );
+
+    // Completion tick: the charge lands (999 clamps to max-fuel) minus this tick's drain.
+    ship.HeldInput = new ShipInputState { Boost = true };
+    sim.Step();
+    Check(
+        ship.FuelPodAmmo == 1 && ship.State.Fuel > maxFuel - 1f && ship.State.Fuel < maxFuel && ship.FuelLoadEndTick == 0,
+        $"the load completes on its tick and refills to ~max ({ship.State.Fuel:0.0}/{maxFuel})",
+        $"completion wrong (pods {ship.FuelPodAmmo}, fuel {ship.State.Fuel}, pending {ship.FuelLoadEndTick})"
     );
 }
 
-// ---- 4. Boost continuity through both pods, then dies dry ---------------------------------------
+// ---- 4. Boost GAP at each pod swap, relight after, dead once the reserve is spent ----------------
 {
     var sim = BootSim(seed: 4);
     var ship = Spawn(sim, 1, team: 0, cls: ClassInterceptor, cargo: [(FuelPodCargoId, 2)]);
 
-    // 3 tanks (spawn + 2 pods) at 300 ticks each. Track AbPower once the ramp is up (ab-on-rate
-    // 2.5 → full in 8 ticks; start at 30): it must NEVER dip through both swaps.
+    // 3 tanks (spawn + 2 pods) at 300 ticks each, plus a 40-tick load before each pod lands:
+    // 300 + 40 + 300 + 40 + 300 = 980 ticks of held boost before the ship is finally dry.
     float minAb = float.MaxValue;
+    float abMidSecondTank = -1f,
+        abMidThirdTank = -1f;
     int dryTick = -1;
-    for (int i = 0; i < 960; i++)
+    for (int i = 0; i < 1100; i++)
     {
         ship.HeldInput = new ShipInputState { Boost = true };
         sim.Step();
-        if (dryTick < 0)
-        {
-            if (i >= 30)
-                minAb = System.MathF.Min(minAb, ship.State.AbPower);
-            if (ship.FuelPodAmmo == 0 && ship.State.Fuel <= 0f)
-                dryTick = i;
-        }
+        if (dryTick >= 0)
+            continue;
+        if (i >= 30)
+            minAb = System.MathF.Min(minAb, ship.State.AbPower);
+        if (i == 500)
+            abMidSecondTank = ship.State.AbPower;
+        if (i == 850)
+            abMidThirdTank = ship.State.AbPower;
+        // Truly dry = reserve spent AND nothing left in the loader (mid-load the tank also reads 0).
+        if (ship.FuelPodAmmo == 0 && ship.State.Fuel <= 0f && ship.FuelLoadEndTick == 0)
+            dryTick = i;
     }
     Check(
-        dryTick > 850 && dryTick < 940,
-        $"reserve chain sustains ~900 ticks of continuous boost (dry at {dryTick})",
+        dryTick > 950 && dryTick < 1010,
+        $"reserve chain sustains ~980 ticks of boost — 3 tanks plus two {LoadTicks}-tick loads (dry at {dryTick})",
         $"chain length wrong (dry at {dryTick})"
     );
     Check(
-        minAb >= 0.99f,
-        "AbPower never dips through either pod swap (refill lands before the gate reads fuel)",
-        $"afterburner blinked mid-chain (min AbPower {minAb})"
+        minAb < 0.1f,
+        $"the afterburner DIES during a pod load — the tank is empty while it loads (min AbPower {minAb:0.000})",
+        $"afterburner never dropped through a load (min AbPower {minAb})"
+    );
+    Check(
+        abMidSecondTank >= 0.99f && abMidThirdTank >= 0.99f,
+        "the afterburner relights to full ramp on each freshly loaded tank",
+        $"relight wrong (mid-2nd {abMidSecondTank}, mid-3rd {abMidThirdTank})"
     );
     Check(
         ship.State.AbPower < 0.9f,
@@ -195,7 +241,34 @@ float maxFuel;
     );
 }
 
-// ---- 5. Death-eject: the escape pod carries no fuel pods ----------------------------------------
+// ---- 5. Legacy 0-tick load: same-tick refill, unbroken AbPower -----------------------------------
+{
+    var sim = BootSim(seed: 5);
+    var ship = Spawn(sim, 1, team: 0, cls: ClassInterceptor, cargo: [(FuelPodCargoId, 1)]);
+    ship.FuelPodReloadTicks = 0; // an expendable authoring no load-time (the pre-reload behavior)
+
+    float minAb = float.MaxValue;
+    int guard = 0;
+    while (ship.FuelPodAmmo > 0 && guard++ < 400)
+    {
+        ship.HeldInput = new ShipInputState { Boost = true };
+        sim.Step();
+        if (guard >= 30)
+            minAb = System.MathF.Min(minAb, ship.State.AbPower);
+    }
+    Check(
+        ship.State.Fuel > maxFuel - 1f && ship.FuelLoadEndTick == 0,
+        $"a 0-tick load refills in the same tick it commits ({ship.State.Fuel:0.0}/{maxFuel})",
+        $"instant load wrong (fuel {ship.State.Fuel}, pending {ship.FuelLoadEndTick})"
+    );
+    Check(
+        minAb >= 0.99f,
+        "AbPower never dips across a 0-tick swap (the refill lands before the gate reads fuel)",
+        $"afterburner blinked on an instant load (min AbPower {minAb})"
+    );
+}
+
+// ---- 6. Death-eject: the escape pod carries no fuel pods ----------------------------------------
 {
     var sim = BootSim(seed: 5);
     var ship = Spawn(sim, 1, team: 0, cls: ClassInterceptor, cargo: [(FuelPodCargoId, 2)]);

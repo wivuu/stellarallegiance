@@ -59,8 +59,15 @@ public sealed partial class Simulation
             return;
         if (!WeaponDefs.TryGetValue(ship.ProbeWeaponId, out var w))
             return;
-        // Authoritative cadence gate (the debounce for held-input replay).
-        if (ship.LastProbeTick != 0 && tick - ship.LastProbeTick < w.FireIntervalTicks)
+        // Authoritative cadence gate (the debounce for held-input replay), widened by the time the
+        // next probe takes to load out of the hold (longest of the two wins).
+        if (
+            !FireCadence.MountFires(
+                tick,
+                ship.LastProbeTick,
+                FireCadence.LoadIntervalTicks(w.FireIntervalTicks, w.ReloadTicks)
+            )
+        )
             return;
 
         ship.ProbeAmmo -= 1;

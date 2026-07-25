@@ -54,6 +54,7 @@ public partial class PredictionController : Node3D
         public ShipInputState Input;
         public ShipState Predicted;
         public byte PredictedPods; // fuel-pod reserve AFTER this tick's auto-load (reconcile resync anchor)
+        public uint PredictedLoadEnd; // pending pod-load completion tick AFTER this tick (0 = none)
     }
 
     // Dynamic engine glow, fed the local input's forward throttle each prediction
@@ -310,25 +311,43 @@ public partial class PredictionController : Node3D
     // happens instead of a round-trip later. Seeded/resynced from the snapshot fuelPodAmmo byte.
     private byte _predFuelPods;
     private float _fuelPodYield; // streamed CargoItemDef.FuelPerCharge (re-pulled each Step)
+    private uint _fuelPodReloadTicks; // streamed CargoItemDef.ReloadTicks (re-pulled each Step)
     public int FuelPods => _predFuelPods;
 
-    // The server's Pass A fuel-pod rule, applied to a state about to Integrate under `input`.
-    // Kept as the single client mirror so live Step and reconcile replay can't drift apart.
-    // The yield>0 guard also keeps a defs gap from burning pods into a 0-fuel refill.
-    private void ConsumeFuelPod(ref ShipState st, in ShipInputState input, ref byte pods)
+    // Predicted completion tick of the pod load in progress (0 = none). The pod is already spent and
+    // the tank stays EMPTY until this tick — the mirror of ShipSim.FuelLoadEndTick. Client-only
+    // state (nothing streams it), so it is replayed through the input buffer like _predFuelPods and
+    // is deliberately PRESERVED across the good-prediction resync: clearing it there would restart
+    // the load every snapshot and eat the whole reserve.
+    private uint _predFuelLoadEnd;
+
+    // Load progress 0..1 for the HUD's POD readout; 0 when nothing is loading. Derived from the
+    // predicted stamps (no round-trip), so the sweep starts on the same tick the tank dies.
+    public float FuelLoadFrac =>
+        _predFuelLoadEnd == 0 || _fuelPodReloadTicks == 0
+            ? 0f
+            : Mathf.Clamp(1f - (float)(_predFuelLoadEnd - (double)_clientTick) / _fuelPodReloadTicks, 0f, 1f);
+    public bool FuelLoading => _predFuelLoadEnd != 0;
+
+    // The server's Pass A fuel-pod rule, applied to a state about to Integrate under `input` at
+    // `tick`. Kept as the single client mirror so live Step and reconcile replay can't drift apart.
+    // Two-phase, exactly like Simulation.Step: the empty tank COMMITS a pod to the loader, and the
+    // tank refills only when the load completes (a 0-tick load completes in the same tick, the
+    // pre-reload behavior). The yield>0 guard also keeps a defs gap from burning pods into a
+    // 0-fuel refill.
+    private void ConsumeFuelPod(ref ShipState st, in ShipInputState input, ref byte pods, ref uint loadEnd, uint tick)
     {
-        if (
-            !IsPod
-            && pods > 0
-            && input.Boost
-            && _fuelPodYield > 0f
-            && _stats.MaxFuel > 0f
-            && _stats.AbThrust > 0f
-            && st.Fuel <= 0f
-        )
+        if (IsPod || _stats.MaxFuel <= 0f || _stats.AbThrust <= 0f)
+            return;
+        if (loadEnd == 0 && pods > 0 && input.Boost && st.Fuel <= 0f && _fuelPodYield > 0f)
         {
             pods--;
+            loadEnd = tick + _fuelPodReloadTicks;
+        }
+        if (loadEnd != 0 && tick >= loadEnd)
+        {
             st.Fuel = System.MathF.Min(_stats.MaxFuel, _fuelPodYield);
+            loadEnd = 0;
         }
     }
 
@@ -426,12 +445,13 @@ public partial class PredictionController : Node3D
     // class (Scout/Bomber/Pod) shows no plume even while Shift is held — mirroring the
     // FlightModel's own `i.Boost && st.AbThrust > 0` gate so VFX matches authority. Also
     // dies on an empty tank (MaxFuel > 0 && Fuel <= 0) exactly like FlightModel.Integrate's
-    // `afterburning` gate, so the exhaust plume cuts out the instant the server's does —
-    // unless a fuel-pod reserve remains: the next Step's auto-load refills the tank, so the
-    // plume must not flicker in the sub-tick window between empty and refilled.
+    // `afterburning` gate, so the exhaust plume cuts out the instant the server's does. A pod being
+    // loaded is NOT a reason to keep it lit: the tank stays empty for the whole load, so the plume
+    // dies with it and relights when the charge lands (the visual tell that a reload is happening).
+    // An instant (0-tick) load still shows no flicker — the tank refills in the same tick.
     public void SetAfterburner(float boost) =>
         _afterburner =
-            _hasStats && _stats.AbThrust > 0f && (_stats.MaxFuel <= 0f || _state.Fuel > 0f || _predFuelPods > 0)
+            _hasStats && _stats.AbThrust > 0f && (_stats.MaxFuel <= 0f || _state.Fuel > 0f)
                 ? Mathf.Clamp(boost, 0f, 1f)
                 : 0f;
 
@@ -457,6 +477,7 @@ public partial class PredictionController : Node3D
         _hasStats = defs.TryGetStats((byte)row.Class, row.IsPod, out _stats);
         _launchClassMask = defs.LaunchClassMask(row.IsPod ? DefRegistry.PodClassId : (byte)row.Class);
         _predFuelPods = row.FuelPodAmmo;
+        _predFuelLoadEnd = 0; // a fresh ship launches with a loaded tank, nothing in the loader
         _state = ShipMath.StateFromRow(row);
         _prevState = _state;
         _buffer.Clear();
@@ -499,9 +520,12 @@ public partial class PredictionController : Node3D
             return _shotsOut;
         // Fuel-pod yield rides the streamed cargo defs — re-pulled like _stats so a live YAML
         // retune flows in (no baked fallback: 0 until the defs arrive disables the mirror).
-        _fuelPodYield = _defs.FuelCargoItem()?.FuelPerCharge ?? 0f;
+        var fuelItem = _defs.FuelCargoItem();
+        _fuelPodYield = fuelItem?.FuelPerCharge ?? 0f;
+        _fuelPodReloadTicks = fuelItem?.ReloadTicks ?? 0u;
         _throttle = Mathf.Clamp(input.Thrust, 0f, 1f); // forward thrust drives the engine glow
-        ConsumeFuelPod(ref _state, input, ref _predFuelPods); // mirror of the server's pre-Integrate auto-load
+        // Mirror of the server's pre-Integrate auto-load (commit a pod on empty, fill when loaded).
+        ConsumeFuelPod(ref _state, input, ref _predFuelPods, ref _predFuelLoadEnd, clientTick);
         _state = FlightModel.Integrate(_state, input, _stats);
         ResolveCollisions(ref _state, clientTick);
         _buffer.Add(
@@ -511,6 +535,7 @@ public partial class PredictionController : Node3D
                 Input = input,
                 Predicted = _state,
                 PredictedPods = _predFuelPods,
+                PredictedLoadEnd = _predFuelLoadEnd,
             }
         );
         if (_buffer.Count > BufferLen)
@@ -659,12 +684,16 @@ public partial class PredictionController : Node3D
             WindowMaxReconcileErr = posErr; // window peak for [predict-stats] (zeroed by the Hud each report)
 
         var replay = _buffer.GetRange(idx + 1, _buffer.Count - (idx + 1));
+        // The pending pod load is client-only state (nothing streams it): resume it from what was
+        // predicted AT tick N — read BEFORE the buffer is dropped — and let the replay carry it
+        // forward tick by tick, exactly like the pod count.
+        uint loadEnd = _buffer[idx].PredictedLoadEnd;
         _buffer.Clear();
         var s = auth;
         byte pods = row.FuelPodAmmo;
         for (int i = 0; i < replay.Count; i++)
         {
-            ConsumeFuelPod(ref s, replay[i].Input, ref pods);
+            ConsumeFuelPod(ref s, replay[i].Input, ref pods, ref loadEnd, replay[i].Tick);
             s = FlightModel.Integrate(s, replay[i].Input, _stats);
             // Replay: time-align obstacles to each replayed entry's own tick (this fixes the
             // present-time-pose replay flaw too); excluded from the local_hits contact count.
@@ -672,10 +701,12 @@ public partial class PredictionController : Node3D
             var e = replay[i];
             e.Predicted = s;
             e.PredictedPods = pods;
+            e.PredictedLoadEnd = loadEnd;
             replay[i] = e;
             _buffer.Add(e);
         }
         _predFuelPods = pods;
+        _predFuelLoadEnd = loadEnd;
         RebaseTo(s);
     }
 

@@ -20,10 +20,8 @@ Archives:
 
 ## QUICKNOTES:
 - **[M]** Code cleanup and refactor
-- Reloading things from cargo should take a configurable amount of time (i.e. ammo and fuel)
+- Proceed to dropped salvage below
 - Look for opportunities to utilize native vector3 and SIMD for performance improvements
-- Capital
-  - Shipyard can be flown through doublecheck collisions - show me an interactive visual debug of the collision mesh.
 ---
 
 ## Content philosophy (the through-line)

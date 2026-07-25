@@ -56,8 +56,15 @@ public sealed partial class Simulation
             return;
         if (!WeaponDefs.TryGetValue(ship.MineWeaponId, out var w))
             return;
-        // Authoritative cadence gate (the debounce for held-input replay — never client-edge-detect).
-        if (ship.LastMineTick != 0 && tick - ship.LastMineTick < w.FireIntervalTicks)
+        // Authoritative cadence gate (the debounce for held-input replay — never client-edge-detect),
+        // widened by the time the next field takes to load out of the hold (longest of the two wins).
+        if (
+            !FireCadence.MountFires(
+                tick,
+                ship.LastMineTick,
+                FireCadence.LoadIntervalTicks(w.FireIntervalTicks, w.ReloadTicks)
+            )
+        )
             return;
 
         // Mesh count is the authored cosmetic density, capped at the 64-bit aliveMask; it is NOT tied to

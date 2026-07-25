@@ -47,7 +47,14 @@ public sealed partial class Simulation
         var w = WeaponDefs[ship.ChaffWeaponId];
         // Authoritative cadence debounce (mirror TryFireMissile's LastMissileTick): held-input replay
         // re-asserts DropChaff every tick, so the server — NOT the client — edge-detects a new eject.
-        if (ship.LastChaffTick != 0 && tick - ship.LastChaffTick < w.FireIntervalTicks)
+        // The window also covers loading the next puff out of the hold (longest of the two wins).
+        if (
+            !FireCadence.MountFires(
+                tick,
+                ship.LastChaffTick,
+                FireCadence.LoadIntervalTicks(w.FireIntervalTicks, w.ReloadTicks)
+            )
+        )
             return;
 
         ship.ChaffAmmo--;

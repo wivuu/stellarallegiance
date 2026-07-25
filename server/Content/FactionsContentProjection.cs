@@ -396,6 +396,7 @@ public static class FactionsContentProjection
         {
             var def = Common();
             def.Kind = WeaponKind.Missile;
+            def.ReloadTicks = LoadTicks(m.LoadTime); // rack: time to load the next round from the hold
             // Ballistics reused from the referenced missile.
             def.Damage = (float)m.Power;
             def.ProjectileSpeed = (float)m.InitialSpeed;
@@ -426,6 +427,7 @@ public static class FactionsContentProjection
         {
             var def = Common();
             def.Kind = WeaponKind.Mine;
+            def.ReloadTicks = LoadTicks(mn.LoadTime);
             // Field/arming stats reused from the referenced mine. The field is one damage VOLUME
             // (cloud-radius sphere); there is no per-mine trigger/blast radius any more.
             def.ProjectileLifeTicks = (uint)Math.Round(mn.Lifespan * 20.0); // field lifespan
@@ -445,6 +447,7 @@ public static class FactionsContentProjection
         {
             var def = Common();
             def.Kind = WeaponKind.Chaff;
+            def.ReloadTicks = LoadTicks(ch.LoadTime);
             def.ProjectileLifeTicks = (uint)Math.Round(ch.Lifespan * 20.0); // puff lifespan
             def.ChaffStrength = (float)ch.ChaffStrength;
             def.DecoyRadius = (float)ch.DecoyRadius;
@@ -457,6 +460,7 @@ public static class FactionsContentProjection
         {
             var def = Common();
             def.Kind = WeaponKind.Probe;
+            def.ReloadTicks = LoadTicks(pr.LoadTime);
             def.ProjectileLifeTicks = (uint)Math.Round(pr.Lifespan * 20.0); // deployed-probe lifespan
             def.ProbeSightRadius = (float)pr.SightRadius;
             def.ProbeLifespanSec = (float)pr.Lifespan;
@@ -481,6 +485,11 @@ public static class FactionsContentProjection
     // a signature of 0 (which would make the thing undetectable at any range).
     private static float Sig(double v) => v <= 0 ? 1f : (float)v;
 
+    // Authored `load-time` (seconds, core Allegiance expendable data) -> the tick domain the sim
+    // gates in. Converted ONCE here, like every other seconds->ticks stat (LockTime, Lifespan,
+    // ArmDelay), so the runtime gate stays integer-deterministic for PIG replay.
+    private static uint LoadTicks(double seconds) => seconds <= 0 ? 0u : (uint)Math.Round(seconds * 20.0);
+
     // Authored trail tint: 8-digit RRGGBBAA verbatim, or 6-digit RRGGBB promoted to opaque (…FF).
     // CoreValidator already proved the string is 6/8-digit hex when present.
     private static uint ParseTrailColor(string? hex)
@@ -501,6 +510,9 @@ public static class FactionsContentProjection
             ChargesPerPack = (byte)System.Math.Max(1, e.ChargesPerPack ?? 1),
             Description = e.Description ?? "",
             FuelPerCharge = e is Factions.FuelPod f ? (float)f.FuelPerCharge : 0f,
+            // Load time out of the hold. Only the fuel pod consumes it from the CARGO def (it has no
+            // launcher); a dispenser's identical value rides its WeaponDef instead.
+            ReloadTicks = LoadTicks(e.LoadTime),
         };
 
     private static BaseDef ProjectBase(Factions.Station s, short successorBaseTypeId, IReadOnlySet<uint> rackWeaponIds) =>
