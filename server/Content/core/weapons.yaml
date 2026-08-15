@@ -3,6 +3,12 @@
 # (fire-interval-ticks / projectile-life-ticks) are explicit runtime extensions.
 # mass = payload units the weapon occupies when mounted (counts against the hull's payload-capacity).
 #
+# Guns have NO reload: they carry infinite ammo and feed from no cargo hold, so fire-interval-ticks is
+# their only gate. The core `reload-time` field here is IGC dtimeReady and is NOT read at runtime
+# (fire-interval-ticks supersedes it), and the RELOAD mechanic — the time to pull a charge out of the
+# hold — is authored as `load-time` on the EXPENDABLES a launcher carries (expendables.yaml).
+# ContentValidator refuses to boot a bolt weapon that somehow reaches the sim with a load time.
+#
 # Iron Coalition gun line (Phase 2, PCore014.igc). Three tiered lines share the gun weapon-id space
 # with the launchers (launchers.yaml claims 3–8):
 #   PW Gat Gun 1/2/3   = weapon-ids 0/1/2   (partMask 0x1, wep09)  — the all-round gun

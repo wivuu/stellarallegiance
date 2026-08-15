@@ -171,17 +171,17 @@ public partial class WeaponsPanel : Control
         // ---- Dispenser rows (chaff [C] / mine [B] / probe [G]), keyed to their hotkeys ----
         if (chaffDisp != null)
         {
-            DrawDispenserRow("C", chaffDisp, _net.LocalChaffAmmo, left, right, y, mono);
+            DrawDispenserRow("C", chaffDisp, _net.LocalChaffAmmo, _net.LocalChaffLoadTick, left, right, y, mono);
             y += SecRowH;
         }
         if (mineDisp != null)
         {
-            DrawDispenserRow("B", mineDisp, _net.LocalMineAmmo, left, right, y, mono);
+            DrawDispenserRow("B", mineDisp, _net.LocalMineAmmo, _net.LocalMineLoadTick, left, right, y, mono);
             y += SecRowH;
         }
         if (probeDisp != null)
         {
-            DrawDispenserRow("G", probeDisp, _net.LocalProbeAmmo, left, right, y, mono);
+            DrawDispenserRow("G", probeDisp, _net.LocalProbeAmmo, _net.LocalProbeLoadTick, left, right, y, mono);
             y += SecRowH;
         }
     }
@@ -195,8 +195,7 @@ public partial class WeaponsPanel : Control
     {
         if (_defs.TryGetShipDef(classId, out var def) && def.DefaultCargo is not null)
             foreach (var load in def.DefaultCargo)
-            foreach (var w in _defs.AllWeapons())
-                if (w.Kind == kind && w.CargoId == load.CargoId)
+                if (_defs.DispenserForCargo(load.CargoId) is WeaponDef w && w.Kind == kind)
                     return w;
         if (liveAmmo > 0)
             foreach (var w in _defs.AllWeapons())
@@ -207,20 +206,53 @@ public partial class WeaponsPanel : Control
 
     // The researched tier's display name for a dispenser row. Cargo stays one tier-neutral item per
     // line (the def found by CargoId is always tier 1) while research upgrades what actually fires —
-    // Simulation.SeedDispenserAmmo walks the same successor chain server-side — so the row names the
-    // LIVE tier. The pack/ammo math stays on the tier-1 def (it owns the CargoId). Walk shared with
-    // ShipLoadout via DefRegistry.MigrateWeaponTier.
-    private string MigratedDispenserName(WeaponDef disp)
+    // Simulation.SeedDispenserAmmo applies the same shared rule server-side — so the row names the
+    // LIVE tier. The pack/ammo math stays on the tier-1 def (it owns the CargoId). The hangar's cargo
+    // hold names its rows the same way (ShipLoadout.Hangar), both via DefRegistry.MigrateWeaponTier.
+    private string MigratedDispenserName(WeaponDef disp) => MigratedDispenser(disp).Name;
+
+    // The tier that actually fires — the def whose cadence/load-time the server gates on.
+    private WeaponDef MigratedDispenser(WeaponDef disp) =>
+        _defs.GetWeapon(_defs.MigrateWeaponTier(disp.WeaponId, _net.MyTeam, _world)) ?? disp;
+
+    // Load-from-hold progress for a cargo-fed launcher/dispenser: 0 just after a charge was spent,
+    // 1 once the slot is usable again. `spentTick` is the SERVER tick of the spend, derived by
+    // GameNetClient from the ammo-byte edge (0 = nothing spent this sortie), and the window is the
+    // very rule the sim gates on — FireCadence.LoadIntervalTicks — so the bar can't promise a shot
+    // the server will refuse.
+    private float LoadFrac(WeaponDef live, uint spentTick)
     {
-        uint id = _defs.MigrateWeaponTier(disp.WeaponId, _net.MyTeam, _world);
-        return _defs.GetWeapon(id) is WeaponDef live ? live.Name : disp.Name;
+        uint window = FireCadence.LoadIntervalTicks(live.FireIntervalTicks, live.ReloadTicks);
+        if (spentTick == 0 || window == 0)
+            return 1f;
+        uint now = _world.ServerTick;
+        return now <= spentTick ? 0f : Mathf.Clamp((now - spentTick) / (float)window, 0f, 1f);
     }
+
+    // Is the wait dominated by pulling the next charge out of the hold, or by the launcher's own
+    // cadence? Only the former earns the RELOADING label (an author who leaves load-time at 0 keeps
+    // the old CYCLING readout verbatim).
+    private static string WaitLabel(WeaponDef live) => live.ReloadTicks > live.FireIntervalTicks ? "RELOADING" : "CYCLING";
+
+    // Thin progress line along the row's bottom edge — the reload readout for the compact secondary/
+    // dispenser rows, which have no room for the primary slot's full CYCLE bar.
+    private void DrawLoadLine(float left, float right, float y, float frac) =>
+        DrawBar(new Rect2(left, y + SecRowH - 3f, right - left, 2f), frac, DesignTokens.Warn);
 
     // One dispenser row: "[key]  NAME  <pack-pips>  NN  READY/EMPTY". `ammo` is the local ship's
     // authoritative TOTAL charge count (LocalChaffAmmo / LocalMineAmmo); dispensers are loaded in
     // packs of `ChargesPerPack`, so the pips show PACKS still holding a charge (bounded, readable)
     // and the NN number carries the exact remaining charges.
-    private void DrawDispenserRow(string keyHint, WeaponDef disp, int ammo, float left, float right, float y, Font mono)
+    private void DrawDispenserRow(
+        string keyHint,
+        WeaponDef disp,
+        int ammo,
+        uint spentTick,
+        float left,
+        float right,
+        float y,
+        Font mono
+    )
     {
         float mid = y + SecRowH * 0.5f;
         DrawString(
@@ -238,8 +270,17 @@ public partial class WeaponsPanel : Control
             packSize = 1;
         int packs = (ammo + packSize - 1) / packSize; // ceil — packs still holding at least one charge
 
-        (string txt, Color col) = ammo == 0 ? ("EMPTY", DesignTokens.TextDim) : ("READY", DesignTokens.Ok);
+        // A spent charge takes the live tier's load time to come out of the hold — until then the
+        // dispenser is gated server-side, so the row says so (and shows how far along it is).
+        WeaponDef live = MigratedDispenser(disp);
+        float loadFrac = LoadFrac(live, spentTick);
+        (string txt, Color col) =
+            ammo == 0 ? ("EMPTY", DesignTokens.TextDim)
+            : loadFrac < 1f ? (WaitLabel(live), DesignTokens.Warn)
+            : ("READY", DesignTokens.Ok);
         DrawStringRight(mono, new Vector2(right, mid + 4f), txt, 10, col);
+        if (ammo > 0 && loadFrac < 1f)
+            DrawLoadLine(left, right, y, loadFrac);
 
         // Exact remaining charges, just left of the state tag.
         float countRight = right - MonoWidth(mono, txt, 10) - 10f;
@@ -292,6 +333,14 @@ public partial class WeaponsPanel : Control
             int mag = System.Math.Max(w.MagazineSize, (byte)ammo);
 
             (string txt, Color col, bool pulse) = LauncherStatus(ammo, locked, prog);
+            // Loading the next round out of the rack outranks the lock readout: the tube is empty,
+            // so a completed lock still can't launch until the charge is in.
+            float loadFrac = LoadFrac(w, _net.LocalMissileLoadTick);
+            if (ammo > 0 && loadFrac < 1f)
+            {
+                (txt, col, pulse) = (WaitLabel(w), DesignTokens.Warn, false);
+                DrawLoadLine(left, right, y, loadFrac);
+            }
             DrawStringRight(mono, new Vector2(right, mid + 4f), txt, 10, pulse ? Pulsed(col) : col);
 
             float pipsRight = right - MonoWidth(mono, txt, 10) - 10f;

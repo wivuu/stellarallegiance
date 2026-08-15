@@ -31,6 +31,7 @@
     <Project Path="tests/LobbyTest/LobbyTest.csproj" />
     <Project Path="tests/MiningTest/MiningTest.csproj" />
     <Project Path="tests/MissileTest/MissileTest.csproj" />
+    <Project Path="tests/ReloadTest/ReloadTest.csproj" />
     <Project Path="tests/StrategyTest/StrategyTest.csproj" />
     <Project Path="tests/TeamStateStoreTest/TeamStateStoreTest.csproj" />
   </Folder>

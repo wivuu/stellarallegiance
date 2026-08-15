@@ -319,6 +319,13 @@ public sealed partial class Simulation
         // input: a charge auto-consumes in Pass A when the tank empties while boost is held. ----
         public byte FuelPodAmmo; // charges left (packs × ChargesPerPack, capped 255)
         public float FuelPodFuelPerCharge; // tank refill per consumed charge (clamped to MaxFuel)
+        public uint FuelPodReloadTicks; // ticks a charge takes to load out of the hold (0 = instant)
+
+        // Tick the in-progress pod load completes on, or 0 when no load is pending. The pod is
+        // already spent (FuelPodAmmo decremented) — the tank stays EMPTY until this tick, so the
+        // afterburner really does die while the charge is loading. Mirrored client-side by
+        // PredictionController.ConsumeFuelPod. (Tick 0 never runs a Step, so 0 is a safe sentinel.)
+        public uint FuelLoadEndTick;
 
         // Last tick this ship spawned a minefield hit-FX ping (rate-limits the client's small
         // explosion + pop while it sits inside a lethal field — StepMines throttles off this).
@@ -467,6 +474,7 @@ public sealed partial class Simulation
     private readonly Dictionary<uint, float> _cargoMass = new();
     private readonly Dictionary<uint, byte> _chargesPerPack = new(); // dispenser ammo = packs × this
     private readonly Dictionary<uint, float> _fuelPerCharge = new(); // fuel cargo: tank refill per charge
+    private readonly Dictionary<uint, uint> _cargoReloadTicks = new(); // ticks a charge takes to load out of the hold
 
     // Clients with no live ship and a scheduled respawn tick (set when a player pod resolves).
     private readonly Dictionary<int, uint> _clientRespawn = new();
@@ -625,6 +633,7 @@ public sealed partial class Simulation
         {
             _cargoMass[c.CargoId] = c.Mass;
             _chargesPerPack[c.CargoId] = System.Math.Max((byte)1, c.ChargesPerPack);
+            _cargoReloadTicks[c.CargoId] = c.ReloadTicks;
             if (c.FuelPerCharge > 0f)
                 _fuelPerCharge[c.CargoId] = c.FuelPerCharge; // fuel cargo — no dispenser WeaponDef
         }
@@ -806,22 +815,32 @@ public sealed partial class Simulation
         {
             var input = InputFor(s, tick);
             var stats = StatsFor(s.Class, s.IsPod);
-            // Fuel-pod auto-load: Integrate's afterburner gate reads PRE-tick fuel (the tick that
-            // empties the tank still burns), so refilling here — on the first tick the tank sits
-            // empty while boost is held — keeps the afterburner lit with no gap and no AbPower
-            // decay. Server-side only; FlightModel.Integrate stays untouched (PIG determinism).
-            // The client mirrors this rule in PredictionController.
-            if (
-                !s.IsPod
-                && s.FuelPodAmmo > 0
-                && input.Boost
-                && stats.MaxFuel > 0f
-                && stats.AbThrust > 0f
-                && s.State.Fuel <= 0f
-            )
+            // Fuel-pod auto-load, resolved BETWEEN InputFor and Integrate: Integrate's afterburner
+            // gate reads PRE-tick fuel (the tick that empties the tank still burns), so the tank is
+            // topped up here rather than inside the flight model — FlightModel.Integrate stays
+            // untouched (PIG determinism). The client mirrors this rule in PredictionController.
+            // A pod does NOT arrive instantly: it takes FuelPodReloadTicks to come out of the hold,
+            // and the tank stays at 0 for the whole load, so the afterburner really does die while
+            // the charge is loading. An authored load time of 0 completes in this same tick —
+            // byte-identical to the pre-reload "no gap, no AbPower decay" behavior.
+            if (!s.IsPod && stats.MaxFuel > 0f && stats.AbThrust > 0f)
             {
-                s.FuelPodAmmo--;
-                s.State.Fuel = MathF.Min(stats.MaxFuel, s.FuelPodFuelPerCharge);
+                if (
+                    s.FuelLoadEndTick == 0
+                    && s.FuelPodAmmo > 0
+                    && input.Boost
+                    && s.State.Fuel <= 0f
+                    && s.FuelPodFuelPerCharge > 0f
+                )
+                {
+                    s.FuelPodAmmo--; // committed to the loader the moment the tank runs dry
+                    s.FuelLoadEndTick = tick + s.FuelPodReloadTicks;
+                }
+                if (s.FuelLoadEndTick != 0 && tick >= s.FuelLoadEndTick)
+                {
+                    s.State.Fuel = MathF.Min(stats.MaxFuel, s.FuelPodFuelPerCharge);
+                    s.FuelLoadEndTick = 0;
+                }
             }
             s.State = FlightModel.Integrate(s.State, input, stats);
             s.LastInputTick = tick;
@@ -1360,7 +1379,51 @@ public sealed partial class Simulation
         return s;
     }
 
-    // Seed the ship's dispenser ammo/weapon-ids from an ALREADY-VALIDATED hold (ResolveLoadout).
+    // THE gate every cargo-fed weapon shares — the missile rack and all three dispensers (chaff /
+    // mines / probes). Only the deploy geometry differs between them, so only that stays per-site.
+    //
+    // Two rules live here, and both are load-bearing:
+    //   - The cadence window is the SERVER's ONLY drop/fire-input debounce. Held input replays
+    //     Firing2 / DropChaff / DropMine / DropProbe every tick, so the client must never
+    //     edge-detect one; the server decides what counts as a new charge.
+    //   - Cadence and reload are ONE window, not two (FireCadence.LoadIntervalTicks: longest wins),
+    //     so an authored load-time of 0 is exactly the legacy cadence-only behavior.
+    //
+    // COMMITS on success: the charge is spent and the slot stamped, so a true return means the
+    // caller has already paid and must deploy.
+    private static bool ConsumeCargoCharge(ref byte ammo, ref uint lastTick, uint tick, WeaponDef w)
+    {
+        if (ammo == 0)
+            return false;
+        if (!FireCadence.MountFires(tick, lastTick, FireCadence.LoadIntervalTicks(w.FireIntervalTicks, w.ReloadTicks)))
+            return false;
+        ammo--;
+        lastTick = tick;
+        return true;
+    }
+
+    // The dispenser flavor of the gate above: resolves the cargo-fed WeaponDef the ship is carrying
+    // (already tier-migrated at spawn by SeedDispenserAmmo) and spends one charge from it. Returns
+    // the def that just deployed, or null when this hull carries none, is spent, or is still
+    // cycling/reloading.
+    private WeaponDef? ConsumeDispenserCharge(ref byte ammo, uint weaponId, ref uint lastTick, uint tick)
+    {
+        if (weaponId == 0 || !WeaponDefs.TryGetValue(weaponId, out var w))
+            return null; // no dispenser cargo of this kind on the hull
+        return ConsumeCargoCharge(ref ammo, ref lastTick, tick, w) ? w : null;
+    }
+
+    // What a hull spawns holding when nobody customized it: the class's authored `default-cargo`,
+    // boot-validated to fit PayloadCapacity. THE one answer to that question — ResolveLoadout falls
+    // back to it for players, and SpawnPigShip seeds drones straight from it, so `default-cargo`
+    // means the same thing on both spawn paths.
+    private (uint, byte)[] DefaultCargoFor(byte cls) =>
+        ShipDefs.TryGetValue(cls, out var def)
+            ? def.DefaultCargo.Select(c => (c.CargoId, c.Count)).ToArray()
+            : System.Array.Empty<(uint, byte)>();
+
+    // Seed the ship's dispenser ammo/weapon-ids from an ALREADY-VALIDATED hold (ResolveLoadout, or
+    // DefaultCargoFor for a drone).
     private void SeedDispenserAmmo(ShipSim s, (uint cargoId, byte count)[] chosen)
     {
         World.TeamStates.TryGetValue(s.Team, out var teamState);
@@ -1373,6 +1436,8 @@ public sealed partial class Simulation
                 byte fuelPackSize = _chargesPerPack.TryGetValue(cargoId, out var fpk) ? fpk : (byte)1;
                 s.FuelPodAmmo = (byte)System.Math.Min(255, s.FuelPodAmmo + count * fuelPackSize);
                 s.FuelPodFuelPerCharge = perCharge;
+                // Cached on the ship so Pass A stays a dictionary-free hot loop (like the yield).
+                s.FuelPodReloadTicks = _cargoReloadTicks.TryGetValue(cargoId, out uint rt) ? rt : 0u;
                 continue;
             }
             if (!_dispenserByCargo.TryGetValue(cargoId, out var w))
@@ -1421,9 +1486,7 @@ public sealed partial class Simulation
     )
     {
         ShipDefs.TryGetValue(cls, out var def);
-        (uint, byte)[] fallbackCargo = def is null
-            ? System.Array.Empty<(uint, byte)>()
-            : def.DefaultCargo.Select(c => (c.CargoId, c.Count)).ToArray();
+        (uint, byte)[] fallbackCargo = DefaultCargoFor(cls);
         bool wantMounts = mounts is { Length: > 0 } && def is not null;
         bool wantCargo = requested is { Length: > 0 };
 
@@ -1542,38 +1605,21 @@ public sealed partial class Simulation
         return (effective, cargo);
     }
 
-    // Walk the weapon-tier successor chain for a team: while the current weapon is obsoleted by a tech
-    // the team owns and names a successor NO HEAVIER than itself, advance to that successor. A
-    // researched tier auto-replaces the guns it obsoletes at spawn. The mass guard keeps a boot-valid
-    // loadout within PayloadCapacity (a heavier successor is left for the player to mount explicitly).
-    // Bounded by the chain length (guard caps a malformed cycle). This is the authoritative twin of
-    // the client's ShipLoadout.MigrateTier display helper.
+    // The AUTHORITATIVE application of the shared weapon-tier succession rule (shared/WeaponTier.cs):
+    // a researched tier auto-replaces the guns/dispensers it obsoletes at spawn. The client's
+    // DefRegistry.MigrateWeaponTier feeds the same rule its own lookups so the hangar and the HUD
+    // name exactly what this hands the ship. A team with no state yet owns nothing, so it migrates
+    // nothing.
     private uint MigrateWeaponTier(World.TeamState? ts, uint weaponId)
     {
         if (ts is null)
             return weaponId;
-        for (int guard = 0; guard < 8; guard++)
-        {
-            if (
-                !WeaponDefs.TryGetValue(weaponId, out var w)
-                || w.SucceededByWeaponId == uint.MaxValue
-                || w.ObsoletedByTechIdx.Length == 0
-                || !WeaponDefs.TryGetValue(w.SucceededByWeaponId, out var next)
-                || next.Mass > w.Mass
-            )
-                return weaponId;
-            bool owns = false;
-            foreach (ushort t in w.ObsoletedByTechIdx)
-                if (t < Content.Techs.Count && ts.OwnedTechs.Contains(Content.Techs[t].Id))
-                {
-                    owns = true;
-                    break;
-                }
-            if (!owns)
-                return weaponId;
-            weaponId = w.SucceededByWeaponId;
-        }
-        return weaponId;
+
+        WeaponDef? Lookup(uint id) => WeaponDefs.TryGetValue(id, out var w) ? w : null;
+        bool Owns(ushort techIdx) =>
+            techIdx < Content.Techs.Count && ts.OwnedTechs.Contains(Content.Techs[techIdx].Id);
+
+        return WeaponTier.Migrate(weaponId, Lookup, Owns);
     }
 
     // Position a ship just outside its team base, launched out of one of the base's DOCKING-EXIT
@@ -1640,6 +1686,7 @@ public sealed partial class Simulation
         };
         s.LastFireTick = 0;
         s.MountLastFire = null; // per-mount cadence gates restart with the fresh LastFireTick
+        s.FuelLoadEndTick = 0; // a pod half-loaded at the old sortie's end is not still loading
         s.LastInputTick = tick;
         s.Alive = true;
     }
@@ -2940,13 +2987,8 @@ public sealed partial class Simulation
     {
         if (MissileMountFor(ship) is not (Muzzle mount, WeaponDef w))
             return; // no effective rack (none authored, or emptied in the hangar)
-        if (ship.MissileAmmo == 0)
-            return;
-        if (ship.LastMissileTick != 0 && tick - ship.LastMissileTick < w.FireIntervalTicks)
-            return;
-
-        ship.MissileAmmo--;
-        ship.LastMissileTick = tick;
+        if (!ConsumeCargoCharge(ref ship.MissileAmmo, ref ship.LastMissileTick, tick, w))
+            return; // empty rack, or still cycling/reloading
 
         Vec3 fwd = ship.State.Rot.Rotate(mount.Dir);
         Vec3 mp = ship.State.Pos + ship.State.Rot.Rotate(mount.Off);

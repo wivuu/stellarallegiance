@@ -418,6 +418,14 @@ public sealed partial class Simulation
         s.SigBias = ShieldDefFor(s).SignatureBias; // drones carry the same projected loadout bias
         if (MissileMountFor(slot.Class) is (_, WeaponDef mw)) // missile-armed pigs spawn with a full rack
             s.MissileAmmo = mw.MagazineSize;
+        // Drones carry the hull's authored hold too — same seam player spawns fall back to, so
+        // `default-cargo` means one thing across both spawn paths and a drone's dispenser tier
+        // follows team research (SeedDispenserAmmo walks the successor chain).
+        // NOTE: nothing consumes this yet. PIG input never raises DropChaff/DropMine/DropProbe and
+        // never holds Boost, so the seeded charges are inert until the AI learns to dispense (or
+        // until wrecks drop what they were carrying). It is seeded anyway so the authored data and
+        // the sim agree; a drone silently flying an empty hold was the inconsistency.
+        SeedDispenserAmmo(s, DefaultCargoFor(slot.Class));
 
         _ships[s.ShipId] = s;
         _order.Add(s);

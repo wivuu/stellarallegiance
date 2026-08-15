@@ -1037,16 +1037,20 @@ void LayChaffCloud(Simulation sim, Simulation.ShipSim ship, int count)
     );
 }
 
-// ---- 14. Chaff ammo + cadence: held DropChaff yields exactly ammo puffs at FireIntervalTicks ------
+// ---- 14. Chaff ammo + load window: held DropChaff yields exactly ammo puffs, one per window ------
+// The gap is the DISPENSER'S LOAD WINDOW — max(fire-interval-ticks, the counter expendable's
+// load-time in ticks), the shared FireCadence.LoadIntervalTicks rule the server gates on — so a
+// content retune of either number keeps this test honest (tests/ReloadTest owns the rule itself).
 {
     var (sim, _, target, _) = SetupDuel(seed: 14);
     var dispenser = sim.Content.Weapons.First(w => w.WeaponId == 6); // decoy dispenser
+    uint window = FireCadence.LoadIntervalTicks(dispenser.FireIntervalTicks, dispenser.ReloadTicks);
     const byte ammo = 5;
     target.ChaffAmmo = ammo;
     target.LastChaffTick = 0;
 
     var spawnTicks = new List<uint>();
-    uint budget = dispenser.FireIntervalTicks * ammo + 60;
+    uint budget = window * ammo + 60;
     for (uint i = 0; i < budget; i++)
     {
         target.HeldInput = new ShipInputState { DropChaff = true }; // held every tick (no client edge-detect)
@@ -1059,12 +1063,12 @@ void LayChaffCloud(Simulation sim, Simulation.ShipSim ship, int count)
     Check(target.ChaffAmmo == 0, "chaff ammo reaches exactly 0", $"chaff ammo left at {target.ChaffAmmo}");
     bool spacingOk = true;
     for (int i = 1; i < spawnTicks.Count; i++)
-        if (spawnTicks[i] - spawnTicks[i - 1] != dispenser.FireIntervalTicks)
+        if (spawnTicks[i] - spawnTicks[i - 1] != window)
             spacingOk = false;
     Check(
         spacingOk,
-        $"consecutive puffs are spaced exactly FireIntervalTicks ({dispenser.FireIntervalTicks}) apart",
-        $"chaff spacing wrong: [{string.Join(", ", spawnTicks)}] (want {dispenser.FireIntervalTicks}-tick gaps)"
+        $"consecutive puffs are spaced exactly one load window ({window} ticks) apart",
+        $"chaff spacing wrong: [{string.Join(", ", spawnTicks)}] (want {window}-tick gaps)"
     );
 }
 

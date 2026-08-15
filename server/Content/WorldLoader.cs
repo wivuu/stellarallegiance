@@ -326,6 +326,21 @@ public sealed class WorldMechanicsDef
     /// <summary>Escape-pod initial tumble, rad/s.</summary>
     public double? PodEjectSpin { get; set; }
 
+    /// <summary>Chaff puff eject distance aft of the hull, world units.</summary>
+    public double? ChaffEjectOffset { get; set; }
+
+    /// <summary>Fraction of the ejecting ship's velocity a chaff puff inherits.</summary>
+    public double? ChaffEjectVelInherit { get; set; }
+
+    /// <summary>Extra aft kick given to an ejected chaff puff, u/s.</summary>
+    public double? ChaffEjectKick { get; set; }
+
+    /// <summary>Clearance past the field's cloud-radius where a minefield centre is laid, world units.</summary>
+    public double? MineEjectClearance { get; set; }
+
+    /// <summary>Clearance past (ship radius + probe hit radius) where a probe is dropped, world units.</summary>
+    public double? ProbeEjectClearance { get; set; }
+
     /// <summary>Seconds a dropped client's ship is held for reconnect reclaim.</summary>
     public double? ReconnectGraceSeconds { get; set; }
 
@@ -651,6 +666,11 @@ public static class WorldLoader
             t.RescueRadiusMult = F(me.RescueRadiusMult, t.RescueRadiusMult);
             t.PodEjectSpeed = F(me.PodEjectSpeed, t.PodEjectSpeed);
             t.PodEjectSpin = F(me.PodEjectSpin, t.PodEjectSpin);
+            t.ChaffEjectOffset = F(me.ChaffEjectOffset, t.ChaffEjectOffset);
+            t.ChaffEjectVelInherit = F(me.ChaffEjectVelInherit, t.ChaffEjectVelInherit);
+            t.ChaffEjectKick = F(me.ChaffEjectKick, t.ChaffEjectKick);
+            t.MineEjectClearance = F(me.MineEjectClearance, t.MineEjectClearance);
+            t.ProbeEjectClearance = F(me.ProbeEjectClearance, t.ProbeEjectClearance);
             t.ReconnectGraceSeconds = F(me.ReconnectGraceSeconds, t.ReconnectGraceSeconds);
             t.EndedToLobbySeconds = F(me.EndedToLobbySeconds, t.EndedToLobbySeconds);
         }

@@ -106,7 +106,16 @@ public static class Wire
     // F3 map now resolves a constructor's station type through this id and captions it by the
     // station it carries ("Shipyard Constructor") instead of a hardcoded "Outpost Constructor".
     // Writer Protocol.BuildConstructorState ↔ reader GameNetClient.ApplyConstructorState.
-    public const byte ProtocolVersion = 35;
+    // (2026-07-24) timed reload from cargo: MsgDefs appends u32 ReloadTicks to each weapon record
+    // (after SucceededByWeaponId) and to each cargo-item record (after FuelPerCharge) — the ticks a
+    // charge takes to LOAD out of the hold, projected from the expendable's authored `load-time`.
+    // A cargo-fed launcher/dispenser is usable again after
+    // FireCadence.LoadIntervalTicks(FireIntervalTicks, ReloadTicks); a fuel pod commits at the empty
+    // tank and fills it only when its load completes (the tank — and the afterburner — stay dead
+    // meanwhile). 0 = instant, i.e. the pre-v36 behavior. No ship-record growth: the HUD derives the
+    // local reload clock from the already-streamed ammo-byte edge. Writer Protocol.WriteWeaponDefs /
+    // WriteCargoDefs ↔ reader GameNetClient.ReadWeaponDef / ReadCargoItemDef.
+    public const byte ProtocolVersion = 36;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

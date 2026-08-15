@@ -55,25 +55,19 @@ public sealed partial class Simulation
     // drop-input debounce; we never client-edge-detect). One deploy consumes ONE probe-cargo unit.
     private void TryDeployProbe(ShipSim ship, uint tick)
     {
-        if (ship.ProbeAmmo == 0 || ship.ProbeWeaponId == 0)
+        // Ammo + cadence/reload gate, shared with the other dispensers and the rack
+        // (Simulation.ConsumeDispenserCharge). Returns the buoy's def only once the charge is spent.
+        if (ConsumeDispenserCharge(ref ship.ProbeAmmo, ship.ProbeWeaponId, ref ship.LastProbeTick, tick) is not WeaponDef w)
             return;
-        if (!WeaponDefs.TryGetValue(ship.ProbeWeaponId, out var w))
-            return;
-        // Authoritative cadence gate (the debounce for held-input replay).
-        if (ship.LastProbeTick != 0 && tick - ship.LastProbeTick < w.FireIntervalTicks)
-            return;
-
-        ship.ProbeAmmo -= 1;
-        ship.LastProbeTick = tick;
 
         // Behind the ship's engine (local −Z), clear of the hull — deployed out the back like a
-        // dropped buoy. It's a solid collision body now (ResolveProbeCollisions), so it ejects far
+        // dropped buoy. It's a solid collision body (ResolveProbeCollisions), so it ejects far
         // enough back that the deploying ship starts OUTSIDE the probe's collision sphere
-        // (ShipRadius + ProbeHitRadius + margin); otherwise dropping one would kick/damage your own
-        // ship. It never moves afterward — it sits where dropped for the rest of its lifespan.
+        // (ShipRadius + ProbeHitRadius + the authored clearance); otherwise dropping one would
+        // kick/damage your own ship. It never moves afterward — it sits where dropped for life.
         Vec3 fwd = ship.State.Rot.Rotate(new Vec3(0f, 0f, 1f));
         float hitR = w.ProbeHitRadius > 0f ? w.ProbeHitRadius : 4f;
-        Vec3 pos = ship.State.Pos - fwd * (World.ShipRadius + hitR + 2f);
+        Vec3 pos = ship.State.Pos - fwd * (World.ShipRadius + hitR + _mech.ProbeEjectClearance);
 
         _probes.Add(
             new ProbeSim

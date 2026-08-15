@@ -31,5 +31,4 @@ Assets like models, textures, and audio files can be found in the `pick-assets` 
 
 ## Work
 - Plan in Opus or Fable
-- Delegate detailed requirement build work to Opus or Sonnet
 - Explore in Haiku

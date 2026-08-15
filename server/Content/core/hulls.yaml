@@ -175,6 +175,7 @@ hulls:
       - { kind: cockpit, off-y: 0.55, off-z: 1.4, dir-z: 1 }
     default-cargo:
       - { item: counter-1, count: 2 }
+      - { item: fuel-pod-1, count: 1 } # one reserve dash; the Interceptor's 2-pod tank stays its identity
 
   # Adv Fighter (class-id 6, wc_icadv): the Enh Fighter's successor — three PW Gat Guns, more armor.
   # Gated behind supremacy-adv (unbuildable until Phase 3/4 delivers the Supremacy (Adv) base).
@@ -225,6 +226,7 @@ hulls:
       - { kind: cockpit, off-y: 0.55, off-z: 1.4, dir-z: 1 }
     default-cargo:
       - { item: counter-1, count: 2 }
+      - { item: fuel-pod-1, count: 1 } # one reserve dash; the Interceptor's 2-pod tank stays its identity
 
   # Bomber (class-id 2, wc_icbmb): the heavy assault hull — 2x PW Gat Gun + 2x PW AutoCan + the
   # SRM Anti-Base rack (the ONLY can-damage-base weapon, so the bomber is the match-ender). IGC

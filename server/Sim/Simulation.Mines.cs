@@ -52,28 +52,21 @@ public sealed partial class Simulation
     // regenerate the identical cloud.
     private void TryDeployMine(ShipSim ship, uint tick)
     {
-        if (ship.MineAmmo == 0 || ship.MineWeaponId == 0)
-            return;
-        if (!WeaponDefs.TryGetValue(ship.MineWeaponId, out var w))
-            return;
-        // Authoritative cadence gate (the debounce for held-input replay — never client-edge-detect).
-        if (ship.LastMineTick != 0 && tick - ship.LastMineTick < w.FireIntervalTicks)
+        // Ammo + cadence/reload gate, shared with the other dispensers and the rack
+        // (Simulation.ConsumeDispenserCharge). Returns the field's def only once the charge is spent.
+        if (ConsumeDispenserCharge(ref ship.MineAmmo, ship.MineWeaponId, ref ship.LastMineTick, tick) is not WeaponDef w)
             return;
 
-        // Mesh count is the authored cosmetic density, capped at the 64-bit aliveMask; it is NOT tied to
-        // how many mines the ship carries. One deploy costs exactly one mine-cargo unit.
-        int n = w.MineCloudCount > 64 ? 64 : w.MineCloudCount;
-        if (n <= 0)
-            return;
-
-        ship.MineAmmo -= 1;
-        ship.LastMineTick = tick;
+        // Mesh count is the authored cosmetic density; it is NOT tied to how many mines the ship
+        // carries — one deploy costs exactly one mine-cargo unit. ContentValidator refuses a bundle
+        // whose MineCloudCount leaves 1..64 at boot, so the aliveMask below always has room for it.
+        int n = w.MineCloudCount;
 
         ulong fieldId = _nextShipId++;
         // Just aft of the ship (local -Z): CloudRadius + a small hull clearance back, so the cluster
         // sits right behind the tail rather than far downrange.
         Vec3 aft = ship.State.Rot.Rotate(new Vec3(0f, 0f, 1f)) * -1f;
-        Vec3 center = ship.State.Pos + aft * (w.MineCloudRadius + 4f);
+        Vec3 center = ship.State.Pos + aft * (w.MineCloudRadius + _mech.MineEjectClearance);
 
         // Deterministic uint seed from (fieldId, World.Seed) — the wire carries this exact value, so
         // the client regenerates the same offsets. Hash01 gives a stable [0,1) roll; scale to a uint.

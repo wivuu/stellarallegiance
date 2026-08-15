@@ -127,6 +127,28 @@ public partial class GameNetClient : Node
     public byte LocalFuelPodAmmo { get; private set; } // reserve fuel pods (auto-consumed on empty tank mid-boost)
     public byte LocalThreatLock { get; private set; } // 0 none, 1 being locked, 2 locked
 
+    // Server tick the local ship last SPENT a charge of each cargo-fed launcher/dispenser, derived
+    // from the ammo-byte edge in ApplySnapshot (0 = not since this ship launched). The HUD turns
+    // these into the RELOADING readout via FireCadence.LoadIntervalTicks + the weapon's streamed
+    // ReloadTicks; nothing gameplay-facing reads them (the server owns the gate).
+    private uint _localMissileLoadTick;
+    private uint _localChaffLoadTick;
+    private uint _localMineLoadTick;
+    private uint _localProbeLoadTick;
+    public uint LocalMissileLoadTick => _localMissileLoadTick;
+    public uint LocalChaffLoadTick => _localChaffLoadTick;
+    public uint LocalMineLoadTick => _localMineLoadTick;
+    public uint LocalProbeLoadTick => _localProbeLoadTick;
+
+    // A drop stamps the spend tick; a rise (rearm on relaunch) clears the clock. Equal = untouched.
+    private static void StampLoadTick(ref uint stamp, byte was, byte now, uint tick)
+    {
+        if (now < was)
+            stamp = tick;
+        else if (now > was)
+            stamp = 0;
+    }
+
     // Optional connect credentials. Secret = shared-secret password (env SIM_SECRET, empty =
     // open server); name labels the lobby roster (env PILOT_NAME).
     private string _secret = "";
@@ -266,6 +288,7 @@ public partial class GameNetClient : Node
         _missileRows.Clear();
         _minefieldRows.Clear();
         _probeRows.Clear();
+        _localMissileLoadTick = _localChaffLoadTick = _localMineLoadTick = _localProbeLoadTick = 0;
     }
 
     // Voluntarily leave the current server: cancel the live socket/peer connection and drop all
@@ -830,6 +853,9 @@ public partial class GameNetClient : Node
                 // as the predicted local ship rather than leaving it an un-predicted remote.
                 _rows.Remove(LocalShipId);
                 _world.Ships.NetPromoteLocal(LocalShipId);
+                // A fresh hull launches with every slot loaded: drop the previous ship's spend ticks
+                // so a smaller hold on the new loadout can't read as a reload in progress.
+                _localMissileLoadTick = _localChaffLoadTick = _localMineLoadTick = _localProbeLoadTick = 0;
                 Log.Print($"[GameNet] assigned ship {LocalShipId}");
                 break;
             case 3:
@@ -1791,6 +1817,9 @@ public partial class GameNetClient : Node
             // Weapon-tier succession (v43; mirror of BuildDefs — read after IsHealing).
             ObsoletedByTechIdx = ReadTechList(r),
             SucceededByWeaponId = r.ReadUInt32(),
+            // Load-from-hold time (2026-07-24), read LAST (mirror of BuildDefs). Feeds the HUD's
+            // RELOADING readout through the same FireCadence.LoadIntervalTicks rule the sim gates on.
+            ReloadTicks = r.ReadUInt32(),
         };
 
     // One cargo item (mirror of Protocol.BuildDefs' cargo block, exact field order).
@@ -1804,6 +1833,7 @@ public partial class GameNetClient : Node
             ChargesPerPack = r.ReadByte(),
             Description = ReadStr(r),
             FuelPerCharge = r.ReadSingle(), // v35: 0 = not a fuel item
+            ReloadTicks = r.ReadUInt32(), // v36: ticks a charge takes to load out of the hold (0 = instant)
         };
 
     // One base type (mirror of Protocol.BuildDefs' base block, exact field order).
@@ -2212,6 +2242,15 @@ public partial class GameNetClient : Node
             // Surface the LOCAL ship's authoritative missile/chaff/mine ammo + lock/threat state for the HUD.
             if (id == LocalShipId)
             {
+                // Reload clock: a DROP in one of these counts is the server spending that charge, so
+                // this snapshot's tick IS the sim's LastMissileTick/LastChaffTick/… — the local ship
+                // always rides the nearest AOI tier, so its record ships every tick. That makes the
+                // load window derivable without a single extra wire byte (same "derive, don't stream"
+                // trade as per-mount gun cadence). A RISE is a rearm (relaunch) — clear the clock.
+                StampLoadTick(ref _localMissileLoadTick, LocalMissileAmmo, missileAmmo, tick);
+                StampLoadTick(ref _localChaffLoadTick, LocalChaffAmmo, chaffAmmo, tick);
+                StampLoadTick(ref _localMineLoadTick, LocalMineAmmo, mineAmmo, tick);
+                StampLoadTick(ref _localProbeLoadTick, LocalProbeAmmo, probeAmmo, tick);
                 LocalMissileAmmo = missileAmmo;
                 LocalLockState = lockState;
                 LocalChaffAmmo = chaffAmmo;

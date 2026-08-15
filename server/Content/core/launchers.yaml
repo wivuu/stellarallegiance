@@ -3,6 +3,10 @@
 # the referenced missile expendable (expendables.yaml); the launcher itself supplies the magazine
 # (amount → MagazineSize), the launch cadence (fire-interval-ticks, tick domain to avoid rounding
 # drift) and the mounted mass (counts against the hull's payload-capacity, like a gun's mass).
+# The RELOAD (time to pull the next charge out of the hold) is NOT authored here — it rides the
+# carried expendable's `load-time` (seconds) and widens this cadence into one window:
+# max(fire-interval-ticks, round(load-time*20)). Raising fire-interval-ticks alone still works
+# exactly as before; the expendable's load-time is what the HUD labels RELOADING.
 # weapon-id shares the namespace with weapons.yaml guns (0-2/9-11/12-14/15-17 = the gun lines).
 #
 # Iron Coalition ordnance import (Phase 6, PCore014.igc) — the IGC Iron Coalition extraction is the

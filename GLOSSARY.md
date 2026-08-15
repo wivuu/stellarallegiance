@@ -312,21 +312,78 @@ and drops a probe just ahead of the ship, granting its team an unoccluded vision
 - **Related:** [[Fog of War (Team Vision)]], [[Minefield]], [[Chaff]], [[Expendables]]
 - **Notes:** Proto v23: `WeaponKind.Probe` dispenser, ammo/cadence rides the same D6/D9 seam as chaff/mine
 
+### Reload (load-from-hold)
+The time it takes to pull the next charge out of the cargo hold. Authored per expendable as
+`load-time` (SECONDS, the core Allegiance field) in `expendables.yaml`, projected to ticks onto the
+launcher's `WeaponDef.ReloadTicks` (and, for the fuel pod, onto `CargoItemDef.ReloadTicks`), and
+streamed to clients on `MsgDefs`. A cargo-fed launcher/dispenser is usable again after
+`FireCadence.LoadIntervalTicks(FireIntervalTicks, ReloadTicks)` — **one** window, longest wins — so
+`load-time: 0`/omitted is exactly the legacy cadence-only behavior. Guns are excluded (infinite ammo,
+no hold).
+- **Frequency:** Common
+- **Key Files:**
+  - `shared/FireCadence.cs` — `LoadIntervalTicks`, the single rule server + HUD both read
+  - `server/Content/core/expendables.yaml` — authored `load-time` per expendable, EVERY tier
+  - `server/Sim/Simulation.cs` — `TryFireMissile` gate + the Pass A fuel-pod loader
+    (`ShipSim.FuelLoadEndTick` / `FuelPodReloadTicks`); `Simulation.Chaff/Mines/Probes.cs` gates
+  - `client/scripts/PredictionController.cs` — `ConsumeFuelPod` two-phase mirror + `FuelLoadFrac`
+  - `client/scripts/GameNetClient.cs` — `Local*LoadTick`: the spend tick derived from the streamed
+    ammo-byte edge (no new wire bytes — same "derive, don't stream" trade as per-mount gun cadence)
+  - `client/scripts/WeaponsPanel.cs` / `SystemRing.cs` — `RELOADING` rows + the `LOAD nn%` POD line
+  - `tests/ReloadTest`, `tests/FuelPodTest` — the gate, the window boundary, and the 0-tick legacy path
+- **Related:** [[Fuel Pod]], [[Expendables]], [[Weapon Loadouts]], [[Payload]]
+- **Notes:** Wire v36. The charge leaves the hold at USE time (the streamed ammo byte keeps meaning
+  "rounds you can still fire"); the reload is the window before the slot is usable again. Stock
+  content deliberately authors every load time ABOVE its launcher cadence, so the reload — not the
+  cadence — is the governing gate everywhere. `MissileTest`'s chaff-spacing case reads the window
+  through the shared rule, not `FireIntervalTicks`.
+
+### Weapon Tier Migration
+A researched tier automatically replaces the weapons it obsoletes, so an authored or hangar-saved
+mount flies as its live successor with nothing to re-equip. Authored per part in `launchers.yaml` /
+`weapons.yaml` as `obsoleted-by-techs` + `successor-part-id`; applied at spawn by the server, and
+mirrored by every client surface that names a weapon. A successor NO HEAVIER than its predecessor is
+required — a boot-valid loadout is only guaranteed to fit `PayloadCapacity` at its authored masses,
+so a heavier tier is left for the player to mount explicitly. Dispenser CARGO is tier-neutral (one
+hangar row per line, always owned by the tier-1 def), so migration is the only thing that decides
+which tier a hold actually deploys.
+- **Frequency:** Common
+- **Key Files:**
+  - `shared/WeaponTier.cs` — `Migrate`, the single rule; callers pass their own def + tech lookups
+  - `server/Sim/Simulation.cs` — `MigrateWeaponTier` (authoritative), applied by `ResolveLoadout`
+    for mounts and `SeedDispenserAmmo` for the hold
+  - `client/scripts/DefRegistry.cs` — `MigrateWeaponTier` (display) + `DispenserTier`, the 1-based
+    tier number the hangar's cargo rows append
+  - `client/scripts/ui/ShipLoadout.cs` / `WeaponsPanel.cs` — equipped slots, arsenal, cargo + HUD
+    dispenser rows, all of which must name what the server will hand the ship
+  - `shared/ContentValidator.cs` — refuses a succession chain that changes weapon CATEGORY
+  - `tests/LoadoutTest` — scenario 8 (mounted rack) and 8b (cargo hold)
+- **Related:** [[Per-Ship Weapon Loadout (mount overrides)]], [[Expendables]], [[Payload]], [[Tech Paths / Research]]
+- **Notes:** Migration runs even on a pure authored spawn, so a quick-launch also flies the current
+  tier. The client copy is a DISPLAY mirror with no authority — if it disagrees with the server the
+  screen is simply lying about what you will carry.
+
 ### Fuel Pod
 Reserve afterburner fuel carried as pure cargo (no launcher, no key): when a fuel-modeled hull's
-tank hits 0 while boost is held, one charge auto-loads pre-Integrate and the tank refills by
+tank hits 0 while boost is held, one charge is committed pre-Integrate and — after the pod's
+`load-time` (stock 2 s), during which the tank and the afterburner stay DEAD — the tank refills by
 `fuel-per-charge` (clamped to `max-fuel` — the stock 999 value means "full refill").
 - **Frequency:** Domain-specific
 - **Key Files:**
   - `factions/src/Allegiance.Factions/Model/Expendables/FuelPod.cs` — authoring model (`fuels:` in expendables.yaml)
   - `server/Sim/Simulation.cs` — `ShipSim.FuelPodAmmo` + the Pass A auto-load before `FlightModel.Integrate`
   - `client/scripts/PredictionController.cs` — `ConsumeFuelPod` prediction mirror (live Step + reconcile replay)
-  - `client/scripts/SystemRing.cs` — `POD +N` reserve readout under the FUEL arc
-- **Related:** [[Expendables]], [[Payload]], [[Afterburner]]
+  - `client/scripts/SystemRing.cs` — `POD +N` reserve readout under the FUEL arc, `LOAD nn%` + a
+    danger-tone sweep arc while a pod is loading
+- **Related:** [[Reload (load-from-hold)]], [[Expendables]], [[Payload]], [[Afterburner]]
 - **Notes:** Proto v35: ship record appends u8 fuelPodAmmo; cargo defs append f32 FuelPerCharge.
   FlightModel.Integrate is untouched (PIG determinism) — the refill lands between InputFor and
   Integrate so the boost gate (which reads pre-tick fuel) never blinks. Hangar hides the row on
   fuel-less hulls; server rejects fuel cargo there (whole-request authored fallback).
+  v36 (2026-07-24): the load is TIMED — the pod is committed (count drops) the tick the tank runs dry
+  and the tank stays at 0 until `FuelLoadEndTick`, so the afterburner really does cut out and relight;
+  releasing boost mid-load does not abort the spent charge. `SetAfterburner` no longer keeps the plume
+  lit on `pods > 0` (a 0-tick load still shows no flicker).
 
 ### Threat Lock (being-locked warning)
 Warning that an enemy missile-armed ship is locking you: `ShipSim.ThreatLockState` (0 none / 1 locking /

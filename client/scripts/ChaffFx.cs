@@ -69,8 +69,10 @@ public partial class ChaffFx : Node3D
             Sector = (int)sector,
         });
 
-        // A soft dispensing pop — no bespoke asset (reuse Impact, pitched up and quiet).
-        SfxManager.Instance?.PlayAt(SfxManager.SfxId.Impact, pos, pitch: 1.5f, volumeDb: -14f);
+        // The dispensing pop. Sector-gated like the node above: these positions are sector-LOCAL, so
+        // a teammate ejecting in another sector would otherwise sound like it happened alongside you.
+        if (SectorVisible((int)sector))
+            SfxManager.Instance?.PlayAt(SfxManager.SfxId.DeployObject, pos, volumeDb: -8f);
     }
 
     public override void _Process(double delta)

@@ -327,12 +327,18 @@ Check(
     $"probe weapon wrong (kind {probeW.Kind}, sight {probeW.ProbeSightRadius}, lifespan {probeW.ProbeLifespanSec}, life-ticks {probeW.ProjectileLifeTicks}, cargo {probeW.CargoId}, model {probeW.ModelName})"
 );
 
-// Fighter default consumable hold: 2x sensor-decoy (cargo-id 3), authored order.
+// Fighter default consumable hold, authored order: 2x sensor-decoy (cargo-id 3) then 1 fuel pod
+// (cargo-id 5). The fighter models an afterburner tank with a slow (0.5/s) regen, so it carries a
+// single reserve dash — the Lt Interceptor's 2-pod hold below stays the booster hull's identity.
 var fighterCargo = stock.Ships.First(s => s.ClassId == FlightModel.ClassFighter).DefaultCargo;
 Check(
-    fighterCargo.Count == 1 && fighterCargo[0].CargoId == 3 && fighterCargo[0].Count == 2,
-    "loader projected fighter default-cargo ([(3,2)])",
-    $"fighter default-cargo wrong (count {fighterCargo.Count})"
+    fighterCargo.Count == 2
+        && fighterCargo[0].CargoId == 3
+        && fighterCargo[0].Count == 2
+        && fighterCargo[1].CargoId == 5
+        && fighterCargo[1].Count == 1,
+    "loader projected fighter default-cargo ([(3,2),(5,1)])",
+    $"fighter default-cargo wrong ([{string.Join(",", fighterCargo.Select(l => $"({l.CargoId},{l.Count})"))}])"
 );
 
 // Anti-base torpedo (weapon-id 5): the only weapon flagged CanDamageBase — a base is a lockable

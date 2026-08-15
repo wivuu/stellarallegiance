@@ -298,11 +298,17 @@ public static class CoreValidator
                 result.Error($"fuel pod '{fuel.Id}' has negative mass.");
         }
 
-        // Runtime cargo items: wire ids must be unique.
+        // Runtime cargo items: wire ids must be unique. load-time is the seconds a charge takes to
+        // load out of the hold (projected to WeaponDef/CargoItemDef ReloadTicks) — omitted/0 means
+        // instant, so only a negative is nonsense.
         var cargoIds = new HashSet<uint>();
         foreach (var expendable in core.AllExpendables())
+        {
             if (expendable.CargoId is uint cid && !cargoIds.Add(cid))
                 result.Error($"duplicate cargo-id {cid} (expendable '{expendable.Id}').");
+            if (expendable.LoadTime < 0)
+                result.Error($"expendable '{expendable.Id}' has negative load-time.");
+        }
     }
 
     private static void ValidateCrossReferences(

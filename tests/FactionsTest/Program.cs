@@ -324,10 +324,15 @@ Check(
     $"dispensers wrong (chaff wid {decoyDispenser.WeaponId} exp {decoyDispenser.ExpendableId}, mine wid {mineDispenser.WeaponId} exp {mineDispenser.ExpendableId})"
 );
 
-// Fighter/bomber default-cargo (raw YAML): fighter 2x counter-1 (was sensor-decoy).
+// Fighter/bomber default-cargo (raw YAML): fighter 2x counter-1 (was sensor-decoy) + 1 fuel pod —
+// the hull models an afterburner tank with a slow regen, so it carries one reserve dash.
 Check(
-    fighter.DefaultCargo.Count == 1 && fighter.DefaultCargo[0].Item == "counter-1" && fighter.DefaultCargo[0].Count == 2,
-    "stock fighter default-cargo = 2x counter-1",
+    fighter.DefaultCargo.Count == 2
+        && fighter.DefaultCargo[0].Item == "counter-1"
+        && fighter.DefaultCargo[0].Count == 2
+        && fighter.DefaultCargo[1].Item == "fuel-pod-1"
+        && fighter.DefaultCargo[1].Count == 1,
+    "stock fighter default-cargo = 2x counter-1 + 1x fuel-pod-1",
     $"fighter default-cargo wrong ({string.Join(",", fighter.DefaultCargo.Select(c => $"{c.Item}x{c.Count}"))})"
 );
 

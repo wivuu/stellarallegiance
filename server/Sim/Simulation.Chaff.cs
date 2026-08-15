@@ -37,23 +37,17 @@ public sealed partial class Simulation
     private readonly List<ChaffSim> _chaff = new();
     public IReadOnlyList<ChaffSim> Chaff => _chaff;
 
-    // Eject a chaff puff from this ship's dispenser (ammo + cadence gated). TRACK A fills the body
-    // (ammo/LastChaffTick gate, eject-aft velocity, lifespan from the chaff WeaponDef, append to
-    // _chaff + ChaffSpawnedThisStep). Track-0 stub: no-op, so no chaff ever spawns.
+    // Eject a chaff puff from this ship's dispenser (ammo + cadence gated by the shared cargo-charge
+    // gate; eject-aft velocity from the world.yaml `mechanics:` knobs; lifespan from the chaff
+    // WeaponDef; appended to _chaff + ChaffSpawnedThisStep).
     private void TryDropChaff(ShipSim ship, uint tick)
     {
-        if (ship.ChaffAmmo == 0 || ship.ChaffWeaponId == 0)
-            return; // no dispenser cargo on this hull, or spent
-        var w = WeaponDefs[ship.ChaffWeaponId];
-        // Authoritative cadence debounce (mirror TryFireMissile's LastMissileTick): held-input replay
-        // re-asserts DropChaff every tick, so the server — NOT the client — edge-detects a new eject.
-        if (ship.LastChaffTick != 0 && tick - ship.LastChaffTick < w.FireIntervalTicks)
+        // Ammo + cadence/reload gate, shared with the other dispensers and the rack
+        // (Simulation.ConsumeDispenserCharge). Returns the puff's def only once the charge is spent.
+        if (ConsumeDispenserCharge(ref ship.ChaffAmmo, ship.ChaffWeaponId, ref ship.LastChaffTick, tick) is not WeaponDef w)
             return;
 
-        ship.ChaffAmmo--;
-        ship.LastChaffTick = tick;
-
-        // Eject aft: a puff behind the ship, inheriting half the ship's velocity plus a small kick
+        // Eject aft: a puff behind the ship, inheriting part of the ship's velocity plus a kick
         // backward so it lags behind and lingers where the seeker is coming from.
         Vec3 aft = ship.State.Rot.Rotate(new Vec3(0f, 0f, -1f));
         var puff = new ChaffSim
@@ -63,8 +57,8 @@ public sealed partial class Simulation
             Team = ship.Team,
             WeaponId = w.WeaponId,
             SectorId = ship.SectorId,
-            Pos = ship.State.Pos + aft * 4f,
-            Vel = ship.State.Vel * 0.5f + aft * 10f,
+            Pos = ship.State.Pos + aft * _mech.ChaffEjectOffset,
+            Vel = ship.State.Vel * _mech.ChaffEjectVelInherit + aft * _mech.ChaffEjectKick,
             ExpireAtTick = tick + w.ProjectileLifeTicks,
             Strength = w.ChaffStrength,
             DecoyRadius = w.DecoyRadius,

@@ -1458,6 +1458,10 @@ public static class Protocol
             // (uint.MaxValue = no successor) a loadout migrates to.
             WriteTechList(w, wp.ObsoletedByTechIdx);
             w.Write(wp.SucceededByWeaponId);
+            // Load-from-hold time (2026-07-24), streamed LAST (append-only). Reader mirrors. The
+            // client needs it for the HUD's RELOADING readout, which reads the same
+            // FireCadence.LoadIntervalTicks rule the server gates on.
+            w.Write(wp.ReloadTicks);
         }
     }
 
@@ -1473,6 +1477,7 @@ public static class Protocol
             w.Write(c.ChargesPerPack);
             WriteString(w, c.Description);
             w.Write(c.FuelPerCharge); // v35: 0 = not a fuel item
+            w.Write(c.ReloadTicks); // 2026-07-24: ticks a charge takes to load out of the hold (0 = instant)
         }
     }
 

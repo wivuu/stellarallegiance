@@ -45,6 +45,12 @@ namespace StellarAllegiance.Shared
                     cargoById[c.CargoId] = c;
                     if (c.FuelPerCharge < 0)
                         errors.Add($"cargo item {c.CargoId} (\"{c.Name}\") has negative FuelPerCharge");
+                    // A load time long enough to outlive a sortie is content authored in the wrong
+                    // unit (seconds vs ticks); the sim clock is 20 Hz, so 1200 ticks is a minute.
+                    if (c.ReloadTicks > 1200)
+                        errors.Add(
+                            $"cargo item {c.CargoId} (\"{c.Name}\") has ReloadTicks {c.ReloadTicks} (> 60 s) — check the authored load-time"
+                        );
                 }
 
             var weaponIds = new HashSet<uint>();
@@ -62,9 +68,11 @@ namespace StellarAllegiance.Shared
                 ValidateWeapon(w, cargoIds, cargoItems is not null, errors);
             }
 
-            // Weapon-tier succession must stay within one category: MigrateWeaponTier swaps a
-            // mount's weapon for its successor IN PLACE, so a successor of a different kind would
-            // smuggle a rack onto a gun mount (or a gun onto a rack mount) past the mount-type gate.
+            // Weapon-tier succession must stay within one category: WeaponTier.Migrate (the shared
+            // succession rule, applied at spawn by the server and mirrored by every client display)
+            // swaps a mount's weapon for its successor IN PLACE, so a successor of a different kind
+            // would smuggle a rack onto a gun mount (or a gun onto a rack mount) past the
+            // mount-type gate.
             foreach (var w in weapons)
                 if (
                     w.SucceededByWeaponId != uint.MaxValue
@@ -172,6 +180,13 @@ namespace StellarAllegiance.Shared
                 if (haveCargo && w.CargoId != 0 && !cargoIds.Contains(w.CargoId))
                     errors.Add($"{kind} weapon {w.WeaponId} (\"{w.Name}\") CargoId {w.CargoId} resolves to no cargo item");
             }
+
+            // A Bolt gun feeds from no hold — it has infinite ammo and nothing to load — so a
+            // non-zero load time on one is authored-in-the-wrong-place, not a balance choice.
+            if (w.Kind == WeaponKind.Bolt && w.ReloadTicks != 0)
+                errors.Add(
+                    $"bolt weapon {w.WeaponId} (\"{w.Name}\") has ReloadTicks {w.ReloadTicks} — guns feed from no cargo hold; author load-time on the expendable a launcher carries"
+                );
 
             // Missile-kind defs need a live guidance/lock stat block (belt-and-suspenders over
             // the library CoreValidator — a projected missile with a dead lock/range/speed/

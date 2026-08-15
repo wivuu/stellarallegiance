@@ -294,6 +294,14 @@ namespace StellarAllegiance.Shared
         // server-side, ShipLoadout client-side) so a saved Gat Gun 1 becomes Gat Gun 2 once gat-2 is
         // owned. Streamed after ObsoletedByTechIdx (v43).
         public uint SucceededByWeaponId = uint.MaxValue;
+
+        // Sim ticks to LOAD the next charge out of the hold after this launcher/dispenser is used
+        // (round(expendable load-time * 20)); 0 = instant (legacy). Cargo-fed kinds only — a Bolt gun
+        // feeds from no hold and always projects 0. The usable-again gate is
+        // FireCadence.LoadIntervalTicks(FireIntervalTicks, ReloadTicks) — ONE rule, read by the
+        // server gates and the HUD's RELOADING readout. Streamed after SucceededByWeaponId so every
+        // block above stays byte-stable (v36).
+        public uint ReloadTicks;
     }
 
     // One entry in a hull's default consumable hold — an item id + a count. Mirrors the authored
@@ -317,6 +325,12 @@ namespace StellarAllegiance.Shared
         public byte ChargesPerPack = 1; // charges dispensed per loaded pack (one per press); >=1
         public string Description = "";
         public float FuelPerCharge; // afterburner fuel restored per consumed charge; 0 = not a fuel item
+
+        // Sim ticks a charge takes to LOAD out of the hold (round(load-time * 20)); 0 = instant
+        // (legacy). Only fuel items read it today — a dispenser's load time rides its WeaponDef
+        // (WeaponDef.ReloadTicks), since that is where its cadence already lives. Streamed after
+        // FuelPerCharge (v36).
+        public uint ReloadTicks;
     }
 
     // One per base type.
@@ -829,6 +843,14 @@ namespace StellarAllegiance.Shared
         public float RescueRadiusMult = 4f; // pod pickup distance, × ship collision radius
         public float PodEjectSpeed = 90f; // u/s initial fling (decays to Pod.MaxSpeed)
         public float PodEjectSpin = 5f; // rad/s initial tumble (decays via angular drag)
+
+        // Dispenser eject geometry — where a charge leaves the ship. Server-only like the rest of
+        // this block: the RESULTING position is what streams, so the client never mirrors these.
+        public float ChaffEjectOffset = 4f; // u aft of the hull the puff appears
+        public float ChaffEjectVelInherit = 0.5f; // fraction of the ship's velocity the puff keeps
+        public float ChaffEjectKick = 10f; // u/s extra aft kick so the puff lags behind
+        public float MineEjectClearance = 4f; // u past the field's cloud-radius the cluster centre sits
+        public float ProbeEjectClearance = 2f; // u past (ship radius + probe hit radius) — no self-kick
         public float ReconnectGraceSeconds = 5f; // dropped ship held for reconnect reclaim
         public float EndedToLobbySeconds = 6f; // after match end before returning to the lobby
     }
