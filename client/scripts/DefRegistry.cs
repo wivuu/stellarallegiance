@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using Godot;
 using StellarAllegiance.Shared;
 
@@ -271,27 +270,50 @@ public partial class DefRegistry : Node, IShipCostSource
 
     public WeaponDef? GetWeapon(uint weaponId) => _weapons.TryGetValue(weaponId, out var w) ? w : null;
 
-    // Walk the weapon-tier successor chain: while the current weapon is obsoleted by a tech the team
-    // owns and names a successor, advance to it. So a saved/authored Gat Gun 1 resolves to Gat Gun 2
-    // once gat-2 is researched — the DISPLAY mirror of Simulation.ResolveLoadout's server-side migrate
-    // (the authoritative one at spawn). Bounded by the chain length (guard caps a malformed cycle).
-    // Shared by ShipLoadout (equipped-slot + arsenal display) and WeaponsPanel (dispenser row naming).
+    // The DISPLAY application of the shared weapon-tier succession rule (shared/WeaponTier.cs): a
+    // saved/authored Gat Gun 1 reads as Gat Gun 2 once gat-2 is researched, because that is what
+    // Simulation.MigrateWeaponTier — the same rule, server-side — will actually hand the ship at
+    // spawn. Used by ShipLoadout (equipped slots, arsenal, cargo rows) and WeaponsPanel (dispenser
+    // rows); every one of them must agree with the server or the screen promises the wrong tier.
     public uint MigrateWeaponTier(uint weaponId, byte team, WorldRenderer world)
     {
-        for (int guard = 0; guard < 8; guard++)
+        bool Owns(ushort techIdx) => world.TeamState.OwnsTech(team, techIdx);
+
+        return WeaponTier.Migrate(weaponId, GetWeapon, Owns);
+    }
+
+    // Which TIER of a dispenser cargo line the team will actually deploy, 1-based (1 = the authored
+    // tier). Cargo ids are tier-neutral — one hangar row per line, always owned by the tier-1 def —
+    // so counting steps up the succession chain is what turns "Prox Mine" into "Prox Mine 2" without
+    // the row having to borrow the dispenser WEAPON's name (which reads "Prox Mine Dispenser 2").
+    // Expendables author their tiers as "<Name> N", so the number matches the content's own naming.
+    public int DispenserTier(uint cargoId, byte team, WorldRenderer world)
+    {
+        if (DispenserForCargo(cargoId) is not WeaponDef baseDef)
+            return 1;
+        uint live = MigrateWeaponTier(baseDef.WeaponId, team, world);
+        int tier = 1;
+        uint id = baseDef.WeaponId;
+        while (id != live && tier < 8 && GetWeapon(id) is WeaponDef w && w.SucceededByWeaponId != uint.MaxValue)
         {
-            if (
-                GetWeapon(weaponId) is not WeaponDef w
-                || w.SucceededByWeaponId == uint.MaxValue
-                || w.ObsoletedByTechIdx.Length == 0
-                || GetWeapon(w.SucceededByWeaponId) is not WeaponDef next
-                || next.Mass > w.Mass // mass guard: matches the server's payload-safe migration
-                || !w.ObsoletedByTechIdx.Any(t => world.TeamState.OwnsTech(team, t))
-            )
-                return weaponId;
-            weaponId = w.SucceededByWeaponId;
+            id = w.SucceededByWeaponId;
+            tier++;
         }
-        return weaponId;
+        return tier;
+    }
+
+    // The dispenser a cargo line feeds: the Chaff/Mine/Probe-kind weapon whose CargoId matches, or
+    // null for pure cargo (the fuel pod deploys nothing). Cargo ids are TIER-NEUTRAL — one hangar row
+    // per line, always owned by the tier-1 def — so callers that want to NAME what actually deploys
+    // must run this through MigrateWeaponTier. Shared by the hangar's cargo hold and WeaponsPanel.
+    public WeaponDef? DispenserForCargo(uint cargoId)
+    {
+        if (cargoId == 0)
+            return null; // 0 = "no cargo" on a weapon def; never a real cargo id
+        foreach (var w in _weapons.Values)
+            if (w.CargoId == cargoId && w.Kind is WeaponKind.Chaff or WeaponKind.Mine or WeaponKind.Probe)
+                return w;
+        return null;
     }
 
     // Every streamed weapon def, ascending by WeaponId so lists built from it have a stable

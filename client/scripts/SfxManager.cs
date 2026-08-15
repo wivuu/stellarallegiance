@@ -41,6 +41,9 @@ public partial class SfxManager : Node
         Collision,
         AsteroidAmbient,
         ProbePing,
+        DeployObject,
+        DeployMine,
+        ReloadStart,
         ShieldImpact,
         MissileLaunch,
         MissileLock,
@@ -68,6 +71,11 @@ public partial class SfxManager : Node
         { SfxId.Collision, "collision_thud.ogg" },
         { SfxId.AsteroidAmbient, "asteroid_ambient.ogg" },
         { SfxId.ProbePing, "probe_ping.ogg" },
+        // Expendable deploy/reload cues. One wave covers chaff AND probes because a puff and a buoy
+        // leave the same dispenser — the sound is the hold opening, not the payload.
+        { SfxId.DeployObject, "deploy_object.ogg" },
+        { SfxId.DeployMine, "deploy_mine.ogg" },
+        { SfxId.ReloadStart, "reload_start.ogg" },
         { SfxId.ShieldImpact, "shield_hit.ogg" },
         { SfxId.MissileLaunch, "missile_launch.ogg" },
         { SfxId.MissileLock, "missile_lock.ogg" },

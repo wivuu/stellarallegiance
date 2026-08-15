@@ -12,6 +12,11 @@ public sealed class ProbeRenderer : IProbeQuery
 {
     private const float ProbeBlastRadius = 8f;
 
+    // How much of a probe's lifespan may already be gone and still count as "just deployed" for the
+    // drop cue — one second at 20 Hz, enough slack for the deploy frame's flight time (the stream
+    // sends on change, so a real drop arrives well inside this) without adopting an older buoy.
+    private const ushort FreshDeployTicks = 20;
+
     private readonly Node3D _container;
     private readonly DefRegistry _defs;
     private readonly SectorView _sectors;
@@ -40,14 +45,25 @@ public sealed class ProbeRenderer : IProbeQuery
         if (_probes.ContainsKey(row.ProbeId))
             return; // stationary — nothing to update on a resend
         Vector3 pos = new(row.PosX, row.PosY, row.PosZ);
+        var def = _defs.GetWeapon(row.WeaponId);
         var pv = new ProbeView { Name = $"Probe_{row.ProbeId}" };
         _container.AddChild(pv);
-        pv.Initialize(pos, row.Team, _defs.GetWeapon(row.WeaponId));
+        pv.Initialize(pos, row.Team, def);
         _sectors.SetNodeSector(pv, row.SectorId);
         _probes[row.ProbeId] = pv;
         // Solid body for the local ship's collision prediction (bounce matches the server's
         // ResolveProbeCollisions); HitRadius is the same combat radius the server collides against.
         _collision.AddProbe(row.SectorId, row.ProbeId, new Vec3(pos.X, pos.Y, pos.Z), pv.HitRadius);
+
+        // Deploy cue. This runs on FIRST SIGHT, not on deploy — the stream re-sends every live probe
+        // — so a buoy only sounds if it still has essentially its whole lifespan left. Probes met
+        // mid-life (sector entry, reconnect, an enemy buoy drifting into radar) stay silent. Same
+        // freshness idea MinefieldViews uses ("first seen while still arming"), and sector-gated for
+        // the same reason: these positions are sector-LOCAL.
+        if (def is not null && def.ProjectileLifeTicks > 0
+            && row.TicksLeft + FreshDeployTicks >= def.ProjectileLifeTicks
+            && row.SectorId == _sectors.ViewSector)
+            SfxManager.Instance?.PlayAt(SfxManager.SfxId.DeployObject, pos, volumeDb: -6f);
     }
 
     // reason 0 expired, 1 match cleanup, 255 silent local reconcile (fogged-out enemy probe) → the

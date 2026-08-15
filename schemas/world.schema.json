@@ -511,6 +511,41 @@
           ],
           "description": "Escape-pod initial tumble, rad/s."
         },
+        "chaff-eject-offset": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Chaff puff eject distance aft of the hull, world units."
+        },
+        "chaff-eject-vel-inherit": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Fraction of the ejecting ship\u0027s velocity a chaff puff inherits."
+        },
+        "chaff-eject-kick": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Extra aft kick given to an ejected chaff puff, u/s."
+        },
+        "mine-eject-clearance": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Clearance past the field\u0027s cloud-radius where a minefield centre is laid, world units."
+        },
+        "probe-eject-clearance": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Clearance past (ship radius \u002B probe hit radius) where a probe is dropped, world units."
+        },
         "reconnect-grace-seconds": {
           "type": [
             "number",

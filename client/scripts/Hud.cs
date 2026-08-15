@@ -41,12 +41,11 @@ public partial class Hud : CanvasLayer
     private int _lastReconcileCount;
     private int _lastLocalContacts;
 
-    // Edge-detect the secondary-fire keys so an empty-rack click plays its "no rounds" blip once
-    // per press (not every held frame), and a short cooldown so mashing F doesn't machine-gun it.
-    private bool _firing2Held;
-    private bool _chaffHeld;
-    private bool _mineHeld;
-    private bool _probeHeld;
+    // Edge-detect the consumable keys so an empty-slot press plays its "no rounds" blip once per
+    // press (not every held frame), and a short cooldown so mashing one doesn't machine-gun it. One
+    // slot per consumable, in EmptyBlip's call order: missile rack, chaff, mine, probe.
+    private readonly bool[] _consumableHeld = new bool[4];
+    private bool _fuelLoadingHeld; // rising edge of the fuel-pod auto-load (not a key — a sim event)
     private double _emptyClickCd;
 
     // The design-system gallery overlay (F9), instantiated on demand.
@@ -433,38 +432,37 @@ public partial class Hud : CanvasLayer
                 Input.IsActionPressed("fire_secondary")
                 || (Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsMouseButtonPressed(MouseButton.Right))
             );
-        if (firing2 && !_firing2Held && missileMount != null && _net.LocalMissileAmmo == 0 && _emptyClickCd <= 0)
-        {
-            SfxManager.Instance?.PlayUi(SfxManager.SfxId.MissileEmpty);
-            _emptyClickCd = 0.5;
-        }
-        _firing2Held = firing2;
-
-        // Same "no rounds" blip for the dispenser keys (C chaff / B mine / G probe): an empty (or
-        // absent) dispenser otherwise swallows the press silently — the drop itself is
-        // server-authoritative, so this client-side edge detect is cosmetic feedback only.
+        // One rising-edge blip rule for every consumable key. `pressed` is this frame's key state,
+        // `dry` says the press will be swallowed, and `slot` indexes the held-state shadow — the
+        // dispensers (C chaff / B mine / G probe) differ from the rack only in those three, and an
+        // empty or absent dispenser otherwise eats the press silently. The drop itself is
+        // server-authoritative, so all of this is cosmetic feedback.
         bool dispensersLive = flying && !ship!.IsPod;
-        bool chaffKey = inputFree && Input.IsActionPressed("drop_chaff");
-        if (chaffKey && !_chaffHeld && dispensersLive && _net.LocalChaffAmmo == 0 && _emptyClickCd <= 0)
+        void EmptyBlip(int slot, bool pressed, bool dry)
         {
-            SfxManager.Instance?.PlayUi(SfxManager.SfxId.MissileEmpty);
+            if (pressed && !_consumableHeld[slot] && dry && _emptyClickCd <= 0)
+            {
+                SfxManager.Instance?.PlayUi(SfxManager.SfxId.MissileEmpty);
+                _emptyClickCd = 0.5;
+            }
+            _consumableHeld[slot] = pressed;
+        }
+        EmptyBlip(0, firing2, missileMount != null && _net.LocalMissileAmmo == 0);
+        EmptyBlip(1, inputFree && Input.IsActionPressed("drop_chaff"), dispensersLive && _net.LocalChaffAmmo == 0);
+        EmptyBlip(2, inputFree && Input.IsActionPressed("drop_mine"), dispensersLive && _net.LocalMineAmmo == 0);
+        EmptyBlip(3, inputFree && Input.IsActionPressed("drop_probe"), dispensersLive && _net.LocalProbeAmmo == 0);
+
+        // Fuel-pod auto-load: the tank runs dry mid-boost, a pod is committed, and the afterburner
+        // stays dead for the pod's load time. SystemRing draws the sweep; this is the cue that the
+        // reserve — not the engine — is what just died. Not a key press, so it edges on the predicted
+        // loading flag, and it shares the blip cooldown so a prediction rollback can't stutter it.
+        bool fuelLoading = flying && ship!.FuelLoading;
+        if (fuelLoading && !_fuelLoadingHeld && _emptyClickCd <= 0)
+        {
+            SfxManager.Instance?.PlayUi(SfxManager.SfxId.ReloadStart);
             _emptyClickCd = 0.5;
         }
-        _chaffHeld = chaffKey;
-        bool mineKey = inputFree && Input.IsActionPressed("drop_mine");
-        if (mineKey && !_mineHeld && dispensersLive && _net.LocalMineAmmo == 0 && _emptyClickCd <= 0)
-        {
-            SfxManager.Instance?.PlayUi(SfxManager.SfxId.MissileEmpty);
-            _emptyClickCd = 0.5;
-        }
-        _mineHeld = mineKey;
-        bool probeKey = inputFree && Input.IsActionPressed("drop_probe");
-        if (probeKey && !_probeHeld && dispensersLive && _net.LocalProbeAmmo == 0 && _emptyClickCd <= 0)
-        {
-            SfxManager.Instance?.PlayUi(SfxManager.SfxId.MissileEmpty);
-            _emptyClickCd = 0.5;
-        }
-        _probeHeld = probeKey;
+        _fuelLoadingHeld = fuelLoading;
 
         // Sector boundary: warn (and pulse) once the ship is past the radius, where the
         // server is eroding the hull. Distance is measured from the local sector center.

@@ -1379,7 +1379,51 @@ public sealed partial class Simulation
         return s;
     }
 
-    // Seed the ship's dispenser ammo/weapon-ids from an ALREADY-VALIDATED hold (ResolveLoadout).
+    // THE gate every cargo-fed weapon shares — the missile rack and all three dispensers (chaff /
+    // mines / probes). Only the deploy geometry differs between them, so only that stays per-site.
+    //
+    // Two rules live here, and both are load-bearing:
+    //   - The cadence window is the SERVER's ONLY drop/fire-input debounce. Held input replays
+    //     Firing2 / DropChaff / DropMine / DropProbe every tick, so the client must never
+    //     edge-detect one; the server decides what counts as a new charge.
+    //   - Cadence and reload are ONE window, not two (FireCadence.LoadIntervalTicks: longest wins),
+    //     so an authored load-time of 0 is exactly the legacy cadence-only behavior.
+    //
+    // COMMITS on success: the charge is spent and the slot stamped, so a true return means the
+    // caller has already paid and must deploy.
+    private static bool ConsumeCargoCharge(ref byte ammo, ref uint lastTick, uint tick, WeaponDef w)
+    {
+        if (ammo == 0)
+            return false;
+        if (!FireCadence.MountFires(tick, lastTick, FireCadence.LoadIntervalTicks(w.FireIntervalTicks, w.ReloadTicks)))
+            return false;
+        ammo--;
+        lastTick = tick;
+        return true;
+    }
+
+    // The dispenser flavor of the gate above: resolves the cargo-fed WeaponDef the ship is carrying
+    // (already tier-migrated at spawn by SeedDispenserAmmo) and spends one charge from it. Returns
+    // the def that just deployed, or null when this hull carries none, is spent, or is still
+    // cycling/reloading.
+    private WeaponDef? ConsumeDispenserCharge(ref byte ammo, uint weaponId, ref uint lastTick, uint tick)
+    {
+        if (weaponId == 0 || !WeaponDefs.TryGetValue(weaponId, out var w))
+            return null; // no dispenser cargo of this kind on the hull
+        return ConsumeCargoCharge(ref ammo, ref lastTick, tick, w) ? w : null;
+    }
+
+    // What a hull spawns holding when nobody customized it: the class's authored `default-cargo`,
+    // boot-validated to fit PayloadCapacity. THE one answer to that question — ResolveLoadout falls
+    // back to it for players, and SpawnPigShip seeds drones straight from it, so `default-cargo`
+    // means the same thing on both spawn paths.
+    private (uint, byte)[] DefaultCargoFor(byte cls) =>
+        ShipDefs.TryGetValue(cls, out var def)
+            ? def.DefaultCargo.Select(c => (c.CargoId, c.Count)).ToArray()
+            : System.Array.Empty<(uint, byte)>();
+
+    // Seed the ship's dispenser ammo/weapon-ids from an ALREADY-VALIDATED hold (ResolveLoadout, or
+    // DefaultCargoFor for a drone).
     private void SeedDispenserAmmo(ShipSim s, (uint cargoId, byte count)[] chosen)
     {
         World.TeamStates.TryGetValue(s.Team, out var teamState);
@@ -1442,9 +1486,7 @@ public sealed partial class Simulation
     )
     {
         ShipDefs.TryGetValue(cls, out var def);
-        (uint, byte)[] fallbackCargo = def is null
-            ? System.Array.Empty<(uint, byte)>()
-            : def.DefaultCargo.Select(c => (c.CargoId, c.Count)).ToArray();
+        (uint, byte)[] fallbackCargo = DefaultCargoFor(cls);
         bool wantMounts = mounts is { Length: > 0 } && def is not null;
         bool wantCargo = requested is { Length: > 0 };
 
@@ -1563,38 +1605,21 @@ public sealed partial class Simulation
         return (effective, cargo);
     }
 
-    // Walk the weapon-tier successor chain for a team: while the current weapon is obsoleted by a tech
-    // the team owns and names a successor NO HEAVIER than itself, advance to that successor. A
-    // researched tier auto-replaces the guns it obsoletes at spawn. The mass guard keeps a boot-valid
-    // loadout within PayloadCapacity (a heavier successor is left for the player to mount explicitly).
-    // Bounded by the chain length (guard caps a malformed cycle). This is the authoritative twin of
-    // the client's ShipLoadout.MigrateTier display helper.
+    // The AUTHORITATIVE application of the shared weapon-tier succession rule (shared/WeaponTier.cs):
+    // a researched tier auto-replaces the guns/dispensers it obsoletes at spawn. The client's
+    // DefRegistry.MigrateWeaponTier feeds the same rule its own lookups so the hangar and the HUD
+    // name exactly what this hands the ship. A team with no state yet owns nothing, so it migrates
+    // nothing.
     private uint MigrateWeaponTier(World.TeamState? ts, uint weaponId)
     {
         if (ts is null)
             return weaponId;
-        for (int guard = 0; guard < 8; guard++)
-        {
-            if (
-                !WeaponDefs.TryGetValue(weaponId, out var w)
-                || w.SucceededByWeaponId == uint.MaxValue
-                || w.ObsoletedByTechIdx.Length == 0
-                || !WeaponDefs.TryGetValue(w.SucceededByWeaponId, out var next)
-                || next.Mass > w.Mass
-            )
-                return weaponId;
-            bool owns = false;
-            foreach (ushort t in w.ObsoletedByTechIdx)
-                if (t < Content.Techs.Count && ts.OwnedTechs.Contains(Content.Techs[t].Id))
-                {
-                    owns = true;
-                    break;
-                }
-            if (!owns)
-                return weaponId;
-            weaponId = w.SucceededByWeaponId;
-        }
-        return weaponId;
+
+        WeaponDef? Lookup(uint id) => WeaponDefs.TryGetValue(id, out var w) ? w : null;
+        bool Owns(ushort techIdx) =>
+            techIdx < Content.Techs.Count && ts.OwnedTechs.Contains(Content.Techs[techIdx].Id);
+
+        return WeaponTier.Migrate(weaponId, Lookup, Owns);
     }
 
     // Position a ship just outside its team base, launched out of one of the base's DOCKING-EXIT
@@ -2962,20 +2987,8 @@ public sealed partial class Simulation
     {
         if (MissileMountFor(ship) is not (Muzzle mount, WeaponDef w))
             return; // no effective rack (none authored, or emptied in the hangar)
-        if (ship.MissileAmmo == 0)
-            return;
-        // Cadence AND the time to load the next round out of the hold — one window, longest wins.
-        if (
-            !FireCadence.MountFires(
-                tick,
-                ship.LastMissileTick,
-                FireCadence.LoadIntervalTicks(w.FireIntervalTicks, w.ReloadTicks)
-            )
-        )
-            return;
-
-        ship.MissileAmmo--;
-        ship.LastMissileTick = tick;
+        if (!ConsumeCargoCharge(ref ship.MissileAmmo, ref ship.LastMissileTick, tick, w))
+            return; // empty rack, or still cycling/reloading
 
         Vec3 fwd = ship.State.Rot.Rotate(mount.Dir);
         Vec3 mp = ship.State.Pos + ship.State.Rot.Rotate(mount.Off);

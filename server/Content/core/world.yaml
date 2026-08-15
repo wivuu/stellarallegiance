@@ -116,6 +116,13 @@ mechanics:
   rescue-radius-mult: 4      # pod pickup distance, × ship collision radius
   pod-eject-speed: 90        # u/s initial fling (decays to the pod's max speed)
   pod-eject-spin: 5          # rad/s initial tumble (decays via angular drag)
+  # Dispenser eject geometry — where a charge leaves the ship. The resulting position is what
+  # streams to clients, so these stay server-side like everything else in this block.
+  chaff-eject-offset: 4      # u aft of the hull the puff appears
+  chaff-eject-vel-inherit: 0.5 # fraction of the ship's velocity the puff keeps (lower = lags more)
+  chaff-eject-kick: 10       # u/s extra aft kick, so the puff lingers where the seeker is coming from
+  mine-eject-clearance: 4    # u past the field's cloud-radius the cluster centre sits, aft of the tail
+  probe-eject-clearance: 2   # u past (ship radius + probe hit radius); too small and you kick your own hull
   reconnect-grace-seconds: 5 # dropped ship held (simulated, vulnerable) for reconnect reclaim
   ended-to-lobby-seconds: 6  # after match end before the server returns to the lobby
 

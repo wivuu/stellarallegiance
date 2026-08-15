@@ -141,6 +141,15 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
     var pig = WaitForPig(sim);
     uint sector = pig.SectorId;
 
+    // Drones spawn holding their hull's authored default-cargo, exactly like a player launch
+    // (SpawnPigShip -> SeedDispenserAmmo via the shared DefaultCargoFor seam). Every PIG hull —
+    // Scout, Enh Fighter, Bomber — authors decoys, so a seeded hold is never empty. Nothing
+    // consumes these charges yet (PIG input never raises the drop flags), so this assertion is
+    // the ONLY thing keeping the drone hold from silently regressing to empty.
+    Check(pig.ChaffAmmo > 0 && pig.ChaffWeaponId != 0,
+        "spawned drone carries its hull's authored hold (chaff seeded)",
+        $"drone hold empty (chaff {pig.ChaffAmmo}, weapon {pig.ChaffWeaponId}, class {pig.Class})");
+
     // Enemy parked ~1400 from the pig — beyond radar-range 1200, so autonomy would never chase it;
     // the commander (and the issuer's own ship) parked well clear of the fight.
     PlaceAt(pig, sector, new Vec3(0f, 400f, -700f));

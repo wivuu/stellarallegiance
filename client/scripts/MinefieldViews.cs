@@ -107,9 +107,10 @@ public partial class MinefieldViews : Node3D
 
         // Deploy cue: a field first seen while still arming was just laid (fields discovered mid-life —
         // sector entry, reconnect — stay silent). The layer has no HUD row focus, so this is the
-        // pilot's confirmation the drop happened.
-        if (!armed)
-            SfxManager.Instance?.PlayAt(SfxManager.SfxId.MissileLaunch, node.Position, pitch: 0.7f, volumeDb: -6f);
+        // pilot's confirmation the drop happened. Sector-gated like node.Visible above: these
+        // positions are sector-LOCAL, so a field laid in another sector must not sound adjacent.
+        if (!armed && node.Visible)
+            SfxManager.Instance?.PlayAt(SfxManager.SfxId.DeployMine, node.Position, volumeDb: -6f);
     }
 
     // Build the field's MultiMeshInstance3D: n mine meshes at their seed-regenerated local offsets,

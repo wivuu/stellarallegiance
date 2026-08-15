@@ -314,7 +314,16 @@ public partial class ShipLoadout
             row.AddChild(glyph);
             var nameCol = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
             nameCol.AddThemeConstantOverride("separation", 0);
-            var name = UiKit.MakeLabel(item.Name.ToUpperInvariant(), UiKit.TextStyle.Data, DesignTokens.TextHi);
+            // Cargo lines are TIER-NEUTRAL — the def owning the CargoId is always tier 1 — while
+            // research upgrades what actually deploys, so the row has to say which tier you'll
+            // really carry or the hangar promises a weaker charge than the ship flies with (the
+            // server picks the same tier in SeedDispenserAmmo, and WeaponsPanel shows it in flight).
+            // The tier suffix keeps the row naming the CONSUMABLE rather than borrowing the
+            // dispenser weapon's name; tier 1 reads exactly as it always has. Pure cargo (the fuel
+            // pod deploys nothing) has no chain and is always just its own name.
+            int tier = _defs.DispenserTier(itemId, Team, _world);
+            string liveName = tier > 1 ? $"{item.Name} {tier}" : item.Name;
+            var name = UiKit.MakeLabel(liveName.ToUpperInvariant(), UiKit.TextStyle.Data, DesignTokens.TextHi);
             name.AddThemeFontSizeOverride("font_size", 12);
             // Dispensers load in PACKS of ChargesPerPack charges (one per press); show the multiplier
             // so the count reads as packs. Legacy single-charge items (ChargesPerPack 1) stay "EA".

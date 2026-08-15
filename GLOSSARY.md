@@ -338,6 +338,31 @@ no hold).
   cadence — is the governing gate everywhere. `MissileTest`'s chaff-spacing case reads the window
   through the shared rule, not `FireIntervalTicks`.
 
+### Weapon Tier Migration
+A researched tier automatically replaces the weapons it obsoletes, so an authored or hangar-saved
+mount flies as its live successor with nothing to re-equip. Authored per part in `launchers.yaml` /
+`weapons.yaml` as `obsoleted-by-techs` + `successor-part-id`; applied at spawn by the server, and
+mirrored by every client surface that names a weapon. A successor NO HEAVIER than its predecessor is
+required — a boot-valid loadout is only guaranteed to fit `PayloadCapacity` at its authored masses,
+so a heavier tier is left for the player to mount explicitly. Dispenser CARGO is tier-neutral (one
+hangar row per line, always owned by the tier-1 def), so migration is the only thing that decides
+which tier a hold actually deploys.
+- **Frequency:** Common
+- **Key Files:**
+  - `shared/WeaponTier.cs` — `Migrate`, the single rule; callers pass their own def + tech lookups
+  - `server/Sim/Simulation.cs` — `MigrateWeaponTier` (authoritative), applied by `ResolveLoadout`
+    for mounts and `SeedDispenserAmmo` for the hold
+  - `client/scripts/DefRegistry.cs` — `MigrateWeaponTier` (display) + `DispenserTier`, the 1-based
+    tier number the hangar's cargo rows append
+  - `client/scripts/ui/ShipLoadout.cs` / `WeaponsPanel.cs` — equipped slots, arsenal, cargo + HUD
+    dispenser rows, all of which must name what the server will hand the ship
+  - `shared/ContentValidator.cs` — refuses a succession chain that changes weapon CATEGORY
+  - `tests/LoadoutTest` — scenario 8 (mounted rack) and 8b (cargo hold)
+- **Related:** [[Per-Ship Weapon Loadout (mount overrides)]], [[Expendables]], [[Payload]], [[Tech Paths / Research]]
+- **Notes:** Migration runs even on a pure authored spawn, so a quick-launch also flies the current
+  tier. The client copy is a DISPLAY mirror with no authority — if it disagrees with the server the
+  screen is simply lying about what you will carry.
+
 ### Fuel Pod
 Reserve afterburner fuel carried as pure cargo (no launcher, no key): when a fuel-modeled hull's
 tank hits 0 while boost is held, one charge is committed pre-Integrate and — after the pod's

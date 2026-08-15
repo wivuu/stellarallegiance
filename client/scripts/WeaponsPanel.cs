@@ -195,8 +195,7 @@ public partial class WeaponsPanel : Control
     {
         if (_defs.TryGetShipDef(classId, out var def) && def.DefaultCargo is not null)
             foreach (var load in def.DefaultCargo)
-            foreach (var w in _defs.AllWeapons())
-                if (w.Kind == kind && w.CargoId == load.CargoId)
+                if (_defs.DispenserForCargo(load.CargoId) is WeaponDef w && w.Kind == kind)
                     return w;
         if (liveAmmo > 0)
             foreach (var w in _defs.AllWeapons())
@@ -207,9 +206,9 @@ public partial class WeaponsPanel : Control
 
     // The researched tier's display name for a dispenser row. Cargo stays one tier-neutral item per
     // line (the def found by CargoId is always tier 1) while research upgrades what actually fires —
-    // Simulation.SeedDispenserAmmo walks the same successor chain server-side — so the row names the
-    // LIVE tier. The pack/ammo math stays on the tier-1 def (it owns the CargoId). Walk shared with
-    // ShipLoadout via DefRegistry.MigrateWeaponTier.
+    // Simulation.SeedDispenserAmmo applies the same shared rule server-side — so the row names the
+    // LIVE tier. The pack/ammo math stays on the tier-1 def (it owns the CargoId). The hangar's cargo
+    // hold names its rows the same way (ShipLoadout.Hangar), both via DefRegistry.MigrateWeaponTier.
     private string MigratedDispenserName(WeaponDef disp) => MigratedDispenser(disp).Name;
 
     // The tier that actually fires — the def whose cadence/load-time the server gates on.

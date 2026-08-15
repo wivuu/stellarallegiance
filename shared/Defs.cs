@@ -843,6 +843,14 @@ namespace StellarAllegiance.Shared
         public float RescueRadiusMult = 4f; // pod pickup distance, × ship collision radius
         public float PodEjectSpeed = 90f; // u/s initial fling (decays to Pod.MaxSpeed)
         public float PodEjectSpin = 5f; // rad/s initial tumble (decays via angular drag)
+
+        // Dispenser eject geometry — where a charge leaves the ship. Server-only like the rest of
+        // this block: the RESULTING position is what streams, so the client never mirrors these.
+        public float ChaffEjectOffset = 4f; // u aft of the hull the puff appears
+        public float ChaffEjectVelInherit = 0.5f; // fraction of the ship's velocity the puff keeps
+        public float ChaffEjectKick = 10f; // u/s extra aft kick so the puff lags behind
+        public float MineEjectClearance = 4f; // u past the field's cloud-radius the cluster centre sits
+        public float ProbeEjectClearance = 2f; // u past (ship radius + probe hit radius) — no self-kick
         public float ReconnectGraceSeconds = 5f; // dropped ship held for reconnect reclaim
         public float EndedToLobbySeconds = 6f; // after match end before returning to the lobby
     }

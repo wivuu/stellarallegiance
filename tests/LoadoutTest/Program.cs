@@ -46,6 +46,8 @@
 //   7. Determinism: scenario-5's script twice from fresh sims -> identical fire sequences.
 //   8. Tier migration at spawn (Iron ordnance import): owning seeker-2 migrates a mounted seeker
 //      rack (weapon-id 3) to its successor (weapon-id 18) at spawn.
+//   8b. The same migration on the CARGO HOLD: owning chaff-2 seeds counter-dispenser-2 (27) instead
+//      of the authored tier 1 (6); a team owning nothing keeps tier 1.
 //   9. Dumbfire rack mount + launch: weapon-id 24 seeds its magazine and launches a MissileSim
 //      carrying weapon-id 24.
 //  10. Fuel cargo (cargo-id 5, mass 1 — no dispenser WeaponDef): accepted on the fuel-modeled
@@ -196,6 +198,30 @@ Simulation.ShipSim Spawn(
         ship.MissileAmmo == seekerRack2.MagazineSize,
         $"missile magazine seeds from the MIGRATED rack ({seekerRack2.MagazineSize} rounds)",
         $"migrated magazine wrong: {ship.MissileAmmo}, expected {seekerRack2.MagazineSize}"
+    );
+}
+
+// ---- 8b. Tier migration of the CARGO HOLD: owning chaff-2 makes a spawned hold deploy the counter
+// dispenser's successor (6 -> 27). Cargo ids are tier-neutral by design — the hangar shows ONE row
+// per line, always owned by the tier-1 def — so nothing on the wire says which tier a hold will
+// actually throw; only this migration does. It is also what both client surfaces must agree with
+// (WeaponsPanel names the live tier in flight, the hangar's cargo row appends it), so a silent
+// regression here would have every screen promising tier 1 while the ship carries tier 3. ----------
+{
+    var sim = BootSim(seed: 82, "chaff-2");
+    var ship = Spawn(sim, 1, team: 0, cls: FlightModel.ClassScout);
+    Check(
+        ship.ChaffWeaponId == 27,
+        "team-owned chaff-2 seeds the hold with counter-dispenser-2 (27), not the authored tier 1 (6)",
+        $"dispenser tier migration wrong (chaff weapon {ship.ChaffWeaponId})"
+    );
+    // Untier-ed hold on a team that researched nothing: the same cargo line stays on tier 1, so the
+    // migration above is research doing it and not a content-ordering accident.
+    var plain = Spawn(BootSim(seed: 83), 1, team: 0, cls: FlightModel.ClassScout);
+    Check(
+        plain.ChaffWeaponId == 6,
+        "a team owning no chaff tech keeps the authored counter-dispenser-1 (6)",
+        $"unresearched dispenser wrong (chaff weapon {plain.ChaffWeaponId})"
     );
 }
 

@@ -68,9 +68,11 @@ namespace StellarAllegiance.Shared
                 ValidateWeapon(w, cargoIds, cargoItems is not null, errors);
             }
 
-            // Weapon-tier succession must stay within one category: MigrateWeaponTier swaps a
-            // mount's weapon for its successor IN PLACE, so a successor of a different kind would
-            // smuggle a rack onto a gun mount (or a gun onto a rack mount) past the mount-type gate.
+            // Weapon-tier succession must stay within one category: WeaponTier.Migrate (the shared
+            // succession rule, applied at spawn by the server and mirrored by every client display)
+            // swaps a mount's weapon for its successor IN PLACE, so a successor of a different kind
+            // would smuggle a rack onto a gun mount (or a gun onto a rack mount) past the
+            // mount-type gate.
             foreach (var w in weapons)
                 if (
                     w.SucceededByWeaponId != uint.MaxValue
