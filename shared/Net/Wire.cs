@@ -115,7 +115,20 @@ public static class Wire
     // meanwhile). 0 = instant, i.e. the pre-v36 behavior. No ship-record growth: the HUD derives the
     // local reload clock from the already-streamed ammo-byte edge. Writer Protocol.WriteWeaponDefs /
     // WriteCargoDefs ↔ reader GameNetClient.ReadWeaponDef / ReadCargoItemDef.
-    public const byte ProtocolVersion = 36;
+    // (2026-08-28) match scoreboard: NEW frame MsgMatchStats = 29 — u8 nPilots, n x (i32 clientId,
+    // str name, u8 team, u8 flags (bit0 = connected), u16 kills, u16 deaths, u16 ejects, i32
+    // points), then u8 nTeams, n x (u8 team, u8 garrisonsDestroyed, u8 outpostsDestroyed). Broadcast
+    // RELIABLY and only on change (the ledger moves a few times a match, not every tick); a send is
+    // a FULL REPLACE of the client's table. Name and team ride the frame instead of being joined
+    // against the lobby roster because a departed pilot loses both server-side, and the end-of-match
+    // board must still name them — bit0 clear is exactly the "LEFT" badge. Points is signed (a
+    // penalty weight legitimately pushes a pilot negative); a team's SCORE is NOT repeated here, it
+    // is exactly the sum of its pilots' points and already rides MsgTeamState. EJ and D are distinct
+    // Allegiance semantics: losing your COMBAT SHIP is an EJECTION, losing the POD is a DEATH (so
+    // EJ >= D), and a pod that docks or is rescued is neither. Kill credit itself is server-side
+    // only (world.yaml `scoring:`) — the client only ever sees these resolved counters. Writer
+    // Protocol.BuildMatchStats <-> reader GameNetClient.ApplyMatchStats.
+    public const byte ProtocolVersion = 37;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

@@ -26,6 +26,11 @@ public sealed partial class Simulation
     {
         public ulong FieldId;
         public uint WeaponId; // mine-kind WeaponDef (blast / arm / trigger / cloud)
+
+        // Kill credit for the field's per-tick damage: the pilot who laid it (-1 = a PIG's field, or
+        // one whose layer is long gone as far as the ledger is concerned). A field outlives its
+        // layer's ship routinely, so this rides the field rather than being looked up at trigger time.
+        public int OwnerClientId = -1;
         public byte Team; // owner team (a mine only triggers on an ENEMY non-pod)
         public uint SectorId;
         public Vec3 Center;
@@ -83,6 +88,7 @@ public sealed partial class Simulation
             {
                 FieldId = fieldId,
                 WeaponId = w.WeaponId,
+                OwnerClientId = ship.OwnerClientId,
                 Team = ship.Team,
                 SectorId = ship.SectorId,
                 Center = center,
@@ -177,7 +183,7 @@ public sealed partial class Simulation
                 float dmg = w.BlastPower * mult * FlightModel.Dt;
                 if (dmg <= 0f)
                     continue;
-                ApplyDamage(s, dmg, tick, w.ShieldMult);
+                ApplyDamage(s, dmg, tick, w.ShieldMult, field.OwnerClientId);
 
                 // Rate-limited hit-FX ping: a small explosion + pop at the nearest cosmetic
                 // mine (a mine "near you" going off). Doesn't deplete anything.

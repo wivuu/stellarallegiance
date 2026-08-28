@@ -746,6 +746,7 @@ namespace StellarAllegiance.Shared
         public WorldMiningTuning Mining = new();
         public WorldConstructorTuning Constructor = new();
         public WorldBuildTuning Build = new();
+        public WorldScoringTuning Scoring = new();
     }
 
     // PIG drone AI tuning (world.yaml `ai:`). Server-side only — clients never simulate
@@ -1014,6 +1015,35 @@ namespace StellarAllegiance.Shared
     {
         public int ParallelLimit = 4; // ordered items a garrison BUILDS at once (1 = strictly one at a time)
         public int QueueLimit = 4; // total ordered (building + queued) a garrison may hold before the Build tab locks
+    }
+
+    // Per-pilot scoring tuning (world.yaml `scoring:`) — the weights behind the match scoreboard.
+    // Server-side only and never streamed: the client only ever sees the RESULTING K/D/EJ/PTS rows
+    // on MsgMatchStats, so a server may retune the weights with no client redeploy. A pilot's PTS is
+    // the weighted sum below and a TEAM's score is exactly the sum of its pilots' points (this is
+    // the only thing that feeds TeamState.Score). Kill credit goes to the LAST ENEMY PILOT whose
+    // damage reached a HULL within CreditWindowSeconds — a PIG, a collision, the sector boundary or
+    // an ownerless mine credits nobody (the loss still counts against the victim). Allegiance
+    // semantics: losing your COMBAT SHIP is an EJECTION (you fly out in a pod), losing the POD is a
+    // DEATH — so EJ >= D, and a pod that docks or is rescued is neither. The initializers ARE the
+    // stock values; authoring 0 for a weight switches that award off without any code branch.
+    public sealed class WorldScoringTuning
+    {
+        // How long a hull hit keeps kill credit alive. Age past this and the victim's death credits
+        // nobody (the shooter left the fight long enough that the kill isn't theirs).
+        public float CreditWindowSeconds = 10f;
+
+        public int KillShip = 100; // enemy player's combat hull
+        public int KillPod = 25; // enemy escape pod (player or PIG)
+        public int KillDrone = 50; // enemy miner / constructor
+        public int KillPig = 50; // enemy AI combat drone
+        public int KillGarrison = 500; // killing blow on an enemy win-condition base
+        public int KillOutpost = 250; // killing blow on an enemy forward base
+
+        // Victim-side awards. Negative = a penalty; 0 = the loss is tracked (the EJ/D counters always
+        // tick) but costs no points.
+        public int Ejection = 0; // when YOUR combat ship is destroyed and you eject
+        public int Death = -25; // when YOUR escape pod is destroyed
     }
 
     // Stable content IDENTIFIERS the engine branches on. These are NOT tunable content — the actual

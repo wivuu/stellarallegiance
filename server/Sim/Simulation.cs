@@ -33,6 +33,7 @@ public sealed partial class Simulation
     private readonly float PodEjectSpin; // rad/s initial tumble (decays via angular drag)
     private readonly WorldMechanicsTuning _mech; // gate/warp knobs read at their use sites
     private readonly WorldCombatTuning _combat; // collision damage + boundary hazard
+    private readonly WorldScoringTuning _scoring; // scoreboard weights + credit window (Simulation.Scoring.cs)
 
     // Mining tuning reads through the LIVE World (not a ctor-cached copy): the world owns the knob
     // set it seeded ore with, and StartMatch may swap in a fresh World — harvest rate/standoff must
@@ -115,7 +116,14 @@ public sealed partial class Simulation
     // hull is untouched; when a hit pops it, the raw damage it couldn't absorb spills into the hull
     // the same tick. ShieldDamageTick stamps this tick so the recharge sweep waits out the delay.
     // Death is still resolved by the end-of-step Health<=0 pass, not here.
-    private void ApplyDamage(ShipSim s, float dmg, uint tick, float shieldMult = 1f)
+    //
+    // attackerClientId is the PILOT behind the damage (-1 = nobody — a PIG, a collision, the sector
+    // boundary, an ownerless mine), and it is the ONE place kill credit is stamped. Credit only
+    // lands on damage that actually reached the HULL: a hit the shield fully absorbs returns early
+    // and leaves the previous stamp alone, matching the agreed "damaged the hull" rule. Friendly
+    // fire never reaches here (blasts/mines skip same-team, same-team bolts route to ApplyHeal), so
+    // the self-hit guard below is the only ownership check needed.
+    private void ApplyDamage(ShipSim s, float dmg, uint tick, float shieldMult = 1f, int attackerClientId = -1)
     {
         if (dmg <= 0f)
             return;
@@ -134,6 +142,11 @@ public sealed partial class Simulation
             s.Shield = 0f;
             if (dmg <= 0f)
                 return;
+        }
+        if (attackerClientId >= 0 && attackerClientId != s.OwnerClientId)
+        {
+            s.LastHitByClient = attackerClientId;
+            s.LastHitTick = tick;
         }
         s.Health -= dmg;
     }
@@ -273,6 +286,14 @@ public sealed partial class Simulation
         // Harvesting miner bumped this tick drops its beam and re-approaches the rock.
         public uint LastCollisionTick;
 
+        // Kill credit (scoreboard): the last ENEMY PILOT whose damage reached this ship's HULL, and
+        // the tick it landed. Stamped in the single ApplyDamage seam; -1 = nobody holds credit.
+        // Unowned damage (PIG / collision / boundary / ownerless mine) deliberately does NOT clear
+        // the stamp — shoving a wounded foe into a rock still credits the shooter; the stamp simply
+        // ages out after Scoring.CreditWindowSeconds. Never serialized.
+        public int LastHitByClient = -1;
+        public uint LastHitTick;
+
         // Server-side autopilot engaged on this ship (player-requested navigation, WP1). While set,
         // InputFor synthesizes steering instead of using the client's held input, and WriteShip raises
         // ShipFlagAutopilot so the owning client suspends its own-ship prediction. The target is one of
@@ -361,6 +382,11 @@ public sealed partial class Simulation
     {
         public ulong MissileId;
         public ulong OwnerShipId; // launching ship (never a valid sweep target)
+
+        // Kill credit for the warhead (direct hit, base hit and splash all inherit it). Carried on
+        // the missile rather than looked up from OwnerShipId at detonation: a torpedo outlives its
+        // launcher routinely, and the ledger is keyed by client id. -1 = a PIG's missile.
+        public int OwnerClientId = -1;
         public byte Team; // owner team (friendlies are not swept)
         public uint WeaponId; // missile-kind WeaponDef (ballistics + model/trail)
         public uint SectorId;
@@ -400,13 +426,17 @@ public sealed partial class Simulation
     // fresh (possibly empty) frame promptly instead of only on the coarse cadence. Cleared at top of Step.
     public bool MinefieldsChangedThisStep { get; private set; }
 
+    // AttackerClientId rides the queued bolt so kill credit survives the flight time: the shooter may
+    // have died, docked or reconnected by the tick the shot resolves, and the ledger is keyed by
+    // client id, not by a live ShipSim. -1 = nobody (a PIG's bolt).
     private readonly record struct PendingShot(
         ulong TargetShipId,
         int BaseIndex,
         float Damage,
         float ShieldMult,
         ulong TargetProbeId = 0,
-        bool Heal = false
+        bool Heal = false,
+        int AttackerClientId = -1
     );
 
     // Settable (not readonly) so a map switch can swap in a fresh arena at match start (StartMatch,
@@ -588,6 +618,7 @@ public sealed partial class Simulation
         // come from the shared classes' initializers when a block/knob is unauthored.
         _mech = content.World.Mechanics;
         _combat = content.World.Combat;
+        _scoring = content.World.Scoring;
         PaycheckTicks = System.Math.Max(1u, (uint)MathF.Round(_mech.PaycheckSeconds * TickHz));
         DockRadiusFrac = _mech.DockRadiusFrac;
         LaunchSpeed = _mech.LaunchSpeed;
@@ -756,6 +787,8 @@ public sealed partial class Simulation
         BasesChangedThisStep = false;
         TeamStateChangedThisStep = false;
         LoadoutsChangedThisStep = false;
+        StatsChangedThisStep = false;
+        ReclaimsThisStep.Clear();
         // Live rock shrink deltas accumulate on World across a step; clear alongside the other
         // change flags so a later wire stream drains only this step's changed rocks (nothing yet).
         World.RocksChangedThisStep.Clear();
@@ -1100,6 +1133,9 @@ public sealed partial class Simulation
                         _clientInfo[newCid] = info;
                     if (_clientRespawn.Remove(orphan.oldClientId, out var rt))
                         _clientRespawn[newCid] = rt;
+                    // The scoreboard row (and any in-flight attribution naming the old id) follows
+                    // the ship across the reconnect (Simulation.Scoring.cs).
+                    MigrateStats(orphan.oldClientId, newCid);
                 }
             }
             while (_inputQueue.Count > 0)
@@ -1201,6 +1237,9 @@ public sealed partial class Simulation
         // BEFORE ResetMatchBases (v41): the team attr cache resolves off the freshly-seeded OwnedTechs,
         // so ResetMatchBases stamps base health with the correct Iron ×1.15 station-armor factor.
         World.SeedEconomy(Content.Start);
+        // Fresh scoreboard too — StartMatch is the ONLY place the ledger clears, so a finished
+        // match stays readable all the way through the lobby wait (Simulation.Scoring.cs).
+        ResetMatchStats();
         RecomputeTeamAttributes();
         World.ResetMatchBases();
         BasesChangedThisStep = true;
@@ -2492,6 +2531,7 @@ public sealed partial class Simulation
     private void ResolveDeath(ShipSim s, uint tick)
     {
         s.ApEngaged = false; // autopilot never survives the ship it was flying
+        ScoreDeath(s, tick); // one scoring seam for every death form (Simulation.Scoring.cs)
         if (s.IsMiner)
             KillMiner(s, tick); // slot dies with the drone — no pod, repurchase only
         else if (s.Kind == ShipKind.Constructor)
@@ -2519,6 +2559,9 @@ public sealed partial class Simulation
 
     // Build an escape pod ShipSim at a wreck's pose, inheriting team/owner with a random
     // eject impulse + tumble. Shared by player (EjectPlayerPod) and PIG (KillPigCombat) death.
+    // The kill-credit stamp (LastHitByClient/LastHitTick) is deliberately NOT carried over: the pod
+    // is a fresh hull that must be shot down on its own to score a D, so whoever killed the combat
+    // ship does not automatically inherit credit for the pod as well.
     private ShipSim MakePod(ShipSim dead, uint tick)
     {
         Vec3 dir = RandomUnitVec();
@@ -2893,7 +2936,17 @@ public sealed partial class Simulation
             // path (ApplyBaseDamage via shot.Damage) inherits it as well.
             float dmg = w.Damage * TeamAttr(ship.Team, Allegiance.Factions.Model.GameAttribute.GunDamage);
             _shotRing[(tick + resolveTicks) % ShotRingSize]
-                .Add(new PendingShot(targetShip, targetBase, dmg, w.ShieldMult, targetProbe, w.IsHealing));
+                .Add(
+                    new PendingShot(
+                        targetShip,
+                        targetBase,
+                        dmg,
+                        w.ShieldMult,
+                        targetProbe,
+                        w.IsHealing,
+                        ship.OwnerClientId
+                    )
+                );
         }
     }
 
@@ -2997,6 +3050,7 @@ public sealed partial class Simulation
             {
                 MissileId = _nextShipId++,
                 OwnerShipId = ship.ShipId,
+                OwnerClientId = ship.OwnerClientId,
                 Team = ship.Team,
                 WeaponId = w.WeaponId,
                 SectorId = ship.SectorId,
@@ -3081,7 +3135,7 @@ public sealed partial class Simulation
             if (chaffDetonate)
             {
                 var cg = _shipGrid.TryGetValue(mis.SectorId, out var csg) ? csg : null;
-                ApplyBlast(mis.Team, w, chaffDetonatePos, 0, cg, tick, mis.SectorId);
+                ApplyBlast(mis.Team, mis.OwnerClientId, w, chaffDetonatePos, 0, cg, tick, mis.SectorId);
                 MissileGoneThisStep.Add((mis.MissileId, 1, mis.SectorId, chaffDetonatePos));
                 (remove ??= new()).Add(mis);
                 continue;
@@ -3227,10 +3281,10 @@ public sealed partial class Simulation
                 // hit + base hit here; the splash inherits it inside ApplyBlast off the same mis.Team).
                 float md = TeamAttr(mis.Team, Allegiance.Factions.Model.GameAttribute.MissileDamage);
                 if (hitShip != 0 && _ships.TryGetValue(hitShip, out var victim) && victim.Alive)
-                    ApplyDamage(victim, w.Damage * w.DirectHitMult * md, tick, w.ShieldMult); // end-of-step death pass resolves 0 health
+                    ApplyDamage(victim, w.Damage * w.DirectHitMult * md, tick, w.ShieldMult, mis.OwnerClientId); // end-of-step death pass resolves 0 health
                 else if (hitBase >= 0 && w.CanDamageBase)
-                    ApplyBaseDamage(hitBase, w.Damage * w.DirectHitMult * md, tick); // blast never touches the base
-                ApplyBlast(mis.Team, w, hitPos, hitShip, shipGrid, tick, mis.SectorId);
+                    ApplyBaseDamage(hitBase, w.Damage * w.DirectHitMult * md, tick, mis.OwnerClientId); // blast never touches the base
+                ApplyBlast(mis.Team, mis.OwnerClientId, w, hitPos, hitShip, shipGrid, tick, mis.SectorId);
                 MissileGoneThisStep.Add((mis.MissileId, 1, mis.SectorId, hitPos)); // impact
                 (remove ??= new()).Add(mis);
                 continue;
@@ -3256,8 +3310,12 @@ public sealed partial class Simulation
     // (it already took Damage * DirectHitMult); friendlies/pods never take splash, matching the
     // sweep's no-friendly-fire rule. Grid cube query keeps this off the O(ships) path; fixed
     // dx/dy/dz iteration order + one damage write per ship keeps it deterministic.
+    // attackerClientId is the launching pilot (-1 for a PIG's warhead) — the splash credits exactly
+    // what the direct hit would have, so a kill made by the blast rather than the impact still lands
+    // on the shooter's row.
     private void ApplyBlast(
         byte team,
+        int attackerClientId,
         WeaponDef w,
         Vec3 hitPos,
         ulong directHitShip,
@@ -3311,7 +3369,7 @@ public sealed partial class Simulation
                 if (d > w.BlastRadius)
                     continue;
                 float falloff = d <= fuseR ? 1f : (fuseR / d) * (fuseR / d);
-                ApplyDamage(s, w.BlastPower * falloff * md, tick, w.ShieldMult); // end-of-step death pass resolves 0 health
+                ApplyDamage(s, w.BlastPower * falloff * md, tick, w.ShieldMult, attackerClientId); // end-of-step death pass resolves 0 health
             }
         }
     }
@@ -3371,16 +3429,25 @@ public sealed partial class Simulation
     // win-condition (headquarters) base drops to 0 — latch the match end (winner = the OTHER team) and
     // schedule the return-to-lobby. Destroying a forward base (outpost) removes it from play but never
     // ends the match. Shared by the bolt path (ResolveDueShots) and missile detonation (StepMissiles).
-    private void ApplyBaseDamage(int baseIndex, float damage, uint tick)
+    // attackerClientId is the pilot behind the hit (-1 = a PIG / nobody): it stamps base kill credit
+    // exactly the way ApplyDamage stamps a hull's, and the killing blow is scored below.
+    private void ApplyBaseDamage(int baseIndex, float damage, uint tick, int attackerClientId = -1)
     {
         bool wasAlive = World.BaseHealth[baseIndex] > 0f;
         float hp = MathF.Max(0f, World.BaseHealth[baseIndex] - damage);
         World.BaseHealth[baseIndex] = hp;
         BasesChangedThisStep = true;
         _matchDirty = true;
+        // Kill credit for structures, keyed by the base's STABLE Id (World.Bases grows mid-match and
+        // the whole World is swapped at StartMatch, so an index is not a durable key).
+        if (attackerClientId >= 0)
+            _baseLastHit[World.Bases[baseIndex].Id] = (attackerClientId, tick);
         if (hp <= 0f && wasAlive && Phase != PhaseEnded)
         {
             byte loser = World.Bases[baseIndex].Team;
+            // Score the killing blow BEFORE the latch below: ScoreBaseKill guards on Phase ==
+            // PhaseActive, and the garrison whose loss ENDS the match must still count.
+            ScoreBaseKill(baseIndex, tick);
             // Only the loss of a team's FINAL win-condition base ends the match.
             if (IsWinConditionBase(World.Bases[baseIndex].BaseTypeId) && !TeamHasAliveWinBase(loser, baseIndex))
             {
@@ -3424,7 +3491,7 @@ public sealed partial class Simulation
             }
             else if (shot.BaseIndex >= 0)
             {
-                ApplyBaseDamage(shot.BaseIndex, shot.Damage, tick);
+                ApplyBaseDamage(shot.BaseIndex, shot.Damage, tick, shot.AttackerClientId);
             }
             else if (_ships.TryGetValue(shot.TargetShipId, out var s) && s.Alive)
             {
@@ -3435,7 +3502,7 @@ public sealed partial class Simulation
                 else
                     // Apply damage only; the end-of-step death/dock pass detects 0 health and
                     // ejects the pod / frees the slot — one death path, like the module.
-                    ApplyDamage(s, shot.Damage, tick, shot.ShieldMult);
+                    ApplyDamage(s, shot.Damage, tick, shot.ShieldMult, shot.AttackerClientId);
             }
         }
         due.Clear();

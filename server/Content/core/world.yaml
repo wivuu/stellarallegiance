@@ -206,3 +206,21 @@ constructor:
 build:
   parallel-limit: 1  # ordered items a garrison builds at once (1 = strictly one at a time)
   queue-limit: 2     # total ordered (building + queued) before the Build tab locks
+
+# Per-pilot scoring (the match scoreboard). Server-side only — never streamed; clients see the
+# resulting K/D/EJ/PTS rows on MsgMatchStats. A pilot's PTS is the weighted sum below and a TEAM's
+# score is exactly the sum of its pilots' points. Kill credit goes to the LAST enemy PILOT whose
+# damage reached a HULL within credit-window-seconds — a PIG, a collision, the sector boundary or an
+# ownerless mine never credits anyone (the loss still counts against the victim). Allegiance
+# semantics: losing your COMBAT SHIP is an EJECTION (you fly out in a pod), losing the POD is a
+# DEATH — so EJ >= D; a pod that docks or is rescued is neither. Set a weight to 0 to switch it off.
+scoring:
+  credit-window-seconds: 10
+  kill-ship: 100        # enemy player's combat hull
+  kill-pod: 25          # enemy escape pod (player or PIG)
+  kill-drone: 50        # enemy miner / constructor
+  kill-pig: 50          # enemy AI combat drone
+  kill-garrison: 500    # killing blow on an enemy win-condition base
+  kill-outpost: 250     # killing blow on an enemy forward base
+  ejection: 0           # penalty when YOUR combat ship is destroyed
+  death: -25            # penalty when YOUR escape pod is destroyed

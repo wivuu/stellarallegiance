@@ -921,6 +921,79 @@
       },
       "description": "Build-pipeline tuning: the per-garrison order queue (parallel \u002B queue limits). Null -\u003E stock.",
       "additionalProperties": false
+    },
+    "scoring": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "credit-window-seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Seconds a hull hit keeps kill credit alive; past this the death credits nobody."
+        },
+        "kill-ship": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Points for destroying an enemy player\u0027s combat hull."
+        },
+        "kill-pod": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Points for destroying an enemy escape pod (player or PIG)."
+        },
+        "kill-drone": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Points for destroying an enemy miner / constructor drone."
+        },
+        "kill-pig": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Points for destroying an enemy AI combat drone (PIG)."
+        },
+        "kill-garrison": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Points for the killing blow on an enemy win-condition base (garrison)."
+        },
+        "kill-outpost": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Points for the killing blow on an enemy forward base (outpost)."
+        },
+        "ejection": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Points awarded when YOUR combat ship is destroyed and you eject (negative = penalty)."
+        },
+        "death": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Points awarded when YOUR escape pod is destroyed (negative = penalty)."
+        }
+      },
+      "description": "Per-pilot scoreboard weights (server-side only \u2014 never streamed). Null -\u003E stock.",
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,

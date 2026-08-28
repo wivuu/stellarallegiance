@@ -54,6 +54,15 @@ public partial class Hud : CanvasLayer
     // The hangar / ship-loadout overlay (F4 or the HANGAR button), instantiated on demand.
     private ShipLoadout? _hangar;
 
+    // The match scoreboard overlay (F5, and auto-opened post-match). Persistent, not instantiated on
+    // demand like the two above — see Scoreboard's header.
+    private Scoreboard? _scoreboard;
+
+    // Previous-frame match phase, so the Active→Ended edge can auto-open the post-match board. That
+    // edge is detected HERE, not in the Lobby: the sim holds the ships for ~6s after the win, so the
+    // Lobby is still hidden (LocalShip != null) when the phase flips.
+    private MatchPhase _prevPhase = MatchPhase.Lobby;
+
     // The floating chat overlay (created in _Ready). Kept as a field so OpenHangar can raise it
     // above the full-screen hangar, which is added as a later Hud child and would otherwise cover it.
     private Chat? _chat;
@@ -194,6 +203,13 @@ public partial class Hud : CanvasLayer
         connLayer.AddChild(conn);
         conn.Init(_cm, _ship);
 
+        // Match scoreboard (F5 live / auto-opened post-match). Added LAST so it draws above the Lobby
+        // and Chat, but still under the ConnectLayer (150) and ModalHost (200) canvas layers. It's
+        // persistent and visibility-toggled, so its sort column and team filter survive a toggle.
+        _scoreboard = new Scoreboard { Name = "Scoreboard" };
+        AddChild(_scoreboard);
+        _scoreboard.Init(_world, _net, _defs, _cm);
+
         CaptureLiveUiIfRequested();
     }
 
@@ -201,14 +217,20 @@ public partial class Hud : CanvasLayer
 
     // `--ui-shot=<path>` (without --ui-showcase) screenshots the live game UI after a short
     // settle and quits — used to verify the migrated screens render with the design system.
+    // `--ui-open=scoreboard-live|scoreboard-post` raises that overlay just before the shot, the way
+    // the showcase's own --ui-open does for its modals: overlays behind a hotkey can't otherwise be
+    // captured, and the scoreboard's two modes are the ones with no other way in.
     private void CaptureLiveUiIfRequested()
     {
         string? outPath = null;
+        string? openOverlay = null;
         double delay = 2.0; // default settle; --ui-shot-delay=<sec> waits longer (e.g. for an autofly spawn)
         foreach (string a in OS.GetCmdlineUserArgs())
         {
             if (a.StartsWith("--ui-shot="))
                 outPath = a["--ui-shot=".Length..];
+            else if (a.StartsWith("--ui-open="))
+                openOverlay = a["--ui-open=".Length..];
             else if (a.StartsWith("--ui-shot-delay="))
                 double.TryParse(
                     a["--ui-shot-delay=".Length..],
@@ -221,9 +243,18 @@ public partial class Hud : CanvasLayer
         var t = GetTree().CreateTimer(delay);
         t.Timeout += () =>
         {
-            GetViewport().GetTexture().GetImage().SavePng(outPath);
-            GD.Print("UI_SHOT_SAVED:" + ProjectSettings.GlobalizePath(outPath));
-            GetTree().Quit();
+            if (openOverlay == "scoreboard-live")
+                _scoreboard?.Open(Scoreboard.Mode.Live);
+            else if (openOverlay == "scoreboard-post")
+                _scoreboard?.Open(Scoreboard.Mode.PostMatch);
+            // One more frame so the overlay lays out before the grab.
+            var shot = GetTree().CreateTimer(0.2);
+            shot.Timeout += () =>
+            {
+                GetViewport().GetTexture().GetImage().SavePng(outPath);
+                GD.Print("UI_SHOT_SAVED:" + ProjectSettings.GlobalizePath(outPath));
+                GetTree().Quit();
+            };
         };
     }
 
@@ -252,6 +283,26 @@ public partial class Hud : CanvasLayer
         if (@event is InputEventKey { Pressed: true, Echo: false, Keycode: Key.F4 } && _defs != null)
         {
             ToggleHangar();
+            GetViewport().SetInputAsHandled();
+        }
+
+        // F5 toggles the match scoreboard: the read-only live board while a match is running, the
+        // result screen otherwise — so F5 back in the LOBBY reopens the finished match's board (the
+        // ledger persists until the next StartMatch). Before the first match there's nothing to show,
+        // so it stays inert. Guarded on the same overlays as F4, plus the hangar (it owns the screen).
+        if (
+            @event is InputEventKey { Pressed: true, Echo: false, Keycode: Key.F5 }
+            && _defs != null
+            && _scoreboard != null
+            && !Chat.Capturing
+            && !EscapeMenu.Active
+            && !SettingsDialog.Active
+            && !ShipLoadout.Active
+        )
+        {
+            bool live = _world.Phase == MatchPhase.Active;
+            if (live || _world.MatchStats.Pilots.Count > 0)
+                _scoreboard.Toggle(live ? Scoreboard.Mode.Live : Scoreboard.Mode.PostMatch);
             GetViewport().SetInputAsHandled();
         }
     }
@@ -404,6 +455,25 @@ public partial class Hud : CanvasLayer
             _hangar.QueueFree();
             _hangar = null;
         }
+
+        // Match scoreboard lifecycle. The Active→Ended edge auto-opens the post-match board — detected
+        // HERE rather than in the Lobby because the sim holds the ships for ~6s after the win, so the
+        // Lobby is still hidden (and the cursor still captured) at that moment; the board frees the
+        // cursor itself. That board then STAYS up over the lobby until Esc / BACK TO LOBBY dismisses
+        // it. The live board is dismissed whenever it loses its subject (the match stops being live)
+        // or the mandatory spawn hangar takes the screen, and any board closes when a new match
+        // starts. Read after the hangar block so the hangar state is current.
+        if (_scoreboard != null)
+        {
+            bool spawnHangar = _hangar != null && IsInstanceValid(_hangar) && _hangar.OpenedForSpawn;
+            bool matchStarting = _world.Phase == MatchPhase.Active && _prevPhase != MatchPhase.Active;
+            bool liveLostSubject = _scoreboard.CurrentMode == Scoreboard.Mode.Live && !inMatch;
+            if (_world.Phase == MatchPhase.Ended && _prevPhase == MatchPhase.Active)
+                _scoreboard.Open(Scoreboard.Mode.PostMatch);
+            else if (Scoreboard.Active && (spawnHangar || matchStarting || liveLostSubject))
+                _scoreboard.Close();
+        }
+        _prevPhase = _world.Phase;
 
         _sectorShips.Visible = inMatch;
         if (inMatch)

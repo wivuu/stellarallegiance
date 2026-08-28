@@ -269,6 +269,11 @@ public partial class WorldRenderer
     // MsgConstructorState), extracted into its own store. Constructed in _Ready once _defs is resolved.
     public TeamStateStore TeamState { get; private set; } = null!;
 
+    // The match scoreboard ledger (MsgMatchStats): per-pilot K/D/EJ/PTS + the per-team garrison tally.
+    // Read by the Scoreboard overlay and the Lobby roster cells. No dependencies, so unlike TeamState it
+    // exists from construction; it deliberately survives a match ending (cleared only by Reset).
+    public MatchStatsStore MatchStats { get; } = new();
+
     private StandardMaterial3D _asteroidMat = null!;
     private StandardMaterial3D _team0Mat = null!;
     private StandardMaterial3D _team1Mat = null!;
@@ -497,6 +502,13 @@ public partial class WorldRenderer
         _clock.Winner = winner == 255 ? (byte?)null : winner;
     }
 
+    // The scoreboard ledger from MsgMatchStats (reliable, on change). A full reconcile — the frame
+    // always carries every pilot seen this match, leavers included.
+    public void NetApplyMatchStats(
+        IReadOnlyList<MatchStatsStore.PilotStat> pilots,
+        IReadOnlyList<MatchStatsStore.TeamTally> teams
+    ) => MatchStats.Apply(pilots, teams);
+
     // Shared spin clock: the authoritative tick in seconds. The rock tumble (visual + predicted hull)
     // is phased on this, so they rotate together and stay within ~1° of the server's live hull.
     private float SimSeconds => ServerTick * FlightModel.Dt;
@@ -536,6 +548,7 @@ public partial class WorldRenderer
         _minefield.Clear(); // chaff/minefield container nodes aren't in the group sweep above
         _construction.Reset(); // BuildSphere/ConstructorDebris nodes freed by the _effects sweep above
         TeamState.ClearConstructorStates(); // roster drops on rebuild; economy/research dicts persist
+        MatchStats.Clear(); // the scoreboard ledger is per-session; the server re-sends it after Welcome
         _collision.Reset();
         _aleph.Reset();
         _fog.Reset(); // ghosts + radar tier + chime-priming + the CONTACT LOST window

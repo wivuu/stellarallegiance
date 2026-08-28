@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Link the client's pure-POCO scoreboard ledger directly. It depends only on the BCL — NOT on Godot,
+         and (unlike TeamStateStore) not even on a seam interface — so this suite exercises the real
+         production filtering/aggregation/sort logic headlessly. -->
+    <Compile Include="../../client/scripts/world/MatchStatsStore.cs" Link="MatchStatsStore.cs" />
+  </ItemGroup>
+</Project>

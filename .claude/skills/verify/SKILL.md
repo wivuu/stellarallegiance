@@ -45,3 +45,8 @@ $env:MOVIE_RESOLUTION='1280x720'; scripts/run-client.ps1 -Local -WriteMovie <scr
 - A held connection is required or the sim loop won't tick (autofly provides one).
 - Kill servers when done: `kill $(lsof -tnP -iTCP:8090 -sTCP:LISTEN)`.
 -  `timeout` likely will not work on MacOS
+- From zsh/bash, hand the argument array to PowerShell ITSELF — `pwsh -Command "& ./scripts/run-client.ps1 -Local -GodotArgs @('--autofly','--','--ui-shot=…','--ui-shot-delay=22')"`.
+  `pwsh scripts/run-client.ps1 -GodotArgs '--autofly','--','…'` passes ONE argv word (quotes+commas included) so Godot
+  never sees `--autofly` (tell: `world received — 0 sectors` ×3, no spawn, no `UI_SHOT_SAVED`, window never quits);
+  separate words with a bare `--` trip pwsh's binder ("parameter name '' is ambiguous").
+- `--ui-open=scoreboard-live|scoreboard-post` (after `--`) raises the match scoreboard before a `--ui-shot`.
