@@ -581,15 +581,27 @@ void PositionNoseOnBase(Simulation.ShipSim ship, Vec3 basePos, float standoff = 
         $"failed to lock the base after {torpedo.LockTicks} ticks (locked={bomber.Locked}, progress={bomber.LockProgress})"
     );
 
-    // Volley the full rack (respecting FireIntervalTicks cadence): every impact must drop BaseHealth
-    // by EXACTLY Damage * DirectHitMultiplier (a direct-hit-only warhead — blast never touches a base).
+    // Volley the rack at the locked garrison until it falls. Every impact drops BaseHealth by EXACTLY
+    // Damage * DirectHitMultiplier (a direct-hit-only warhead — blast never touches a base) except the
+    // killing hit, which clamps at 0. ONE bomber-load must carry the whole kill: the rack magazine is
+    // sized for it (launchers.yaml "MAGAZINE SIZING RULE"), with a spare round for a wasted shot.
     float directDamage = torpedo.Damage * torpedo.DirectHitMult;
     float healthBefore = sim.World.BaseHealth[baseIdx];
+    int hitsToKill = (int)MathF.Ceiling(healthBefore / directDamage);
+    Check(
+        hitsToKill < torpedo.MagazineSize,
+        $"one torpedo rack ({torpedo.MagazineSize} rounds) covers the {hitsToKill} hits a garrison takes ({healthBefore} armor / {directDamage} per hit) with a round to spare",
+        $"rack too small to crack a garrison alone: {torpedo.MagazineSize} rounds vs {hitsToKill} hits needed at {directDamage}/hit"
+    );
+
     var healthDeltas = new List<float>();
     byte launches = 0;
     byte lastAmmo = bomber.MissileAmmo;
-    uint rackTicks = torpedo.FireIntervalTicks * (uint)torpedo.MagazineSize + 40;
-    for (uint i = 0; i < rackTicks; i++)
+    // A launcher's real cycle is the reload-widened window (the torpedo's load-time dominates its
+    // fire interval), not the bare cadence; budget the whole magazine plus the last round's flight.
+    uint cycle = FireCadence.LoadIntervalTicks(torpedo.FireIntervalTicks, torpedo.ReloadTicks);
+    uint rackTicks = cycle * (uint)torpedo.MagazineSize + 200;
+    for (uint i = 0; i < rackTicks && sim.Phase != Simulation.PhaseEnded; i++)
     {
         float before = sim.World.BaseHealth[baseIdx];
         bomber.HeldInput = new ShipInputState { LockTargetId = lockId, Firing2 = true };
@@ -603,40 +615,24 @@ void PositionNoseOnBase(Simulation.ShipSim ship, Vec3 basePos, float standoff = 
         if (after != before)
             healthDeltas.Add(before - after);
     }
-    Check(launches == torpedo.MagazineSize, $"bomber fired its full torpedo rack ({torpedo.MagazineSize})", $"bomber fired {launches} torpedoes, expected {torpedo.MagazineSize}");
-    Check(bomber.MissileAmmo == 0, "torpedo rack ran dry", $"rack left with {bomber.MissileAmmo} torpedoes");
-    Check(
-        healthDeltas.Count > 0 && healthDeltas.All(d => d == directDamage),
-        $"every base impact dealt exactly Damage * DirectHitMultiplier ({directDamage})",
-        $"base health deltas wrong: [{string.Join(", ", healthDeltas)}], expected all {directDamage} (a stray non-{directDamage} delta usually means a rock/ship intercepted a torpedo)"
-    );
     float healthAfterRack = sim.World.BaseHealth[baseIdx];
     Check(
-        healthAfterRack == healthBefore - healthDeltas.Count * directDamage,
-        $"base health dropped by exactly {healthDeltas.Count} direct hits ({healthBefore} -> {healthAfterRack})",
-        $"base health bookkeeping wrong ({healthBefore} -> {healthAfterRack}, {healthDeltas.Count} impacts logged)"
+        healthAfterRack == 0f && healthDeltas.Count == hitsToKill,
+        $"ONE bomber's rack destroyed the garrison in {hitsToKill} direct hits ({healthBefore} -> 0)",
+        $"one rack did not crack the garrison (health {healthAfterRack} after {healthDeltas.Count} impacts, {launches} torpedoes launched)"
     );
-
-    // One rack (6 x 300 = 1800) doesn't fully deplete a base carrying more HP (garrison MaxArmor
-    // 2000) — rejoin a second bomber, nose-aligned the same way, and dumbfire (no lock needed: a
-    // straight, nose-on shot already flies dead-on at the base) until it falls, so the match-end
-    // assertion below is reachable rather than merely hoped-for.
-    if (sim.Phase != Simulation.PhaseEnded)
-    {
-        Check(healthAfterRack > 0f, "base survives one bomber's rack (needs a second wave)", $"base health {healthAfterRack} <= 0 but the match didn't end");
-
-        sim.EnqueueJoin(2, team: 0, cls: FlightModel.ClassBomber);
-        sim.Step();
-        var bomber2 = sim.Ships.First(s => s.OwnerClientId == 2);
-        PositionNoseOnBase(bomber2, sim.World.Bases[baseIdx].Pos);
-
-        uint secondRackTicks = torpedo.FireIntervalTicks * (uint)torpedo.MagazineSize + 40;
-        for (uint i = 0; i < secondRackTicks && sim.Phase != Simulation.PhaseEnded; i++)
-        {
-            bomber2.HeldInput = new ShipInputState { Firing2 = true }; // dumbfire — already nose-on
-            sim.Step();
-        }
-    }
+    Check(
+        launches == hitsToKill && bomber.MissileAmmo > 0,
+        $"the kill cost {launches} of the rack's {torpedo.MagazineSize} rounds ({bomber.MissileAmmo} left in the rack)",
+        $"rack bookkeeping wrong (launched {launches}, expected {hitsToKill}; ammo left {bomber.MissileAmmo} of {torpedo.MagazineSize})"
+    );
+    Check(
+        healthDeltas.Count > 0
+            && healthDeltas.Take(healthDeltas.Count - 1).All(d => d == directDamage)
+            && healthDeltas.Sum() == healthBefore,
+        $"every base impact dealt exactly Damage * DirectHitMultiplier ({directDamage}), the killing hit clamping at 0",
+        $"base health deltas wrong: [{string.Join(", ", healthDeltas)}], expected {directDamage} each (a stray delta usually means a rock/ship intercepted a torpedo)"
+    );
 
     Check(
         sim.Phase == Simulation.PhaseEnded && sim.Winner == 0,
@@ -743,9 +739,10 @@ void PositionNoseOnBase(Simulation.ShipSim ship, Vec3 basePos, float standoff = 
 }
 
 // ---- 11. Determinism: replay the base-siege script on two fresh Simulations ----------------------
-// A self-contained replica of scenario 7's script (lock -> volley -> second-bomber finish), tracking
-// every in-flight missile's position/velocity per tick + every gone event, so a replay diverging
-// anywhere (steering, collision order, base-health bookkeeping) is caught.
+// A self-contained replica of scenario 7's script (lock -> volley, with a second bomber joining only
+// if the first one's rack somehow runs dry first), tracking every in-flight missile's position/
+// velocity per tick + every gone event, so a replay diverging anywhere (steering, collision order,
+// base-health bookkeeping) is caught.
 (
     List<(uint tick, ulong id, Vec3 pos, Vec3 vel)> flight,
     List<(uint tick, ulong id, byte reason)> gone,
