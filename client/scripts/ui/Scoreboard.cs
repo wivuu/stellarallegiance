@@ -179,6 +179,7 @@ public partial class Scoreboard : Control
             _matchStartTick = _world.ServerTick;
             _haveStartTick = _sawLiveLobby;
             _sawLiveLobby = false;
+            _matchEndTick = 0; // a new match is running — the previous one's final length is spent
         }
         if (phase == MatchPhase.Ended && _prevPhase == MatchPhase.Active)
             _matchEndTick = _world.ServerTick;
@@ -242,7 +243,10 @@ public partial class Scoreboard : Control
     {
         if (!_haveStartTick)
             return "--:--";
-        uint now = _world.Phase == MatchPhase.Ended && _matchEndTick != 0 ? _matchEndTick : _world.ServerTick;
+        // Latched end tick wins whenever we have one — the board outlives the Ended phase (the sim
+        // drops back to Lobby ~6s after the win while the result screen is still up), so gating this
+        // on Phase == Ended would let the "final" duration start counting again over the lobby.
+        uint now = _matchEndTick != 0 ? _matchEndTick : _world.ServerTick;
         int secs = (int)Math.Max(0, (now - (long)_matchStartTick) * FlightModel.Dt);
         return $"{secs / 60:00}:{secs % 60:00}";
     }
@@ -759,8 +763,8 @@ public partial class Scoreboard : Control
         }
         left.AddChild(line2);
         // Win reason. The only win condition today is "all of a side's win-condition garrisons fell",
-        // so it's stated outright when there IS a winner — never when the board is being reviewed
-        // from the lobby with no result to explain.
+        // so it's stated outright when there IS a winner — never on a board with no result to explain
+        // (before the first match of a session, where the winner byte is still 255).
         string where = $"{MapName().ToUpperInvariant()} · {(_net.CurrentMap?.Mode ?? "CONQUEST").ToUpperInvariant()}";
         left.AddChild(
             RosterCells

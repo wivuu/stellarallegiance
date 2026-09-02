@@ -1229,7 +1229,7 @@ public sealed partial class Simulation
         if (nextWorld != null)
             World = nextWorld;
         Phase = PhaseActive;
-        Winner = NoWinner;
+        Winner = NoWinner; // the ONLY reset — the last result stays readable through the lobby wait
         _matchDirty = false;
         foreach (var ring in _shotRing)
             ring.Clear();
@@ -1360,7 +1360,10 @@ public sealed partial class Simulation
         World.ResetMatchBases();
         BasesChangedThisStep = true;
         Phase = PhaseLobby;
-        Winner = NoWinner;
+        // Winner is deliberately NOT cleared here. It is match RESULT, not match state: the
+        // post-match scoreboard stays up over the lobby (and F5 reopens it there), so the winning
+        // side has to survive the Ended -> Lobby flip exactly the way the ledger above does.
+        // StartMatch is the only place it resets.
         _matchDirty = false;
         foreach (var ring in _shotRing)
             ring.Clear();

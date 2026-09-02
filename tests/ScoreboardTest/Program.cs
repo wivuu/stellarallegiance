@@ -10,10 +10,13 @@
 // exactly the sum of its pilots' points" invariant, deaths nobody gets credit for, credit-window
 // expiry, unowned damage NOT clearing a live stamp, the garrison killing blow (points + tally +
 // match end in the right order), reconnect-reclaim row migration, a leaver's row surviving, the
-// ledger surviving ReturnToLobby but not StartMatch, and the Ended-window phase guard.
+// ledger surviving ReturnToLobby but not StartMatch, the Ended-window phase guard, and (at the hub
+// level) the board surviving the re-Welcome the server sends on the match->lobby flip.
 
 using System.Linq;
+using System.Text;
 using SimServer.Content;
+using SimServer.Net;
 using SimServer.Sim;
 using StellarAllegiance.Shared;
 
@@ -355,12 +358,23 @@ Simulation siegeSim;
         "ReturnToLobby keeps the finished match's ledger + tallies readable",
         $"ReturnToLobby wiped the ledger (PTS={Row(sim, Attacker).Points}, garrisons={sim.GarrisonsDestroyed(0)})"
     );
+    // The winner is part of that same result. The post-match screen stays up over the lobby (and F5
+    // reopens it there), so a Winner cleared by ReturnToLobby reads as "NO WINNER" on the very board
+    // that just announced the win.
+    Check(
+        sim.Winner == 0 && sim.Phase == Simulation.PhaseLobby,
+        "ReturnToLobby keeps the winning team latched (the result screen outlives the Ended phase)",
+        $"ReturnToLobby cleared the winner (winner={sim.Winner}, phase={sim.Phase})"
+    );
     sim.StartMatch();
     Check(
-        sim.MatchStats.Count == 0 && sim.GarrisonsDestroyed(0) == 0 && sim.World.TeamStates[0].Score == 0,
-        "StartMatch zeroes the ledger, the tallies and every team score",
+        sim.MatchStats.Count == 0
+            && sim.GarrisonsDestroyed(0) == 0
+            && sim.World.TeamStates[0].Score == 0
+            && sim.Winner == Simulation.NoWinner,
+        "StartMatch zeroes the ledger, the tallies, every team score and the winner",
         $"StartMatch left stale state (rows={sim.MatchStats.Count}, garrisons={sim.GarrisonsDestroyed(0)}, "
-            + $"team0 score={sim.World.TeamStates[0].Score})"
+            + $"team0 score={sim.World.TeamStates[0].Score}, winner={sim.Winner})"
     );
 }
 
@@ -425,5 +439,142 @@ Simulation siegeSim;
     );
 }
 
+// ---- 12. The board survives the re-Welcome on the match -> lobby flip (hub level) --------------
+// A Welcome REBUILDS the client's world, and that rebuild wipes its scoreboard ledger
+// (WorldRenderer.Reset -> MatchStats.Clear). Under fog the server re-Welcomes every client on the
+// match->lobby flip — which lands seconds AFTER the post-match board auto-opened, and in the lobby
+// nothing ever re-sends the ledger (it broadcasts on change, and a finished match's never changes
+// again). So the result screen blanked: rows gone, garrison tally zeroed. The fix makes the ledger
+// part of what a Welcome means, so the assertion here is about ORDER — a MsgMatchStats frame must
+// reach the client AFTER the last MsgWelcome, carrying real rows.
+{
+    var content = ContentLoader.Load(stockPath, worldPath);
+    var world = new World(12, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
+    // Fog ON: it is fog that makes the flip re-Welcome (the remembered map is per-team). Synchronous
+    // vision so the off-thread worker can't leave a Welcome half-built inside a single Step.
+    var sim = new Simulation(world, content)
+    {
+        PigsEnabled = false,
+        MinersEnabled = false,
+        FogEnabled = true,
+        VisionSynchronous = true,
+    };
+    var hub = new ClientHub(
+        sim,
+        new SimServer.Backend.OpenAuthenticator(),
+        new SimServer.Backend.InMemoryPlayerDirectory(),
+        // Ready-up (not autoStart): ReturnToLobby below clears ready flags, so the matchmaker can't
+        // immediately restart the match and wipe the very ledger this section is checking.
+        new SimServer.Backend.ReadyUpMatchmaker(autoStart: false),
+        "Test Arena",
+        Array.Empty<MapCatalogEntry>()
+    );
+    sim.ShouldStartMatch = hub.ShouldStartMatch;
+    sim.OnReturnToLobby = hub.OnReturnToLobby;
+    sim.OnMatchStart = hub.OnMatchStart;
+    var ft = new FakeHubTransport();
+    var cts = new System.Threading.CancellationTokenSource();
+    _ = hub.HandleConnection(ft, cts.Token);
+
+    // Fresh-join Hello (v9): [MsgHello][secretLen 0][nameLen][name][tokenLen 0].
+    var name = Encoding.UTF8.GetBytes("ace");
+    var hello = new List<byte> { Protocol.MsgHello, 0, (byte)name.Length };
+    hello.AddRange(name);
+    hello.Add(0);
+    ft.Feed(hello.ToArray());
+    System.Threading.Thread.Sleep(50);
+    ft.Feed(new byte[] { Protocol.MsgSetTeam, 0 });
+    System.Threading.Thread.Sleep(50);
+    ft.Feed(new byte[] { Protocol.MsgSetReady, 1 });
+    System.Threading.Thread.Sleep(50);
+
+    void Pump(int n)
+    {
+        for (int i = 0; i < n; i++)
+        {
+            sim.Step();
+            hub.AfterStep();
+        }
+    }
+    Pump(20); // the ready-up matchmaker auto-starts the match
+    Check(
+        sim.Phase == Simulation.PhaseActive,
+        "premise: the hub-driven match went Active with a connected pilot",
+        $"hub match never started (phase={sim.Phase})"
+    );
+
+    // The flip. ReturnToLobby is the same seam the win latch schedules (_returnToLobbyAtTick), so
+    // this drives HandlePhaseTransition's Active->Lobby branch — BroadcastLobby, BroadcastMatchStats,
+    // then the fog re-Welcome — exactly as a real match end does.
+    sim.ReturnToLobby();
+    Pump(3);
+    System.Threading.Thread.Sleep(100); // the async SendLoop flushes AfterStep's frames a moment later
+
+    var sent = ft.Sent.ToArray();
+    int lastWelcome = Array.FindLastIndex(sent, f => f.Length > 0 && f[0] == Protocol.MsgWelcome);
+    int lastStats = Array.FindLastIndex(sent, f => f.Length > 0 && f[0] == Protocol.MsgMatchStats);
+    Check(
+        lastWelcome >= 0 && sim.Phase == Simulation.PhaseLobby,
+        "premise: the flip re-Welcomed the client under fog",
+        $"no re-Welcome on the flip (welcome={lastWelcome}, phase={sim.Phase})"
+    );
+    Check(
+        lastStats > lastWelcome,
+        "the ledger is re-sent AFTER the flip's Welcome (the result screen keeps its rows)",
+        $"the Welcome was the last word — the client's board was wiped and never refilled "
+            + $"(last welcome at {lastWelcome}, last stats at {lastStats})"
+    );
+    // ...and that trailing frame has to carry the pilot, not an empty table: byte 1 is nPilots.
+    Check(
+        lastStats >= 0 && sent[lastStats].Length > 1 && sent[lastStats][1] > 0,
+        "that trailing ledger frame still lists the match's pilots",
+        $"the trailing ledger frame was empty (nPilots={(lastStats >= 0 && sent[lastStats].Length > 1 ? sent[lastStats][1] : 0)})"
+    );
+    // The winner rides the same rebuild: WorldRenderer.Reset also resets the client's MatchClock
+    // (phase + winner), so the result screen's "{team} WINS" depends on a snapshot landing after the
+    // Welcome. Snapshots stream every tick in any phase (a shipless lobby snapshot is a bare header),
+    // so the restore is automatic — this pins that. Header: [29 tick(4) phase winner count(2)].
+    int lastSnap = Array.FindLastIndex(sent, f => f.Length >= 9 && f[0] == Protocol.MsgSnapshot);
+    Check(
+        lastSnap > lastWelcome && sent[lastSnap][6] == sim.Winner && sent[lastSnap][5] == sim.Phase,
+        "a snapshot after that Welcome restores the client's match phase + winner",
+        $"no post-Welcome snapshot to restore phase/winner (snap={lastSnap}, welcome={lastWelcome}, "
+            + $"phase={(lastSnap >= 0 ? sent[lastSnap][5] : -1)}/{sim.Phase}, winner={(lastSnap >= 0 ? sent[lastSnap][6] : -1)}/{sim.Winner})"
+    );
+    cts.Cancel();
+}
+
 Console.WriteLine(failures == 0 ? "\nALL SCOREBOARD TESTS PASSED" : $"\n{failures} SCOREBOARD TEST(S) FAILED");
 return failures == 0 ? 0 : 1;
+
+// In-memory IClientTransport for the hub-level test: feed client->server frames, capture server->client
+// (copied verbatim from tests/FogTest/Program.cs — the shared hub-harness pattern).
+sealed class FakeHubTransport : SimServer.Net.IClientTransport
+{
+    private readonly System.Collections.Concurrent.BlockingCollection<byte[]> _in = new();
+    public readonly System.Collections.Concurrent.ConcurrentQueue<byte[]> Sent = new();
+
+    public void Feed(byte[] frame) => _in.Add(frame);
+
+    public async ValueTask<int> ReceiveAsync(byte[] buffer, System.Threading.CancellationToken ct)
+    {
+        try
+        {
+            byte[] f = await Task.Run(() => _in.Take(ct), ct);
+            Array.Copy(f, buffer, f.Length);
+            return f.Length;
+        }
+        catch (OperationCanceledException)
+        {
+            return -1; // transport closed
+        }
+    }
+
+    public ValueTask SendAsync(ReadOnlyMemory<byte> data, System.Threading.CancellationToken ct)
+    {
+        Sent.Enqueue(data.ToArray());
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask CloseAsync(string reason, System.Threading.CancellationToken ct) => ValueTask.CompletedTask;
+}

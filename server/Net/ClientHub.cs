@@ -411,6 +411,10 @@ public sealed class ClientHub
         // The sim just wiped its ledger (Simulation.ResetMatchStats), so the name/team memo starts
         // over too — last match's leavers must not haunt the new board.
         _pilotIdentity.Clear();
+        // Rebuild the cached board BEFORE the re-Welcome below, which re-seeds each client from it:
+        // the cache still holds the FINISHED match's rows, and the new match must open on a clean
+        // one. Sim thread (inside StartMatch), so reading the ledger here is safe.
+        BroadcastMatchStats();
         foreach (var c in _clients.Values)
             SendWelcome(c);
     }
@@ -533,6 +537,15 @@ public sealed class ClientHub
             );
         }
         SendReliable(client, OutFrame.Whole(frame));
+        // A Welcome REBUILDS the client's world (ApplyWelcome -> WorldRenderer.Reset), and that
+        // wipes its scoreboard ledger — so re-seeding the board is part of what a Welcome means.
+        // Every re-Welcome site (join, team change, reclaim, match start, the fog re-sync on a phase
+        // flip) would otherwise blank the F5 board, and in the lobby NOTHING re-sends it: the ledger
+        // only broadcasts on change, and a finished match's ledger never changes again. The cached
+        // frame is immutable and the reference read is atomic, so this is safe off the sim thread;
+        // callers that just mutated the ledger rebuild the cache (BroadcastMatchStats) FIRST.
+        if (_matchStatsFrame is { } statsFrame)
+            SendReliable(client, OutFrame.Whole(statsFrame));
     }
 
     public async Task HandleConnection(IClientTransport transport, CancellationToken ct)
@@ -710,13 +723,10 @@ public sealed class ClientHub
                     // right after Defs, so the lobby's sector pane + map picker have data to render.
                     SendReliable(client, OutFrame.Whole(Protocol.BuildMapList(_mapCatalog)));
                     BroadcastLobby();
-                    // The joiner needs the match ledger too — mid-match (F5 has to work the moment
-                    // they're in) and in the lobby (the previous match's board is still readable).
-                    // Hand over the cached frame from this socket thread, then let the SIM thread
-                    // rebuild next tick so the joiner's own zero row reaches everyone (BroadcastLobby
-                    // just folded them into the name/team memo).
-                    if (_matchStatsFrame is { } statsFrame)
-                        SendReliable(client, OutFrame.Whole(statsFrame));
+                    // SendWelcome above already handed this joiner the cached board (mid-match F5 has
+                    // to work the moment they're in; in the lobby the previous match's board is still
+                    // readable). Ask the SIM thread to rebuild next tick so the joiner's own zero row
+                    // reaches everyone — BroadcastLobby just folded them into the name/team memo.
                     _matchStatsResend = true;
 
                     // Reconnect: hand back a ship the sim is still holding for the presented token.
