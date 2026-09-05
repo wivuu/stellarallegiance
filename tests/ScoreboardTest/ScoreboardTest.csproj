@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Same seam as ShieldTest/MissileTest: reference the sim + shared def records; SimServer's
+         Main is never invoked. -->
+    <ProjectReference Include="../../shared/Shared.csproj" />
+    <ProjectReference Include="../../server/SimServer.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The stock bundle under test, copied next to the binary so CoreSerializer.Load resolves it. -->
+    <Content Include="../../server/content/core/**/*.yaml" Link="content/core/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

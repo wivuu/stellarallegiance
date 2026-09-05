@@ -799,7 +799,11 @@ public partial class ShipController : Node
     // mid-flight); with the cursor already free a second press opens the escape menu. A left
     // click in the viewport recaptures. Skipped under --autofly (headless has no real cursor),
     // while Chat/SectorOverview own the cursor (they restore it on close), and while the
-    // escape menu / settings dialog are up (so clicking their buttons never recaptures).
+    // escape menu / settings dialog / post-match scoreboard are up (so clicking their buttons never
+    // recaptures). The POST-MATCH board earns its place here because it auto-opens at the match-end
+    // edge while the pilot is STILL FLYING — without the guard, clicking BACK TO LOBBY would re-lock
+    // the cursor for mouse-look. The LIVE (F5) board is deliberately absent: it's read-only,
+    // mouse-transparent, and must leave flight input exactly as it was.
     public override void _Input(InputEvent @event)
     {
         if (@event is InputEventMouseMotion mm && Input.MouseMode == Input.MouseModeEnum.Captured)
@@ -813,6 +817,7 @@ public partial class ShipController : Node
             || ShipLoadout.Active
             || EscapeMenu.Active
             || SettingsDialog.Active
+            || Scoreboard.PostMatchActive
         )
             return;
 

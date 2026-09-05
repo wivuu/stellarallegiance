@@ -186,12 +186,4 @@ public static class UiKit
         double f = max > min ? (v - min) / (max - min) : 0;
         return $"{Mathf.RoundToInt((float)(f * 100))}%";
     }
-
-    // Tiny fluent helper so factories can tweak a control inline.
-    private static T With<T>(this T node, Action<T> configure)
-        where T : Node
-    {
-        configure(node);
-        return node;
-    }
 }

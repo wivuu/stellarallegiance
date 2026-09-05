@@ -99,11 +99,22 @@ launchers:
 
   # ---- SRM Anti-Base 1/2/3 (weapon-ids 5/22/23) — the ONLY can-damage-base weapon line, so the
   # bomber (the sole default carrier) is the match-ender. Bomber hp index 4 stays bound to weapon-id 5. ----
+  # MAGAZINE SIZING RULE — ONE bomber-load must crack a garrison. A direct base hit deals
+  # power x direct-hit-multiplier x the firing team's MissileDamage attribute (Iron x1.1), against a
+  # garrison's max-armor x MaxArmorStation (Iron x1.15); bases never regenerate, so a sortie's hits
+  # simply accumulate:
+  #   tier 1: 300 x1.1 = 330/hit vs 2000 x1.15 = 2300  -> 7 hits   (2000/300 = 7 with attributes off)
+  #   tier 2/3: 375 x1.1 = 412.5/hit vs 2300           -> 6 hits
+  # amount 8 therefore carries the kill at EVERY tier with a spare round for a wasted shot, and at
+  # tier 2/3 it also cracks a Garrison (Str) (2500 x1.15 = 2875 -> 7 hits). Tier 3 was 4 rounds — a
+  # top-tier rack that could not finish ANY base (4 x 412.5 = 1650); it holds 8 like the rest now.
+  # The magazine rides FREE of the payload budget (the rack's own mass 4 is the payload cost), so
+  # no hull's payload-capacity moves with these counts.
   - id: anti-base-rack-1
     name: SRM Anti-Base 1
     slot: magazine
     mass: 4
-    amount: 6
+    amount: 8
     expendable-id: srm-anti-base-1
     weapon-id: 5
     fire-interval-ticks: 60
@@ -114,7 +125,7 @@ launchers:
     name: SRM Anti-Base 2
     slot: magazine
     mass: 4
-    amount: 6
+    amount: 8
     expendable-id: srm-anti-base-2
     weapon-id: 22
     fire-interval-ticks: 60
@@ -126,7 +137,7 @@ launchers:
     name: SRM Anti-Base 3
     slot: magazine
     mass: 4
-    amount: 4
+    amount: 8
     expendable-id: srm-anti-base-3
     weapon-id: 23
     fire-interval-ticks: 50

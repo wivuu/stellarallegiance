@@ -252,10 +252,12 @@ Check(
     "stock srm-anti-base-1 carries can-damage-base + power 300, and no cargo-id",
     $"srm-anti-base-1 wrong (can-damage-base {torpedo.CanDamageBase}, power {torpedo.Power}, cargo-id {torpedo.CargoId})"
 );
+// The rack's magazine is SIZED so one bomber-load cracks a garrison (launchers.yaml "MAGAZINE
+// SIZING RULE"): 2000 armor / 300 per direct hit = 7 hits, so it holds 8 — a spare for a wasted shot.
 var torpedoRack = stock.Launchers.Single(l => l.Id == "anti-base-rack-1");
 Check(
     torpedoRack.WeaponId == 5
-        && torpedoRack.Amount == 6
+        && torpedoRack.Amount == 8
         && torpedoRack.FireIntervalTicks == 60
         && torpedoRack.ExpendableId == "srm-anti-base-1",
     "stock anti-base-rack-1 carries weapon-id + amount + fire-interval-ticks + resolves to the torpedo",

@@ -258,6 +258,21 @@ public sealed class ClientHub
     private readonly ConcurrentDictionary<int, Client> _clients = new();
     private int _nextClientId;
 
+    // Name + team of every pilot seen THIS MATCH, leavers included — the scoreboard's memo. The sim
+    // ledger is keyed by client id and outlives a disconnect, but the disconnect path drops the
+    // pilot from BOTH _lobby and _players, so by the time the end-of-match board is built the server
+    // would otherwise have no name for them. Folded from the roster on every BroadcastLobby (which
+    // runs from socket threads AND the sim thread — hence Concurrent), cleared at match start.
+    private readonly ConcurrentDictionary<int, (string Name, byte Team)> _pilotIdentity = new();
+
+    // The last MsgMatchStats frame, cached so a socket thread can hand a joining connection the
+    // current board WITHOUT reading the sim's ledger (a plain Dictionary the sim thread mutates —
+    // enumerating it off-thread is the classic torn-read/InvalidOperationException). The frame is
+    // immutable once built and the reference read/write is atomic. _matchStatsResend then asks the
+    // sim thread to rebuild next tick, so the joiner's own (zero) row appears on everyone's board.
+    private volatile byte[]? _matchStatsFrame;
+    private volatile bool _matchStatsResend;
+
     // Session-global lobby state, distinct from the per-player _lobby roster and streamed on the
     // tail of MsgLobbyState. Touched by socket receive threads; reference/int field reads & writes
     // are atomic in .NET, and races here are benign (last rename wins; host recomputed from a lobby
@@ -393,6 +408,13 @@ public sealed class ClientHub
     public void OnMatchStart()
     {
         _rockIndexById = null;
+        // The sim just wiped its ledger (Simulation.ResetMatchStats), so the name/team memo starts
+        // over too — last match's leavers must not haunt the new board.
+        _pilotIdentity.Clear();
+        // Rebuild the cached board BEFORE the re-Welcome below, which re-seeds each client from it:
+        // the cache still holds the FINISHED match's rows, and the new match must open on a clean
+        // one. Sim thread (inside StartMatch), so reading the ledger here is safe.
+        BroadcastMatchStats();
         foreach (var c in _clients.Values)
             SendWelcome(c);
     }
@@ -400,10 +422,15 @@ public sealed class ClientHub
     // Build + fan out the current lobby roster (HasShip overlaid from the live sim).
     private void BroadcastLobby()
     {
+        // ONE roster snapshot: folded into the scoreboard's name/team memo and then written to the
+        // frame, so the memo can never disagree with the roster the clients were just sent.
+        var roster = _lobby.Snapshot(id => _sim.ShipIdOf(id));
+        foreach (var e in roster)
+            _pilotIdentity[e.Id] = (e.Name, e.Team);
         var frame = Protocol.BuildLobbyState(
             _sim.Phase,
             _sim.Winner,
-            _lobby.Snapshot(id => _sim.ShipIdOf(id)),
+            roster,
             _teamNames[0],
             _teamNames[1],
             _hostId,
@@ -411,6 +438,55 @@ public sealed class ClientHub
             _lobby.CommanderOf(0),
             _lobby.CommanderOf(1)
         );
+        foreach (var c in _clients.Values)
+            SendReliable(c, OutFrame.Whole(frame));
+    }
+
+    // Build + fan out the match scoreboard. Rows are the sim's ledger joined with the name/team
+    // memo, PLUS a zero row for every pilot who has been seen this match but hasn't scored yet — the
+    // board should list everyone in the game from the first frame, not fill in as people trade
+    // shots. Sorted by client id so the client's table has a stable identity to diff against.
+    // Reliable: a scoreboard sent on change only must not be the frame that gets dropped.
+    //
+    // SIM THREAD ONLY — it reads the sim's ledger directly. A socket thread that wants the board
+    // sends the cached _matchStatsFrame and raises _matchStatsResend instead.
+    private void BroadcastMatchStats()
+    {
+        var stats = _sim.MatchStats;
+        var rows = new List<Protocol.StatsEntry>(stats.Count + _pilotIdentity.Count);
+
+        Protocol.StatsEntry Row(int cid, Simulation.PilotStats? st)
+        {
+            // A pilot who left is gone from the roster AND the player table, so their identity comes
+            // from the memo; a client id with no memo entry at all can only be a ship whose owner
+            // never made it onto a roster broadcast, so it gets a placeholder rather than a blank.
+            var (name, team) = _pilotIdentity.TryGetValue(cid, out var id) ? id : ($"Pilot{cid}", Protocol.NoTeam);
+            return new Protocol.StatsEntry(
+                cid,
+                name,
+                team,
+                _clients.ContainsKey(cid),
+                st?.Kills ?? 0,
+                st?.Deaths ?? 0,
+                st?.Ejects ?? 0,
+                st?.Points ?? 0
+            );
+        }
+
+        foreach (var kv in stats)
+            rows.Add(Row(kv.Key, kv.Value));
+        foreach (var kv in _pilotIdentity)
+            if (!stats.ContainsKey(kv.Key))
+                rows.Add(Row(kv.Key, null));
+        rows.Sort((a, b) => a.Id.CompareTo(b.Id));
+
+        var teams = new (byte Team, int Garrisons, int Outposts)[]
+        {
+            (0, _sim.GarrisonsDestroyed(0), _sim.OutpostsDestroyed(0)),
+            (1, _sim.GarrisonsDestroyed(1), _sim.OutpostsDestroyed(1)),
+        };
+        var frame = Protocol.BuildMatchStats(rows, teams);
+        _matchStatsFrame = frame;
         foreach (var c in _clients.Values)
             SendReliable(c, OutFrame.Whole(frame));
     }
@@ -461,6 +537,15 @@ public sealed class ClientHub
             );
         }
         SendReliable(client, OutFrame.Whole(frame));
+        // A Welcome REBUILDS the client's world (ApplyWelcome -> WorldRenderer.Reset), and that
+        // wipes its scoreboard ledger — so re-seeding the board is part of what a Welcome means.
+        // Every re-Welcome site (join, team change, reclaim, match start, the fog re-sync on a phase
+        // flip) would otherwise blank the F5 board, and in the lobby NOTHING re-sends it: the ledger
+        // only broadcasts on change, and a finished match's ledger never changes again. The cached
+        // frame is immutable and the reference read is atomic, so this is safe off the sim thread;
+        // callers that just mutated the ledger rebuild the cache (BroadcastMatchStats) FIRST.
+        if (_matchStatsFrame is { } statsFrame)
+            SendReliable(client, OutFrame.Whole(statsFrame));
     }
 
     public async Task HandleConnection(IClientTransport transport, CancellationToken ct)
@@ -516,6 +601,11 @@ public sealed class ClientHub
             _players.OnDisconnect(client.Id);
             client.Outbound.Writer.TryComplete();
             BroadcastLobby(); // roster shrank (and possibly host/selected-map changed)
+            // The leaver's scoreboard row stays (the ledger outlives them) but its connected bit must
+            // drop so it renders as LEFT — a disconnect moves no counter, so nothing else would
+            // trigger the on-change broadcast. _clients no longer holds them (TryRemove above), so the
+            // sim-thread rebuild on the next AfterStep computes the flag correctly.
+            _matchStatsResend = true;
             try
             {
                 await sendTask;
@@ -633,6 +723,11 @@ public sealed class ClientHub
                     // right after Defs, so the lobby's sector pane + map picker have data to render.
                     SendReliable(client, OutFrame.Whole(Protocol.BuildMapList(_mapCatalog)));
                     BroadcastLobby();
+                    // SendWelcome above already handed this joiner the cached board (mid-match F5 has
+                    // to work the moment they're in; in the lobby the previous match's board is still
+                    // readable). Ask the SIM thread to rebuild next tick so the joiner's own zero row
+                    // reaches everyone — BroadcastLobby just folded them into the name/team memo.
+                    _matchStatsResend = true;
 
                     // Reconnect: hand back a ship the sim is still holding for the presented token.
                     // Enqueued AFTER _clients registration so the resulting ShipIdOf flip in
@@ -1355,6 +1450,17 @@ public sealed class ClientHub
         // clients flip their UI between lobby and match in lockstep with the authority.
         HandlePhaseTransition();
 
+        // Scoreboard. Prune the name/team memo of any client id the sim just retired to a reconnect
+        // BEFORE building a frame, so a reclaimed pilot never shows up twice (once live, once as a
+        // ghost row flagged LEFT). Then broadcast only if the ledger actually moved this step.
+        foreach (var (oldCid, _) in _sim.ReclaimsThisStep)
+            _pilotIdentity.TryRemove(oldCid, out _);
+        if (_sim.StatsChangedThisStep || _matchStatsResend)
+        {
+            _matchStatsResend = false;
+            BroadcastMatchStats();
+        }
+
         // System-chat / directive notices accumulated by the sim during Step (miner, constructor,
         // research, commander-order), drained in the same order they were emitted.
         DrainStepNotices();
@@ -1456,6 +1562,9 @@ public sealed class ClientHub
         {
             _lastPhase = _sim.Phase;
             BroadcastLobby();
+            // The board is what the client auto-opens at Active->Ended, so it must be current at the
+            // transition itself — StatsChangedThisStep may well be false on the tick the phase flips.
+            BroadcastMatchStats();
             // Fog: a match reseed (StartMatch -> Active, ReturnToLobby -> Lobby both run ResetVision,
             // which clears every team's discovered set + reveal log back to its own bases) leaves each
             // client's rendered world stale. Pre-fog nothing re-syncs the world across a recycle (the

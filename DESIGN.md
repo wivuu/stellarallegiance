@@ -60,6 +60,17 @@ subclasses** for anything needing custom `_Draw` or per-frame state.
 - **Connect feedback** — `LinkRadar` (rotating dashed radar ring with centred link %),
   `ProgressSweepBar` (continuous fill + sweeping highlight while indeterminate).
 - **Game elements** — `LoadoutSlot`, `ContactChip`, `ResourceReadout`, `RadarFrame`.
+- **Roster primitives** (`RosterCells`) — the small builders every pilot-roster surface composes:
+  `Mono`/`Lbl` cells, `Cell` (proportional column width), `Badge`, `Diamond`, `RowPanel`
+  (hairline row, faction tint + 2px bar for "me"), `HeaderPanel` (4% accent wash), `TabStyle`,
+  `BarPanel`, `PaddedRow`/`Margins`, `Spacer`, `Hairline`, `EmptyNote`, plus the `.With(…)` fluent
+  helper (`UiControlExt`). The Lobby roster and both Scoreboard modes are built from these, so the
+  header and its rows must always be passed the SAME column ratios or the columns won't line up.
+- **Scoreboard** — the two-mode match board (`Scoreboard`): a centred `BracketPanel` LIVE board over
+  the running sector (F5, read-only, `MouseFilter.Ignore` everywhere and it never touches
+  `Input.MouseMode`), and a full-screen POST-MATCH result screen with sortable columns, team-filter
+  cards, the team-summary comparison bars and the Top Gun `AlertBox`. `--ui-open=scoreboard-live` /
+  `--ui-open=scoreboard-post` raises a mode for a `--ui-shot` capture of the live game UI.
 - **Backgrounds** — `NebulaBackground` (animated warm/blue gas-cloud fill from the `Nebula.dc.html`
   spec; a single `canvas_item` shader — drifting screen-blended clouds, Void vignette, star-dot
   grid, scanlines; `Intensity` 0..1). Use it behind full-screen menu overlays whose backdrop is
@@ -75,7 +86,7 @@ subclasses** for anything needing custom `_Draw` or per-frame state.
 ## Wiring & gotchas
 
 - **Theme is applied per top-level overlay**, not globally: call `UiTheme.Apply(control)` on each
-  full-screen overlay's root (Lobby, ConnectLinkModal, ServerLobbyOverlay, Chat). A Theme can't
+  full-screen overlay's root (Lobby, Scoreboard, ConnectLinkModal, ServerLobbyOverlay, Chat). A Theme can't
   live on a `CanvasLayer`, and wrapping the Hud in one extra Control would break the
   `GetNode("../../GameNetClient")` relative lookups in Lobby/Chat — don't do that.
 - **`ChamferButton` draws on top of the stock Button**, so it blanks both the stock styleboxes

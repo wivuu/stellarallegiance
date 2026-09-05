@@ -19,10 +19,14 @@ using StellarAllegiance.Ui;
 // Controls (see the plan): JOIN {TEAM} only picks a side; LAUNCH is the deploy action — it opens
 // the mandatory ship-select hangar mid-match, or readies up pre-match so the match can start.
 //
-// PLACEHOLDERS (data the wire doesn't carry yet — rendered but clearly stubbed): per-player
-// SHIP/K/D/EJ/PTS stats and team kill totals; the NOAT ("not on a team") tab + chat channel
-// (spectator/unassigned — the team byte is always 0/1 today); match name/mode/sector/clock.
-// TeamName() is the single hook for future streamed team names.
+// The per-pilot K/D/EJ/PTS cells and the per-team kill totals are LIVE: they read the match
+// scoreboard ledger (WorldRenderer.MatchStats, from MsgMatchStats), the same data the F5 Scoreboard
+// overlay renders. Like the team score labels, that ledger persists between matches — it's cleared
+// server-side by the next StartMatch — so the finished match's numbers stay readable in the lobby.
+//
+// PLACEHOLDERS (data the wire doesn't carry yet — rendered but clearly stubbed): the NOAT ("not on
+// a team") tab + chat channel (spectator/unassigned — the team byte is always 0/1 today); match
+// name/mode/sector/clock. TeamName() is the single hook for future streamed team names.
 public partial class Lobby : Control
 {
     // Team identity stays the faction colours (NOT the cyan structural accent).
@@ -142,16 +146,17 @@ public partial class Lobby : Control
         AddChild(root);
 
         root.AddChild(BuildHeader());
-        root.AddChild(Hairline());
+        root.AddChild(RosterCells.Hairline());
         root.AddChild(BuildStatusBar());
-        root.AddChild(Hairline());
+        root.AddChild(RosterCells.Hairline());
         root.AddChild(BuildBody());
-        root.AddChild(Hairline());
+        root.AddChild(RosterCells.Hairline());
         root.AddChild(BuildComms());
 
         _net.LobbyChanged += OnLobbyChanged;
         _net.MapListChanged += OnLobbyChanged; // catalog arrival refreshes the sector pane too
         _net.DefsReceived += OnLobbyChanged; // defs carry the faction name; refresh the intel pane
+        _net.MatchStatsChanged += OnLobbyChanged; // scoreboard ledger feeds the K/D/EJ/PTS cells
         _net.ChatReceived += OnChat;
 
         UpdateChannelButtons();
@@ -163,6 +168,7 @@ public partial class Lobby : Control
         _net.LobbyChanged -= OnLobbyChanged;
         _net.MapListChanged -= OnLobbyChanged;
         _net.DefsReceived -= OnLobbyChanged;
+        _net.MatchStatsChanged -= OnLobbyChanged;
         _net.ChatReceived -= OnChat;
     }
 
@@ -171,7 +177,7 @@ public partial class Lobby : Control
     // Brand header: wordmark + MATCH chip on the left; online count, settings gear, leave on the right.
     private Control BuildHeader()
     {
-        var bar = BarPanel(26, 12, ChromeBar);
+        var bar = RosterCells.BarPanel(26, 12, ChromeBar);
         var row = new HBoxContainer();
         row.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         bar.AddChild(row);
@@ -193,7 +199,7 @@ public partial class Lobby : Control
         brand.AddChild(UiChips.AccentChip("MATCH", 16, 6, 12));
         row.AddChild(brand);
 
-        row.AddChild(Spacer());
+        row.AddChild(RosterCells.Spacer());
 
         var right = new HBoxContainer();
         right.AddThemeConstantOverride("separation", 16);
@@ -214,7 +220,7 @@ public partial class Lobby : Control
     // Status bar: phase pill + clock + match title on the left, score in the middle, JOIN/LAUNCH right.
     private Control BuildStatusBar()
     {
-        var bar = BarPanel(26, 12, ChromeBar);
+        var bar = RosterCells.BarPanel(26, 12, ChromeBar);
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 20);
         row.SizeFlagsHorizontal = SizeFlags.ExpandFill;
@@ -240,12 +246,12 @@ public partial class Lobby : Control
         left.AddChild(titleCol);
         row.AddChild(left);
 
-        row.AddChild(Spacer());
+        row.AddChild(RosterCells.Spacer());
         // Score: team-coloured names flanking the mono tally (IRON COIL 3 — 2 ASH SYNDICATE).
         var score = new HBoxContainer();
         score.AddThemeConstantOverride("separation", 12);
         score.SizeFlagsVertical = SizeFlags.ShrinkCenter;
-        score.AddChild(Diamond(Team0, false));
+        score.AddChild(RosterCells.Diamond(Team0, false));
         _scoreName0 = UiKit.MakeLabel(TeamName(0), UiKit.TextStyle.Label, Team0);
         _scoreName0.SizeFlagsVertical = SizeFlags.ShrinkCenter;
         score.AddChild(_scoreName0);
@@ -263,9 +269,9 @@ public partial class Lobby : Control
         _scoreName1 = UiKit.MakeLabel(TeamName(1), UiKit.TextStyle.Label, Team1);
         _scoreName1.SizeFlagsVertical = SizeFlags.ShrinkCenter;
         score.AddChild(_scoreName1);
-        score.AddChild(Diamond(Team1, false));
+        score.AddChild(RosterCells.Diamond(Team1, false));
         row.AddChild(score);
-        row.AddChild(Spacer());
+        row.AddChild(RosterCells.Spacer());
 
         var actions = new HBoxContainer();
         actions.AddThemeConstantOverride("separation", 10);
@@ -290,7 +296,7 @@ public partial class Lobby : Control
 
         // Left: team tabs (two teams at top, NOAT pinned at the bottom).
         var leftMargin = new MarginContainer { CustomMinimumSize = new Vector2(228, 0) };
-        Margins(leftMargin, 12, 14);
+        RosterCells.Margins(leftMargin, 12, 14);
         var leftCol = new VBoxContainer();
         leftCol.AddThemeConstantOverride("separation", 8);
         leftMargin.AddChild(leftCol);
@@ -298,13 +304,13 @@ public partial class Lobby : Control
         _teamTabs = new VBoxContainer();
         _teamTabs.AddThemeConstantOverride("separation", 8);
         leftCol.AddChild(_teamTabs);
-        leftCol.AddChild(Spacer(vertical: true));
+        leftCol.AddChild(RosterCells.Spacer(vertical: true));
         leftCol.AddChild(new DiamondDivider());
         _noatTabHost = new VBoxContainer();
         leftCol.AddChild(_noatTabHost);
         body.AddChild(leftMargin);
 
-        body.AddChild(Hairline(vertical: true));
+        body.AddChild(RosterCells.Hairline(vertical: true));
 
         // Right: roster header + column header + scrolling rows.
         var rightCol = new VBoxContainer();
@@ -312,7 +318,7 @@ public partial class Lobby : Control
         rightCol.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         rightCol.SizeFlagsVertical = SizeFlags.ExpandFill;
 
-        var head = PaddedRow(24, 16);
+        var head = RosterCells.PaddedRow(24, 16);
         var headRow = new HBoxContainer();
         headRow.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         head.AddChild(headRow);
@@ -326,7 +332,7 @@ public partial class Lobby : Control
         nameCol.AddChild(_rosterNameRow);
         nameCol.AddChild(_rosterTeamSub);
         headRow.AddChild(nameCol);
-        headRow.AddChild(Spacer());
+        headRow.AddChild(RosterCells.Spacer());
         _rosterPoints = StatCol(headRow, "TEAM PTS", DesignTokens.Data);
         _rosterCount = StatCol(headRow, "PILOTS", DesignTokens.TextHi);
         rightCol.AddChild(head);
@@ -346,9 +352,9 @@ public partial class Lobby : Control
         body.AddChild(rightCol);
 
         // Third column: the sector pane (map thumbnail + Sector Intel + Garrison Control).
-        body.AddChild(Hairline(vertical: true));
+        body.AddChild(RosterCells.Hairline(vertical: true));
         var sectorMargin = new MarginContainer { CustomMinimumSize = new Vector2(320, 0) };
-        Margins(sectorMargin, 16, 16);
+        RosterCells.Margins(sectorMargin, 16, 16);
         sectorMargin.AddChild(BuildSectorPane());
         body.AddChild(sectorMargin);
 
@@ -371,7 +377,7 @@ public partial class Lobby : Control
                 .MakeLabel("SECTOR MAP", UiKit.TextStyle.Label, DesignTokens.TextDim)
                 .With(l => l.SizeFlagsHorizontal = SizeFlags.ExpandFill)
         );
-        _mapHostBadge = Mono("LOCKED", DesignTokens.Text2);
+        _mapHostBadge = RosterCells.Mono("LOCKED", DesignTokens.Text2);
         mapHead.AddChild(_mapHostBadge);
         mapSection.AddChild(mapHead);
 
@@ -402,7 +408,7 @@ public partial class Lobby : Control
         cardCol.AddChild(_sectorMap);
 
         var bar = new MarginContainer { MouseFilter = MouseFilterEnum.Ignore };
-        Margins(bar, 12, 10);
+        RosterCells.Margins(bar, 12, 10);
         var barRow = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore, SizeFlagsHorizontal = SizeFlags.ExpandFill };
         barRow.AddThemeConstantOverride("separation", 8);
         var barNames = new VBoxContainer
@@ -413,12 +419,12 @@ public partial class Lobby : Control
         barNames.AddThemeConstantOverride("separation", 2);
         _mapName = UiKit.MakeLabel("—", UiKit.TextStyle.Label, DesignTokens.TextHi);
         _mapName.MouseFilter = MouseFilterEnum.Ignore;
-        _mapMeta = Mono("—", DesignTokens.Text2);
+        _mapMeta = RosterCells.Mono("—", DesignTokens.Text2);
         _mapMeta.AddThemeFontSizeOverride("font_size", 9);
         barNames.AddChild(_mapName);
         barNames.AddChild(_mapMeta);
         barRow.AddChild(barNames);
-        _mapCta = Mono("VIEW ▸", DesignTokens.TeamAccent);
+        _mapCta = RosterCells.Mono("VIEW ▸", DesignTokens.TeamAccent);
         _mapCta.SizeFlagsVertical = SizeFlags.ShrinkCenter;
         barRow.AddChild(_mapCta);
         bar.AddChild(barRow);
@@ -461,16 +467,6 @@ public partial class Lobby : Control
         return col;
     }
 
-    // The current/"next" map, resolved from the streamed catalog by SelectedMap (falls back to the
-    // first advertised map, or null before the catalog arrives).
-    private MapInfo? CurrentMap()
-    {
-        foreach (var m in _net.Maps)
-            if (string.Equals(m.Name, _net.SelectedMap, StringComparison.OrdinalIgnoreCase))
-                return m;
-        return _net.Maps.Count > 0 ? _net.Maps[0] : null;
-    }
-
     private void OpenMapPicker()
     {
         SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
@@ -480,7 +476,7 @@ public partial class Lobby : Control
     // Refresh the sector pane from the current map + host/team state (called from RebuildBody).
     private void UpdateSectorPane()
     {
-        var cm = CurrentMap();
+        var cm = _net.CurrentMap;
         bool host = _net.IsHost;
         _mapHostBadge.Text = host ? "HOST" : "LOCKED";
         _mapHostBadge.AddThemeColorOverride("font_color", host ? DesignTokens.Ok : DesignTokens.Text2);
@@ -556,10 +552,10 @@ public partial class Lobby : Control
         var row = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         var left = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         left.AddThemeConstantOverride("separation", 8);
-        left.AddChild(Diamond(color, false));
-        left.AddChild(Mono(label, DesignTokens.TextHi).With(l => l.AddThemeFontSizeOverride("font_size", 11)));
+        left.AddChild(RosterCells.Diamond(color, false));
+        left.AddChild(RosterCells.Mono(label, DesignTokens.TextHi).With(l => l.AddThemeFontSizeOverride("font_size", 11)));
         row.AddChild(left);
-        var cnt = Mono($"{count}/{total}", color, HorizontalAlignment.Right);
+        var cnt = RosterCells.Mono($"{count}/{total}", color, HorizontalAlignment.Right);
         cnt.AddThemeFontSizeOverride("font_size", 11);
         row.AddChild(cnt);
         return row;
@@ -576,7 +572,7 @@ public partial class Lobby : Control
         panel.AddThemeStyleboxOverride("panel", sb);
         var c = new VBoxContainer();
         c.AddThemeConstantOverride("separation", 4);
-        c.AddChild(Mono(caption, DesignTokens.TextDim).With(l => l.AddThemeFontSizeOverride("font_size", 9)));
+        c.AddChild(RosterCells.Mono(caption, DesignTokens.TextDim).With(l => l.AddThemeFontSizeOverride("font_size", 9)));
         value = UiKit.MakeLabel("—", UiKit.TextStyle.Label, valueColor);
         value.AddThemeFontSizeOverride("font_size", 14);
         c.AddChild(value);
@@ -675,7 +671,7 @@ public partial class Lobby : Control
         var wrap = new VBoxContainer { CustomMinimumSize = new Vector2(0, 200) };
         wrap.AddThemeConstantOverride("separation", 0);
 
-        var tabs = PaddedRow(22, 8);
+        var tabs = RosterCells.PaddedRow(22, 8);
         var tabRow = new HBoxContainer();
         tabRow.AddThemeConstantOverride("separation", 8);
         tabRow.SizeFlagsHorizontal = SizeFlags.ExpandFill;
@@ -690,7 +686,7 @@ public partial class Lobby : Control
         AddChannelButton(tabRow, 0);
         wrap.AddChild(tabs);
 
-        var logWrap = PaddedRow(22, 6);
+        var logWrap = RosterCells.PaddedRow(22, 6);
         logWrap.SizeFlagsVertical = SizeFlags.ExpandFill;
         _commsLog = new RichTextLabel
         {
@@ -704,7 +700,7 @@ public partial class Lobby : Control
         logWrap.AddChild(_commsLog);
         wrap.AddChild(logWrap);
 
-        var inputWrap = PaddedRow(22, 10);
+        var inputWrap = RosterCells.PaddedRow(22, 10);
         var inputRow = new HBoxContainer();
         inputRow.AddThemeConstantOverride("separation", 0);
         inputRow.SizeFlagsHorizontal = SizeFlags.ExpandFill;
@@ -851,6 +847,10 @@ public partial class Lobby : Control
             || SettingsDialog.Active
             || MapPickerModal.Active
             || Chat.Capturing
+            // The post-match scoreboard stacks ON this overlay and owns Esc while it's up (it closes
+            // itself). NOTE: Scoreboard.Active deliberately does NOT join InputGate.FlightInputFree —
+            // the live board must never freeze steering.
+            || Scoreboard.Active
             || _editingTeam >= 0
         )
             return;
@@ -946,7 +946,7 @@ public partial class Lobby : Control
     {
         _online.Text = $"● {_net.LobbyPlayers.Count} ONLINE";
 
-        var cm = CurrentMap();
+        var cm = _net.CurrentMap;
         string mapTitle = cm?.Name ?? "SKIRMISH";
         switch (_world.Phase)
         {
@@ -1068,7 +1068,7 @@ public partial class Lobby : Control
         foreach (var p in roster)
             _rosterRows.AddChild(RosterRow(p));
         if (!any)
-            _rosterRows.AddChild(EmptyNote(noatTab ? "No unassigned pilots." : "Waiting for pilots…"));
+            _rosterRows.AddChild(RosterCells.EmptyNote(noatTab ? "No unassigned pilots." : "Waiting for pilots…"));
 
         // Keep the group comms channel labelled for your current side (TEAM ⇄ NOAT on join/leave).
         UpdateChannelButtons();
@@ -1089,7 +1089,7 @@ public partial class Lobby : Control
             FocusMode = FocusModeEnum.None,
         };
         foreach (string s in new[] { "normal", "hover", "pressed", "focus", "disabled" })
-            btn.AddThemeStyleboxOverride(s, TabStyle(accent, selected));
+            btn.AddThemeStyleboxOverride(s, RosterCells.TabStyle(accent, selected));
         foreach (string c in new[] { "font_color", "font_hover_color", "font_pressed_color", "font_focus_color" })
             btn.AddThemeColorOverride(c, Colors.Transparent);
         int captured = team;
@@ -1104,7 +1104,7 @@ public partial class Lobby : Control
 
         var pad = new MarginContainer { MouseFilter = MouseFilterEnum.Ignore };
         pad.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        Margins(pad, 13, 10);
+        RosterCells.Margins(pad, 13, 10);
         var col = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
         col.AddThemeConstantOverride("separation", 7);
         pad.AddChild(col);
@@ -1112,12 +1112,12 @@ public partial class Lobby : Control
         var top = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
         top.AddThemeConstantOverride("separation", 9);
         top.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        top.AddChild(Diamond(accent, team == NoatTeam));
+        top.AddChild(RosterCells.Diamond(accent, team == NoatTeam));
         var name = UiKit.MakeLabel(TeamName(team), UiKit.TextStyle.Label, DesignTokens.TextHi);
         name.AddThemeFontSizeOverride("font_size", 14);
         name.MouseFilter = MouseFilterEnum.Ignore;
         top.AddChild(name);
-        top.AddChild(Spacer());
+        top.AddChild(RosterCells.Spacer());
         string bigNum = team == NoatTeam ? CountFor(team).ToString() : _world.TeamState.Score((byte)team).ToString();
         var num = UiKit.MakeLabel(bigNum, UiKit.TextStyle.Data, accent);
         num.AddThemeFontSizeOverride("font_size", 18);
@@ -1129,13 +1129,13 @@ public partial class Lobby : Control
         sub.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         if (team == NoatTeam)
         {
-            sub.AddChild(Mono("NOT ON A TEAM", DesignTokens.TextDim));
+            sub.AddChild(RosterCells.Mono("NOT ON A TEAM", DesignTokens.TextDim));
         }
         else
         {
-            sub.AddChild(Mono($"{CountFor(team)} PILOTS", DesignTokens.Text2));
-            sub.AddChild(Spacer());
-            sub.AddChild(Mono("— KILLS", DesignTokens.Text2)); // PLACEHOLDER: no per-team kills on the wire
+            sub.AddChild(RosterCells.Mono($"{CountFor(team)} PILOTS", DesignTokens.Text2));
+            sub.AddChild(RosterCells.Spacer());
+            sub.AddChild(RosterCells.Mono($"{_world.MatchStats.TeamKills((byte)team)} KILLS", DesignTokens.Text2));
         }
         col.AddChild(sub);
 
@@ -1147,35 +1147,23 @@ public partial class Lobby : Control
     {
         bool isMe = p.Id == _net.LocalClientId;
         Color team = TeamColor(p.Team);
-        var panel = new PanelContainer();
-        var sb = new StyleBoxFlat
-        {
-            BgColor = isMe ? new Color(team, 0.10f) : Colors.Transparent,
-            BorderColor = DesignTokens.BorderLo,
-            AntiAliasing = false,
-        };
-        sb.SetCornerRadiusAll(0);
-        sb.BorderWidthBottom = 1;
-        if (isMe)
-            sb.BorderWidthLeft = 2; // accent bar marking "me"
-        sb.BorderColor = isMe ? team : DesignTokens.BorderLo;
-        sb.ContentMarginLeft = sb.ContentMarginRight = 24;
-        sb.ContentMarginTop = sb.ContentMarginBottom = 11;
-        panel.AddThemeStyleboxOverride("panel", sb);
+        var panel = RosterCells.RowPanel(isMe, team);
 
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 8);
         panel.AddChild(row);
 
         row.AddChild(
-            Mono(isMe ? "◆" : "▸", isMe ? team : DesignTokens.TextDim).With(l => l.CustomMinimumSize = new Vector2(20, 0))
+            RosterCells
+                .Mono(isMe ? "◆" : "▸", isMe ? team : DesignTokens.TextDim)
+                .With(l => l.CustomMinimumSize = new Vector2(20, 0))
         );
 
         // CALLSIGN (+ CMDR / YOU badges). Commander = the server-streamed per-team authority
         // (MsgLobbyState tail, v34) — the only pilot whose orders AI vessels execute.
         var nameCell = new HBoxContainer();
         nameCell.AddThemeConstantOverride("separation", 8);
-        Cell(nameCell, 1.6f);
+        RosterCells.Cell(nameCell, 1.6f);
         string who = string.IsNullOrEmpty(p.Name) ? $"Pilot{p.Id}" : p.Name;
         nameCell.AddChild(UiKit.MakeLabel(who, UiKit.TextStyle.Body, isMe ? team : DesignTokens.TextHi));
         if (!IsNoat(p.Team) && p.Id == _net.CommanderIdOf(p.Team))
@@ -1185,40 +1173,41 @@ public partial class Lobby : Control
                     .With(l => l.SizeFlagsVertical = SizeFlags.ShrinkCenter)
             );
         if (isMe)
-            nameCell.AddChild(Badge("YOU", team));
+            nameCell.AddChild(RosterCells.Badge("YOU", team));
         row.AddChild(nameCell);
 
-        // K/D/EJ/PTS — PLACEHOLDER columns (not carried by MsgLobbyState). PTS right-aligned.
-        row.AddChild(Cell(Mono("—", DesignTokens.Data, HorizontalAlignment.Center), 0.5f));
-        row.AddChild(Cell(Mono("—", DesignTokens.Data, HorizontalAlignment.Center), 0.5f));
-        row.AddChild(Cell(Mono("—", DesignTokens.Data, HorizontalAlignment.Center), 0.5f));
-        row.AddChild(Cell(Mono("—", DesignTokens.Data, HorizontalAlignment.Right), 0.7f));
+        // K/D/EJ/PTS from the match scoreboard ledger (MsgMatchStats), the same numbers the F5 board
+        // shows. "—" until the pilot appears on it (no match played yet, or a spectator). PTS
+        // right-aligned. Ratios must match ColumnHeader's or the columns won't line up.
+        var st = _world.MatchStats.For(p.Id);
+        string Stat(Func<MatchStatsStore.PilotStat, int> pick) => st is { } s ? pick(s).ToString() : "—";
+        row.AddChild(
+            RosterCells.Cell(RosterCells.Mono(Stat(s => s.Kills), DesignTokens.Data, HorizontalAlignment.Center), 0.5f)
+        );
+        row.AddChild(
+            RosterCells.Cell(RosterCells.Mono(Stat(s => s.Deaths), DesignTokens.Data, HorizontalAlignment.Center), 0.5f)
+        );
+        row.AddChild(
+            RosterCells.Cell(RosterCells.Mono(Stat(s => s.Ejects), DesignTokens.Data, HorizontalAlignment.Center), 0.5f)
+        );
+        row.AddChild(
+            RosterCells.Cell(RosterCells.Mono(Stat(s => s.Points), DesignTokens.Data, HorizontalAlignment.Right), 0.7f)
+        );
         return panel;
     }
 
     private Control ColumnHeader()
     {
-        var panel = new PanelContainer();
-        var sb = new StyleBoxFlat
-        {
-            BgColor = new Color(DesignTokens.TeamAccent, 0.04f),
-            BorderColor = DesignTokens.BorderLo,
-            AntiAliasing = false,
-        };
-        sb.SetCornerRadiusAll(0);
-        sb.BorderWidthBottom = 1;
-        sb.ContentMarginLeft = sb.ContentMarginRight = 24;
-        sb.ContentMarginTop = sb.ContentMarginBottom = 8;
-        panel.AddThemeStyleboxOverride("panel", sb);
+        var panel = RosterCells.HeaderPanel();
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 8);
         panel.AddChild(row);
-        row.AddChild(Lbl("", 20));
-        row.AddChild(Cell(Lbl("CALLSIGN"), 1.6f));
-        row.AddChild(Cell(Lbl("K", align: HorizontalAlignment.Center), 0.5f));
-        row.AddChild(Cell(Lbl("D", align: HorizontalAlignment.Center), 0.5f));
-        row.AddChild(Cell(Lbl("EJ", align: HorizontalAlignment.Center), 0.5f));
-        row.AddChild(Cell(Lbl("PTS", align: HorizontalAlignment.Right), 0.7f));
+        row.AddChild(RosterCells.Lbl("", 20));
+        row.AddChild(RosterCells.Cell(RosterCells.Lbl("CALLSIGN"), 1.6f));
+        row.AddChild(RosterCells.Cell(RosterCells.Lbl("K", align: HorizontalAlignment.Center), 0.5f));
+        row.AddChild(RosterCells.Cell(RosterCells.Lbl("D", align: HorizontalAlignment.Center), 0.5f));
+        row.AddChild(RosterCells.Cell(RosterCells.Lbl("EJ", align: HorizontalAlignment.Center), 0.5f));
+        row.AddChild(RosterCells.Cell(RosterCells.Lbl("PTS", align: HorizontalAlignment.Right), 0.7f));
         return panel;
     }
 
@@ -1348,70 +1337,12 @@ public partial class Lobby : Control
         return $"{s / 60:00}:{s % 60:00}";
     }
 
-    private static Label Mono(string text, Color color, HorizontalAlignment align = HorizontalAlignment.Left)
-    {
-        var l = UiKit.MakeLabel(text, UiKit.TextStyle.Data, color);
-        l.AddThemeFontSizeOverride("font_size", 13);
-        l.HorizontalAlignment = align;
-        l.MouseFilter = MouseFilterEnum.Ignore;
-        return l;
-    }
-
-    private static Label Lbl(string text, float minWidth = 0, HorizontalAlignment align = HorizontalAlignment.Left)
-    {
-        var l = UiKit.MakeLabel(text, UiKit.TextStyle.Label, DesignTokens.TextDim);
-        l.AddThemeFontSizeOverride("font_size", 10);
-        l.HorizontalAlignment = align;
-        if (minWidth > 0)
-            l.CustomMinimumSize = new Vector2(minWidth, 0);
-        return l;
-    }
-
-    private static Control Cell(Control c, float ratio)
-    {
-        c.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        c.SizeFlagsStretchRatio = ratio;
-        return c;
-    }
-
-    private static Label Badge(string text, Color color)
-    {
-        var l = UiKit.MakeLabel(text, UiKit.TextStyle.Data, DesignTokens.Void);
-        l.AddThemeFontSizeOverride("font_size", 9);
-        var sb = new StyleBoxFlat { BgColor = color, AntiAliasing = false };
-        sb.SetCornerRadiusAll(0);
-        sb.ContentMarginLeft = sb.ContentMarginRight = 5;
-        sb.ContentMarginTop = sb.ContentMarginBottom = 1;
-        l.AddThemeStyleboxOverride("normal", sb);
-        l.SizeFlagsVertical = SizeFlags.ShrinkCenter;
-        return l;
-    }
-
-    private static Control Diamond(Color color, bool hollow)
-    {
-        // A rotated square would need a custom draw; the ◆ glyph reads as the design's team diamond.
-        var l = new Label { Text = hollow ? "◇" : "◆", MouseFilter = MouseFilterEnum.Ignore };
-        l.AddThemeFontOverride("font", UiFonts.Mono);
-        l.AddThemeFontSizeOverride("font_size", 12);
-        l.AddThemeColorOverride("font_color", color);
-        l.SizeFlagsVertical = SizeFlags.ShrinkCenter;
-        return l;
-    }
-
-    private static Control EmptyNote(string text)
-    {
-        var m = new MarginContainer();
-        Margins(m, 24, 20);
-        m.AddChild(UiKit.MakeLabel(text, UiKit.TextStyle.Body, DesignTokens.TextDim));
-        return m;
-    }
-
     private Label StatCol(HBoxContainer parent, string caption, Color valueColor)
     {
         var col = new VBoxContainer();
         col.AddThemeConstantOverride("separation", 0);
         col.SizeFlagsVertical = SizeFlags.ShrinkCenter;
-        col.AddChild(Mono(caption, DesignTokens.TextDim).With(l => l.AddThemeFontSizeOverride("font_size", 10)));
+        col.AddChild(RosterCells.Mono(caption, DesignTokens.TextDim).With(l => l.AddThemeFontSizeOverride("font_size", 10)));
         var v = UiKit.MakeLabel("—", UiKit.TextStyle.Data, valueColor);
         v.AddThemeFontSizeOverride("font_size", 20);
         col.AddChild(v);
@@ -1420,89 +1351,5 @@ public partial class Lobby : Control
         wrap.AddChild(col);
         parent.AddChild(wrap);
         return v;
-    }
-
-    private static StyleBoxFlat TabStyle(Color accent, bool selected)
-    {
-        var sb = new StyleBoxFlat
-        {
-            BgColor = selected ? new Color(accent, 0.12f) : DesignTokens.PanelFill,
-            BorderColor = selected ? accent : DesignTokens.BorderLo,
-            AntiAliasing = false,
-        };
-        sb.SetCornerRadiusAll(0);
-        sb.SetBorderWidthAll(1);
-        if (selected)
-            sb.BorderWidthLeft = 3;
-        return sb;
-    }
-
-    // A chrome bar: horizontal + vertical padding via a filled panel stylebox (so it draws a
-    // background) rather than a bare MarginContainer.
-    private static PanelContainer BarPanel(int h, int v, Color bg)
-    {
-        var p = new PanelContainer();
-        var sb = new StyleBoxFlat { BgColor = bg, AntiAliasing = false };
-        sb.SetCornerRadiusAll(0);
-        sb.ContentMarginLeft = sb.ContentMarginRight = h;
-        sb.ContentMarginTop = sb.ContentMarginBottom = v;
-        p.AddThemeStyleboxOverride("panel", sb);
-        return p;
-    }
-
-    // A row with horizontal + vertical padding, sized to its content height.
-    private static MarginContainer PaddedRow(int h, int v)
-    {
-        var m = new MarginContainer();
-        m.AddThemeConstantOverride("margin_left", h);
-        m.AddThemeConstantOverride("margin_right", h);
-        m.AddThemeConstantOverride("margin_top", v);
-        m.AddThemeConstantOverride("margin_bottom", v);
-        return m;
-    }
-
-    private static void Margins(MarginContainer m, int h, int v)
-    {
-        m.AddThemeConstantOverride("margin_left", h);
-        m.AddThemeConstantOverride("margin_right", h);
-        m.AddThemeConstantOverride("margin_top", v);
-        m.AddThemeConstantOverride("margin_bottom", v);
-    }
-
-    private static Control Spacer(bool vertical = false)
-    {
-        var c = new Control { MouseFilter = MouseFilterEnum.Ignore };
-        if (vertical)
-            c.SizeFlagsVertical = SizeFlags.ExpandFill;
-        else
-            c.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        return c;
-    }
-
-    private static Control Hairline(bool vertical = false)
-    {
-        var r = new ColorRect { Color = DesignTokens.BorderHi, MouseFilter = MouseFilterEnum.Ignore };
-        if (vertical)
-        {
-            r.CustomMinimumSize = new Vector2(1, 0);
-            r.SizeFlagsVertical = SizeFlags.ExpandFill;
-        }
-        else
-        {
-            r.CustomMinimumSize = new Vector2(0, 1);
-        }
-        return r;
-    }
-}
-
-// Tiny fluent helper so the builders above can tweak a freshly-made control inline (UiKit keeps
-// its own copy private).
-internal static class LobbyControlExt
-{
-    public static T With<T>(this T node, Action<T> configure)
-        where T : Node
-    {
-        configure(node);
-        return node;
     }
 }

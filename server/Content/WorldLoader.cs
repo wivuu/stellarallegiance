@@ -132,6 +132,9 @@ public sealed class WorldDef
 
     /// <summary>Build-pipeline tuning: the per-garrison order queue (parallel + queue limits). Null -&gt; stock.</summary>
     public WorldBuildDef? Build { get; set; }
+
+    /// <summary>Per-pilot scoreboard weights (server-side only — never streamed). Null -&gt; stock.</summary>
+    public WorldScoringDef? Scoring { get; set; }
 }
 
 /// <summary>
@@ -538,6 +541,46 @@ public sealed class WorldBuildDef
     public int? QueueLimit { get; set; }
 }
 
+/// <summary>
+/// Per-pilot scoring weights, authored under <c>scoring:</c> — what the match scoreboard's PTS
+/// column is made of. Every field is optional; null falls back to the stock value (the shared
+/// <c>WorldScoringTuning</c> initializers). Server-side only — never streamed; clients only see the
+/// resulting K/D/EJ/PTS rows on MsgMatchStats, so these are safe to sweep per server. A TEAM's score
+/// is exactly the sum of its pilots' points. Kill credit goes to the LAST ENEMY PILOT whose damage
+/// reached a HULL within <c>credit-window-seconds</c>; unowned damage (PIG, collision, boundary,
+/// ownerless mine) credits nobody. Allegiance semantics: losing your COMBAT SHIP is an EJECTION,
+/// losing the POD is a DEATH. Authoring 0 for a weight switches that award off.
+/// </summary>
+public sealed class WorldScoringDef
+{
+    /// <summary>Seconds a hull hit keeps kill credit alive; past this the death credits nobody.</summary>
+    public double? CreditWindowSeconds { get; set; }
+
+    /// <summary>Points for destroying an enemy player's combat hull.</summary>
+    public int? KillShip { get; set; }
+
+    /// <summary>Points for destroying an enemy escape pod (player or PIG).</summary>
+    public int? KillPod { get; set; }
+
+    /// <summary>Points for destroying an enemy miner / constructor drone.</summary>
+    public int? KillDrone { get; set; }
+
+    /// <summary>Points for destroying an enemy AI combat drone (PIG).</summary>
+    public int? KillPig { get; set; }
+
+    /// <summary>Points for the killing blow on an enemy win-condition base (garrison).</summary>
+    public int? KillGarrison { get; set; }
+
+    /// <summary>Points for the killing blow on an enemy forward base (outpost).</summary>
+    public int? KillOutpost { get; set; }
+
+    /// <summary>Points awarded when YOUR combat ship is destroyed and you eject (negative = penalty).</summary>
+    public int? Ejection { get; set; }
+
+    /// <summary>Points awarded when YOUR escape pod is destroyed (negative = penalty).</summary>
+    public int? Death { get; set; }
+}
+
 // Loads content/core/world.yaml and projects it onto the shared runtime WorldConfig the sim runs on and
 // the wire streams (the streamed subset: id/scale/density/debug/fog-of-war — Protocol.BuildDefs).
 // Fail-fast like ContentLoader/MapLoader: a missing or malformed world file throws at boot (the
@@ -732,6 +775,19 @@ public static class WorldLoader
             var t = cfg.Build;
             t.ParallelLimit = bd.ParallelLimit ?? t.ParallelLimit;
             t.QueueLimit = bd.QueueLimit ?? t.QueueLimit;
+        }
+        if (w.Scoring is { } sc)
+        {
+            var t = cfg.Scoring;
+            t.CreditWindowSeconds = F(sc.CreditWindowSeconds, t.CreditWindowSeconds);
+            t.KillShip = sc.KillShip ?? t.KillShip;
+            t.KillPod = sc.KillPod ?? t.KillPod;
+            t.KillDrone = sc.KillDrone ?? t.KillDrone;
+            t.KillPig = sc.KillPig ?? t.KillPig;
+            t.KillGarrison = sc.KillGarrison ?? t.KillGarrison;
+            t.KillOutpost = sc.KillOutpost ?? t.KillOutpost;
+            t.Ejection = sc.Ejection ?? t.Ejection;
+            t.Death = sc.Death ?? t.Death;
         }
         return cfg;
     }

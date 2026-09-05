@@ -514,6 +514,17 @@ The hangar's weapon-slot assignments (swap or leave-empty per Weapon hardpoint) 
 - **Related:** [[Projectile]], [[Dock Refund]], [[Held-Input Replay]]
 - **Notes:** Guns fire on PER-MOUNT cooldowns; the wire carries only LastFireTick — clients derive WHICH mounts fired by replaying FireCadence against a per-ship shadow, so hardpoint count is unlimited (no fired-mask field). Barrel index = position in the FULL Weapon-hardpoint list (empties included) and seeds the spread — barrel-indexed code must never use the filtered mount list. Whole-request reject → authored fallback (mounts AND cargo); empty cargo alongside overrides = deliberately empty hold, not "seed default". Mount TYPES gate what fits each slot (gun mounts take guns, missile mounts take racks, `any` mounts take either, and an UNAUTHORED empty mesh mount is `NonMountable` — hidden in the hangar, not a slot — via `HardpointDef.MountAccepts`, enforced hangar-side and in ResolveLoadout). Bots/pods always fly authored (MountWeaponIds null). tests/LoadoutTest covers the seams.
 
+### Kill Credit
+Who a death is scored to. Every hit that reaches a ship's HULL through the single `ApplyDamage` seam stamps `ShipSim.LastHitByClient`/`LastHitTick` with the attacking PILOT's client id; when the ship dies, the killer is that pilot if the stamp is younger than `scoring.credit-window-seconds`, else nobody. Unowned damage (a PIG, a collision, the sector boundary, an ownerless mine) deliberately does NOT clear the stamp — shoving a wounded foe into a rock still credits the shooter — and a shield-only hit doesn't stamp at all. Allegiance loss semantics: destroying a pilot's COMBAT SHIP is an EJECTION for them (they fly out in a pod), destroying the POD is a DEATH, so EJ ≥ D; a pod that docks or is rescued is neither. Scoring runs only while `Phase == Active`.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `server/Sim/Simulation.cs` — `ApplyDamage` stamp seam, `PendingShot.AttackerClientId`, `MissileSim/MineFieldSim.OwnerClientId`, `ApplyBaseDamage` base-kill credit
+  - `server/Sim/Simulation.Scoring.cs` — `PilotStats` ledger, `CreditedKiller`, `ScoreDeath`, `AddPoints`, `ResetMatchStats`, `MigrateStats`
+  - `server/Content/core/world.yaml` — the `scoring:` weight block
+  - `tests/ScoreboardTest` — credit window, unowned damage, reclaim/leaver, garrison kill, Σ-points invariant
+- **Related:** [[Scoreboard]], [[MsgMatchStats]], [[World Tuning Blocks]], [[Shield]]
+- **Notes:** Team score is exactly Σ its pilots' points — `AddPoints` is the only writer of `TeamState.Score`. A reconnect reclaim remaps to a NEW client id, so the ledger row migrates with it. Bases are POINTS, not kills.
+
 ---
 
 ## Content Pipeline & Game Data
@@ -532,7 +543,7 @@ Server-driven content authoring: gameplay/balance values (hulls, weapons, techs,
 - **Notes:** Patchless runtime streaming; no client fallback (client holds authority until defs load)
 
 ### World Tuning Blocks
-Server-side sim tuning authored in the standalone `server/Content/core/world.yaml` (NOT part of the factions bundle manifest; loaded by `WorldLoader`, overridable via `SIM_WORLD`/`--world`) — `ai:` (PIG drone difficulty/behavior), `combat:` (collision damage + boundary hazard), `mechanics:` (gates/docking/pods/economy/match flow), `seeding:` (asteroid field/belt shapes + base placement), `mining:` (harvest/ore economy), `constructor:` (base-builder creep speeds/standoff/embed/dwell), `build:` (per-garrison build-queue parallel/queue limits), plus root radar-signature knobs (`aleph-radar-signature`/`rock-radar-signature`, the `boost/shield/dust-signature-mult` fog multipliers, and the `signature-min/max-mult` rails). Every key optional; omitted keys keep stock values (the shared classes' field initializers). NEVER streamed — no protocol impact.
+Server-side sim tuning authored in the standalone `server/Content/core/world.yaml` (NOT part of the factions bundle manifest; loaded by `WorldLoader`, overridable via `SIM_WORLD`/`--world`) — `ai:` (PIG drone difficulty/behavior), `combat:` (collision damage + boundary hazard), `mechanics:` (gates/docking/pods/economy/match flow), `seeding:` (asteroid field/belt shapes + base placement), `mining:` (harvest/ore economy), `constructor:` (base-builder creep speeds/standoff/embed/dwell), `build:` (per-garrison build-queue parallel/queue limits), `scoring:` (per-pilot kill/loss point weights + the kill-credit window), plus root radar-signature knobs (`aleph-radar-signature`/`rock-radar-signature`, the `boost/shield/dust-signature-mult` fog multipliers, and the `signature-min/max-mult` rails). Every key optional; omitted keys keep stock values (the shared classes' field initializers). NEVER streamed — no protocol impact.
 - **Frequency:** Common (any sim-balance sweep)
 - **Key Files:**
   - `server/Content/core/world.yaml` — authored values (stock = documented defaults); standalone, not a manifest fragment
@@ -700,6 +711,17 @@ Separate protocol message for active missiles; never packed into ship snapshots.
   - `server/Sim/Simulation.cs` — missile lifecycle updates
 - **Related:** [[Missile]], [[MsgSnapshot]], [[Protocol]]
 - **Notes:** Proto v15: separate stride prevents missile data bloat; missiles sent per-missile once per tick
+
+### MsgMatchStats
+The match scoreboard ledger (id 29, proto v37): `u8 nPilots`, then per pilot `i32 clientId | str name | u8 team | u8 flags (bit0 = connected) | u16 kills | u16 deaths | u16 ejects | i32 points`, then `u8 nTeams` × `u8 team | u8 garrisonsDestroyed | u8 outpostsDestroyed`. Full table keyed by client id (never reconcile-by-omission), broadcast RELIABLE and only when the ledger changes. Name+team ride the frame rather than being joined against the lobby roster because a disconnect drops both server-side and a leaver must stay on the board. PTS is signed (a penalty weight can push a pilot negative); a team's SCORE is deliberately absent — it is exactly Σ its pilots' points and already rides MsgTeamState.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `server/Net/Protocol.cs` — `MsgMatchStats`, `StatsEntry`, `BuildMatchStats`
+  - `server/Net/ClientHub.cs` — `_pilotIdentity` memo (leavers), `BroadcastMatchStats` + its call sites
+  - `client/scripts/GameNetClient.cs` — `ApplyMatchStats` reader + `MatchStatsChanged`
+  - `client/scripts/world/MatchStatsStore.cs` — the client ledger (filter/aggregate/sort); `tests/MatchStatsStoreTest`
+- **Related:** [[Scoreboard]], [[Kill Credit]], [[Protocol]], [[Lobby]]
+- **Notes:** The ledger persists across a match ending (so the post-match board and the lobby roster keep reading it) and is cleared server-side only by `StartMatch`; client-side only by a world rebuild. No dotnet suite loads the Godot client, so a writer↔reader field-order bug only shows at runtime — smoke a change with `--autofly`.
 
 ### WireQuant (Wire Quantization)
 Half-precision (f16) floating-point compression for network transmission of velocities, power levels, and health.
@@ -922,6 +944,17 @@ The chase camera's two-mode state machine: THIRD PERSON (the behind-the-ship cha
   - `server/Content/core/hulls.yaml` — the `kind: cockpit` hardpoint (eye point) on each hull
 - **Related:** [[Zoom Mode (Telescopic Scope)]], [[Hardpoint]], [[UserPrefs]]
 - **Notes:** `Cockpit` = `HardpointKind` byte 8 (append-only, client-only — no wire/sim change); marker `HP_Cockpit_0` resolved to ship-local space, fallback `(0, 0.5, 1)`; F3 sector overview un-hides the own ship
+
+### Scoreboard
+The match scoreboard overlay, one class in two modes over one ledger (`WorldRenderer.MatchStats`). **LIVE** (F5 in flight) is a centred bracket panel over the running sector showing both teams side by side, read-only, with a fog-gated SHIP/STATUS column — an enemy your team can't see reads `· · ·`, while K/D/EJ/PTS are match RECORD and always shown. **POST-MATCH** is a full-screen result screen the Hud auto-opens on the Active→Ended edge, with a sortable roster, a team filter, the team-summary comparison and the Top Gun callout (no SHIP column — a pilot flies many hulls per match). Created once by the Hud as its last child and visibility-toggled, so sort/filter survive a toggle.
+- **Frequency:** Common
+- **Key Files:**
+  - `client/scripts/ui/Scoreboard.cs` — both modes, sorting/filtering, `LiveFor` fog gate, Esc handling
+  - `client/scripts/world/MatchStatsStore.cs` — the ledger + all filter/aggregate/sort rules (headless-tested)
+  - `client/scripts/ui/RosterCells.cs` — the row/header/cell primitives it shares with the Lobby roster
+  - `client/scripts/Hud.cs` — creation, the F5 hotkey, and the Active→Ended auto-open edge
+- **Related:** [[MsgMatchStats]], [[Kill Credit]], [[Lobby]], [[Fog of War (Team Vision)]], [[UI Components]]
+- **Notes:** `Scoreboard.Active` is deliberately NOT part of `InputGate.FlightInputFree` — the server replays held input, so freezing the client would leave the pilot thrusting blind; the live board also never touches `Input.MouseMode`. The post-match board DOES free the cursor on open, because it fires while you're still flying with the lobby hidden. `--ui-open=scoreboard-live|scoreboard-post` opens a mode for a `--ui-shot` capture.
 
 ---
 

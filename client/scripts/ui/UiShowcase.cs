@@ -46,6 +46,7 @@ public partial class UiShowcase : Control
         Build(col);
         Modals(col);
         Backgrounds(col);
+        ScoreboardStates(col);
 
         MaybeCaptureAndQuit();
     }
@@ -736,6 +737,296 @@ public partial class UiShowcase : Control
             row.AddChild(frame);
         }
         s.AddChild(row);
+    }
+
+    // The Scoreboard's building blocks, in every state the real board can put them in. Fixtures only
+    // (no game state) — the live board composes these same RosterCells primitives from the
+    // MsgMatchStats ledger, so this is the visual contract for both it and the lobby roster.
+    private static void ScoreboardStates(VBoxContainer parent)
+    {
+        var s = Section(parent, "11 — SCOREBOARD");
+        var cols = new HBoxContainer();
+        cols.AddThemeConstantOverride("separation", 26);
+        s.AddChild(cols);
+
+        // --- left: roster rows + the sortable header's four states ---
+        var left = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        left.AddThemeConstantOverride("separation", 8);
+        cols.AddChild(left);
+
+        left.AddChild(UiKit.MakeLabel("ROSTER ROW — STATES", UiKit.TextStyle.Label, DesignTokens.TeamAccent));
+        var rows = new VBoxContainer();
+        rows.AddThemeConstantOverride("separation", 0);
+        left.AddChild(rows);
+        Color blue = DesignTokens.Faction0;
+        Color red = DesignTokens.Faction1;
+        rows.AddChild(FixtureRow("HALYARD", "Enh Fighter", 9, 5, 4, 720, false, blue, cmdr: false));
+        rows.AddChild(FixtureRow("VULCAN", "Adv Fighter", 14, 2, 2, 980, false, blue, cmdr: true));
+        rows.AddChild(FixtureRow("ORRERY", "Scout", 4, 3, 2, 355, true, blue, cmdr: false));
+        rows.AddChild(FixtureRow("CINDER", "Bomber", 5, 7, 4, 605, true, red, cmdr: true));
+        rows.AddChild(
+            FixtureRow(
+                "SABLE",
+                "Bomber",
+                6,
+                4,
+                3,
+                640,
+                false,
+                blue,
+                cmdr: false,
+                badge: RosterCells.TintBadge("DOCKED", DesignTokens.Text2, new Color(DesignTokens.Text2, 0.16f))
+            )
+        );
+        rows.AddChild(
+            FixtureRow(
+                "QUILL",
+                "Lt Interceptor",
+                7,
+                6,
+                5,
+                505,
+                false,
+                blue,
+                cmdr: false,
+                badge: RosterCells.Badge("POD", DesignTokens.Warn)
+            )
+        );
+        rows.AddChild(
+            FixtureRow(
+                "SLAG",
+                "Devastator",
+                1,
+                2,
+                1,
+                230,
+                false,
+                red,
+                cmdr: false,
+                badge: RosterCells.TintBadge("CONTACT", DesignTokens.DangerText, new Color(DesignTokens.Danger, 0.16f))
+            )
+        );
+        rows.AddChild(
+            FixtureRow(
+                "TINDER",
+                "· · ·",
+                0,
+                1,
+                1,
+                410,
+                false,
+                blue,
+                cmdr: false,
+                badge: RosterCells.TintBadge("LEFT", DesignTokens.TextDim, new Color(DesignTokens.TextDim, 0.16f))
+            )
+        );
+        rows.AddChild(FixtureRow("RASP", "· · ·", 8, 6, 4, 690, false, red, cmdr: false));
+        left.AddChild(
+            Caption(
+                "Default · commander (★ gold) · you (blue) · you + commander (red) · docked · ejected to pod · "
+                    + "enemy contact · left the match · hull hidden by fog"
+            )
+        );
+
+        left.AddChild(new Control { CustomMinimumSize = new Vector2(0, 8) });
+        left.AddChild(UiKit.MakeLabel("COLUMN HEADER — SORT STATES", UiKit.TextStyle.Label, DesignTokens.TeamAccent));
+        var headers = new VBoxContainer();
+        headers.AddThemeConstantOverride("separation", 6);
+        left.AddChild(headers);
+        headers.AddChild(FixtureHeader(-1, false)); // idle
+        headers.AddChild(FixtureHeader(-1, false, hover: true)); // pointer over CALLSIGN
+        headers.AddChild(FixtureHeader(4, true)); // PTS, descending
+        headers.AddChild(FixtureHeader(1, false)); // K, ascending
+        left.AddChild(Caption("Idle · hover · sorted descending · sorted ascending. Only the active column shows a caret."));
+
+        // --- right: the three team-filter cards ---
+        var right = new VBoxContainer { CustomMinimumSize = new Vector2(356, 0) };
+        right.AddThemeConstantOverride("separation", 8);
+        cols.AddChild(right);
+        right.AddChild(UiKit.MakeLabel("TEAM FILTER CARD", UiKit.TextStyle.Label, DesignTokens.TeamAccent));
+        right.AddChild(FixtureFilterCard("IRON COIL", blue, "3610", "6 PILOTS", "40 KILLS", selected: true, hollow: false));
+        right.AddChild(
+            FixtureFilterCard("ASH SYNDICATE", red, "2985", "6 PILOTS", "21 KILLS", selected: false, hollow: false)
+        );
+        right.AddChild(
+            FixtureFilterCard(
+                "ALL PILOTS",
+                DesignTokens.Text2,
+                "12",
+                "BOTH TEAMS",
+                "61 KILLS",
+                selected: false,
+                hollow: true
+            )
+        );
+        right.AddChild(
+            Caption("Selected · unselected · the neutral both-teams filter (hollow diamond, never a faction colour).")
+        );
+        right.AddChild(new Control { CustomMinimumSize = new Vector2(0, 8) });
+        right.AddChild(UiKit.MakeLabel("EMPTY TEAM", UiKit.TextStyle.Label, DesignTokens.TeamAccent));
+        var empty = new HairlinePanel();
+        empty.AddChild(UiKit.MakeLabel("No pilots flew for this side.", UiKit.TextStyle.Body, DesignTokens.TextDim));
+        right.AddChild(empty);
+    }
+
+    // A wrapping caption under a fixture group. Autowrap is what lets the fixture columns shrink —
+    // a non-wrapping sentence would set the whole column's minimum width and push the page wide.
+    private static Label Caption(string text)
+    {
+        var l = UiKit.MakeLabel(text, UiKit.TextStyle.Data, DesignTokens.TextDim);
+        l.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        l.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        l.CustomMinimumSize = new Vector2(1, 0);
+        return l;
+    }
+
+    // One roster row fixture, built from the same RosterCells primitives the real board uses.
+    private static Control FixtureRow(
+        string name,
+        string ship,
+        int k,
+        int d,
+        int ej,
+        int pts,
+        bool isMe,
+        Color team,
+        bool cmdr,
+        Control? badge = null
+    )
+    {
+        var panel = RosterCells.RowPanel(isMe, team, vPad: 11, hPad: 16);
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", 8);
+        panel.AddChild(row);
+        row.AddChild(
+            RosterCells
+                .Mono(isMe ? "◆" : "▸", isMe ? team : DesignTokens.TextDim)
+                .With(l => l.CustomMinimumSize = new Vector2(18, 0))
+        );
+
+        var nameCell = new HBoxContainer();
+        nameCell.AddThemeConstantOverride("separation", 7);
+        RosterCells.Cell(nameCell, 1.5f);
+        nameCell.AddChild(UiKit.MakeLabel(name, UiKit.TextStyle.Body, isMe ? team : DesignTokens.TextHi));
+        if (cmdr)
+            nameCell.AddChild(
+                UiKit
+                    .MakeLabel("★", UiKit.TextStyle.Body, DesignTokens.CmdrGold)
+                    .With(l => l.SizeFlagsVertical = SizeFlags.ShrinkCenter)
+            );
+        if (isMe)
+            nameCell.AddChild(RosterCells.Badge("YOU", team));
+        row.AddChild(nameCell);
+
+        var shipCell = new HBoxContainer();
+        shipCell.AddThemeConstantOverride("separation", 6);
+        RosterCells.Cell(shipCell, 1.25f);
+        shipCell.AddChild(RosterCells.Mono(ship, ship == "· · ·" ? DesignTokens.TextDim : DesignTokens.Text2));
+        if (badge != null)
+            shipCell.AddChild(badge);
+        row.AddChild(shipCell);
+
+        Color pt = isMe ? team : DesignTokens.Data;
+        row.AddChild(RosterCells.Cell(RosterCells.Mono($"{k}", DesignTokens.Data, HorizontalAlignment.Center), 0.45f));
+        row.AddChild(RosterCells.Cell(RosterCells.Mono($"{d}", DesignTokens.Data, HorizontalAlignment.Center), 0.45f));
+        row.AddChild(RosterCells.Cell(RosterCells.Mono($"{ej}", DesignTokens.Data, HorizontalAlignment.Center), 0.45f));
+        row.AddChild(RosterCells.Cell(RosterCells.Mono($"{pts}", pt, HorizontalAlignment.Right), 0.7f));
+        return panel;
+    }
+
+    // One column-header fixture. `active` = the sorted column index (-1 = none); `hover` brightens a
+    // non-active label the way the pointer does.
+    private static Control FixtureHeader(int active, bool descending, bool hover = false)
+    {
+        (string Label, float Ratio, HorizontalAlignment Align)[] cols =
+        [
+            ("CALLSIGN", 1.5f, HorizontalAlignment.Left),
+            ("K", 0.45f, HorizontalAlignment.Center),
+            ("D", 0.45f, HorizontalAlignment.Center),
+            ("EJ", 0.45f, HorizontalAlignment.Center),
+            ("PTS", 0.7f, HorizontalAlignment.Right),
+        ];
+        var panel = RosterCells.HeaderPanel(16);
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", 8);
+        panel.AddChild(row);
+        row.AddChild(RosterCells.Lbl("", 18));
+        for (int i = 0; i < cols.Length; i++)
+        {
+            var (text, ratio, align) = cols[i];
+            bool on = i == active;
+            var cell = new HBoxContainer();
+            cell.AddThemeConstantOverride("separation", 5);
+            cell.Alignment = align switch
+            {
+                HorizontalAlignment.Center => BoxContainer.AlignmentMode.Center,
+                HorizontalAlignment.Right => BoxContainer.AlignmentMode.End,
+                _ => BoxContainer.AlignmentMode.Begin,
+            };
+            RosterCells.Cell(cell, ratio);
+            cell.AddChild(
+                RosterCells
+                    .Lbl(text)
+                    .With(l =>
+                        l.AddThemeColorOverride(
+                            "font_color",
+                            on ? DesignTokens.TeamAccent
+                                : hover && i == 0 ? DesignTokens.TextHi
+                                : DesignTokens.TextDim
+                        )
+                    )
+            );
+            if (on)
+                cell.AddChild(
+                    RosterCells
+                        .Mono(descending ? "▼" : "▲", DesignTokens.TeamAccent)
+                        .With(l => l.AddThemeFontSizeOverride("font_size", 9))
+                        .With(l => l.SizeFlagsVertical = SizeFlags.ShrinkCenter)
+                );
+            row.AddChild(cell);
+        }
+        return panel;
+    }
+
+    private static Control FixtureFilterCard(
+        string name,
+        Color accent,
+        string big,
+        string sub,
+        string sub2,
+        bool selected,
+        bool hollow
+    )
+    {
+        var panel = new PanelContainer { CustomMinimumSize = new Vector2(0, 62) };
+        panel.AddThemeStyleboxOverride("panel", RosterCells.TabStyle(accent, selected));
+        var pad = new MarginContainer();
+        RosterCells.Margins(pad, 13, 10);
+        panel.AddChild(pad);
+        var col = new VBoxContainer();
+        col.AddThemeConstantOverride("separation", 7);
+        pad.AddChild(col);
+
+        var top = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        top.AddThemeConstantOverride("separation", 9);
+        top.AddChild(RosterCells.Diamond(accent, hollow));
+        top.AddChild(
+            UiKit
+                .MakeLabel(name, UiKit.TextStyle.Label, DesignTokens.TextHi)
+                .With(l => l.AddThemeFontSizeOverride("font_size", 14))
+        );
+        top.AddChild(RosterCells.Spacer());
+        top.AddChild(
+            UiKit.MakeLabel(big, UiKit.TextStyle.Data, accent).With(l => l.AddThemeFontSizeOverride("font_size", 18))
+        );
+        col.AddChild(top);
+
+        var bottom = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        bottom.AddChild(RosterCells.Mono(sub, DesignTokens.Text2));
+        bottom.AddChild(RosterCells.Spacer());
+        bottom.AddChild(RosterCells.Mono(sub2, DesignTokens.Text2));
+        col.AddChild(bottom);
+        return panel;
     }
 
     private static ToastHost? _toast;

@@ -112,6 +112,7 @@ public static class Protocol
     public const byte MsgConstructorState = 26; // u8 count, count x (u64 id, u8 stationTypeId, u8 state (0 producing/1 idle/2 to-rock/3 move/4 align/5 sink/6 build/8 queued), u32 startTick, u32 durationTicks, u64 targetId, bool producesMiner, u64 launchBaseId, u64 shipId) — PER-TEAM build roster for the Build tab: producing (start/duration → progress bar + cancel), queued (untimed, 0% — waiting for a build slot at launchBaseId), and launched drones (status). launchBaseId groups a garrison's build pipeline for the queue-full gray-out. shipId is the launched drone's ship id (0 while queued/producing), which maps a rendered ship to the station it carries (F3 map label). Progress derives client-side from startTick+duration (v38). On change + coarse keepalive. See BuildConstructorState.
     public const byte MsgRockGone = 27; // u8 count, count x u64 rockId — rocks fully despawned this step (a constructor's finished base consumed the asteroid). Broadcast, reliable; the client deletes its rock node + collision. See BuildRockGone.
     public const byte MsgShipLoadout = 28; // u8 count, count x (u64 shipId, u8 nSlots, nSlots x u32 weaponId) — per-barrel EFFECTIVE weapon ids (hardpoint declaration order; u32.Max = emptied slot) for every ship flying a NON-authored loadout. Full table, reconcile-by-omission: a ship absent from the frame flies its authored class loadout. Broadcast, reliable, on change + coarse keepalive (empty frames still sent so stale entries prune). Doubles as the owner's authoritative echo. See BuildShipLoadouts.
+    public const byte MsgMatchStats = 29; // u8 nPilots, n x (i32 clientId, str name, u8 team, u8 flags (bit0 = connected), u16 kills, u16 deaths, u16 ejects, i32 points), then u8 nTeams, n x (u8 team, u8 garrisonsDestroyed, u8 outpostsDestroyed) — the match scoreboard ledger (v37). Full table, keyed by client id, sorted by id; a pilot who LEFT stays on it with bit0 clear, which is why name+team ride the frame instead of being joined against the lobby roster (a disconnect drops both server-side). PTS is signed (a penalty weight can push a pilot negative); the TEAM score is NOT repeated here — it rides MsgTeamState. Broadcast, reliable, on change only. See BuildMatchStats.
 
     public const byte FlagFiring = 1;
     public const byte FlagBoost = 2;
@@ -1629,6 +1630,63 @@ public static class Protocol
         WriteString(w, selectedMap);
         w.Write(commander0); // i32 per-team commander client ids; -1 when the side is empty (v34)
         w.Write(commander1);
+        w.Flush();
+        return ms.ToArray();
+    }
+
+    // One pilot's scoreboard row. Name + Team ride the row rather than being looked up from the
+    // lobby: a departed pilot loses BOTH server-side (ClientHub's disconnect path removes them from
+    // the lobby AND the player table), and the end-of-match board still has to name them. Connected
+    // is what the client renders as the "LEFT" badge.
+    public readonly record struct StatsEntry(
+        int Id,
+        string Name,
+        byte Team,
+        bool Connected,
+        int Kills,
+        int Deaths,
+        int Ejects,
+        int Points
+    );
+
+    // The match scoreboard: every pilot's K/D/EJ/PTS plus the per-team base-destruction tallies the
+    // Team Summary's GARRISONS row reads. A full replace on every send (no reconcile-by-omission
+    // subtleties — the client swaps its whole table), broadcast reliably on change only, since the
+    // ledger moves a handful of times a match rather than every tick.
+    //
+    // Counters clamp into their wire widths (a 65k-kill pilot is not a case worth widening the frame
+    // for); POINTS stays a signed i32 because a penalty weight (stock death: -25) legitimately pushes
+    // a pilot negative. A team's SCORE is deliberately absent — it is exactly the sum of its pilots'
+    // points and already rides MsgTeamState.
+    public static byte[] BuildMatchStats(
+        System.Collections.Generic.IReadOnlyList<StatsEntry> pilots,
+        System.Collections.Generic.IReadOnlyList<(byte Team, int Garrisons, int Outposts)> teams
+    )
+    {
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+        w.Write(MsgMatchStats);
+        w.Write((byte)Math.Min(pilots.Count, 255));
+        for (int i = 0; i < pilots.Count && i < 255; i++)
+        {
+            var p = pilots[i];
+            w.Write(p.Id); // i32 — client ids are i32 everywhere (-1 is a live sentinel elsewhere)
+            WriteString(w, p.Name);
+            w.Write(p.Team);
+            w.Write((byte)(p.Connected ? 1 : 0)); // flags: bit0 = still connected
+            w.Write((ushort)Math.Clamp(p.Kills, 0, ushort.MaxValue));
+            w.Write((ushort)Math.Clamp(p.Deaths, 0, ushort.MaxValue));
+            w.Write((ushort)Math.Clamp(p.Ejects, 0, ushort.MaxValue));
+            w.Write(p.Points);
+        }
+        w.Write((byte)Math.Min(teams.Count, 255));
+        for (int i = 0; i < teams.Count && i < 255; i++)
+        {
+            var t = teams[i];
+            w.Write(t.Team);
+            w.Write((byte)Math.Clamp(t.Garrisons, 0, byte.MaxValue));
+            w.Write((byte)Math.Clamp(t.Outposts, 0, byte.MaxValue));
+        }
         w.Flush();
         return ms.ToArray();
     }

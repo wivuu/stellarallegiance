@@ -61,11 +61,29 @@ public partial class GameNetClient : Node
     // picker; MapListChanged fires when it arrives.
     public IReadOnlyList<MapInfo> Maps { get; private set; } = Array.Empty<MapInfo>();
 
+    // The current/"next" map, resolved from the streamed catalog by SelectedMap (falls back to the
+    // first advertised map, or null before the catalog arrives). Lives here rather than on one overlay
+    // because both the Lobby's sector pane and the Scoreboard's result band need the same lookup.
+    public MapInfo? CurrentMap
+    {
+        get
+        {
+            foreach (var m in Maps)
+                if (string.Equals(m.Name, SelectedMap, StringComparison.OrdinalIgnoreCase))
+                    return m;
+            return Maps.Count > 0 ? Maps[0] : null;
+        }
+    }
+
     // Raised on the main thread. Connected = Welcome received; DefsReceived = defs applied;
     // LobbyChanged = roster/phase update; ChatReceived = a chat line; Pong = ping echo (RTT).
     public event Action? Connected;
     public event Action? DefsReceived;
     public event Action? LobbyChanged;
+
+    // MatchStatsChanged = a fresh MsgMatchStats ledger (per-pilot K/D/EJ/PTS + the team garrison tally).
+    // Reliable and only sent on change, so listeners can simply mark themselves dirty.
+    public event Action? MatchStatsChanged;
     public event Action? MapListChanged;
     public event Action<ChatLine>? ChatReceived;
     public event Action<uint>? Pong;
@@ -933,7 +951,39 @@ public partial class GameNetClient : Node
             case 28:
                 ApplyShipLoadout(r);
                 break;
+            case 29:
+                ApplyMatchStats(r);
+                break;
         }
+    }
+
+    // MsgMatchStats: the whole match scoreboard ledger — one row per pilot who has flown this match
+    // (leavers included, which is why name+team ride on the frame rather than being joined against the
+    // lobby roster) plus each side's garrison/outpost demolition tally. Full reconcile; decode straight
+    // into the store's DTOs and forward whole to WorldRenderer, then fire the change event for the
+    // Scoreboard overlay + the Lobby roster cells.
+    private void ApplyMatchStats(BinaryReader r)
+    {
+        byte nPilots = r.ReadByte();
+        var pilots = new List<MatchStatsStore.PilotStat>(nPilots);
+        for (int i = 0; i < nPilots; i++)
+        {
+            int clientId = r.ReadInt32();
+            string name = ReadStr(r);
+            byte team = r.ReadByte();
+            byte flags = r.ReadByte(); // bit0 = still connected (clear = "LEFT")
+            ushort kills = r.ReadUInt16();
+            ushort deaths = r.ReadUInt16();
+            ushort ejects = r.ReadUInt16();
+            int points = r.ReadInt32(); // signed — the death penalty can push a pilot negative
+            pilots.Add(new MatchStatsStore.PilotStat(clientId, name, team, (flags & 1) != 0, kills, deaths, ejects, points));
+        }
+        byte nTeams = r.ReadByte();
+        var teams = new List<MatchStatsStore.TeamTally>(nTeams);
+        for (int i = 0; i < nTeams; i++)
+            teams.Add(new MatchStatsStore.TeamTally(r.ReadByte(), r.ReadByte(), r.ReadByte()));
+        _world.NetApplyMatchStats(pilots, teams);
+        MatchStatsChanged?.Invoke();
     }
 
     // MsgShipLoadout: the full per-ship weapon-mount override table — effective per-barrel weapon
