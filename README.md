@@ -16,7 +16,7 @@ lobby. Clients connect directly to a server by `ip:port` and download everything
 ```
 client/        Godot 4.7 (C#/.NET 10) — rendering, input, client-side prediction
 server/        .NET 10 console — authoritative 20 Hz sim + lobby host (the only gameplay authority)
-public-lobby/  .NET 10 web — PUBLIC LOBBY: game-server registry + WebRTC signaling relay
+public-lobby/  .NET 10 web — PUBLIC LOBBY: player accounts + game-server registry + WebRTC signaling + match ladder (Postgres/Orleans)
 shared/        deterministic FlightModel + content defs, compiled into BOTH client and server
 tools/         simbot (load bot swarm), asteroid-gen (mesh catalog)
 tests/         ~20 test suites (FlightModel determinism/golden, Crypto, …) + factions/tests
@@ -57,6 +57,14 @@ public lobby (`PUBLIC_LOBBY`, default `https://wivuu-public-lobby-production.up.
 name with `SIM_PUBLIC_NAME="My Server"`. And `run-client.ps1` opens the **server browser** against
 that lobby so you can pick a server (or still type an address for a direct connect). See
 [Public lobby & NAT traversal](#public-lobby--nat-traversal).
+
+**Accounts.** On first launch the client asks you to sign in: it shows a short code and opens the
+lobby's approval page in your browser (passkeys always work; Google/GitHub/Steam when the lobby has
+them configured). Signed in, you see the public server list with **VERIFIED** (authenticated,
+operator shown, results count on the ladder) and **UNVERIFIED** badges; joining a Verified server
+uses a single-use join token under your account name. *Continue without account* (or `--anonymous`)
+keeps direct-by-address joins only. The web pages (`/ladder`, `/players/<name>`, `/me`) live on the
+lobby.
 
 Solo testing tip: run the server with `scripts/run-server.ps1 -Local --autostart` to skip the
 ready-up gate and start a perpetual match immediately.

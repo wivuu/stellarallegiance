@@ -39,6 +39,12 @@ fill out the opposition.
 ---
 
 ### Public lobby
+
+**Sign in first.** The client shows a device code and opens the lobby's approval page in your
+browser; approve it there (create a passkey the first time). *Continue without account* skips this
+but hides the public server list — direct `host:port` joins still work. Verified servers require a
+signed-in join.
+
 Without `-Local`, `run-server.ps1` publishes the server to the public lobby (`PUBLIC_LOBBY`,
 default `https://wivuu-public-lobby-production.up.railway.app`) and `run-client.ps1` opens a browser of the servers listed there —
 including NAT'd ones, joined over WebRTC. See the README's *Public lobby & NAT traversal*.

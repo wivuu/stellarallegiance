@@ -1,6 +1,6 @@
 # Public Lobby — Identity, Persistence & Ranking: hand-off plan
 
-**Status:** decisions settled (grill session 2026-09-05/06); implementation IN PROGRESS — see §8.
+**Status:** slice 1 IMPLEMENTED 2026-09-06 on branch `auth-lobby-ranking` (see §8 for per-package notes and what is still user-owned).
 **Language:** [`public-lobby/CONTEXT.md`](../public-lobby/CONTEXT.md) — use its words (Player, Pilot,
 Match, Listing, Game Server, Operator, Verified, Ranked, Join Token, Result, Ladder, Rating).
 **Decisions of record:** [ADR-0001](../docs/adr/0001-public-lobby-is-its-own-identity-issuer.md),
@@ -559,3 +559,10 @@ every restart under their name. Unlisted servers and every existing harness beha
   empty; anonymous direct join refused (1104); a stale credential on a new DB falls back to a new
   device code; restart re-lists silently. NOT exercised headlessly: a win-condition ending (needs a
   base kill) and the Godot passkey/browser UI — user to click through once.
+- **2026-09-06 WP4.2 done** (supervisor): docker-compose `lobby-db` + `lobby-migrate` + full lobby env;
+  `deploy-railway-lobby.ps1` documents Postgres attach / pre-deploy `--migrate` / env and passes
+  `LOBBY_PUBLIC_URL`; DEPLOY.md "Lobby prerequisites" + "Match results" sections; README/QUICKSTART
+  account paragraphs; GLOSSARY "Game Server" / "Ranked" entries (plus "Join Token" from WP0.4,
+  "Verified Listing" from WP1.4). Docker image build verified (Tailwind CSS present). **Slice 1 complete.**
+  User-owned: OAuth app secrets, Railway Postgres + env, browser passkey click-through, win-condition
+  e2e, merge to master.

@@ -86,6 +86,19 @@ WebRTC hole-punching, so the WebRTC/STUN fallback only applies to home/self-host
 Verify with `curl https://<lobby-domain>/servers` — the entry's `publicEndpoint` should be
 `wss://<server-domain>` (and listed once).
 
+### Lobby prerequisites (Postgres + env)
+
+The lobby is stateful now (accounts, sessions, matches, ladder). Attach a **Postgres** service and
+set on the lobby service: `ConnectionStrings__postgres-database` (the database URL), the pre-deploy
+command `dotnet PublicLobby.dll --migrate` (applies EF Core + Orleans migrations, idempotent),
+`LOBBY_PUBLIC_URL=https://<lobby-domain>` (must equal the `PUBLIC_LOBBY` servers dial — it is the
+join-token issuer and the passkey relying party), `LOBBY_ADMINS` (`name:<display>`, `github:<login>`,
+`google:<sub>`, `steam:<id>`), optionally `AUTH_GOOGLE_CLIENT_ID/SECRET`, `AUTH_GITHUB_CLIENT_ID/SECRET`,
+`AUTH_STEAM_API_KEY`, `RANKED_RESULTS`, `ALLOW_UNVERIFIED_SERVERS`. Never set `AUTH_DEV_LOGIN` in
+production. `docker-compose.yml` wires the same for a single box (`lobby-db` + one-shot
+`lobby-migrate`). Health: `/health` (web) and `/health/orleans` (silo). Full reference:
+`public-lobby/README.md`.
+
 ## Match results → public lobby
 
 A server that holds a **Verified** listing reports every match to the lobby with its own access

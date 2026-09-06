@@ -1055,6 +1055,24 @@ Directory of active game servers: hostname, port, player count, faction mix, Ver
 - **Related:** [[Public Lobby]], [[Verified Listing]]
 - **Notes:** Periodically probed for health; stale entries auto-removed. Still in-memory (plan §1.4 slice 1) — Verified/GameServerId/OperatorName are set once at registration from the caller's identity, never from the request body.
 
+### Game Server
+Durable, operator-owned server identity minted at the first device-code approval (`public-lobby/CONTEXT.md`); a Listing is its live registration.
+- **Frequency:** Common
+- **Key Files:**
+  - `public-lobby/Grains/GameServerGrain.cs` — single writer of `game_servers` (ranked flag, last listed)
+  - `server/Net/LobbyRegistrar.cs`, `server/Net/LobbyAuthSession.cs` — device-code pairing, `SIM_AUTH_FILE` credential
+  - `public-lobby/Pages/ServerHistory.cshtml` — `/servers/{id}/history`
+- **Related:** [[Verified Listing]], [[Ranked]], [[Public Lobby]]
+
+### Ranked
+Admin-granted standing (`/admin` toggle) that lets a game server's results move the global Ladder; the lobby's `RANKED_RESULTS` trust level (`flagged` default, `authenticated`) decides whether the flag matters.
+- **Frequency:** Occasional
+- **Key Files:**
+  - `public-lobby/Grains/MatchGrain.cs` — counted/ranked snapshot at result acceptance
+  - `public-lobby/Grains/PlayerGrain.cs` — `ApplyMatch` folds ranked matches into `players` aggregates
+  - `public-lobby/Pages/Ladder.cshtml`, `public-lobby/Grains/QueryGrain.cs` — global + per-server ladders
+- **Related:** [[Game Server]], [[Match Scoreboard]]
+
 ### Verified Listing
 A Listing whose Game Server authenticated with the public lobby (WP1.1 device-code flow) when it
 registered — see `public-lobby/CONTEXT.md`'s "Listing"/"Operator"/"Verified" entries for the
