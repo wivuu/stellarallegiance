@@ -3,7 +3,10 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.EntityFrameworkCore;
 using PublicLobby;
+using PublicLobby.Data;
+using PublicLobby.Hosting;
 
 // Public lobby + WebRTC signaling box. Player-run game servers register here (name + port) and
 // maintain a WebSocket connection to stay listed; clients subscribe via SSE for live updates.
@@ -38,8 +41,21 @@ builder.Services.AddSingleton<ServerConnectionManager>();
 builder.Services.AddSingleton<IServerRegistry>(new InMemoryServerRegistry(stunServers, bus));
 builder.Services.AddSingleton<SignalingRelay>();
 builder.Services.AddSingleton<ReachabilityProbe>();
+builder.AddLobbyPersistence();
 
 var app = builder.Build();
+
+// `--migrate` mode (plan §1.4/§8): apply pending migrations (creating the database if absent)
+// and exit — no routes mapped, nothing listens. This is Railway's pre-deploy command
+// (`dotnet PublicLobby.dll --migrate`); run it twice locally and the second run is a no-op.
+if (args.Contains("--migrate"))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var db = scope.ServiceProvider.GetRequiredService<LobbyDbContext>();
+    await db.Database.MigrateAsync();
+    Log.MigrationsApplied(app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("PublicLobby"));
+    return;
+}
 
 // Behind a TLS-terminating proxy the registrant's real IP arrives in X-Forwarded-For; honour it so
 // the reachability probe targets the right address (cleared trust list = accept from the proxy).
@@ -102,7 +118,11 @@ app.MapGet(
         // Auth: first frame must identify the session AND carry the secret minted at registration,
         // so a client that scraped the public sessionId can't hijack the server's control channel.
         var auth = await WsReceiveJsonAsync<WsAuthMsg>(ws, ct);
-        if (auth?.Type != "auth" || string.IsNullOrEmpty(auth.SessionId) || !registry.ValidateSecret(auth.SessionId, auth.Secret))
+        if (
+            auth?.Type != "auth"
+            || string.IsNullOrEmpty(auth.SessionId)
+            || !registry.ValidateSecret(auth.SessionId, auth.Secret)
+        )
         {
             if (ws.State == WebSocketState.Open)
                 await ws.CloseAsync(WebSocketCloseStatus.PolicyViolation, "unauthorized", default);
@@ -257,7 +277,11 @@ app.MapGet(
     }
 );
 
-Log.Listening(app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("PublicLobby"), $"http://0.0.0.0:{port}", stunServers.Count);
+Log.Listening(
+    app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("PublicLobby"),
+    $"http://0.0.0.0:{port}",
+    stunServers.Count
+);
 app.Run();
 
 // ---- Helpers ---------------------------------------------------------------

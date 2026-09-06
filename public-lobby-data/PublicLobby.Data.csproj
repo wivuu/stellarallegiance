@@ -20,4 +20,11 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
   </ItemGroup>
+  <ItemGroup>
+    <!-- WP0.1: status/kind columns reuse the wire-literal string constants (LobbySubjectKind,
+         MatchEndReason) instead of duplicating them, so a SQL view can literal-compare against
+         the same text a peer would see over HTTP. shared/ is dependency-free (BCL only), so this
+         reference adds nothing to the graph. -->
+    <ProjectReference Include="../shared/Shared.csproj" />
+  </ItemGroup>
 </Project>

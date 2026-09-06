@@ -89,10 +89,22 @@ Environment variables (see [`PublicLobby.cs`](PublicLobby.cs)):
 |---|---|---|
 | `SHARE_PORT` | `8091` | HTTP listen port. |
 | `STUN_URL` | `stun:stun.cloudflare.com:3478` | Public STUN handed to clients/servers for the WebRTC fallback. Comma/space-separate several for redundancy. |
+| `ConnectionStrings__postgres-database` | none (required) | Postgres connection string for identity, sessions, servers, matches and the ladder (`.PLAN/LobbyRankingService.md`); the process fails fast at startup if it's missing. |
 
-A public STUN server is fine — there's nothing to host. It holds everything in memory (no
-database): registry entries expire 30 s after the last WebSocket ping; signaling tickets expire
-after 60 s. Run a single instance — there is no shared state across replicas.
+A public STUN server is fine — there's nothing to host for it. The live server registry and
+signaling relay still hold everything in memory (registry entries expire 30 s after the last
+WebSocket ping; signaling tickets expire after 60 s; run a single instance — there is no shared
+state across replicas), but **the lobby now requires Postgres** as its system of record for
+players, sessions, game servers and matches (see [ADR-0002](../docs/adr/0002-postgres-system-of-record-grains-single-writers.md)).
+Apply schema migrations (creating the database if absent) with migrate-and-exit mode — this is
+Railway's pre-deploy command:
+
+```bash
+dotnet public-lobby/bin/.../PublicLobby.dll --migrate    # or: dotnet run --project public-lobby -- --migrate
+```
+
+Running it again against an already-migrated database is a no-op. WP4.2 documents the full
+Postgres deployment/env story; this is the short version.
 
 ### The reachability probe
 

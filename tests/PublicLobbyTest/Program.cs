@@ -10,8 +10,16 @@ static partial class Program
     static async Task<int> Main(string[] args)
     {
         Console.WriteLine("PublicLobbyTest");
-        // WP0.0: empty suite — packages fill in sections below.
-        await Task.CompletedTask;
+        try
+        {
+            await RunSchemaTestsAsync();
+        }
+        finally
+        {
+            // Started lazily by the first section that needs Postgres (PostgresFixture); torn
+            // down once here regardless of which sections ran or failed.
+            await PostgresFixture.DisposeAsync();
+        }
         Console.WriteLine(_failures == 0 ? "ALL PASS" : $"{_failures} FAILURE(S)");
         return _failures == 0 ? 0 : 1;
     }
