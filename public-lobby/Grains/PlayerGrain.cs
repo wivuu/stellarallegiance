@@ -23,6 +23,12 @@ public interface IPlayerGrain : IGrainWithGuidKey
 
     /// <summary>Change the display name (plan §1.1: 3–24 chars, unique case-insensitively).</summary>
     Task<RenameOutcome> Rename(string newDisplayName);
+
+    /// <summary>
+    /// Record that a join token was issued (plan §1.1: "the lobby records every issuance", the
+    /// plausibility check for results) and move the player's presence to that listing (§1.2).
+    /// </summary>
+    Task RecordJoinToken(string jti, Guid gameServerId, string listingId, DateTimeOffset issuedAt, DateTimeOffset expiresAt);
 }
 
 public sealed class PlayerGrain(IDbContextFactory<LobbyDbContext> dbFactory) : Grain, IPlayerGrain
@@ -75,6 +81,34 @@ public sealed class PlayerGrain(IDbContextFactory<LobbyDbContext> dbFactory) : G
             _row.DisplayName = previous;
             return RenameOutcome.Taken;
         }
+    }
+
+    public async Task RecordJoinToken(
+        string jti,
+        Guid gameServerId,
+        string listingId,
+        DateTimeOffset issuedAt,
+        DateTimeOffset expiresAt
+    )
+    {
+        if (_row is null && !await TryReload())
+            throw new InvalidOperationException($"player {this.GetPrimaryKey():N} does not exist");
+        await using var db = await dbFactory.CreateDbContextAsync();
+        db.JoinTokensIssued.Add(
+            new JoinTokenIssued
+            {
+                Jti = jti,
+                PlayerId = _row!.Id,
+                GameServerId = gameServerId,
+                ListingId = listingId,
+                IssuedAt = issuedAt,
+                ExpiresAt = expiresAt,
+            }
+        );
+        db.Players.Attach(_row);
+        _row.CurrentListingId = listingId;
+        _row.LastSeenAt = issuedAt;
+        await db.SaveChangesAsync();
     }
 
     // A grain can be activated by a Get() racing account creation; re-read before giving up.

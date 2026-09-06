@@ -21,6 +21,7 @@ static partial class Suite
             await RunOrleansTestsAsync();
             await RunAuthTestsAsync();
             await RunProfileTestsAsync();
+            await RunJoinTokenTestsAsync();
         }
         finally
         {

@@ -15,6 +15,7 @@ static class AuthHosting
         builder.Services.AddMemoryCache();
         builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<AccessTokenCache>();
+        builder.Services.AddSingleton<JoinTokenIssuer>();
         builder
             .Services.AddAuthentication()
             .AddScheme<AuthenticationSchemeOptions, LobbyBearerHandler>(LobbyBearer.Scheme, displayName: null, _ => { });

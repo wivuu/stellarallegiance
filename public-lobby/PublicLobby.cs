@@ -79,6 +79,7 @@ app.MapOrleansHealth();
 app.MapAuthEndpoints();
 app.MapDevWebLogin();
 app.MapProfileApi();
+app.MapJwks();
 
 // ---- Registry: server discovery -------------------------------------------
 

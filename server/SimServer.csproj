@@ -58,6 +58,10 @@
          (server/Content/ContentLoader). Server-only, so shared/ stays dependency-free and the
          client/wasm never pull YamlDotNet. -->
     <PackageReference Include="YamlDotNet" Version="18.1.0" />
+    <!-- Join tokens (public-lobby/CONTEXT.md): the lobby-issued ES256 JWT a joiner presents in Hello
+         is verified OFFLINE here against the lobby's JWKS (server/Net/JoinTokenVerifier.cs). Server-
+         only so shared/ stays dependency-free. -->
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.22.0" />
     <!-- Non-trickle SDP/ICE helpers shared with the Godot client (excluded from Shared.csproj,
          which is dependency-free); compiled in here so both sides serialize candidates identically. -->
     <Compile Include="../shared/Net/WebRtcSdp.cs" Link="Net/WebRtcSdp.cs" />
