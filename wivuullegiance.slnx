@@ -12,6 +12,7 @@
   </Folder>
   <Folder Name="/public-lobby/">
     <Project Path="public-lobby/PublicLobby.csproj" />
+    <Project Path="public-lobby-data/PublicLobby.Data.csproj" />
   </Folder>
   <Folder Name="/server/">
     <Project Path="server/SimServer.csproj" />
@@ -32,6 +33,7 @@
     <Project Path="tests/MatchStatsStoreTest/MatchStatsStoreTest.csproj" />
     <Project Path="tests/MiningTest/MiningTest.csproj" />
     <Project Path="tests/MissileTest/MissileTest.csproj" />
+    <Project Path="tests/PublicLobbyTest/PublicLobbyTest.csproj" />
     <Project Path="tests/ReloadTest/ReloadTest.csproj" />
     <Project Path="tests/ScoreboardTest/ScoreboardTest.csproj" />
     <Project Path="tests/StrategyTest/StrategyTest.csproj" />

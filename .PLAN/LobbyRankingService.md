@@ -1,6 +1,6 @@
 # Public Lobby — Identity, Persistence & Ranking: hand-off plan
 
-**Status:** decisions settled (grill session 2026-09-05/06), implementation not started.
+**Status:** decisions settled (grill session 2026-09-05/06); implementation IN PROGRESS — see §8.
 **Language:** [`public-lobby/CONTEXT.md`](../public-lobby/CONTEXT.md) — use its words (Player, Pilot,
 Match, Listing, Game Server, Operator, Verified, Ranked, Join Token, Result, Ladder, Rating).
 **Decisions of record:** [ADR-0001](../docs/adr/0001-public-lobby-is-its-own-identity-issuer.md),
@@ -369,6 +369,19 @@ failures per memory: CollisionTest×4 / AutopilotTest×3 / FogTest×1 / Commande
   lists/aggregates go through the query worker or views. Mark grain getters `[ReadOnly]`.
 
 ## 6. Needs the user before/while implementing
+
+**Resolutions taken by the supervisor on 2026-09-06 (override below if you disagree):**
+1. Adopted the dev grant: `AUTH_DEV_LOGIN=true` → `POST /auth/token` `grant_type=dev` +
+   `display_name` (constant `LobbyGrantType.Dev`); refused with `unsupported_grant_type` otherwise.
+2. Still yours: Google/GitHub OAuth apps + Steam Web API key. Local dev runs passkey-only.
+3. Still yours: Railway Postgres + `LOBBY_ADMINS`. WP4.2 documents the exact env.
+4. Layout: `public-lobby-data/PublicLobby.Data.csproj` (EF model/migrations) + `tests/PublicLobbyTest/`
+   as planned. DEVIATION: the HTTP contracts live in **`shared/Lobby/LobbyContracts.cs`**
+   (`StellarAllegiance.Shared.Lobby`), not `public-lobby/Contracts/`, because the Godot client and
+   the sim server must compile the same records and neither can reference a Web SDK project. The
+   lobby now references `shared/` + `public-lobby-data/`; the Dockerfile copies all three dirs.
+5. No rename cooldown in slice 1.
+
 1. **Headless authenticated smoke.** Harnesses skip login, but WP4.3 must exercise the token path
    non-interactively. Recommendation: a lobby dev-only grant (`AUTH_DEV_LOGIN=true` → `POST /auth/token`
    `grant_type=dev` with a display name) that is refused unless the env is set; never set in production.
@@ -386,3 +399,15 @@ listings, joins a verified server with a join token under their account name, pl
 and the result appears in their match history and on the global ladder (if the server is ranked or the
 trust level allows). An operator authenticates a server once with a device code and it re-lists on
 every restart under their name. Unlisted servers and every existing harness behave exactly as before.
+
+---
+
+## 8. Progress log
+
+- **2026-09-06 WP0.0 done** (supervisor): `public-lobby-data/` (LobbyDbContext stub over Identity
+  + citext), `tests/PublicLobbyTest/` (empty console suite, Testcontainers ref), `shared/Lobby/
+  LobbyContracts.cs` (all §3.1/§3.3 records + constant classes), slnx entries, Dockerfile COPY
+  widened, `dotnet-ef` 10.0.11 in `dotnet-tools.json`. Pinned versions: EF/Npgsql 10.0.3,
+  EFCore.NamingConventions 10.0.1, Identity.EntityFrameworkCore 10.0.11, Orleans 10.3.1,
+  Testcontainers.PostgreSql 4.15.0, AspNet.Security.OAuth.GitHub / OpenId.Steam 10.0.0,
+  Microsoft.IdentityModel.Tokens + System.IdentityModel.Tokens.Jwt 8.22.0.

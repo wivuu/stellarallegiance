@@ -7,7 +7,12 @@
 
        Was originally a .NET-10 file-based app (single PublicLobby.cs with a #:sdk header); file
        based apps can't span multiple .cs files, so it is a normal net10.0 csproj now — same
-       toolchain/Docker pattern as server/ and shared/. -->
+       toolchain/Docker pattern as server/ and shared/.
+
+       Identity/persistence/ranking (.PLAN/LobbyRankingService.md): the lobby is its own identity
+       issuer (ADR-0001) over Postgres + co-hosted Orleans (ADR-0002). The EF model lives in the
+       sibling public-lobby-data/ project; the HTTP contracts every peer compiles live in
+       shared/Lobby/. The Dockerfile copies all three directories (build context = repo root). -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -15,4 +20,8 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <RootNamespace>PublicLobby</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../public-lobby-data/PublicLobby.Data.csproj" />
+    <ProjectReference Include="../shared/Shared.csproj" />
+  </ItemGroup>
 </Project>

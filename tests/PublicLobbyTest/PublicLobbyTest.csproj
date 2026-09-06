@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Public-lobby suite (identity, persistence, ranking — plan .PLAN/LobbyRankingService.md).
+       Console exe like every other tests/* suite: `dotnet run`, non-zero exit on first failure.
+       Distinct from tests/LobbyTest, which covers the GAME SERVER's pre-match roster.
+       Needs Docker: schema/grain tests run against a Testcontainers Postgres. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="../../public-lobby/PublicLobby.csproj" />
+    <ProjectReference Include="../../public-lobby-data/PublicLobby.Data.csproj" />
+    <ProjectReference Include="../../shared/Shared.csproj" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.15.0" />
+  </ItemGroup>
+</Project>
