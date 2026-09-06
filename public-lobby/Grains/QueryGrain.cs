@@ -25,6 +25,9 @@ public interface IQueryGrain : IGrainWithIntegerKey
 
     /// <summary>A game server's page: identity, operator, recent matches, per-server ladder.</summary>
     Task<ServerHistoryView?> ServerHistory(Guid gameServerId);
+
+    /// <summary>Every game server, for the admin page (uncached — the toggle must show at once).</summary>
+    Task<GameServerAdminRow[]> ListGameServers();
 }
 
 [StatelessWorker(1)]
@@ -238,6 +241,26 @@ public sealed class QueryGrain(IDbContextFactory<LobbyDbContext> dbFactory, IMem
             .ToArrayAsync();
         var ladder = await LadderByServer(gameServerId, 1, 50);
         return new ServerHistoryView(server, operatorName, recent, ladder);
+    }
+
+    public async Task<GameServerAdminRow[]> ListGameServers()
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        return await (
+            from gs in db.GameServers.AsNoTracking()
+            join p in db.Players.AsNoTracking() on gs.OperatorPlayerId equals p.Id
+            orderby gs.LastListedAt descending, gs.CreatedAt descending
+            select new GameServerAdminRow(
+                gs.Id,
+                gs.Name,
+                gs.OperatorPlayerId,
+                p.DisplayName,
+                gs.Ranked,
+                gs.CreatedAt,
+                gs.LastListedAt,
+                db.Matches.Count(m => m.GameServerId == gs.Id)
+            )
+        ).ToArrayAsync();
     }
 
     static (int Page, int PageSize) Clamp(int page, int pageSize) =>

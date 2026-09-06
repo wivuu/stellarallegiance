@@ -457,3 +457,9 @@ every restart under their name. Unlisted servers and every existing harness beha
   a result for a never-started match is accepted), `Api/MatchEndpoints.cs`, `QueryGrain.ServerHistory`,
   page `/servers/{gameServerId}/history`. DEVIATION: ladders are LINQ in `QueryGrain` (no `ladder_*` SQL
   views) — add views only if an external SQL consumer appears. Suite: `MatchTests.cs`; 253 checks green.
+- **2026-09-06 WP4.1 done** (supervisor, pulled forward — lobby-only): `/admin` (`[Authorize(Policy=admin)]`,
+  game servers with operator/last listed/match count, Ranked toggle via `GameServerGrain.SetRanked`,
+  trust level + unverified policy shown), `QueryGrain.ListGameServers`, Admin nav link for admins,
+  `AdminTests.cs`. FIXED a WP0.3 bug: every sign-in path applied `LOBBY_ADMINS` AFTER issuing the
+  cookie, so the admin role only appeared on the next login — now role first, then `SignInAsync`
+  (`RefreshSignInAsync` on the existing-external-login path); cookie access-denied is a plain 403.

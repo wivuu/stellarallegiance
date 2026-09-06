@@ -84,6 +84,13 @@ static class WebHosting
                 o.LoginPath = "/login";
                 o.ExpireTimeSpan = TimeSpan.FromDays(30);
                 o.SlidingExpiration = true;
+                // A signed-in player who fails a policy (e.g. /admin without the role) gets a plain
+                // 403, not a redirect to a non-existent access-denied page.
+                o.Events.OnRedirectToAccessDenied = ctx =>
+                {
+                    ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    return Task.CompletedTask;
+                };
             });
         });
 
@@ -264,13 +271,14 @@ static class WebHosting
                 if (!result.Succeeded || result.User is null)
                     return Results.BadRequest(new { error = result.Error ?? "could not create account" });
 
-                await signInManager.SignInAsync(result.User, isPersistent: true);
+                // Role before the cookie: role claims are baked into the principal at sign-in.
                 await accounts.ApplyAdminPolicyAsync(
                     result.User,
                     provider: null,
                     providerPrincipal: null,
                     http.RequestAborted
                 );
+                await signInManager.SignInAsync(result.User, isPersistent: true);
 
                 return Results.Ok(new { ok = true, redirect = SafeLocalPath(body.ReturnUrl) ?? "/me" });
             }
@@ -307,13 +315,14 @@ static class WebHosting
                 // PasskeySignInCoreAsync — we don't call that convenience method directly because it
                 // always signs in non-persistent, and we want the 30-day sliding cookie (plan §1.1).
                 await userManager.AddOrUpdatePasskeyAsync(assertion.User, assertion.Passkey);
-                await signInManager.SignInAsync(assertion.User, isPersistent: true);
+                // Role before the cookie: role claims are baked into the principal at sign-in.
                 await accounts.ApplyAdminPolicyAsync(
                     assertion.User,
                     provider: null,
                     providerPrincipal: null,
                     http.RequestAborted
                 );
+                await signInManager.SignInAsync(assertion.User, isPersistent: true);
 
                 return Results.Ok(new { ok = true, redirect = SafeLocalPath(body.ReturnUrl) ?? "/me" });
             }

@@ -213,3 +213,15 @@ public sealed record ServerHistoryView(
     [property: Id(2)] MatchSummaryRow[] Recent,
     [property: Id(3)] LadderPage Ladder
 );
+
+[GenerateSerializer]
+public sealed record GameServerAdminRow(
+    [property: Id(0)] Guid Id,
+    [property: Id(1)] string Name,
+    [property: Id(2)] Guid OperatorPlayerId,
+    [property: Id(3)] string OperatorName,
+    [property: Id(4)] bool Ranked,
+    [property: Id(5)] DateTimeOffset CreatedAt,
+    [property: Id(6)] DateTimeOffset? LastListedAt,
+    [property: Id(7)] int Matches
+);

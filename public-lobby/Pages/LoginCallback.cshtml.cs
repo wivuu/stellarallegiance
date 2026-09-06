@@ -43,11 +43,16 @@ public sealed class LoginCallbackModel(SignInManager<LobbyUser> signInManager, A
         else
         {
             var (createdUser, _) = await accounts.FindOrCreateFromExternalLoginAsync(info, HttpContext.RequestAborted);
-            await signInManager.SignInAsync(createdUser, isPersistent: true);
             user = createdUser;
         }
 
+        // Role BEFORE the cookie is (re)issued: the principal's role claims are baked in at sign-in,
+        // so applying LOBBY_ADMINS afterwards would only show up on the NEXT login.
         await accounts.ApplyAdminPolicyAsync(user, info.LoginProvider, info.Principal, HttpContext.RequestAborted);
+        if (existingSignIn.Succeeded)
+            await signInManager.RefreshSignInAsync(user);
+        else
+            await signInManager.SignInAsync(user, isPersistent: true);
 
         return !string.IsNullOrEmpty(ReturnUrl) && Url.IsLocalUrl(ReturnUrl)
             ? LocalRedirect(ReturnUrl)

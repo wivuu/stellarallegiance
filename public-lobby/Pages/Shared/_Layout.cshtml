@@ -23,6 +23,10 @@
                     <a href="/ladder" class="hover:text-text-hi">Ladder</a>
                     @if (User.Identity?.IsAuthenticated == true)
                     {
+                        @if (User.IsInRole(PublicLobby.Accounts.LobbyRoles.Admin))
+                        {
+                            <a href="/admin" class="hover:text-text-hi">Admin</a>
+                        }
                         <a href="/me" class="hover:text-text-hi">Me</a>
                         <form method="post" action="/logout" class="inline">
                             @Html.AntiForgeryToken()

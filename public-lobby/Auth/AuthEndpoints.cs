@@ -172,8 +172,8 @@ static class AuthEndpoints
                 var user = await users.FindByIdAsync(player.Id.ToString());
                 if (user is null)
                     return Results.NotFound();
+                await accounts.ApplyAdminPolicyAsync(user, null, null, http.RequestAborted); // role before the cookie
                 await signIn.SignInAsync(user, isPersistent: true);
-                await accounts.ApplyAdminPolicyAsync(user, null, null, http.RequestAborted);
                 return Results.LocalRedirect(
                     string.IsNullOrEmpty(returnUrl) || !returnUrl.StartsWith('/') ? "/me" : returnUrl
                 );
