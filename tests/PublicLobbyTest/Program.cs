@@ -23,6 +23,7 @@ static partial class Suite
             await RunProfileTestsAsync();
             await RunJoinTokenTestsAsync();
             await RunListingTestsAsync();
+            await RunMatchTestsAsync();
         }
         finally
         {

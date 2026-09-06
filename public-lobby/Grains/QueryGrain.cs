@@ -22,6 +22,9 @@ public interface IQueryGrain : IGrainWithIntegerKey
 
     /// <summary>Public profile + the player's most recent matches, by display name (citext).</summary>
     Task<PlayerProfileView?> PlayerByName(string displayName);
+
+    /// <summary>A game server's page: identity, operator, recent matches, per-server ladder.</summary>
+    Task<ServerHistoryView?> ServerHistory(Guid gameServerId);
 }
 
 [StatelessWorker(1)]
@@ -207,6 +210,34 @@ public sealed class QueryGrain(IDbContextFactory<LobbyDbContext> dbFactory, IMem
             p.CurrentListingId
         );
         return new PlayerProfileView(snapshot, recent);
+    }
+
+    public async Task<ServerHistoryView?> ServerHistory(Guid gameServerId)
+    {
+        var server = await GrainFactory.GetGrain<IGameServerGrain>(gameServerId).Get();
+        if (server is null)
+            return null;
+        var operatorName = (await GrainFactory.GetGrain<IPlayerGrain>(server.OperatorPlayerId).Get())?.DisplayName ?? "?";
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var recent = await db
+            .Matches.AsNoTracking()
+            .Where(m => m.GameServerId == gameServerId)
+            .OrderByDescending(m => m.StartedAt)
+            .Take(50)
+            .Select(m => new MatchSummaryRow(
+                m.Id,
+                m.Map,
+                m.StartedAt,
+                m.EndedAt,
+                m.WinnerTeam,
+                m.Status,
+                m.Counted,
+                m.Ranked,
+                db.MatchPilots.Count(p => p.MatchId == m.Id)
+            ))
+            .ToArrayAsync();
+        var ladder = await LadderByServer(gameServerId, 1, 50);
+        return new ServerHistoryView(server, operatorName, recent, ladder);
     }
 
     static (int Page, int PageSize) Clamp(int page, int pageSize) =>

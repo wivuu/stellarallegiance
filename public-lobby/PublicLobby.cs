@@ -84,6 +84,7 @@ app.MapDevWebLogin();
 app.MapProfileApi();
 app.MapJwks();
 app.MapJoin();
+app.MapMatchApi();
 
 // ---- Registry: server discovery -------------------------------------------
 

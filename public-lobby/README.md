@@ -315,3 +315,19 @@ listings). Keys live only in `signing_keys` (`Grains/SigningKeyGrain.cs`); the p
 `join_tokens_issued` and moves the player's presence (`players.current_listing_id`). The game server
 verifies offline with `server/Net/JoinTokenVerifier.cs` (JWKS fetched at registration and on an
 unknown `kid`, once per 30 s; `jti` replay window).
+
+## Match ingestion (WP2.4)
+
+Game servers report with their bearer: `POST /matches` `{matchId, listingId, map, startedAt}` at
+match start (202; repeat → 200; the game server id is always the bearer's) and
+`POST /matches/{matchId}/result` (plan §3.3 payload) at the end → 202 accepted, 409 already
+final (ended or abandoned), 422 implausible (a pilot without a player id, or one never issued a
+join token for that game server up to 5 min after `endedAt`), 403 wrong game server. A result for
+a match that was never started is accepted (the spool may deliver out of order). Only
+`endReason=win-condition` with a winner is **counted**; the **ranked** flag is snapshotted at
+acceptance from `RANKED_RESULTS` (`flagged` default = the server's admin-set Ranked flag;
+`authenticated` = every verified server) and only ranked matches move `players` aggregates (the
+global ladder); every ended match feeds the per-server ladder. `Grains/MatchGrain.cs` is the single
+writer of `matches` / `match_teams` / `match_pilots` and registers an Orleans reminder (5 min) that
+marks a match **abandoned** once its listing has been gone for 10 min. `/servers/{gameServerId}/history`
+shows a server's matches and ladder.

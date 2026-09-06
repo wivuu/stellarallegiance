@@ -1,0 +1,121 @@
+@page "/servers/{gameServerId:guid}/history"
+@using PublicLobby.Data
+@model PublicLobby.Pages.ServerHistoryModel
+@{
+    var s = Model.View.Server;
+    ViewData["Title"] = $"{s.Name} — Public Lobby";
+}
+
+<div class="mx-auto max-w-3xl space-y-8">
+    <section class="space-y-1">
+        <h1 class="font-ui text-2xl font-bold text-text-hi">@s.Name
+            @if (s.Ranked)
+            {
+                <span class="ml-2 align-middle rounded border border-accent/40 bg-accent/10 px-2 py-0.5 text-xs text-accent">Ranked</span>
+            }
+        </h1>
+        <p class="text-xs text-text-dim">
+            Operator <a class="text-text-2 hover:text-text-hi" href="/players/@Uri.EscapeDataString(Model.View.OperatorName)">@Model.View.OperatorName</a>
+            &middot; registered @s.CreatedAt.ToString("yyyy-MM-dd")
+            @if (s.LastListedAt is { } seen)
+            {
+                <text>&middot; last listed @seen.ToString("yyyy-MM-dd HH:mm") UTC</text>
+            }
+        </p>
+    </section>
+
+    <section class="space-y-2">
+        <h2 class="text-sm font-semibold text-text-2">Recent matches</h2>
+        @if (Model.View.Recent.Length == 0)
+        {
+            <p class="text-sm text-text-dim">No matches recorded yet.</p>
+        }
+        else
+        {
+            <div class="overflow-x-auto rounded border border-panel-hi">
+                <table class="w-full text-sm">
+                    <thead class="bg-panel text-left text-xs uppercase tracking-wide text-text-dim">
+                        <tr>
+                            <th class="px-3 py-2">Started</th>
+                            <th class="px-3 py-2">Map</th>
+                            <th class="px-3 py-2">Outcome</th>
+                            <th class="px-3 py-2 text-right">Pilots</th>
+                            <th class="px-3 py-2">Standing</th>
+                        </tr>
+                    </thead>
+                    <tbody class="font-mono text-data">
+                        @foreach (var m in Model.View.Recent)
+                        {
+                            <tr class="border-t border-panel-hi/60">
+                                <td class="px-3 py-2 text-text-dim">@m.StartedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td class="px-3 py-2 font-ui text-text-hi">@m.Map</td>
+                                <td class="px-3 py-2">
+                                    @if (m.Status == MatchStatus.Active)
+                                    {
+                                        <span class="text-warn">in progress</span>
+                                    }
+                                    else if (m.Status == MatchStatus.Abandoned)
+                                    {
+                                        <span class="text-text-dim">abandoned</span>
+                                    }
+                                    else if (m.WinnerTeam is { } w)
+                                    {
+                                        <span class="text-ok">team @w won</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-text-dim">no winner</span>
+                                    }
+                                </td>
+                                <td class="px-3 py-2 text-right">@m.Pilots</td>
+                                <td class="px-3 py-2 font-ui text-xs text-text-dim">@(m.Status != MatchStatus.Ended ? "" : m.Counted ? (m.Ranked ? "ranked" : "counted") : "not counted")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <section class="space-y-2">
+        <h2 class="text-sm font-semibold text-text-2">Server ladder <span class="font-normal text-text-dim">(every match played here)</span></h2>
+        @if (Model.View.Ladder.Total == 0)
+        {
+            <p class="text-sm text-text-dim">Nobody on the board yet.</p>
+        }
+        else
+        {
+            <div class="overflow-x-auto rounded border border-panel-hi">
+                <table class="w-full text-sm">
+                    <thead class="bg-panel text-left text-xs uppercase tracking-wide text-text-dim">
+                        <tr>
+                            <th class="px-3 py-2">#</th>
+                            <th class="px-3 py-2">Player</th>
+                            <th class="px-3 py-2 text-right">Pts</th>
+                            <th class="px-3 py-2 text-right">W</th>
+                            <th class="px-3 py-2 text-right">L</th>
+                            <th class="px-3 py-2 text-right">K</th>
+                            <th class="px-3 py-2 text-right">D</th>
+                            <th class="px-3 py-2 text-right">EJ</th>
+                        </tr>
+                    </thead>
+                    <tbody class="font-mono text-data">
+                        @foreach (var row in Model.View.Ladder.Rows)
+                        {
+                            <tr class="border-t border-panel-hi/60">
+                                <td class="px-3 py-2 text-text-dim">@row.Rank</td>
+                                <td class="px-3 py-2 font-ui text-text-hi"><a class="hover:text-accent" href="/players/@Uri.EscapeDataString(row.DisplayName)">@row.DisplayName</a></td>
+                                <td class="px-3 py-2 text-right">@row.Points</td>
+                                <td class="px-3 py-2 text-right text-ok">@row.Wins</td>
+                                <td class="px-3 py-2 text-right text-danger">@row.Losses</td>
+                                <td class="px-3 py-2 text-right">@row.Kills</td>
+                                <td class="px-3 py-2 text-right">@row.Deaths</td>
+                                <td class="px-3 py-2 text-right">@row.Ejects</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>

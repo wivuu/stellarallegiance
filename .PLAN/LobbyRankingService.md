@@ -449,3 +449,11 @@ every restart under their name. Unlisted servers and every existing harness beha
   `POST /servers` decision table in README ("Listings: Verified vs Unverified"), `ALLOW_UNVERIFIED_SERVERS`
   read per request. Suite: 194 checks green. NOT yet done: sim server still sends `hostedBy` and
   registers anonymously (WP2.1), Hello carries no token (WP2.2), client mirrors the old `ServerDto` (WP3.2).
+- **2026-09-06 WP2.4 done** (supervisor, lobby side of Phase 2): `Grains/MatchGrain.cs` (Start
+  idempotent, Complete with plausibility over `join_tokens_issued` + 5-min skew, counted/ranked snapshot
+  via `LobbyPolicy.RankedResultsAuthenticated` + `GameServerGrain.Ranked`, fan-out `PlayerGrain.ApplyMatch`
+  (aggregates only when ranked; presence cleared) + `GameServerGrain.OnMatch`; abandonment = reminder
+  every 5 min → `CheckAbandonment(now)` marks abandoned 10 min after the listing left the registry;
+  a result for a never-started match is accepted), `Api/MatchEndpoints.cs`, `QueryGrain.ServerHistory`,
+  page `/servers/{gameServerId}/history`. DEVIATION: ladders are LINQ in `QueryGrain` (no `ladder_*` SQL
+  views) — add views only if an external SQL consumer appears. Suite: `MatchTests.cs`; 253 checks green.

@@ -124,3 +124,92 @@ public sealed record RecentMatchRow(
 
 [GenerateSerializer]
 public sealed record PlayerProfileView([property: Id(0)] PlayerSnapshot Player, [property: Id(1)] RecentMatchRow[] Recent);
+
+public enum MatchStartOutcome
+{
+    Started,
+    AlreadyStarted, // same match id, same game server — idempotent retry
+    Conflict, // same match id claimed by another game server
+}
+
+public enum MatchCompleteOutcome
+{
+    Accepted,
+    AlreadyFinal, // 409: ended or abandoned
+    Implausible, // 422: a pilot was never issued a join token for this game server
+    Conflict, // 403/409: reported by a different game server than the one that started it
+    Invalid, // 400: malformed report
+}
+
+[GenerateSerializer]
+public sealed record MatchCompleteResult([property: Id(0)] MatchCompleteOutcome Outcome, [property: Id(1)] string? Reason);
+
+/// <summary>One team's line of a result, as the grain stores it (mirrors the wire record).</summary>
+[GenerateSerializer]
+public sealed record MatchTeamLine(
+    [property: Id(0)] int Team,
+    [property: Id(1)] int GarrisonsDestroyed,
+    [property: Id(2)] int OutpostsDestroyed,
+    [property: Id(3)] long Score
+);
+
+[GenerateSerializer]
+public sealed record MatchPilotLine(
+    [property: Id(0)] Guid? PlayerId,
+    [property: Id(1)] string DisplayName,
+    [property: Id(2)] int Team,
+    [property: Id(3)] int Kills,
+    [property: Id(4)] int Deaths,
+    [property: Id(5)] int Ejects,
+    [property: Id(6)] long Points,
+    [property: Id(7)] bool ConnectedAtEnd
+);
+
+[GenerateSerializer]
+public sealed record MatchResultInput(
+    [property: Id(0)] Guid GameServerId,
+    [property: Id(1)] string ListingId,
+    [property: Id(2)] string Map,
+    [property: Id(3)] DateTimeOffset StartedAt,
+    [property: Id(4)] DateTimeOffset EndedAt,
+    [property: Id(5)] int? WinnerTeam,
+    [property: Id(6)] string EndReason,
+    [property: Id(7)] MatchTeamLine[] Teams,
+    [property: Id(8)] MatchPilotLine[] Pilots
+);
+
+[GenerateSerializer]
+public sealed record MatchSnapshot(
+    [property: Id(0)] Guid Id,
+    [property: Id(1)] Guid GameServerId,
+    [property: Id(2)] string ListingId,
+    [property: Id(3)] string Map,
+    [property: Id(4)] DateTimeOffset StartedAt,
+    [property: Id(5)] DateTimeOffset? EndedAt,
+    [property: Id(6)] int? WinnerTeam,
+    [property: Id(7)] string? EndReason,
+    [property: Id(8)] MatchStatus Status,
+    [property: Id(9)] bool Counted,
+    [property: Id(10)] bool Ranked
+);
+
+[GenerateSerializer]
+public sealed record MatchSummaryRow(
+    [property: Id(0)] Guid MatchId,
+    [property: Id(1)] string Map,
+    [property: Id(2)] DateTimeOffset StartedAt,
+    [property: Id(3)] DateTimeOffset? EndedAt,
+    [property: Id(4)] int? WinnerTeam,
+    [property: Id(5)] MatchStatus Status,
+    [property: Id(6)] bool Counted,
+    [property: Id(7)] bool Ranked,
+    [property: Id(8)] int Pilots
+);
+
+[GenerateSerializer]
+public sealed record ServerHistoryView(
+    [property: Id(0)] GameServerSnapshot Server,
+    [property: Id(1)] string OperatorName,
+    [property: Id(2)] MatchSummaryRow[] Recent,
+    [property: Id(3)] LadderPage Ladder
+);

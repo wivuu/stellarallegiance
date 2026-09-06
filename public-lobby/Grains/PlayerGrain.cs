@@ -29,6 +29,12 @@ public interface IPlayerGrain : IGrainWithGuidKey
     /// plausibility check for results) and move the player's presence to that listing (§1.2).
     /// </summary>
     Task RecordJoinToken(string jti, Guid gameServerId, string listingId, DateTimeOffset issuedAt, DateTimeOffset expiresAt);
+
+    /// <summary>
+    /// A match result was accepted (MatchGrain fan-out): fold RANKED-counted matches into the
+    /// aggregates (the global Ladder) and clear presence on that listing.
+    /// </summary>
+    Task ApplyMatch(PlayerMatchDelta delta, DateTimeOffset now);
 }
 
 public sealed class PlayerGrain(IDbContextFactory<LobbyDbContext> dbFactory) : Grain, IPlayerGrain
@@ -109,6 +115,30 @@ public sealed class PlayerGrain(IDbContextFactory<LobbyDbContext> dbFactory) : G
         _row.CurrentListingId = listingId;
         _row.LastSeenAt = issuedAt;
         await db.SaveChangesAsync();
+    }
+
+    public async Task ApplyMatch(PlayerMatchDelta delta, DateTimeOffset now)
+    {
+        if (_row is null && !await TryReload())
+            return;
+        await Persist(p =>
+        {
+            if (delta.Ranked)
+            {
+                p.MatchesPlayed++;
+                if (delta.Won)
+                    p.Wins++;
+                else
+                    p.Losses++;
+                p.Kills += delta.Kills;
+                p.Deaths += delta.Deaths;
+                p.Ejects += delta.Ejects;
+                p.Points += delta.Points;
+            }
+            if (p.CurrentListingId == delta.ListingId)
+                p.CurrentListingId = null;
+            p.LastSeenAt = now;
+        });
     }
 
     // A grain can be activated by a Get() racing account creation; re-read before giving up.

@@ -21,6 +21,9 @@ public interface IGameServerGrain : IGrainWithGuidKey
 
     /// <summary>Admin toggle (CONTEXT.md "Ranked").</summary>
     Task SetRanked(bool ranked);
+
+    /// <summary>A match result from this server was accepted.</summary>
+    Task OnMatch(DateTimeOffset now);
 }
 
 public sealed class GameServerGrain(IDbContextFactory<LobbyDbContext> dbFactory) : Grain, IGameServerGrain
@@ -74,6 +77,9 @@ public sealed class GameServerGrain(IDbContextFactory<LobbyDbContext> dbFactory)
             return;
         await Persist(g => g.LastListedAt = now);
     }
+
+    // No per-server match counter column in v1 (history is queried); a result is proof of life.
+    public Task OnMatch(DateTimeOffset now) => OnListed(now);
 
     public async Task SetRanked(bool ranked)
     {
