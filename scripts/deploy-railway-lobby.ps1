@@ -11,6 +11,22 @@
 # creating a duplicate lobby. Build: public-lobby/Dockerfile from the repo-root context.
 # Set the STUN_URL environment variable to override the public STUN default handed to WebRTC clients.
 #
+# The lobby needs POSTGRES (identity, sessions, matches, ladder — .PLAN/LobbyRankingService.md).
+# One-time, in the Railway dashboard for this project:
+#   1. Add a Postgres database service (Railway Postgres). Railway exposes its connection string
+#      as ${{Postgres.DATABASE_URL}} on the database service; copy it into the lobby service as
+#      ConnectionStrings__postgres-database (Npgsql accepts the postgres:// URL form).
+#   2. Set the lobby's pre-deploy command to: dotnet PublicLobby.dll --migrate
+#      (Service → Settings → Deploy → Pre-deploy command). It applies EF Core + Orleans migrations
+#      and exits 0 (idempotent), so every deploy migrates before the new instance starts.
+#   3. Set LOBBY_PUBLIC_URL=https://<lobby-domain> (join-token issuer, device-code links, passkey
+#      relying party) and LOBBY_ADMINS=name:<your display name> (or github:<login> etc.).
+#   4. Optional: AUTH_GOOGLE_CLIENT_ID/SECRET, AUTH_GITHUB_CLIENT_ID/SECRET, AUTH_STEAM_API_KEY,
+#      RANKED_RESULTS (flagged|authenticated), ALLOW_UNVERIFIED_SERVERS (true|false).
+#      NEVER set AUTH_DEV_LOGIN in production.
+# This script sets the non-secret defaults it can (RAILWAY_DOCKERFILE_PATH, LOBBY_PUBLIC_URL when
+# LOBBY_PUBLIC_URL is exported, STUN_URL) — database attachment and secrets stay manual.
+#
 # NOTE: the default lobby URL is baked into the server/client as
 # https://wivuu-public-lobby-production.up.railway.app — keep the project name `wivuu-public-lobby`
 # (or update that default in LobbyRegistrar.cs / ConnectionManager.cs) so clients find this lobby.
@@ -69,6 +85,7 @@ if ($ProjectId) {
   Write-Host "==> Updating existing project '$Project' ($ProjectId)"
   $vars = @("RAILWAY_DOCKERFILE_PATH=$Dockerfile")
   if ($env:STUN_URL) { $vars += "STUN_URL=$($env:STUN_URL)" }
+  if ($env:LOBBY_PUBLIC_URL) { $vars += "LOBBY_PUBLIC_URL=$($env:LOBBY_PUBLIC_URL)" }
   railway variable set @vars -p $ProjectId -s $Project -e production --skip-deploys
   railway up -c -p $ProjectId -s $Project -e production
 } else {
@@ -76,6 +93,7 @@ if ($ProjectId) {
   railway init -n $Project
   $addArgs = @('--variables', "RAILWAY_DOCKERFILE_PATH=$Dockerfile")
   if ($env:STUN_URL) { $addArgs += @('--variables', "STUN_URL=$($env:STUN_URL)") }
+  if ($env:LOBBY_PUBLIC_URL) { $addArgs += @('--variables', "LOBBY_PUBLIC_URL=$($env:LOBBY_PUBLIC_URL)") }
   railway add --service $Project @addArgs
   railway domain --service $Project
   railway up -c --service $Project
@@ -85,5 +103,10 @@ Write-Host @"
 
 Done. Show the domain and verify:
   railway domain -s "$Project"
-  curl -s https://<that-domain>/health     # -> public-lobby
+  curl -s https://<that-domain>/health          # -> public-lobby
+  curl -s https://<that-domain>/health/orleans  # -> orleans:ok   (silo up; needs the Postgres attached)
+  open  https://<that-domain>/login             # passkey sign-up works with zero provider config
+
+If /health/orleans fails or the deploy log shows "connection string 'postgres-database' is not set",
+attach the Postgres service + pre-deploy command as described at the top of this script.
 "@
