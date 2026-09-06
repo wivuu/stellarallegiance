@@ -263,7 +263,25 @@ public sealed class ClientHub
     // pilot from BOTH _lobby and _players, so by the time the end-of-match board is built the server
     // would otherwise have no name for them. Folded from the roster on every BroadcastLobby (which
     // runs from socket threads AND the sim thread — hence Concurrent), cleared at match start.
-    private readonly ConcurrentDictionary<int, (string Name, byte Team)> _pilotIdentity = new();
+    private readonly ConcurrentDictionary<int, PilotIdentity> _pilotIdentity = new();
+
+    // What the scoreboard and the match reporter remember about a pilot after they leave: the
+    // name/team they played under and, for a join that carried a verified join token (WP2.2), the
+    // public lobby's durable Player id. Anonymous joins have no id and can never be reported.
+    public readonly record struct PilotIdentity(string Name, byte Team, Guid? PlayerId);
+
+    public sealed record PilotRecord(int ClientId, string Name, byte Team, Guid? PlayerId, bool Connected);
+
+    // Snapshot of every pilot seen this match (leavers included) with their live-connection flag —
+    // the identity half of a match result (WP2.3 joins it with Simulation.MatchStats).
+    public List<PilotRecord> PilotIdentitySnapshot()
+    {
+        var list = new List<PilotRecord>(_pilotIdentity.Count);
+        foreach (var kv in _pilotIdentity)
+            list.Add(new PilotRecord(kv.Key, kv.Value.Name, kv.Value.Team, kv.Value.PlayerId, _clients.ContainsKey(kv.Key)));
+        list.Sort((a, b) => a.ClientId.CompareTo(b.ClientId));
+        return list;
+    }
 
     // The last MsgMatchStats frame, cached so a socket thread can hand a joining connection the
     // current board WITHOUT reading the sim's ledger (a plain Dictionary the sim thread mutates —
@@ -432,7 +450,7 @@ public sealed class ClientHub
         // frame, so the memo can never disagree with the roster the clients were just sent.
         var roster = _lobby.Snapshot(id => _sim.ShipIdOf(id));
         foreach (var e in roster)
-            _pilotIdentity[e.Id] = (e.Name, e.Team);
+            _pilotIdentity[e.Id] = new PilotIdentity(e.Name, e.Team, e.PlayerId ?? _players.PlayerIdOf(e.Id));
         var frame = Protocol.BuildLobbyState(
             _sim.Phase,
             _sim.Winner,
@@ -466,11 +484,13 @@ public sealed class ClientHub
             // A pilot who left is gone from the roster AND the player table, so their identity comes
             // from the memo; a client id with no memo entry at all can only be a ship whose owner
             // never made it onto a roster broadcast, so it gets a placeholder rather than a blank.
-            var (name, team) = _pilotIdentity.TryGetValue(cid, out var id) ? id : ($"Pilot{cid}", Protocol.NoTeam);
+            var id = _pilotIdentity.TryGetValue(cid, out var known)
+                ? known
+                : new PilotIdentity($"Pilot{cid}", Protocol.NoTeam, null);
             return new Protocol.StatsEntry(
                 cid,
-                name,
-                team,
+                id.Name,
+                id.Team,
                 _clients.ContainsKey(cid),
                 st?.Kills ?? 0,
                 st?.Deaths ?? 0,
