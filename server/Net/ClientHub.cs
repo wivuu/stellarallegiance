@@ -310,6 +310,12 @@ public sealed class ClientHub
     // Per-player roster (name/team/ready/ship) advertised to the public lobby's server browser.
     public List<LobbyEntry> RosterSnapshot() => _lobby.Snapshot(id => _sim.ShipIdOf(id));
 
+    // This server's relationship to the public lobby (WP2.1: device-code auth, Verified listing,
+    // join-token verifier) — NoLobbyIdentity.Instance when unlisted. LobbyRegistrar.FromEnv builds
+    // the real one; Program.cs assigns it here right after construction. WP2.2 (Hello join tokens)
+    // and WP2.3 (match reporting) code against this seam instead of reaching into LobbyRegistrar.
+    public ILobbyIdentity LobbyIdentity { get; set; } = NoLobbyIdentity.Instance;
+
     // Avg ship records per snapshot since the last call (0 if none), then resets. Read on the
     // sim thread between ticks; the snapshot build (parallel) only adds, so Exchange is enough.
     public double TakeAvgRecordsPerSnapshot()

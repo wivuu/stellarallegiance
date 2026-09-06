@@ -85,8 +85,7 @@ static ulong RandomSeed()
     System.Security.Cryptography.RandomNumberGenerator.Fill(b);
     return BitConverter.ToUInt64(b);
 }
-ulong? pinnedSeed =
-    ulong.TryParse(Environment.GetEnvironmentVariable("SIM_SEED"), out var envSeed) ? envSeed : null;
+ulong? pinnedSeed = ulong.TryParse(Environment.GetEnvironmentVariable("SIM_SEED"), out var envSeed) ? envSeed : null;
 
 // Optional shared-secret password. Empty (default) = open server: any client may connect.
 string secret = Environment.GetEnvironmentVariable("SIM_SECRET") ?? "";
@@ -159,6 +158,7 @@ builder.WebHost.ConfigureKestrel(k => k.ListenAnyIP(port));
 var app = builder.Build();
 var loggerFactory = app.Services.GetRequiredService<ILoggerFactory>();
 var log = loggerFactory.CreateLogger("SimServer");
+
 // The static asset/content helpers have no instance to inject into — hand them the boot logger now,
 // before ContentLoader.Load (which merges GLB hardpoints and loads sim models) runs below.
 SimAssets.Logger = loggerFactory.CreateLogger("SimServer.Assets");
@@ -178,12 +178,20 @@ try
 }
 catch (Exception ex)
 {
-    Console.Error.WriteLine($"[SimServer] FATAL: failed to load content '{contentPath}' / world '{worldPath}': {ex.Message}");
+    Console.Error.WriteLine(
+        $"[SimServer] FATAL: failed to load content '{contentPath}' / world '{worldPath}': {ex.Message}"
+    );
     return;
 }
 var contentErrors = ContentValidator.Validate(
-    content.Ships, content.Weapons, content.Bases, content.CargoItems,
-    content.Techs, content.Developments, content.StationCatalog);
+    content.Ships,
+    content.Weapons,
+    content.Bases,
+    content.CargoItems,
+    content.Techs,
+    content.Developments,
+    content.StationCatalog
+);
 if (contentErrors.Count > 0)
 {
     Console.Error.WriteLine($"[SimServer] FATAL: content validation failed ({contentErrors.Count} error(s)):");
@@ -215,6 +223,7 @@ IMatchResultSink results = new LoggingMatchResultSink(loggerFactory.CreateLogger
 MapDef selectedMapDef;
 IReadOnlyList<MapCatalogEntry> mapCatalog;
 IReadOnlyDictionary<string, MapDef> maps;
+
 // Pristine (pre-ApplyTo) world config, kept so a runtime map switch can clone + re-apply a different
 // map's overrides onto a clean base (ApplyTo mutates sectors/scale/radius in place).
 WorldConfig pristineWorldCfg = MapCatalog.Clone(content.World);
@@ -242,7 +251,15 @@ string mapName = selectedMapDef.Name!.Trim();
 
 // Base health (the win-condition hull) comes from the content's base def — the validator guarantees
 // at least one base, so [0] is safe — so a YAML-tuned base max-health is the server's authority too.
-var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships, content.Bases, loggerFactory.CreateLogger<World>());
+var world = new World(
+    seed,
+    content.World,
+    content.Bases[0].MaxHealth,
+    content.Start,
+    content.Ships,
+    content.Bases,
+    loggerFactory.CreateLogger<World>()
+);
 var sim = new Simulation(world, content, loggerFactory.CreateLogger<Simulation>());
 var hub = new ClientHub(sim, auth, players, matchmaker, mapName, mapCatalog, loggerFactory.CreateLogger<ClientHub>());
 
@@ -266,7 +283,15 @@ World? BuildWorldForMap(string name)
     // seed so any live layout can be reproduced later with --seed.
     ulong matchSeed = pinnedSeed ?? RandomSeed();
     Log.MatchWorldSeed(log, name, matchSeed);
-    return new World(matchSeed, cfg, content.Bases[0].MaxHealth, content.Start, content.Ships, content.Bases, loggerFactory.CreateLogger<World>());
+    return new World(
+        matchSeed,
+        cfg,
+        content.Bases[0].MaxHealth,
+        content.Start,
+        content.Ships,
+        content.Bases,
+        loggerFactory.CreateLogger<World>()
+    );
 }
 sim.BuildMatchWorld = () => BuildWorldForMap(hub.SelectedMap);
 sim.OnMatchStart = hub.OnMatchStart;
@@ -362,6 +387,7 @@ simThread.Start();
 // Start only once the HTTP server is actually listening (ApplicationStarted) so the probe reaches
 // us; shares the server-lifetime token so it deregisters and stops on shutdown.
 var registrar = LobbyRegistrar.FromEnv(hub, port, secret.Length > 0, loggerFactory);
+hub.LobbyIdentity = (ILobbyIdentity?)registrar ?? NoLobbyIdentity.Instance;
 if (registrar is not null)
     app.Lifetime.ApplicationStarted.Register(() => registrar.Start(cts.Token));
 

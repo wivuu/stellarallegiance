@@ -31,6 +31,10 @@ services:
       SIM_AUTOSTART: ${SIM_AUTOSTART:-}
       # Public-lobby publishing (opt-in): set SIM_PUBLIC_NAME (3-50 chars) to register this server
       # with the lobby below so clients can discover + WebRTC-join it. Empty = private (direct only).
+      # First boot prints a device code and stays unlisted until approved at the lobby's /device
+      # page; the resulting credential is written to SIM_AUTH_FILE (default beside sim-cache/,
+      # inside this container — mount a volume there if you want it to survive a container rebuild
+      # instead of pairing again on every `up --build`).
       SIM_PUBLIC_NAME: ${SIM_PUBLIC_NAME:-}
       PUBLIC_LOBBY: ${PUBLIC_LOBBY:-public-lobby:8091}
       # Public-facing port the lobby probes/advertises (default = listen port; set when a

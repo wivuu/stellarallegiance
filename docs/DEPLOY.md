@@ -26,6 +26,15 @@ public/port-forwarded host). To make servers **discoverable**, also deploy **`pu
 tiny registry + WebRTC signaling relay (`docker compose up public-lobby`). Servers that set
 `SIM_PUBLIC_NAME` register there; clients browse the list.
 
+**First-run device-code auth.** A server only lists as **Verified** once it authenticates as a
+durable Game Server: on first boot with `SIM_PUBLIC_NAME` set it prints a one-time code and an
+approval URL, and stays **unlisted** until an Operator opens the URL and approves it. The resulting
+credential (refresh token) is saved to `SIM_AUTH_FILE` (default beside the sim-cache dir — see
+`server/Assets/SimAssets.cs`), so every later restart re-lists silently under the same Operator with
+no prompt. Delete that file (or point `SIM_AUTH_FILE` elsewhere) to re-pair under a different
+Operator. `ALLOW_UNVERIFIED_SERVERS=true` on the lobby accepts unauthenticated listings instead
+(no Operator, badged Unverified) — see `public-lobby/README.md`'s "Listings: Verified vs Unverified".
+
 Discovery is **direct-first** and automatic:
 
 - On register, the lobby **probes the server's port** (`GET /health` from its public vantage). If

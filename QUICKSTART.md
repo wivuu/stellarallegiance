@@ -43,6 +43,10 @@ Without `-Local`, `run-server.ps1` publishes the server to the public lobby (`PU
 default `https://wivuu-public-lobby-production.up.railway.app`) and `run-client.ps1` opens a browser of the servers listed there —
 including NAT'd ones, joined over WebRTC. See the README's *Public lobby & NAT traversal*.
 
+First publish, the server prints a one-time device code and stays **unlisted** until you open the
+printed URL and approve it — the credential is then saved (`SIM_AUTH_FILE`, default beside
+`sim-cache/`) so every later restart re-lists silently, with no code to approve.
+
 ### Solo / unattended
 Skip the ready-up gate and start a perpetual match immediately:
 ```pwsh

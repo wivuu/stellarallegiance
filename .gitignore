@@ -10,6 +10,11 @@ pick-assets/
 tools/tailwind/
 public-lobby/wwwroot/app.css
 
+# sim server's persisted Game Server credential (WP2.1) — a bearer refresh token, never committed.
+# Default location is beside sim-cache/ (wherever that resolves); this also catches SIM_AUTH_FILE
+# left at its default name in a repo-local dev run.
+lobby-auth.json
+
 graphify-out/cache/
 .serena/
 # screen-recording outputs (scripts/run-client.ps1 -WriteMovie)

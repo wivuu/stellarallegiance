@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.WebSockets;
 using System.Text.Json;
@@ -11,6 +12,13 @@ namespace SimServer.Net;
 // NAME: only registers when SIM_PUBLIC_NAME (3-50 chars) is set; with no name the server stays
 // private (direct ws://host:8090 only) and this whole subsystem is dormant.
 //
+// Also implements ILobbyIdentity (plan .PLAN/LobbyRankingService.md §4 WP2.1): the seam WP2.2
+// (Hello join tokens) and WP2.3 (match reporting) code against. Before it can register at all it
+// must hold a Game Server credential (public-lobby/CONTEXT.md "Game Server") — either resumed from
+// SIM_AUTH_FILE or minted via the device-code flow (LobbyAuthSession) — so the server runs UNLISTED
+// while unauthenticated/mid-approval. Once verified, POST /servers carries `Authorization: Bearer
+// <access token>`, binding the listing to that Game Server's Operator (a Verified listing).
+//
 // After registration the server opens a WebSocket to /servers/ws. While that WS is open the lobby
 // considers it alive (no periodic heartbeats needed). State updates (player count, game state) are
 // pushed over the WS only when values actually change; a ping is sent every ~25 s as a keepalive
@@ -19,10 +27,17 @@ namespace SimServer.Net;
 //
 // Env:
 //   PUBLIC_LOBBY          public-lobby base — host:port or https://domain
-//                         (default https://wivuu-public-lobby-production.up.railway.app)
-//   SIM_PUBLIC_NAME       3-50 char public name; gates registration
-//   SIM_HOSTED_BY         optional host/operator label shown as "hosted by …" in the browser
-//                         (max 24 chars; unset = no attribution)
+//                         (default https://wivuu-public-lobby-production.up.railway.app). This is
+//                         ALSO the join token issuer (WP2.2/JoinTokenVerifier) — it must equal the
+//                         lobby's own LOBBY_PUBLIC_URL or offline token verification will reject
+//                         every token on a wrong-issuer mismatch.
+//   SIM_PUBLIC_NAME       3-50 char public name; gates registration. Also the device-code
+//                         approval page's server label (`client:"sim-server", serverName`).
+//   SIM_AUTH_FILE         path to the persisted Game Server credential (lobbyBase, gameServerId,
+//                         serverName, refreshToken); default beside the sim-cache dir (see
+//                         SimAssets.CacheDir / LobbyCredentialStore.ResolveDefaultPath). Deleted
+//                         and re-minted if its lobbyBase doesn't match PUBLIC_LOBBY, or the lobby
+//                         refuses the refresh (invalid_grant).
 //   SIM_MAX_PLAYERS       capacity advertised in the lobby browser (default 32)
 //   SIM_PUBLIC_PORT       public-facing port to advertise/probe (default = the listen port; set
 //                         when a port-forward maps a different external port)
@@ -30,7 +45,7 @@ namespace SimServer.Net;
 //                         / a proxy) or a scheme'd https://domain (a PaaS HTTPS edge); the lobby
 //                         probes it and advertises it only if it answers /health. Defaults to
 //                         https://$RAILWAY_PUBLIC_DOMAIN on Railway.
-public sealed class LobbyRegistrar
+public sealed class LobbyRegistrar : ILobbyIdentity
 {
     public const string DefaultLobby = "https://wivuu-public-lobby-production.up.railway.app";
 
@@ -46,13 +61,16 @@ public sealed class LobbyRegistrar
     private readonly int _port; // public-facing port the lobby probes/advertises
     private readonly string? _publicEndpoint;
     private readonly int _maxPlayers; // capacity advertised to the lobby browser
-    private readonly string? _hostedBy; // optional operator label ("hosted by …")
     private readonly bool _protected; // true when a shared-secret password gates joins
     private readonly ILoggerFactory _loggerFactory; // kept to build the WebRtcListener's logger lazily
     private readonly ILogger _log;
+    private readonly LobbyAuthSession _authSession; // device-code/refresh state machine (ILobbyIdentity)
 
     private string? _sessionId;
     private string? _secret; // per-session capability minted by the lobby at registration
+    private string? _listingId; // ILobbyIdentity.ListingId — this listing's session id while live
+    private JoinTokenVerifier? _verifier; // ILobbyIdentity.Verifier — built once, refreshed per registration
+    private bool _needsReauth; // set on a 401 whose refresh also failed — RunAsync restarts the auth flow
     private CancellationTokenSource? _listenerCts;
     private bool _gotDirect; // last registration came back DIRECT
     private int _directRetries; // re-register attempts spent waiting for our endpoint to go live
@@ -65,9 +83,9 @@ public sealed class LobbyRegistrar
         int port,
         string? publicEndpoint,
         int maxPlayers,
-        string? hostedBy,
         bool @protected,
-        ILoggerFactory loggerFactory
+        ILoggerFactory loggerFactory,
+        string authFilePath
     )
     {
         _hub = hub;
@@ -76,11 +94,21 @@ public sealed class LobbyRegistrar
         _port = port;
         _publicEndpoint = publicEndpoint;
         _maxPlayers = maxPlayers;
-        _hostedBy = hostedBy;
         _protected = @protected;
         _loggerFactory = loggerFactory;
         _log = loggerFactory.CreateLogger<LobbyRegistrar>();
+        _authSession = new LobbyAuthSession(new LobbyAuthClient(_http, _shareBase), _name, _shareBase, authFilePath, _log);
     }
+
+    // ---- ILobbyIdentity ----------------------------------------------------
+    public bool IsVerified => _authSession.GameServerId is not null;
+    public Guid? GameServerId => _authSession.GameServerId;
+    public string? ListingId => _listingId;
+    public string? LobbyBase => _shareBase;
+    public JoinTokenVerifier? Verifier => _verifier;
+
+    public ValueTask<string?> GetAccessTokenAsync(bool forceRefresh, CancellationToken ct) =>
+        _authSession.GetAccessTokenAsync(forceRefresh, ct);
 
     // Builds a registrar from the environment, or returns null when no public name is set
     // (the server stays private). Logs the decision either way.
@@ -118,11 +146,9 @@ public sealed class LobbyRegistrar
 
         var maxPlayers = int.TryParse(Environment.GetEnvironmentVariable("SIM_MAX_PLAYERS"), out var mp) && mp > 0 ? mp : 32;
 
-        var hostedBy = (Environment.GetEnvironmentVariable("SIM_HOSTED_BY") ?? "").Trim();
-        if (hostedBy.Length > 24)
-            hostedBy = hostedBy[..24];
+        var authFilePath = LobbyCredentialStore.ResolveDefaultPath();
 
-        Log.LobbyPublishing(log, name, shareBase, port, maxPlayers, hostedBy.Length > 0 ? $", hosted by {hostedBy}" : "");
+        Log.LobbyPublishing(log, name, shareBase, port, maxPlayers);
         return new LobbyRegistrar(
             hub,
             shareBase,
@@ -130,9 +156,9 @@ public sealed class LobbyRegistrar
             port,
             endpoint.Length == 0 ? null : endpoint,
             maxPlayers,
-            hostedBy.Length == 0 ? null : hostedBy,
             @protected,
-            loggerFactory
+            loggerFactory,
+            authFilePath
         );
     }
 
@@ -142,10 +168,21 @@ public sealed class LobbyRegistrar
     {
         try
         {
+            if (!await AuthenticateOrStayUnlisted(ct))
+                return; // access_denied (stay unlisted forever) or shutting down mid-approval
+
             while (!ct.IsCancellationRequested)
             {
                 if (!await RegisterAndListen(ct))
                 {
+                    if (_needsReauth)
+                    {
+                        _needsReauth = false;
+                        if (!await AuthenticateOrStayUnlisted(ct))
+                            return;
+                        continue;
+                    }
+
                     // Registration failed (lobby unreachable?); wait before retrying.
                     try
                     {
@@ -192,70 +229,41 @@ public sealed class LobbyRegistrar
         }
     }
 
+    // Runs the boot/re-auth state machine. True once verified; false means "give up for this
+    // process lifetime" (access_denied) or "we're shutting down" — RunAsync returns either way.
+    private async Task<bool> AuthenticateOrStayUnlisted(CancellationToken ct)
+    {
+        var result = await _authSession.AuthenticateAsync(ct);
+        return result == LobbyAuthSession.BootResult.Approved;
+    }
+
     private async Task<bool> RegisterAndListen(CancellationToken ct)
     {
+        var accessToken = await GetAccessTokenAsync(forceRefresh: false, ct);
+        if (accessToken is null)
+        {
+            // Shouldn't normally happen right after a successful auth, but the refresh token
+            // could be revoked between boot and now — surface it as a re-auth need.
+            _needsReauth = true;
+            return false;
+        }
+
         try
         {
-            using var resp = await _http.PostAsJsonAsync(
-                $"{_shareBase}/servers",
-                new
+            using var resp = await PostRegisterAsync(accessToken, ct);
+            if (resp.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                var refreshed = await GetAccessTokenAsync(forceRefresh: true, ct);
+                if (refreshed is null)
                 {
-                    name = _name,
-                    port = _port,
-                    publicEndpoint = _publicEndpoint,
-                    players = _hub.PlayerCount,
-                    maxPlayers = _maxPlayers,
-                    state = _hub.GameState,
-                    protocolVersion = (int)Protocol.Version,
-                    hostedBy = _hostedBy,
-                    roster = LobbyStatus.BuildRoster(_hub.RosterSnapshot()),
-                    @protected = _protected,
-                },
-                ct
-            );
-            if (!resp.IsSuccessStatusCode)
-            {
-                Log.LobbyRegisterFailed(_log, (int)resp.StatusCode);
-                return false;
-            }
-
-            var resultDto = await resp.Content.ReadFromJsonAsync<RegisterResponseDto>(ct);
-            var entry = resultDto?.Server;
-            if (entry is null || string.IsNullOrEmpty(entry.SessionId) || string.IsNullOrEmpty(resultDto!.Secret))
-            {
-                Log.LobbyRegisterNoSession(_log);
-                return false;
-            }
-
-            _sessionId = entry.SessionId;
-            _secret = resultDto.Secret; // echoed on WS auth + graceful DELETE to prove ownership
-            _gotDirect = !string.IsNullOrEmpty(entry.PublicEndpoint);
-
-            if (!_gotDirect)
-            {
-                // NAT mode: create the offer channel and start WebRtcListener once — both are
-                // reused across re-registrations so the listener never needs to restart.
-                if (_offerChannel is null)
-                {
-                    _offerChannel = Channel.CreateUnbounded<PendingOfferDto>(
-                        new UnboundedChannelOptions { SingleReader = true }
-                    );
-                    var ice = ToIceServers(entry.IceServers);
-                    _listenerCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                    new WebRtcListener(_hub, _shareBase, _offerChannel.Reader, ice, _loggerFactory.CreateLogger<WebRtcListener>())
-                        .Start(_listenerCts.Token);
-                    Log.LobbyRegisteredWebRtc(_log, _sessionId, ice.Count);
+                    Log.LobbyAuthReauthRequired(_log, "401 on register and the refresh failed");
+                    _needsReauth = true;
+                    return false;
                 }
-                else
-                {
-                    Log.LobbyReRegisteredWebRtc(_log, _sessionId);
-                }
+                using var retryResp = await PostRegisterAsync(refreshed, ct);
+                return await HandleRegisterResponseAsync(retryResp, ct);
             }
-            else
-            {
-                Log.LobbyRegisteredDirect(_log, _sessionId, entry.PublicEndpoint!);
-            }
-            return true;
+            return await HandleRegisterResponseAsync(resp, ct);
         }
         catch (OperationCanceledException)
         {
@@ -265,6 +273,110 @@ public sealed class LobbyRegistrar
         {
             Log.LobbyRegisterError(_log, e.Message);
             return false;
+        }
+    }
+
+    Task<HttpResponseMessage> PostRegisterAsync(string accessToken, CancellationToken ct)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Post, $"{_shareBase}/servers")
+        {
+            Content = JsonContent.Create(
+                new
+                {
+                    name = _name,
+                    port = _port,
+                    publicEndpoint = _publicEndpoint,
+                    players = _hub.PlayerCount,
+                    maxPlayers = _maxPlayers,
+                    state = _hub.GameState,
+                    protocolVersion = (int)Protocol.Version,
+                    roster = LobbyStatus.BuildRoster(_hub.RosterSnapshot()),
+                    @protected = _protected,
+                }
+            ),
+        };
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        return _http.SendAsync(req, ct);
+    }
+
+    private async Task<bool> HandleRegisterResponseAsync(HttpResponseMessage resp, CancellationToken ct)
+    {
+        if (!resp.IsSuccessStatusCode)
+        {
+            Log.LobbyRegisterFailed(_log, (int)resp.StatusCode);
+            return false;
+        }
+
+        var resultDto = await resp.Content.ReadFromJsonAsync<RegisterResponseDto>(ct);
+        var entry = resultDto?.Server;
+        if (entry is null || string.IsNullOrEmpty(entry.SessionId) || string.IsNullOrEmpty(resultDto!.Secret))
+        {
+            Log.LobbyRegisterNoSession(_log);
+            return false;
+        }
+
+        _sessionId = entry.SessionId;
+        _secret = resultDto.Secret; // echoed on WS auth + graceful DELETE to prove ownership
+        _listingId = entry.SessionId; // ILobbyIdentity.ListingId — the join token `aud` (WP2.2)
+        _gotDirect = !string.IsNullOrEmpty(entry.PublicEndpoint);
+
+        await RefreshVerifierAsync(ct);
+
+        if (!_gotDirect)
+        {
+            // NAT mode: create the offer channel and start WebRtcListener once — both are
+            // reused across re-registrations so the listener never needs to restart.
+            if (_offerChannel is null)
+            {
+                _offerChannel = Channel.CreateUnbounded<PendingOfferDto>(
+                    new UnboundedChannelOptions { SingleReader = true }
+                );
+                var ice = ToIceServers(entry.IceServers);
+                _listenerCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                new WebRtcListener(
+                    _hub,
+                    _shareBase,
+                    _offerChannel.Reader,
+                    ice,
+                    _loggerFactory.CreateLogger<WebRtcListener>()
+                ).Start(_listenerCts.Token);
+                Log.LobbyRegisteredWebRtc(_log, _sessionId, ice.Count);
+            }
+            else
+            {
+                Log.LobbyReRegisteredWebRtc(_log, _sessionId);
+            }
+        }
+        else
+        {
+            Log.LobbyRegisteredDirect(_log, _sessionId, entry.PublicEndpoint!);
+        }
+        return true;
+    }
+
+    // JWKS fetch for offline join-token verification (WP2.2). Built once (issuer = the lobby base
+    // we dial, which must equal the lobby's own LOBBY_PUBLIC_URL) and re-fetched after every
+    // successful registration so a key rotation is picked up promptly; a failure here just means
+    // the first join after a rotation retries the fetch on an unknown `kid` (JoinTokenVerifier
+    // already does that internally), so it's logged rather than treated as a registration failure.
+    private async Task RefreshVerifierAsync(CancellationToken ct)
+    {
+        _verifier ??= new JoinTokenVerifier(
+            _shareBase,
+            JoinTokenVerifier.HttpJwksFetcher(_http, _shareBase),
+            log: _loggerFactory.CreateLogger<JoinTokenVerifier>()
+        );
+        try
+        {
+            await _verifier.RefreshAsync(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            Log.LobbyVerifierRefreshFailed(_log, e.Message);
         }
     }
 
@@ -278,7 +390,14 @@ public sealed class LobbyRegistrar
             await ws.ConnectAsync(ToWsUri(_shareBase), ct);
 
             // Auth handshake — carries the per-session secret so the lobby can verify ownership.
-            var authBytes = JsonSerializer.SerializeToUtf8Bytes(new { type = "auth", sessionId, secret = _secret });
+            var authBytes = JsonSerializer.SerializeToUtf8Bytes(
+                new
+                {
+                    type = "auth",
+                    sessionId,
+                    secret = _secret,
+                }
+            );
             await ws.SendAsync(new ArraySegment<byte>(authBytes), WebSocketMessageType.Text, true, ct);
 
             var buf = new byte[512];
@@ -390,6 +509,7 @@ public sealed class LobbyRegistrar
 
     private async Task Deregister()
     {
+        _listingId = null; // clears whether or not we actually had a listing to drop
         if (_sessionId is null)
             return;
         var sid = _sessionId;
@@ -453,11 +573,7 @@ public sealed class LobbyRegistrar
     // listing. Server holds only the fields we actually consume.
     private sealed record RegisterResponseDto(ServerEntryDto? Server, string? Secret);
 
-    private sealed record ServerEntryDto(
-        string SessionId,
-        string? PublicEndpoint,
-        IReadOnlyList<IceServerDto>? IceServers
-    );
+    private sealed record ServerEntryDto(string SessionId, string? PublicEndpoint, IReadOnlyList<IceServerDto>? IceServers);
 
     private sealed record IceServerDto(string[]? Urls, string? Username, string? Credential);
 }

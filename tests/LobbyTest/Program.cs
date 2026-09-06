@@ -118,5 +118,8 @@ Check(lobby.CommanderOf(1) == 3, "other side unaffected", $"other side commander
 // ---- Join-token verifier (WP1.3): offline ES256 verification of lobby-issued join tokens. ----
 failures += await JoinTokenVerifierTests.RunAsync();
 
+// ---- Server auth on boot (WP2.1): credential file + device-code/refresh boot flow. ----
+failures += await LobbyAuthTests.RunAsync();
+
 Console.WriteLine(failures == 0 ? "ALL PASS" : $"{failures} FAILURE(S)");
 return failures == 0 ? 0 : 1;

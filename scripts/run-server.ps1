@@ -16,8 +16,13 @@
 #   scripts/run-server.ps1 --secret hunter2         # require a shared-secret password
 #   scripts/run-server.ps1 --autostart              # skip ready-up (bots / benchmarking)
 #   $env:SIM_PUBLIC_NAME="My Server"; scripts/run-server.ps1   # custom lobby name (else hostname)
-#   $env:SIM_HOSTED_BY="Vex"; scripts/run-server.ps1   # "hosted by ..." attribution in the browser
 #   $env:SIM_PORT=9000; scripts/run-server.ps1      # different port
+#
+# First publish, this box authenticates itself with the public lobby via a device code (RFC 8628):
+# it prints a one-time code + approval URL and stays UNLISTED until you open the URL and approve
+# it (as an Operator — "hosted by" now comes from your lobby account's display name). The
+# resulting credential is saved to SIM_AUTH_FILE (default beside sim-cache/) so every later restart
+# re-lists silently, with no prompt.
 param(
     [switch]$Local,
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$ServerArgs
