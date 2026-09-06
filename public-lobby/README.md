@@ -262,3 +262,37 @@ Routes live in `Auth/AuthEndpoints.cs`; the grains are `Grains/SessionGrain.cs` 
 lineage) and `Grains/DeviceCodeGrain.cs`; bearer auth is the `LobbyBearer` scheme
 (`Auth/LobbyBearerAuthentication.cs`, per-silo 60 s cache) with policies `lobby-player` /
 `lobby-server`.
+
+## Listings: Verified vs Unverified (WP1.4)
+
+The **HTTP API (reference)** table above predates identity — the listing routes now require the
+bearer tokens from the previous section. This section supersedes it for `/servers` and
+`/servers/events`.
+
+A **Listing** (`public-lobby/CONTEXT.md`) is a game server's live registration; whether it's
+**Verified** depends entirely on how `POST /servers` was authenticated, never on anything the
+request body claims:
+
+| Caller | Result |
+|---|---|
+| Server bearer (from the device-code flow, `client:"sim-server"`) | `201`, **Verified**: the listing is bound to that Game Server's id and its Operator's current display name (`gameServerId`, `operatorName` in the response); also bumps `GameServerGrain.LastListedAt`. |
+| Player bearer | `403` — players don't list servers. |
+| No bearer, or an invalid one | **Unverified** only when `ALLOW_UNVERIFIED_SERVERS=true` (default `false`): `201` with `verified:false`, `gameServerId:null`, `operatorName:null`. Otherwise `401 {"error":"unverified servers are not accepted"}`. |
+
+An Unverified listing has no Operator, never receives join tokens (WP1.3/WP2.2), and can never
+deliver match results — it behaves exactly like today's open registration, gated behind one env
+var so an operator has to opt in. `ALLOW_UNVERIFIED_SERVERS` is meant for local dev and harnesses
+(`--anonymous`/`--autofly` don't touch listing at all — this only affects a server that sets
+`SIM_PUBLIC_NAME`); leave it unset on a production lobby.
+
+Reads are gated too (plan §1.5 — "anonymous sees no server list"): `GET /servers` and
+`GET /servers/events` both require a **player** bearer now, Verified and Unverified listings alike.
+`DELETE /servers/{sessionId}` and the server WebSocket (`/servers/ws`) are unchanged — they still
+authenticate with the per-listing `secret` from the `POST /servers` response, not a player/server
+bearer. Every roster entry (heartbeats, `/servers/ws` `update` frames) now carries an optional
+`playerId` — set once join tokens carry player identity onto the sim server (WP2.2), null for an
+Anonymous Join until then.
+
+See `public-lobby/Contracts.cs` (`RegisterRequest`/`ServerEntry`/`LobbyRosterEntry`) and
+`public-lobby/ServerRegistry.cs` (`ListingIdentity`) for the exact shapes, and
+`tests/PublicLobbyTest/ListingTests.cs` for the auth-decision coverage above.

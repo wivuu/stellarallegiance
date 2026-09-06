@@ -1042,18 +1042,33 @@ Standalone .NET web service: game server registry, WebRTC signaling relay, serve
   - `public-lobby/ServerRegistry.cs` — active server tracking
   - `public-lobby/Signaling.cs` — WebRTC SDP relay
   - Live: `wivuu-public-lobby-production.up.railway.app`
-- **Related:** [[WebRTC]], [[DIRECT-FIRST]], [[Railway Deploy]]
-- **Notes:** Separate from gameplay servers; handles discovery and P2P setup only. Also co-hosts a single-replica Orleans silo in the same process (`public-lobby/Hosting/OrleansHosting.cs`, `public-lobby/Grains/`) — entity grains are the sole writers of their own Postgres rows through EF Core (ADR-0002); ADO.NET clustering/reminders share the lobby's Postgres by default (`LOBBY_ORLEANS_CLUSTERING=adonet`), or run in-memory for dev/tests (`=localhost`). `GET /health/orleans` checks the silo is taking grain calls.
-- **Ubiquitous language:** identity/ranking terms (Player / Pilot / Match / Listing) are defined in `public-lobby/CONTEXT.md`; use those words for anything the service persists
+- **Related:** [[WebRTC]], [[DIRECT-FIRST]], [[Railway Deploy]], [[Verified Listing]]
+- **Notes:** Separate from gameplay servers; handles discovery and P2P setup only. Also co-hosts a single-replica Orleans silo in the same process (`public-lobby/Hosting/OrleansHosting.cs`, `public-lobby/Grains/`) — entity grains are the sole writers of their own Postgres rows through EF Core (ADR-0002); ADO.NET clustering/reminders share the lobby's Postgres by default (`LOBBY_ORLEANS_CLUSTERING=adonet`), or run in-memory for dev/tests (`=localhost`). `GET /health/orleans` checks the silo is taking grain calls. Listing routes require identity (WP1.4): `GET /servers` and `GET /servers/events` need a player bearer (anonymous sees no list); `POST /servers` needs a server bearer (Verified) or, only with `ALLOW_UNVERIFIED_SERVERS=true`, none at all (Unverified) — see [[Verified Listing]].
+- **Ubiquitous language:** identity/ranking terms (Player / Pilot / Match / Listing / Operator / Verified) are defined in `public-lobby/CONTEXT.md`; use those words for anything the service persists
 
 ### ServerRegistry
-Directory of active game servers: hostname, port, player count, faction mix.
+Directory of active game servers: hostname, port, player count, faction mix, Verified/Unverified status.
 - **Frequency:** Common
 - **Key Files:**
-  - `public-lobby/ServerRegistry.cs` — registry logic
-  - `public-lobby/PublicLobby.cs` — registry queries
-- **Related:** [[Public Lobby]]
-- **Notes:** Periodically probed for health; stale entries auto-removed
+  - `public-lobby/ServerRegistry.cs` — registry logic; `IServerRegistry.Register(req, publicEndpoint, ListingIdentity?)`, `ListingIdentity(GameServerId, OperatorName)`
+  - `public-lobby/PublicLobby.cs` — registry queries; `POST /servers` resolves the caller's bearer into a `ListingIdentity` (server bearer) or `null` (Unverified, gated by `ALLOW_UNVERIFIED_SERVERS`)
+- **Related:** [[Public Lobby]], [[Verified Listing]]
+- **Notes:** Periodically probed for health; stale entries auto-removed. Still in-memory (plan §1.4 slice 1) — Verified/GameServerId/OperatorName are set once at registration from the caller's identity, never from the request body.
+
+### Verified Listing
+A Listing whose Game Server authenticated with the public lobby (WP1.1 device-code flow) when it
+registered — see `public-lobby/CONTEXT.md`'s "Listing"/"Operator"/"Verified" entries for the
+ubiquitous language. `ServerEntry.Verified` is bound to the Game Server id + the Operator's current
+display name (`GameServerId`/`OperatorName`); an Unverified listing has neither, exists only when
+`ALLOW_UNVERIFIED_SERVERS=true`, and can never receive join tokens or deliver results (plan §1.2).
+- **Frequency:** Common
+- **Key Files:**
+  - `public-lobby/PublicLobby.cs` — `POST /servers` auth decision (server bearer → Verified + `GameServerGrain.OnListed`; player bearer → 403; no/invalid bearer → Unverified iff `ALLOW_UNVERIFIED_SERVERS`)
+  - `public-lobby/ServerRegistry.cs` — `ListingIdentity`, `IServerRegistry.Register`
+  - `public-lobby/Grains/GameServerGrain.cs` — `game_servers` row, `LastListedAt` (self-throttled to once/minute, refreshed on every `/servers/ws` ping/update from a Verified listing)
+  - `tests/PublicLobbyTest/ListingTests.cs` — auth-decision coverage
+- **Related:** [[Public Lobby]], [[ServerRegistry]]
+- **Notes:** `GET /servers` and `GET /servers/events` require a player bearer (plan §1.5: anonymous accounts see no server list at all, verified or not).
 
 ### Signaling
 WebRTC SDP offer/answer relay: matches peers for connection negotiation.
