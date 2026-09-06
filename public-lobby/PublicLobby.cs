@@ -83,6 +83,7 @@ app.MapAuthEndpoints();
 app.MapDevWebLogin();
 app.MapProfileApi();
 app.MapJwks();
+app.MapJoin();
 
 // ---- Registry: server discovery -------------------------------------------
 

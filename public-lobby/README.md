@@ -305,3 +305,13 @@ Anonymous Join until then.
 See `public-lobby/Contracts.cs` (`RegisterRequest`/`ServerEntry`/`LobbyRosterEntry`) and
 `public-lobby/ServerRegistry.cs` (`ListingIdentity`) for the exact shapes, and
 `tests/PublicLobbyTest/ListingTests.cs` for the auth-decision coverage above.
+
+## Join tokens (WP1.3)
+
+`POST /servers/{listingId}/join` (player bearer) returns a 60 s, single-use ES256 JWT for ONE
+Verified listing (`aud` = listing id, `sub` = player id, `name`, `jti`; 404 for unknown/Unverified
+listings). Keys live only in `signing_keys` (`Grains/SigningKeyGrain.cs`); the public half is at
+`/.well-known/jwks.json` (cache 60 s; retired keys stay 10 min). Every issuance is recorded in
+`join_tokens_issued` and moves the player's presence (`players.current_listing_id`). The game server
+verifies offline with `server/Net/JoinTokenVerifier.cs` (JWKS fetched at registration and on an
+unknown `kid`, once per 30 s; `jti` replay window).

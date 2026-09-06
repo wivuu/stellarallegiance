@@ -1,10 +1,13 @@
 using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using Orleans;
+using PublicLobby;
 using PublicLobby.Auth;
 using PublicLobby.Grains;
 using StellarAllegiance.Shared.Lobby;
@@ -110,6 +113,80 @@ static partial class Suite
             Eq("listing-1", reader.GetString(2), "…and the listing");
         }
 
+        // ---- POST /servers/{listingId}/join: Verified listings only, player bearer ----
+        var juno = vex;
+        var (serverBearer, gameServerId) = await DevServerTokenAsync(http, grains, "Juno Ops", "Juno's Verified Box");
+        var verified = await PostServerAsync(
+            http,
+            new RegisterRequest(Name: "Juno's Verified Box", Port: 19093, PublicEndpoint: null),
+            serverBearer
+        );
+        Eq(HttpStatusCode.Created, verified.Status, "verified listing registered");
+        var listingId = verified.Body!.Server.SessionId;
+        Environment.SetEnvironmentVariable("ALLOW_UNVERIFIED_SERVERS", "true");
+        var unverified = await PostServerAsync(
+            http,
+            new RegisterRequest(Name: "Juno's Anon Box", Port: 19094, PublicEndpoint: null),
+            null
+        );
+        Environment.SetEnvironmentVariable("ALLOW_UNVERIFIED_SERVERS", null);
+        Eq(HttpStatusCode.Created, unverified.Status, "unverified listing registered (flag on)");
+
+        Eq(
+            HttpStatusCode.Unauthorized,
+            (await http.PostAsync($"/servers/{listingId}/join", null)).StatusCode,
+            "join without a bearer: 401"
+        );
+        Eq(HttpStatusCode.Forbidden, await JoinStatusAsync(http, listingId, serverBearer), "join with a SERVER bearer: 403");
+        Eq(
+            HttpStatusCode.NotFound,
+            await JoinStatusAsync(http, "no-such-listing", juno.AccessToken),
+            "join unknown listing: 404"
+        );
+        Eq(
+            HttpStatusCode.NotFound,
+            await JoinStatusAsync(http, unverified.Body!.Server.SessionId, juno.AccessToken),
+            "join an Unverified listing: 404"
+        );
+
+        using (var req = new HttpRequestMessage(HttpMethod.Post, $"/servers/{listingId}/join"))
+        {
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", juno.AccessToken);
+            var r = await http.SendAsync(req);
+            Eq(HttpStatusCode.OK, r.StatusCode, "join a Verified listing: 200");
+            var body = (await r.Content.ReadFromJsonAsync<JoinTokenResponse>())!;
+            Eq(60, body.ExpiresIn, "join token expires_in 60");
+            var joinJwt = handler.ReadJsonWebToken(body.JoinToken);
+            Eq(listingId, joinJwt.Audiences.Single(), "join token aud = the listing id");
+            Eq(juno.Subject.Id.ToString(), joinJwt.Subject, "join token sub = the player");
+            Eq("Juno", joinJwt.GetClaim("name").Value, "join token name = display name");
+            var v = await handler.ValidateTokenAsync(
+                body.JoinToken,
+                new TokenValidationParameters
+                {
+                    ValidIssuer = joinJwt.Issuer,
+                    ValidAudience = listingId,
+                    IssuerSigningKeys = jwks.GetSigningKeys(),
+                    ValidAlgorithms = ["ES256"],
+                }
+            );
+            Check(v.IsValid, "join token validates against the JWKS");
+            var presence = await grains.GetGrain<IPlayerGrain>(juno.Subject.Id).Get();
+            Eq(listingId, presence?.CurrentListingId, "presence moved to the joined listing");
+            await using var conn = new NpgsqlConnection(cs);
+            await conn.OpenAsync();
+            await using var cmd = new NpgsqlCommand(
+                "select count(*) from join_tokens_issued where player_id = @p and game_server_id = @g and listing_id = @l",
+                conn
+            );
+            cmd.Parameters.AddWithValue("p", juno.Subject.Id);
+            cmd.Parameters.AddWithValue("g", gameServerId);
+            cmd.Parameters.AddWithValue("l", listingId);
+            Eq(1L, (long)(await cmd.ExecuteScalarAsync())!, "issuance recorded against the game server + listing");
+        }
+        await DeleteServerAsync(http, listingId, verified.Body.Secret);
+        await DeleteServerAsync(http, unverified.Body.Server.SessionId, unverified.Body.Secret);
+
         // ---- rotation keeps the old key published for the grace window ----
         var newKid = await grains.GetGrain<ISigningKeyGrain>(0).Rotate(now);
         var after = new JsonWebKeySet(await http.GetStringAsync("/.well-known/jwks.json"));
@@ -117,5 +194,12 @@ static partial class Suite
         Check(after.Keys.Any(k => k.Kid == newKid), "…including the new kid");
         var later = await grains.GetGrain<ISigningKeyGrain>(0).GetJwks(now.AddMinutes(11));
         Eq(1, new JsonWebKeySet(later).Keys.Count, "retired key drops out after the grace window");
+    }
+
+    static async Task<HttpStatusCode> JoinStatusAsync(HttpClient http, string listingId, string bearer)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, $"/servers/{listingId}/join");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
+        return (await http.SendAsync(req)).StatusCode;
     }
 }

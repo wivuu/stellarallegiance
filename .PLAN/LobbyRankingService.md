@@ -436,3 +436,16 @@ every restart under their name. Unlisted servers and every existing harness beha
   interceptor proving the second `PlayerGrain.Get()` issues no SQL. GOTCHAS: raw-seeded Identity users
   (no security stamp) break cookie sign-in — SchemaTests now seeds "Schema Probe", never a name a later
   section signs in as; the 5 s list cache means tests must wait it out after seeding.
+- **2026-09-06 WP1.3 + WP1.4 done** — Phase 1 complete. WP1.3 (supervisor): `SigningKeyGrain`
+  (ES256, PKCS#8 PEM + JWK in `signing_keys`, `Rotate` with 10-min grace), `Auth/JoinTokenIssuer.cs`
+  (`Microsoft.IdentityModel.JsonWebTokens` 8.22.0 — used INSTEAD of System.IdentityModel.Tokens.Jwt on
+  both peers; `kid` comes from `ECDsaSecurityKey.KeyId`, never `AdditionalHeaderClaims`),
+  `GET /.well-known/jwks.json`, `POST /servers/{id}/join` (`Auth/JoinEndpoints.cs`),
+  `PlayerGrain.RecordJoinToken` (ledger + presence), `server/Net/JoinTokenVerifier.cs` (+ 15 checks in
+  tests/LobbyTest, custom lifetime validator on an injected TimeProvider; note
+  `SecurityTokenInvalidLifetimeException` maps to Expired). WP1.4 (Sonnet): `ServerEntry` gains
+  `Verified/GameServerId/OperatorName` (drops `HostedBy`), roster entries gain `PlayerId`,
+  `IServerRegistry.Register(req, endpoint, ListingIdentity?)`, `GET /servers` + SSE need a player bearer,
+  `POST /servers` decision table in README ("Listings: Verified vs Unverified"), `ALLOW_UNVERIFIED_SERVERS`
+  read per request. Suite: 194 checks green. NOT yet done: sim server still sends `hostedBy` and
+  registers anonymously (WP2.1), Hello carries no token (WP2.2), client mirrors the old `ServerDto` (WP3.2).
