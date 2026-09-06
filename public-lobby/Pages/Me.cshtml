@@ -1,0 +1,65 @@
+@page "/me"
+@model PublicLobby.Pages.MeModel
+@{
+    ViewData["Title"] = "Me — Public Lobby";
+}
+
+<div class="mx-auto max-w-lg space-y-8">
+    <section>
+        <h1 class="font-ui text-2xl font-bold text-text-hi">@Model.Player.DisplayName</h1>
+        <p class="text-sm text-text-dim">
+            Display name changes ship in a later update.
+            @if (Model.Player.IsAdmin)
+            {
+                <span class="ml-2 rounded border border-accent/40 bg-accent/10 px-2 py-0.5 text-xs text-accent">Admin</span>
+            }
+        </p>
+    </section>
+
+    <section class="space-y-2">
+        <h2 class="text-sm font-semibold text-text-2">Linked logins</h2>
+        @if (Model.Logins.Count == 0)
+        {
+            <p class="text-sm text-text-dim">No external logins linked — this account is passkey-only.</p>
+        }
+        else
+        {
+            <ul class="space-y-1">
+                @foreach (var login in Model.Logins)
+                {
+                    <li class="rounded border border-panel-hi bg-panel px-3 py-2 text-sm text-text-hi">
+                        @login.LoginProvider
+                        <span class="text-text-dim">&middot; @(login.ProviderDisplayName ?? login.ProviderKey)</span>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+
+    <section class="space-y-2">
+        <div class="flex items-center justify-between">
+            <h2 class="text-sm font-semibold text-text-2">Passkeys</h2>
+            <button
+                id="add-passkey"
+                type="button"
+                class="rounded border border-secondary bg-secondary/10 px-3 py-1 text-xs font-medium text-secondary hover:bg-secondary/20">
+                Add a passkey
+            </button>
+        </div>
+        @Html.Raw(PublicLobby.Pages.MeModel.RenderPasskeyListFragment(Model.Passkeys, Model.AntiforgeryToken))
+        <p id="add-passkey-status" class="text-sm text-text-2" role="status"></p>
+    </section>
+
+    <section>
+        <form method="post" asp-page-handler="SignOutEverywhere">
+            @Html.AntiForgeryToken()
+            <button
+                type="submit"
+                class="w-full rounded border border-danger/40 bg-danger/10 px-4 py-2 text-sm font-medium text-danger hover:bg-danger/20">
+                Sign out everywhere
+            </button>
+        </form>
+    </section>
+</div>
+
+<script src="/passkeys.js" data-mode="add"></script>

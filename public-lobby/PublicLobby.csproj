@@ -24,4 +24,55 @@
     <ProjectReference Include="../public-lobby-data/PublicLobby.Data.csproj" />
     <ProjectReference Include="../shared/Shared.csproj" />
   </ItemGroup>
+
+  <!-- WP0.3 (web shell + auth providers): external-login handlers, env-gated in
+       Hosting/WebAuth.cs — see public-lobby/README.md for the AUTH_* env vars. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="10.0.11" />
+    <PackageReference Include="AspNet.Security.OAuth.GitHub" Version="10.0.0" />
+    <PackageReference Include="AspNet.Security.OpenId.Steam" Version="10.0.0" />
+  </ItemGroup>
+
+  <!-- Tailwind CSS (standalone CLI, no Node/npm) for Pages/Shared/_Layout.cshtml + friends. Downloads
+       the pinned binary for the current OS/CPU into tools/tailwind/ (repo-root-relative, gitignored;
+       absent in the Dockerfile's build context, so MakeDir below must (and does) create it) and runs it
+       against Styles/app.css, producing wwwroot/app.css (gitignored, not committed). See
+       public-lobby/README.md. -->
+  <PropertyGroup>
+    <TailwindVersion>v4.3.3</TailwindVersion>
+    <TailwindToolsDir>$(MSBuildProjectDirectory)/../tools/tailwind</TailwindToolsDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(OS)' == 'Windows_NT'">
+    <TailwindAssetName>tailwindcss-windows-x64.exe</TailwindAssetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(OS)' != 'Windows_NT' AND $([MSBuild]::IsOSPlatform('OSX'))">
+    <TailwindAssetName Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' == 'Arm64'">tailwindcss-macos-arm64</TailwindAssetName>
+    <TailwindAssetName Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' != 'Arm64'">tailwindcss-macos-x64</TailwindAssetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(OS)' != 'Windows_NT' AND $([MSBuild]::IsOSPlatform('Linux'))">
+    <TailwindAssetName Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' == 'Arm64'">tailwindcss-linux-arm64</TailwindAssetName>
+    <TailwindAssetName Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' != 'Arm64'">tailwindcss-linux-x64</TailwindAssetName>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TailwindExe>$(TailwindToolsDir)/$(TailwindAssetName)</TailwindExe>
+  </PropertyGroup>
+
+  <Target Name="EnsureTailwindCss" BeforeTargets="Build">
+    <Error
+      Condition="'$(TailwindAssetName)' == ''"
+      Text="public-lobby: unsupported OS/CPU for the pinned Tailwind CLI $(TailwindVersion); set TailwindAssetName to override." />
+
+    <MakeDir Directories="$(TailwindToolsDir)" Condition="!Exists('$(TailwindToolsDir)')" />
+
+    <DownloadFile
+      Condition="!Exists('$(TailwindExe)')"
+      SourceUrl="https://github.com/tailwindlabs/tailwindcss/releases/download/$(TailwindVersion)/$(TailwindAssetName)"
+      DestinationFolder="$(TailwindToolsDir)" />
+
+    <Exec Command="chmod +x &quot;$(TailwindExe)&quot;" Condition="'$(OS)' != 'Windows_NT'" />
+
+    <Exec
+      Command="&quot;$(TailwindExe)&quot; -i Styles/app.css -o wwwroot/app.css --minify"
+      WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
 </Project>

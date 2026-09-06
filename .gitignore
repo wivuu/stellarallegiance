@@ -6,6 +6,10 @@
 build/
 pick-assets/
 
+# public-lobby web shell (WP0.3): downloaded Tailwind standalone CLI + its generated CSS
+tools/tailwind/
+public-lobby/wwwroot/app.css
+
 graphify-out/cache/
 .serena/
 # screen-recording outputs (scripts/run-client.ps1 -WriteMovie)
