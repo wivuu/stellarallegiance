@@ -4,7 +4,72 @@
     ViewData["Title"] = "Ladder — Public Lobby";
 }
 
-<div class="mx-auto max-w-lg text-center space-y-3">
-    <h1 class="font-ui text-2xl font-bold text-text-hi">Ladder</h1>
-    <p class="text-text-2">Coming in WP1.2.</p>
+<div class="mx-auto max-w-3xl space-y-6">
+    <section>
+        <h1 class="font-ui text-2xl font-bold text-text-hi">Ladder</h1>
+        <p class="text-sm text-text-dim">Cumulative standings from ranked matches. Every pilot on the ledger gets the match with their team's outcome.</p>
+    </section>
+
+    @if (Model.Ladder.Total == 0)
+    {
+        <p class="rounded border border-panel-hi bg-panel px-4 py-3 text-sm text-text-2">No ranked matches recorded yet.</p>
+    }
+    else
+    {
+        <div class="overflow-x-auto rounded border border-panel-hi">
+            <table class="w-full text-sm">
+                <thead class="bg-panel text-left text-xs uppercase tracking-wide text-text-dim">
+                    <tr>
+                        <th class="px-3 py-2">#</th>
+                        <th class="px-3 py-2">Player</th>
+                        <th class="px-3 py-2 text-right">Pts</th>
+                        <th class="px-3 py-2 text-right">W</th>
+                        <th class="px-3 py-2 text-right">L</th>
+                        <th class="px-3 py-2 text-right">K</th>
+                        <th class="px-3 py-2 text-right">D</th>
+                        <th class="px-3 py-2 text-right">EJ</th>
+                        <th class="px-3 py-2 text-right">Matches</th>
+                    </tr>
+                </thead>
+                <tbody class="font-mono text-data">
+                    @foreach (var row in Model.Ladder.Rows)
+                    {
+                        <tr class="border-t border-panel-hi/60 hover:bg-panel">
+                            <td class="px-3 py-2 text-text-dim">@row.Rank</td>
+                            <td class="px-3 py-2 font-ui text-text-hi"><a class="hover:text-accent" href="/players/@Uri.EscapeDataString(row.DisplayName)">@row.DisplayName</a></td>
+                            <td class="px-3 py-2 text-right">@row.Points</td>
+                            <td class="px-3 py-2 text-right text-ok">@row.Wins</td>
+                            <td class="px-3 py-2 text-right text-danger">@row.Losses</td>
+                            <td class="px-3 py-2 text-right">@row.Kills</td>
+                            <td class="px-3 py-2 text-right">@row.Deaths</td>
+                            <td class="px-3 py-2 text-right">@row.Ejects</td>
+                            <td class="px-3 py-2 text-right">@row.MatchesPlayed</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (Model.LastPage > 1)
+        {
+            <nav class="flex items-center justify-between text-sm text-text-2">
+                @if (Model.PageNumber > 1)
+                {
+                    <a class="hover:text-text-hi" href="/ladder?page=@(Model.PageNumber - 1)">&larr; Previous</a>
+                }
+                else
+                {
+                    <span></span>
+                }
+                <span class="text-text-dim">Page @Model.PageNumber of @Model.LastPage</span>
+                @if (Model.PageNumber < Model.LastPage)
+                {
+                    <a class="hover:text-text-hi" href="/ladder?page=@(Model.PageNumber + 1)">Next &rarr;</a>
+                }
+                else
+                {
+                    <span></span>
+                }
+            </nav>
+        }
+    }
 </div>

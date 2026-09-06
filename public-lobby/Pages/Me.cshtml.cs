@@ -5,24 +5,29 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Orleans;
 using PublicLobby.Data;
-using PublicLobby.Data.Entities;
+using PublicLobby.Grains;
+using StellarAllegiance.Shared.Lobby;
 
 namespace PublicLobby.Pages;
 
-// /me (plan §3.1, WP0.3): display name + linked logins read-only (edits ship in WP1.2's PlayerGrain-
-// backed PATCH /api/me), passkeys list with remove (htmx swap, no full reload), "add a passkey" (reuses
+// /me (plan §3.1, WP0.3 + WP1.2): display name (edited through PlayerGrain.Rename — the row's single
+// writer, same path as PATCH /api/me), linked logins read-only, passkeys list with remove (htmx swap, no
+// full reload), "add a passkey" (reuses
 // the /login/passkey/creation-options + /register ceremony for a signed-in caller — see
 // Hosting/WebAuth.cs), and sign-out-everywhere (UpdateSecurityStampAsync invalidates every other cookie).
 [Authorize]
 public sealed class MeModel(
     UserManager<LobbyUser> userManager,
     SignInManager<LobbyUser> signInManager,
-    LobbyDbContext db,
+    IGrainFactory grains,
     IAntiforgery antiforgery
 ) : PageModel
 {
-    public Player Player { get; private set; } = default!;
+    public PlayerSnapshot Player { get; private set; } = default!;
+    public string? RenameError { get; private set; }
+    public bool Renamed { get; private set; }
     public IReadOnlyList<UserLoginInfo> Logins { get; private set; } = [];
     public IReadOnlyList<UserPasskeyInfo> Passkeys { get; private set; } = [];
 
@@ -32,6 +37,26 @@ public sealed class MeModel(
         if (user is null)
             return Challenge();
 
+        Player = await LoadPlayerAsync(user.Id);
+        Logins = [.. await userManager.GetLoginsAsync(user)];
+        Passkeys = [.. (await userManager.GetPasskeysAsync(user)).OrderByDescending(p => p.CreatedAt)];
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostRenameAsync(string displayName)
+    {
+        var user = await userManager.GetUserAsync(User);
+        if (user is null)
+            return Challenge();
+
+        var outcome = await grains.GetGrain<IPlayerGrain>(user.Id).Rename(displayName ?? "");
+        RenameError = outcome switch
+        {
+            RenameOutcome.Ok => null,
+            RenameOutcome.Taken => "That display name is taken.",
+            _ => $"Display name must be {LobbyLimits.DisplayNameMin}-{LobbyLimits.DisplayNameMax} characters.",
+        };
+        Renamed = outcome == RenameOutcome.Ok;
         Player = await LoadPlayerAsync(user.Id);
         Logins = [.. await userManager.GetLoginsAsync(user)];
         Passkeys = [.. (await userManager.GetPasskeysAsync(user)).OrderByDescending(p => p.CreatedAt)];
@@ -75,8 +100,9 @@ public sealed class MeModel(
         return RedirectToPage("/Login");
     }
 
-    async Task<Player> LoadPlayerAsync(Guid userId) =>
-        await db.Players.FindAsync(userId) ?? throw new InvalidOperationException($"players row missing for {userId}.");
+    async Task<PlayerSnapshot> LoadPlayerAsync(Guid userId) =>
+        await grains.GetGrain<IPlayerGrain>(userId).Get()
+        ?? throw new InvalidOperationException($"players row missing for {userId}.");
 
     // Hand-rolled fragment (no MVC partial-view plumbing) — matches the "keep markup lean" rule for this
     // work package. Shared by the initial page render (Me.cshtml calls this too, so there's one source

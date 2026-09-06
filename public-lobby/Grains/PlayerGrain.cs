@@ -3,6 +3,7 @@ using Orleans;
 using Orleans.Concurrency;
 using PublicLobby.Data;
 using PublicLobby.Data.Entities;
+using StellarAllegiance.Shared.Lobby;
 
 namespace PublicLobby.Grains;
 
@@ -19,6 +20,9 @@ public interface IPlayerGrain : IGrainWithGuidKey
     Task Touch(DateTimeOffset now);
 
     Task SetAdmin(bool isAdmin);
+
+    /// <summary>Change the display name (plan §1.1: 3–24 chars, unique case-insensitively).</summary>
+    Task<RenameOutcome> Rename(string newDisplayName);
 }
 
 public sealed class PlayerGrain(IDbContextFactory<LobbyDbContext> dbFactory) : Grain, IPlayerGrain
@@ -49,6 +53,28 @@ public sealed class PlayerGrain(IDbContextFactory<LobbyDbContext> dbFactory) : G
         if (_row!.IsAdmin == isAdmin)
             return;
         await Persist(p => p.IsAdmin = isAdmin);
+    }
+
+    public async Task<RenameOutcome> Rename(string newDisplayName)
+    {
+        if (_row is null && !await TryReload())
+            return RenameOutcome.Invalid;
+        var name = newDisplayName?.Trim() ?? "";
+        if (name.Length < LobbyLimits.DisplayNameMin || name.Length > LobbyLimits.DisplayNameMax || name.Any(char.IsControl))
+            return RenameOutcome.Invalid;
+        if (name == _row!.DisplayName)
+            return RenameOutcome.Ok;
+        var previous = _row.DisplayName;
+        try
+        {
+            await Persist(p => p.DisplayName = name);
+            return RenameOutcome.Ok;
+        }
+        catch (DbUpdateException e) when (PostgresErrors.IsUniqueViolation(e))
+        {
+            _row.DisplayName = previous;
+            return RenameOutcome.Taken;
+        }
     }
 
     // A grain can be activated by a Get() racing account creation; re-read before giving up.

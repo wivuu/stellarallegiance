@@ -429,3 +429,10 @@ every restart under their name. Unlisted servers and every existing harness beha
   `is_admin` through `PlayerGrain.SetAdmin`. Suite section `AuthTests.cs` (55 checks); page flow verified
   with curl + cookie jar for a client AND a server approval. Chrome extension was unresponsive, so the
   passkey ceremony is still unverified in a real browser — user to try `/login` once.
+- **2026-09-06 WP1.2 done** (supervisor): `PlayerGrain.Rename` (409 via unique violation, row
+  reverted), `Api/ProfileEndpoints.cs` (`GET/PATCH /api/me`), `QueryGrain` gains `LadderGlobal` /
+  `LadderByServer` / `PlayerByName` (5 s `IMemoryCache`), pages `/ladder` (paged table), `/players/{name}`,
+  `/me` rename form (reads the grain snapshot now). Suite `ProfileTests.cs` incl. a `DbCommandCounter`
+  interceptor proving the second `PlayerGrain.Get()` issues no SQL. GOTCHAS: raw-seeded Identity users
+  (no security stamp) break cookie sign-in — SchemaTests now seeds "Schema Probe", never a name a later
+  section signs in as; the 5 s list cache means tests must wait it out after seeding.

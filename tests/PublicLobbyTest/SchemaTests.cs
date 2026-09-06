@@ -113,7 +113,7 @@ static partial class Suite
                 new Player
                 {
                     Id = playerId,
-                    DisplayName = "Vex",
+                    DisplayName = "Schema Probe",
                     CreatedAt = now,
                     LastSeenAt = now,
                 }
@@ -149,7 +149,7 @@ static partial class Suite
                 {
                     MatchId = matchId,
                     PlayerId = playerId,
-                    DisplayNameAtMatch = "Vex",
+                    DisplayNameAtMatch = "Schema Probe",
                     Team = 0,
                     Kills = 3,
                     Deaths = 1,
@@ -168,7 +168,7 @@ static partial class Suite
 
             var player = await db.Players.AsNoTracking().SingleOrDefaultAsync(p => p.Id == playerId);
             Check(player is not null, "Player round-trips");
-            Eq("Vex", player?.DisplayName, "Player.DisplayName round-trips");
+            Eq("Schema Probe", player?.DisplayName, "Player.DisplayName round-trips");
 
             var gameServer = await db.GameServers.AsNoTracking().SingleOrDefaultAsync(g => g.Id == gameServerId);
             Check(gameServer is not null, "GameServer round-trips");
@@ -209,7 +209,7 @@ static partial class Suite
                 new Player
                 {
                     Id = dupId,
-                    DisplayName = "VEX", // same name, different case as "Vex" above
+                    DisplayName = "SCHEMA PROBE", // same name, different case as "Schema Probe" above
                     CreatedAt = now,
                     LastSeenAt = now,
                 }

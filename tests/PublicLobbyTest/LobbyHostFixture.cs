@@ -1,9 +1,11 @@
+using System.Data.Common;
 using System.Net;
 using System.Net.Sockets;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using PublicLobby.Data;
 
@@ -16,6 +18,11 @@ sealed class LobbyWebApplicationFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseContentRoot(FindLobbyProjectDirectory());
+
+        // EF Core picks IInterceptor registrations up from the application service provider, so the
+        // suite can count SQL commands the host's contexts execute (ProfileTests: a second grain
+        // read must not touch Postgres).
+        builder.ConfigureServices(services => services.AddSingleton<IInterceptor>(DbCommandCounter.Instance));
 
         // AddIdentityCore<LobbyUser>().AddSignInManager() (Persistence.cs, WP0.1) registers the
         // Identity STORE only — the sign-in SURFACE (AddAuthentication/AddDataProtection) is
@@ -55,6 +62,11 @@ static class LobbyHostFixture
 {
     static WebApplicationFactory<Program>? _factory;
     static bool _attempted;
+
+    // A second in-memory client that keeps cookies and does NOT follow redirects, for the
+    // cookie-authenticated web pages (/login/dev, /me, /device). Null when the host is unavailable.
+    public static HttpClient? CreateCookieClient() =>
+        _factory?.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true, AllowAutoRedirect = false });
 
     // Null return means "skip this section" (Docker unavailable — PostgresFixture already printed
     // the WARN), exactly like PostgresFixture.GetDataSourceAsync's own null contract.
@@ -119,5 +131,77 @@ static class LobbyHostFixture
         {
             listener.Stop();
         }
+    }
+}
+
+// Counts every command EF Core sends through the host's DbContexts (readers, scalars, non-queries).
+sealed class DbCommandCounter : DbCommandInterceptor
+{
+    public static readonly DbCommandCounter Instance = new();
+    long _count;
+
+    public long Count => Interlocked.Read(ref _count);
+
+    public override InterceptionResult<DbDataReader> ReaderExecuting(
+        DbCommand command,
+        CommandEventData eventData,
+        InterceptionResult<DbDataReader> result
+    )
+    {
+        Interlocked.Increment(ref _count);
+        return result;
+    }
+
+    public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+        DbCommand command,
+        CommandEventData eventData,
+        InterceptionResult<DbDataReader> result,
+        CancellationToken cancellationToken = default
+    )
+    {
+        Interlocked.Increment(ref _count);
+        return ValueTask.FromResult(result);
+    }
+
+    public override InterceptionResult<object> ScalarExecuting(
+        DbCommand command,
+        CommandEventData eventData,
+        InterceptionResult<object> result
+    )
+    {
+        Interlocked.Increment(ref _count);
+        return result;
+    }
+
+    public override ValueTask<InterceptionResult<object>> ScalarExecutingAsync(
+        DbCommand command,
+        CommandEventData eventData,
+        InterceptionResult<object> result,
+        CancellationToken cancellationToken = default
+    )
+    {
+        Interlocked.Increment(ref _count);
+        return ValueTask.FromResult(result);
+    }
+
+    public override InterceptionResult<int> NonQueryExecuting(
+        DbCommand command,
+        CommandEventData eventData,
+        InterceptionResult<int> result
+    )
+    {
+        Interlocked.Increment(ref _count);
+        return result;
+    }
+
+    public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+        DbCommand command,
+        CommandEventData eventData,
+        InterceptionResult<int> result,
+        CancellationToken cancellationToken = default
+    )
+    {
+        Interlocked.Increment(ref _count);
+        return ValueTask.FromResult(result);
     }
 }

@@ -262,3 +262,12 @@ Routes live in `Auth/AuthEndpoints.cs`; the grains are `Grains/SessionGrain.cs` 
 lineage) and `Grains/DeviceCodeGrain.cs`; bearer auth is the `LobbyBearer` scheme
 (`Auth/LobbyBearerAuthentication.cs`, per-silo 60 s cache) with policies `lobby-player` /
 `lobby-server`.
+
+## Profiles and the ladder (WP1.2)
+
+`GET /api/me` (player bearer) returns the profile (`PlayerProfileDto`: display name, admin flag,
+linked logins, aggregates); `PATCH /api/me {displayName}` renames (400 length, 409 taken). Both go
+through `Grains/PlayerGrain.cs`, the single writer of the `players` row, which serves repeat reads
+from memory. `/ladder` (global, ranked-counted aggregates), `/players/{name}` (public profile +
+recent matches) and the `/me` rename form read through `Grains/QueryGrain.cs`, a per-silo
+`[StatelessWorker(1)]` over a no-tracking context with a 5 s cache on lists.

@@ -75,3 +75,52 @@ public sealed record GameServerSnapshot(
     [property: Id(4)] DateTimeOffset CreatedAt,
     [property: Id(5)] DateTimeOffset? LastListedAt
 );
+
+public enum RenameOutcome
+{
+    Ok,
+    Invalid, // length/whitespace
+    Taken, // citext collision with another player
+}
+
+[GenerateSerializer]
+public sealed record LadderRow(
+    [property: Id(0)] int Rank,
+    [property: Id(1)] Guid PlayerId,
+    [property: Id(2)] string DisplayName,
+    [property: Id(3)] int MatchesPlayed,
+    [property: Id(4)] int Wins,
+    [property: Id(5)] int Losses,
+    [property: Id(6)] int Kills,
+    [property: Id(7)] int Deaths,
+    [property: Id(8)] int Ejects,
+    [property: Id(9)] long Points
+);
+
+[GenerateSerializer]
+public sealed record LadderPage(
+    [property: Id(0)] LadderRow[] Rows,
+    [property: Id(1)] int Total,
+    [property: Id(2)] int Page,
+    [property: Id(3)] int PageSize
+);
+
+[GenerateSerializer]
+public sealed record RecentMatchRow(
+    [property: Id(0)] Guid MatchId,
+    [property: Id(1)] DateTimeOffset StartedAt,
+    [property: Id(2)] string Map,
+    [property: Id(3)] string GameServerName,
+    [property: Id(4)] int Team,
+    [property: Id(5)] bool Won,
+    [property: Id(6)] int Kills,
+    [property: Id(7)] int Deaths,
+    [property: Id(8)] int Ejects,
+    [property: Id(9)] long Points,
+    [property: Id(10)] bool Counted,
+    [property: Id(11)] bool Ranked,
+    [property: Id(12)] MatchStatus Status
+);
+
+[GenerateSerializer]
+public sealed record PlayerProfileView([property: Id(0)] PlayerSnapshot Player, [property: Id(1)] RecentMatchRow[] Recent);
