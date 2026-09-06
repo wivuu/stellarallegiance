@@ -2,13 +2,15 @@ using System;
 
 namespace StellarAllegiance.Shared;
 
-// Pure-managed SHA-256 + HMAC-SHA256. Deliberately NO System.Security.Cryptography:
-// this same source compiles into the wasi-wasm SpacetimeDB module (which historically
-// could not rely on the platform crypto provider at runtime) AND into the native sim
-// server, so a join token computed in the module is byte-identical to the one the server
-// recomputes. Standard FIPS 180-4 (SHA-256) and RFC 2104 (HMAC); verified against the
-// RFC 4231 known-answer vectors in tests/. Not performance-critical — tokens are minted
-// once per match start and validated once per socket connect.
+// Pure-managed SHA-256 + HMAC-SHA256. Deliberately NO System.Security.Cryptography: this
+// same source historically compiled into the wasi-wasm SpacetimeDB module (which could not
+// rely on the platform crypto provider at runtime) AND the native sim server, so the HMAC
+// join token each computed was byte-identical. That STDB module and its HMAC join token are
+// gone (join tokens are now ES256 JWTs, see shared/JoinTokens.cs); as of WP0.4 these two
+// classes have no callers left outside their own known-answer tests in tests/CryptoTest —
+// kept in place (not deleted) pending a decision on whether a future use needs them.
+// Standard FIPS 180-4 (SHA-256) and RFC 2104 (HMAC); verified against the RFC 4231
+// known-answer vectors in tests/.
 public static class Sha256
 {
     private static readonly uint[] K =

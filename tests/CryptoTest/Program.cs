@@ -1,9 +1,10 @@
 using System.Text;
 using StellarAllegiance.Shared;
 
-// Known-answer + behavioural tests for the pure-managed crypto that backs join tokens.
-// Console exe (matches FlightModelTest): exits non-zero on the first failure so CI / the
-// build scripts can gate on it. Vectors: FIPS 180-4 (SHA-256) and RFC 4231 (HMAC-SHA256).
+// Known-answer + behavioural tests for the pure-managed crypto in shared/. Console exe
+// (matches FlightModelTest): exits non-zero on the first failure so CI / the build scripts
+// can gate on it. Vectors: FIPS 180-4 (SHA-256) and RFC 4231 (HMAC-SHA256), plus behavioural
+// checks for JoinTokens.ConstantTimeEquals (used by the shared-secret connect authenticator).
 
 static class Program
 {
@@ -50,20 +51,12 @@ static class Program
             "RFC4231 case 6 (long key)"
         );
 
-        // ---- Join-token behaviour ----
-        const string secret = "test-secret-0123456789";
-        string id = "0xfeedface";
-        string t1 = JoinTokens.Compute(secret, id, 0, 7, 1_900_000_000);
-        string t1b = JoinTokens.Compute(secret, id, 0, 7, 1_900_000_000);
-        Check(t1 == t1b, "token is deterministic");
-        Check(t1.Length == 64, "token is 64 hex chars (256-bit)");
-        Check(t1 != JoinTokens.Compute(secret, id, 1, 7, 1_900_000_000), "team is bound");
-        Check(t1 != JoinTokens.Compute(secret, id, 0, 8, 1_900_000_000), "epoch is bound");
-        Check(t1 != JoinTokens.Compute(secret, id, 0, 7, 1_900_000_001), "expiry is bound");
-        Check(t1 != JoinTokens.Compute("other-secret-9876543210", id, 0, 7, 1_900_000_000), "secret is bound");
-        Check(JoinTokens.ConstantTimeEquals(t1, t1b), "constant-time equal accepts match");
-        Check(!JoinTokens.ConstantTimeEquals(t1, t1[..^1] + "0"), "constant-time rejects diff");
-        Check(!JoinTokens.ConstantTimeEquals(t1, t1 + "0"), "constant-time rejects length diff");
+        // ---- ConstantTimeEquals behaviour (server/Backend/Backends.cs SharedSecretAuthenticator) ----
+        const string secretA = "test-secret-0123456789";
+        const string secretB = "test-secret-0123456789";
+        Check(JoinTokens.ConstantTimeEquals(secretA, secretB), "constant-time equal accepts match");
+        Check(!JoinTokens.ConstantTimeEquals(secretA, "test-secret-0123456780"), "constant-time rejects diff");
+        Check(!JoinTokens.ConstantTimeEquals(secretA, secretA + "0"), "constant-time rejects length diff");
 
         if (_failures == 0)
             Console.WriteLine("CryptoTest: all checks passed");

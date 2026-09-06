@@ -754,14 +754,13 @@ Reachability probe strategy: attempt direct P2P connection first; only fall back
 - **Notes:** NO TURN server; reintroducing TURN would add latency and cost
 
 ### Join Token
-HMAC-SHA256 signed authorization: epoch + expiry + team + faction. Server verifies at connection handshake.
+Short-lived (60s), single-use ES256 JWT the public lobby issues to a signed-in player for ONE listing (`aud` = listing id, `sub` = player id); verified offline by the game server against the lobby's JWKS. Anonymous joins carry none.
 - **Frequency:** Common
 - **Key Files:**
-  - `shared/JoinTokens.cs` — token generation and validation
-  - `server/Net/ClientHub.cs` — join validation
-  - `public-lobby/PublicLobby.cs` — token issuance
-- **Related:** [[MsgWelcome]], [[Team]]
-- **Notes:** Prevents replay attacks and unauthorized teams; expiry ~5 minutes
+  - public lobby: `public-lobby/` — issuer (WP1.3)
+  - game server: `server/Net/JoinTokenVerifier.cs` — offline JWKS verification (WP2.2, pending)
+- **Related:** [[MsgWelcome]], [[Team]], [[Public Lobby]]
+- **Notes:** See `public-lobby/CONTEXT.md` ("Join Token") for full language; replaces the old STDB-era HMAC-SHA256 derivation (`shared/JoinTokens.cs`), removed in WP0.4 — that file now holds only the constant-time compare used by the connect-time shared-secret authenticator
 
 ### MsgWelcome
 Handshake message from server to client: assigns player ID, initial ship, world state snapshot, reconnect token.
