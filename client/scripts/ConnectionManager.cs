@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Godot;
 
 // Owns "which server, and are we connected" — the front of the single native connection.
@@ -65,6 +66,15 @@ public partial class ConnectionManager : Node
     // True when the last failure was the server refusing our shared secret ("bad secret"). The failed
     // connecting modal reads this to offer a password re-prompt instead of a generic retry.
     public bool AuthRejected { get; private set; }
+
+    // A Verified listing refused the join because the Hello carried no / a stale lobby join
+    // token (MsgReject code 2). RETRY asks JoinTokenProvider for a fresh one before redialing.
+    public bool JoinTokenRejected { get; private set; }
+
+    // Set by the server browser when joining a Verified listing: mints a fresh single-use join
+    // token (POST /servers/{id}/join) for every (re)dial — reconnects present a new one too, since
+    // every Hello on a Verified listing is gated. Null for direct / Unverified joins.
+    public Func<Task<string?>>? JoinTokenProvider { get; set; }
 
     // What the connecting modal shows in the server well: a friendly name (lobby entry
     // name, else the bare host) plus the technical address line.
@@ -175,6 +185,54 @@ public partial class ConnectionManager : Node
     // Shared-secret password from the direct-connect modal; rides the next Hello frame.
     public void SetJoinSecret(string secret) => _net.SetJoinSecret(secret);
 
+    // The lobby join token to present in the NEXT Hello (single use; the browser sets it right
+    // before the first dial, JoinTokenProvider refreshes it for redials).
+    public void SetJoinToken(string? token) => _net.SetJoinToken(token);
+
+    // Redial through the join-token provider when one is set: fetch off the main thread, then
+    // dial on it. Without a provider (direct/Unverified) dial immediately, exactly as before.
+    private void DialWithFreshJoinToken(Action dial)
+    {
+        var provider = JoinTokenProvider;
+        if (provider is null)
+        {
+            dial();
+            return;
+        }
+        _ = Task.Run(async () =>
+        {
+            string? token = null;
+            try
+            {
+                token = await provider();
+            }
+            catch (Exception e)
+            {
+                Log.Err($"[ConnectionManager] join token refresh failed: {e.Message}");
+            }
+            Callable
+                .From(() =>
+                {
+                    _net.SetJoinToken(token);
+                    dial();
+                })
+                .CallDeferred();
+        });
+    }
+
+    private void DialCurrent()
+    {
+        if (_mode == Transport.WebRtc)
+        {
+            _net.ConnectWebRtc(LobbyBase, _sessionId);
+        }
+        else
+        {
+            NotifyStage(ConnectStage.Channel);
+            _net.Connect(ServerUrl);
+        }
+    }
+
     // Submit handler for the address screen, and the entry point for --host. Direct WebSocket
     // join. The server browser stays visible underneath — the connecting modal draws over it.
     public void ConnectTo(string hostOrUrl, string? displayName = null)
@@ -238,15 +296,7 @@ public partial class ConnectionManager : Node
         State = ConnState.Connecting;
         BeginStages();
         Log.Print($"[ConnectionManager] retrying {ServerUrl}");
-        if (_mode == Transport.WebRtc)
-        {
-            _net.ConnectWebRtc(LobbyBase, _sessionId);
-        }
-        else
-        {
-            NotifyStage(ConnectStage.Channel);
-            _net.Connect(ServerUrl);
-        }
+        DialWithFreshJoinToken(DialCurrent);
     }
 
     // Leave button (Lobby): voluntarily drop the current server and return to the address screen
@@ -301,6 +351,7 @@ public partial class ConnectionManager : Node
         Add(ConnectStage.Sync, "SYNC WORLD");
         FailReason = "";
         AuthRejected = false;
+        JoinTokenRejected = false;
         _stages[0].State = StageState.Active;
         _stages[0].StartMs = Time.GetTicksMsec();
         CurrentStage = ConnectStage.Locate;
@@ -375,6 +426,7 @@ public partial class ConnectionManager : Node
     {
         FailReason = reason;
         AuthRejected = reason == "bad secret";
+        JoinTokenRejected = reason == GameNetClient.RejectJoinToken;
         Log.Err($"[ConnectionManager] connect failed: {reason}");
         // A failed redial while auto-reconnecting settles the attempt and lets the _Process
         // driver pace the next one — same as NotifyDisconnected's Reconnecting branch.
@@ -422,6 +474,7 @@ public partial class ConnectionManager : Node
         if (!string.IsNullOrEmpty(reason))
             FailReason = reason;
         AuthRejected = reason == "bad secret";
+        JoinTokenRejected = reason == GameNetClient.RejectJoinToken;
         State = ConnState.Failed;
         FailCurrentStage();
     }
@@ -455,15 +508,7 @@ public partial class ConnectionManager : Node
         _attemptInFlight = true;
         Log.Print($"[ConnectionManager] reconnect attempt {_reconnectAttempts} to {ServerUrl}");
         BeginStages(); // fresh stage log per redial
-        if (_mode == Transport.WebRtc)
-        {
-            _net.ConnectWebRtc(LobbyBase, _sessionId);
-        }
-        else
-        {
-            NotifyStage(ConnectStage.Channel);
-            _net.Connect(ServerUrl);
-        }
+        DialWithFreshJoinToken(DialCurrent);
     }
 
     // "Leave & Return to Lobby" during a reconnect: give up the ship the server may still be

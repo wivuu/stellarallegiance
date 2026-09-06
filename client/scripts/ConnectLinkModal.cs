@@ -152,7 +152,11 @@ public partial class ConnectLinkModal : Control
         mid.AddThemeConstantOverride("separation", 26);
         _radar = new LinkRadar { SizeFlagsVertical = SizeFlags.ShrinkCenter };
         mid.AddChild(_radar);
-        _stageBox = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ShrinkCenter };
+        _stageBox = new VBoxContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ShrinkCenter,
+        };
         _stageBox.AddThemeConstantOverride("separation", 7);
         mid.AddChild(_stageBox);
         col.AddChild(mid);
@@ -187,10 +191,20 @@ public partial class ConnectLinkModal : Control
         // -- Actions -------------------------------------------------------------------
         var actions = new HBoxContainer();
         actions.AddThemeConstantOverride("separation", 10);
-        _cancel = new ChamferButton { Text = "CANCEL", Variant = ButtonVariant.Secondary, CustomMinimumSize = new Vector2(150, 44) };
+        _cancel = new ChamferButton
+        {
+            Text = "CANCEL",
+            Variant = ButtonVariant.Secondary,
+            CustomMinimumSize = new Vector2(150, 44),
+        };
         _cancel.Pressed += OnCancelPressed;
         actions.AddChild(_cancel);
-        _abandon = new ChamferButton { Text = "ABANDON SHIP", Variant = ButtonVariant.Ghost, CustomMinimumSize = new Vector2(150, 44) };
+        _abandon = new ChamferButton
+        {
+            Text = "ABANDON SHIP",
+            Variant = ButtonVariant.Ghost,
+            CustomMinimumSize = new Vector2(150, 44),
+        };
         _abandon.Pressed += () => _cm.AbandonReconnect();
         actions.AddChild(_abandon);
         _retry = new ChamferButton
@@ -211,11 +225,16 @@ public partial class ConnectLinkModal : Control
     {
         if (_cm.AuthRejected)
         {
-            ServerPasswordModal.Open(this, _cm.ServerDisplayName, pw =>
-            {
-                _cm.SetJoinSecret(pw);
-                _cm.RetryLast();
-            }, error: true);
+            ServerPasswordModal.Open(
+                this,
+                _cm.ServerDisplayName,
+                pw =>
+                {
+                    _cm.SetJoinSecret(pw);
+                    _cm.RetryLast();
+                },
+                error: true
+            );
             return;
         }
         _cm.RetryLast();
@@ -293,7 +312,10 @@ public partial class ConnectLinkModal : Control
         bool connected = state == ConnectionManager.ConnState.Connected;
         bool reconnecting = state == ConnectionManager.ConnState.Reconnecting;
 
-        Color accent = failed ? DesignTokens.Danger : connected ? DesignTokens.Ok : DesignTokens.TeamAccent;
+        Color accent =
+            failed ? DesignTokens.Danger
+            : connected ? DesignTokens.Ok
+            : DesignTokens.TeamAccent;
         if (_panel.Accent != accent)
         {
             _panel.Accent = accent;
@@ -341,7 +363,10 @@ public partial class ConnectLinkModal : Control
         // arrives via a different failure path — still flips RETRY LINK → ENTER PASSWORD.
         if (failed)
         {
-            string sig = _cm.AuthRejected ? "auth" : "drop:" + _cm.FailReason;
+            string sig =
+                _cm.AuthRejected ? "auth"
+                : _cm.JoinTokenRejected ? "token"
+                : "drop:" + _cm.FailReason;
             if (sig != _failSig)
             {
                 _failSig = sig;
@@ -352,12 +377,25 @@ public partial class ConnectLinkModal : Control
                     _error.Configure(
                         "⚠ ACCESS DENIED",
                         "Incorrect or missing password. Re-enter the server passphrase to join.",
-                        StatusPill.Kind.Danger);
+                        StatusPill.Kind.Danger
+                    );
+                }
+                else if (_cm.JoinTokenRejected)
+                {
+                    // A Verified server wants a lobby join token we didn't (validly) present. RETRY
+                    // redials through ConnectionManager.JoinTokenProvider, which mints a fresh one.
+                    _retry.Text = "◆ RETRY WITH NEW TOKEN";
+                    _error.Configure(
+                        "⚠ JOIN TOKEN REJECTED",
+                        "This Verified server requires a fresh lobby join token. Retry to request one — if it keeps failing, sign in again or pick another server.",
+                        StatusPill.Kind.Danger
+                    );
                 }
                 else
                 {
                     _retry.Text = "◆ RETRY LINK";
-                    string detail = $"Link dropped during {_cm.FailedStageLabel()}. The host may be full or offline. Check the address and retry.";
+                    string detail =
+                        $"Link dropped during {_cm.FailedStageLabel()}. The host may be full or offline. Check the address and retry.";
                     if (!string.IsNullOrEmpty(_cm.FailReason))
                         detail += $"\n{_cm.FailReason}";
                     _error.Configure("⚠ LINK DROPPED", detail, StatusPill.Kind.Danger);
@@ -385,11 +423,10 @@ public partial class ConnectLinkModal : Control
 
         // Subline: what the link is doing right now, with a blinking caret while busy.
         bool busy = !failed && !connected;
-        _subline.Text = failed
-            ? "connection aborted"
-            : connected
-                ? "handoff complete — ready to deploy"
-                : ActiveStageLabel().ToLowerInvariant() + "…";
+        _subline.Text =
+            failed ? "connection aborted"
+            : connected ? "handoff complete — ready to deploy"
+            : ActiveStageLabel().ToLowerInvariant() + "…";
         _caret.Visible = busy && Mathf.PosMod((float)_caretT, 1f) < 0.5f;
     }
 
@@ -506,7 +543,10 @@ public partial class ConnectLinkModal : Control
             frac = 1f;
 
         bool failed = state is ConnectionManager.ConnState.Failed or ConnectionManager.ConnState.Disconnected;
-        Color barColor = failed ? DesignTokens.Danger : state == ConnectionManager.ConnState.Connected ? DesignTokens.Ok : DesignTokens.TeamAccent;
+        Color barColor =
+            failed ? DesignTokens.Danger
+            : state == ConnectionManager.ConnState.Connected ? DesignTokens.Ok
+            : DesignTokens.TeamAccent;
         _radar.SetProgress(frac);
         _bar.Set(frac, barColor);
         _bar.Sweep = !failed && state != ConnectionManager.ConnState.Connected;

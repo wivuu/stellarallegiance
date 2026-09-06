@@ -94,3 +94,18 @@ godot --path client res://scenes/UiShowcase.tscn -- --ui-open=signin --ui-shot=/
 The fonts in `assets/fonts/` are variable TTFs (OFL); their `.import` sidecars are regenerated
 by `godot --headless --import` (same convention as the GLBs), and `UiFonts` falls back to the
 engine font if the import cache is cold.
+
+### Server browser, join tokens, account page (WP3.2 / WP3.3)
+
+- The list and its live stream carry the player bearer; a 401 refreshes the session once and a
+  second 401 signs you out (the SIGN IN gate returns). Rows and the detail panel badge listings
+  **VERIFIED** (operator shown) or **UNVERIFIED** (anonymous join only).
+- Joining a Verified listing requests a single-use join token (`POST /servers/{id}/join`) and
+  presents it in Hello; the server takes your name from the token. Every redial (RETRY, auto-
+  reconnect) mints a fresh one through `ConnectionManager.JoinTokenProvider`. A `MsgReject` code 2
+  shows "JOIN TOKEN REJECTED" with a retry that fetches a new token. Unverified listings join
+  anonymously under the callsign.
+- **ACCOUNT** (header button, Settings → PILOT, `--ui-open=account`): display name edit via
+  `PATCH /api/me`, career line, linked logins, MANAGE IN BROWSER (`/me`), SIGN OUT.
+- Harness: `--join-listing=<exact name>` auto-joins that listing once it appears (use with a seeded
+  `user://auth.json`; pairs with `--autofly`).

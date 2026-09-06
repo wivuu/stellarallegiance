@@ -385,15 +385,6 @@ var simThread = new Thread(() =>
 
         double t0 = clock.Elapsed.TotalMilliseconds;
         sim.Step();
-        if (sim.JustStarted)
-        {
-            matchListingId = hub.LobbyIdentity.ListingId;
-            results.OnMatchStarted(new MatchStartInfo(sim.MatchId, sim.MatchMapName, sim.MatchStartedAt, matchListingId));
-        }
-        if (sim.JustEnded)
-            results.ReportResult(BuildMatchResult(StellarAllegiance.Shared.Lobby.MatchEndReason.WinCondition)); // one-shot
-        if (sim.JustReset)
-            results.ReportResult(BuildMatchResult(StellarAllegiance.Shared.Lobby.MatchEndReason.Reset));
         hub.AfterStep();
         // Recycle the match once the server has been empty for the grace window: end whatever
         // was running and reset to a clean idle lobby. IsIdle makes this fire once per empty
@@ -408,6 +399,17 @@ var simThread = new Thread(() =>
         {
             emptySinceMs = null;
         }
+        // Match reporting — checked AFTER the reset above so a JustReset raised by ResetMatch is
+        // seen this iteration (Step clears the one-step flags at its next start).
+        if (sim.JustStarted)
+        {
+            matchListingId = hub.LobbyIdentity.ListingId;
+            results.OnMatchStarted(new MatchStartInfo(sim.MatchId, sim.MatchMapName, sim.MatchStartedAt, matchListingId));
+        }
+        if (sim.JustEnded)
+            results.ReportResult(BuildMatchResult(StellarAllegiance.Shared.Lobby.MatchEndReason.WinCondition)); // one-shot
+        if (sim.JustReset)
+            results.ReportResult(BuildMatchResult(StellarAllegiance.Shared.Lobby.MatchEndReason.Reset));
     }
 })
 {

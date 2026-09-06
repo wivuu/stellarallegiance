@@ -64,6 +64,8 @@ public partial class AuthSession : Node
     // While set, ServerLobbyOverlay's sign-in gate stays down for the rest of this process.
     public bool ContinueWithoutAccount { get; private set; }
 
+    public string LobbyBase => _lobbyBase;
+
     private string? _accessToken;
     private DateTimeOffset _accessExpiry;
     private string? _refreshToken;
@@ -188,6 +190,20 @@ public partial class AuthSession : Node
     }
 
     public void CancelDeviceFlow() => _deviceCts?.Cancel();
+
+    // A rename succeeded at the lobby (PATCH /api/me): keep the in-memory session and the saved
+    // file in step so the next launch restores the new name. Main thread.
+    public void UpdateDisplayName(string displayName)
+    {
+        DisplayName = displayName;
+        if (!string.IsNullOrEmpty(_refreshToken) && PlayerId is { } id)
+            SaveAuthFile(new AuthFile(_refreshToken, displayName, id, _lobbyBase));
+        StateChanged?.Invoke();
+    }
+
+    // The lobby answered 401 to a request that carried our access token (revoked / rotated away
+    // elsewhere): forget it so the next GetAccessTokenAsync goes through the refresh token.
+    public void InvalidateAccessToken() => _accessToken = null;
 
     // "CONTINUE WITHOUT ACCOUNT" — session-only; consumed by ServerLobbyOverlay's sign-in gate and
     // SettingsDialog's callsign row (both read IsSignedIn / ContinueWithoutAccount).

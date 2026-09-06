@@ -3,12 +3,16 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Godot;
+using StellarAllegiance.Shared.Lobby;
 using StellarAllegiance.Ui;
 // Godot ships its own HttpClient; the lobby uses the BCL one.
 using HttpClient = System.Net.Http.HttpClient;
@@ -28,8 +32,13 @@ public partial class ServerLobbyOverlay : Control
 
     // Wire DTOs mirroring public-lobby/Contracts.cs (additive fields are nullable so servers
     // that predate them keep rendering with graceful fallbacks).
-    private sealed record RosterDto(string Name, int Team, bool Ready, bool Flying);
+    // PlayerId: the lobby Player behind a pilot who joined with a verified join token (null =
+    // anonymous join on an Unverified listing).
+    private sealed record RosterDto(string Name, int Team, bool Ready, bool Flying, Guid? PlayerId = null);
 
+    // Verified: the listing's game server authenticated with the lobby (CONTEXT.md "Verified") —
+    // joining it needs a join token and its results count; OperatorName replaces the old free-text
+    // "hosted by" (it is the operator's lobby display name).
     private sealed record ServerDto(
         string SessionId,
         string Name,
@@ -37,13 +46,25 @@ public partial class ServerLobbyOverlay : Control
         int Players,
         int MaxPlayers,
         string? State,
-        string? HostedBy,
         List<RosterDto>? Roster,
-        bool Protected = false
+        bool Protected = false,
+        bool Verified = false,
+        Guid? GameServerId = null,
+        string? OperatorName = null
     );
 
     private ConnectionManager _cm = null!;
     private LineEdit _name = null!;
+    private Control? _accountButton;
+
+    // Harness: `--join-listing=<name>` (game flag, before `--`) auto-joins the first listing with
+    // that exact name once the live list carries it — the headless path through the join-token
+    // flow (plan WP4.3). One shot per launch.
+    private readonly string? _autoJoinName = OS.GetCmdlineArgs()
+        .Where(a => a.StartsWith("--join-listing=", StringComparison.Ordinal))
+        .Select(a => a["--join-listing=".Length..])
+        .FirstOrDefault();
+    private bool _autoJoinFired;
     private Label _online = null!;
     private ScrollContainer _gameScroll = null!;
     private VBoxContainer _list = null!;
@@ -73,6 +94,7 @@ public partial class ServerLobbyOverlay : Control
     private readonly Dictionary<string, ServerDto> _serverMap = [];
     private readonly ConcurrentQueue<(string Event, string Data)> _sseQueue = [];
     private string? _sseError;
+    private int _unauthorizedStreak;
 
     public void Init(ConnectionManager cm)
     {
@@ -155,6 +177,8 @@ public partial class ServerLobbyOverlay : Control
     // since _name has no TextChanged wiring).
     private void OnPrefsChanged()
     {
+        if (AuthSession.Instance is { IsSignedIn: true })
+            return; // the field shows the account name, not the local callsign
         if (!_name.HasFocus() && _name.Text != UserPrefs.PilotName)
             _name.Text = UserPrefs.PilotName;
     }
@@ -215,6 +239,14 @@ public partial class ServerLobbyOverlay : Control
         _name.AddThemeFontSizeOverride("font_size", 15);
         bar.AddChild(_name);
 
+        // Account page (display name, linked logins, sign out) — signed in only (RefreshAuthGate).
+        var account = UiKit.MakeButton("ACCOUNT", () => AccountDialog.Open(this), ButtonVariant.Secondary);
+        account.CustomMinimumSize = new Vector2(0, 34);
+        account.FocusMode = FocusModeEnum.None;
+        account.Visible = false;
+        bar.AddChild(account);
+        _accountButton = account;
+
         _online = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.Ok);
         bar.AddChild(_online);
 
@@ -228,7 +260,8 @@ public partial class ServerLobbyOverlay : Control
     // dialog's PILOT tab shows what's on screen.
     private void OpenSettings()
     {
-        UserPrefs.SetPilotName(_name.Text);
+        if (AuthSession.Instance is not { IsSignedIn: true })
+            UserPrefs.SetPilotName(_name.Text);
         SettingsDialog.Open(this);
     }
 
@@ -329,6 +362,21 @@ public partial class ServerLobbyOverlay : Control
         bool signedIn = AuthSession.Instance?.IsSignedIn ?? true;
         _authGate.Visible = !signedIn;
         _gameScroll.Visible = signedIn;
+        // Header callsign: the account display name (read-only) while signed in; the free callsign
+        // otherwise. The ACCOUNT button next to it only shows while signed in.
+        if (AuthSession.Instance is { IsSignedIn: true } auth)
+        {
+            _name.Text = auth.DisplayName;
+            _name.Editable = false;
+        }
+        else
+        {
+            _name.Editable = true;
+            if (!_name.HasFocus())
+                _name.Text = UserPrefs.PilotName;
+        }
+        if (_accountButton is not null)
+            _accountButton.Visible = signedIn;
         if (signedIn)
         {
             if (_sseCts is null)
@@ -490,13 +538,34 @@ public partial class ServerLobbyOverlay : Control
         {
             try
             {
+                // The list endpoints need a player bearer (plan §1.5). No token = not signed in:
+                // stop quietly; RefreshAuthGate restarts us when a session appears.
+                var auth = AuthSession.Instance;
+                string? bearer = auth is null ? null : await auth.GetAccessTokenAsync();
+                if (bearer is null)
+                    return;
                 using var req = new HttpRequestMessage(
                     HttpMethod.Get,
                     $"{_cm.LobbyBase}/servers/events?protocol={GameNetClient.ProtocolVersion}"
                 );
                 req.Headers.TryAddWithoutValidation("Accept", "text/event-stream");
+                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
 
                 using var resp = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+                if (resp.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    // Revoked / rotated elsewhere: drop the cached access token so the next attempt
+                    // refreshes; a second 401 in a row means the session itself is dead.
+                    auth!.InvalidateAccessToken();
+                    if (++_unauthorizedStreak >= 2)
+                    {
+                        _unauthorizedStreak = 0;
+                        _ = auth.SignOutAsync();
+                        return;
+                    }
+                    throw new HttpRequestException("lobby session rejected (401)");
+                }
+                _unauthorizedStreak = 0;
                 resp.EnsureSuccessStatusCode();
 
                 using var stream = await resp.Content.ReadAsStreamAsync(ct);
@@ -648,6 +717,13 @@ public partial class ServerLobbyOverlay : Control
             _listStatus.Visible = false;
         }
 
+        if (_autoJoinName is not null && !_autoJoinFired && servers.Find(x => x.Name == _autoJoinName) is { } target)
+        {
+            _autoJoinFired = true;
+            _selectedSessionId = target.SessionId;
+            Log.Print($"[ServerLobbyOverlay] --join-listing: joining '{target.Name}' (verified={target.Verified})");
+            Callable.From(() => Join(target)).CallDeferred();
+        }
         foreach (var s in servers)
         {
             var row = new ServerRow();
@@ -704,6 +780,14 @@ public partial class ServerLobbyOverlay : Control
             titleRow.AddChild(lockPill);
             lockPill.Configure("⚿ PROTECTED", StatusPill.Kind.Warn);
         }
+        // Verified (authenticated game server, join tokens, results count) vs Unverified (anonymous
+        // joins only, no operator, never delivers results) — plan §1.2.
+        var trustPill = new StatusPill { SizeFlagsVertical = SizeFlags.ShrinkCenter };
+        titleRow.AddChild(trustPill);
+        trustPill.Configure(
+            sel.Verified ? "◆ VERIFIED" : "UNVERIFIED",
+            sel.Verified ? StatusPill.Kind.Ok : StatusPill.Kind.Warn
+        );
         var pill = new StatusPill { SizeFlagsVertical = SizeFlags.ShrinkCenter };
         titleRow.AddChild(pill);
         (string pillText, StatusPill.Kind pillKind) = sel.State switch
@@ -718,8 +802,10 @@ public partial class ServerLobbyOverlay : Control
         // sector preview were removed from the server lobby — map info lives in the game lobby.
         var subParts = new List<string> { (sel.State ?? "lobby").ToUpperInvariant() };
         subParts.Add($"{sel.Players}/{max} PILOTS");
-        if (!string.IsNullOrEmpty(sel.HostedBy))
-            subParts.Add($"HOSTED BY {sel.HostedBy.ToUpperInvariant()}");
+        if (!string.IsNullOrEmpty(sel.OperatorName))
+            subParts.Add($"OPERATOR {sel.OperatorName.ToUpperInvariant()}");
+        else if (!sel.Verified)
+            subParts.Add("ANONYMOUS JOIN ONLY");
         var sub = UiKit.MakeLabel(string.Join(" · ", subParts), UiKit.TextStyle.Data, DesignTokens.Text2);
         sub.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         _detailBox.AddChild(sub);
@@ -813,12 +899,92 @@ public partial class ServerLobbyOverlay : Control
                 pw =>
                 {
                     _cm.SetJoinSecret(pw);
-                    Dial(s);
+                    JoinWithIdentity(s);
                 }
             );
             return;
         }
-        Dial(s);
+        JoinWithIdentity(s);
+    }
+
+    // Verified listing: fetch a single-use join token (POST /servers/{id}/join) and present it in
+    // Hello; the server takes our name from it. Every redial mints another through the provider.
+    // Unverified listing: anonymous join under the callsign, no provider, no token.
+    private void JoinWithIdentity(ServerDto s)
+    {
+        if (!s.Verified)
+        {
+            _cm.JoinTokenProvider = null;
+            _cm.SetJoinToken(null);
+            Dial(s);
+            return;
+        }
+        var auth = AuthSession.Instance;
+        if (auth is null || !auth.IsSignedIn)
+        {
+            ShowListStatus("SIGN IN TO JOIN A VERIFIED SERVER");
+            SignInDialog.Open(this);
+            return;
+        }
+        string listingId = s.SessionId;
+        _cm.JoinTokenProvider = () => RequestJoinTokenAsync(listingId);
+        _hint.Text = $"REQUESTING JOIN TOKEN · {s.Name}";
+        _ = JoinVerifiedAsync(s);
+    }
+
+    private async Task JoinVerifiedAsync(ServerDto s)
+    {
+        string? token = null;
+        string? error = null;
+        try
+        {
+            token = await RequestJoinTokenAsync(s.SessionId);
+            if (token is null)
+                error = "LISTING WENT AWAY — PICK ANOTHER SERVER";
+        }
+        catch (Exception e)
+        {
+            error = $"JOIN TOKEN REQUEST FAILED — {e.Message}";
+        }
+        Callable
+            .From(() =>
+            {
+                if (error is not null)
+                {
+                    ShowListStatus(error);
+                    _hint.Text = "";
+                    return;
+                }
+                _cm.SetJoinToken(token);
+                Dial(s);
+            })
+            .CallDeferred();
+    }
+
+    // Null = the lobby has no Verified listing with that id any more (404); throws on other errors.
+    private async Task<string?> RequestJoinTokenAsync(string listingId)
+    {
+        var auth = AuthSession.Instance ?? throw new InvalidOperationException("not signed in");
+        string bearer = await auth.GetAccessTokenAsync() ?? throw new InvalidOperationException("not signed in");
+        using var req = new HttpRequestMessage(HttpMethod.Post, $"{_cm.LobbyBase}/servers/{listingId}/join");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
+        using var resp = await Http.SendAsync(req);
+        if (resp.StatusCode == HttpStatusCode.NotFound)
+            return null;
+        if (resp.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            auth.InvalidateAccessToken();
+            throw new InvalidOperationException("lobby session rejected — sign in again");
+        }
+        resp.EnsureSuccessStatusCode();
+        var body = await resp.Content.ReadFromJsonAsync<JoinTokenResponse>(JsonOpts);
+        return body?.JoinToken ?? throw new InvalidOperationException("malformed join response");
+    }
+
+    private void ShowListStatus(string text)
+    {
+        _listStatus.Text = text;
+        _listStatus.Visible = true;
     }
 
     // Direct WebSocket to an advertised endpoint, else WebRTC through the lobby. The lobby name is kept
@@ -850,6 +1016,14 @@ public partial class ServerLobbyOverlay : Control
 
     private void CommitName()
     {
+        // Signed in: the account display name goes out in Hello (a Verified server ignores it and
+        // takes the name from the join token; an Unverified one uses it as the callsign). The local
+        // callsign pref is left alone so signing out restores it.
+        if (AuthSession.Instance is { IsSignedIn: true } auth)
+        {
+            _cm.SetPilotName(UserPrefs.Clamp(auth.DisplayName));
+            return;
+        }
         string name = UserPrefs.Clamp(_name.Text);
         UserPrefs.SetPilotName(name);
         _cm.SetPilotName(name);
@@ -885,7 +1059,9 @@ public partial class ServerLobbyOverlay : Control
         {
             int max = s.MaxPlayers > 0 ? s.MaxPlayers : 32;
             _name = s.Name;
-            _tag = !string.IsNullOrEmpty(s.HostedBy) ? $"hosted by {s.HostedBy}" : (s.State ?? "");
+            _tag = s.Verified
+                ? (!string.IsNullOrEmpty(s.OperatorName) ? $"verified · {s.OperatorName}" : "verified")
+                : "unverified";
             _pilots = $"{s.Players}/{max}";
             _full = s.Players >= max;
             _live = s.State == "in-progress";

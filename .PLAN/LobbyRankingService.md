@@ -539,3 +539,23 @@ every restart under their name. Unlisted servers and every existing harness beha
   start (captures the listing id), win-condition, reset (empty-server recycle / ReturnToLobby while
   Active) and shutdown (after `app.Run`, then drains ≤3 s). Tests: `MatchReporterTests` (LobbyTest now
   88 checks). Phase 2 complete on the server side; e2e (WP4.3) still pending.
+- **2026-09-06 WP3.2 + WP3.3 done** (supervisor — Sonnet agent rate-limited): bearer on list/SSE
+  with 401 → invalidate/refresh → sign-out on a second 401; `ServerDto` gains `Verified/GameServerId/
+  OperatorName` + roster `PlayerId` (drops `HostedBy`); VERIFIED/UNVERIFIED pills + OPERATOR line;
+  `JoinWithIdentity` (token → `SetJoinToken` → dial; 404 → "listing went away"); `ConnectionManager.
+  JoinTokenProvider` mints a fresh token on EVERY redial (RetryLast + auto-reconnect — a Verified
+  server gates reconnects too), `JoinTokenRejected` + "RETRY WITH NEW TOKEN" in ConnectLinkModal;
+  signed-in header shows the account name read-only + ACCOUNT button; `AccountDialog` (PATCH /api/me,
+  career, logins, manage-in-browser, sign out; `--ui-open=account`); Settings PILOT tab → OPEN ACCOUNT.
+  Harness `--join-listing=<name>`. FIXED: sim-loop report checks moved after the empty-server reset
+  (JustReset was cleared by the next Step before being observed). Profile page: non-counted matches
+  read "no result".
+- **2026-09-06 WP4.3 evidence (headless e2e, scratchpad e2e3.sh):** fresh Postgres + lobby
+  (`AUTH_DEV_LOGIN`) → sim server pairs via device code (approved with the dev cookie + `/device`
+  form) → registers Verified with operator name → client seeded via `grant_type=dev` auto-joins with
+  `--join-listing` → server log 1106 "joined as player … (verified join token)", lobby roster carries
+  the player id → start report 202 → player leaves → empty-server reset → result(reset) 202 →
+  `/servers/{id}/history` shows the match (no winner, not counted), `/players/Erik` lists it; spool
+  empty; anonymous direct join refused (1104); a stale credential on a new DB falls back to a new
+  device code; restart re-lists silently. NOT exercised headlessly: a win-condition ending (needs a
+  base kill) and the Godot passkey/browser UI — user to click through once.

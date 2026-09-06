@@ -363,9 +363,18 @@ public partial class SettingsDialog : Control
         }
         group.AddChild(_callsign);
 
+        if (signedIn)
+        {
+            // The account page owns the name (PATCH /api/me), linked logins and sign-out.
+            var open = UiKit.MakeButton("OPEN ACCOUNT", () => AccountDialog.Open(this), ButtonVariant.Secondary);
+            open.CustomMinimumSize = new Vector2(240, 38);
+            group.AddChild(open);
+        }
         group.AddChild(
             UiKit.MakeLabel(
-                signedIn ? "(account name — edit in Account)" : "Takes effect next time you connect.",
+                signedIn
+                    ? "Your lobby account name — change it on the account page."
+                    : "Takes effect next time you connect.",
                 UiKit.TextStyle.Data,
                 DesignTokens.TextDim
             )

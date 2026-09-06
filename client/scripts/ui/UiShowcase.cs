@@ -55,7 +55,7 @@ public partial class UiShowcase : Control
 
     // `--ui-shot[=path]` renders one frame and saves a PNG, for screenshot verification.
     // `--ui-scroll=<px>` scrolls the gallery down first so below-the-fold sections land in shot.
-    // `--ui-open=settings|escape|password|password-error|signin` opens that modal before the shot
+    // `--ui-open=settings|escape|password|password-error|signin|account` opens that modal before the shot
     // (dialog verification).
     private void MaybeCaptureAndQuit()
     {
@@ -93,6 +93,8 @@ public partial class UiShowcase : Control
                 ServerPasswordModal.Open(this, "IRON VEIL BASTION", _ => { }, error: true);
             else if (openModal == "signin")
                 SignInDialog.Open(this);
+            else if (openModal == "account")
+                AccountDialog.Open(this);
             var shotTimer = GetTree().CreateTimer(0.2);
             shotTimer.Timeout += () =>
             {
@@ -716,6 +718,7 @@ public partial class UiShowcase : Control
             )
         );
         row.AddChild(UiKit.MakeButton("OPEN SIGN-IN DIALOG", () => SignInDialog.Open(parent), ButtonVariant.Ghost));
+        row.AddChild(UiKit.MakeButton("OPEN ACCOUNT DIALOG", () => AccountDialog.Open(parent), ButtonVariant.Ghost));
         s.AddChild(row);
     }
 
