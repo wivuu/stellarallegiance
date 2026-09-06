@@ -56,7 +56,7 @@ Pick a side, ready up, and the match starts.
 public lobby (`PUBLIC_LOBBY`, default `https://wivuu-public-lobby-production.up.railway.app`) under your hostname — override the
 name with `SIM_PUBLIC_NAME="My Server"`. And `run-client.ps1` opens the **server browser** against
 that lobby so you can pick a server (or still type an address for a direct connect). See
-[Public lobby & NAT traversal](#public-lobby--nat-traversal).
+[Public lobby & NAT traversal](#public-lobby--nat-traversal). Accounts, Verified servers, the ladder and how to deploy them: [docs/LOBBY-ACCOUNTS-AND-RANKING.md](docs/LOBBY-ACCOUNTS-AND-RANKING.md).
 
 **Accounts.** On first launch the client asks you to sign in: it shows a short code and opens the
 lobby's approval page in your browser (passkeys always work; Google/GitHub/Steam when the lobby has
