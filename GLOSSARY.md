@@ -1045,6 +1045,7 @@ Standalone .NET web service: game server registry, WebRTC signaling relay, serve
   - Live: `wivuu-public-lobby-production.up.railway.app`
 - **Related:** [[WebRTC]], [[DIRECT-FIRST]], [[Railway Deploy]]
 - **Notes:** Separate from gameplay servers; handles discovery and P2P setup only
+- **Ubiquitous language:** identity/ranking terms (Player / Pilot / Match / Listing) are defined in `public-lobby/CONTEXT.md`; use those words for anything the service persists
 
 ### ServerRegistry
 Directory of active game servers: hostname, port, player count, faction mix.

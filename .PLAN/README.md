@@ -101,6 +101,9 @@ Stage-1 YAML pipeline.
 
 ### Stage 5 — Social & persistence (independent track)
 
+> **Hand-off plan (2026-09-06):** decisions for accounts, server auth, persistence, and ranking are settled in
+> [`LobbyRankingService.md`](LobbyRankingService.md); language in `public-lobby/CONTEXT.md`; ADR-0001/0002 in `docs/adr/`.
+
 Orthogonal to the strategy loop, which runs on ephemeral per-match state. Do when persistence is
 wanted. **The discovery + hosting core is done; the social/persistence layer is not.**
 
