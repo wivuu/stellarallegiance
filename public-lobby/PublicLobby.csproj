@@ -23,5 +23,12 @@
   <ItemGroup>
     <ProjectReference Include="../public-lobby-data/PublicLobby.Data.csproj" />
     <ProjectReference Include="../shared/Shared.csproj" />
+    <!-- WP0.2: co-hosted Orleans silo (plan §1.4/§3.5, ADR-0002). Server brings the codegen SDK
+         transitively (Microsoft.Orleans.Sdk) so grains defined in this project get generated
+         serializers. ADO.NET clustering/reminders share the lobby's Postgres (Npgsql is already
+         referenced transitively via public-lobby-data; Orleans loads it by invariant name). -->
+    <PackageReference Include="Microsoft.Orleans.Server" Version="10.3.1" />
+    <PackageReference Include="Microsoft.Orleans.Clustering.AdoNet" Version="10.3.1" />
+    <PackageReference Include="Microsoft.Orleans.Reminders.AdoNet" Version="10.3.1" />
   </ItemGroup>
 </Project>

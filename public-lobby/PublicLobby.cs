@@ -42,6 +42,7 @@ builder.Services.AddSingleton<IServerRegistry>(new InMemoryServerRegistry(stunSe
 builder.Services.AddSingleton<SignalingRelay>();
 builder.Services.AddSingleton<ReachabilityProbe>();
 builder.AddLobbyPersistence();
+builder.AddLobbyOrleans();
 
 var app = builder.Build();
 
@@ -69,6 +70,7 @@ app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSecond
 // "wivuu-sim" so an endpoint accidentally pointed here can't be mistaken for a game server by the
 // reachability probe.
 app.MapGet("/health", () => Results.Text("public-lobby"));
+app.MapOrleansHealth();
 
 // ---- Registry: server discovery -------------------------------------------
 
@@ -431,3 +433,8 @@ static class LobbyJson
     // Reused by WsReceiveJsonAsync for every inbound WS frame instead of allocating one per call.
     internal static readonly JsonSerializerOptions CaseInsensitive = new() { PropertyNameCaseInsensitive = true };
 }
+
+// Top-level-statement programs compile their entry point into a generated `Program` class; this
+// partial declaration makes that type visible so tests/PublicLobbyTest/LobbyHostFixture.cs can
+// boot the real host via WebApplicationFactory<Program> (WP0.2/WP0.3).
+public partial class Program { }

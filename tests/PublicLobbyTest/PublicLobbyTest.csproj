@@ -16,5 +16,9 @@
     <ProjectReference Include="../../public-lobby-data/PublicLobby.Data.csproj" />
     <ProjectReference Include="../../shared/Shared.csproj" />
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.15.0" />
+    <!-- WP0.2: boots the REAL lobby host (Program via the top-level-statement `public partial
+         class Program { }` marker) in-process against the Testcontainers Postgres, so the
+         Orleans section exercises the actual silo wiring, not a stub. -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.11" />
   </ItemGroup>
 </Project>

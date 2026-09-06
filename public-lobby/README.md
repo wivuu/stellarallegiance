@@ -90,6 +90,9 @@ Environment variables (see [`PublicLobby.cs`](PublicLobby.cs)):
 | `SHARE_PORT` | `8091` | HTTP listen port. |
 | `STUN_URL` | `stun:stun.cloudflare.com:3478` | Public STUN handed to clients/servers for the WebRTC fallback. Comma/space-separate several for redundancy. |
 | `ConnectionStrings__postgres-database` | none (required) | Postgres connection string for identity, sessions, servers, matches and the ladder (`.PLAN/LobbyRankingService.md`); the process fails fast at startup if it's missing. |
+| `LOBBY_ORLEANS_CLUSTERING` | `adonet` | Orleans clustering mode: `adonet` (production — clusters through the same Postgres above) or `localhost` (dev boxes and the test suite — in-memory reminders, no Postgres clustering dependency). |
+| `ORLEANS_SILO_PORT` | `11111` | Orleans silo-to-silo port. |
+| `ORLEANS_GATEWAY_PORT` | `30000` | Orleans client gateway port. |
 
 A public STUN server is fine — there's nothing to host for it. The live server registry and
 signaling relay still hold everything in memory (registry entries expire 30 s after the last
@@ -102,6 +105,14 @@ Railway's pre-deploy command:
 ```bash
 dotnet public-lobby/bin/.../PublicLobby.dll --migrate    # or: dotnet run --project public-lobby -- --migrate
 ```
+
+The lobby also co-hosts an Orleans silo in the same process (ADR-0002): grains are the single
+writers of their own Postgres rows through EF Core, while Orleans itself supplies only the actor
+model and, via `LOBBY_ORLEANS_CLUSTERING=adonet` (the default), ADO.NET clustering + reminders
+against that same database — `--migrate` creates the Orleans tables too. This is a single-replica
+co-hosted silo for now; a second replica is a later slice, once the in-memory server registry and
+signaling relay above also move into grains. `GET /health/orleans` proves the silo is actually
+taking grain calls (not just that the process is up).
 
 Running it again against an already-migrated database is a no-op. WP4.2 documents the full
 Postgres deployment/env story; this is the short version.

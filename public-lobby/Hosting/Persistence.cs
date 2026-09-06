@@ -13,7 +13,9 @@ namespace PublicLobby.Hosting;
 // write endpoint. Sibling packages add their own Hosting/*.cs files the same way.
 static class PersistenceHosting
 {
-    const string ConnectionStringName = "postgres-database";
+    // internal: OrleansHosting.cs reads the same connection string (ADO.NET clustering/reminders
+    // share this Postgres, plan §1.4) without duplicating the name.
+    internal const string ConnectionStringName = "postgres-database";
     const string ConnectionStringEnvVar = "ConnectionStrings__postgres-database";
 
     public static IHostApplicationBuilder AddLobbyPersistence(this IHostApplicationBuilder builder)

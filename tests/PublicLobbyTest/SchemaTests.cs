@@ -10,7 +10,7 @@ using Npgsql;
 using PublicLobby.Data;
 using PublicLobby.Data.Entities;
 
-static partial class Program
+static partial class Suite
 {
     // Every table plan §3.4 (WP0.1 deliverable 1) names, exactly as the migration created them —
     // see the "exact table names" verification in the work-package report.

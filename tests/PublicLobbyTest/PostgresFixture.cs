@@ -37,6 +37,17 @@ static class PostgresFixture
         }
     }
 
+    // For sections (LobbyHostFixture) that hand the connection string to a SEPARATE process/host
+    // via an env var rather than sharing this fixture's NpgsqlDataSource directly.
+    // NpgsqlDataSource.ConnectionString strips the password on the way out (confirmed against
+    // Npgsql 10.0.3), so this returns the container's own connection string, not
+    // GetDataSourceAsync's `.ConnectionString`.
+    public static async Task<string?> GetConnectionStringAsync()
+    {
+        await GetDataSourceAsync();
+        return _container?.GetConnectionString();
+    }
+
     public static async Task DisposeAsync()
     {
         if (_dataSource is not null)

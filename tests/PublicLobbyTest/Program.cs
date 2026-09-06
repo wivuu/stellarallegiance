@@ -3,7 +3,12 @@
 // Sections that need Postgres (Testcontainers) are skipped with a WARN line when Docker is
 // unreachable, so the suite still exercises the pure-logic sections on a box without Docker.
 
-static partial class Program
+// Named `Suite`, not `Program`: LobbyHostFixture needs WebApplicationFactory<Program> to bind
+// unambiguously to public-lobby/PublicLobby.cs's `public partial class Program {}` marker (added
+// for exactly this purpose), which collides in the global namespace with a same-named type
+// declared in this project's own compilation (CS0436) — so this suite's own top-level static
+// class is named differently instead of reaching for an extern-alias workaround.
+static partial class Suite
 {
     static int _failures;
 
@@ -13,11 +18,15 @@ static partial class Program
         try
         {
             await RunSchemaTestsAsync();
+            await RunOrleansTestsAsync();
         }
         finally
         {
-            // Started lazily by the first section that needs Postgres (PostgresFixture); torn
-            // down once here regardless of which sections ran or failed.
+            // LobbyHostFixture (the real host + co-hosted silo) must shut down while its Postgres
+            // connection is still live, so it's disposed BEFORE the container it depends on.
+            // Both are started lazily by the first section that needs them; torn down once here
+            // regardless of which sections ran or failed.
+            await LobbyHostFixture.DisposeAsync();
             await PostgresFixture.DisposeAsync();
         }
         Console.WriteLine(_failures == 0 ? "ALL PASS" : $"{_failures} FAILURE(S)");

@@ -1043,7 +1043,7 @@ Standalone .NET web service: game server registry, WebRTC signaling relay, serve
   - `public-lobby/Signaling.cs` — WebRTC SDP relay
   - Live: `wivuu-public-lobby-production.up.railway.app`
 - **Related:** [[WebRTC]], [[DIRECT-FIRST]], [[Railway Deploy]]
-- **Notes:** Separate from gameplay servers; handles discovery and P2P setup only
+- **Notes:** Separate from gameplay servers; handles discovery and P2P setup only. Also co-hosts a single-replica Orleans silo in the same process (`public-lobby/Hosting/OrleansHosting.cs`, `public-lobby/Grains/`) — entity grains are the sole writers of their own Postgres rows through EF Core (ADR-0002); ADO.NET clustering/reminders share the lobby's Postgres by default (`LOBBY_ORLEANS_CLUSTERING=adonet`), or run in-memory for dev/tests (`=localhost`). `GET /health/orleans` checks the silo is taking grain calls.
 - **Ubiquitous language:** identity/ranking terms (Player / Pilot / Match / Listing) are defined in `public-lobby/CONTEXT.md`; use those words for anything the service persists
 
 ### ServerRegistry
