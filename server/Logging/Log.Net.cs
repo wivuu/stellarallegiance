@@ -218,4 +218,53 @@ internal static partial class Log
 
     [LoggerMessage(EventId = 1306, Level = LogLevel.Warning, Message = "answer error (ticket {Ticket}): {Reason}")]
     public static partial void WebRtcAnswerError(ILogger logger, string ticket, string reason);
+
+    // ---- Match reporting (WP2.3) ----
+
+    [LoggerMessage(
+        EventId = 1230,
+        Level = LogLevel.Information,
+        Message = "match {MatchId} started unlisted; it will not be reported to the public lobby"
+    )]
+    public static partial void MatchNotListed(ILogger logger, Guid matchId);
+
+    [LoggerMessage(
+        EventId = 1231,
+        Level = LogLevel.Information,
+        Message = "match {MatchId} ended (winner {Winner}, {EndReason}, {Pilots} pilots) — unlisted, result not reported"
+    )]
+    public static partial void MatchResultUnlisted(
+        ILogger logger,
+        Guid matchId,
+        string winner,
+        string endReason,
+        int pilots
+    );
+
+    [LoggerMessage(EventId = 1232, Level = LogLevel.Information, Message = "spooled match {Kind} for {MatchId}")]
+    public static partial void MatchReportSpooled(ILogger logger, string kind, Guid matchId);
+
+    [LoggerMessage(
+        EventId = 1233,
+        Level = LogLevel.Information,
+        Message = "public lobby accepted match {Kind} for {MatchId} ({Detail})"
+    )]
+    public static partial void MatchReportSent(ILogger logger, string kind, Guid matchId, string detail);
+
+    [LoggerMessage(EventId = 1234, Level = LogLevel.Warning, Message = "match report {File} dropped: {Detail}")]
+    public static partial void MatchReportDropped(ILogger logger, string file, string detail);
+
+    [LoggerMessage(
+        EventId = 1235,
+        Level = LogLevel.Warning,
+        Message = "match report {File} not delivered (attempt {Attempt}: {Reason}); retrying in {Seconds}s"
+    )]
+    public static partial void MatchReportRetry(ILogger logger, string file, int attempt, string reason, int seconds);
+
+    [LoggerMessage(
+        EventId = 1236,
+        Level = LogLevel.Warning,
+        Message = "match {MatchId} has pilots without a lobby player id ({Names}); the public lobby will refuse this result"
+    )]
+    public static partial void MatchReportHasAnonymousPilots(ILogger logger, Guid matchId, string names);
 }

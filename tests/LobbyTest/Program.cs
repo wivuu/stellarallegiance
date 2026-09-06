@@ -118,6 +118,9 @@ Check(lobby.CommanderOf(1) == 3, "other side unaffected", $"other side commander
 // ---- Hello frame (WP2.2): proto-38 parser, backward-compatible with every older layout. ----
 failures += HelloFrameTests.Run();
 
+// ---- Match reporting (WP2.3): result builder + spooling reporter against a stub lobby. ----
+failures += await MatchReporterTests.RunAsync();
+
 // ---- Join-token verifier (WP1.3): offline ES256 verification of lobby-issued join tokens. ----
 failures += await JoinTokenVerifierTests.RunAsync();
 

@@ -576,6 +576,18 @@ public sealed partial class Simulation
     // one-shot result writeback (IMatchResultSink).
     public bool JustEnded { get; private set; }
 
+    // Match identity for reporting (plan §1.3): minted at StartMatch, frozen through Ended/Lobby.
+    public Guid MatchId { get; private set; }
+    public DateTimeOffset MatchStartedAt { get; private set; }
+
+    // Set by the host (Program.cs) from the lobby's selected map when BuildMatchWorld runs.
+    public string MatchMapName { get; set; } = "";
+
+    // One-step flags mirroring JustEnded: Lobby→Active this step; Active→Lobby WITHOUT a winner
+    // this step (reset / empty-server recycle — reported as a non-counting "reset" ending).
+    public bool JustStarted { get; private set; }
+    public bool JustReset { get; private set; }
+
     // Set whenever a base took damage this step (or the match ended), so the hub streams
     // a fresh Bases frame instead of leaving clients on the Welcome-time values.
     public bool BasesChangedThisStep { get; private set; }
@@ -784,6 +796,8 @@ public sealed partial class Simulation
         ProbeGoneThisStep.Clear();
         ProbesChangedThisStep = false;
         JustEnded = false;
+        JustStarted = false;
+        JustReset = false;
         BasesChangedThisStep = false;
         TeamStateChangedThisStep = false;
         LoadoutsChangedThisStep = false;
@@ -1229,6 +1243,9 @@ public sealed partial class Simulation
         if (nextWorld != null)
             World = nextWorld;
         Phase = PhaseActive;
+        MatchId = Guid.NewGuid();
+        MatchStartedAt = DateTimeOffset.UtcNow;
+        JustStarted = true;
         Winner = NoWinner; // the ONLY reset — the last result stays readable through the lobby wait
         _matchDirty = false;
         foreach (var ring in _shotRing)
@@ -1327,6 +1344,8 @@ public sealed partial class Simulation
     // ends and whenever the server empties out.
     public void ReturnToLobby()
     {
+        if (Phase == PhaseActive)
+            JustReset = true; // leaving a live match with no winner: reported as "reset"
         DespawnAllPigs();
         DespawnAllMiners();
         // Tear down any in-flight missiles too (emit gone so live clients don't keep ghosts).
@@ -1658,8 +1677,7 @@ public sealed partial class Simulation
             return weaponId;
 
         WeaponDef? Lookup(uint id) => WeaponDefs.TryGetValue(id, out var w) ? w : null;
-        bool Owns(ushort techIdx) =>
-            techIdx < Content.Techs.Count && ts.OwnedTechs.Contains(Content.Techs[techIdx].Id);
+        bool Owns(ushort techIdx) => techIdx < Content.Techs.Count && ts.OwnedTechs.Contains(Content.Techs[techIdx].Id);
 
         return WeaponTier.Migrate(weaponId, Lookup, Owns);
     }
@@ -2940,15 +2958,7 @@ public sealed partial class Simulation
             float dmg = w.Damage * TeamAttr(ship.Team, Allegiance.Factions.Model.GameAttribute.GunDamage);
             _shotRing[(tick + resolveTicks) % ShotRingSize]
                 .Add(
-                    new PendingShot(
-                        targetShip,
-                        targetBase,
-                        dmg,
-                        w.ShieldMult,
-                        targetProbe,
-                        w.IsHealing,
-                        ship.OwnerClientId
-                    )
+                    new PendingShot(targetShip, targetBase, dmg, w.ShieldMult, targetProbe, w.IsHealing, ship.OwnerClientId)
                 );
         }
     }

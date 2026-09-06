@@ -530,3 +530,12 @@ every restart under their name. Unlisted servers and every existing harness beha
   restoring SignedIn silently (refresh token visibly rotated) with no modal. `pwsh` is unavailable in
   this sandboxed worktree (blocked outright, not just the documented `-GodotArgs` footgun) — verified
   via direct `godot-mono` invocation instead (same `--` flag-split convention applies either way).
+- **2026-09-06 WP2.3 done** (supervisor — the Sonnet agent was cut off by a session rate limit):
+  `server/Net/MatchReport.cs` (`MatchStartInfo`/`MatchResultInfo`, pure `MatchReportBuilder.Build`),
+  `server/Net/LobbyMatchReporter.cs` (disk spool `SIM_REPORT_SPOOL`, chronological file names, worker
+  with 5 s→60 s backoff; 2xx/409 delete, 422/400/403/404 drop loudly, 401 → one forced refresh, waits
+  while unverified), `IMatchResultSink` widened (`OnMatchStarted`/`ReportResult(MatchResultInfo)`),
+  Simulation gains `MatchId`/`MatchStartedAt`/`MatchMapName`/`JustStarted`/`JustReset`; Program.cs reports
+  start (captures the listing id), win-condition, reset (empty-server recycle / ReturnToLobby while
+  Active) and shutdown (after `app.Run`, then drains ≤3 s). Tests: `MatchReporterTests` (LobbyTest now
+  88 checks). Phase 2 complete on the server side; e2e (WP4.3) still pending.

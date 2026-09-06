@@ -86,6 +86,16 @@ WebRTC hole-punching, so the WebRTC/STUN fallback only applies to home/self-host
 Verify with `curl https://<lobby-domain>/servers` — the entry's `publicEndpoint` should be
 `wss://<server-domain>` (and listed once).
 
+## Match results → public lobby
+
+A server that holds a **Verified** listing reports every match to the lobby with its own access
+token: `POST /matches` when a match starts and `POST /matches/{id}/result` when it ends
+(win-condition, or a non-counting `reset`/`shutdown` ending). Reports are spooled to disk first
+(`SIM_REPORT_SPOOL`, default `report-spool/` beside `sim-cache/`) and retried with backoff until the
+lobby answers, so a lobby outage or a server crash never loses a result — leftovers are re-sent on
+the next boot. A result the lobby refuses as implausible (a pilot who never took a join token for
+this server) is logged and dropped. Unlisted/private servers only log results.
+
 ## TLS
 
 The sim server speaks **plain `ws://` on :8090**. Terminate TLS at the **hosting layer's ingress

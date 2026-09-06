@@ -73,16 +73,32 @@ public sealed class InMemoryPlayerDirectory : IPlayerDirectory
 // Folds in the old ResultReporter; the default just logs.
 public interface IMatchResultSink
 {
-    void ReportResult(byte winner);
+    // Lobby→Active: the match id/map/start time and the Listing it runs under (null = unlisted).
+    void OnMatchStarted(Net.MatchStartInfo start);
+
+    // Active→Ended (win-condition), or Active→Lobby without a winner (reset), or process exit
+    // mid-match (shutdown). Only win-condition results count on the lobby's ladder.
+    void ReportResult(Net.MatchResultInfo result);
 }
 
+// Unlisted / private servers: results are only logged (plan §1.2 — an unlisted match can never be
+// reported, there is no Listing to attribute it to).
 public sealed class LoggingMatchResultSink : IMatchResultSink
 {
     private readonly ILogger _log;
 
     public LoggingMatchResultSink(ILogger<LoggingMatchResultSink> log) => _log = log;
 
-    public void ReportResult(byte winner) => Log.MatchResult(_log, winner);
+    public void OnMatchStarted(Net.MatchStartInfo start) { }
+
+    public void ReportResult(Net.MatchResultInfo result) =>
+        Log.MatchResultUnlisted(
+            _log,
+            result.MatchId,
+            result.WinnerTeam?.ToString() ?? "none",
+            result.EndReason,
+            result.Pilots.Length
+        );
 }
 
 // Decides when a lobby should start its match. Default: start the instant ANY teamed pilot is
