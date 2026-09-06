@@ -503,3 +503,30 @@ every restart under their name. Unlisted servers and every existing harness beha
   `-Local --autostart` server unchanged (ship spawned). GOTCHA: a listing's session id changes on every
   re-registration, so a join token fetched for a stale listing fails `aud` — the client must re-fetch the
   list and request a new token (WP3.2 handles by re-requesting on reject code 2).
+- **2026-09-06 WP3.1 done** — `client/scripts/auth/AuthSession.cs` (Node service, `Instance` static
+  like `SfxManager`; `State` enum SignedOut/Restoring/DeviceFlow/Expired/Denied/SignedIn):
+  `user://auth.json` holds ONLY `{refreshToken,displayName,playerId,lobbyBase}` (write-to-temp-then-
+  `File.Move` atomic; never the access token, never `settings.cfg`); restores on boot (refresh
+  in the background, `invalid_grant` deletes the file), full RFC 8628 device flow
+  (`StartDeviceFlowAsync`, `OS.ShellOpen`, poll respecting `slow_down`), proactive refresh 60s ahead
+  of the 15-min access-token expiry (monotonic generation counter so a stale schedule is a no-op),
+  `GetAccessTokenAsync()` for WP3.2's bearer calls, `ContinueAnonymously`/`SignOutAsync`.
+  `client/scripts/ui/SignInDialog.cs` (DESIGN.md components only) shown automatically the first time
+  `AuthSession` settles on SignedOut, suppressed by `--autofly`/`--anonymous` (new flag)/`--host`/
+  `--stress-*`/`SIM_URI` (before `--`) and `--ui-shot`/`--ui-open=`/`--ui-showcase`/`--hangar*` (after
+  `--`); added to `UiShowcase` (`--ui-open=signin`). `ServerLobbyOverlay` gates the SSE/list fetch
+  behind `AuthSession.IsSignedIn` (a "SIGN IN TO BROWSE" panel replaces the list; direct-join-by-
+  address stays usable; the expected WP3.2-pending 401 is logged, not thrown). `SettingsDialog`'s
+  PILOT tab shows the account name read-only when signed in. `ConnectionManager.ResolveLobbyBase()`
+  extracted static (both peers resolve the same lobby base without an instance-ready-order
+  dependency). GOTCHA (fixed): `SignInDialog.Open` must never be called synchronously from
+  `AuthSession._Ready()` — the engine still has Main's own children "busy setting up" at that point,
+  so `add_child` on the tree root throws; `ShowSignInModalOnce` defers via `CallDeferred`. Verified
+  live end to end against a local `postgres:17-alpine` + `AUTH_DEV_LOGIN=true` lobby: `--ui-shot` of
+  the modal (UiShowcase), `--autofly --host` unlisted-server run with NO modal + normal flight, a
+  plain launch reaching device-flow "waiting" (`[AuthSession] device code … — approve at …`), then
+  (bonus, via a curl-driven `/device` approval) the full happy path — `[AuthSession] signed in as
+  Vex`, `user://auth.json` written with exactly the 4 allowed fields, and a same-session relaunch
+  restoring SignedIn silently (refresh token visibly rotated) with no modal. `pwsh` is unavailable in
+  this sandboxed worktree (blocked outright, not just the documented `-GodotArgs` footgun) — verified
+  via direct `godot-mono` invocation instead (same `--` flag-split convention applies either way).

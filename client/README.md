@@ -44,6 +44,7 @@ Roughly grouped by responsibility:
   `AlertBox`, `DataTable`, `ContactChip`, `RadarFrame`, …). Team identity stays the
   blue/red faction colours; the cyan accent is structural chrome only.
 - **Audio** — `SfxManager` (spatial SFX via `PlayAt`/`PlayUi`, hooked into combat/engine events).
+- **Account** — `scripts/auth/AuthSession` (public-lobby sign-in session; see below).
 
 ## Running
 
@@ -59,6 +60,25 @@ assembly against a rebuilt server (which would cause silent protocol skew). See 
 [README](../README.md) and [QUICKSTART](../QUICKSTART.md) for prerequisites (Godot Mono build,
 .NET 10 SDK).
 
+### Account sign-in
+
+`AuthSession` (`scripts/auth/AuthSession.cs`) owns the public-lobby session, per
+[`.PLAN/LobbyRankingService.md`](../.PLAN/LobbyRankingService.md) WP3.1. It persists **only**
+`{ refreshToken, displayName, playerId, lobbyBase }` to `user://auth.json` (never the access
+token, never `settings.cfg`); deleting that file signs the player out locally. On launch it shows
+a **SIGN IN** modal (RFC 8628 device code, opened in the system browser) whenever there's no
+usable session — unless one of these is present, in which case the modal is suppressed entirely
+and the client behaves exactly as before:
+
+- game flags (before a bare `--`): `--autofly`, `--anonymous`, `--host`/`--host=`, `--stress-*`
+- UI-harness flags (after `--`): `--ui-shot`, `--ui-open=`, `--ui-showcase`, `--hangar`, `--hangar-demo=`
+- a direct-join address via `SIM_URI`
+
+`--anonymous` (new) forces anonymous mode for the whole process the same way clicking **CONTINUE
+WITHOUT ACCOUNT** does — useful for harnesses/CI that need to skip the modal without also forcing
+a specific server via `--host`. While anonymous, the server browser shows only direct join by
+address (`+ CONNECT TO…`); the public server list requires a signed-in session.
+
 ### Design-system gallery
 
 Press **F9** in-game to toggle the component gallery as a live overlay, or boot straight into
@@ -68,6 +88,7 @@ it for a screenshot:
 godot --headless --import --path client           # required once after pulling new fonts
 godot --path client -- --ui-showcase              # opens scenes/UiShowcase.tscn
 godot --path client res://scenes/UiShowcase.tscn -- --ui-shot=/tmp/ui.png   # one-frame capture
+godot --path client res://scenes/UiShowcase.tscn -- --ui-open=signin --ui-shot=/tmp/signin.png
 ```
 
 The fonts in `assets/fonts/` are variable TTFs (OFL); their `.import` sidecars are regenerated
