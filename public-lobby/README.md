@@ -117,6 +117,34 @@ taking grain calls (not just that the process is up).
 Running it again against an already-migrated database is a no-op. WP4.2 documents the full
 Postgres deployment/env story; this is the short version.
 
+### Accounts, sign-in, and the web shell (WP0.3)
+
+The lobby is its own identity issuer ([ADR-0001](../docs/adr/0001-public-lobby-is-its-own-identity-issuer.md)):
+ASP.NET Core Identity, cookie auth (`lobby` cookie, 30-day sliding), and a handful of Razor Pages
+(`/login`, `/me`, `/ladder`, …) under `Pages/`. **Passkeys are always on and need zero configuration**
+— a bare local lobby with only `ConnectionStrings__postgres-database` set still lets a player sign up
+with a passkey at `/login`. External login providers are registered ONLY when their env vars are
+present:
+
+| Var | Purpose |
+|---|---|
+| `LOBBY_PUBLIC_URL` | The lobby's own public URL (default `http://localhost:<port>`). Used as the passkey relying-party domain and (later work packages) the device-code `verification_uri`/join-token issuer. |
+| `AUTH_GOOGLE_CLIENT_ID` / `AUTH_GOOGLE_CLIENT_SECRET` | Enables "Continue with Google" on `/login`. |
+| `AUTH_GITHUB_CLIENT_ID` / `AUTH_GITHUB_CLIENT_SECRET` | Enables "Continue with GitHub". |
+| `AUTH_STEAM_API_KEY` | Enables "Continue with Steam" (OpenID 2.0 — needs no client id/secret) and fetches the Steam persona name as the default display name. |
+| `LOBBY_ADMINS` | Comma list of `github:<login>`, `google:<sub>`, `steam:<steamid>`, or `name:<display-name>` — a matching player gets the admin role at sign-in. |
+
+Sign-up creates a `players` row alongside the Identity user (`public-lobby/Accounts/AccountService.cs`
+— the ONE place that happens); every later change to a player (display-name edits, `last_seen_at`,
+match aggregates) becomes WP1.2's `PlayerGrain`'s job.
+
+**Front-end build:** the web pages are styled with Tailwind CSS v4 (standalone CLI, no Node/npm — the
+`EnsureTailwindCss` MSBuild target in `PublicLobby.csproj` downloads the pinned binary into
+`tools/tailwind/` on first build and runs it against `Styles/app.css` to produce `wwwroot/app.css`;
+both are gitignored) plus [htmx](https://htmx.org) 2.0.9, vendored verbatim at
+`wwwroot/htmx.min.js` (committed, not downloaded at build time). Both work unmodified inside
+[`Dockerfile`](Dockerfile) — `dotnet publish` runs the same MSBuild target.
+
 ### The reachability probe
 
 `public-lobby` decides a server's mode by `GET`ting `/health` on the address it registered from

@@ -1,0 +1,7 @@
+@page "/login/external"
+@model PublicLobby.Pages.LoginExternalModel
+@{
+    ViewData["Title"] = "Redirecting…";
+}
+@* OnGet always issues a ChallengeResult (redirect to the provider); this body never renders. *@
+<p class="text-center text-text-2">Redirecting to sign-in&hellip;</p>

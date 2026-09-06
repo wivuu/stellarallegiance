@@ -43,6 +43,8 @@ builder.Services.AddSingleton<SignalingRelay>();
 builder.Services.AddSingleton<ReachabilityProbe>();
 builder.AddLobbyPersistence();
 builder.AddLobbyOrleans();
+builder.AddLobbyWeb();
+builder.AddLobbyBearerAuth();
 
 var app = builder.Build();
 
@@ -65,6 +67,7 @@ fwd.KnownIPNetworks.Clear();
 fwd.KnownProxies.Clear();
 app.UseForwardedHeaders(fwd);
 app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30) });
+app.UseLobbyWeb();
 
 // Liveness endpoint for a PaaS healthcheck (Railway). Distinct token from the sim server's
 // "wivuu-sim" so an endpoint accidentally pointed here can't be mistaken for a game server by the

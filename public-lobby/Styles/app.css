@@ -1,0 +1,29 @@
+/* Tailwind CSS v4 source (public-lobby web shell, WP0.3). Built by the EnsureTailwindCss MSBuild
+   target in PublicLobby.csproj via the standalone CLI (no Node/npm) into wwwroot/app.css
+   (gitignored — see public-lobby/README.md). Palette/fonts mirror DESIGN.md's "Stellar Allegiance"
+   tokens (client/scripts/ui/DesignTokens) so the web shell reads as the same product as the Godot
+   client, even though the two UIs share no code. */
+@import "tailwindcss";
+
+@theme {
+    --color-void: #05070f;
+    --color-panel: #0b1320;
+    --color-panel-hi: #16243a;
+    --color-accent: #37e0ff;
+    --color-secondary: #ff9d4d;
+    --color-text-hi: #cfe6f5;
+    --color-text-2: #7fa6c8;
+    --color-text-dim: #5a7390;
+    --color-ok: #4dffa6;
+    --color-warn: #ffb347;
+    --color-danger: #ff5a6a;
+    --color-data: #9fd6ff;
+
+    --font-ui: "Saira", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+
+body {
+    background-color: var(--color-void);
+    color: var(--color-text-hi);
+}
