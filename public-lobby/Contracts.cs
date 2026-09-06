@@ -2,17 +2,22 @@ namespace PublicLobby;
 
 // ---- Wire contracts (JSON) shared by the registry + signaling routes ----
 
-// A host announcing itself. Name (3-50 chars, validated in ServerRegistry) and Port (the
-// public-facing port to probe/advertise) are required. PublicEndpoint is an OPTIONAL host:port the
-// server asserts as its reachable address (e.g. its host LAN/public address when it sits behind
-// container NAT or a proxy); the lobby probes it and advertises it only if it answers /health (see
-// ReachabilityProbe), so a server can't simply CLAIM to be directly joinable. When empty the lobby
-// probes the request's source IP instead.
+// A host announcing itself — the start of a Listing (public-lobby/CONTEXT.md). Name (3-50 chars,
+// validated in ServerRegistry) and Port (the public-facing port to probe/advertise) are required.
+// PublicEndpoint is an OPTIONAL host:port the server asserts as its reachable address (e.g. its
+// host LAN/public address when it sits behind container NAT or a proxy); the lobby probes it and
+// advertises it only if it answers /health (see ReachabilityProbe), so a server can't simply CLAIM
+// to be directly joinable. When empty the lobby probes the request's source IP instead.
 // Players/MaxPlayers/State seed the live status fields the browser shows (also refreshed by the
 // heartbeat) — current player count, capacity, and "lobby"/"in-progress"/"ended".
 // ProtocolVersion is the server's wire-protocol version (server/Net/Protocol.cs); clients filter the
 // browser list to their own protocol so they only see servers they can actually handshake with. 0 =
 // unspecified (a legacy server that predates this field) — those match no real client filter.
+// Whether the resulting Listing is Verified is NOT part of this body: it comes from the caller's
+// bearer token (plan §1.2/WP1.4) — a Game Server token binds the listing to its Operator; no/other
+// token is allowed only when ALLOW_UNVERIFIED_SERVERS is set. HostedBy is gone (superseded by the
+// authenticated Operator name); a sim server that still sends it is fine — unknown fields are
+// ignored.
 public record RegisterRequest(
     string Name,
     int Port,
@@ -21,7 +26,6 @@ public record RegisterRequest(
     int MaxPlayers = 0,
     string? State = null,
     int ProtocolVersion = 0,
-    string? HostedBy = null,
     LobbyRosterEntry[]? Roster = null,
     // True when the server enforces a shared-secret password (--secret/SIM_SECRET). Advertised so the
     // browser can flag locked servers and prompt for the passphrase BEFORE dialing. Not the secret
@@ -33,20 +37,18 @@ public record RegisterRequest(
 // browser list stays fresh between (re)registrations. All optional — a body-less ping just
 // refreshes LastSeen. Roster is null when unchanged/unsupported (keep the stored one); an
 // empty array explicitly clears it.
-public record HeartbeatRequest(
-    int Players = 0,
-    int MaxPlayers = 0,
-    string? State = null,
-    LobbyRosterEntry[]? Roster = null
-);
+public record HeartbeatRequest(int Players = 0, int MaxPlayers = 0, string? State = null, LobbyRosterEntry[]? Roster = null);
 
 // One player on a registered server, as shown in the server-browser detail panel. Team is the
 // side index (0/1); Flying means the player has an active ship (vs waiting in the lobby).
-public record LobbyRosterEntry(string Name, int Team, bool Ready = false, bool Flying = false);
+// PlayerId is the Pilot's Player id (public-lobby/CONTEXT.md) when they joined with a join token;
+// null means an Anonymous Join (WP2.2 sets it, so it stays null until the sim server sends it).
+public record LobbyRosterEntry(string Name, int Team, bool Ready = false, bool Flying = false, Guid? PlayerId = null);
 
-// What the registry stores and hands back. IceServers is the STUN/TURN config this box owns
-// (from its env) so every client + game server gets one consistent ICE configuration to dial.
-// Players/MaxPlayers/State are the live status the browser renders as "(players/max) · state".
+// What the registry stores and hands back — the live Listing (public-lobby/CONTEXT.md). IceServers
+// is the STUN/TURN config this box owns (from its env) so every client + game server gets one
+// consistent ICE configuration to dial. Players/MaxPlayers/State are the live status the browser
+// renders as "(players/max) · state".
 public record ServerEntry(
     string SessionId,
     string Name,
@@ -58,7 +60,17 @@ public record ServerEntry(
     int MaxPlayers = 0,
     string? State = null,
     int ProtocolVersion = 0,
-    string? HostedBy = null,
+    // Verified (CONTEXT.md): true when this Listing's Game Server authenticated with the public
+    // lobby at registration (a server bearer token) — set in ServerRegistry.Register from the
+    // caller's ListingIdentity. An Unverified listing (false) has no Operator, can never receive
+    // join tokens, and can never deliver results (plan §1.2).
+    bool Verified = false,
+    // The durable Game Server id (WP1.1's game_servers row) this listing is bound to; null when
+    // Unverified.
+    Guid? GameServerId = null,
+    // The Operator's (CONTEXT.md) current display name, looked up fresh at registration; null when
+    // Unverified. Replaces the old free-text HostedBy the sim server used to self-report.
+    string? OperatorName = null,
     IReadOnlyList<LobbyRosterEntry>? Roster = null,
     // Mirrors RegisterRequest.Protected: whether this server requires a shared-secret password.
     // Serialized to SSE / GET /servers so the browser can render a lock and gate the join.

@@ -4,6 +4,13 @@ using System.Text;
 
 namespace PublicLobby;
 
+// The server-authenticated identity bound to a Listing at registration (WP1.4, plan §1.2). Carries
+// the durable Game Server id (WP1.1's game_servers row) and its Operator's current display name —
+// both looked up fresh by the POST /servers route from the caller's bearer token. Passing null to
+// IServerRegistry.Register means the listing is Unverified (CONTEXT.md): no operator, never
+// eligible for join tokens or results.
+public sealed record ListingIdentity(Guid GameServerId, string OperatorName);
+
 // In-memory registry of active game servers. A host POSTs to register (getting a SessionId),
 // heartbeats to stay listed, and is pruned once it goes quiet. Clients GET the active list to
 // browse. Swap the implementation for Redis/DB later behind IServerRegistry.
@@ -11,9 +18,11 @@ public interface IServerRegistry
 {
     // Returns null when the name is invalid (caller maps to 400). publicEndpoint is the result of
     // the lobby's reachability probe: a host:port for a directly-joinable server, or null for a
-    // NAT'd server that clients must reach over WebRTC/STUN. The result carries a freshly-minted
-    // per-session secret returned only to the registrant (see RegisterResponse).
-    RegisterResponse? Register(RegisterRequest req, string? publicEndpoint);
+    // NAT'd server that clients must reach over WebRTC/STUN. identity is the caller's authenticated
+    // Game Server + Operator (see ListingIdentity), or null for an Unverified listing. The result
+    // carries a freshly-minted per-session secret returned only to the registrant (see
+    // RegisterResponse).
+    RegisterResponse? Register(RegisterRequest req, string? publicEndpoint, ListingIdentity? identity);
 
     // Refresh liveness (LastSeen) and, when status is given, the live player count / capacity /
     // game state shown in the browser. Returns false if the session isn't registered (-> 404,
@@ -41,6 +50,7 @@ public sealed class InMemoryServerRegistry : IServerRegistry
     static readonly TimeSpan Ttl = TimeSpan.FromSeconds(30);
 
     readonly ConcurrentDictionary<string, ServerEntry> _servers = new();
+
     // Per-session capability secrets, kept out of ServerEntry so they never reach the SSE/list JSON.
     readonly ConcurrentDictionary<string, string> _secrets = new();
     readonly IReadOnlyList<IceServer> _iceServers;
@@ -59,7 +69,7 @@ public sealed class InMemoryServerRegistry : IServerRegistry
         return n.Length is >= NameMin and <= NameMax ? n : null;
     }
 
-    public RegisterResponse? Register(RegisterRequest req, string? publicEndpoint)
+    public RegisterResponse? Register(RegisterRequest req, string? publicEndpoint, ListingIdentity? identity)
     {
         var name = NormalizeName(req.Name);
         if (name is null)
@@ -79,7 +89,11 @@ public sealed class InMemoryServerRegistry : IServerRegistry
             MaxPlayers: Math.Max(0, req.MaxPlayers),
             State: NormalizeState(req.State),
             ProtocolVersion: Math.Max(0, req.ProtocolVersion),
-            HostedBy: NormalizeHostedBy(req.HostedBy),
+            // Verified/GameServerId/OperatorName all come from the caller's authenticated identity
+            // (route), never from the request body — a server can't self-report as verified.
+            Verified: identity is not null,
+            GameServerId: identity?.GameServerId,
+            OperatorName: identity is null ? null : NormalizeOperatorName(identity.OperatorName),
             Roster: SanitizeRoster(req.Roster, req.MaxPlayers),
             Protected: req.Protected
         );
@@ -125,13 +139,16 @@ public sealed class InMemoryServerRegistry : IServerRegistry
     }
 
     // Trim, strip control chars, and cap a reported game-state label so a server can't bloat the
-    // list payload. Shares hygiene with hostedBy/roster names (see CleanShortText below).
+    // list payload. Shares hygiene with operatorName/roster names (see CleanShortText below).
     static string? NormalizeState(string? state) => CleanShortText(state, 20);
 
-    // Hosted-by label: trimmed, control chars stripped, capped. Null when absent/empty.
-    static string? NormalizeHostedBy(string? hostedBy) => CleanShortText(hostedBy, 24);
+    // Operator display name (looked up from PlayerGrain at registration): trimmed, control chars
+    // stripped, capped. Null when absent/empty (never happens for a real Verified listing, since
+    // the route only builds a ListingIdentity from an existing player's display name — defensive
+    // hygiene anyway, same as everything else that reaches the broadcast list JSON).
+    static string? NormalizeOperatorName(string? operatorName) => CleanShortText(operatorName, 24);
 
-    // Player-name / short-label hygiene shared by hostedBy and roster names: the lobby is a
+    // Player-name / short-label hygiene shared by operatorName and roster names: the lobby is a
     // public service, so cap length and strip control characters before anything reaches the
     // broadcast list JSON.
     static string? CleanShortText(string? text, int max)
@@ -151,6 +168,9 @@ public sealed class InMemoryServerRegistry : IServerRegistry
     }
 
     // Roster caps: at most min(maxPlayers, 64) entries, names cleaned, team clamped to 0/1.
+    // PlayerId passes through untouched (the `with` copy below preserves it) — a Pilot's Player id
+    // when they joined with a join token, null for an Anonymous Join (CONTEXT.md); the lobby has no
+    // way to validate it here, only the sim server that minted the roster knows.
     // Null in, null out (meaning "no roster data"); an empty array stays an empty array.
     static LobbyRosterEntry[]? SanitizeRoster(LobbyRosterEntry[]? roster, int maxPlayers)
     {
@@ -205,10 +225,7 @@ public sealed class InMemoryServerRegistry : IServerRegistry
         Prune();
         if (string.IsNullOrEmpty(secret) || !_secrets.TryGetValue(sessionId, out var expected))
             return false;
-        return CryptographicOperations.FixedTimeEquals(
-            Encoding.UTF8.GetBytes(secret),
-            Encoding.UTF8.GetBytes(expected)
-        );
+        return CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(secret), Encoding.UTF8.GetBytes(expected));
     }
 
     void Prune()

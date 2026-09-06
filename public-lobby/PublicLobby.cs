@@ -2,12 +2,15 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
+using Orleans;
 using PublicLobby;
 using PublicLobby.Api;
 using PublicLobby.Auth;
 using PublicLobby.Data;
+using PublicLobby.Grains;
 using PublicLobby.Hosting;
 
 // Public lobby + WebRTC signaling box. Player-run game servers register here (name + port) and
@@ -83,11 +86,25 @@ app.MapJwks();
 
 // ---- Registry: server discovery -------------------------------------------
 
-// Register a new server (host announces itself). The lobby probes the server's advertised port and
-// records a direct host:port if it's reachable, else null (-> WebRTC/STUN). 400 on a bad name.
+// Register a new server (host announces itself) — Verified vs Unverified (plan §1.2, CONTEXT.md):
+//   - A SERVER bearer token binds the listing to its durable Game Server + current Operator
+//     (Verified=true) and bumps GameServerGrain.LastListedAt.
+//   - A PLAYER bearer token is refused (403): players don't list servers.
+//   - No/invalid bearer is allowed only when ALLOW_UNVERIFIED_SERVERS=true (Unverified listing);
+//     otherwise 401.
+// The lobby also probes the server's advertised port and records a direct host:port if it's
+// reachable, else null (-> WebRTC/STUN). 400 on a bad name.
 app.MapPost(
     "/servers",
-    async (RegisterRequest req, HttpContext ctx, IServerRegistry registry, ReachabilityProbe probe, CancellationToken ct) =>
+    async (
+        RegisterRequest req,
+        HttpContext ctx,
+        IServerRegistry registry,
+        ReachabilityProbe probe,
+        IGrainFactory grains,
+        TimeProvider clock,
+        CancellationToken ct
+    ) =>
     {
         // Shared 400 payload: NormalizeName's pre-check and Register's null-return both mean the
         // same thing (name outside the valid length range), so both branches return this one.
@@ -97,10 +114,47 @@ app.MapPost(
         if (InMemoryServerRegistry.NormalizeName(req.Name) is null)
             return nameErr;
 
+        ListingIdentity? identity = null;
+        var auth = await ctx.AuthenticateAsync(LobbyBearer.Scheme);
+        if (auth.Succeeded)
+        {
+            var user = auth.Principal!;
+            if (LobbyBearer.IsPlayer(user))
+                return Results.Json(
+                    new { error = "players cannot list servers" },
+                    statusCode: StatusCodes.Status403Forbidden
+                );
+
+            var gameServerId = LobbyBearer.SubjectId(user);
+            var gameServerGrain = grains.GetGrain<IGameServerGrain>(gameServerId);
+            var gameServer = await gameServerGrain.Get();
+            if (gameServer is null)
+                return Results.Json(
+                    new { error = "game server no longer exists" },
+                    statusCode: StatusCodes.Status401Unauthorized
+                );
+            var operatorSnap = await grains.GetGrain<IPlayerGrain>(gameServer.OperatorPlayerId).Get();
+            if (operatorSnap is null)
+                return Results.Json(
+                    new { error = "operator no longer exists" },
+                    statusCode: StatusCodes.Status401Unauthorized
+                );
+
+            identity = new ListingIdentity(gameServerId, operatorSnap.DisplayName);
+            await gameServerGrain.OnListed(clock.GetUtcNow());
+        }
+        else if (!AllowUnverifiedServers())
+        {
+            return Results.Json(
+                new { error = "unverified servers are not accepted" },
+                statusCode: StatusCodes.Status401Unauthorized
+            );
+        }
+
         var sourceIp = ctx.Connection.RemoteIpAddress?.ToString();
         var endpoint = await probe.ResolveAsync(sourceIp, req.Port, req.PublicEndpoint, ct);
 
-        var result = registry.Register(req, endpoint);
+        var result = registry.Register(req, endpoint, identity);
         // The response body is the only place the per-session secret is disclosed; it never appears
         // in the SSE stream or GET /servers, so a client browsing the list can't replay it.
         return result is null ? nameErr : Results.Created($"/servers/{result.Server.SessionId}", result);
@@ -116,7 +170,14 @@ app.MapPost(
 // Route must be declared before /servers/{sessionId} so the literal "ws" segment wins routing.
 app.MapGet(
     "/servers/ws",
-    async (HttpContext ctx, IServerRegistry registry, LobbyEventBus bus, ServerConnectionManager connMgr) =>
+    async (
+        HttpContext ctx,
+        IServerRegistry registry,
+        LobbyEventBus bus,
+        ServerConnectionManager connMgr,
+        IGrainFactory grains,
+        TimeProvider clock
+    ) =>
     {
         if (!ctx.WebSockets.IsWebSocketRequest)
         {
@@ -140,13 +201,17 @@ app.MapGet(
             return;
         }
         var sessionId = auth.SessionId;
+        // Verified/GameServerId are fixed for the life of a listing (set once at registration), so
+        // resolve them once here rather than on every ping/update frame.
+        var listing = registry.Get(sessionId);
+        var verifiedGameServerId = listing is { Verified: true, GameServerId: { } gsid } ? gsid : (Guid?)null;
         await WsSendJsonAsync(ws, new { type = "ok" }, ct);
 
         var offerReader = connMgr.Register(sessionId);
         try
         {
             using var pair = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            var recvTask = WsRecvServerUpdates(ws, sessionId, registry, pair.Token);
+            var recvTask = WsRecvServerUpdates(ws, sessionId, registry, verifiedGameServerId, grains, clock, pair.Token);
             var sendTask = WsSendOffers(ws, offerReader, pair.Token);
             await Task.WhenAny(recvTask, sendTask);
             pair.Cancel();
@@ -174,11 +239,12 @@ app.MapGet(
 
 // List currently active servers (the lobby/browser view). Kept for backwards compat with clients
 // that have not yet adopted the SSE stream. The optional ?protocol=N query filters to servers on
-// that wire-protocol version.
+// that wire-protocol version. Player bearer required (plan §1.5: anonymous sees no server list).
 app.MapGet(
-    "/servers",
-    (IServerRegistry registry, int? protocol) => Results.Ok(FilterProtocol(registry.ListActive(), protocol))
-);
+        "/servers",
+        (IServerRegistry registry, int? protocol) => Results.Ok(FilterProtocol(registry.ListActive(), protocol))
+    )
+    .RequireAuthorization(LobbyBearer.PlayerPolicy);
 
 // Explicitly remove a server (graceful host shutdown). Requires the per-session secret in an
 // `Authorization: Bearer <secret>` header so only the registrant can tear down its own listing.
@@ -198,50 +264,52 @@ app.MapDelete(
 //
 // Clients subscribe here instead of polling GET /servers every 10 s. On connect they receive a
 // full snapshot of active servers, then incremental registered/updated/removed events as they
-// happen. A keepalive comment is sent every 20 s to keep proxies and NAT alive.
+// happen. A keepalive comment is sent every 20 s to keep proxies and NAT alive. Player bearer
+// required, same as GET /servers.
 app.MapGet(
-    "/servers/events",
-    async (HttpContext ctx, IServerRegistry registry, LobbyEventBus bus, int? protocol, CancellationToken ct) =>
-    {
-        ctx.Response.Headers["Content-Type"] = "text/event-stream; charset=utf-8";
-        ctx.Response.Headers["Cache-Control"] = "no-cache";
-        ctx.Response.Headers["X-Accel-Buffering"] = "no"; // disable nginx/Railway proxy buffering
-        await ctx.Response.Body.FlushAsync(ct);
-
-        using var sub = bus.Subscribe(out var reader);
-
-        // Initial full snapshot filtered to the client's protocol (same FilterProtocol as GET /servers).
-        var snap = FilterProtocol(registry.ListActive(), protocol);
-        await WriteSseEvent(ctx.Response.Body, "snapshot", SseJson(snap), ct);
-
-        // Keepalive comment lines run concurrently with the event loop.
-        using var kaCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var keepalive = KeepaliveLoop(ctx.Response.Body, kaCts.Token);
-        try
+        "/servers/events",
+        async (HttpContext ctx, IServerRegistry registry, LobbyEventBus bus, int? protocol, CancellationToken ct) =>
         {
-            await foreach (var evt in reader.ReadAllAsync(ct))
-            {
-                // Drop events for protocols this subscriber isn't watching.
-                if (protocol is > 0 && evt.Kind != LobbyEventKind.Removed && evt.Entry?.ProtocolVersion != protocol)
-                    continue;
+            ctx.Response.Headers["Content-Type"] = "text/event-stream; charset=utf-8";
+            ctx.Response.Headers["Cache-Control"] = "no-cache";
+            ctx.Response.Headers["X-Accel-Buffering"] = "no"; // disable nginx/Railway proxy buffering
+            await ctx.Response.Body.FlushAsync(ct);
 
-                var (name, data) = evt.Kind switch
+            using var sub = bus.Subscribe(out var reader);
+
+            // Initial full snapshot filtered to the client's protocol (same FilterProtocol as GET /servers).
+            var snap = FilterProtocol(registry.ListActive(), protocol);
+            await WriteSseEvent(ctx.Response.Body, "snapshot", SseJson(snap), ct);
+
+            // Keepalive comment lines run concurrently with the event loop.
+            using var kaCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            var keepalive = KeepaliveLoop(ctx.Response.Body, kaCts.Token);
+            try
+            {
+                await foreach (var evt in reader.ReadAllAsync(ct))
                 {
-                    LobbyEventKind.Registered => ("registered", SseJson(evt.Entry)),
-                    LobbyEventKind.Updated => ("updated", SseJson(evt.Entry)),
-                    LobbyEventKind.Removed => ("removed", SseJson(new { sessionId = evt.SessionId })),
-                    _ => ("snapshot", SseJson(evt.Entry)),
-                };
-                await WriteSseEvent(ctx.Response.Body, name, data, ct);
+                    // Drop events for protocols this subscriber isn't watching.
+                    if (protocol is > 0 && evt.Kind != LobbyEventKind.Removed && evt.Entry?.ProtocolVersion != protocol)
+                        continue;
+
+                    var (name, data) = evt.Kind switch
+                    {
+                        LobbyEventKind.Registered => ("registered", SseJson(evt.Entry)),
+                        LobbyEventKind.Updated => ("updated", SseJson(evt.Entry)),
+                        LobbyEventKind.Removed => ("removed", SseJson(new { sessionId = evt.SessionId })),
+                        _ => ("snapshot", SseJson(evt.Entry)),
+                    };
+                    await WriteSseEvent(ctx.Response.Body, name, data, ct);
+                }
+            }
+            finally
+            {
+                kaCts.Cancel();
+                await keepalive;
             }
         }
-        finally
-        {
-            kaCts.Cancel();
-            await keepalive;
-        }
-    }
-);
+    )
+    .RequireAuthorization(LobbyBearer.PlayerPolicy);
 
 // ---- Signaling: WebRTC SDP relay ------------------------------------------
 
@@ -336,7 +404,15 @@ static async Task KeepaliveLoop(Stream body, CancellationToken ct)
 
 // WS helpers for the /servers/ws handler.
 
-static async Task WsRecvServerUpdates(WebSocket ws, string sessionId, IServerRegistry registry, CancellationToken ct)
+static async Task WsRecvServerUpdates(
+    WebSocket ws,
+    string sessionId,
+    IServerRegistry registry,
+    Guid? verifiedGameServerId,
+    IGrainFactory grains,
+    TimeProvider clock,
+    CancellationToken ct
+)
 {
     try
     {
@@ -356,6 +432,11 @@ static async Task WsRecvServerUpdates(WebSocket ws, string sessionId, IServerReg
                 registry.Heartbeat(sessionId, new HeartbeatRequest(msg.Players, msg.MaxPlayers, msg.State, msg.Roster));
             else if (msg.Type == "ping")
                 registry.Heartbeat(sessionId); // bare touch; no SSE event (values unchanged)
+
+            // Verified listings keep GameServerGrain.LastListedAt fresh on every ping/update; the
+            // grain self-throttles to once a minute, so this is cheap to call unconditionally.
+            if (verifiedGameServerId is { } gsid && msg.Type is "update" or "ping")
+                await grains.GetGrain<IGameServerGrain>(gsid).OnListed(clock.GetUtcNow());
         }
     }
     catch (OperationCanceledException) { }
@@ -408,6 +489,16 @@ static async Task<T?> WsReceiveJsonAsync<T>(WebSocket ws, CancellationToken ct)
     return JsonSerializer.Deserialize<T>(ms, LobbyJson.CaseInsensitive);
 }
 
+// Read at request time (same pattern as AuthEndpoints.DevLoginEnabled) so tests can flip it
+// without restarting the host. Default false: a listing needs a server bearer unless the operator
+// explicitly opts into open registration (plan §1.2/§3.5).
+static bool AllowUnverifiedServers() =>
+    string.Equals(
+        Environment.GetEnvironmentVariable("ALLOW_UNVERIFIED_SERVERS"),
+        "true",
+        StringComparison.OrdinalIgnoreCase
+    );
+
 // ---- STUN config from env -------------------------------------------------
 
 static IReadOnlyList<IceServer> BuildStunServers()
@@ -427,6 +518,8 @@ static IReadOnlyList<IceServer> BuildStunServers()
 // Inbound from game server over WS. Secret is the per-session capability from registration.
 file sealed record WsAuthMsg(string? Type, string? SessionId, string? Secret);
 
+// Roster entries now carry `playerId` (nullable; WP1.4) via LobbyRosterEntry itself — no separate
+// wire shape needed here, System.Text.Json picks it up like every other roster field.
 file sealed record WsServerMsg(
     string? Type,
     int Players = 0,
