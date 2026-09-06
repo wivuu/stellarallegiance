@@ -11,6 +11,11 @@ public class Session
 {
     public Guid Id { get; init; }
 
+    // The lineage this row belongs to = the Id of the row created at login. SessionGrain is keyed
+    // by it (one grain owns every rotation of one login), and both opaque tokens embed it so a
+    // presented token routes to its grain without a table scan.
+    public Guid LineageId { get; init; }
+
     public required SubjectKind SubjectKind { get; set; }
 
     // Player id (Player.Id) or GameServer id (GameServer.Id), keyed by SubjectKind. Not an EF FK

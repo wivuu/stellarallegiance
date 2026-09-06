@@ -411,3 +411,21 @@ every restart under their name. Unlisted servers and every existing harness beha
   EFCore.NamingConventions 10.0.1, Identity.EntityFrameworkCore 10.0.11, Orleans 10.3.1,
   Testcontainers.PostgreSql 4.15.0, AspNet.Security.OAuth.GitHub / OpenId.Steam 10.0.0,
   Microsoft.IdentityModel.Tokens + System.IdentityModel.Tokens.Jwt 8.22.0.
+- **2026-09-06 WP0.1–0.4 done** (Sonnet sub-agents): EF model + `InitialSchema`/`OrleansAdoNet`
+  migrations, `--migrate` mode, `Hosting/Persistence.cs` (`AddDbContextFactory`), co-hosted silo
+  (`Hosting/OrleansHosting.cs`, `LOBBY_ORLEANS_CLUSTERING=adonet|localhost`), Razor Pages web shell
+  (`/login` passkeys + env-gated Google/GitHub/Steam, `/me`, `/logout`, Tailwind v4.3.3 standalone CLI
+  target, htmx 2.0.9), `Accounts/AccountService.cs`, dead HMAC join token removed. Suite boots the real
+  host via `WebApplicationFactory<Program>` (`tests/PublicLobbyTest/LobbyHostFixture.cs`). GOTCHAS:
+  `IdentityDbContext` 3-arg form has no passkeys table (needs the 9-arg form + `SchemaVersion=3`);
+  Identity's explicit `ToTable` names are NOT snake_cased by the convention (re-mapped by hand); the
+  Orleans PostgreSQL scripts are not in the NuGet packages (fetched from the dotnet/orleans v10.3.1 tag).
+- **2026-09-06 WP1.1 done** (supervisor): `Auth/AuthEndpoints.cs` (`/auth/device|token|revoke`, JSON or
+  form), `Grains/SessionGrain.cs` keyed by lineage (new `sessions.lineage_id` column, migration
+  `SessionLineage`; tokens are `a.<lineage:N>.<random>` / `r.…`), `Grains/DeviceCodeGrain.cs`
+  (single-use approval, slow_down, `[CollectionAgeLimit(12 min)]`), minimal `PlayerGrain` /
+  `GameServerGrain` / `QueryGrain` (`[StatelessWorker(1)]`), `LobbyBearer` auth scheme + policies,
+  `/device` page, dev grant + `GET /login/dev` (both `AUTH_DEV_LOGIN`). AccountService now flips
+  `is_admin` through `PlayerGrain.SetAdmin`. Suite section `AuthTests.cs` (55 checks); page flow verified
+  with curl + cookie jar for a client AND a server approval. Chrome extension was unresponsive, so the
+  passkey ceremony is still unverified in a real browser — user to try `/login` once.

@@ -85,6 +85,7 @@ public class LobbyDbContext(DbContextOptions<LobbyDbContext> options)
             e.Property(s => s.SubjectKind).HasConversion(new EnumTextConverter<SubjectKind>(EnumTextMaps.SubjectKindText));
             e.HasIndex(s => s.RefreshHash).IsUnique();
             e.HasIndex(s => s.AccessHash);
+            e.HasIndex(s => s.LineageId);
             e.HasIndex(s => new { s.SubjectKind, s.SubjectId });
         });
 

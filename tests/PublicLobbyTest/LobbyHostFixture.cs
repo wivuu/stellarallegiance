@@ -81,6 +81,9 @@ static class LobbyHostFixture
         Environment.SetEnvironmentVariable("LOBBY_ORLEANS_CLUSTERING", "localhost");
         Environment.SetEnvironmentVariable("ORLEANS_SILO_PORT", siloPort.ToString());
         Environment.SetEnvironmentVariable("ORLEANS_GATEWAY_PORT", gatewayPort.ToString());
+        // grant_type=dev (plan §6 item 1) is how the suite gets a real player session without a
+        // browser; AuthTests also proves it is refused when this is unset.
+        Environment.SetEnvironmentVariable("AUTH_DEV_LOGIN", "true");
 
         var factory = new LobbyWebApplicationFactory();
         // Force the host to actually start now (rather than lazily on first CreateClient/request)

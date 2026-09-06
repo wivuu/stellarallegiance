@@ -2,8 +2,10 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using Orleans;
 using PublicLobby.Data;
 using PublicLobby.Data.Entities;
+using PublicLobby.Grains;
 using StellarAllegiance.Shared.Lobby;
 
 namespace PublicLobby.Accounts;
@@ -35,6 +37,7 @@ public sealed class AccountService(
     UserManager<LobbyUser> userManager,
     RoleManager<IdentityRole<Guid>> roleManager,
     LobbyDbContext db,
+    IGrainFactory grains,
     ILogger<AccountService> logger
 )
 {
@@ -228,10 +231,53 @@ public sealed class AccountService(
         if (!await userManager.IsInRoleAsync(user, LobbyRoles.Admin))
             await userManager.AddToRoleAsync(user, LobbyRoles.Admin);
 
+        // players.is_admin belongs to PlayerGrain (the row's single writer, which also caches it).
         if (!player.IsAdmin)
+            await grains.GetGrain<IPlayerGrain>(user.Id).SetAdmin(true);
+    }
+
+    /// <summary>
+    /// <c>grant_type=dev</c> (AUTH_DEV_LOGIN=true only — plan §6 item 1): a player keyed by display
+    /// name alone, with no external login or passkey, so headless harnesses can hold a real session.
+    /// Finds the existing player of that name (citext) or creates LobbyUser + Player.
+    /// </summary>
+    public async Task<Player> FindOrCreateForDevGrantAsync(string displayName, CancellationToken ct = default)
+    {
+        var trimmed = displayName.Trim();
+        for (var attempt = 0; ; attempt++)
         {
-            player.IsAdmin = true;
-            await db.SaveChangesAsync(ct);
+            var existing = await db.Players.AsNoTracking().SingleOrDefaultAsync(p => p.DisplayName == trimmed, ct);
+            if (existing is not null)
+                return existing;
+
+            var userId = Guid.CreateVersion7();
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            var user = new LobbyUser { Id = userId, UserName = userId.ToString() };
+            var createResult = await userManager.CreateAsync(user);
+            if (!createResult.Succeeded)
+                throw new InvalidOperationException($"dev grant: could not create user: {Describe(createResult)}");
+            var now = DateTimeOffset.UtcNow;
+            var player = new Player
+            {
+                Id = userId,
+                DisplayName = trimmed,
+                CreatedAt = now,
+                LastSeenAt = now,
+            };
+            db.Players.Add(player);
+            try
+            {
+                await db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
+                logger.LogInformation("dev grant created player {DisplayName} ({PlayerId})", trimmed, userId);
+                return player;
+            }
+            catch (DbUpdateException ex) when (IsUniqueViolation(ex) && attempt < 2)
+            {
+                // Lost a race with a concurrent dev grant for the same name: re-read it.
+                await tx.RollbackAsync(ct);
+                db.ChangeTracker.Clear();
+            }
         }
     }
 

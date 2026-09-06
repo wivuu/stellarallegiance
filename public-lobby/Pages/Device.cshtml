@@ -1,0 +1,72 @@
+@page "/device"
+@using PublicLobby.Data
+@model PublicLobby.Pages.DeviceModel
+@{
+    ViewData["Title"] = "Approve a device — Public Lobby";
+}
+
+<div class="mx-auto max-w-md space-y-6">
+    <section>
+        <h1 class="font-ui text-2xl font-bold text-text-hi">Approve a device</h1>
+        <p class="text-sm text-text-dim">Enter the code shown by the game client or game server, then approve it as
+            <span class="text-text-hi">@Model.DisplayName</span>.</p>
+    </section>
+
+    @if (Model.Outcome == "approved")
+    {
+        <div class="rounded border border-ok/40 bg-ok/10 px-4 py-3 text-sm text-ok">
+            Approved. You can close this tab; the device will finish signing in on its own.
+        </div>
+    }
+    else if (Model.Outcome == "denied")
+    {
+        <div class="rounded border border-warn/40 bg-warn/10 px-4 py-3 text-sm text-warn">Denied.</div>
+    }
+
+    @if (Model.Error is not null)
+    {
+        <div class="rounded border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">@Model.Error</div>
+    }
+
+    @if (Model.Pending is null && Model.Outcome is null)
+    {
+        <form method="get" class="space-y-3">
+            <label class="block text-sm text-text-2" for="user_code">Device code</label>
+            <input id="user_code" name="user_code" value="@Model.PrettyCode" autocomplete="off" autocapitalize="characters"
+                   spellcheck="false" placeholder="BCDF-GHJK"
+                   class="w-full rounded border border-panel-hi bg-panel px-3 py-2 font-mono text-lg tracking-widest text-text-hi" />
+            <button type="submit" class="w-full rounded bg-accent px-4 py-2 text-sm font-semibold text-void hover:bg-accent/90">
+                Look up
+            </button>
+        </form>
+    }
+    else if (Model.Pending is not null)
+    {
+        <div class="rounded border border-panel-hi bg-panel px-4 py-4 space-y-4">
+            <p class="font-mono text-2xl tracking-widest text-data">@Model.PrettyCode</p>
+            @if (Model.Pending.Kind == SubjectKind.Server)
+            {
+                <p class="text-sm text-text-hi">Approve game server <span class="font-semibold">&ldquo;@Model.Pending.ServerName&rdquo;</span>?</p>
+                <p class="text-xs text-text-dim">You become its operator: its listings show your name and it reports match results under your account.</p>
+            }
+            else
+            {
+                <p class="text-sm text-text-hi">Approve a Stellar Allegiance game client?</p>
+                <p class="text-xs text-text-dim">The client signs in as you and can join servers under your display name.</p>
+            }
+            <p class="text-xs text-text-dim">Code expires @Model.Pending.ExpiresAt.ToString("HH:mm") UTC.</p>
+            <div class="flex gap-3">
+                <form method="post" asp-page-handler="Approve" class="flex-1">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="user_code" value="@Model.PrettyCode" />
+                    <button type="submit" class="w-full rounded bg-accent px-4 py-2 text-sm font-semibold text-void hover:bg-accent/90">Approve</button>
+                </form>
+                <form method="post" asp-page-handler="Deny" class="flex-1">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="user_code" value="@Model.PrettyCode" />
+                    <button type="submit" class="w-full rounded border border-danger/40 bg-danger/10 px-4 py-2 text-sm font-medium text-danger hover:bg-danger/20">Deny</button>
+                </form>
+            </div>
+        </div>
+    }
+</div>

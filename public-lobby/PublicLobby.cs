@@ -5,6 +5,7 @@ using System.Threading.Channels;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using PublicLobby;
+using PublicLobby.Auth;
 using PublicLobby.Data;
 using PublicLobby.Hosting;
 
@@ -74,6 +75,8 @@ app.UseLobbyWeb();
 // reachability probe.
 app.MapGet("/health", () => Results.Text("public-lobby"));
 app.MapOrleansHealth();
+app.MapAuthEndpoints();
+app.MapDevWebLogin();
 
 // ---- Registry: server discovery -------------------------------------------
 

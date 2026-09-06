@@ -19,6 +19,7 @@ static partial class Suite
         {
             await RunSchemaTestsAsync();
             await RunOrleansTestsAsync();
+            await RunAuthTestsAsync();
         }
         finally
         {

@@ -242,3 +242,23 @@ Signaling (relays opaque SDP; long-polls so a join settles in ~one round trip):
 | `GET` | `/servers/{sessionId}/pending` | — | game server long-polls for offers. |
 | `POST` | `/connect/{ticket}/answer` | `{ sdpAnswer }` | game server posts its answer. |
 | `GET` | `/connect/{ticket}/answer` | — | client long-polls; `200` with answer, or `204` if not ready. |
+
+## Identity: device codes, sessions, dev login (WP1.1)
+
+Both the Godot client and a game server sign in with one RFC 8628 device-code flow:
+`POST /auth/device` (`{client:"godot"}` or `{client:"sim-server", serverName}`) returns a
+`user_code` and `verification_uri_complete`; the operator opens it, signs in on the web, and clicks
+Approve on `/device`; the peer polls `POST /auth/token` (`grant_type=urn:ietf:params:oauth:grant-type:device_code`,
+JSON or form-encoded) until it gets an access token (15 min, opaque) plus a refresh token (rotates on
+use, 90-day sliding window; reusing a rotated-away refresh token revokes the whole lineage).
+`POST /auth/revoke` with the bearer signs out. Approving a *server* code mints the durable Game
+Server owned by the approving player (its operator).
+
+`AUTH_DEV_LOGIN=true` (dev boxes and the test suite only — never production) enables two shortcuts:
+`grant_type=dev` + `display_name` on `POST /auth/token` mints a player session with no browser step,
+and `GET /login/dev?displayName=…` signs the browser in as that player (cookie).
+
+Routes live in `Auth/AuthEndpoints.cs`; the grains are `Grains/SessionGrain.cs` (one per login
+lineage) and `Grains/DeviceCodeGrain.cs`; bearer auth is the `LobbyBearer` scheme
+(`Auth/LobbyBearerAuthentication.cs`, per-silo 60 s cache) with policies `lobby-player` /
+`lobby-server`.
