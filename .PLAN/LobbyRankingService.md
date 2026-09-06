@@ -449,3 +449,31 @@ every restart under their name. Unlisted servers and every existing harness beha
   `POST /servers` decision table in README ("Listings: Verified vs Unverified"), `ALLOW_UNVERIFIED_SERVERS`
   read per request. Suite: 194 checks green. NOT yet done: sim server still sends `hostedBy` and
   registers anonymously (WP2.1), Hello carries no token (WP2.2), client mirrors the old `ServerDto` (WP3.2).
+- **2026-09-06 WP2.1 done** (Sonnet): `server/Net/LobbyIdentity.cs` (`ILobbyIdentity` seam +
+  `NoLobbyIdentity`; `ClientHub.LobbyIdentity` property, wired in `Program.cs` right after the
+  registrar), `LobbyCredentialStore.cs` (atomic 0600 `{lobbyBase,gameServerId,serverName,
+  refreshToken}` at `SIM_AUTH_FILE`, default beside `SimAssets.CacheDir` — made public),
+  `LobbyAuthClient.cs` (`/auth/device`+`/auth/token` HTTP calls), `LobbyAuthSession.cs` (the
+  testable boot state machine: resume-from-file → refresh_token, else device-code flow with a
+  Warning-level banner, `authorization_pending`/`slow_down`/`expired_token`/`access_denied`
+  handling, injectable delay so tests don't sleep). `LobbyRegistrar` now implements
+  `ILobbyIdentity`, registers with `Authorization: Bearer <access>` (401 → force-refresh → retry;
+  refresh failure → drops the file, restarts the device flow), sets `ListingId` from the response
+  `sessionId` (cleared on any `Deregister`), and refreshes a `JoinTokenVerifier` after every
+  successful registration. `SIM_HOSTED_BY` removed everywhere (registrar, scripts/docs/compose);
+  "hosted by" now comes from the Operator's name via `verified`/`operatorName`. `IPlayerDirectory`
+  gained `PlayerIdOf`/an `OnConnect` overload (default-interface-method shim, so `ClientHub.cs`
+  needed no call-site change beyond the `LobbyIdentity` property); `LobbyEntry`/`Lobby.Snapshot`/
+  `LobbyStatus.RosterDto` gained an optional `PlayerId` plumbed through but always null today (no
+  caller passes `playerIdOf` yet — WP2.2's job). Suite: `tests/LobbyTest/LobbyAuthTests.cs` (credential
+  round-trip + 0600, malformed/mismatched file, and the full device-flow state machine — pending →
+  slow_down → approved, stored-credential resume, access_denied-stops — against a stub
+  `HttpMessageHandler`, no real sleeping). Manual smoke (local Postgres + lobby +
+  `AUTH_DEV_LOGIN=true` + dev-cookie `/device` approval) verified: banner printed, `GET /servers`
+  showed `verified:true`/`operatorName:"Operator"`, and a restart re-listed with NO code prompt
+  (same `gameServerId`, fresh `sessionId`). GOTCHA: the repo's `server/appsettings.json` console
+  formatter is `SingleLine:true`, so the multi-line banner string renders as one long line at
+  runtime (still Warning-level, still shows `user_code`/`verification_uri_complete` clearly) — left
+  as-is rather than fighting the repo's logging convention. NOT yet done: Hello still carries no
+  join token so every join stays anonymous even on a Verified listing (WP2.2), `IMatchResultSink`
+  still just logs (WP2.3), client mirrors the old `ServerDto` (WP3.2).

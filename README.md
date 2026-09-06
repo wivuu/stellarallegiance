@@ -142,6 +142,11 @@ A player can reach a server two ways:
   (no traffic through the lobby). A server that isn't reachable (NAT, no port-forward) falls back
   to a **WebRTC DataChannel** (P2P hole-punching via public **STUN**), with only the SDP handshake
   relayed through the lobby. The same binary protocol rides both transports.
+- **Verified listings** — a server only lists as **Verified** (its Operator's display name shown as
+  "hosted by") once it authenticates with the lobby: first boot prints a one-time device code and
+  stays **unlisted** until approved at the printed URL; the resulting credential persists to
+  `SIM_AUTH_FILE` so later restarts re-list silently. See `public-lobby/README.md`'s "Identity:
+  device codes…" and "Listings: Verified vs Unverified".
 
 **There is no TURN relay** — the lobby never carries game traffic. The trade-off is that a client
 behind a symmetric NAT can't reach a *NAT'd* server; it can always join **direct** servers, so
@@ -154,6 +159,7 @@ port and your server is listed as directly joinable; don't, and it's listed as W
 | `PUBLIC_LOBBY` | server + client | Lobby base — `host:port` or `https://domain` (default `https://wivuu-public-lobby-production.up.railway.app`). Client also takes `--lobby`. |
 | `SIM_PUBLIC_PORT` | server | Public-facing port the lobby probes/advertises (default = listen port). |
 | `SIM_PUBLIC_ENDPOINT` | server | Optional address the server asserts as reachable — `host:port` (container NAT / proxy) or `https://domain` (a PaaS edge); advertised only if it answers `/health`. Auto-derives from `RAILWAY_PUBLIC_DOMAIN` on Railway. |
+| `SIM_AUTH_FILE` | server | Path to the persisted Game Server credential (device-code auth); default beside the sim-cache dir. Delete it to re-pair under a different Operator. |
 | `SHARE_PORT` | public-lobby | Listen port (default 8091; a PaaS `PORT` overrides it). |
 | `STUN_URL` | public-lobby | Public STUN URL(s) for the WebRTC fallback, comma-separated for redundancy (default Cloudflare's). |
 

@@ -6,7 +6,10 @@ namespace SimServer.Net;
 // options just fine. (Map layout is intentionally NOT advertised — the browser shows no preview.)
 public static class LobbyStatus
 {
-    public sealed record RosterDto(string Name, int Team, bool Ready, bool Flying);
+    // PlayerId (WP2.1): the public lobby's durable Player id once a join carried a verified join
+    // token (public-lobby/CONTEXT.md "Player"); null for an Anonymous Join. Always null until
+    // WP2.2 wires ClientHub.RosterSnapshot's playerIdOf — see LobbyEntry / Lobby.Snapshot.
+    public sealed record RosterDto(string Name, int Team, bool Ready, bool Flying, Guid? PlayerId = null);
 
     // Sorted (Team, Name, Id) so equal lobby states always produce the same list — both the
     // registrar's change signature and the lobby's SequenceEqual dedup depend on stable order
@@ -16,12 +19,12 @@ public static class LobbyStatus
             .OrderBy(e => e.Team)
             .ThenBy(e => e.Name, StringComparer.Ordinal)
             .ThenBy(e => e.Id)
-            .Select(e => new RosterDto(Truncate(e.Name, 24), e.Team, e.Ready, e.HasShip))
+            .Select(e => new RosterDto(Truncate(e.Name, 24), e.Team, e.Ready, e.HasShip, e.PlayerId))
             .ToList();
 
     // Compact change-detection key for WsSendLoop — cheaper to compare than the list itself.
     public static string RosterSignature(List<RosterDto> roster) =>
-        string.Join("\u001f", roster.Select(r => $"{r.Team}:{r.Name}:{r.Ready}:{r.Flying}"));
+        string.Join("\u001f", roster.Select(r => $"{r.Team}:{r.Name}:{r.Ready}:{r.Flying}:{r.PlayerId}"));
 
     static string Truncate(string s, int max) => s.Length <= max ? s : s[..max];
 }

@@ -3,8 +3,18 @@ namespace SimServer.Net;
 // One roster row on the wire (Protocol.BuildLobbyState) and the unit the matchmaker reasons
 // over. ShipId is overlaid at broadcast time from the sim — the client's currently-controlled ship
 // (0 = not flying), which lets every client map a snapshot ship back to its pilot's name for the
-// in-world nameplate. HasShip = ShipId != 0.
-public readonly record struct LobbyEntry(int Id, string Name, byte Team, bool Ready, bool HasShip, ulong ShipId);
+// in-world nameplate. HasShip = ShipId != 0. PlayerId (WP2.1) is the public lobby's durable Player
+// id (public-lobby/CONTEXT.md) once a join gets one from a verified join token — null for an
+// Anonymous Join; always null today since Snapshot's playerIdOf isn't wired yet (WP2.2).
+public readonly record struct LobbyEntry(
+    int Id,
+    string Name,
+    byte Team,
+    bool Ready,
+    bool HasShip,
+    ulong ShipId,
+    Guid? PlayerId = null
+);
 
 // The pre-match lobby: who's connected, which side they picked, and whether they're ready.
 // Lives at the connection layer (NOT in the authoritative sim, which only knows ships) and is
@@ -156,8 +166,10 @@ public sealed class Lobby
     }
 
     // A point-in-time roster copy. `shipIdOf` (optional) supplies each client's currently-controlled
-    // ship id from the sim (0 = not flying); HasShip is derived from it.
-    public List<LobbyEntry> Snapshot(Func<int, ulong>? shipIdOf = null)
+    // ship id from the sim (0 = not flying); HasShip is derived from it. `playerIdOf` (optional,
+    // WP2.1 seam — WP2.2 wires it from IPlayerDirectory.PlayerIdOf) supplies the public lobby's
+    // Player id for a verified join; omitted callers (today, every caller) get PlayerId = null.
+    public List<LobbyEntry> Snapshot(Func<int, ulong>? shipIdOf = null, Func<int, Guid?>? playerIdOf = null)
     {
         lock (_lock)
         {
@@ -165,7 +177,8 @@ public sealed class Lobby
             foreach (var kv in _players)
             {
                 ulong sid = shipIdOf is null ? 0UL : shipIdOf(kv.Key);
-                list.Add(new LobbyEntry(kv.Key, kv.Value.Name, kv.Value.Team, kv.Value.Ready, sid != 0UL, sid));
+                Guid? pid = playerIdOf?.Invoke(kv.Key);
+                list.Add(new LobbyEntry(kv.Key, kv.Value.Name, kv.Value.Team, kv.Value.Ready, sid != 0UL, sid, pid));
             }
             return list;
         }

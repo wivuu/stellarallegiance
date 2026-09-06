@@ -41,23 +41,32 @@ public sealed class SharedSecretAuthenticator : IAuthenticator
 
 // Player identity / profile storage. Today an in-memory note of who is connected; later this
 // is where persistent accounts, stats, cosmetics, etc. would be loaded/saved.
+//
+// PlayerIdOf / the OnConnect overload (WP2.1) carry the public lobby's durable Player id
+// (public-lobby/CONTEXT.md "Player") once a join gets one from a verified join token — null for
+// an Anonymous Join. WP2.2 populates it (Hello's join-token identity); until then every caller
+// keeps using the name-only OnConnect, so PlayerIdOf is always null.
 public interface IPlayerDirectory
 {
-    void OnConnect(int clientId, string name);
+    void OnConnect(int clientId, string name) => OnConnect(clientId, name, null);
+    void OnConnect(int clientId, string name, Guid? playerId);
     void OnDisconnect(int clientId);
     string NameOf(int clientId);
+    Guid? PlayerIdOf(int clientId);
 }
 
 public sealed class InMemoryPlayerDirectory : IPlayerDirectory
 {
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, string> _names = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, (string Name, Guid? PlayerId)> _players = new();
 
-    public void OnConnect(int clientId, string name) =>
-        _names[clientId] = string.IsNullOrWhiteSpace(name) ? $"Pilot{clientId}" : name;
+    public void OnConnect(int clientId, string name, Guid? playerId) =>
+        _players[clientId] = (string.IsNullOrWhiteSpace(name) ? $"Pilot{clientId}" : name, playerId);
 
-    public void OnDisconnect(int clientId) => _names.TryRemove(clientId, out _);
+    public void OnDisconnect(int clientId) => _players.TryRemove(clientId, out _);
 
-    public string NameOf(int clientId) => _names.TryGetValue(clientId, out var n) ? n : $"Pilot{clientId}";
+    public string NameOf(int clientId) => _players.TryGetValue(clientId, out var p) ? p.Name : $"Pilot{clientId}";
+
+    public Guid? PlayerIdOf(int clientId) => _players.TryGetValue(clientId, out var p) ? p.PlayerId : null;
 }
 
 // Sink for finished-match results (winner, and later: scores, MMR deltas, persistence).

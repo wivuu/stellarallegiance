@@ -187,7 +187,10 @@ use TLS (see below).
 - **Game server** — set `SIM_PUBLIC_NAME` (3–50 chars; gates registration) and
   `PUBLIC_LOBBY=<lobby-host>:8091`. With `scripts/run-server.ps1` this is the default (no
   `-Local`); the name defaults to the hostname. Forward the game port (default `8090`) to be
-  directly joinable; set `SIM_PUBLIC_PORT` if the forwarded external port differs.
+  directly joinable; set `SIM_PUBLIC_PORT` if the forwarded external port differs. First boot
+  prints a device code and stays unlisted until an Operator approves it (see "Identity: device
+  codes…" below); the credential persists to `SIM_AUTH_FILE` (default beside the sim-cache dir) so
+  later restarts re-list silently.
 - **Client** — set `PUBLIC_LOBBY=<lobby-host>:8091` (or `--lobby host:port`). `scripts/run-client.ps1`
   opens the lobby browser by default; it joins direct servers over WebSocket and NAT'd ones over
   WebRTC automatically.
