@@ -45,8 +45,10 @@ public partial class ServerLobbyOverlay : Control
     private ConnectionManager _cm = null!;
     private LineEdit _name = null!;
     private Label _online = null!;
+    private ScrollContainer _gameScroll = null!;
     private VBoxContainer _list = null!;
     private Label _listStatus = null!;
+    private Control _authGate = null!;
     private VBoxContainer _detailBox = null!;
     private Label _hint = null!;
 
@@ -126,18 +128,24 @@ public partial class ServerLobbyOverlay : Control
         // pilot name (unsubscribed in _ExitTree — UserPrefs.Changed is static).
         UserPrefs.Changed += OnPrefsChanged;
 
-        // Subscribe to the lobby SSE stream for live server list updates.
-        StartSse();
+        // Anonymous mode shows a "sign in to browse" gate instead of the live server list — the
+        // list endpoints require a player bearer (plan §1.5); the direct-join controls below stay
+        // usable either way. Re-evaluated whenever AuthSession's state changes (sign-in completes,
+        // sign-out, etc.) — unsubscribed in _ExitTree (AuthSession.Instance is a session-lifetime
+        // singleton, so this outlives any one overlay instance otherwise).
+        if (AuthSession.Instance is { } auth)
+            auth.StateChanged += OnAuthStateChanged;
+        RefreshAuthGate();
 
         // One-shot, fire-and-forget: ask GitHub whether a newer client release is out.
         _ = CheckUpdateAsync();
-
-        RenderServers();
     }
 
     public override void _ExitTree()
     {
         UserPrefs.Changed -= OnPrefsChanged;
+        if (AuthSession.Instance is { } auth)
+            auth.StateChanged -= OnAuthStateChanged;
         StopSse();
         base._ExitTree();
     }
@@ -248,25 +256,93 @@ public partial class ServerLobbyOverlay : Control
         header.AddChild(game);
         header.AddChild(UiKit.MakeLabel("PILOTS", UiKit.TextStyle.Label, DesignTokens.TextDim));
 
-        var scroll = new ScrollContainer
+        // "Sign in to browse" gate — shown INSTEAD of the list while anonymous (plan §1.5). Sits in
+        // the same slot as the scroll below; RefreshAuthGate toggles which one is visible.
+        _authGate = BuildAuthGate();
+        col.AddChild(_authGate);
+
+        _gameScroll = new ScrollContainer
         {
             SizeFlagsVertical = SizeFlags.ExpandFill,
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
         };
-        col.AddChild(scroll);
+        col.AddChild(_gameScroll);
         _list = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _list.AddThemeConstantOverride("separation", 0);
-        scroll.AddChild(_list);
+        _gameScroll.AddChild(_list);
 
         _listStatus = UiKit.MakeLabel("Connecting…", UiKit.TextStyle.Data, DesignTokens.TextDim);
         _listStatus.HorizontalAlignment = HorizontalAlignment.Center;
         col.AddChild(_listStatus);
 
+        // Direct-join-by-address stays usable regardless of sign-in state (plan §1.5 — "anonymous
+        // sees no server list, only direct join by address").
         var connectTo = UiKit.MakeButton("+ CONNECT TO…", ShowConnectModal, ButtonVariant.Ghost);
         connectTo.Alignment = HorizontalAlignment.Left;
         connectTo.CustomMinimumSize = new Vector2(0, 40);
         col.AddChild(connectTo);
     }
+
+    // Compact "sign in to browse" panel (WP3.1 — MINIMAL; WP3.2 adds the bearer so the real list
+    // loads once signed in). Filled in RefreshAuthGate; hidden by default until the first check.
+    private Control BuildAuthGate()
+    {
+        var panel = new HairlinePanel { Visible = false, SizeFlagsVertical = SizeFlags.ExpandFill };
+        var col = new VBoxContainer
+        {
+            Alignment = BoxContainer.AlignmentMode.Center,
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+        };
+        col.AddThemeConstantOverride("separation", 10);
+        panel.AddChild(col);
+
+        var label = UiKit.MakeLabel("SIGN IN TO BROWSE PUBLIC SERVERS", UiKit.TextStyle.Label, DesignTokens.TextDim);
+        label.HorizontalAlignment = HorizontalAlignment.Center;
+        col.AddChild(label);
+        var hint = UiKit.MakeLabel(
+            "Direct connect by address still works below.",
+            UiKit.TextStyle.Data,
+            DesignTokens.TextDim
+        );
+        hint.HorizontalAlignment = HorizontalAlignment.Center;
+        col.AddChild(hint);
+
+        var signIn = new HBoxContainer
+        {
+            Alignment = BoxContainer.AlignmentMode.Center,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+        };
+        var signInButton = UiKit.MakeButton("◆ SIGN IN", () => SignInDialog.Open(this), ButtonVariant.Primary);
+        signInButton.CustomMinimumSize = new Vector2(160, 44);
+        signIn.AddChild(signInButton);
+        col.AddChild(signIn);
+
+        return panel;
+    }
+
+    // Anonymous mode never starts the SSE/list fetch (the list endpoints require a player bearer —
+    // plan §1.5) and shows the sign-in gate instead; signed in restores today's behaviour (the list
+    // will 401 until WP3.2 adds the bearer to the request — expected for now, see the SSE catch
+    // block below, which logs rather than crashing).
+    private void RefreshAuthGate()
+    {
+        bool signedIn = AuthSession.Instance?.IsSignedIn ?? true;
+        _authGate.Visible = !signedIn;
+        _gameScroll.Visible = signedIn;
+        if (signedIn)
+        {
+            if (_sseCts is null)
+                StartSse();
+            RenderServers();
+        }
+        else
+        {
+            StopSse();
+            _listStatus.Visible = false;
+        }
+    }
+
+    private void OnAuthStateChanged() => RefreshAuthGate();
 
     private void BuildDetailPanel(HBoxContainer body)
     {
@@ -437,6 +513,10 @@ public partial class ServerLobbyOverlay : Control
             }
             catch (Exception e)
             {
+                // Expected right now for a signed-in session (plan §1.5 — /servers/events requires a
+                // player bearer WP3.2 hasn't wired in yet, so this 401s): log and keep showing the
+                // direct-join controls rather than crash.
+                Log.Warn($"[ServerLobbyOverlay] lobby SSE error: {e.Message}");
                 _sseError = e.Message;
                 _sseQueue.Enqueue(("error", ""));
                 CallDeferred(nameof(DrainSseQueue));
@@ -727,11 +807,15 @@ public partial class ServerLobbyOverlay : Control
         // then dials via the same transport branch below. Open servers dial straight through.
         if (s.Protected)
         {
-            ServerPasswordModal.Open(this, s.Name, pw =>
-            {
-                _cm.SetJoinSecret(pw);
-                Dial(s);
-            });
+            ServerPasswordModal.Open(
+                this,
+                s.Name,
+                pw =>
+                {
+                    _cm.SetJoinSecret(pw);
+                    Dial(s);
+                }
+            );
             return;
         }
         Dial(s);
@@ -838,7 +922,13 @@ public partial class ServerLobbyOverlay : Control
             if (_live)
             {
                 float a = 0.55f + 0.45f * Mathf.Sin(_pulse);
-                DrawString(mono, new Vector2(12, Size.Y / 2f + 4f), "▶", fontSize: 11, modulate: new Color(DesignTokens.Warn, a));
+                DrawString(
+                    mono,
+                    new Vector2(12, Size.Y / 2f + 4f),
+                    "▶",
+                    fontSize: 11,
+                    modulate: new Color(DesignTokens.Warn, a)
+                );
             }
             else
             {
@@ -870,7 +960,9 @@ public partial class ServerLobbyOverlay : Control
             // Amber padlock right after the name marks a password-protected server.
             if (_protected)
             {
-                float nameW = UiFonts.SairaSemi.GetStringSize(shownName, HorizontalAlignment.Left, -1, DesignTokens.BodySize).X;
+                float nameW = UiFonts
+                    .SairaSemi.GetStringSize(shownName, HorizontalAlignment.Left, -1, DesignTokens.BodySize)
+                    .X;
                 DrawPadlock(new Vector2(textX + nameW + 7f, 12f));
             }
             if (_tag.Length > 0)
