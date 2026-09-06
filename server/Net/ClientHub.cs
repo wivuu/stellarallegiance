@@ -326,7 +326,7 @@ public sealed class ClientHub
         };
 
     // Per-player roster (name/team/ready/ship) advertised to the public lobby's server browser.
-    public List<LobbyEntry> RosterSnapshot() => _lobby.Snapshot(id => _sim.ShipIdOf(id));
+    public List<LobbyEntry> RosterSnapshot() => _lobby.Snapshot(id => _sim.ShipIdOf(id), _players.PlayerIdOf);
 
     // This server's relationship to the public lobby (WP2.1: device-code auth, Verified listing,
     // join-token verifier) — NoLobbyIdentity.Instance when unlisted. LobbyRegistrar.FromEnv builds
@@ -448,9 +448,9 @@ public sealed class ClientHub
     {
         // ONE roster snapshot: folded into the scoreboard's name/team memo and then written to the
         // frame, so the memo can never disagree with the roster the clients were just sent.
-        var roster = _lobby.Snapshot(id => _sim.ShipIdOf(id));
+        var roster = _lobby.Snapshot(id => _sim.ShipIdOf(id), _players.PlayerIdOf);
         foreach (var e in roster)
-            _pilotIdentity[e.Id] = new PilotIdentity(e.Name, e.Team, e.PlayerId ?? _players.PlayerIdOf(e.Id));
+            _pilotIdentity[e.Id] = new PilotIdentity(e.Name, e.Team, e.PlayerId);
         var frame = Protocol.BuildLobbyState(
             _sim.Phase,
             _sim.Winner,
@@ -642,46 +642,6 @@ public sealed class ClientHub
         }
     }
 
-    // Parses the MsgHello payload (v9 layout: u8 secretLen, secret…, u8 nameLen, name…, u8
-    // tokenLen, token…). The secret is an optional shared-secret password the server constant-time
-    // compares (open when the server runs without one); name labels the lobby roster; the trailing
-    // token (absent on a fresh join) is a reconnect token from a prior Welcome. Every field is
-    // optional — a frame that runs out of bytes at any point (the running cursor `o`) just leaves
-    // the remaining out params at their "" default. This never rejects a Hello (bad-secret handling
-    // happens afterward in the caller), so TryParseHello always returns true; the bool return keeps
-    // the Try* naming convention for a flat, early-return-guarded cursor walk.
-    private static bool TryParseHello(ReadOnlySpan<byte> frame, out string secret, out string name, out string token)
-    {
-        secret = "";
-        name = "";
-        token = "";
-
-        if (frame.Length <= 1)
-            return true;
-
-        int secLen = frame[1];
-        int o = 2 + secLen;
-        if (frame.Length < o + 1)
-            return true;
-        secret = System.Text.Encoding.UTF8.GetString(frame.Slice(2, secLen));
-
-        int nameLen = frame[o];
-        o += 1;
-        if (frame.Length < o + nameLen)
-            return true;
-        name = System.Text.Encoding.UTF8.GetString(frame.Slice(o, nameLen));
-        o += nameLen;
-
-        if (frame.Length < o + 1)
-            return true;
-        int tokLen = frame[o];
-        o += 1;
-        if (tokLen > 0 && frame.Length >= o + tokLen)
-            token = System.Text.Encoding.UTF8.GetString(frame.Slice(o, tokLen));
-
-        return true;
-    }
-
     private async Task ReceiveLoop(Client client, CancellationToken ct)
     {
         var buffer = new byte[2048];
@@ -697,20 +657,20 @@ public sealed class ClientHub
             {
                 case Protocol.MsgHello:
                 {
-                    // v9 layout: u8 secretLen, secret…, u8 nameLen, name…, u8 tokenLen, token…
-                    // No class/team here — those are lobby actions.
-                    TryParseHello(buffer.AsSpan(0, count), out string secret, out string name, out string reconnectToken);
+                    // Proto 38 layout (server/Net/HelloFrame.cs): u8 secretLen, secret…, u8 nameLen,
+                    // name…, u8 tokenLen, reconnectToken…, u16 joinLen, joinToken…. No class/team here
+                    // — those are lobby actions.
+                    var hello = HelloFrame.Parse(buffer.AsSpan(0, count));
 
-                    if (!_auth.Authenticate(secret))
+                    // Tell the client WHY before closing. The WS close frame also carries the reason,
+                    // but a WebRTC DataChannel close does not — this app-level frame is the only signal
+                    // that survives both transports, so the client can re-prompt for the password /
+                    // sign in instead of showing a generic "link dropped".
+                    async Task RejectAndClose(byte code, string reason)
                     {
-                        Log.RejectedJoinBadSecret(_log, client.Id);
-                        // Tell the client WHY before closing. The WS close frame also carries "bad
-                        // secret", but a WebRTC DataChannel close does not — this app-level frame is
-                        // the only signal that survives both transports, so the client can re-prompt
-                        // for the password instead of showing a generic "link dropped".
                         try
                         {
-                            await client.Transport.SendAsync(new byte[] { Protocol.MsgReject, 1 }, ct);
+                            await client.Transport.SendAsync(new byte[] { Protocol.MsgReject, code }, ct);
                             // Let the frame actually transmit before we tear the channel down: the WebRTC
                             // transport's CloseAsync does an immediate pc.close() that would abort the
                             // SCTP association out from under the just-queued chunk. Cheap on this rare
@@ -720,15 +680,48 @@ public sealed class ClientHub
                         catch
                         { /* best-effort — closing anyway */
                         }
-                        await client.Transport.CloseAsync("bad secret", ct);
+                        await client.Transport.CloseAsync(reason, ct);
+                    }
+
+                    if (!_auth.Authenticate(hello.Secret))
+                    {
+                        Log.RejectedJoinBadSecret(_log, client.Id);
+                        await RejectAndClose(1, "bad secret");
                         return;
+                    }
+
+                    // Identity (plan §3.2): while this server holds a Verified listing, EVERY joiner
+                    // must present a join token minted by the public lobby for THIS listing; the
+                    // token's (sub, name) become the pilot's identity and the typed name is ignored.
+                    // Unlisted / unverified servers keep today's anonymous join (harnesses unchanged).
+                    string name = hello.Name;
+                    Guid? playerId = null;
+                    var identity = LobbyIdentity;
+                    if (identity.IsVerified && identity.ListingId is { } listingId && identity.Verifier is { } verifier)
+                    {
+                        if (hello.JoinToken.Length == 0)
+                        {
+                            Log.RejectedJoinNoToken(_log, client.Id);
+                            await RejectAndClose(2, "join token required");
+                            return;
+                        }
+                        var verdict = await verifier.VerifyAsync(hello.JoinToken, listingId, ct);
+                        if (!verdict.IsValid)
+                        {
+                            Log.RejectedJoinBadToken(_log, client.Id, verdict.Failure?.ToString() ?? "invalid");
+                            await RejectAndClose(2, "join token rejected");
+                            return;
+                        }
+                        name = verdict.Identity!.DisplayName;
+                        playerId = verdict.Identity.PlayerId;
+                        Log.JoinedWithPlayerId(_log, client.Id, playerId.Value, name);
                     }
 
                     // Mint this connection's reconnect token before sending Welcome. Each Welcome
                     // rotates the token; the sim keys held orphans by it.
                     client.Token = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
 
-                    _players.OnConnect(client.Id, name);
+                    _players.OnConnect(client.Id, name, playerId);
                     _lobby.Add(client.Id, _players.NameOf(client.Id));
                     _clients[client.Id] = client; // visible to AfterStep / broadcasts once joined
                     client.Team = _lobby.TeamOf(client.Id);
@@ -758,8 +751,8 @@ public sealed class ClientHub
                     // Reconnect: hand back a ship the sim is still holding for the presented token.
                     // Enqueued AFTER _clients registration so the resulting ShipIdOf flip in
                     // AfterStep has a registered client to re-issue MsgYouAre to.
-                    if (reconnectToken.Length > 0)
-                        _sim.EnqueueReclaim(client.Id, reconnectToken);
+                    if (hello.ReconnectToken.Length > 0)
+                        _sim.EnqueueReclaim(client.Id, hello.ReconnectToken);
                     break;
                 }
                 case Protocol.MsgSpawn when count >= 10:

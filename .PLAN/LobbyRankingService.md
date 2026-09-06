@@ -491,3 +491,15 @@ every restart under their name. Unlisted servers and every existing harness beha
   as-is rather than fighting the repo's logging convention. NOT yet done: Hello still carries no
   join token so every join stays anonymous even on a Verified listing (WP2.2), `IMatchResultSink`
   still just logs (WP2.3), client mirrors the old `ServerDto` (WP3.2).
+- **2026-09-06 WP2.1 + WP2.2 done.** WP2.1 (Sonnet): `server/Net/LobbyIdentity.cs` (`ILobbyIdentity`,
+  `NoLobbyIdentity`), `LobbyAuthClient`/`LobbyAuthSession`/`LobbyCredentialStore` (device flow, banner,
+  `SIM_AUTH_FILE` 0600, refresh-before-use), bearer registration + `Verifier.RefreshAsync` after each
+  listing, `IPlayerDirectory.PlayerIdOf`, `SIM_HOSTED_BY` removed everywhere; smoke-verified re-list without
+  prompt. WP2.2 (supervisor): `Wire.ProtocolVersion` 37→38, `server/Net/HelloFrame.cs` (public parser/
+  builder; trailing `u16 joinTokenLen`), ClientHub Hello: Verified+listed ⇒ token REQUIRED
+  (`MsgReject` code 2 = "join token required/rejected"), identity = token (sub,name), `_players.OnConnect(…,
+  playerId)`, roster snapshots carry `PlayerId`; client `GameNetClient.SetJoinToken` + proto-38 SendHello +
+  reject reason mapping. Tests: `HelloFrameTests` (LobbyTest, 65 checks); `--autofly` against an unlisted
+  `-Local --autostart` server unchanged (ship spawned). GOTCHA: a listing's session id changes on every
+  re-registration, so a join token fetched for a stale listing fails `aud` — the client must re-fetch the
+  list and request a new token (WP3.2 handles by re-requesting on reject code 2).

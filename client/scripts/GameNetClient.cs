@@ -183,6 +183,20 @@ public partial class GameNetClient : Node
     // close carries no reason); OnSocketClosed falls back to it when the transport gives no reason.
     private volatile string _rejectReason = "";
 
+    // MsgReject code → the message the UI shows (server/Net/Protocol.cs MsgReject): 1 = the
+    // shared-secret password was wrong; 2 = a Verified listing wanted a lobby join token we did
+    // not present (not signed in) or refused the one we did (expired/reused — fetch a fresh one).
+    public const string RejectBadSecret = "bad secret";
+    public const string RejectJoinToken = "join token rejected";
+
+    private static string RejectReasonOf(byte code) =>
+        code switch
+        {
+            1 => RejectBadSecret,
+            2 => RejectJoinToken,
+            _ => "rejected",
+        };
+
     // True once a Welcome has populated the rendered world. A later Welcome arriving while this is
     // set is a reconnect, so ApplyWelcome rebuilds the world from server authority (see there).
     private bool _worldLoaded;
@@ -357,14 +371,25 @@ public partial class GameNetClient : Node
 
     // ---- Send API (used by the UI + ShipController) ----------------------
 
-    // Hello v9: secret + name + reconnect token. Sent automatically once the socket opens. The
-    // token (empty on a first connect) lets the server hand back a ship it's still holding for us.
+    // The lobby-issued join token to present in Hello (proto 38 tail). Set by the server browser
+    // before connecting to a Verified listing (POST /servers/{id}/join); empty = anonymous join,
+    // which a Verified listing refuses (MsgReject code 2). Single use, 60 s — fetch right before
+    // dialing, never cache across connects.
+    private string _joinToken = "";
+
+    public void SetJoinToken(string? token) => _joinToken = token ?? "";
+
+    // Hello (proto 38): secret + name + reconnect token + u16 join token. Sent automatically once
+    // the socket opens. The reconnect token (empty on a first connect) lets the server hand back a
+    // ship it's still holding for us; the join token (server/Net/HelloFrame.cs) proves who we are
+    // on a Verified listing — the server then takes our name from the token, not from _name.
     private void SendHello()
     {
         var sec = System.Text.Encoding.UTF8.GetBytes(_secret);
         var nm = System.Text.Encoding.UTF8.GetBytes(_name);
         var tok = System.Text.Encoding.UTF8.GetBytes(_reconnectToken);
-        var f = new byte[2 + sec.Length + 1 + nm.Length + 1 + tok.Length];
+        var join = System.Text.Encoding.UTF8.GetBytes(_joinToken);
+        var f = new byte[2 + sec.Length + 1 + nm.Length + 1 + tok.Length + 2 + join.Length];
         int o = 0;
         f[o++] = 1; // Hello
         f[o++] = (byte)sec.Length;
@@ -375,6 +400,11 @@ public partial class GameNetClient : Node
         o += nm.Length;
         f[o++] = (byte)tok.Length;
         tok.CopyTo(f, o);
+        o += tok.Length;
+        f[o++] = (byte)(join.Length & 0xFF);
+        f[o++] = (byte)(join.Length >> 8);
+        join.CopyTo(f, o);
+        _joinToken = ""; // single use
         _tx.Writer.TryWrite(f);
     }
 
@@ -631,7 +661,7 @@ public partial class GameNetClient : Node
                 // on one code path.
                 if (len >= 1 && buf[0] == 21)
                 {
-                    _rejectReason = len >= 2 && buf[1] == 1 ? "bad secret" : "rejected";
+                    _rejectReason = RejectReasonOf(len >= 2 ? buf[1] : (byte)0);
                     continue;
                 }
                 _rx.Enqueue(buf.AsSpan(0, len).ToArray());
@@ -692,7 +722,7 @@ public partial class GameNetClient : Node
                 // dc.onclose fires) and don't enqueue it as a game frame.
                 if (data.Length >= 1 && data[0] == 21)
                 {
-                    _rejectReason = data.Length >= 2 && data[1] == 1 ? "bad secret" : "rejected";
+                    _rejectReason = RejectReasonOf(data.Length >= 2 ? data[1] : (byte)0);
                     return;
                 }
                 _rx.Enqueue(data);

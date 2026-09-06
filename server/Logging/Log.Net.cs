@@ -23,6 +23,27 @@ internal static partial class Log
     [LoggerMessage(
         EventId = 1104,
         Level = LogLevel.Warning,
+        Message = "rejected join from client {ClientId}: this server holds a Verified listing and the Hello carried no join token"
+    )]
+    public static partial void RejectedJoinNoToken(ILogger logger, int clientId);
+
+    [LoggerMessage(
+        EventId = 1105,
+        Level = LogLevel.Warning,
+        Message = "rejected join from client {ClientId}: join token {Failure}"
+    )]
+    public static partial void RejectedJoinBadToken(ILogger logger, int clientId, string failure);
+
+    [LoggerMessage(
+        EventId = 1106,
+        Level = LogLevel.Information,
+        Message = "client {ClientId} joined as player {PlayerId} '{Name}' (verified join token)"
+    )]
+    public static partial void JoinedWithPlayerId(ILogger logger, int clientId, Guid playerId, string name);
+
+    [LoggerMessage(
+        EventId = 1104,
+        Level = LogLevel.Warning,
         Message = "outbound queue pressure: {Dropped} lossy frame(s) dropped, {Parked} reliable frame(s) parked for retry"
     )]
     public static partial void OutboundQueuePressure(ILogger logger, long dropped, long parked);
