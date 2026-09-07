@@ -579,3 +579,12 @@ every restart under their name. Unlisted servers and every existing harness beha
   Postgres template has no public TCP proxy (migrations only via pre-deploy). Still open:
   Google OAuth app + Steam key; browser sign-in click-through; pair + Ranked-flag the dedicated
   server; win-condition e2e; merge to master.
+- **2026-09-07 DataProtection persisted** (supervisor, commit 7aa9f22, deployment 6978a660):
+  `LobbyDbContext : IDataProtectionKeyContext` + migration `DataProtectionKeys`
+  (`data_protection_keys`), `Persistence.cs` registers
+  `AddDataProtection().SetApplicationName("public-lobby").PersistKeysToDbContext<LobbyDbContext>()`
+  — website cookies and passkey/external-login state now survive redeploys (the ring used to live in
+  `/root/.aspnet` on the ephemeral container fs). Keys are stored unencrypted, like
+  `signing_keys.private_pem` — the database is the secret store. Suite: schema expects the table and
+  a last section proves the host ring is loaded from those rows (282 checks). Stale agent worktrees
+  under `.claude/worktrees` (5, all merged) removed with their `worktree-agent-*` branches.
