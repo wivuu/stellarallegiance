@@ -42,6 +42,18 @@ public interface IGameServerGrain : IGrainWithGuidKey
 
     /// <summary>Hand this game server to another player (an admin adopting an orphan).</summary>
     Task SetOperator(Guid operatorPlayerId);
+
+    /// <summary>
+    /// Erase this game server and everything the ledger keeps under its id: the matches it
+    /// reported (with their team and pilot lines), the join tokens issued for it, and its own
+    /// sessions. Returns false when there was nothing to delete.
+    ///
+    /// Irreversible, and NOT a rollback: the kills, points and wins those matches already added to
+    /// each player are cumulative counters on `players` (PlayerGrain.OnMatch), not a projection of
+    /// match_pilots, so the global ladder keeps them. Only the per-server ladder and the match
+    /// history go. Ban instead if the record should stay readable.
+    /// </summary>
+    Task<bool> Delete(DateTimeOffset now);
 }
 
 public sealed class GameServerGrain(IDbContextFactory<LobbyDbContext> dbFactory) : Grain, IGameServerGrain
@@ -153,6 +165,49 @@ public sealed class GameServerGrain(IDbContextFactory<LobbyDbContext> dbFactory)
         if (_row is null || _row.OperatorPlayerId == operatorPlayerId)
             return;
         await Persist(g => g.OperatorPlayerId = operatorPlayerId);
+    }
+
+    public async Task<bool> Delete(DateTimeOffset now)
+    {
+        if (_row is null)
+            return false;
+        var id = this.GetPrimaryKey();
+
+        // Sessions and matches are owned by OTHER grains that hold their row in memory, so they are
+        // told first and are therefore NOT inside the transaction below — the same ordering (and
+        // reasoning) as PlayerGrain.Delete. If the transaction then failed, a revoked session and a
+        // forgotten match grain are both recoverable; a grain still serving a row that has been
+        // deleted underneath it is not.
+        var query = GrainFactory.GetGrain<IQueryGrain>(0);
+        foreach (var lineage in await query.ListSessionLineages(SubjectKind.Server, id, now))
+            await GrainFactory.GetGrain<ISessionGrain>(lineage).Revoke(now);
+
+        Guid[] matchIds;
+        await using (var probe = await dbFactory.CreateDbContextAsync())
+        {
+            matchIds = await probe.Matches.AsNoTracking().Where(m => m.GameServerId == id).Select(m => m.Id).ToArrayAsync();
+        }
+        foreach (var matchId in matchIds)
+            await GrainFactory.GetGrain<IMatchGrain>(matchId).Forget();
+
+        await using var db = await dbFactory.CreateDbContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync();
+        // Children first: every FK onto `matches` and `game_servers` is Restrict, so the order here
+        // is the delete order the database will accept.
+        await db.MatchPilots.Where(p => matchIds.Contains(p.MatchId)).ExecuteDeleteAsync();
+        await db.MatchTeams.Where(t => matchIds.Contains(t.MatchId)).ExecuteDeleteAsync();
+        await db.Matches.Where(m => m.GameServerId == id).ExecuteDeleteAsync();
+        // Unlike a player deletion, these join_tokens_issued rows are safe to drop: they are the
+        // plausibility evidence for results reported by THIS server, and it will never report
+        // another one.
+        await db.JoinTokensIssued.Where(j => j.GameServerId == id).ExecuteDeleteAsync();
+        await db.Sessions.Where(x => x.SubjectKind == SubjectKind.Server && x.SubjectId == id).ExecuteDeleteAsync();
+        await db.GameServers.Where(g => g.Id == id).ExecuteDeleteAsync();
+        await tx.CommitAsync();
+
+        _row = null;
+        DeactivateOnIdle();
+        return true;
     }
 
     async Task Persist(Action<GameServer> mutate)

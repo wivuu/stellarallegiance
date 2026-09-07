@@ -35,6 +35,12 @@ public interface IMatchGrain : IGrainWithGuidKey
     /// abandoned the match on this call.
     /// </summary>
     Task<bool> CheckAbandonment(DateTimeOffset now);
+
+    /// <summary>
+    /// This match's rows have been deleted underneath the grain (its game server was deleted):
+    /// drop the cached row and the abandonment reminder so nothing writes a row that is gone.
+    /// </summary>
+    Task Forget();
 }
 
 public sealed class MatchGrain(IDbContextFactory<LobbyDbContext> dbFactory, IServerRegistry registry)
@@ -272,6 +278,14 @@ public sealed class MatchGrain(IDbContextFactory<LobbyDbContext> dbFactory, ISer
         }
         await UnregisterAbandonReminder();
         return true;
+    }
+
+    public async Task Forget()
+    {
+        await UnregisterAbandonReminder();
+        _row = null;
+        _listingSeenAt = null;
+        DeactivateOnIdle();
     }
 
     public Task ReceiveReminder(string reminderName, TickStatus status) =>

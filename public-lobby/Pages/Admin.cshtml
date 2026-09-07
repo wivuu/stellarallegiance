@@ -17,6 +17,14 @@
         </section>
     }
 
+    @if (Model.DeletedServerName is { } deletedServerName)
+    {
+        <section class="space-y-1.5 rounded border border-panel-hi bg-panel px-4 py-3.5">
+            <h2 class="text-sm font-semibold text-text-hi">Game server &ldquo;@deletedServerName&rdquo; was deleted</h2>
+            <p class="text-[13px] leading-relaxed text-text-2">@Model.DeletedServerNotice</p>
+        </section>
+    }
+
     <section class="space-y-2.5">
         <h1 class="font-ui text-2xl font-bold text-text-hi">Admin</h1>
         <div class="flex gap-3">

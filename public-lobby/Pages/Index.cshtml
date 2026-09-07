@@ -3,6 +3,7 @@
 @{
     ViewData["Title"] = "Stellar Allegiance — Public Lobby";
     const string Repo = "https://github.com/onionhammer/wivuullegiance";
+    const string Releases = Repo + "/releases/latest";
 
     // Head of the ladder gets a little hierarchy the paginated /ladder table doesn't need.
     string RankClass(int rank) => rank == 1 ? "text-accent" : rank <= 3 ? "text-text-2" : "text-text-dim";
@@ -11,23 +12,23 @@
 <div class="space-y-0">
 
     @* ---- Hero ------------------------------------------------------------------------------ *@
-    <section class="flex items-center gap-10 pt-8 pb-11">
-        <img src="/logo.png" alt="Stellar Allegiance" width="240" class="w-60 shrink-0" />
-        <div class="flex flex-col gap-[18px]">
+    <section class="flex flex-col items-center gap-7 pt-4 pb-9 text-center sm:flex-row sm:gap-10 sm:pt-8 sm:pb-11 sm:text-left">
+        <img src="/logo.png" alt="Stellar Allegiance" width="240" class="w-44 shrink-0 sm:w-60" />
+        <div class="flex flex-col items-center gap-[18px] sm:items-start">
             <div class="flex items-center gap-2.5">
                 <span class="size-2.5 rotate-45 bg-accent"></span>
                 <span class="text-[13px] font-medium uppercase tracking-[2px] text-text-2">Public Lobby</span>
             </div>
-            <h1 class="text-[34px] font-bold leading-[1.15] text-text-hi text-balance">An ancient game,<br />reimagined</h1>
+            <h1 class="text-[28px] font-bold leading-[1.15] text-text-hi text-balance sm:text-[34px]">An ancient game,<br />reimagined</h1>
             <p class="text-[15px] leading-[1.65] text-text-2 text-pretty">
-                A 3D multiplayer space-combat game &mdash; a Godot client predicting flight against an
-                authoritative 20&nbsp;Hz .NET sim server. Mine, research, build stations and take the
-                enemy's home base, with one player commanding from the map.
+                Team-based 3D space combat. Fly, mine asteroids, research new tech and build stations
+                on your way to the enemy's home base &mdash; while one player commands the whole front
+                from the map.
             </p>
-            <div class="flex items-center gap-3 pt-1">
-                <a href="@Repo" class="chamfer flex items-center gap-2 bg-accent px-3.5 py-[11px] text-sm font-semibold tracking-[0.02em] text-void hover:bg-accent/85">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><path d="M8 6 3 12l5 6"></path><path d="m16 6 5 6-5 6"></path></svg>
-                    View on GitHub
+            <div class="flex flex-wrap items-center justify-center gap-3 pt-1 sm:justify-start">
+                <a href="@Releases" class="chamfer flex items-center gap-2 bg-accent px-3.5 py-[11px] text-sm font-semibold tracking-[0.02em] text-void hover:bg-accent/85">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M4 19h16"></path></svg>
+                    Download the game
                 </a>
                 <a href="/ladder" class="chamfer flex items-center gap-2 border border-hairline-hi/40 bg-accent/10 px-3.5 py-2.5 text-sm font-medium text-text-hi hover:bg-accent/20">Browse the ladder</a>
             </div>
@@ -44,7 +45,7 @@
         </p>
     </div>
 
-    <div class="flex items-center gap-3 py-10">
+    <div class="flex items-center gap-3 py-8 sm:py-10">
         <span class="h-px flex-1 bg-hairline"></span>
         <span class="size-2.5 shrink-0 rotate-45 bg-accent"></span>
         <span class="h-px flex-1 bg-hairline"></span>
@@ -52,7 +53,7 @@
 
     @* ---- Servers online --------------------------------------------------------------------- *@
     <section class="flex flex-col gap-3">
-        <div class="flex items-baseline justify-between gap-4">
+        <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <h2 class="text-[22px] font-bold text-text-hi">Servers online</h2>
             <span class="font-mono text-[13px] text-text-dim">
                 @Model.ServersOnline listed &middot; @Model.PilotsOnline @(Model.PilotsOnline == 1 ? "pilot" : "pilots")
@@ -118,7 +119,7 @@
         }
     </section>
 
-    <div class="flex items-center gap-3 py-10">
+    <div class="flex items-center gap-3 py-8 sm:py-10">
         <span class="h-px flex-1 bg-hairline"></span>
         <span class="size-2.5 shrink-0 rotate-45 bg-accent"></span>
         <span class="h-px flex-1 bg-hairline"></span>
@@ -126,7 +127,7 @@
 
     @* ---- Top of the ladder ------------------------------------------------------------------ *@
     <section class="flex flex-col gap-3">
-        <div class="flex items-baseline justify-between gap-4">
+        <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <h2 class="text-[22px] font-bold text-text-hi">Top pilots</h2>
             <a href="/ladder" class="text-sm text-data hover:text-text-hi">Full ladder &rarr;</a>
         </div>
@@ -181,7 +182,7 @@
         }
     </section>
 
-    <div class="flex items-center gap-3 py-10">
+    <div class="flex items-center gap-3 py-8 sm:py-10">
         <span class="h-px flex-1 bg-hairline"></span>
         <span class="size-2.5 shrink-0 rotate-45 bg-accent"></span>
         <span class="h-px flex-1 bg-hairline"></span>
@@ -189,29 +190,50 @@
 
     @* ---- Get in the cockpit ----------------------------------------------------------------- *@
     <section class="flex flex-col gap-3 pb-6">
-        <h2 class="text-[22px] font-bold text-text-hi">Get in the cockpit</h2>
+        <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h2 class="text-[22px] font-bold text-text-hi">Get in the cockpit</h2>
+            <a href="@Repo/releases" class="text-sm text-data hover:text-text-hi">All releases &rarr;</a>
+        </div>
         <p class="text-sm leading-relaxed text-text-dim">
-            No installer yet &mdash; you build it from source. You'll need the .NET&nbsp;10 SDK,
-            Godot&nbsp;4.7 (Mono/.NET build) and PowerShell&nbsp;7+.
+            Grab the latest build for your platform, unzip it, and run it &mdash; there is no installer
+            and nothing to compile. Keep the unzipped folder together; the game needs the files that
+            ship beside the executable.
         </p>
 
-        <div class="mt-2 grid grid-cols-3 gap-4">
+        <div class="mt-1">
+            <a href="@Releases" class="chamfer inline-flex items-center gap-2 bg-accent px-3.5 py-[11px] text-sm font-semibold tracking-[0.02em] text-void hover:bg-accent/85">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M4 19h16"></path></svg>
+                Download the latest release
+            </a>
+        </div>
+
+        <div class="mt-2 grid gap-3 sm:grid-cols-3 sm:gap-4">
             <div class="flex flex-col gap-2 rounded border border-hairline bg-panel-fill p-3.5">
-                <span class="font-mono text-xs text-accent">01</span>
-                <h3 class="text-[15px] font-semibold text-text-hi">Clone and build</h3>
-                <p class="text-[13px] leading-relaxed text-text-2">Pull the repo and let the toolchain restore. The physics core is shared by client and server, so both stay bit-identical.</p>
+                <span class="font-mono text-xs text-accent">WINDOWS</span>
+                <h3 class="text-[15px] font-semibold text-text-hi">&hellip;-windows.zip</h3>
+                <p class="text-[13px] leading-relaxed text-text-2">Unzip anywhere and run <code class="font-mono text-xs text-data">stellarallegiance.exe</code>.</p>
             </div>
             <div class="flex flex-col gap-2 rounded border border-hairline bg-panel-fill p-3.5">
-                <span class="font-mono text-xs text-accent">02</span>
-                <h3 class="text-[15px] font-semibold text-text-hi">Launch the client</h3>
-                <p class="text-[13px] leading-relaxed text-text-2">Run <code class="font-mono text-xs text-data">scripts/run-client.ps1</code> and it opens the server browser against this lobby.</p>
+                <span class="font-mono text-xs text-accent">MACOS</span>
+                <h3 class="text-[15px] font-semibold text-text-hi">&hellip;-macos.zip</h3>
+                <p class="text-[13px] leading-relaxed text-text-2">Ad-hoc signed, not notarized &mdash; clear quarantine once, then open the app.</p>
             </div>
             <div class="flex flex-col gap-2 rounded border border-hairline bg-panel-fill p-3.5">
-                <span class="font-mono text-xs text-accent">03</span>
-                <h3 class="text-[15px] font-semibold text-text-hi">Sign in and fly</h3>
-                <p class="text-[13px] leading-relaxed text-text-2">Approve the device code in your browser, pick a Verified server, ready up. Or join any address directly.</p>
+                <span class="font-mono text-xs text-accent">LINUX</span>
+                <h3 class="text-[15px] font-semibold text-text-hi">&hellip;-linux.zip</h3>
+                <p class="text-[13px] leading-relaxed text-text-2">Unzip anywhere and run <code class="font-mono text-xs text-data">stellarallegiance.x86_64</code>.</p>
             </div>
         </div>
+
+        <code class="mt-1 block overflow-x-auto whitespace-pre rounded-sm border border-hairline bg-void px-3 py-2.5 font-mono text-[12px] leading-[1.7] text-data sm:text-[12.5px]">macOS only: xattr -dr com.apple.quarantine stellarallegiance.app</code>
+
+        <p class="mt-1 text-sm leading-relaxed text-text-dim">
+            On first launch, the client shows a device code and opens this site to approve it &mdash;
+            after that, pick a <span class="text-ok">Verified</span> server and ready up. You can also
+            join any address directly, or
+            <a href="@Repo/blob/master/QUICKSTART.md" class="text-data hover:text-text-hi">build from source</a>
+            if you would rather.
+        </p>
 
         <div class="mt-3 flex flex-col gap-2.5 rounded border border-panel-hi bg-panel-deep p-3.5">
             <div class="flex items-center gap-2">
@@ -219,7 +241,7 @@
                 <span class="text-[13px] font-medium uppercase tracking-[2px] text-text-2">Host a server</span>
             </div>
             <p class="text-[13px] leading-relaxed text-text-dim">Prebuilt images are on GHCR &mdash; forward the port and your server lists itself here automatically.</p>
-            <code class="block overflow-x-auto whitespace-pre rounded-sm border border-hairline bg-void px-3 py-2.5 font-mono text-[12.5px] leading-[1.7] text-data">docker run --rm -p 8090:8090 \
+            <code class="block overflow-x-auto whitespace-pre rounded-sm border border-hairline bg-void px-3 py-2.5 font-mono text-[12px] leading-[1.7] text-data sm:text-[12.5px]">docker run --rm -p 8090:8090 \
   -e SIM_PUBLIC_NAME="My Server" \
   ghcr.io/wivuu/stellarallegiance-sim:latest</code>
         </div>

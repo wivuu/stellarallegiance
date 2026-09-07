@@ -57,6 +57,22 @@ public sealed class AdminModel(
     [BindProperty(SupportsGet = true, Name = "servers")]
     public int DeletedServers { get; set; }
 
+    // Same idea for /admin/servers/{id}: after a delete there is no server page left to say so on.
+    [BindProperty(SupportsGet = true, Name = "deletedServer")]
+    public string? DeletedServerName { get; set; }
+
+    [BindProperty(SupportsGet = true, Name = "deletedMatches")]
+    public int DeletedServerMatches { get; set; }
+
+    public string DeletedServerNotice =>
+        DeletedServerMatches == 0
+            ? "The game server, its live session and every join token issued for it are gone. It had "
+                + "reported no matches. Pairing that machine again mints a brand-new game server."
+            : $"The game server, its live session, every join token issued for it and the "
+                + $"{DeletedServerMatches:N0} {(DeletedServerMatches == 1 ? "match" : "matches")} it "
+                + "reported are gone. Ladder totals were not rolled back: the points those matches "
+                + "added are cumulative on each player.";
+
     public string DeletedNotice
     {
         get

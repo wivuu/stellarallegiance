@@ -241,6 +241,97 @@ static partial class Suite
             ).Status,
             "…and it lists again"
         );
+
+        // ---- delete a game server -------------------------------------------
+        // The one path that erases a game server's whole ledger footprint. It exists alongside Ban
+        // rather than instead of it, so the check that matters is what it does NOT roll back.
+        var (doomedToken, doomedId) = await DevServerTokenAsync(http, grains, "Warden", "Doomed Box");
+        // Ranked, so the match actually moves the pilot's ladder counters (PlayerGrain.ApplyMatch
+        // only accumulates for a ranked result) and the "not a rollback" check below has teeth.
+        await grains.GetGrain<IGameServerGrain>(doomedId).SetRanked(true);
+        var pilotBearer = await DevPlayerTokenAsync(http, "Doomed Pilot");
+        var pilotId = (await query.FindPlayerIdByDisplayName("Doomed Pilot"))!.Value;
+        var doomedListing = "listing-doomed";
+        var doomedMatch = Guid.NewGuid();
+        await grains
+            .GetGrain<IPlayerGrain>(pilotId)
+            .RecordJoinToken(Guid.NewGuid().ToString("N"), doomedId, doomedListing, now, now.AddMinutes(1));
+        await grains.GetGrain<IMatchGrain>(doomedMatch).Start(doomedId, doomedListing, "Doomed Map", now, now);
+        Eq(
+            MatchCompleteOutcome.Accepted,
+            (
+                await grains
+                    .GetGrain<IMatchGrain>(doomedMatch)
+                    .Complete(
+                        new MatchResultInput(
+                            doomedId,
+                            doomedListing,
+                            "Doomed Map",
+                            now,
+                            now.AddMinutes(5),
+                            0,
+                            MatchEndReason.WinCondition,
+                            [new MatchTeamLine(0, 1, 1, 100)],
+                            [new MatchPilotLine(pilotId, "Doomed Pilot", 0, 3, 1, 0, 40, true)]
+                        ),
+                        now.AddMinutes(5)
+                    )
+            ).Outcome,
+            "the doomed server reported a match"
+        );
+        var pointsBefore = (await grains.GetGrain<IPlayerGrain>(pilotId).Get())!.Points;
+        Check(pointsBefore > 0, "the pilot carries that match's points on the ladder");
+
+        // The typed confirmation is exact and case-sensitive, as on the player page.
+        await PostAdminAsync(
+            admin,
+            $"/admin/servers/{doomedId}?handler=Delete",
+            [new("id", doomedId.ToString()), new("confirmName", "DOOMED BOX")]
+        );
+        Check(
+            await grains.GetGrain<IGameServerGrain>(doomedId).Get() is not null,
+            "a shouted server name does not confirm a deletion"
+        );
+
+        await PostAdminAsync(
+            admin,
+            $"/admin/servers/{doomedId}?handler=Delete",
+            [new("id", doomedId.ToString()), new("confirmName", "Doomed Box")]
+        );
+        Check(await grains.GetGrain<IGameServerGrain>(doomedId).Get() is null, "the game server is gone");
+        Eq(
+            HttpStatusCode.NotFound,
+            (await admin.GetAsync($"/admin/servers/{doomedId}")).StatusCode,
+            "…and its admin page is 404"
+        );
+        Eq(
+            HttpStatusCode.NotFound,
+            (await admin.GetAsync($"/admin/matches/{doomedMatch}")).StatusCode,
+            "…the match it reported went with it"
+        );
+        Eq(
+            pointsBefore,
+            (await grains.GetGrain<IPlayerGrain>(pilotId).Get())!.Points,
+            "…but the pilot keeps the points it already earned: a delete is not a rollback"
+        );
+        Eq(
+            HttpStatusCode.OK,
+            (await admin.GetAsync("/admin?tab=servers")).StatusCode,
+            "the servers tab still renders with the row gone"
+        );
+        // Its credential died with its sessions, so the machine cannot list itself back.
+        Eq(
+            HttpStatusCode.Unauthorized,
+            (
+                await PostServerAsync(
+                    http,
+                    new RegisterRequest(Name: "Doomed Box", Port: 9109, PublicEndpoint: null),
+                    doomedToken
+                )
+            ).Status,
+            "a deleted server's token no longer lists it"
+        );
+        Eq(HttpStatusCode.OK, (await GetServersAsync(http, pilotBearer)).Status, "the pilot who played there is untouched");
     }
 
     // Plays one match for `name`, then deletes them through the page and checks what became of the

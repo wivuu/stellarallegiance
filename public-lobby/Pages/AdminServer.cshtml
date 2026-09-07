@@ -191,7 +191,14 @@
                 <a href="/admin/servers/@s.Id?ban=true" class="shrink-0 rounded border border-danger/40 bg-danger/10 px-3.5 py-1.5 text-[13px] font-medium text-danger hover:bg-danger/20">@Model.BanPanel.Button</a>
             }
         </div>
-        <p class="text-xs leading-relaxed text-text-dim">@Model.NoDeleteNote</p>
+        <div class="flex flex-wrap items-center justify-between gap-x-5 gap-y-3 border-t border-danger/20 pt-3">
+            <div class="space-y-0.5">
+                <span class="block text-sm font-semibold text-text-hi">@Model.DeletePanel.Title</span>
+                <span class="block text-[13px] leading-relaxed text-text-2">@Model.DeletePanel.Blurb</span>
+            </div>
+            <a href="/admin/servers/@s.Id?confirm=delete" class="shrink-0 rounded border border-danger/40 bg-danger/10 px-3.5 py-1.5 text-[13px] font-medium text-danger hover:bg-danger/20">Delete&hellip;</a>
+        </div>
+        <p class="text-xs leading-relaxed text-text-dim">@Model.DeleteLadderNote</p>
     </section>
 </div>
 
@@ -232,5 +239,54 @@
                 <button type="submit" class="rounded bg-danger px-4 py-2 text-sm font-semibold text-void hover:bg-danger/85">Ban server</button>
             </div>
         </form>
+    </div>
+}
+
+@if (Model.ShowDeleteDialog)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-void/[0.82] p-6">
+        <div class="bracket-frame w-full max-w-[520px] p-1">
+            <form method="post" asp-page-handler="Delete" class="flex flex-col gap-3.5 border border-danger/30 bg-panel p-5">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@s.Id" />
+
+                <div class="space-y-1.5">
+                    <h3 class="text-[17px] font-bold text-text-hi">Delete game server &ldquo;@s.Name&rdquo;</h3>
+                    <p class="text-[13px] leading-relaxed text-text-2">
+                        There is no undo and no grace period &mdash; if you only want it off the browser for a
+                        while, ban it instead.
+                    </p>
+                </div>
+
+                <div class="space-y-1.5">
+                    <span class="block text-xs font-semibold uppercase tracking-[1px] text-text-dim">Erased immediately</span>
+                    @foreach (var line in Model.DeleteErased)
+                    {
+                        <span class="flex items-start gap-2 text-[13px] leading-relaxed text-text-hi">
+                            <span class="text-danger">&minus;</span>@line
+                        </span>
+                    }
+                </div>
+
+                <p class="border-l-2 border-warn/50 pl-2.5 text-xs leading-relaxed text-text-dim">@Model.DeleteLadderNote</p>
+
+                <div class="space-y-1.5">
+                    <label for="confirm-server-name" class="block text-xs font-semibold uppercase tracking-[1px] text-text-dim">
+                        Type <span class="font-mono text-danger">@s.Name</span> to confirm
+                    </label>
+                    <input id="confirm-server-name" name="confirmName" autocomplete="off" spellcheck="false" placeholder="Server name"
+                           class="w-full rounded border border-panel-hi bg-panel-deep px-3 py-2 font-mono text-sm text-text-hi placeholder:text-text-dim focus:border-accent focus:outline-none" />
+                    @if (Model.DeleteError is { } deleteError)
+                    {
+                        <p class="text-[13px] text-danger">@deleteError</p>
+                    }
+                </div>
+
+                <div class="flex items-center justify-end gap-2.5 pt-0.5">
+                    <a href="/admin/servers/@s.Id" class="px-3 py-2 text-sm text-text-2 hover:text-text-hi">Cancel</a>
+                    <button type="submit" class="rounded bg-danger px-4 py-2 text-sm font-semibold text-void hover:bg-danger/85">Delete permanently</button>
+                </div>
+            </form>
+        </div>
     </div>
 }
