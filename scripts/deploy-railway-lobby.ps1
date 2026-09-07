@@ -108,6 +108,7 @@ Done. Show the domain and verify:
   railway domain -s "$Project"
   curl -s https://<that-domain>/health          # -> public-lobby
   curl -s https://<that-domain>/health/orleans  # -> orleans:ok   (silo up; needs the Postgres attached)
+  curl -s https://<that-domain>/health/cluster  # JSON: this silo, membership, cross-silo stats, TCP probes
   open  https://<that-domain>/login             # passkey sign-up works with zero provider config
 
 If /health/orleans fails or the deploy log shows "connection string 'postgres-database' is not set",

@@ -111,8 +111,13 @@ writers of their own Postgres rows through EF Core, while Orleans itself supplie
 model and, via `LOBBY_ORLEANS_CLUSTERING=adonet` (the default), ADO.NET clustering + reminders
 against that same database — `--migrate` creates the Orleans tables too. This is a single-replica
 co-hosted silo for now; a second replica is a later slice, once the in-memory server registry and
-signaling relay above also move into grains. `GET /health/orleans` proves the silo is actually
-taking grain calls (not just that the process is up).
+signaling relay above also move into grains (the Orleans side already clusters across Railway
+replicas: the silo advertises its private IPv6 and listens on `[::]` when `RAILWAY_PRIVATE_DOMAIN`
+is set, `ORLEANS_ADVERTISED_IP` overrides). `GET /health/orleans` proves the silo is actually
+taking grain calls (not just that the process is up); `GET /health/cluster` returns JSON with this
+silo's address, the listening endpoints, the membership view, cross-silo runtime stats (CPU, memory,
+activations per silo) and a raw TCP probe of every live silo port — hit it a few times to land on
+each replica.
 
 Running it again against an already-migrated database is a no-op. WP4.2 documents the full
 Postgres deployment/env story; this is the short version.

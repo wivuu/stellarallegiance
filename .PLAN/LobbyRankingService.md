@@ -588,3 +588,18 @@ every restart under their name. Unlisted servers and every existing harness beha
   `signing_keys.private_pem` — the database is the secret store. Suite: schema expects the table and
   a last section proves the host ring is loaded from those rows (282 checks). Stale agent worktrees
   under `.claude/worktrees` (5, all merged) removed with their `worktree-agent-*` branches.
+- **2026-09-07 2-replica scale test** (supervisor, commits 6d80708/00e38f2/87b37c2): `/health/cluster`
+  (membership view + cross-silo `IManagementGrain.GetRuntimeStatistics` + raw TCP probe per silo +
+  listening endpoints). First attempt FAILED: Orleans advertised the container's host-local 10.x
+  IPv4, the joiner looped in "Failed to get ping responses from 1 of 1 active silos" and restarted
+  (Railway showed 2 running, crashed 0 — Kestrel never starts on a silo stuck validating, so all
+  traffic hit replica 1). Fix: on Railway (RAILWAY_PRIVATE_DOMAIN set) advertise this replica's
+  fd00::/8 private IPv6 (`ORLEANS_ADVERTISED_IP` overrides) AND set `EndpointOptions` listeners to
+  `[::]` explicitly — `ConfigureEndpoints(..., listenOnAnyHostAddress: true)` binds 0.0.0.0, which
+  never accepts the IPv6 connections the advertised address invites. Result: both replicas Active,
+  TCP open both ways, stats fetched cross-silo from both (24/24 samples, ~50/50 request split).
+  Scaled back to 1. STILL NOT SAFE to run >1 replica: `ServerRegistry` (listings + secrets) and the
+  WebRTC signaling relay are per-process (slice 3 moves them into grains). Railway gotchas:
+  `railway environment edit --service-config <svc> path value` did NOT commit (both times);
+  `railway environment edit --json` with a services patch does — and every commit REBUILT the
+  last upload (not deploy-less via CLI). Config carries a `limitOverride` of 0.5 vCPU / 2 GB.
