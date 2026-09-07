@@ -41,6 +41,9 @@ var stunServers = BuildStunServers();
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
+// OTLP logs/metrics/traces (Hosting/Telemetry.cs) so an Aspire AppHost dashboard can see this service.
+builder.AddLobbyTelemetry();
+
 var bus = new LobbyEventBus();
 builder.Services.AddSingleton(bus);
 builder.Services.AddSingleton<ServerConnectionManager>();

@@ -17,7 +17,8 @@ cp .env.example .env
 docker compose up --build           # serves ws://localhost:8090/game
 ```
 
-For a throwaway local server with bots, run it directly: `scripts/run-server.ps1 -Local --autostart`.
+For a throwaway local server with bots: `aspire run` with `SIM_AUTOSTART=1` in `.env` (parameter
+`sim-autostart`), or the raw `dotnet run --project server -c Release -- --port 8090 --autostart`.
 
 ## Public lobby & NAT traversal (optional)
 
@@ -61,22 +62,27 @@ project reference; `public-lobby/Dockerfile` matches for uniformity). `railway u
 root and won't read a subdirectory config, so each service just sets `RAILWAY_DOCKERFILE_PATH` to
 point at its Dockerfile — no Root Directory setting needed.
 
-Two one-liner scripts wrap the whole flow (Railway CLI installed + `railway login` first). Both are
-**idempotent** — re-running with the same project name UPDATES that project instead of creating a
-duplicate (so a server never gets advertised twice):
+Deploy from the Aspire dashboard's **Deploy to Railway** button on the `lobby` or `server`
+resource (prompts for the project, environment, and which variables to push; blank leaves a
+variable untouched), or from the CLI:
 
-```pwsh
-scripts/deploy-railway-lobby.ps1                 # deploy/update the public lobby (wivuu-public-lobby)
-scripts/deploy-railway-server.ps1                # deploy/update a game server (wivuu-game-server)
-scripts/deploy-railway-server.ps1 my-other-box   # a second, differently-named server
+```bash
+aspire do deploy-lobby     # deploy/update the public lobby (project wivuu-public-lobby)
+aspire do deploy-server    # deploy/update a game server (project wivuu-game-server)
 ```
 
-The **lobby** script defaults to project `wivuu-public-lobby` (the domain baked into the
-server/client defaults); export `STUN_URL` to override the public STUN handed to WebRTC clients.
+Both are **idempotent** — re-running against the same project UPDATES it instead of creating a
+duplicate (so a server never gets advertised twice). Project names come from the AppHost
+parameters `railway-lobby-project` (default `wivuu-public-lobby`), `railway-server-project`
+(default `wivuu-game-server`) and `railway-environment` (default `production`) — override them in
+the dashboard prompt or `.env` for a second, differently-named server.
 
-The **game-server** script uses the project name as the server's public name (`SIM_PUBLIC_NAME`) and
-leaves `PUBLIC_LOBBY` unset so it registers with the default hosted lobby (export `PUBLIC_LOBBY` to
-point elsewhere). `SIM_PUBLIC_ENDPOINT` auto-derives from Railway's `RAILWAY_PUBLIC_DOMAIN` to
+The **lobby** deploy targets project `wivuu-public-lobby` (the domain baked into the
+server/client defaults); set `STUN_URL` to override the public STUN handed to WebRTC clients.
+
+The **game-server** deploy uses the project name as the server's public name (`SIM_PUBLIC_NAME`)
+and leaves `PUBLIC_LOBBY` unset so it registers with the default hosted lobby (set `PUBLIC_LOBBY`
+to point elsewhere). `SIM_PUBLIC_ENDPOINT` auto-derives from Railway's `RAILWAY_PUBLIC_DOMAIN` to
 `https://<server-domain>`, so the lobby probes it over HTTPS and advertises `wss://<server-domain>` —
 clients one-click-join directly. On a fresh deploy the Railway edge takes ~1 min to propagate; the
 server **self-heals** (re-registers until the probe succeeds), so it settles to DIRECT on its own.

@@ -1171,6 +1171,39 @@ YAML-to-GLB pipeline: converts modular hull part definitions into 3D models with
 - **Related:** [[VFX]], [[Client-Side Hit Sparks]]
 - **Notes:** Hooked into AddBolt/DeleteShip/CheckBoltImpacts/EngineGlow; collisions+settings-UI deferred
 
+### Aspire AppHost (`apphost/`)
+The .NET Aspire distributed-application host that orchestrates the local dev stack and replaces
+the old PowerShell run/deploy scripts. `aspire run` (foreground, dashboard attached) or `aspire
+start` (background, for agents/harnesses) brings up a Postgres container, applies the public
+lobby's EF Core migrations, then starts `public-lobby` (`http://localhost:8091`) and `server`
+(`ws://localhost:8090/game`).
+- **Frequency:** Common
+- **Key Files:**
+  - `apphost/AppHost.cs` — resource graph (Postgres, `lobby`, `server`, `client`) + custom commands
+  - `.env` / `.env.example` — read by both `docker compose` and the AppHost; every `KEY=VALUE`
+    becomes a parameter in kebab-case (`SIM_AUTOSTART=1` → `sim-autostart`); unresolved
+    parameters are prompted for in the dashboard and can be saved to user secrets
+  - `apphost/.local/` — untracked per-workstation state: the server's `sim-cache/` and the paired
+    `lobby-auth.json` device-code credential
+- **Related:** [[Public Lobby]], [[Game Server]], [[Ranked]]
+- **Notes:** The `client` resource builds the client C# then launches Godot, resolving the Godot
+  binary the same way `scripts/godot-bin.ps1` did (GODOT env → `godot.executablePath` user secret →
+  PATH → standard install dirs), prompting in the dashboard if none resolve. The server registers under `sim-public-name` but stays
+  unlisted until `aspire resource lobby approve-device-code --user-code XXXX-XXXX` (dashboard button)
+  approves the code printed in its log; approved = Verified, which refuses direct `--host` joins
+  (`join token required`), so harness runs then use `--mode lobby --seed-dev-login --godot-args
+  "--join-listing=<name> --autofly"` (`--seed-dev-login` mints a dev player and overwrites the
+  client's `user://auth.json`). `aspire resource
+  client launch --mode <direct|lobby|autofly> [--godot-args "..."] [--write-movie <path>]
+  [--pilot-name <name>]` starts an extra/custom client (also a dashboard button); `--godot-args` is
+  one quoted, space-split string that may itself contain the `--` separator before UI-harness
+  flags. `aspire do deploy-lobby` / `aspire do deploy-server` (or the dashboard's Deploy to Railway
+  button) push `public-lobby`/`server` to Railway using the `railway-lobby-project` /
+  `railway-server-project` / `railway-environment` parameters; the one-time manual Railway steps
+  (attach Postgres, pre-deploy `--migrate`, App Sleeping off, custom domain) are unchanged. Perf
+  benchmarks still run the raw Release server directly (`dotnet run --project server -c Release`)
+  since Aspire builds Debug.
+
 ---
 
 ## Common Pitfalls & Anti-Patterns

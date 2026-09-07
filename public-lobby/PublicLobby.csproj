@@ -33,6 +33,13 @@
     <!-- WP1.3: ES256 join tokens (plan §3.2) minted with the modern JsonWebTokenHandler; the sim
          server verifies them offline with the same library family (server/Net/JoinTokenVerifier.cs). -->
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.22.0" />
+    <!-- Telemetry (Hosting/Telemetry.cs): OTLP-exported logs/metrics/traces so an Aspire AppHost
+         dashboard can show this service alongside the rest of the distributed app. -->
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.18.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.18.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.18.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.18.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.18.0" />
   </ItemGroup>
 
   <!-- WP0.3 (web shell + auth providers): external-login handlers, env-gated in

@@ -43,9 +43,14 @@ curl -s -b jar -c jar "$L/device?user_code=XXXX-XXXX" > page.html
 TOK=$(grep -o 'name="__RequestVerificationToken"[^>]*value="[^"]*"' page.html | head -1 | sed 's/.*value="//;s/"$//')
 curl -s -b jar -c jar "$L/device?handler=Approve" --data-urlencode "user_code=XXXX-XXXX" --data-urlencode "__RequestVerificationToken=$TOK"
 ```
+Under the AppHost the same approval is one command: `aspire resource lobby approve-device-code --user-code XXXX-XXXX`
+(also a button on the `lobby` resource). Note: an approved server is Verified and refuses direct `--host` joins.
 Seed a Godot client session: write `user://auth.json` (`~/Library/Application Support/Godot/app_userdata/stellarallegiance/auth.json`)
-as `{refreshToken, displayName, playerId, lobbyBase}` from a dev token; then
-`PUBLIC_LOBBY=$L pwsh -Command "& ./scripts/run-client.ps1 -GodotArgs @('--join-listing=<name>','--autofly')"`.
+as `{refreshToken, displayName, playerId, lobbyBase}` from a dev token — or let the launch command do it with
+`--seed-dev-login`; then
+`aspire resource client launch --mode lobby --seed-dev-login --godot-args "--join-listing=<name> --autofly"`
+(the AppHost already points the client at the local lobby, so no `PUBLIC_LOBBY` override needed
+for the local stack).
 Admins: `LOBBY_ADMINS=name:<display>,github:<login>,google:<sub>,steam:<id>` (applied at sign-in).
 
 ## Sim server side
@@ -109,9 +114,12 @@ target downloads the standalone CLI into `tools/tailwind/`). Format only touched
 
 ## Deploy (Railway)
 
-`scripts/deploy-railway-lobby.ps1` (project `wivuu-public-lobby`, `RAILWAY_DOCKERFILE_PATH=public-lobby/Dockerfile`,
-repo-root context; the Dockerfile copies `public-lobby/`, `public-lobby-data/`, `shared/`). One-time
-in the dashboard: attach Postgres → `ConnectionStrings__postgres-database`; pre-deploy command
-`dotnet PublicLobby.dll --migrate`; `LOBBY_PUBLIC_URL`, `LOBBY_ADMINS`, optional `AUTH_*` provider
-secrets, `RANKED_RESULTS`, `ALLOW_UNVERIFIED_SERVERS`. Verify `/health`, `/health/orleans`, `/login`.
-Single box: `docker compose up` (`lobby-db` + one-shot `lobby-migrate` + `public-lobby`).
+`aspire do deploy-lobby` (or the Aspire dashboard's **Deploy to Railway** button on the `lobby`
+resource) — project `wivuu-public-lobby` (parameter `railway-lobby-project`),
+`RAILWAY_DOCKERFILE_PATH=public-lobby/Dockerfile`, repo-root context; the Dockerfile copies
+`public-lobby/`, `public-lobby-data/`, `shared/`. One-time manual steps in the Railway dashboard:
+attach Postgres → `ConnectionStrings__postgres-database`; pre-deploy command
+`dotnet PublicLobby.dll --migrate`; App Sleeping OFF; `LOBBY_PUBLIC_URL`, `LOBBY_ADMINS`, optional
+`AUTH_*` provider secrets, `RANKED_RESULTS`, `ALLOW_UNVERIFIED_SERVERS`. Verify `/health`,
+`/health/orleans`, `/login`. Single box: `docker compose up` (`lobby-db` + one-shot
+`lobby-migrate` + `public-lobby`).

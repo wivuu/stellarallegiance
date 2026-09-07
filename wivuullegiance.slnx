@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/apphost/">
+    <Project Path="apphost/AppHost.csproj" />
+  </Folder>
   <Folder Name="/client/">
     <Project Path="client/stellarallegiance.csproj" />
   </Folder>

@@ -28,8 +28,8 @@ reference lives in `public-lobby/README.md`; day-to-day recipes in the `/public-
   to `SIM_AUTH_FILE` (default next to `sim-cache/`) and every restart re-lists silently under your
   name. `SIM_HOSTED_BY` is gone.
 - While listed as Verified, every joiner must present a join token; the server takes the pilot's
-  name and player id from it. Unlisted or private (`-Local`) servers behave exactly as before, so
-  `--autofly` and the other harnesses are unchanged.
+  name and player id from it. Unlisted or private (empty `sim-public-name`) servers behave exactly
+  as before, so `--autofly` and the other harnesses are unchanged.
 - Match results are reported to the lobby through a disk spool (`SIM_REPORT_SPOOL`) that survives
   lobby outages and server restarts.
 
@@ -48,11 +48,13 @@ reference lives in `public-lobby/README.md`; day-to-day recipes in the `/public-
 ## 2. Deploying the lobby (Railway)
 
 The lobby needs a Postgres database and a handful of environment variables. Everything else is
-already in `public-lobby/Dockerfile` and `scripts/deploy-railway-lobby.ps1`.
+already in `public-lobby/Dockerfile` and the AppHost's `deploy-lobby` Railway wiring
+(`apphost/`).
 
-1. **Deploy or update the service** from the repo root:
+1. **Deploy or update the service** — from the Aspire dashboard's **Deploy to Railway** button on
+   the `lobby` resource, or from the CLI:
    ```sh
-   scripts/deploy-railway-lobby.ps1            # project wivuu-public-lobby
+   aspire do deploy-lobby            # project wivuu-public-lobby (parameter railway-lobby-project)
    ```
 2. **Attach Postgres.** In the Railway project add a *Postgres* database service. Copy its
    `DATABASE_URL` into the lobby service as the variable `ConnectionStrings__postgres-database`
@@ -97,7 +99,8 @@ one-shot `lobby-migrate`, then `public-lobby` and `sim-server`; every variable a
 ## 3. Deploying / pairing a game server
 
 1. Run the server with `SIM_PUBLIC_NAME="Your Server"` and `PUBLIC_LOBBY=https://<lobby-domain>`
-   (both scripts and the compose file already do this; `-Local` keeps it private).
+   (the `.env`/AppHost parameters `sim-public-name`/`public-lobby`, or the compose file, already
+   do this for local runs; leave `sim-public-name` empty to keep a server private).
 2. On first boot the log prints:
    ```
    Approve this game server at the public lobby: https://<lobby>/device?user_code=XXXX-XXXX

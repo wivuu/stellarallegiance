@@ -26,18 +26,16 @@ source; the server's `Protocol.Version` aliases it.
 
 ## Building & running
 
-The repo scripts require **PowerShell 7+ (`pwsh`)** on all platforms — preinstalled on Windows;
-on macOS/Linux install it with `brew install powershell` or your package manager.
-
-```pwsh
+```bash
 dotnet build shared/Shared.csproj
 dotnet build server/SimServer.csproj -c Release
 dotnet build client/stellarallegiance.csproj
-scripts/run-server.ps1        # server (rebuilds + runs)
-scripts/run-client.ps1        # client (rebuilds + launches Godot)
+aspire run             # whole local stack (Postgres, lobby, sim server) + dashboard
 ```
 
-See [QUICKSTART.md](QUICKSTART.md) for the full local loop.
+Start a Godot client from the dashboard (**Start** on the `client` resource), or
+`aspire resource client start` from a terminal. See [QUICKSTART.md](QUICKSTART.md) for the full
+local loop, including the Aspire CLI/Docker prerequisites.
 
 ## Tests
 

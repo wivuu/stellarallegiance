@@ -58,10 +58,12 @@ works via WebRTC/STUN for most clients; it just can't serve symmetric-NAT client
 
 ---
 
-## Quick start (Docker Compose)
+## Quick start
 
 `public-lobby` is defined in the repo-root [`docker-compose.yml`](../docker-compose.yml) alongside
-the sim server. To run **just the lobby** on a dedicated box:
+the sim server, and as the `lobby` resource in the Aspire AppHost (`apphost/`) — `aspire run` /
+`aspire start` brings up Postgres, runs migrations, and starts it on `http://localhost:8091`
+alongside the sim server. To run **just the lobby** on a dedicated box with Docker Compose instead:
 
 ```bash
 # on the lobby box, in the repo:
@@ -208,15 +210,16 @@ scheme prefix is optional — a bare `host:port` becomes `http://host:port`; pas
 use TLS (see below).
 
 - **Game server** — set `SIM_PUBLIC_NAME` (3–50 chars; gates registration) and
-  `PUBLIC_LOBBY=<lobby-host>:8091`. With `scripts/run-server.ps1` this is the default (no
-  `-Local`); the name defaults to the hostname. Forward the game port (default `8090`) to be
-  directly joinable; set `SIM_PUBLIC_PORT` if the forwarded external port differs. First boot
-  prints a device code and stays unlisted until an Operator approves it (see "Identity: device
-  codes…" below); the credential persists to `SIM_AUTH_FILE` (default beside the sim-cache dir) so
-  later restarts re-list silently.
-- **Client** — set `PUBLIC_LOBBY=<lobby-host>:8091` (or `--lobby host:port`). `scripts/run-client.ps1`
-  opens the lobby browser by default; it joins direct servers over WebSocket and NAT'd ones over
-  WebRTC automatically.
+  `PUBLIC_LOBBY=<lobby-host>:8091` (`.env` keys, or the `sim-public-name`/`public-lobby` AppHost
+  parameters). Under `aspire run` the server is already published, listed under your hostname
+  against the local lobby. Forward the game port (default `8090`) to be directly joinable; set
+  `SIM_PUBLIC_PORT` if the forwarded external port differs. First boot prints a device code and
+  stays unlisted until an Operator approves it (see "Identity: device codes…" below); the
+  credential persists to `SIM_AUTH_FILE` (default beside the sim-cache dir) so later restarts
+  re-list silently.
+- **Client** — set `PUBLIC_LOBBY=<lobby-host>:8091` (or `--lobby host:port`). `aspire resource
+  client launch --mode lobby` opens that lobby's server browser; it joins direct servers over
+  WebSocket and NAT'd ones over WebRTC automatically.
 
 The repo default is the hosted lobby at `https://stellarlobby.wivuu.com`;
 override it (env, `.env`, or the code default in `ConnectionManager`/`LobbyRegistrar`) to point at

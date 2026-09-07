@@ -27,3 +27,7 @@ scripts
 deploy
 .stdb-data
 .env
+# Aspire AppHost is local-dev only
+apphost
+aspire.config.json
+.aspire

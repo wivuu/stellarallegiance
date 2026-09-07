@@ -48,17 +48,19 @@ Roughly grouped by responsibility:
 
 ## Running
 
-From the repo root (not this directory):
+From the repo root, with the stack up (`aspire run` or `aspire start`):
 
-```pwsh
-scripts/run-client.ps1            # opens the public-lobby server browser
-scripts/run-client.ps1 -Local     # connects straight to localhost:8090
+```bash
+aspire resource client start                                   # direct connect to localhost:8090
+aspire resource client launch --mode lobby                     # opens the local lobby's server browser
+aspire resource client launch --mode autofly --godot-args "…"  # extra/custom client, e.g. a harness
 ```
 
-`run-client.ps1` rebuilds the client C# fresh before launching so Godot can't run a stale
-assembly against a rebuilt server (which would cause silent protocol skew). See the root
-[README](../README.md) and [QUICKSTART](../QUICKSTART.md) for prerequisites (Godot Mono build,
-.NET 10 SDK).
+Or click **Start** / **Launch client** on the `client` resource in the Aspire dashboard. Either
+path rebuilds the client C# fresh before launching so Godot can't run a stale assembly against a
+rebuilt server (which would cause silent protocol skew). See the root [README](../README.md) and
+[QUICKSTART](../QUICKSTART.md) for prerequisites (Aspire CLI, Docker, Godot Mono build, .NET 10
+SDK).
 
 ### Account sign-in
 
