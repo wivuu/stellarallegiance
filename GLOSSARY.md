@@ -1172,8 +1172,9 @@ YAML-to-GLB pipeline: converts modular hull part definitions into 3D models with
 - **Notes:** Hooked into AddBolt/DeleteShip/CheckBoltImpacts/EngineGlow; collisions+settings-UI deferred
 
 ### Aspire AppHost (`apphost/`)
-The .NET Aspire distributed-application host that orchestrates the local dev stack and replaces
-the old PowerShell run/deploy scripts. `aspire run` (foreground, dashboard attached) or `aspire
+The .NET Aspire distributed-application host that orchestrates the local dev stack and replaced
+the PowerShell deploy scripts (`scripts/run-server.ps1` / `run-client.ps1` remain for running
+against the HOSTED public lobby). `aspire run` (foreground, dashboard attached) or `aspire
 start` (background, for agents/harnesses) brings up a Postgres container, applies the public
 lobby's EF Core migrations, then starts `public-lobby` (`http://localhost:8091`) and `server`
 (`ws://localhost:8090/game`).

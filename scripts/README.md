@@ -4,11 +4,21 @@ Running and deploying the game now go through the .NET Aspire AppHost (`apphost/
 `aspire` CLI — see the root [README](../README.md) and [QUICKSTART](../QUICKSTART.md) (`aspire
 run` / `aspire start`, `aspire resource client launch`, `aspire do deploy-lobby`/`deploy-server`).
 
-What's left here are the two helpers Aspire doesn't replace: exporting release client builds, and
-resolving a Godot install for the tools below. Both are **PowerShell 7+ (`pwsh`)** — cross-platform
+What's left here are the helpers Aspire doesn't replace: running a server/client against the
+**hosted** public lobby (the AppHost always wires the local one), exporting release client builds,
+and resolving a Godot install for the tools below. Both are **PowerShell 7+ (`pwsh`)** — cross-platform
 (Windows natively; macOS/Linux after `brew install powershell` or your package manager) — and
 wired up as VS Code tasks in `.vscode/tasks.json`. Run them **from the repo root**, e.g.
 `scripts/export-clients.ps1`.
+
+## Run against the hosted public lobby
+
+| Script | What it does |
+|--------|--------------|
+| `run-server.ps1` | Builds (Release) and runs the sim server, **publishing it to the hosted public lobby** (`PUBLIC_LOBBY`, default `https://stellarlobby.wivuu.com`) under your hostname (`SIM_PUBLIC_NAME` to rename). First publish prints a device code to approve at the hosted lobby; the credential is saved beside `sim-cache/`. `-Local` stays private (direct `ws://` only); `--autostart`, `--secret`, `$env:SIM_PORT` pass through. |
+| `run-client.ps1` | Rebuilds the client C# and launches Godot on the **hosted lobby's server browser**. `-Local` connects straight to `localhost:8090`; `-Release` runs optimized C#; `-WriteMovie <path>` records; extra args pass to Godot (`--host host:port`, harness flags). From zsh/bash hand the array to PowerShell itself: `pwsh -Command "& ./scripts/run-client.ps1 -GodotArgs @('--autofly','--','--ui-shot=…')"`. |
+
+For the full local stack (local lobby + Postgres + server + dashboard) use `aspire run` instead.
 
 ## Godot resolution
 

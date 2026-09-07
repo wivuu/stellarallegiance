@@ -34,7 +34,8 @@ aspire run             # whole local stack (Postgres, lobby, sim server) + dashb
 ```
 
 Start a Godot client from the dashboard (**Start** on the `client` resource), or
-`aspire resource client start` from a terminal. See [QUICKSTART.md](QUICKSTART.md) for the full
+`aspire resource client start` from a terminal. To run against the hosted public lobby instead,
+`scripts/run-server.ps1` / `scripts/run-client.ps1` (see `scripts/README.md`). See [QUICKSTART.md](QUICKSTART.md) for the full
 local loop, including the Aspire CLI/Docker prerequisites.
 
 ## Tests

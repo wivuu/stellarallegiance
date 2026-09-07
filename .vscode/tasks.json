@@ -84,6 +84,40 @@
             "problemMatcher": []
         },
         {
+            "label": "Run server (public lobby)",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-File",
+                "${workspaceFolder}/scripts/run-server.ps1"
+            ],
+            "isBackground": true,
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "group": "run"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Run client (public lobby)",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-File",
+                "${workspaceFolder}/scripts/run-client.ps1"
+            ],
+            "isBackground": true,
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "group": "run"
+            },
+            "problemMatcher": []
+        },
+        {
             "label": "Export clients (all platforms)",
             "type": "shell",
             "command": "pwsh",

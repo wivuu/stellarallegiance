@@ -50,9 +50,16 @@ aspire run
 This brings up a Postgres container, applies the lobby's migrations, then the public lobby
 (`http://localhost:8091`) and the sim server (`ws://localhost:8090/game`), and opens the Aspire
 dashboard. In the dashboard, click **Start** on the `client` resource to build and launch the
-Godot client (connects straight to `localhost:8090`).
+Godot client (it opens the local lobby's server browser; parameter `client-mode` = `direct`
+dials `localhost:8090` instead).
 
 Pick a side, ready up, and the match starts.
+
+**Against the hosted lobby instead.** To publish a server to, or browse, the real public lobby
+(`https://stellarlobby.wivuu.com`) without the local stack, use the scripts:
+`scripts/run-server.ps1` (publishes under your hostname; `-Local` = private) and
+`scripts/run-client.ps1` (hosted server browser; `-Local` = direct `localhost:8090`). See
+[scripts/README.md](scripts/README.md).
 
 **Configuration.** The root `.env` (see `.env.example`) is read by both `docker compose` and the
 AppHost: every `KEY=VALUE` becomes an AppHost parameter (kebab-cased, e.g. `SIM_AUTOSTART=1` →
@@ -88,6 +95,8 @@ See **[QUICKSTART.md](QUICKSTART.md)** for a step-by-step walkthrough and
 |------|---------|--------------|
 | **Aspire: run** | `aspire run` | Start the whole local stack (Postgres, lobby, sim server) with the dashboard, in a dedicated background panel. |
 | **Aspire: launch client** | `aspire resource client launch --mode <direct\|lobby\|autofly>` | Build and launch an extra/custom Godot client (prompts for the mode). |
+| **Run server (public lobby)** | `scripts/run-server.ps1` | Build (Release) + run the sim server published to the **hosted** public lobby. |
+| **Run client (public lobby)** | `scripts/run-client.ps1` | Rebuild + launch a Godot client on the **hosted** lobby's server browser. |
 | **Export clients (all platforms)** | `scripts/export-clients.ps1` | Export macOS/Windows/Linux builds (macOS `.app` only when run on macOS). |
 | **Godot: import assets (if needed)** | `tools/godot-import.ps1` | Import GLB assets. Runs automatically on folder-open; a no-op unless something needs importing. |
 | **Godot: reimport assets (force)** | `tools/godot-import.ps1 -Force` | Force a full reimport after editing a `.glb`. |

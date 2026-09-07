@@ -59,8 +59,9 @@ shows a device code and opens the lobby's approval page; with dev login on, pick
 and click the listing. Prefer plain direct connects while iterating on gameplay? Don't approve the
 code (or delete `apphost/.local/server/lobby-auth.json` to un-pair).
 
-To browse the hosted lobby (`https://stellarlobby.wivuu.com`) instead, launch a client with
-`--godot-args "--lobby https://stellarlobby.wivuu.com"` in Lobby mode.
+To play on the hosted lobby (`https://stellarlobby.wivuu.com`) instead of the local stack, use
+the scripts: `scripts/run-client.ps1` opens its server browser, and `scripts/run-server.ps1`
+publishes a server there under your hostname (see `scripts/README.md`).
 
 ### Solo / unattended
 Skip the ready-up gate and start a perpetual match immediately — set `SIM_AUTOSTART=1` in `.env`

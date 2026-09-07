@@ -21,7 +21,10 @@ aspire stop
 ```
 
 For perf-sensitive measurements, run the raw Release server instead of Aspire's Debug build:
-`dotnet run --project server -c Release -- --port 8090 --autostart`.
+`dotnet run --project server -c Release -- --port 8090 --autostart` (or `scripts/run-server.ps1 -Local --autostart`).
+`scripts/run-client.ps1` still exists for the hosted lobby; from zsh call it as
+`pwsh -Command "& ./scripts/run-client.ps1 -Local -GodotArgs @('--autofly','--','--ui-shot=…')"` —
+the comma-list / bare `--` forms silently drop the flags (tell: `0 sectors`, no spawn, window never quits).
 
 - `--godot-args` is **one quoted string**, split on spaces by the launcher; it may itself contain
   the `--` separator before UI-harness flags. Game flags (`--autofly` is covered by `--mode
