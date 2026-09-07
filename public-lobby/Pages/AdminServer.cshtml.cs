@@ -126,10 +126,10 @@ public sealed class AdminServerModel(
         if (await OnGetAsync(id) is not PageResult)
             return NotFound();
 
-        // Case-SENSITIVE and exact, as the dialog says.
-        if (!string.Equals(confirmName?.Trim(), View.Server.Name, StringComparison.Ordinal))
+        // The whole name, but case-insensitively, as on the player page.
+        if (!string.Equals(confirmName?.Trim(), View.Server.Name, StringComparison.OrdinalIgnoreCase))
         {
-            DeleteError = "That is not the server name. Type it exactly as it is shown.";
+            DeleteError = "That is not the server name. Type it as it is shown.";
             Confirm = "delete";
             return Page();
         }

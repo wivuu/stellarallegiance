@@ -34,7 +34,7 @@ static partial class Suite
         Check(html.Contains("Servers online"), "root renders the servers section");
         Check(html.Contains("Top pilots"), "root renders the ladder section");
         Check(html.Contains("Get in the cockpit"), "root renders the how-to-play section");
-        Check(html.Contains("https://github.com/onionhammer/wivuullegiance"), "root links the GitHub repository");
+        Check(html.Contains("https://github.com/wivuu/stellarallegiance"), "root links the GitHub repository");
 
         // ---- a listing shows up in the strip WITHOUT a player bearer ----
         // (GET /servers stays 401 for the same anonymous caller — plan §1.5 — which is exactly the

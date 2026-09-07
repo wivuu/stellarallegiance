@@ -369,8 +369,9 @@ banned server tries to report is dropped for good — its spool treats 403 as te
 point of the ban.
 
 **Deleting a player** is the one irreversible action, offered only on that player's own page behind
-an exact, case-sensitive typed confirmation. It erases the account, its Identity rows (external
-logins, passkeys, roles, tokens — cascaded from `asp_net_users`), its sessions and its ladder entry.
+a typed confirmation of the whole name (case-insensitive). It erases the account, its Identity
+rows (external logins, passkeys, roles, tokens — cascaded from `asp_net_users`), its sessions and
+its ladder entry.
 Two things deliberately survive:
 
 - **`join_tokens_issued` rows.** They are the plausibility evidence *every* pilot in a result must

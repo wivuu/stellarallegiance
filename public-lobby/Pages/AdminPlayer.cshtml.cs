@@ -98,11 +98,12 @@ public sealed class AdminPlayerModel(
                 ? nameof(PlayerDeleteMode.ErasePilots)
                 : nameof(PlayerDeleteMode.AnonymisePilots);
 
-        // Case-SENSITIVE and exact, as the dialog says: this is the last thing standing between an
-        // admin and an irreversible erase.
-        if (!string.Equals(confirmName?.Trim(), Player.DisplayName, StringComparison.Ordinal))
+        // The whole name, but case-insensitively: this is the last thing standing between an admin
+        // and an irreversible erase, and case alone never distinguishes two players (display names
+        // are citext-unique), so demanding it only ever punished the typing.
+        if (!string.Equals(confirmName?.Trim(), Player.DisplayName, StringComparison.OrdinalIgnoreCase))
         {
-            DeleteError = "That is not the display name. Type it exactly as it is shown.";
+            DeleteError = "That is not the display name. Type it as it is shown.";
             Confirm = "delete";
             return Page();
         }

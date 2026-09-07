@@ -282,21 +282,21 @@ static partial class Suite
         var pointsBefore = (await grains.GetGrain<IPlayerGrain>(pilotId).Get())!.Points;
         Check(pointsBefore > 0, "the pilot carries that match's points on the ladder");
 
-        // The typed confirmation is exact and case-sensitive, as on the player page.
+        // The typed confirmation is the whole name, but case-insensitive, as on the player page.
         await PostAdminAsync(
             admin,
             $"/admin/servers/{doomedId}?handler=Delete",
-            [new("id", doomedId.ToString()), new("confirmName", "DOOMED BOX")]
+            [new("id", doomedId.ToString()), new("confirmName", "Doomed")]
         );
         Check(
             await grains.GetGrain<IGameServerGrain>(doomedId).Get() is not null,
-            "a shouted server name does not confirm a deletion"
+            "half the server name does not confirm a deletion"
         );
 
         await PostAdminAsync(
             admin,
             $"/admin/servers/{doomedId}?handler=Delete",
-            [new("id", doomedId.ToString()), new("confirmName", "Doomed Box")]
+            [new("id", doomedId.ToString()), new("confirmName", "DOOMED BOX")]
         );
         Check(await grains.GetGrain<IGameServerGrain>(doomedId).Get() is null, "the game server is gone");
         Eq(
@@ -376,21 +376,21 @@ static partial class Suite
             );
         Eq(MatchCompleteOutcome.Accepted, completed.Outcome, $"{name} played a match");
 
-        // The typed confirmation is exact and case-sensitive.
+        // The typed confirmation is the whole display name, but case-insensitive.
         await PostAdminAsync(
             admin,
             $"/admin/players/{playerId}?handler=Delete",
-            [new("id", playerId.ToString()), new("mode", mode), new("confirmName", name.ToUpperInvariant())]
+            [new("id", playerId.ToString()), new("mode", mode), new("confirmName", name + " the Second")]
         );
         Check(
             await query.FindPlayerIdByDisplayName(name) is not null,
-            $"{name}: a shouted display name does not confirm a deletion"
+            $"{name}: a near-miss display name does not confirm a deletion"
         );
 
         await PostAdminAsync(
             admin,
             $"/admin/players/{playerId}?handler=Delete",
-            [new("id", playerId.ToString()), new("mode", mode), new("confirmName", name)]
+            [new("id", playerId.ToString()), new("mode", mode), new("confirmName", name.ToUpperInvariant())]
         );
         Check(await query.FindPlayerIdByDisplayName(name) is null, $"{name}: the player is gone");
         Eq(
