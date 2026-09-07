@@ -1,5 +1,9 @@
+using System.Net;
+using System.Net.Sockets;
 using System.Text.Json;
+using Microsoft.Extensions.Options;
 using Orleans;
+using Orleans.Configuration;
 using Orleans.Runtime;
 using PublicLobby.Grains;
 
@@ -42,19 +46,33 @@ static class OrleansHealth
 
         app.MapGet(
             "/health/cluster",
-            async (IGrainFactory grains, ILocalSiloDetails self) =>
+            async (IGrainFactory grains, ILocalSiloDetails self, IOptions<EndpointOptions> endpoints) =>
             {
                 var management = grains.GetGrain<IManagementGrain>(0);
+                var listening = new
+                {
+                    silo = endpoints.Value.SiloListeningEndpoint?.ToString() ?? "(advertised address)",
+                    gateway = endpoints.Value.GatewayListeningEndpoint?.ToString() ?? "(advertised address)",
+                };
                 try
                 {
                     var hosts = await management.GetHosts(onlyActive: false).WaitAsync(CrossSiloTimeout);
                     var active = hosts.Where(h => h.Value == SiloStatus.Active).Select(h => h.Key).ToArray();
                     var stats = await management.GetRuntimeStatistics(active).WaitAsync(CrossSiloTimeout);
+                    // Raw TCP reachability of every live-or-joining silo port from THIS replica: separates
+                    // "the network does not route there" from "Orleans membership is unhappy".
+                    var probeTargets = hosts
+                        .Where(h => h.Value is SiloStatus.Active or SiloStatus.Joining)
+                        .Select(h => h.Key)
+                        .ToArray();
+                    var probes = await Task.WhenAll(probeTargets.Select(s => TcpProbe(s.Endpoint)));
                     return Results.Json(
                         new
                         {
                             self = self.SiloAddress.ToParsableString(),
                             hostName = self.DnsHostName,
+                            listening,
+                            tcp = probeTargets.Zip(probes, (s, p) => new { silo = s.ToParsableString(), result = p }),
                             silos = hosts.Select(h => new
                             {
                                 address = h.Key.ToParsableString(),
@@ -91,6 +109,7 @@ static class OrleansHealth
                         {
                             self = self.SiloAddress.ToParsableString(),
                             hostName = self.DnsHostName,
+                            listening,
                             crossSiloOk = false,
                             error = ex.GetType().Name + ": " + ex.Message,
                         },
@@ -100,6 +119,22 @@ static class OrleansHealth
                 }
             }
         );
+    }
+
+    static async Task<string> TcpProbe(IPEndPoint endpoint)
+    {
+        try
+        {
+            using var socket = new Socket(endpoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+            await socket.ConnectAsync(endpoint).WaitAsync(TimeSpan.FromSeconds(3));
+            return "open";
+        }
+        catch (Exception ex)
+        {
+            return ex is TimeoutException
+                ? "timeout"
+                : ex.GetType().Name + (ex is SocketException se ? ":" + se.SocketErrorCode : "");
+        }
     }
 
     static readonly JsonSerializerOptions JsonOpts = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };

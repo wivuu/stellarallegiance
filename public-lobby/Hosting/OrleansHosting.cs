@@ -78,7 +78,22 @@ static class OrleansHosting
             // listen on [::] so the socket accepts it. ORLEANS_ADVERTISED_IP overrides outright.
             var advertised = ResolveAdvertisedAddress();
             if (advertised is not null)
-                silo.ConfigureEndpoints(advertised, siloPort, gatewayPort, listenOnAnyHostAddress: true);
+            {
+                // Set EndpointOptions explicitly rather than via ConfigureEndpoints(advertisedIP, ...,
+                // listenOnAnyHostAddress: true): that overload's "any" is the IPv4 wildcard 0.0.0.0,
+                // which never accepts the IPv6 connections an fd12:: advertised address invites
+                // (measured 2026-09-07: joiner "Connection attempt to endpoint S[fd12:...]:11111 timed
+                // out" while the first silo was up). Listen on [::] (dual-mode) for IPv6 advertising.
+                var any = advertised.AddressFamily == AddressFamily.InterNetworkV6 ? IPAddress.IPv6Any : IPAddress.Any;
+                silo.Configure<EndpointOptions>(o =>
+                {
+                    o.AdvertisedIPAddress = advertised;
+                    o.SiloPort = siloPort;
+                    o.GatewayPort = gatewayPort;
+                    o.SiloListeningEndpoint = new IPEndPoint(any, siloPort);
+                    o.GatewayListeningEndpoint = new IPEndPoint(any, gatewayPort);
+                });
+            }
             else
                 silo.ConfigureEndpoints(siloPort, gatewayPort);
         });
