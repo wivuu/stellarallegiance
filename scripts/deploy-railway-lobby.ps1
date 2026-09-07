@@ -24,6 +24,8 @@
 #   4. Optional: AUTH_GOOGLE_CLIENT_ID/SECRET, AUTH_GITHUB_CLIENT_ID/SECRET, AUTH_STEAM_API_KEY,
 #      RANKED_RESULTS (flagged|authenticated), ALLOW_UNVERIFIED_SERVERS (true|false).
 #      NEVER set AUTH_DEV_LOGIN in production.
+#   5. Service → Settings → Deploy → App Sleeping: OFF (a sleeping lobby drops its Orleans reminders
+#      and the WebSockets registered game servers hold open). Committing 2/5 redeploys the last upload.
 # This script sets the non-secret defaults it can (RAILWAY_DOCKERFILE_PATH, LOBBY_PUBLIC_URL when
 # LOBBY_PUBLIC_URL is exported, STUN_URL) — database attachment and secrets stay manual.
 #

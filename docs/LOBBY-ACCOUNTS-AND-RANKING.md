@@ -64,6 +64,10 @@ already in `public-lobby/Dockerfile` and `scripts/deploy-railway-lobby.ps1`.
    ```
    It creates the database if missing, applies the EF Core and Orleans migrations, exits 0, and is
    safe to run on every deploy.
+   Also turn **App Sleeping off** for the lobby service (Settings → Deploy): Railway enables it on
+   new services, and a sleeping lobby loses its Orleans reminders and the WebSockets that registered
+   game servers hold open. Committing either setting redeploys the service from its last upload, so
+   set both before the first `railway up` of this code.
 4. **Required variables** on the lobby service:
 
    | Variable | Value |

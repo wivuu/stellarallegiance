@@ -1,6 +1,6 @@
 # Public Lobby — Identity, Persistence & Ranking: hand-off plan
 
-**Status:** slice 1 IMPLEMENTED 2026-09-06 on branch `auth-lobby-ranking` (see §8 for per-package notes and what is still user-owned).
+**Status:** slice 1 IMPLEMENTED 2026-09-06 on branch `auth-lobby-ranking` and DEPLOYED 2026-09-07 to https://stellarlobby.wivuu.com (see §8 for per-package notes and what is still user-owned).
 **Language:** [`public-lobby/CONTEXT.md`](../public-lobby/CONTEXT.md) — use its words (Player, Pilot,
 Match, Listing, Game Server, Operator, Verified, Ranked, Join Token, Result, Ladder, Rating).
 **Decisions of record:** [ADR-0001](../docs/adr/0001-public-lobby-is-its-own-identity-issuer.md),
@@ -566,3 +566,17 @@ every restart under their name. Unlisted servers and every existing harness beha
   "Verified Listing" from WP1.4). Docker image build verified (Tailwind CSS present). **Slice 1 complete.**
   User-owned: OAuth app secrets, Railway Postgres + env, browser passkey click-through, win-condition
   e2e, merge to master.
+- **2026-09-07 DEPLOYED** (supervisor, commit 128280d + docs): Railway project `wivuu-public-lobby`
+  now has a Postgres service, `ConnectionStrings__postgres-database=${{Postgres.DATABASE_URL}}`
+  (the lobby normalizes the postgres:// URL in `Hosting/PostgresConnectionString.cs` — Npgsql does
+  not), pre-deploy `dotnet PublicLobby.dll --migrate`, App Sleeping OFF, `LOBBY_PUBLIC_URL=https://stellarlobby.wivuu.com`,
+  `LOBBY_ADMINS=github:onionhammer`, GitHub provider secrets (Google/Steam unset). The baked
+  `PUBLIC_LOBBY` default in server/client/scripts/docs is now the custom domain. `ForwardedHeaders`
+  gained `XForwardedProto` (the GitHub challenge previously built an http:// redirect_uri behind
+  Railway's proxy). Verified live: /health, /health/orleans, JWKS, /login with GitHub + passkeys,
+  challenge redirect_uri = https://stellarlobby.wivuu.com/signin-github; migrations applied in the
+  pre-deploy log. Gotchas: committing a config change rebuilds the last upload immediately; the
+  Postgres template has no public TCP proxy (migrations only via pre-deploy). Still open:
+  DataProtection keys are container-local (website cookies drop on every redeploy — persist via
+  `PersistKeysToDbContext` + migration or a volume); Google OAuth app + Steam key; browser sign-in
+  click-through; pair + Ranked-flag the dedicated server; win-condition e2e; merge to master.
