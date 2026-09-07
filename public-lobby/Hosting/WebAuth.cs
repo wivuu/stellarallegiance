@@ -5,6 +5,7 @@ using AspNet.Security.OpenId.Steam;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Identity;
+using Orleans;
 using PublicLobby.Accounts;
 using PublicLobby.Data;
 using StellarAllegiance.Shared.Lobby;
@@ -301,6 +302,8 @@ static class WebHosting
                 SignInManager<LobbyUser> signInManager,
                 UserManager<LobbyUser> userManager,
                 AccountService accounts,
+                IGrainFactory grains,
+                TimeProvider clock,
                 PasskeyAssertRequest body
             ) =>
             {
@@ -310,6 +313,10 @@ static class WebHosting
                 var assertion = await signInManager.PerformPasskeyAssertionAsync(body.Credential);
                 if (!assertion.Succeeded || assertion.User is null || assertion.Passkey is null)
                     return Results.BadRequest(new { error = assertion.Failure?.Message ?? "sign-in failed" });
+
+                // No cookie for a banned player, same as the external-login callback.
+                if (await LobbyBans.InForce(grains, assertion.User.Id, clock.GetUtcNow()) is { } ban)
+                    return Results.Json(new { error = LobbyBans.SignInMessage(ban) }, statusCode: 403);
 
                 // Keep sign-count/authenticator-data current, same as PasskeySignInAsync's internal
                 // PasskeySignInCoreAsync — we don't call that convenience method directly because it

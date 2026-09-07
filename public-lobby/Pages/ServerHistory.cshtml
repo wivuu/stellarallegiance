@@ -15,11 +15,18 @@
             }
         </h1>
         <p class="text-xs text-text-dim">
-            Operator <a class="text-text-2 hover:text-text-hi" href="/players/@Uri.EscapeDataString(Model.View.OperatorName)">@Model.View.OperatorName</a>
+            @if (Model.View.OperatorName is { } operatorName)
+            {
+                <span>Operator <a class="text-text-2 hover:text-text-hi" href="/players/@Uri.EscapeDataString(operatorName)">@operatorName</a></span>
+            }
+            else
+            {
+                <span class="text-text-dim">No operator</span>
+            }
             &middot; registered @s.CreatedAt.ToString("yyyy-MM-dd")
             @if (s.LastListedAt is { } seen)
             {
-                <text>&middot; last listed @seen.ToString("yyyy-MM-dd HH:mm") UTC</text>
+                <span>&middot; last listed @seen.ToString("yyyy-MM-dd HH:mm") UTC</span>
             }
         </p>
     </section>

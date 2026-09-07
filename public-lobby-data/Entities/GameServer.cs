@@ -10,9 +10,10 @@ public class GameServer
     public Guid Id { get; init; }
 
     // The Player who owns this game server and answers for what it reports (CONTEXT.md
-    // "Operator"). Restrict delete: an operator's Player row is never deleted while it still owns
-    // a game server (plan §5 "no cascade deletes on history tables").
-    public Guid OperatorPlayerId { get; set; }
+    // "Operator"). NULL when that player's account was deleted: the game server outlives them
+    // because every one of its recorded matches points at its id, so it is orphaned rather than
+    // removed. An orphaned server is refused a Listing until an admin reassigns it.
+    public Guid? OperatorPlayerId { get; set; }
 
     public required string Name { get; set; }
 
@@ -21,6 +22,17 @@ public class GameServer
     public bool Ranked { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
+
+    // A Ban (CONTEXT.md), written only by GameServerGrain. BannedAt null = never banned; BanExpiresAt null
+    // alongside a set BannedAt = permanent. Bans.InForce is the single reader of that pairing.
+    // BannedByPlayerId deliberately has NO foreign key: the admin who banned may themselves be
+    // deleted later, and BannedByDisplayName is frozen at ban time so the banner still reads right
+    // when they are (same reasoning as MatchPilot.DisplayNameAtMatch).
+    public DateTimeOffset? BannedAt { get; set; }
+    public DateTimeOffset? BanExpiresAt { get; set; }
+    public string? BanReason { get; set; }
+    public Guid? BannedByPlayerId { get; set; }
+    public string? BannedByDisplayName { get; set; }
 
     // Last time this game server held a Listing (WP1.4's GameServerGrain.OnMatch/listing
     // heartbeat updates it). Null for a game server that authenticated but has never listed.

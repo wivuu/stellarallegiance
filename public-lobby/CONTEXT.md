@@ -11,7 +11,9 @@ A persistent account in the public lobby, recognised across sessions through ext
 _Avoid_: user, account, pilot (when meaning the durable identity)
 
 **Pilot**:
-A player's presence in one match on one game server.
+A player's presence in one match on one game server. A pilot line outlives the player it belonged to:
+when an account is deleted its lines may be kept under a "Deleted pilot" tombstone so the match still
+adds up.
 _Avoid_: player (when meaning the in-match presence), client, connection
 
 **Match**:
@@ -56,6 +58,14 @@ _Avoid_: guest play, offline play, unauthenticated join
 **Admin**:
 A player granted authority over public-lobby policy, such as marking game servers as ranked.
 _Avoid_: operator, moderator, superuser
+
+## Moderation
+
+**Ban**:
+A reversible bar on a player or a game server, carrying a reason and either an expiry or none. A
+banned player cannot sign in or receive join tokens; a banned game server cannot list, receive join
+tokens, or report results. What either of them did before the ban is untouched.
+_Avoid_: suspend, block, kick, blacklist, lockout
 
 ## Servers
 

@@ -71,6 +71,20 @@ public sealed class LobbyRegistrar : ILobbyIdentity
     private string? _listingId; // ILobbyIdentity.ListingId — this listing's session id while live
     private JoinTokenVerifier? _verifier; // ILobbyIdentity.Verifier — built once, refreshed per registration
     private bool _needsReauth; // set on a 401 whose refresh also failed — RunAsync restarts the auth flow
+    private bool _refused; // set on a 403 — the lobby is turning us away on purpose, not failing
+
+    /// <summary>How long to wait between retries once the lobby has refused us outright.</summary>
+    private static readonly TimeSpan RefusedRetry = TimeSpan.FromMinutes(2);
+
+    /// <summary>First line of a refusal body, trimmed — enough for the operator to see why.</summary>
+    private static string Summarise(string body)
+    {
+        var text = body.Trim();
+        if (text.Length > 200)
+            text = text[..200];
+        return text.Length == 0 ? "no reason given" : text;
+    }
+
     private CancellationTokenSource? _listenerCts;
     private bool _gotDirect; // last registration came back DIRECT
     private int _directRetries; // re-register attempts spent waiting for our endpoint to go live
@@ -183,10 +197,11 @@ public sealed class LobbyRegistrar : ILobbyIdentity
                         continue;
                     }
 
-                    // Registration failed (lobby unreachable?); wait before retrying.
+                    // Registration failed (lobby unreachable?); wait before retrying. A deliberate
+                    // refusal waits far longer — it will still pick itself up when a ban is lifted.
                     try
                     {
-                        await Task.Delay(TimeSpan.FromSeconds(5), ct);
+                        await Task.Delay(_refused ? RefusedRetry : TimeSpan.FromSeconds(5), ct);
                     }
                     catch (OperationCanceledException)
                     {
@@ -303,9 +318,23 @@ public sealed class LobbyRegistrar : ILobbyIdentity
     {
         if (!resp.IsSuccessStatusCode)
         {
-            Log.LobbyRegisterFailed(_log, (int)resp.StatusCode);
+            // A 403 is the lobby refusing this server on purpose (banned server, banned operator, no
+            // operator) rather than a transient failure, and refreshing the token cannot help. Log
+            // the reason it gave and slow the retry right down, instead of re-registering every 5 s
+            // for the life of the process.
+            _refused = resp.StatusCode == HttpStatusCode.Forbidden;
+            if (_refused)
+            {
+                var body = await resp.Content.ReadAsStringAsync(ct);
+                Log.LobbyRegisterRefused(_log, Summarise(body));
+            }
+            else
+            {
+                Log.LobbyRegisterFailed(_log, (int)resp.StatusCode);
+            }
             return false;
         }
+        _refused = false;
 
         var resultDto = await resp.Content.ReadFromJsonAsync<RegisterResponseDto>(ct);
         var entry = resultDto?.Server;

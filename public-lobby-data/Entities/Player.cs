@@ -26,6 +26,17 @@ public class Player
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset LastSeenAt { get; set; }
 
+    // A Ban (CONTEXT.md), written only by PlayerGrain. BannedAt null = never banned; BanExpiresAt null
+    // alongside a set BannedAt = permanent. Bans.InForce is the single reader of that pairing.
+    // BannedByPlayerId deliberately has NO foreign key: the admin who banned may themselves be
+    // deleted later, and BannedByDisplayName is frozen at ban time so the banner still reads right
+    // when they are (same reasoning as MatchPilot.DisplayNameAtMatch).
+    public DateTimeOffset? BannedAt { get; set; }
+    public DateTimeOffset? BanExpiresAt { get; set; }
+    public string? BanReason { get; set; }
+    public Guid? BannedByPlayerId { get; set; }
+    public string? BannedByDisplayName { get; set; }
+
     // The listing (ServerEntry.SessionId) the player is currently present on, per plan §1.2
     // "presence is recorded, not enforced" — PlayerGrain updates this from roster heartbeats.
     public string? CurrentListingId { get; set; }

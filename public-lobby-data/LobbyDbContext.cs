@@ -130,7 +130,10 @@ public class LobbyDbContext(DbContextOptions<LobbyDbContext> options)
         {
             e.ToTable("join_tokens_issued");
             e.HasKey(j => j.Jti);
-            e.HasOne<Player>().WithMany().HasForeignKey(j => j.PlayerId).OnDelete(DeleteBehavior.Restrict);
+            // No FK to Player, deliberately: these rows are the plausibility evidence every pilot
+            // in a result must have (MatchGrain.Complete), and one violation rejects the WHOLE
+            // result. Deleting a player mid-match would therefore cost everyone else in it the
+            // game, so their issuance rows are kept and simply point at an id that is gone.
             e.HasOne<GameServer>().WithMany().HasForeignKey(j => j.GameServerId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(j => new { j.PlayerId, j.GameServerId });
         });
@@ -145,6 +148,9 @@ public class LobbyDbContext(DbContextOptions<LobbyDbContext> options)
             e.Property(m => m.EndReason)
                 .HasConversion(new NullableEnumTextConverter<MatchEndReasonKind>(EnumTextMaps.MatchEndReasonText));
             e.HasIndex(m => new { m.GameServerId, m.StartedAt });
+            // The admin console lists every match newest-first across all servers; the composite
+            // index above cannot serve that ordering.
+            e.HasIndex(m => m.StartedAt).IsDescending();
         });
 
         builder.Entity<MatchTeam>(e =>
@@ -159,7 +165,9 @@ public class LobbyDbContext(DbContextOptions<LobbyDbContext> options)
             e.ToTable("match_pilots");
             e.HasKey(p => new { p.MatchId, p.PlayerId });
             e.HasOne<Match>().WithMany().HasForeignKey(p => p.MatchId).OnDelete(DeleteBehavior.Restrict);
-            e.HasOne<Player>().WithMany().HasForeignKey(p => p.PlayerId).OnDelete(DeleteBehavior.Restrict);
+            // No FK to Player either: a pilot line outlives a deleted account (rewritten to a
+            // "Deleted pilot" tombstone) so the match it belongs to still adds up. The column and
+            // its index stay — every read joins manually.
             e.HasIndex(p => p.PlayerId);
         });
     }

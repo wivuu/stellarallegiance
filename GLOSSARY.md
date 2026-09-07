@@ -1044,7 +1044,28 @@ Standalone .NET web service: game server registry, WebRTC signaling relay, serve
   - Live: `stellarlobby.wivuu.com`
 - **Related:** [[WebRTC]], [[DIRECT-FIRST]], [[Railway Deploy]], [[Verified Listing]]
 - **Notes:** Separate from gameplay servers; handles discovery and P2P setup only. Also co-hosts a single-replica Orleans silo in the same process (`public-lobby/Hosting/OrleansHosting.cs`, `public-lobby/Grains/`) — entity grains are the sole writers of their own Postgres rows through EF Core (ADR-0002); ADO.NET clustering/reminders share the lobby's Postgres by default (`LOBBY_ORLEANS_CLUSTERING=adonet`), or run in-memory for dev/tests (`=localhost`). `GET /health/orleans` checks the silo is taking grain calls. Listing routes require identity (WP1.4): `GET /servers` and `GET /servers/events` need a player bearer (anonymous sees no list); `POST /servers` needs a server bearer (Verified) or, only with `ALLOW_UNVERIFIED_SERVERS=true`, none at all (Unverified) — see [[Verified Listing]].
-- **Ubiquitous language:** identity/ranking terms (Player / Pilot / Match / Listing / Operator / Verified) are defined in `public-lobby/CONTEXT.md`; use those words for anything the service persists
+- **Ubiquitous language:** identity/ranking terms (Player / Pilot / Match / Listing / Operator / Verified / Ban) are defined in `public-lobby/CONTEXT.md`; use those words for anything the service persists
+
+### Admin Console
+`/admin`: the public lobby's moderation surface — searchable game servers, players and matches, plus [[Ban]] and complete player deletion. Admin role comes from `LOBBY_ADMINS` at sign-in.
+- **Frequency:** Occasional
+- **Key Files:**
+  - `public-lobby/Pages/Admin.cshtml(.cs)` — the three-tab console
+  - `public-lobby/Pages/AdminServer.cshtml(.cs)`, `AdminPlayer.cshtml(.cs)`, `AdminMatch.cshtml(.cs)` — the detail pages
+  - `public-lobby/Pages/AdminModeration.cs` — applying a ban and its side effects
+  - `public-lobby/Grains/QueryGrain.cs` — every list and detail read
+- **Related:** [[Ban]], [[Public Lobby]], [[Verified Listing]]
+- **Notes:** Entirely server-rendered — tabs, filter chips and dialogs are query-string states of the same pages, so every state has a URL and every mutation is an antiforgery-protected form POST. Route table and what a ban stops: `public-lobby/README.md` "The admin console".
+
+### Ban
+A reversible bar on a player or a game server, with a reason and either an expiry or none; five columns on `players`/`game_servers`, read through `PublicLobby.Data.Bans.InForce`.
+- **Frequency:** Occasional
+- **Key Files:**
+  - `public-lobby-data/Bans.cs` — the in-force rule (expiry is evaluated at read time; nothing sweeps)
+  - `public-lobby/Auth/LobbyBearerAuthentication.cs` — where a player ban bites every bearer request
+  - `public-lobby/PublicLobby.cs`, `public-lobby/Api/MatchEndpoints.cs` — where a server ban bites (403, never 401)
+- **Related:** [[Admin Console]], [[Verified Listing]], [[Public Lobby]]
+- **Notes:** A banned game server is refused with **403** everywhere, never 401 or `invalid_grant` — the sim server reads those as "refresh" and "re-pair", which would loop it instead of stopping it (`server/Net/LobbyRegistrar.cs`). Banning the **operator** is the durable lever: a banned game server can be re-paired under a fresh id, a banned account cannot. Defined in `public-lobby/CONTEXT.md`.
 
 ### ServerRegistry
 Directory of active game servers: hostname, port, player count, faction mix, Verified/Unverified status.

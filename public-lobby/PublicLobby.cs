@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Orleans;
 using PublicLobby;
+using PublicLobby.Accounts;
 using PublicLobby.Api;
 using PublicLobby.Auth;
 using PublicLobby.Data;
@@ -141,11 +142,34 @@ app.MapPost(
                     new { error = "game server no longer exists" },
                     statusCode: StatusCodes.Status401Unauthorized
                 );
-            var operatorSnap = await grains.GetGrain<IPlayerGrain>(gameServer.OperatorPlayerId).Get();
+            // An orphaned game server (its operator's account was deleted) may not list: nobody
+            // answers for what it reports. 403 — an admin reassigns it on /admin/servers/{id}.
+            if (gameServer.OperatorPlayerId is not { } operatorPlayerId)
+                return Results.Json(
+                    new { error = "this game server has no operator; an admin must reassign it" },
+                    statusCode: StatusCodes.Status403Forbidden
+                );
+            var operatorSnap = await grains.GetGrain<IPlayerGrain>(operatorPlayerId).Get();
             if (operatorSnap is null)
                 return Results.Json(
                     new { error = "operator no longer exists" },
                     statusCode: StatusCodes.Status401Unauthorized
+                );
+
+            // 403, never 401: the sim server reads a 401 here as "refresh the token and retry"
+            // (server/Net/LobbyRegistrar.cs:254) and would loop; a 403 it simply logs and backs off.
+            // The operator's ban counts too — this is the durable half, since an operator can always
+            // re-pair a banned game server under a fresh id.
+            var now = clock.GetUtcNow();
+            if (gameServer.Ban.IsBanned(now))
+                return Results.Json(
+                    new { error = AuthEndpoints.BanMessage(gameServer.Ban!) },
+                    statusCode: StatusCodes.Status403Forbidden
+                );
+            if (operatorSnap.Ban.IsBanned(now))
+                return Results.Json(
+                    new { error = "the operator of this game server is banned" },
+                    statusCode: StatusCodes.Status403Forbidden
                 );
 
             identity = new ListingIdentity(gameServerId, operatorSnap.DisplayName);
@@ -276,7 +300,15 @@ app.MapDelete(
 // required, same as GET /servers.
 app.MapGet(
         "/servers/events",
-        async (HttpContext ctx, IServerRegistry registry, LobbyEventBus bus, int? protocol, CancellationToken ct) =>
+        async (
+            HttpContext ctx,
+            IServerRegistry registry,
+            LobbyEventBus bus,
+            IGrainFactory grains,
+            TimeProvider clock,
+            int? protocol,
+            CancellationToken ct
+        ) =>
         {
             ctx.Response.Headers["Content-Type"] = "text/event-stream; charset=utf-8";
             ctx.Response.Headers["Cache-Control"] = "no-cache";
@@ -289,12 +321,16 @@ app.MapGet(
             var snap = FilterProtocol(registry.ListActive(), protocol);
             await WriteSseEvent(ctx.Response.Body, "snapshot", SseJson(snap), ct);
 
-            // Keepalive comment lines run concurrently with the event loop.
+            // Keepalive comment lines run concurrently with the event loop. This request
+            // authenticated ONCE and then stays open indefinitely, so the keepalive tick doubles as
+            // the ban check: without it a player banned mid-stream would keep watching the lobby
+            // until they disconnected. Cancelling kaCts ends both loops.
             using var kaCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            var keepalive = KeepaliveLoop(ctx.Response.Body, kaCts.Token);
+            var playerId = LobbyBearer.SubjectId(ctx.User);
+            var keepalive = KeepaliveLoop(ctx.Response.Body, grains, clock, playerId, kaCts);
             try
             {
-                await foreach (var evt in reader.ReadAllAsync(ct))
+                await foreach (var evt in reader.ReadAllAsync(kaCts.Token))
                 {
                     // Drop events for protocols this subscriber isn't watching.
                     if (protocol is > 0 && evt.Kind != LobbyEventKind.Removed && evt.Entry?.ProtocolVersion != protocol)
@@ -395,14 +431,26 @@ static async Task WriteSseEvent(Stream body, string eventName, string data, Canc
     await body.FlushAsync(ct);
 }
 
-static async Task KeepaliveLoop(Stream body, CancellationToken ct)
+static async Task KeepaliveLoop(
+    Stream body,
+    IGrainFactory grains,
+    TimeProvider clock,
+    Guid playerId,
+    CancellationTokenSource cts
+)
 {
     var comment = Encoding.UTF8.GetBytes(": keepalive\n\n");
+    var ct = cts.Token;
     try
     {
         while (!ct.IsCancellationRequested)
         {
             await Task.Delay(TimeSpan.FromSeconds(20), ct);
+            if (await LobbyBans.InForce(grains, playerId, clock.GetUtcNow()) is not null)
+            {
+                await cts.CancelAsync();
+                return;
+            }
             await body.WriteAsync(comment, ct);
             await body.FlushAsync(ct);
         }

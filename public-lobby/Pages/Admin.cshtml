@@ -1,73 +1,324 @@
 @page "/admin"
+@using PublicLobby.Grains
 @model PublicLobby.Pages.AdminModel
 @{
     ViewData["Title"] = "Admin — Public Lobby";
+    var q = Model.Searching ? "&amp;q=" + Uri.EscapeDataString(Model.SearchTerm) : "";
+    var here = $"/admin?tab={Model.TabValue}&amp;filter={Model.FilterValue}{q}";
 }
 
 <div class="mx-auto max-w-3xl space-y-6">
-    <section class="space-y-1">
+    @if (Model.DeletedName is { } deletedName)
+    {
+        <section class="space-y-1.5 rounded border border-panel-hi bg-panel px-4 py-3.5">
+            <h2 class="text-sm font-semibold text-text-hi">@deletedName was deleted</h2>
+            <p class="text-[13px] leading-relaxed text-text-2">@Model.DeletedNotice</p>
+            <p class="text-xs text-text-dim">The display name is free for anyone to take.</p>
+        </section>
+    }
+
+    <section class="space-y-2.5">
         <h1 class="font-ui text-2xl font-bold text-text-hi">Admin</h1>
-        <p class="text-xs text-text-dim">
-            Trust level <span class="font-mono text-data">RANKED_RESULTS=@Model.TrustLevel</span>
-            @if (Model.TrustLevel == "authenticated")
-            {
-                <text>&mdash; every verified server's results move the global ladder; the Ranked flag is informational.</text>
-            }
-            else
-            {
-                <text>&mdash; only servers flagged Ranked below move the global ladder.</text>
-            }
-            &middot; unverified listings @(Model.AllowUnverified ? "allowed" : "refused")
-        </p>
+        <div class="flex gap-3">
+            <div class="flex flex-1 flex-col gap-1 rounded border border-hairline bg-panel-fill px-3.5 py-2.5">
+                <span class="text-[10px] font-semibold uppercase tracking-[2px] text-text-dim">Trust level</span>
+                <span class="font-mono text-[13px] text-data">RANKED_RESULTS=@Model.TrustLevel</span>
+                <span class="text-xs leading-relaxed text-text-dim">@Model.TrustBlurb</span>
+            </div>
+            <div class="flex flex-1 flex-col gap-1 rounded border border-hairline bg-panel-fill px-3.5 py-2.5">
+                <span class="text-[10px] font-semibold uppercase tracking-[2px] text-text-dim">Unverified listings</span>
+                <span class="font-mono text-[13px] @(Model.AllowUnverified ? "text-ok" : "text-warn")">@(Model.AllowUnverified ? "allowed" : "refused")</span>
+                <span class="text-xs leading-relaxed text-text-dim">@Model.UnverifiedBlurb</span>
+            </div>
+        </div>
     </section>
 
-    <section class="space-y-2">
-        <h2 class="text-sm font-semibold text-text-2">Game servers</h2>
-        @if (Model.Servers.Length == 0)
-        {
-            <p class="text-sm text-text-dim">No game server has authenticated yet.</p>
-        }
-        else
-        {
-            <div class="overflow-x-auto rounded border border-panel-hi">
-                <table class="w-full text-sm">
-                    <thead class="bg-panel text-left text-xs uppercase tracking-wide text-text-dim">
-                        <tr>
-                            <th class="px-3 py-2">Server</th>
-                            <th class="px-3 py-2">Operator</th>
-                            <th class="px-3 py-2">Last listed</th>
-                            <th class="px-3 py-2 text-right">Matches</th>
-                            <th class="px-3 py-2">Ranked</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var s in Model.Servers)
+    <section class="space-y-3.5">
+        <div class="flex gap-6 border-b border-panel-hi">
+            <a href="/admin?tab=servers" class="flex items-center gap-2 px-0.5 pb-2.5 text-sm font-semibold border-b-2 @(Model.Tab == AdminTab.Servers ? "border-accent text-text-hi" : "border-transparent text-text-2 hover:text-text-hi")">
+                Game servers
+                <span class="font-mono text-xs font-normal text-text-dim">@Model.Counts.GameServers.ToString("N0")</span>
+            </a>
+            <a href="/admin?tab=players" class="flex items-center gap-2 px-0.5 pb-2.5 text-sm font-semibold border-b-2 @(Model.Tab == AdminTab.Players ? "border-accent text-text-hi" : "border-transparent text-text-2 hover:text-text-hi")">
+                Players
+                <span class="font-mono text-xs font-normal text-text-dim">@Model.Counts.Players.ToString("N0")</span>
+            </a>
+            <a href="/admin?tab=matches" class="flex items-center gap-2 px-0.5 pb-2.5 text-sm font-semibold border-b-2 @(Model.Tab == AdminTab.Matches ? "border-accent text-text-hi" : "border-transparent text-text-2 hover:text-text-hi")">
+                Matches
+                <span class="font-mono text-xs font-normal text-text-dim">@Model.Counts.Matches.ToString("N0")</span>
+                @if (Model.Counts.LiveMatches > 0)
+                {
+                    <span class="flex items-center gap-1.5 text-xs font-medium text-ok">
+                        <span class="size-1.5 rounded-full bg-ok"></span>@Model.Counts.LiveMatches live
+                    </span>
+                }
+            </a>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <form method="get" class="relative flex flex-1 items-center">
+                <input type="hidden" name="tab" value="@Model.TabValue" />
+                <input type="hidden" name="filter" value="@Model.FilterValue" />
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="pointer-events-none absolute left-3 text-text-dim" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+                <input type="search" name="q" value="@Model.SearchTerm" placeholder="@Model.SearchPlaceholder" autocomplete="off" spellcheck="false" aria-label="@Model.SearchPlaceholder"
+                       class="w-full rounded border border-panel-hi bg-panel py-2 pl-[34px] pr-3 text-sm text-text-hi placeholder:text-text-dim focus:border-accent focus:outline-none" />
+            </form>
+            @foreach (var chip in Model.Chips)
+            {
+                <a href="/admin?tab=@Model.TabValue&amp;filter=@chip.Id@Html.Raw(q)"
+                   class="rounded border px-2.5 py-1.5 text-[13px] font-medium @(Model.FilterValue == chip.Id ? "border-accent/40 bg-accent/10 text-accent" : "border-panel-hi bg-panel text-text-2 hover:text-text-hi")">@chip.Label</a>
+            }
+        </div>
+
+        <div class="space-y-2">
+            <div class="flex items-baseline justify-between gap-4">
+                <h2 class="text-sm font-semibold text-text-2">@Model.Heading</h2>
+                <span class="text-xs text-text-dim">@Model.ListHint</span>
+            </div>
+
+            @if (Model.Tab == AdminTab.Servers)
+            {
+                @if (Model.Servers.Length == 0)
+                {
+                    <p class="rounded border border-panel-hi bg-panel px-4 py-3 text-sm text-text-2">@Model.EmptyText</p>
+                }
+                else
+                {
+                    <div class="overflow-hidden rounded border border-panel-hi">
+                        @foreach (var row in Model.Servers)
                         {
-                            <tr class="border-t border-panel-hi/60">
-                                <td class="px-3 py-2 text-text-hi"><a class="hover:text-accent" href="/servers/@s.Id/history">@s.Name</a></td>
-                                <td class="px-3 py-2 text-text-2"><a class="hover:text-text-hi" href="/players/@Uri.EscapeDataString(s.OperatorName)">@s.OperatorName</a></td>
-                                <td class="px-3 py-2 font-mono text-xs text-text-dim">@(s.LastListedAt?.ToString("yyyy-MM-dd HH:mm") ?? "never")</td>
-                                <td class="px-3 py-2 text-right font-mono text-data">@s.Matches</td>
-                                <td class="px-3 py-2">
-                                    <form method="post" asp-page-handler="Ranked" class="inline">
-                                        @Html.AntiForgeryToken()
-                                        <input type="hidden" name="gameServerId" value="@s.Id" />
-                                        <input type="hidden" name="ranked" value="@(s.Ranked ? "false" : "true")" />
-                                        @if (s.Ranked)
+                            var banned = row.Ban.IsBanned(Model.Now);
+                            var state = Model.State(row);
+                            <div class="flex items-center justify-between gap-4 border-t border-panel-hi/60 px-3.5 py-2.5 first:border-t-0 hover:bg-panel">
+                                <div class="flex min-w-0 flex-col gap-1.5">
+                                    <div class="flex items-center gap-2">
+                                        <a class="text-[15px] font-semibold text-text-hi hover:text-accent" href="/admin/servers/@row.Id">@row.Name</a>
+                                        @if (row.Ranked)
                                         {
-                                            <button type="submit" class="rounded border border-accent/40 bg-accent/10 px-2 py-0.5 text-xs text-accent hover:bg-accent/20" title="Click to unrank">Ranked</button>
+                                            <span class="rounded border border-accent/40 bg-accent/10 px-1.5 py-px text-xs text-accent">Ranked</span>
+                                        }
+                                        @if (banned)
+                                        {
+                                            <span class="rounded border border-danger/40 bg-danger/10 px-1.5 py-px text-xs text-danger">Banned</span>
+                                        }
+                                    </div>
+                                    <div class="text-[13px] text-text-dim">
+                                        @if (row.OperatorPlayerId is { } operatorId)
+                                        {
+                                            <span>operator <a class="text-text-2 hover:text-text-hi" href="/admin/players/@operatorId">@row.OperatorName</a></span>
                                         }
                                         else
                                         {
-                                            <button type="submit" class="rounded border border-panel-hi bg-panel px-2 py-0.5 text-xs text-text-dim hover:text-text-hi" title="Click to rank">Unranked</button>
+                                            <span class="text-warn">no operator</span>
+                                        }
+                                        &middot; @Model.ListedLine(row)
+                                        &middot; <span class="font-mono text-data">@row.Matches.ToString("N0")</span> @(row.Matches == 1 ? "match" : "matches")
+                                        @if (banned)
+                                        {
+                                            <span class="text-danger" title="@AdminModel.BanTitle(row.Ban!)">&middot; @AdminModel.BanNote(row.Ban!)</span>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="flex shrink-0 items-center gap-2.5">
+                                    <span class="text-xs font-semibold uppercase tracking-[1px] @state.Css">@state.Label</span>
+                                    <form method="post" asp-page-handler="Ranked" class="inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="gameServerId" value="@row.Id" />
+                                        <input type="hidden" name="ranked" value="@(row.Ranked ? "false" : "true")" />
+                                        @if (row.Ranked)
+                                        {
+                                            <button type="submit" class="rounded border border-accent/40 bg-accent/10 px-2.5 py-0.5 text-xs text-accent hover:bg-accent/20" title="Click to unrank">Ranked</button>
+                                        }
+                                        else
+                                        {
+                                            <button type="submit" class="rounded border border-panel-hi bg-panel px-2.5 py-0.5 text-xs text-text-dim hover:text-text-hi" title="Click to rank">Unranked</button>
                                         }
                                     </form>
-                                </td>
-                            </tr>
+                                    @if (banned)
+                                    {
+                                        <form method="post" asp-page-handler="Unban" class="inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@row.Id" />
+                                            <input type="hidden" name="kind" value="server" />
+                                            <button type="submit" class="rounded border border-panel-hi bg-panel px-2.5 py-0.5 text-xs text-text-2 hover:border-accent hover:text-text-hi">Unban</button>
+                                        </form>
+                                    }
+                                    else
+                                    {
+                                        <a href="@Html.Raw(here)&amp;ban=@row.Id" class="rounded border border-danger/40 bg-danger/10 px-2.5 py-0.5 text-xs text-danger hover:bg-danger/20">Ban</a>
+                                    }
+                                </div>
+                            </div>
                         }
-                    </tbody>
-                </table>
-            </div>
-        }
+                    </div>
+                }
+            }
+            else if (Model.Tab == AdminTab.Players)
+            {
+                @if (Model.Players.Length == 0)
+                {
+                    <p class="rounded border border-panel-hi bg-panel px-4 py-3 text-sm text-text-2">@Model.EmptyText</p>
+                }
+                else
+                {
+                    <div class="overflow-x-auto rounded border border-panel-hi">
+                        <table class="w-full text-sm">
+                            <thead class="bg-panel text-left text-xs uppercase tracking-wide text-text-dim">
+                                <tr>
+                                    <th class="px-3 py-2">Player</th>
+                                    <th class="w-[70px] px-3 py-2 text-right">Pts</th>
+                                    <th class="w-[76px] px-3 py-2 text-right">Matches</th>
+                                    <th class="w-[100px] px-3 py-2">Last seen</th>
+                                    <th class="w-[84px] px-3 py-2">Status</th>
+                                    <th class="w-[74px] px-3 py-2"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var p in Model.Players)
+                                {
+                                    var banned = p.Ban.IsBanned(Model.Now);
+                                    <tr class="border-t border-panel-hi/60 hover:bg-panel">
+                                        <td class="px-3 py-2">
+                                            <span class="flex items-center gap-2">
+                                                <a class="text-text-hi hover:text-accent" href="/admin/players/@p.Id">@p.DisplayName</a>
+                                                @if (p.IsAdmin)
+                                                {
+                                                    <span class="rounded border border-accent/40 bg-accent/10 px-1.5 py-px text-xs text-accent">Admin</span>
+                                                }
+                                            </span>
+                                        </td>
+                                        <td class="px-3 py-2 text-right font-mono text-data">@p.Points.ToString("N0")</td>
+                                        <td class="px-3 py-2 text-right font-mono text-data">@p.MatchesPlayed.ToString("N0")</td>
+                                        <td class="px-3 py-2 font-mono text-xs text-text-dim">@p.LastSeenAt.ToString("yyyy-MM-dd")</td>
+                                        <td class="px-3 py-2">
+                                            <span class="text-xs font-semibold uppercase tracking-[1px] @(banned ? "text-danger" : "text-ok")"
+                                                  title="@(banned ? AdminModel.BanTitle(p.Ban!) : "")">@(banned ? "Banned" : "Active")</span>
+                                        </td>
+                                        <td class="px-3 py-2 text-right">
+                                            @if (banned)
+                                            {
+                                                <form method="post" asp-page-handler="Unban" class="inline">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="id" value="@p.Id" />
+                                                    <input type="hidden" name="kind" value="player" />
+                                                    <button type="submit" class="rounded border border-panel-hi bg-panel px-2.5 py-0.5 text-xs text-text-2 hover:border-accent hover:text-text-hi">Unban</button>
+                                                </form>
+                                            }
+                                            else
+                                            {
+                                                <a href="@Html.Raw(here)&amp;ban=@p.Id" class="rounded border border-danger/40 bg-danger/10 px-2.5 py-0.5 text-xs text-danger hover:bg-danger/20">Ban</a>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                <p class="text-xs leading-relaxed text-text-dim">
+                    Deleting a player is only offered on the player&rsquo;s own admin page &mdash; a ban is reversible from here, a deletion is not.
+                </p>
+            }
+            else
+            {
+                @if (Model.Matches.Length == 0)
+                {
+                    <p class="rounded border border-panel-hi bg-panel px-4 py-3 text-sm text-text-2">@Model.EmptyText</p>
+                }
+                else
+                {
+                    <div class="overflow-x-auto rounded border border-panel-hi">
+                        <table class="w-full text-sm">
+                            <thead class="bg-panel text-left text-xs uppercase tracking-wide text-text-dim">
+                                <tr>
+                                    <th class="w-[104px] px-3 py-2">Started</th>
+                                    <th class="px-3 py-2">Map</th>
+                                    <th class="px-3 py-2">Server</th>
+                                    <th class="w-[54px] px-3 py-2 text-right">Pilots</th>
+                                    <th class="w-[64px] px-3 py-2 text-right">Length</th>
+                                    <th class="w-[92px] px-3 py-2">Outcome</th>
+                                    <th class="w-[78px] px-3 py-2">Standing</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var m in Model.Matches)
+                                {
+                                    var live = m.Status == MatchStatus.Active;
+                                    var outcome = Model.Outcome(m);
+                                    var standing = Model.Standing(m);
+                                    <tr class="border-t border-panel-hi/60 hover:bg-panel @(live ? "bg-panel/50" : "")">
+                                        <td class="px-3 py-2 font-mono text-xs text-text-dim">@m.StartedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                                        <td class="px-3 py-2"><a class="text-text-hi hover:text-accent" href="/admin/matches/@m.MatchId">@m.Map</a></td>
+                                        <td class="px-3 py-2"><a class="text-text-2 hover:text-text-hi" href="/admin/servers/@m.GameServerId">@m.GameServerName</a></td>
+                                        <td class="px-3 py-2 text-right font-mono text-data">@Model.Pilots(m)</td>
+                                        <td class="px-3 py-2 text-right font-mono @(live ? "text-ok" : "text-data")">@Model.Length(m)</td>
+                                        <td class="px-3 py-2 text-[13px] @outcome.Css">@outcome.Label</td>
+                                        <td class="px-3 py-2 text-xs @standing.Css">@standing.Label</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                <p class="text-xs leading-relaxed text-text-dim">
+                    A live row is the game its server is playing right now; its length keeps counting until the server reports a
+                    result, or until the listing disappears and the match is marked abandoned.
+                </p>
+            }
+        </div>
     </section>
 </div>
+
+@if (Model.BanTarget is { } target && Model.BanName is not null)
+{
+    var kind = Model.BanIsServer ? "server" : "player";
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-void/[0.78] p-6">
+        <form method="post" asp-page-handler="Ban" class="flex w-[470px] flex-col gap-3.5 rounded border border-panel-hi bg-panel p-5">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="id" value="@target" />
+            <input type="hidden" name="kind" value="@kind" />
+            <input type="hidden" name="tab" value="@Model.TabValue" />
+            <input type="hidden" name="q" value="@Model.SearchTerm" />
+            <input type="hidden" name="filter" value="@Model.FilterValue" />
+
+            <div class="space-y-1.5">
+                <h3 class="text-[17px] font-bold text-text-hi">@Model.BanDialogTitle</h3>
+                <p class="text-[13px] leading-relaxed text-text-2">@Model.BanDialogBody</p>
+            </div>
+
+            <div class="space-y-1.5">
+                <label for="ban-reason" class="block text-xs font-semibold uppercase tracking-[1px] text-text-dim">@Model.BanReasonLabel</label>
+                <input id="ban-reason" name="reason" autocomplete="off" maxlength="200" placeholder="@Model.BanReasonPlaceholder"
+                       class="w-full rounded border border-panel-hi bg-panel-deep px-3 py-2 text-sm text-text-hi placeholder:text-text-dim focus:border-accent focus:outline-none" />
+            </div>
+
+            <fieldset class="space-y-1.5">
+                <legend class="text-xs font-semibold uppercase tracking-[1px] text-text-dim">Duration</legend>
+                <div class="flex gap-1.5">
+                    @foreach (var d in AdminModeration.Durations)
+                    {
+                        <label class="flex-1 cursor-pointer rounded border border-panel-hi bg-panel-deep py-1.5 text-center text-[13px] font-medium text-text-2 has-checked:border-danger/40 has-checked:bg-danger/10 has-checked:text-danger">
+                            <input type="radio" name="duration" value="@d.Id" class="sr-only" checked="@(d.Id == AdminModeration.DefaultDuration)" />
+                            @d.Label
+                        </label>
+                    }
+                </div>
+            </fieldset>
+
+            @if (Model.BanIsServer)
+            {
+                <label class="flex cursor-pointer items-center gap-2.5 rounded border border-panel-hi bg-panel-deep px-3 py-2.5 has-checked:border-danger/40 has-checked:bg-danger/[0.08]">
+                    <input type="checkbox" name="alsoUnrank" value="true" checked class="size-3.5 accent-danger" />
+                    <span class="text-[13px] text-text-hi">Drop its Ranked flag as well</span>
+                </label>
+            }
+
+            <p class="border-l-2 border-warn/50 pl-2.5 text-xs leading-relaxed text-text-dim">@Model.BanDialogEffect</p>
+
+            <div class="flex items-center justify-end gap-2.5 pt-0.5">
+                <a href="@Html.Raw(here)" class="px-3 py-2 text-sm text-text-2 hover:text-text-hi">Cancel</a>
+                <button type="submit" class="rounded bg-danger px-4 py-2 text-sm font-semibold text-void hover:bg-danger/85">@Model.BanConfirmLabel</button>
+            </div>
+        </form>
+    </div>
+}

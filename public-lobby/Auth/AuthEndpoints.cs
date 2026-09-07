@@ -160,6 +160,8 @@ static class AuthEndpoints
                 AccountService accounts,
                 UserManager<LobbyUser> users,
                 SignInManager<LobbyUser> signIn,
+                IGrainFactory grains,
+                TimeProvider clock,
                 HttpContext http
             ) =>
             {
@@ -172,6 +174,8 @@ static class AuthEndpoints
                 var user = await users.FindByIdAsync(player.Id.ToString());
                 if (user is null)
                     return Results.NotFound();
+                if (await LobbyBans.InForce(grains, player.Id, clock.GetUtcNow()) is { } devBan)
+                    return Results.LocalRedirect("/login?error=" + Uri.EscapeDataString(LobbyBans.SignInMessage(devBan)));
                 await accounts.ApplyAdminPolicyAsync(user, null, null, http.RequestAborted); // role before the cookie
                 await signIn.SignInAsync(user, isPersistent: true);
                 return Results.LocalRedirect(
@@ -187,6 +191,14 @@ static class AuthEndpoints
         return await Respond(grains, issued, now);
     }
 
+    /// <summary>The one place a ban is put into words for a peer or a person.</summary>
+    internal static string BanMessage(BanRecord ban)
+    {
+        var window = ban.Until is { } until ? $"until {until:yyyy-MM-dd HH:mm} UTC" : "permanently";
+        var reason = string.IsNullOrWhiteSpace(ban.Reason) ? "No reason was recorded." : ban.Reason;
+        return $"Banned {window}. {reason}";
+    }
+
     static async Task<IResult> Respond(IGrainFactory grains, IssuedSession issued, DateTimeOffset now)
     {
         var subject = issued.Subject;
@@ -197,6 +209,11 @@ static class AuthEndpoints
             var snap = await player.Get();
             if (snap is null)
                 return TokenError(LobbyTokenError.InvalidGrant, "player no longer exists");
+            // access_denied, not invalid_grant: invalid_grant tells a paired client its credential
+            // is dead and sends it back through the device flow, which a banned player cannot
+            // complete anyway (they cannot sign in to approve it).
+            if (snap.Ban.IsBanned(now))
+                return TokenError(LobbyTokenError.AccessDenied, BanMessage(snap.Ban!));
             await player.Touch(now);
             displayName = snap.DisplayName;
         }
@@ -205,6 +222,10 @@ static class AuthEndpoints
             var server = await grains.GetGrain<IGameServerGrain>(subject.Id).Get();
             if (server is null)
                 return TokenError(LobbyTokenError.InvalidGrant, "game server no longer exists");
+            // A banned game server is NOT refused here: a sim server deletes its credential and
+            // re-pairs on any refusal to refresh (server/Net/LobbyAuthSession.cs:127), so this would
+            // prompt its operator to approve it all over again rather than stop it. Its ban bites
+            // with a 403 at POST /servers, /matches and the join seam instead.
             displayName = server.Name;
         }
         var kind = subject.Kind == SubjectKind.Player ? LobbySubjectKind.Player : LobbySubjectKind.Server;

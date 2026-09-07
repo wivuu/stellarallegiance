@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Orleans;
 using PublicLobby.Accounts;
 using PublicLobby.Data;
 
@@ -10,7 +11,12 @@ namespace PublicLobby.Pages;
 // GetExternalLoginInfoAsync -> ExternalLoginSignInAsync (existing link) or
 // AccountService.FindOrCreateFromExternalLoginAsync (first login) -> SignInAsync -> admin policy ->
 // returnUrl or /me.
-public sealed class LoginCallbackModel(SignInManager<LobbyUser> signInManager, AccountService accounts) : PageModel
+public sealed class LoginCallbackModel(
+    SignInManager<LobbyUser> signInManager,
+    AccountService accounts,
+    IGrainFactory grains,
+    TimeProvider clock
+) : PageModel
 {
     [BindProperty(SupportsGet = true)]
     public string? ReturnUrl { get; set; }
@@ -44,6 +50,14 @@ public sealed class LoginCallbackModel(SignInManager<LobbyUser> signInManager, A
         {
             var (createdUser, _) = await accounts.FindOrCreateFromExternalLoginAsync(info, HttpContext.RequestAborted);
             user = createdUser;
+        }
+
+        // A banned player gets no cookie at all — the reason is shown on /login, which already
+        // renders an `error` query parameter in its danger callout.
+        if (await LobbyBans.InForce(grains, user.Id, clock.GetUtcNow()) is { } ban)
+        {
+            await signInManager.SignOutAsync();
+            return RedirectToPage("/Login", new { error = LobbyBans.SignInMessage(ban) });
         }
 
         // Role BEFORE the cookie is (re)issued: the principal's role claims are baked in at sign-in,

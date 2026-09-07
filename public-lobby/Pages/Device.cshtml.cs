@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Orleans;
+using PublicLobby.Accounts;
 using PublicLobby.Data;
 using PublicLobby.Grains;
 
@@ -46,8 +47,18 @@ public sealed class DeviceModel(IGrainFactory grains, TimeProvider clock, UserMa
         if (deviceCode is null)
             return Page();
         var playerId = Guid.Parse(userManager.GetUserId(User)!);
-        var grain = grains.GetGrain<IDeviceCodeGrain>(deviceCode);
         var now = clock.GetUtcNow();
+        // Approving mints a brand-new game server owned by this player (DeviceCodeGrain.Approve), so
+        // a banned player holding a cookie issued before the ban could otherwise pair their way
+        // straight back onto the lobby. The cookie itself survives until Identity revalidates the
+        // security stamp; this check does not wait for that.
+        if (await LobbyBans.InForce(grains, playerId, now) is { } ban)
+        {
+            Error = LobbyBans.SignInMessage(ban);
+            Pending = null;
+            return Page();
+        }
+        var grain = grains.GetGrain<IDeviceCodeGrain>(deviceCode);
         var ok = approve ? await grain.Approve(playerId, now) : await grain.Deny(playerId, now);
         if (!ok)
         {

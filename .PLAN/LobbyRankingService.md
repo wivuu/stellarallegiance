@@ -603,3 +603,42 @@ every restart under their name. Unlisted servers and every existing harness beha
   `railway environment edit --service-config <svc> path value` did NOT commit (both times);
   `railway environment edit --json` with a services patch does — and every commit REBUILT the
   last upload (not deploy-less via CLI). Config carries a `limitOverride` of 0.5 vCPU / 2 GB.
+
+### 2026-09-07 — WP4.3 Admin console (bans, deletion, matches)
+
+`/admin` grew from one table into the moderation surface: three searchable tabs (game servers,
+players, matches) plus `/admin/servers/{id}`, `/admin/players/{id}` and `/admin/matches/{id}`.
+Design canvas: <https://claude.ai/code/artifact/3ef68780-fa26-40c4-af42-0f6361d0c21b>. Plan and the
+review that corrected it: `.claude/plans/composed-fluttering-castle.md`.
+
+- **Ban** is new vocabulary (CONTEXT.md): five columns on `players` and `game_servers`, in force per
+  `PublicLobby.Data.Bans.InForce`, expiry evaluated at read time so nothing sweeps. Migration
+  `AdminBans` (+ an index on `matches(started_at desc)` for the console's global list).
+- **A player ban bites in `LobbyBearerHandler`**, so it is immediate on every bearer route despite
+  the 60 s `AccessTokenCache`; also at `POST /auth/token` (`access_denied`), every cookie sign-in
+  path, `/device` approve (which would otherwise mint a fresh game server), `/me` rename, and the
+  SSE stream's keepalive tick.
+- **A game server ban is 403 everywhere, and leaves its session completely alone.** `LobbyRegistrar`
+  reads a 401 from `POST /servers` as "refresh and retry", and `LobbyAuthSession` deletes its stored
+  credential and re-enters the device flow on ANY refused refresh — not just `invalid_grant`
+  (`LobbyAuthSession.cs:127`). So a banned server is neither refused a token nor has its sessions
+  revoked: breaking its credential would prompt its operator to approve it all over again instead of
+  stopping it. The ban bites only at the listing, join and match seams, with a 403 carrying the
+  reason; `LobbyRegistrar` backs off two minutes on one and logs it (EventId 1237) rather than
+  retrying every 5 s forever. Caught by a live run, not by the suite — the first version *did*
+  revoke, and the test passed only because `AccessTokenCache` still held the resolved subject.
+- **Deleting a player** (migration `PlayerDeletion`) drops the `match_pilots → players` and
+  `join_tokens_issued → players` FKs and makes `game_servers.operator_player_id` nullable. Join-token
+  rows are KEPT: they are the plausibility evidence every pilot in a result needs, and one missing
+  row rejects the whole result, so deleting a player mid-match would have cost everyone else in it
+  the game. Servers are orphaned rather than removed, and `/admin/servers/{id}` gained **Reassign
+  operator** so that is not a one-way door.
+- **No admin action log and no match discounting** — both ruled out by the user. `/admin/matches/{id}`
+  is read-only, and a live match's roster comes from the in-memory Listing because `MatchGrain` only
+  writes `match_teams`/`match_pilots` at `Complete`.
+- Suite: new `[moderation]` section in `tests/PublicLobbyTest`; whole suite green (needs Docker),
+  and `tests/LobbyTest` too. It requests every tab × filter and every detail page for real — an
+  untranslatable LINQ expression (`ListMatches` ordered by a property of the record it projects) and
+  a view that throws only ever show up that way, and the first version of both got through.
+- **Pre-existing breakage fixed in passing:** `public-lobby` did not build from clean at HEAD —
+  Razor `<text>` blocks fail with this SDK (`RZ1021`). `ServerHistory.cshtml` was the last one.

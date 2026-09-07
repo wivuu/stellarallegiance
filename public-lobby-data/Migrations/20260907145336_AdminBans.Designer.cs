@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using PublicLobby.Data;
@@ -11,9 +12,11 @@ using PublicLobby.Data;
 namespace PublicLobby.Data.Migrations
 {
     [DbContext(typeof(LobbyDbContext))]
-    partial class LobbyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260907145336_AdminBans")]
+    partial class AdminBans
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -326,7 +329,7 @@ namespace PublicLobby.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("name");
 
-                    b.Property<Guid?>("OperatorPlayerId")
+                    b.Property<Guid>("OperatorPlayerId")
                         .HasColumnType("uuid")
                         .HasColumnName("operator_player_id");
 
@@ -904,6 +907,7 @@ namespace PublicLobby.Data.Migrations
                         .WithMany()
                         .HasForeignKey("OperatorPlayerId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
                         .HasConstraintName("fk_game_servers_players_operator_player_id");
                 });
 
@@ -915,6 +919,13 @@ namespace PublicLobby.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_join_tokens_issued_game_servers_game_server_id");
+
+                    b.HasOne("PublicLobby.Data.Entities.Player", null)
+                        .WithMany()
+                        .HasForeignKey("PlayerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_join_tokens_issued_players_player_id");
                 });
 
             modelBuilder.Entity("PublicLobby.Data.Entities.Match", b =>
@@ -935,6 +946,13 @@ namespace PublicLobby.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_match_pilots_matches_match_id");
+
+                    b.HasOne("PublicLobby.Data.Entities.Player", null)
+                        .WithMany()
+                        .HasForeignKey("PlayerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_match_pilots_players_player_id");
                 });
 
             modelBuilder.Entity("PublicLobby.Data.Entities.MatchTeam", b =>

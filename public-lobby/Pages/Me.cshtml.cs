@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Orleans;
+using PublicLobby.Accounts;
 using PublicLobby.Data;
 using PublicLobby.Grains;
 using StellarAllegiance.Shared.Lobby;
@@ -22,7 +23,8 @@ public sealed class MeModel(
     UserManager<LobbyUser> userManager,
     SignInManager<LobbyUser> signInManager,
     IGrainFactory grains,
-    IAntiforgery antiforgery
+    IAntiforgery antiforgery,
+    TimeProvider clock
 ) : PageModel
 {
     public PlayerSnapshot Player { get; private set; } = default!;
@@ -48,6 +50,15 @@ public sealed class MeModel(
         var user = await userManager.GetUserAsync(User);
         if (user is null)
             return Challenge();
+
+        if (await LobbyBans.InForce(grains, user.Id, clock.GetUtcNow()) is { } ban)
+        {
+            RenameError = LobbyBans.SignInMessage(ban);
+            Player = await LoadPlayerAsync(user.Id);
+            Logins = [.. await userManager.GetLoginsAsync(user)];
+            Passkeys = [.. (await userManager.GetPasskeysAsync(user)).OrderByDescending(p => p.CreatedAt)];
+            return Page();
+        }
 
         var outcome = await grains.GetGrain<IPlayerGrain>(user.Id).Rename(displayName ?? "");
         RenameError = outcome switch

@@ -53,6 +53,7 @@ sealed class LobbyBearerHandler(
     ILoggerFactory logger,
     UrlEncoder encoder,
     AccessTokenCache tokens,
+    IGrainFactory grains,
     TimeProvider clock
 ) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
@@ -68,6 +69,25 @@ sealed class LobbyBearerHandler(
         var subject = await tokens.Resolve(token, lineage, clock.GetUtcNow());
         if (subject is null)
             return AuthenticateResult.Fail("invalid or expired access token");
+
+        var now = clock.GetUtcNow();
+        // A banned PLAYER is refused here, after Resolve, so the ban bites on the very next request
+        // rather than waiting out AccessTokenCache's 60 s window. PlayerGrain serves Get() from the
+        // row it holds in memory and the call is [ReadOnly], so this is a cheap interleaved hop.
+        //
+        // A banned GAME SERVER is deliberately NOT refused here: the sim server treats a 401 from
+        // POST /servers as "refresh and retry" and an invalid_grant as "burn the credential and
+        // re-pair" (server/Net/LobbyRegistrar.cs:254, LobbyAuthSession.cs:96), so failing its
+        // bearer would spin it through the device flow instead of stopping it. Its ban is enforced
+        // with a 403 at the listing, join and match seams instead.
+        if (subject.Kind == SubjectKind.Player)
+        {
+            var player = await grains.GetGrain<IPlayerGrain>(subject.Id).Get();
+            if (player is null)
+                return AuthenticateResult.Fail("player no longer exists");
+            if (player.Ban.IsBanned(now))
+                return AuthenticateResult.Fail("player is banned");
+        }
 
         var kind = subject.Kind == SubjectKind.Player ? LobbySubjectKind.Player : LobbySubjectKind.Server;
         var identity = new ClaimsIdentity(

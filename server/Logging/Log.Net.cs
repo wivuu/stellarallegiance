@@ -93,6 +93,13 @@ internal static partial class Log
     public static partial void LobbyRegisterNoSession(ILogger logger);
 
     [LoggerMessage(
+        EventId = 1237,
+        Level = LogLevel.Warning,
+        Message = "the public lobby refused this server (403): {Reason} — retrying occasionally in case it is lifted."
+    )]
+    public static partial void LobbyRegisterRefused(ILogger logger, string reason);
+
+    [LoggerMessage(
         EventId = 1207,
         Level = LogLevel.Information,
         Message = "registered {SessionId} — STUN/WebRTC ({IceServers} ICE server(s))."

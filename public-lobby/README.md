@@ -314,6 +314,50 @@ See `public-lobby/Contracts.cs` (`RegisterRequest`/`ServerEntry`/`LobbyRosterEnt
 `public-lobby/ServerRegistry.cs` (`ListingIdentity`) for the exact shapes, and
 `tests/PublicLobbyTest/ListingTests.cs` for the auth-decision coverage above.
 
+## The admin console (WP4.3)
+
+`/admin` is the whole moderation surface, cookie-authenticated and gated on the admin role
+(`LOBBY_ADMINS` at sign-in). It is entirely server-rendered — the tabs, the filter chips and the
+dialogs are all query-string states of the same pages, so every state has a URL and every mutation is
+an ordinary antiforgery-protected form POST.
+
+| Path | What it is |
+|---|---|
+| `/admin?tab=servers\|players\|matches&q=&filter=` | the console: three searchable lists, the Ranked toggle, Ban/Unban |
+| `/admin/servers/{id}` | one game server: operator, current Listing (with "Drop listing"), Ranked standing, recent matches, ban, and — for an orphan — reassign its operator |
+| `/admin/players/{id}` | one player: identity, servers operated, recent matches, ban, and complete deletion |
+| `/admin/matches/{id}` | one match, read-only: facts, both teams, who flew for them |
+
+**Ban** (`CONTEXT.md`) is reversible, carries a reason, and either expires or does not; expiry is
+evaluated when it is read, so nothing sweeps. What it stops:
+
+| Subject | Where it bites |
+|---|---|
+| Player | every bearer request (`LobbyBearerHandler` fails the token — so join tokens, `GET /servers` and the SSE stream all stop, the last of them at its next keepalive); `POST /auth/token` (`access_denied`); every cookie sign-in path; approving a device code; renaming |
+| Game server | `POST /servers`, `POST /matches`, `POST /matches/{id}/result`, and join tokens for its listings — all **403**, never 401, because a sim server reads a 401 as "refresh and retry" and an `invalid_grant` as "re-pair from scratch". Its live listing is dropped the moment the ban lands. |
+
+A banned operator's servers are refused too, which is the durable half: an operator can always
+re-pair a banned game server under a fresh id, but not under a banned account. Note that a result a
+banned server tries to report is dropped for good — its spool treats 403 as terminal — which is the
+point of the ban.
+
+**Deleting a player** is the one irreversible action, offered only on that player's own page behind
+an exact, case-sensitive typed confirmation. It erases the account, its Identity rows (external
+logins, passkeys, roles, tokens — cascaded from `asp_net_users`), its sessions and its ladder entry.
+Two things deliberately survive:
+
+- **`join_tokens_issued` rows.** They are the plausibility evidence *every* pilot in a result must
+  have, and one missing row rejects the whole result — deleting a player mid-match would otherwise
+  cost everyone else in it the game.
+- **Their game servers**, orphaned rather than removed, because every match they reported points at
+  their id. An orphan is refused a listing until an admin reassigns it on its own page.
+
+Their pilot lines go one of two ways, chosen in the dialog: anonymised to a `Deleted pilot …`
+tombstone so each match still adds up, or erased outright.
+
+There is no admin action log: who banned whom, when and why lives on the banned row and shows in its
+banner. A deletion leaves no trace at all.
+
 ## Join tokens (WP1.3)
 
 `POST /servers/{listingId}/join` (player bearer) returns a 60 s, single-use ES256 JWT for ONE

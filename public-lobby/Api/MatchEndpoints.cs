@@ -31,6 +31,8 @@ static class MatchEndpoints
                     || string.IsNullOrWhiteSpace(req.Map)
                 )
                     return Results.BadRequest(new { error = "matchId, listingId and map are required" });
+                if (await RefuseIfBanned(grains, gameServerId, clock.GetUtcNow()) is { } banned)
+                    return banned;
                 // The listing, if still alive, must be this server's.
                 var listing = registry.Get(req.ListingId);
                 if (listing is not null && listing.GameServerId != gameServerId)
@@ -67,6 +69,8 @@ static class MatchEndpoints
                     );
                 if (report.Teams is null || report.Pilots is null || string.IsNullOrWhiteSpace(report.EndReason))
                     return Results.BadRequest(new { error = "teams, pilots and endReason are required" });
+                if (await RefuseIfBanned(grains, gameServerId, clock.GetUtcNow()) is { } banned)
+                    return banned;
 
                 var input = new MatchResultInput(
                     gameServerId,
@@ -111,6 +115,20 @@ static class MatchEndpoints
                     _ => Results.BadRequest(new { error = result.Reason }),
                 };
             }
+        );
+    }
+
+    // A banned game server is refused both halves of match ingestion. 403 (not 401) so the sim
+    // server logs and backs off instead of re-authenticating; note that its spool treats 403 as
+    // terminal, so results produced while banned are dropped — which is the point of the ban.
+    static async Task<IResult?> RefuseIfBanned(IGrainFactory grains, Guid gameServerId, DateTimeOffset now)
+    {
+        var server = await grains.GetGrain<IGameServerGrain>(gameServerId).Get();
+        if (server is null || !server.Ban.IsBanned(now))
+            return null;
+        return Results.Json(
+            new { error = AuthEndpoints.BanMessage(server.Ban!) },
+            statusCode: StatusCodes.Status403Forbidden
         );
     }
 }
