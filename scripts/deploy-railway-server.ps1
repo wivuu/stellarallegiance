@@ -84,5 +84,5 @@ if ($ProjectId) {
 Write-Host @'
 
 Done. It should appear (as DIRECT) in the lobby within ~1 min of the container starting:
-  curl -s https://wivuu-public-lobby-production.up.railway.app/servers
+  curl -s https://stellarlobby.wivuu.com/servers
 '@

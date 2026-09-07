@@ -65,9 +65,15 @@ if (args.Contains("--migrate"))
     return;
 }
 
-// Behind a TLS-terminating proxy the registrant's real IP arrives in X-Forwarded-For; honour it so
-// the reachability probe targets the right address (cleared trust list = accept from the proxy).
-var fwd = new ForwardedHeadersOptions { ForwardedHeaders = ForwardedHeaders.XForwardedFor };
+// Behind a TLS-terminating proxy (Railway) the registrant's real IP arrives in X-Forwarded-For and
+// the original scheme in X-Forwarded-Proto; honour both so the reachability probe targets the right
+// address AND Request.Scheme is https — the OAuth redirect_uri handed to GitHub/Google, the passkey
+// origin check and the cookies' Secure flag all derive from it (cleared trust list = accept from the
+// proxy).
+var fwd = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+};
 fwd.KnownIPNetworks.Clear();
 fwd.KnownProxies.Clear();
 app.UseForwardedHeaders(fwd);

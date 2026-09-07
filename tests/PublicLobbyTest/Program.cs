@@ -17,6 +17,7 @@ static partial class Suite
         Console.WriteLine("PublicLobbyTest");
         try
         {
+            await RunConnectionStringTestsAsync();
             await RunSchemaTestsAsync();
             await RunOrleansTestsAsync();
             await RunAuthTestsAsync();

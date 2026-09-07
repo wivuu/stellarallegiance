@@ -40,7 +40,7 @@ services:
       # REQUIRED to be listed: 3-50 char public name. Empty = private (joinable only by direct address).
       SIM_PUBLIC_NAME: ${SIM_PUBLIC_NAME:-}
       # The HOSTED public lobby this server registers with.
-      PUBLIC_LOBBY: ${PUBLIC_LOBBY:-https://wivuu-public-lobby-production.up.railway.app}
+      PUBLIC_LOBBY: ${PUBLIC_LOBBY:-https://stellarlobby.wivuu.com}
       # Public-facing port the lobby probes/advertises (default = listen port; set when a
       # port-forward maps a different external port).
       SIM_PUBLIC_PORT: ${SIM_PUBLIC_PORT:-}

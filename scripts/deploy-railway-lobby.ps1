@@ -15,7 +15,7 @@
 # One-time, in the Railway dashboard for this project:
 #   1. Add a Postgres database service (Railway Postgres). Railway exposes its connection string
 #      as ${{Postgres.DATABASE_URL}} on the database service; copy it into the lobby service as
-#      ConnectionStrings__postgres-database (Npgsql accepts the postgres:// URL form).
+#      ConnectionStrings__postgres-database (the lobby normalizes the postgres:// URL form — Hosting/PostgresConnectionString.cs).
 #   2. Set the lobby's pre-deploy command to: dotnet PublicLobby.dll --migrate
 #      (Service → Settings → Deploy → Pre-deploy command). It applies EF Core + Orleans migrations
 #      and exits 0 (idempotent), so every deploy migrates before the new instance starts.
@@ -27,9 +27,10 @@
 # This script sets the non-secret defaults it can (RAILWAY_DOCKERFILE_PATH, LOBBY_PUBLIC_URL when
 # LOBBY_PUBLIC_URL is exported, STUN_URL) — database attachment and secrets stay manual.
 #
-# NOTE: the default lobby URL is baked into the server/client as
-# https://wivuu-public-lobby-production.up.railway.app — keep the project name `wivuu-public-lobby`
-# (or update that default in LobbyRegistrar.cs / ConnectionManager.cs) so clients find this lobby.
+# NOTE: the default lobby URL baked into the server/client is https://stellarlobby.wivuu.com — a
+# custom domain attached to the `wivuu-public-lobby` service (Railway → Settings → Networking).
+# Keep that domain attached (or update the default in LobbyRegistrar.cs / ConnectionManager.cs)
+# so clients and servers find this lobby; LOBBY_PUBLIC_URL must be the same URL.
 param([string]$Project = 'wivuu-public-lobby')
 
 $ErrorActionPreference = 'Stop'

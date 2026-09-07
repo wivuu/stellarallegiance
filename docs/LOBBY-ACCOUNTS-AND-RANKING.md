@@ -56,7 +56,7 @@ already in `public-lobby/Dockerfile` and `scripts/deploy-railway-lobby.ps1`.
    ```
 2. **Attach Postgres.** In the Railway project add a *Postgres* database service. Copy its
    `DATABASE_URL` into the lobby service as the variable `ConnectionStrings__postgres-database`
-   (Npgsql accepts the `postgres://` URL form; the reference syntax `${{Postgres.DATABASE_URL}}`
+   (the lobby normalizes the `postgres://` URL form itself; the reference syntax `${{Postgres.DATABASE_URL}}`
    works too).
 3. **Pre-deploy migrations.** Lobby service → Settings → Deploy → *Pre-deploy command*:
    ```

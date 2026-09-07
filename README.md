@@ -53,7 +53,7 @@ scripts/run-client.ps1 -Local
 Pick a side, ready up, and the match starts.
 
 **Public lobby (the default).** Without `-Local`, `run-server.ps1` publishes the server to the
-public lobby (`PUBLIC_LOBBY`, default `https://wivuu-public-lobby-production.up.railway.app`) under your hostname — override the
+public lobby (`PUBLIC_LOBBY`, default `https://stellarlobby.wivuu.com`) under your hostname — override the
 name with `SIM_PUBLIC_NAME="My Server"`. And `run-client.ps1` opens the **server browser** against
 that lobby so you can pick a server (or still type an address for a direct connect). See
 [Public lobby & NAT traversal](#public-lobby--nat-traversal). Accounts, Verified servers, the ladder and how to deploy them: [docs/LOBBY-ACCOUNTS-AND-RANKING.md](docs/LOBBY-ACCOUNTS-AND-RANKING.md).
@@ -164,7 +164,7 @@ port and your server is listed as directly joinable; don't, and it's listed as W
 | Flag/Env | Where | Effect |
 |----------|-------|--------|
 | `SIM_PUBLIC_NAME` | server | 3-50 char name; **gates** public-lobby registration (unset = private). |
-| `PUBLIC_LOBBY` | server + client | Lobby base — `host:port` or `https://domain` (default `https://wivuu-public-lobby-production.up.railway.app`). Client also takes `--lobby`. |
+| `PUBLIC_LOBBY` | server + client | Lobby base — `host:port` or `https://domain` (default `https://stellarlobby.wivuu.com`). Client also takes `--lobby`. |
 | `SIM_PUBLIC_PORT` | server | Public-facing port the lobby probes/advertises (default = listen port). |
 | `SIM_PUBLIC_ENDPOINT` | server | Optional address the server asserts as reachable — `host:port` (container NAT / proxy) or `https://domain` (a PaaS edge); advertised only if it answers `/health`. Auto-derives from `RAILWAY_PUBLIC_DOMAIN` on Railway. |
 | `SIM_AUTH_FILE` | server | Path to the persisted Game Server credential (device-code auth); default beside the sim-cache dir. Delete it to re-pair under a different Operator. |

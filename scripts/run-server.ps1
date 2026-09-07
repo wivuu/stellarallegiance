@@ -4,7 +4,7 @@
 # 20 Hz match; clients connect directly by ip:port and download all content from it.
 #
 # By DEFAULT it publishes itself to the hosted public lobby (PUBLIC_LOBBY, default
-# https://wivuu-public-lobby-production.up.railway.app)
+# https://stellarlobby.wivuu.com)
 # so clients can discover and WebRTC-join it; pass -Local to stay private (direct ws:// only,
 # no lobby registration).
 #
@@ -40,7 +40,7 @@ if ($Local) {
     Write-Host "[run-server] -Local: private (not registering with the public lobby)"
 } else {
     # Public: default the lobby + a name (hostname, trimmed to the 50-char cap) so it registers.
-    if (-not $env:PUBLIC_LOBBY) { $env:PUBLIC_LOBBY = 'https://wivuu-public-lobby-production.up.railway.app' }
+    if (-not $env:PUBLIC_LOBBY) { $env:PUBLIC_LOBBY = 'https://stellarlobby.wivuu.com' }
     if (-not $env:SIM_PUBLIC_NAME) {
         $name = [System.Net.Dns]::GetHostName()
         if ($name.Length -gt 50) { $name = $name.Substring(0, 50) }

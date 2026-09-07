@@ -27,7 +27,7 @@ namespace SimServer.Net;
 //
 // Env:
 //   PUBLIC_LOBBY          public-lobby base — host:port or https://domain
-//                         (default https://wivuu-public-lobby-production.up.railway.app). This is
+//                         (default https://stellarlobby.wivuu.com). This is
 //                         ALSO the join token issuer (WP2.2/JoinTokenVerifier) — it must equal the
 //                         lobby's own LOBBY_PUBLIC_URL or offline token verification will reject
 //                         every token on a wrong-issuer mismatch.
@@ -47,7 +47,7 @@ namespace SimServer.Net;
 //                         https://$RAILWAY_PUBLIC_DOMAIN on Railway.
 public sealed class LobbyRegistrar : ILobbyIdentity
 {
-    public const string DefaultLobby = "https://wivuu-public-lobby-production.up.railway.app";
+    public const string DefaultLobby = "https://stellarlobby.wivuu.com";
 
     // When we assert a public endpoint but the lobby can't reach it yet (PaaS domain propagation),
     // re-register on a faster cadence to re-probe until it flips to DIRECT — capped.

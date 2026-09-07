@@ -34,6 +34,7 @@ static class PersistenceHosting
             );
         }
 
+        connectionString = PostgresConnectionString.Normalize(connectionString);
         var dataSource = new NpgsqlDataSourceBuilder(connectionString).Build();
         builder.Services.AddSingleton(dataSource);
         // AddDbContextFactory registers BOTH the singleton IDbContextFactory<LobbyDbContext> the

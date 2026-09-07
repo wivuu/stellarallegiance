@@ -46,7 +46,7 @@ but hides the public server list — direct `host:port` joins still work. Verifi
 signed-in join.
 
 Without `-Local`, `run-server.ps1` publishes the server to the public lobby (`PUBLIC_LOBBY`,
-default `https://wivuu-public-lobby-production.up.railway.app`) and `run-client.ps1` opens a browser of the servers listed there —
+default `https://stellarlobby.wivuu.com`) and `run-client.ps1` opens a browser of the servers listed there —
 including NAT'd ones, joined over WebRTC. See the README's *Public lobby & NAT traversal*.
 
 First publish, the server prints a one-time device code and stays **unlisted** until you open the

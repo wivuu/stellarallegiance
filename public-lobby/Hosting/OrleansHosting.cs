@@ -89,6 +89,6 @@ static class OrleansHosting
                 $"Missing required connection string '{PersistenceHosting.ConnectionStringName}' for Orleans ADO.NET clustering."
             );
         }
-        return connectionString;
+        return PostgresConnectionString.Normalize(connectionString);
     }
 }

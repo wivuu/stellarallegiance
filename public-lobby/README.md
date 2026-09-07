@@ -180,7 +180,7 @@ docker run -p 8091:8091 -e STUN_URL=stun:stun.cloudflare.com:3478 stellarallegia
 
 ## Pointing servers and clients at the lobby
 
-Both read **`PUBLIC_LOBBY`** (default `https://wivuu-public-lobby-production.up.railway.app`). A
+Both read **`PUBLIC_LOBBY`** (default `https://stellarlobby.wivuu.com`). A
 scheme prefix is optional — a bare `host:port` becomes `http://host:port`; pass `https://host` to
 use TLS (see below).
 
@@ -195,7 +195,7 @@ use TLS (see below).
   opens the lobby browser by default; it joins direct servers over WebSocket and NAT'd ones over
   WebRTC automatically.
 
-The repo default is the hosted lobby at `https://wivuu-public-lobby-production.up.railway.app`;
+The repo default is the hosted lobby at `https://stellarlobby.wivuu.com`;
 override it (env, `.env`, or the code default in `ConnectionManager`/`LobbyRegistrar`) to point at
 your own lobby before sharing builds.
 

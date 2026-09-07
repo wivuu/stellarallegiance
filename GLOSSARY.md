@@ -1041,7 +1041,7 @@ Standalone .NET web service: game server registry, WebRTC signaling relay, serve
   - `public-lobby/PublicLobby.cs` — main web service
   - `public-lobby/ServerRegistry.cs` — active server tracking
   - `public-lobby/Signaling.cs` — WebRTC SDP relay
-  - Live: `wivuu-public-lobby-production.up.railway.app`
+  - Live: `stellarlobby.wivuu.com`
 - **Related:** [[WebRTC]], [[DIRECT-FIRST]], [[Railway Deploy]], [[Verified Listing]]
 - **Notes:** Separate from gameplay servers; handles discovery and P2P setup only. Also co-hosts a single-replica Orleans silo in the same process (`public-lobby/Hosting/OrleansHosting.cs`, `public-lobby/Grains/`) — entity grains are the sole writers of their own Postgres rows through EF Core (ADR-0002); ADO.NET clustering/reminders share the lobby's Postgres by default (`LOBBY_ORLEANS_CLUSTERING=adonet`), or run in-memory for dev/tests (`=localhost`). `GET /health/orleans` checks the silo is taking grain calls. Listing routes require identity (WP1.4): `GET /servers` and `GET /servers/events` need a player bearer (anonymous sees no list); `POST /servers` needs a server bearer (Verified) or, only with `ALLOW_UNVERIFIED_SERVERS=true`, none at all (Unverified) — see [[Verified Listing]].
 - **Ubiquitous language:** identity/ranking terms (Player / Pilot / Match / Listing / Operator / Verified) are defined in `public-lobby/CONTEXT.md`; use those words for anything the service persists
