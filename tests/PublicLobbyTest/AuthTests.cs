@@ -210,6 +210,37 @@ static partial class Suite
         var page = await http.GetAsync("/device?user_code=BCDF-GHJK");
         Eq("/login", page.RequestMessage?.RequestUri?.AbsolutePath, "anonymous /device redirects to /login");
         Check(page.RequestMessage?.RequestUri?.Query.Contains("user_code") == true, "…preserving the code in returnUrl");
+
+        // ---- ALLOW_PASSKEY_SIGNUP=false: no new passkey-only accounts ----
+        Environment.SetEnvironmentVariable("ALLOW_PASSKEY_SIGNUP", "false");
+        try
+        {
+            var loginOff = await http.GetStringAsync("/login");
+            Check(!loginOff.Contains("id=\"passkey-signup\""), "/login hides the create-a-passkey form when sign-up is off");
+            Check(loginOff.Contains("id=\"passkey-signin\""), "/login still offers passkey sign-in when sign-up is off");
+            var optionsOff = await http.PostAsJsonAsync("/login/passkey/creation-options", new { displayName = "Newbie" });
+            Eq(HttpStatusCode.Forbidden, optionsOff.StatusCode, "anonymous creation-options refused when sign-up is off");
+            var registerOff = await http.PostAsJsonAsync(
+                "/login/passkey/register",
+                new { displayName = "Newbie", credential = "{}" }
+            );
+            Check(
+                HttpStatusCode.Forbidden == registerOff.StatusCode,
+                "anonymous register never creates an account when sign-up is off"
+            );
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("ALLOW_PASSKEY_SIGNUP", null);
+        }
+        var loginOn = await http.GetStringAsync("/login");
+        Check(loginOn.Contains("id=\"passkey-signup\""), "/login shows the create-a-passkey form by default");
+        var optionsOn = await http.PostAsJsonAsync("/login/passkey/creation-options", new { displayName = "Newbie" });
+        Eq(HttpStatusCode.OK, optionsOn.StatusCode, "anonymous creation-options served by default");
+        Check(
+            (await optionsOn.Content.ReadAsStringAsync()).Contains("\"challenge\""),
+            "creation-options is a WebAuthn options document"
+        );
     }
 
     static async Task<TokenOutcome> PostTokenAsync(HttpClient http, TokenRequest req)

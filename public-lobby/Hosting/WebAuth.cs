@@ -22,6 +22,23 @@ public sealed record AuthProviderInfo(string Scheme, string DisplayName);
 public sealed class AuthProviders(IReadOnlyList<AuthProviderInfo> configured)
 {
     public IReadOnlyList<AuthProviderInfo> Configured { get; } = configured;
+
+    /// <summary>
+    /// <c>ALLOW_PASSKEY_SIGNUP</c> (default true): whether an anonymous visitor may create a brand-new,
+    /// passkey-only account at /login. Set to <c>false</c> to require every account to start from an
+    /// external provider; signing in with an existing passkey and adding a passkey to a signed-in
+    /// account stay allowed either way. Read at request time (same pattern as ALLOW_UNVERIFIED_SERVERS)
+    /// so tests can flip it without restarting the host.
+    /// </summary>
+    public static bool PasskeySignupAllowed =>
+        !string.Equals(
+            Environment.GetEnvironmentVariable("ALLOW_PASSKEY_SIGNUP"),
+            "false",
+            StringComparison.OrdinalIgnoreCase
+        );
+
+    public const string PasskeySignupDisabledError =
+        "passkey sign-up is disabled on this lobby; sign in with a provider first";
 }
 
 /// <summary>
@@ -197,6 +214,8 @@ static class WebHosting
                 }
                 else
                 {
+                    if (!AuthProviders.PasskeySignupAllowed)
+                        return Results.Json(new { error = AuthProviders.PasskeySignupDisabledError }, statusCode: 403);
                     var displayName = body?.DisplayName?.Trim();
                     if (
                         displayName is null
@@ -238,8 +257,22 @@ static class WebHosting
             {
                 if (string.IsNullOrWhiteSpace(body.Credential))
                     return Results.BadRequest(new { error = "missing credential" });
+                // Anonymous caller = fresh-account path. Refuse before touching the attestation state so
+                // options minted before ALLOW_PASSKEY_SIGNUP was flipped can't complete a sign-up.
+                var anonymous = http.User.Identity?.IsAuthenticated != true;
+                if (anonymous && !AuthProviders.PasskeySignupAllowed)
+                    return Results.Json(new { error = AuthProviders.PasskeySignupDisabledError }, statusCode: 403);
 
-                var attestation = await signInManager.PerformPasskeyAttestationAsync(body.Credential);
+                PasskeyAttestationResult attestation;
+                try
+                {
+                    attestation = await signInManager.PerformPasskeyAttestationAsync(body.Credential);
+                }
+                catch (InvalidOperationException)
+                {
+                    // No creation-options call preceded this register: a stray/forged POST, not a bug.
+                    return Results.BadRequest(new { error = "no passkey ceremony in progress" });
+                }
                 if (!attestation.Succeeded || attestation.UserEntity is null || attestation.Passkey is null)
                     return Results.BadRequest(new { error = attestation.Failure?.Message ?? "passkey registration failed" });
 

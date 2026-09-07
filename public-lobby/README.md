@@ -129,7 +129,7 @@ Postgres deployment/env story; this is the short version.
 The lobby is its own identity issuer ([ADR-0001](../docs/adr/0001-public-lobby-is-its-own-identity-issuer.md)):
 ASP.NET Core Identity, cookie auth (`lobby` cookie, 30-day sliding), and a handful of Razor Pages
 (`/login`, `/me`, `/ladder`, …) under `Pages/`. **Passkeys are always on and need zero configuration**
-— a bare local lobby with only `ConnectionStrings__postgres-database` set still lets a player sign up
+(sign-up can be switched off with `ALLOW_PASSKEY_SIGNUP=false`, see below) — a bare local lobby with only `ConnectionStrings__postgres-database` set still lets a player sign up
 with a passkey at `/login`. External login providers are registered ONLY when their env vars are
 present:
 
@@ -139,6 +139,7 @@ present:
 | `AUTH_GOOGLE_CLIENT_ID` / `AUTH_GOOGLE_CLIENT_SECRET` | Enables "Continue with Google" on `/login`. |
 | `AUTH_GITHUB_CLIENT_ID` / `AUTH_GITHUB_CLIENT_SECRET` | Enables "Continue with GitHub". |
 | `AUTH_STEAM_API_KEY` | Enables "Continue with Steam" (OpenID 2.0 — needs no client id/secret) and fetches the Steam persona name as the default display name. |
+| `ALLOW_PASSKEY_SIGNUP` | Default `true`. Set `false` to refuse brand-new passkey-only accounts: the "Create a passkey" form disappears from `/login` and `/login/passkey/creation-options` + `/register` answer 403 for anonymous callers. Passkey sign-in and "Add a passkey" on `/me` keep working, so every account must START from an external provider. |
 | `LOBBY_ADMINS` | Comma list of `github:<login>`, `google:<sub>`, `steam:<steamid>`, or `name:<display-name>` — a matching player gets the admin role at sign-in. |
 
 #### The live server strip
