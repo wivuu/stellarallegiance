@@ -1,3 +1,6 @@
+using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using Orleans.Configuration;
 using Orleans.Hosting;
 
@@ -65,15 +68,49 @@ static class OrleansHosting
                 o.ConnectionString = connectionString;
             });
 
-            // Advertise this host's own resolved address on siloPort/gatewayPort. Fine for a
-            // single replica (plan §1.6 slice 1); a second replica (needed once the in-memory
-            // listing registry/signaling relay move into grains — slice 3) will need real
-            // per-instance advertise-address discovery (Railway private networking or similar),
-            // not attempted here.
-            silo.ConfigureEndpoints(siloPort, gatewayPort);
+            // Advertised address (plan §1.6): what OTHER silos dial for silo-to-silo messaging and
+            // what goes into the membership table. Orleans' default picks this container's first
+            // IPv4 address, which on Railway is a host-local 10.x that a second replica cannot reach
+            // (measured 2026-09-07: the joiner loops in "Failed to get ping responses from 1 of 1
+            // active silos" until it gives up and restarts; even single-replica redeploys spend the
+            // swap window unable to validate against the outgoing silo). Railway private networking
+            // is IPv6-only, so prefer this replica's own private (ULA, fd00::/8) IPv6 address and
+            // listen on [::] so the socket accepts it. ORLEANS_ADVERTISED_IP overrides outright.
+            var advertised = ResolveAdvertisedAddress();
+            if (advertised is not null)
+                silo.ConfigureEndpoints(advertised, siloPort, gatewayPort, listenOnAnyHostAddress: true);
+            else
+                silo.ConfigureEndpoints(siloPort, gatewayPort);
         });
 
         return builder;
+    }
+
+    const string AdvertisedIpEnvVar = "ORLEANS_ADVERTISED_IP";
+    const string RailwayPrivateDomainEnvVar = "RAILWAY_PRIVATE_DOMAIN";
+
+    // ORLEANS_ADVERTISED_IP wins; on Railway (RAILWAY_PRIVATE_DOMAIN set) pick the first non-loopback,
+    // non-link-local IPv6 unicast address of an UP interface, preferring the fd00::/8 unique-local
+    // range Railway's private network uses; anywhere else return null so Orleans keeps its default
+    // IPv4 resolution (dev boxes, docker-compose, tests).
+    static IPAddress? ResolveAdvertisedAddress()
+    {
+        var forced = Environment.GetEnvironmentVariable(AdvertisedIpEnvVar);
+        if (!string.IsNullOrWhiteSpace(forced))
+            return IPAddress.Parse(forced);
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(RailwayPrivateDomainEnvVar)))
+            return null;
+
+        var candidates = NetworkInterface
+            .GetAllNetworkInterfaces()
+            .Where(n =>
+                n.OperationalStatus == OperationalStatus.Up && n.NetworkInterfaceType != NetworkInterfaceType.Loopback
+            )
+            .SelectMany(n => n.GetIPProperties().UnicastAddresses)
+            .Select(u => u.Address)
+            .Where(a => a.AddressFamily == AddressFamily.InterNetworkV6 && !a.IsIPv6LinkLocal && !IPAddress.IsLoopback(a))
+            .ToList();
+        return candidates.FirstOrDefault(a => (a.GetAddressBytes()[0] & 0xFE) == 0xFC) ?? candidates.FirstOrDefault();
     }
 
     static int ReadPort(string envVar, int defaultValue) =>
