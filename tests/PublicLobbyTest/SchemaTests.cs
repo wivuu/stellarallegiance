@@ -33,6 +33,7 @@ static partial class Suite
         "asp_net_role_claims",
         "asp_net_user_tokens",
         "asp_net_user_passkeys",
+        "data_protection_keys",
     ];
 
     static async Task RunSchemaTestsAsync()

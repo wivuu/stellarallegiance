@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -33,7 +34,8 @@ public class LobbyDbContext(DbContextOptions<LobbyDbContext> options)
         IdentityRoleClaim<Guid>,
         IdentityUserToken<Guid>,
         IdentityUserPasskey<Guid>
-    >(options)
+    >(options),
+        IDataProtectionKeyContext
 {
     public DbSet<Player> Players => Set<Player>();
     public DbSet<Session> Sessions => Set<Session>();
@@ -44,6 +46,11 @@ public class LobbyDbContext(DbContextOptions<LobbyDbContext> options)
     public DbSet<Match> Matches => Set<Match>();
     public DbSet<MatchTeam> MatchTeams => Set<MatchTeam>();
     public DbSet<MatchPilot> MatchPilots => Set<MatchPilot>();
+
+    // ASP.NET DataProtection key ring (IDataProtectionKeyContext), table data_protection_keys —
+    // persisted here so cookies and passkey/external-login state survive container redeploys
+    // (wired in public-lobby/Hosting/Persistence.cs).
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

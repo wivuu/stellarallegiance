@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -55,6 +56,16 @@ static class PersistenceHosting
             .AddEntityFrameworkStores<LobbyDbContext>()
             .AddSignInManager()
             .AddDefaultTokenProviders();
+
+        // DataProtection key ring in Postgres (data_protection_keys, LobbyDbContext): the container
+        // filesystem is ephemeral on Railway, so file-backed keys were regenerated on every redeploy —
+        // every website cookie and in-flight passkey/external-login state died with them. Keys are
+        // stored unencrypted (no certificate encryptor), like signing_keys.private_pem: the database
+        // IS the secret store. The fixed application name keeps the ring shared across replicas.
+        builder
+            .Services.AddDataProtection()
+            .SetApplicationName("public-lobby")
+            .PersistKeysToDbContext<LobbyDbContext>();
 
         return builder;
     }

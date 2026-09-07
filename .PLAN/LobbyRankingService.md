@@ -577,6 +577,5 @@ every restart under their name. Unlisted servers and every existing harness beha
   challenge redirect_uri = https://stellarlobby.wivuu.com/signin-github; migrations applied in the
   pre-deploy log. Gotchas: committing a config change rebuilds the last upload immediately; the
   Postgres template has no public TCP proxy (migrations only via pre-deploy). Still open:
-  DataProtection keys are container-local (website cookies drop on every redeploy — persist via
-  `PersistKeysToDbContext` + migration or a volume); Google OAuth app + Steam key; browser sign-in
-  click-through; pair + Ranked-flag the dedicated server; win-condition e2e; merge to master.
+  Google OAuth app + Steam key; browser sign-in click-through; pair + Ranked-flag the dedicated
+  server; win-condition e2e; merge to master.
