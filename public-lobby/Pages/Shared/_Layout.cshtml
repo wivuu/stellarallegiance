@@ -57,5 +57,8 @@
             </div>
         </footer>
     </div>
+
+    @* Per-page scripts (e.g. the live server strip on "/" and "/ladder"). *@
+    @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

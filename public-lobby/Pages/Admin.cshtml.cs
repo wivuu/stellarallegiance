@@ -375,7 +375,7 @@ public sealed class AdminModel(
         : "never listed";
 
     public (string Label, string Css) State(GameServerAdminRow row) =>
-        IndexModel.StateBadge(Listings.TryGetValue(row.Id, out var listing) ? listing.State : null);
+        PublicServerRow.StateBadge(Listings.TryGetValue(row.Id, out var listing) ? listing.State : null);
 
     /// <summary>How long a match has been running, or ran for. Duration is never stored.</summary>
     public string Length(MatchAdminRow m)

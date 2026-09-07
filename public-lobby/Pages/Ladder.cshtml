@@ -72,4 +72,11 @@
             </nav>
         }
     }
+
+    @* ---- Servers online (live: htmx re-GETs the section on every /servers/live announcement) --- *@
+    <partial name="_ServerStrip" model="Model.Strip" />
 </div>
+
+@section Scripts {
+    <script src="/lobby-live.js" defer></script>
+}

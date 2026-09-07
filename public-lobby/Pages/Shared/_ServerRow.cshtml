@@ -1,0 +1,33 @@
+@model PublicLobby.PublicServerRow
+@* One live Listing in the server strip (_ServerStrip.cshtml). *@
+<div class="flex items-center justify-between gap-4 border-t border-panel-hi/60 px-3.5 py-3 first:border-t-0 first:bg-panel/50">
+    <div class="flex min-w-0 flex-col gap-[5px]">
+        <div class="flex items-center gap-2">
+            <span class="truncate text-[15px] font-semibold text-text-hi">@Model.Name</span>
+            @if (Model.Verified)
+            {
+                <span class="shrink-0 rounded-sm border border-ok/35 px-1.5 py-px text-xs font-semibold uppercase tracking-[1px] text-ok">Verified</span>
+            }
+            else
+            {
+                <span class="shrink-0 rounded-sm border border-hairline px-1.5 py-px text-xs font-semibold uppercase tracking-[1px] text-text-dim">Unverified</span>
+            }
+            @if (Model.Protected)
+            {
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#ffb347" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><title>Password required</title><rect width="18" height="11" x="3" y="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            }
+        </div>
+        @if (Model.Verified && !string.IsNullOrWhiteSpace(Model.OperatorName))
+        {
+            <span class="text-[13px] text-text-dim">hosted by <span class="text-text-2">@Model.OperatorName</span></span>
+        }
+        else
+        {
+            <span class="text-[13px] text-text-dim">no operator &middot; direct join only</span>
+        }
+    </div>
+    <div class="flex shrink-0 items-center gap-3.5">
+        <span class="text-xs font-semibold uppercase tracking-[1px] @Model.StateCss">@Model.StateLabel</span>
+        <span class="font-mono text-sm text-data">@Model.Players/@Model.MaxPlayers</span>
+    </div>
+</div>

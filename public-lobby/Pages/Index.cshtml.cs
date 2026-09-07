@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Orleans;
 using PublicLobby.Grains;
@@ -12,38 +13,30 @@ namespace PublicLobby.Pages;
 // NOTE on the server strip: GET /servers is deliberately player-bearer gated (plan §1.5 —
 // "anonymous sees no server list"). This page reads IServerRegistry in-process instead and shows
 // only the busiest few listings as a liveness signal; the full browsable list still requires an
-// account. Drop `Servers` from the view if that trade is ever reversed.
+// account. Drop `Strip` from the view if that trade is ever reversed.
+//
+// The strip is server-rendered here for the first paint and then re-rendered by htmx through
+// OnGetStrip whenever GET /servers/live announces a change (wwwroot/lobby-live.js) — so a visitor
+// watching the page sees players join and matches start.
 public sealed class IndexModel(IGrainFactory grains, IServerRegistry registry) : PageModel
 {
     public const int LadderTop = 10;
-    public const int ServersShown = 5;
 
     public LadderPage Ladder { get; private set; } = new([], 0, 1, LadderTop);
 
-    public IReadOnlyList<ServerEntry> Servers { get; private set; } = [];
-
-    // Totals across EVERY active listing, not just the ones rendered.
-    public int ServersOnline { get; private set; }
-    public int PilotsOnline { get; private set; }
+    public PublicServerStrip Strip { get; private set; } = PublicServerStrip.Empty;
 
     public async Task OnGetAsync()
     {
         Ladder = await grains.GetGrain<IQueryGrain>(0).LadderGlobal(1, LadderTop);
-
-        var active = registry.ListActive();
-        ServersOnline = active.Count;
-        PilotsOnline = active.Sum(s => s.Players);
-        Servers = active.OrderByDescending(s => s.Players).ThenBy(s => s.Name).Take(ServersShown).ToArray();
+        Strip = PublicServerStrip.From(registry.ListActive(), PublicServerStrip.Shown);
     }
 
-    // Listing state as ServerEntry.State reports it ("lobby" / "in-progress" / "ended"), mapped to
-    // the label + palette token the strip renders.
-    public static (string Label, string Css) StateBadge(string? state) =>
-        state switch
-        {
-            "in-progress" => ("In progress", "text-ok"),
-            "lobby" => ("Lobby", "text-accent"),
-            "ended" => ("Ended", "text-text-dim"),
-            _ => ("Idle", "text-text-dim"),
-        };
+    // ?handler=Strip — the section on its own, for htmx to swap in (Pages/Shared/_ServerStrip.cshtml).
+    // Registry-only: no ladder read, so a busy lobby's live updates never touch Postgres.
+    public PartialViewResult OnGetStrip()
+    {
+        Strip = PublicServerStrip.From(registry.ListActive(), PublicServerStrip.Shown);
+        return Partial("_ServerStrip", Strip);
+    }
 }

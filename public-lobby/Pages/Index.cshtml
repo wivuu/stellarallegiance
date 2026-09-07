@@ -51,79 +51,8 @@
         <span class="h-px flex-1 bg-hairline"></span>
     </div>
 
-    @* ---- Servers online --------------------------------------------------------------------- *@
-    <section class="flex flex-col gap-3">
-        <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <h2 class="text-[22px] font-bold text-text-hi">Servers online</h2>
-            <span class="font-mono text-[13px] text-text-dim">
-                @Model.ServersOnline listed &middot; @Model.PilotsOnline @(Model.PilotsOnline == 1 ? "pilot" : "pilots")
-            </span>
-        </div>
-        <p class="text-sm leading-relaxed text-text-dim">
-            Anyone can host. A listing goes <span class="text-ok">Verified</span> once its game server
-            authenticates with the lobby &mdash; only Verified servers issue join tokens and report
-            results to the ladder.
-        </p>
-
-        @if (Model.Servers.Count == 0)
-        {
-            <p class="mt-1 rounded border border-panel-hi bg-panel px-4 py-3 text-sm text-text-2">
-                No servers listed right now. Start one and it appears here automatically.
-            </p>
-        }
-        else
-        {
-            <div class="mt-1 overflow-hidden rounded border border-panel-hi">
-                @foreach (var (server, i) in Model.Servers.Select((s, i) => (s, i)))
-                {
-                    var badge = PublicLobby.Pages.IndexModel.StateBadge(server.State);
-                    <div class="flex items-center justify-between gap-4 px-3.5 py-3 @(i == 0 ? "bg-panel/50" : "border-t border-panel-hi/60")">
-                        <div class="flex min-w-0 flex-col gap-[5px]">
-                            <div class="flex items-center gap-2">
-                                <span class="truncate text-[15px] font-semibold text-text-hi">@server.Name</span>
-                                @if (server.Verified)
-                                {
-                                    <span class="shrink-0 rounded-sm border border-ok/35 px-1.5 py-px text-xs font-semibold uppercase tracking-[1px] text-ok">Verified</span>
-                                }
-                                else
-                                {
-                                    <span class="shrink-0 rounded-sm border border-hairline px-1.5 py-px text-xs font-semibold uppercase tracking-[1px] text-text-dim">Unverified</span>
-                                }
-                                @if (server.Protected)
-                                {
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#ffb347" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><title>Password required</title><rect width="18" height="11" x="3" y="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                                }
-                            </div>
-                            @if (server.Verified && !string.IsNullOrWhiteSpace(server.OperatorName))
-                            {
-                                <span class="text-[13px] text-text-dim">hosted by <span class="text-text-2">@server.OperatorName</span></span>
-                            }
-                            else
-                            {
-                                <span class="text-[13px] text-text-dim">no operator &middot; direct join only</span>
-                            }
-                        </div>
-                        <div class="flex shrink-0 items-center gap-3.5">
-                            <span class="text-xs font-semibold uppercase tracking-[1px] @badge.Css">@badge.Label</span>
-                            <span class="font-mono text-sm text-data">@server.Players/@server.MaxPlayers</span>
-                        </div>
-                    </div>
-                }
-            </div>
-            @if (Model.ServersOnline > Model.Servers.Count)
-            {
-                <p class="text-[13px] text-text-dim">
-                    @(Model.ServersOnline - Model.Servers.Count) more listed &mdash; sign in and open the server browser in the client to see them all.
-                </p>
-            }
-        }
-    </section>
-
-    <div class="flex items-center gap-3 py-8 sm:py-10">
-        <span class="h-px flex-1 bg-hairline"></span>
-        <span class="size-2.5 shrink-0 rotate-45 bg-accent"></span>
-        <span class="h-px flex-1 bg-hairline"></span>
-    </div>
+    @* ---- Servers online (live: htmx re-GETs the section on every /servers/live announcement) --- *@
+    <partial name="_ServerStrip" model="Model.Strip" />
 
     @* ---- Top of the ladder ------------------------------------------------------------------ *@
     <section class="flex flex-col gap-3">
@@ -248,3 +177,7 @@
     </section>
 
 </div>
+
+@section Scripts {
+    <script src="/lobby-live.js" defer></script>
+}

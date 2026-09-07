@@ -355,6 +355,77 @@ app.MapGet(
     )
     .RequireAuthorization(LobbyBearer.PlayerPolicy);
 
+// ---- SSE: public web-page server strip -------------------------------------
+//
+// The live feed behind the server strip on "/" and "/ladder" (wwwroot/lobby-live.js). ANONYMOUS on
+// purpose and strictly narrower than /servers/events: it carries only PublicServerStrip — the same
+// reduced projection those pages already render server-side — so "is anyone playing, and how many"
+// stays live for a visitor without an account, while the browsable list (sessionId, endpoint, ICE,
+// roster) stays behind a player bearer (plan §1.5). See PublicView.cs.
+//
+// Every bus event re-sends the WHOLE strip rather than a registered/updated/removed delta: the
+// payload is a handful of rows, and one snapshot type means the page's render path is identical on
+// first paint and on every update (no client-side merge/ordering to drift from the Razor partial).
+// Identical snapshots are suppressed, so roster-only churn on a listing costs nothing.
+app.MapGet(
+    "/servers/live",
+    async (HttpContext ctx, IServerRegistry registry, LobbyEventBus bus, CancellationToken ct) =>
+    {
+        // Anonymous + long-lived, so cap concurrency: a public SSE route is otherwise an easy way to
+        // pin one connection (and one bus subscription) per request forever.
+        if (!PublicStreams.TryEnter())
+        {
+            ctx.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+            return;
+        }
+        try
+        {
+            ctx.Response.Headers["Content-Type"] = "text/event-stream; charset=utf-8";
+            ctx.Response.Headers["Cache-Control"] = "no-cache";
+            ctx.Response.Headers["X-Accel-Buffering"] = "no"; // disable nginx/Railway proxy buffering
+            await ctx.Response.Body.FlushAsync(ct);
+
+            using var sub = bus.Subscribe(out var reader);
+
+            var last = SseJson(PublicServerStrip.From(registry.ListActive(), PublicServerStrip.Shown));
+            await WriteSseEvent(ctx.Response.Body, "snapshot", last, ct);
+
+            // Single writer: one loop does both the events and the 20 s keepalive comment, waking on
+            // whichever comes first. (The player stream above runs its keepalive as a second task
+            // because it doubles as a mid-stream ban check; this one has nothing to re-check.)
+            while (!ct.IsCancellationRequested)
+            {
+                using var wake = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                wake.CancelAfter(PublicStreams.KeepaliveInterval);
+                try
+                {
+                    if (!await reader.WaitToReadAsync(wake.Token))
+                        return; // bus closed the subscription
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    await WriteSseComment(ctx.Response.Body, ct);
+                    continue;
+                }
+
+                // Coalesce: several listings can change between wakeups, and one snapshot covers them.
+                while (reader.TryRead(out _)) { }
+
+                var snapshot = SseJson(PublicServerStrip.From(registry.ListActive(), PublicServerStrip.Shown));
+                if (snapshot == last)
+                    continue; // nothing the strip shows actually moved (e.g. a roster-only update)
+                last = snapshot;
+                await WriteSseEvent(ctx.Response.Body, "snapshot", snapshot, ct);
+            }
+        }
+        catch (OperationCanceledException) { }
+        finally
+        {
+            PublicStreams.Exit();
+        }
+    }
+);
+
 // ---- Signaling: WebRTC SDP relay ------------------------------------------
 
 // Client posts its SDP offer for a server; gets a ticket to poll the answer with.
@@ -428,6 +499,13 @@ static async Task WriteSseEvent(Stream body, string eventName, string data, Canc
 {
     var bytes = Encoding.UTF8.GetBytes($"event: {eventName}\ndata: {data}\n\n");
     await body.WriteAsync(bytes, ct);
+    await body.FlushAsync(ct);
+}
+
+// SSE keepalive: a comment line the browser ignores but proxies count as traffic.
+static async Task WriteSseComment(Stream body, CancellationToken ct)
+{
+    await body.WriteAsync(Encoding.UTF8.GetBytes(": keepalive\n\n"), ct);
     await body.FlushAsync(ct);
 }
 
@@ -583,6 +661,32 @@ file sealed record WsServerMsg(
     string? State = null,
     LobbyRosterEntry[]? Roster = null
 );
+
+// Concurrency guard for the anonymous SSE stream (/servers/live). Every other long-lived route
+// here is gated by a bearer or a per-listing secret; this one is open to the public web, so it
+// tracks how many are in flight and sheds past a cap.
+static class PublicStreams
+{
+    // One stream = one socket + one bounded bus subscription (64 events). Well past anything this
+    // lobby sees; over the cap a visitor gets 503 and keeps the server-rendered strip (EventSource
+    // retries on its own).
+    public const int Max = 500;
+
+    // Comment line cadence — keeps proxies (Railway) and NATs from reaping an idle stream.
+    public static readonly TimeSpan KeepaliveInterval = TimeSpan.FromSeconds(20);
+
+    static int _open;
+
+    public static bool TryEnter()
+    {
+        if (Interlocked.Increment(ref _open) <= Max)
+            return true;
+        Interlocked.Decrement(ref _open);
+        return false;
+    }
+
+    public static void Exit() => Interlocked.Decrement(ref _open);
+}
 
 static class LobbyJson
 {

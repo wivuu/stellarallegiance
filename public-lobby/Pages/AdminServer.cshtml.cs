@@ -162,7 +162,7 @@ public sealed class AdminServerModel(
 
     // ---- what the view renders ----------------------------------------------
 
-    public (string Label, string Css) State => IndexModel.StateBadge(Listing?.State);
+    public (string Label, string Css) State => PublicServerRow.StateBadge(Listing?.State);
 
     /// <summary>The match this server is playing right now, if the ledger knows of one.</summary>
     public MatchSummaryRow? ActiveMatch => View.Recent.FirstOrDefault(m => m.Status == MatchStatus.Active);

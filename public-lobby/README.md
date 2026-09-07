@@ -139,6 +139,24 @@ present:
 | `AUTH_STEAM_API_KEY` | Enables "Continue with Steam" (OpenID 2.0 — needs no client id/secret) and fetches the Steam persona name as the default display name. |
 | `LOBBY_ADMINS` | Comma list of `github:<login>`, `google:<sub>`, `steam:<steamid>`, or `name:<display-name>` — a matching player gets the admin role at sign-in. |
 
+#### The live server strip
+
+"/" and "/ladder" both render the same "Servers online" section, and both keep it current without a
+page reload. The moving parts:
+
+| Piece | Where |
+|---|---|
+| The projection both halves render | `PublicView.cs` — `PublicServerStrip.From(registry.ListActive(), Shown)` |
+| The markup (one copy, no JS twin) | `Pages/Shared/_ServerStrip.cshtml` + `_ServerRow.cshtml` |
+| The re-render | `?handler=Strip` on `IndexModel`/`LadderModel` — returns the section as a partial, reads the in-memory registry only (never Postgres) |
+| The change signal | `GET /servers/live` (SSE) → `wwwroot/lobby-live.js` re-raises each announcement as a `lobby-servers` event on `<body>` |
+| The swap | htmx: `hx-get="?handler=Strip" hx-trigger="lobby-servers from:body" hx-swap="outerHTML"` |
+
+htmx does the fetching and swapping, so the section's markup lives only in Razor — the script is a
+seven-line adapter and holds no copy of the row markup. The swapped fragment carries its own
+`hx-trigger`, so it re-arms itself (there is a test for that). With JavaScript off the strip still
+renders, frozen at page load.
+
 Sign-up creates a `players` row alongside the Identity user (`public-lobby/Accounts/AccountService.cs`
 — the ONE place that happens); every later change to a player (display-name edits, `last_seen_at`,
 match aggregates) becomes WP1.2's `PlayerGrain`'s job.
@@ -236,6 +254,7 @@ Registry:
 | `POST` | `/servers` | `{ name, port, publicEndpoint? }` | `400` if name not 3–50 chars. Lobby probes `port`; returns `{ server: { sessionId, publicEndpoint, iceServers, … }, secret }` (`publicEndpoint` null = WebRTC mode). `secret` is a per-session capability returned **only here** — never in the SSE/list — that the host echoes to mutate or close its listing. |
 | `GET` | `/servers/{sessionId}` | — | one entry, or `404`. |
 | `GET` | `/servers` | — | active server list (browser view); never includes `secret`. |
+| `GET` | `/servers/live` | — | **anonymous** SSE. Announces registry changes to the public web pages as the reduced `PublicServerStrip` projection (`PublicView.cs`) — server names, player counts, state badge, totals; never the session id, endpoint, ICE config or roster. One `snapshot` event on connect, one per change (identical snapshots suppressed), a keepalive comment every 20 s, and `503` past `PublicStreams.Max` concurrent streams. |
 | `DELETE` | `/servers/{sessionId}` | — | graceful removal on host shutdown. Requires `Authorization: Bearer <secret>`; a missing/wrong secret returns `404`. |
 
 Liveness + status come solely from the server WebSocket (`/servers/ws`): the host authenticates
@@ -304,6 +323,10 @@ var so an operator has to opt in. `ALLOW_UNVERIFIED_SERVERS` is meant for local 
 
 Reads are gated too (plan §1.5 — "anonymous sees no server list"): `GET /servers` and
 `GET /servers/events` both require a **player** bearer now, Verified and Unverified listings alike.
+The one public read is `GET /servers/live`, which carries only what "/" and "/ladder" already
+render — the busiest few listings by name, player count and state, plus the totals (see the
+**live server strip** below). It exists so a visitor without an account can see that a match is
+running; the browsable list, and every field a client needs to actually dial a server, stay gated.
 `DELETE /servers/{sessionId}` and the server WebSocket (`/servers/ws`) are unchanged — they still
 authenticate with the per-listing `secret` from the `POST /servers` response, not a player/server
 bearer. Every roster entry (heartbeats, `/servers/ws` `update` frames) now carries an optional
