@@ -56,15 +56,27 @@ function Get-PortListenerPids {
         return (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue).OwningProcess |
             Select-Object -Unique
     }
-    # unix: lsof, non-fatal when nothing matches.
+    # unix: lsof where present, else ss (many distros — e.g. Ubuntu — ship iproute2 only).
+    # Non-fatal when nothing matches and when neither tool exists.
     $prev = $PSNativeCommandUseErrorActionPreference
     $PSNativeCommandUseErrorActionPreference = $false
     try {
-        $out = lsof -tnP -iTCP:$Port -sTCP:LISTEN 2>$null
+        $pids = @()
+        if (Get-Command lsof -CommandType Application -ErrorAction SilentlyContinue) {
+            $pids = lsof -tnP -iTCP:$Port -sTCP:LISTEN 2>$null |
+                Where-Object { $_ } | ForEach-Object { [int]$_ }
+        } elseif (Get-Command ss -CommandType Application -ErrorAction SilentlyContinue) {
+            # ss -H rows end in users:(("SimServer",pid=1234,fd=7)) — pull every pid= out.
+            $pids = ss -lntpH "sport = :$Port" 2>$null |
+                ForEach-Object { [regex]::Matches($_, 'pid=(\d+)') } |
+                ForEach-Object { [int]$_.Groups[1].Value }
+        } else {
+            Write-Host "[run-server] warning: neither lsof nor ss found; cannot detect a stale server on :$Port"
+        }
     } finally {
         $PSNativeCommandUseErrorActionPreference = $prev
     }
-    return $out | Where-Object { $_ } | ForEach-Object { [int]$_ } | Select-Object -Unique
+    return $pids | Select-Object -Unique
 }
 
 # Stop whatever is already on the port so the rebuilt binary takes over cleanly.
