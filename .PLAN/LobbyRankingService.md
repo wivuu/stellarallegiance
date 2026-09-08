@@ -1,6 +1,6 @@
 # Public Lobby — Identity, Persistence & Ranking: hand-off plan
 
-**Status:** slice 1 IMPLEMENTED 2026-09-06 on branch `auth-lobby-ranking` and DEPLOYED 2026-09-07 to https://stellarlobby.wivuu.com (see §8 for per-package notes and what is still user-owned).
+**Status:** slice 1 COMPLETE — implemented 2026-09-06, deployed 2026-09-07 to https://stellarlobby.wivuu.com, and squash-merged to `master` 2026-09-08 as commit `9077060` (PR #73). The definition of done in §7 is met end to end, including a win-condition match. See §8 for per-package notes and the remaining optional follow-ups.
 **Language:** [`public-lobby/CONTEXT.md`](../public-lobby/CONTEXT.md) — use its words (Player, Pilot,
 Match, Listing, Game Server, Operator, Verified, Ranked, Join Token, Result, Ladder, Rating).
 **Decisions of record:** [ADR-0001](../docs/adr/0001-public-lobby-is-its-own-identity-issuer.md),
@@ -642,3 +642,22 @@ review that corrected it: `.claude/plans/composed-fluttering-castle.md`.
   a view that throws only ever show up that way, and the first version of both got through.
 - **Pre-existing breakage fixed in passing:** `public-lobby` did not build from clean at HEAD —
   Razor `<text>` blocks fail with this SDK (`RZ1021`). `ServerHistory.cshtml` was the last one.
+
+### 2026-09-08 — Slice 1 closed and merged
+
+- **Merged to `master`** as one squash commit `9077060` (PR #73, 50 commits / 240 files). The
+  client, server and lobby moved together because protocol 38 clients cannot join protocol 37
+  servers. Note the GitHub repo is now `wivuu/stellarallegiance`; the older
+  `onionhammer/wivuullegiance` URL still redirects.
+- **The user completed the manual checklist:** browser sign-in clicked through on `/login`, the
+  dedicated game server paired by device code and flagged **Ranked** on `/admin`, and a
+  **win-condition match verified end to end** — the counted base-kill path from `PhaseEnded`
+  through ingestion to the ladder. Every ending (win-condition / reset / shutdown) has now been
+  exercised, so §7's definition of done is met.
+- **Deliberately skipped:** the Google OAuth app and the Steam Web API key. GitHub and passkeys
+  are live and sufficient; both providers are env-gated and can be added later without a code
+  change.
+- **Still open (not blocking):** no CI runs the suites — `tests/PublicLobbyTest` needs Docker for
+  Testcontainers, so a runner with a Docker service is the natural home.
+- **Slice 2 is unblocked.** Glicko-2 team rating now waits only on accumulating real ranked match
+  data rather than on proving the counted path. Steam session tickets still need a Steam AppID.

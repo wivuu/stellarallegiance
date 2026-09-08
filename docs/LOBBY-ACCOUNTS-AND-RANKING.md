@@ -172,26 +172,29 @@ For local testing register a second app with callback `http://localhost:8091/sig
 Set the new value on the service and redeploy; existing sessions and linked logins are unaffected
 (they are keyed by the provider's user id, not the secret).
 
-## 5. Next steps
+## 5. Status and next steps
 
-**Before players use it**
-1. Create the OAuth apps above and set the variables (passkey-only is fine to start).
-2. Attach Railway Postgres, set the pre-deploy migrate command, `LOBBY_PUBLIC_URL` and
-   `LOBBY_ADMINS`, redeploy, and run the checks in section 2.
-3. Sign up once in a real browser on `/login` with a passkey — the passkey ceremony was verified at
-   the API level and in unit tests but not clicked through in a browser yet.
-4. Pair each community game server (section 3) and mark the trusted ones **Ranked** on `/admin`.
-5. Merge `auth-lobby-ranking` into `master` (the client, server and lobby move together — protocol
-   38 clients cannot join protocol 37 servers, and the old lobby has no accounts).
+**Slice 1 is complete and live.** It shipped to `master` on 2026-09-08 as squash commit `9077060`
+(PR #73); the client, server and lobby moved together because protocol 38 clients cannot join
+protocol 37 servers. The lobby runs at https://stellarlobby.wivuu.com with Railway Postgres, the
+pre-deploy migrate command and GitHub sign-in. Browser sign-in has been clicked through, the
+dedicated game server is paired and flagged **Ranked**, and a win-condition match has been driven
+end to end — so the counted base-kill path from the match ending through ingestion to the ladder is
+proven, alongside the reset and shutdown paths the suites already covered.
+
+**To bring up another lobby or another server**
+1. Attach Postgres, set the pre-deploy migrate command, `LOBBY_PUBLIC_URL` and `LOBBY_ADMINS`,
+   deploy, and run the checks in section 2.
+2. Add OAuth providers as you want them (section 4). Passkeys need no configuration and work alone.
+3. Pair each community game server (section 3) and mark the trusted ones **Ranked** on `/admin`.
 
 **Known gaps and follow-ups**
-- A win-condition match has not been driven end to end headlessly (it needs a base kill); the
-  reset and shutdown result paths and the ingestion rules are covered by the suites and an
-  end-to-end run.
+- Google OAuth and the Steam Web API key are deliberately unconfigured; GitHub and passkeys carry
+  sign-in today. Both are env-gated, so adding them later needs no code change.
 - A listing's id changes each time a server re-registers; the client automatically retries a
   rejected join with a fresh token, so a mid-join re-registration costs one retry.
-- Slice 2 in the plan: Glicko-2 team rating once real match data exists, Steam session tickets
-  when there is an AppID. Slice 3: listings and signaling into grains for a second lobby replica,
-  Apple login, loadout persistence.
+- Slice 2 in the plan: Glicko-2 team rating once enough real ranked matches have accumulated, and
+  Steam session tickets when there is an AppID. Slice 3: listings and signaling into grains for a
+  second lobby replica, Apple login, loadout persistence.
 - No CI runs the suites; `tests/PublicLobbyTest` needs Docker (`dotnet run --project
   tests/PublicLobbyTest`) and `tests/LobbyTest` covers the server side.
