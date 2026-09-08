@@ -7,9 +7,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Pin the pure-managed SHA-256/HMAC and the join-token derivation against known
-         answers. The module (wasi) and the native sim server both compile this same
-         shared source, so a green run here is the guarantee their tokens agree. -->
+    <!-- Pin the pure-managed SHA-256/HMAC against known answers, and cover
+         JoinTokens.ConstantTimeEquals (the shared-secret connect authenticator's compare). -->
     <ProjectReference Include="../../shared/Shared.csproj" />
   </ItemGroup>
 </Project>

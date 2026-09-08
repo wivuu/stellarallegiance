@@ -300,7 +300,13 @@ public partial class SettingsDialog : Control
         // row's button to rebind; RESTORE DEFAULTS / CANCEL cover these alongside the mouse controls.
         page.AddChild(new DiamondDivider());
         page.AddChild(UiKit.MakeLabel("KEY BINDINGS", UiKit.TextStyle.Label, DesignTokens.TextDim));
-        page.AddChild(UiKit.MakeLabel("Click a control to rebind it — key, mouse button, or gamepad.", UiKit.TextStyle.Data, DesignTokens.TextDim));
+        page.AddChild(
+            UiKit.MakeLabel(
+                "Click a control to rebind it — key, mouse button, or gamepad.",
+                UiKit.TextStyle.Data,
+                DesignTokens.TextDim
+            )
+        );
         AddBindGroup(page, "FLIGHT", InputBindings.Category.Flight);
         AddBindGroup(page, "COMBAT", InputBindings.Category.Combat);
         AddBindGroup(page, "VIEW", InputBindings.Category.View);
@@ -334,22 +340,45 @@ public partial class SettingsDialog : Control
         group.AddThemeConstantOverride("separation", 8);
         page.AddChild(group);
 
+        // Signed in: the row shows the account display name read-only (WP3.3 replaces it with the
+        // full account page — rename goes through PATCH /api/me there, never this local pref).
+        // Anonymous: unchanged — a free-typed callsign that only goes out in MsgHello.
+        bool signedIn = AuthSession.Instance?.IsSignedIn ?? false;
+
         group.AddChild(UiKit.MakeLabel("CALLSIGN", UiKit.TextStyle.Label, DesignTokens.TextDim));
         _callsign = new LineEdit
         {
-            Text = UserPrefs.PilotName,
+            Text = signedIn ? AuthSession.Instance!.DisplayName : UserPrefs.PilotName,
             PlaceholderText = "your callsign",
             MaxLength = UserPrefs.MaxNameLength,
             CustomMinimumSize = new Vector2(240, 34),
+            Editable = !signedIn,
         };
         _callsign.AddThemeFontOverride("font", UiFonts.Mono);
         _callsign.AddThemeFontSizeOverride("font_size", 15);
-        _callsign.FocusExited += CommitCallsign;
-        _callsign.TextSubmitted += _ => CommitCallsign();
+        if (!signedIn)
+        {
+            _callsign.FocusExited += CommitCallsign;
+            _callsign.TextSubmitted += _ => CommitCallsign();
+        }
         group.AddChild(_callsign);
 
-        // The name only goes out in MsgHello, so a change never renames mid-match.
-        group.AddChild(UiKit.MakeLabel("Takes effect next time you connect.", UiKit.TextStyle.Data, DesignTokens.TextDim));
+        if (signedIn)
+        {
+            // The account page owns the name (PATCH /api/me), linked logins and sign-out.
+            var open = UiKit.MakeButton("OPEN ACCOUNT", () => AccountDialog.Open(this), ButtonVariant.Secondary);
+            open.CustomMinimumSize = new Vector2(240, 38);
+            group.AddChild(open);
+        }
+        group.AddChild(
+            UiKit.MakeLabel(
+                signedIn
+                    ? "Your lobby account name — change it on the account page."
+                    : "Takes effect next time you connect.",
+                UiKit.TextStyle.Data,
+                DesignTokens.TextDim
+            )
+        );
 
         return page;
     }
@@ -421,6 +450,9 @@ public partial class SettingsDialog : Control
     {
         // FocusExited also fires during teardown — never re-commit after a Cancel revert.
         if (_closing)
+            return;
+        // Signed in: the field is read-only (the account name), so there's nothing local to commit.
+        if (AuthSession.Instance?.IsSignedIn == true)
             return;
         UserPrefs.SetPilotName(_callsign.Text);
     }

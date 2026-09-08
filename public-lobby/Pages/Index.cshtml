@@ -1,0 +1,189 @@
+@page "/"
+@model PublicLobby.Pages.IndexModel
+@{
+    ViewData["Title"] = "Stellar Allegiance — Public Lobby";
+    const string Repo = "https://github.com/wivuu/stellarallegiance";
+    const string Releases = Repo + "/releases/latest";
+
+    // Head of the ladder gets a little hierarchy the paginated /ladder table doesn't need.
+    string RankClass(int rank) => rank == 1 ? "text-accent" : rank <= 3 ? "text-text-2" : "text-text-dim";
+}
+
+<div class="space-y-0">
+
+    @* ---- Hero ------------------------------------------------------------------------------ *@
+    <section class="flex flex-col items-center gap-7 pt-4 pb-9 text-center sm:flex-row sm:gap-10 sm:pt-8 sm:pb-11 sm:text-left">
+        <img src="/logo.png" alt="Stellar Allegiance" width="240" class="w-44 shrink-0 sm:w-60" />
+        <div class="flex flex-col items-center gap-[18px] sm:items-start">
+            <div class="flex items-center gap-2.5">
+                <span class="size-2.5 rotate-45 bg-accent"></span>
+                <span class="text-[13px] font-medium uppercase tracking-[2px] text-text-2">Public Lobby</span>
+            </div>
+            <h1 class="text-[28px] font-bold leading-[1.15] text-text-hi text-balance sm:text-[34px]">An ancient game,<br />reimagined</h1>
+            <p class="text-[15px] leading-[1.65] text-text-2 text-pretty">
+                Team-based 3D space combat. Fly, mine asteroids, research new tech and build stations
+                on your way to the enemy's home base &mdash; while one player commands the whole front
+                from the map.
+            </p>
+            <div class="flex flex-wrap items-center justify-center gap-3 pt-1 sm:justify-start">
+                <a href="@Releases" class="chamfer flex items-center gap-2 bg-accent px-3.5 py-[11px] text-sm font-semibold tracking-[0.02em] text-void hover:bg-accent/85">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M4 19h16"></path></svg>
+                    Download the game
+                </a>
+                <a href="/ladder" class="chamfer flex items-center gap-2 border border-hairline-hi/40 bg-accent/10 px-3.5 py-2.5 text-sm font-medium text-text-hi hover:bg-accent/20">Browse the ladder</a>
+            </div>
+        </div>
+    </section>
+
+    @* ---- Honest-prototype note (README's CAUTION) -------------------------------------------- *@
+    <div class="flex gap-3 rounded border border-warn/30 bg-warn/6 px-3.5 py-3">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffb347" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mt-px shrink-0" aria-hidden="true"><path d="M12 9v4"></path><path d="M12 17h.01"></path><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"></path></svg>
+        <p class="text-sm leading-relaxed text-text-2">
+            <strong class="font-semibold text-warn">Functional prototype.</strong>
+            Written by Claude under supervision &mdash; expect bugs and rough edges. It exists to show
+            that Allegiance can be re-platformed as a modern cross-platform game.
+        </p>
+    </div>
+
+    <div class="flex items-center gap-3 py-8 sm:py-10">
+        <span class="h-px flex-1 bg-hairline"></span>
+        <span class="size-2.5 shrink-0 rotate-45 bg-accent"></span>
+        <span class="h-px flex-1 bg-hairline"></span>
+    </div>
+
+    @* ---- Servers online (live: htmx re-GETs the section on every /servers/live announcement) --- *@
+    <partial name="_ServerStrip" model="Model.Strip" />
+
+    <div class="flex items-center gap-3 py-8 sm:py-10">
+        <span class="h-px flex-1 bg-hairline"></span>
+        <span class="size-2.5 shrink-0 rotate-45 bg-accent"></span>
+        <span class="h-px flex-1 bg-hairline"></span>
+    </div>
+
+    @* ---- Top of the ladder ------------------------------------------------------------------ *@
+    <section class="flex flex-col gap-3">
+        <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h2 class="text-[22px] font-bold text-text-hi">Top pilots</h2>
+            <a href="/ladder" class="text-sm text-data hover:text-text-hi">Full ladder &rarr;</a>
+        </div>
+        <p class="text-sm leading-relaxed text-text-dim">
+            Cumulative standings from ranked matches. Every pilot on the ledger gets the match with
+            their team's outcome.
+        </p>
+
+        @if (Model.Ladder.Total == 0)
+        {
+            <p class="mt-1 rounded border border-panel-hi bg-panel px-4 py-3 text-sm text-text-2">
+                No ranked matches recorded yet.
+            </p>
+        }
+        else
+        {
+            <div class="bracket-frame mt-1">
+                <div class="overflow-x-auto rounded border border-panel-hi">
+                    <table class="w-full text-sm">
+                        <thead class="bg-panel text-left text-xs uppercase tracking-wide text-text-dim">
+                            <tr>
+                                <th class="w-11 px-3 py-2">#</th>
+                                <th class="px-3 py-2">Player</th>
+                                <th class="w-[58px] px-3 py-2 text-right">Pts</th>
+                                <th class="w-11 px-3 py-2 text-right">W</th>
+                                <th class="w-11 px-3 py-2 text-right">L</th>
+                                <th class="w-12 px-3 py-2 text-right">K</th>
+                                <th class="w-12 px-3 py-2 text-right">D</th>
+                                <th class="w-12 px-3 py-2 text-right">EJ</th>
+                                <th class="w-[76px] px-3 py-2 text-right">Matches</th>
+                            </tr>
+                        </thead>
+                        <tbody class="font-mono text-data">
+                            @foreach (var row in Model.Ladder.Rows)
+                            {
+                                <tr class="border-t border-panel-hi/60 first:border-t-0 hover:bg-panel">
+                                    <td class="px-3 py-2 @RankClass(row.Rank)">@row.Rank</td>
+                                    <td class="px-3 py-2 font-ui text-text-hi"><a class="hover:text-accent" href="/players/@Uri.EscapeDataString(row.DisplayName)">@row.DisplayName</a></td>
+                                    <td class="px-3 py-2 text-right">@row.Points</td>
+                                    <td class="px-3 py-2 text-right text-ok">@row.Wins</td>
+                                    <td class="px-3 py-2 text-right text-danger">@row.Losses</td>
+                                    <td class="px-3 py-2 text-right">@row.Kills</td>
+                                    <td class="px-3 py-2 text-right">@row.Deaths</td>
+                                    <td class="px-3 py-2 text-right">@row.Ejects</td>
+                                    <td class="px-3 py-2 text-right">@row.MatchesPlayed</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    </section>
+
+    <div class="flex items-center gap-3 py-8 sm:py-10">
+        <span class="h-px flex-1 bg-hairline"></span>
+        <span class="size-2.5 shrink-0 rotate-45 bg-accent"></span>
+        <span class="h-px flex-1 bg-hairline"></span>
+    </div>
+
+    @* ---- Get in the cockpit ----------------------------------------------------------------- *@
+    <section class="flex flex-col gap-3 pb-6">
+        <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h2 class="text-[22px] font-bold text-text-hi">Get in the cockpit</h2>
+            <a href="@Repo/releases" class="text-sm text-data hover:text-text-hi">All releases &rarr;</a>
+        </div>
+        <p class="text-sm leading-relaxed text-text-dim">
+            Grab the latest build for your platform, unzip it, and run it &mdash; there is no installer
+            and nothing to compile. Keep the unzipped folder together; the game needs the files that
+            ship beside the executable.
+        </p>
+
+        <div class="mt-1">
+            <a href="@Releases" class="chamfer inline-flex items-center gap-2 bg-accent px-3.5 py-[11px] text-sm font-semibold tracking-[0.02em] text-void hover:bg-accent/85">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M4 19h16"></path></svg>
+                Download the latest release
+            </a>
+        </div>
+
+        <div class="mt-2 grid gap-3 sm:grid-cols-3 sm:gap-4">
+            <div class="flex flex-col gap-2 rounded border border-hairline bg-panel-fill p-3.5">
+                <span class="font-mono text-xs text-accent">WINDOWS</span>
+                <h3 class="text-[15px] font-semibold text-text-hi">&hellip;-windows.zip</h3>
+                <p class="text-[13px] leading-relaxed text-text-2">Unzip anywhere and run <code class="font-mono text-xs text-data">stellarallegiance.exe</code>.</p>
+            </div>
+            <div class="flex flex-col gap-2 rounded border border-hairline bg-panel-fill p-3.5">
+                <span class="font-mono text-xs text-accent">MACOS</span>
+                <h3 class="text-[15px] font-semibold text-text-hi">&hellip;-macos.zip</h3>
+                <p class="text-[13px] leading-relaxed text-text-2">Ad-hoc signed, not notarized &mdash; clear quarantine once, then open the app.</p>
+            </div>
+            <div class="flex flex-col gap-2 rounded border border-hairline bg-panel-fill p-3.5">
+                <span class="font-mono text-xs text-accent">LINUX</span>
+                <h3 class="text-[15px] font-semibold text-text-hi">&hellip;-linux.zip</h3>
+                <p class="text-[13px] leading-relaxed text-text-2">Unzip anywhere and run <code class="font-mono text-xs text-data">stellarallegiance.x86_64</code>.</p>
+            </div>
+        </div>
+
+        <code class="mt-1 block overflow-x-auto whitespace-pre rounded-sm border border-hairline bg-void px-3 py-2.5 font-mono text-[12px] leading-[1.7] text-data sm:text-[12.5px]">macOS only: xattr -dr com.apple.quarantine stellarallegiance.app</code>
+
+        <p class="mt-1 text-sm leading-relaxed text-text-dim">
+            On first launch, the client shows a device code and opens this site to approve it &mdash;
+            after that, pick a <span class="text-ok">Verified</span> server and ready up. You can also
+            join any address directly, or
+            <a href="@Repo/blob/master/QUICKSTART.md" class="text-data hover:text-text-hi">build from source</a>
+            if you would rather.
+        </p>
+
+        <div class="mt-3 flex flex-col gap-2.5 rounded border border-panel-hi bg-panel-deep p-3.5">
+            <div class="flex items-center gap-2">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7fa6c8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><rect width="20" height="8" x="2" y="2" rx="2"></rect><rect width="20" height="8" x="2" y="14" rx="2"></rect><path d="M6 6h.01"></path><path d="M6 18h.01"></path></svg>
+                <span class="text-[13px] font-medium uppercase tracking-[2px] text-text-2">Host a server</span>
+            </div>
+            <p class="text-[13px] leading-relaxed text-text-dim">Prebuilt images are on GHCR &mdash; forward the port and your server lists itself here automatically.</p>
+            <code class="block overflow-x-auto whitespace-pre rounded-sm border border-hairline bg-void px-3 py-2.5 font-mono text-[12px] leading-[1.7] text-data sm:text-[12.5px]">docker run --rm -p 8090:8090 \
+  -e SIM_PUBLIC_NAME="My Server" \
+  ghcr.io/wivuu/stellarallegiance-sim:latest</code>
+        </div>
+    </section>
+
+</div>
+
+@section Scripts {
+    <script src="/lobby-live.js" defer></script>
+}

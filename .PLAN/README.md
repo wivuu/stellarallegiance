@@ -99,21 +99,58 @@ Stage-1 YAML pipeline.
   asymmetric play (a faction dimension on YAML defs). *Faction rules ride Stage 1; faction assets
   ride asset streaming above.*
 
-### Stage 5 — Social & persistence (independent track)
+### Stage 5 — Social & persistence (independent track) — ◐ accounts + ranking DONE (2026-09-07)
 
-Orthogonal to the strategy loop, which runs on ephemeral per-match state. Do when persistence is
-wanted. **The discovery + hosting core is done; the social/persistence layer is not.**
+Orthogonal to the strategy loop, which runs on ephemeral per-match state. **Slice 1 shipped on
+`auth-lobby-ranking` and is deployed at <https://stellarlobby.wivuu.com>.** The lobby is no longer a
+stateless directory: it is the identity issuer and the system of record — ASP.NET Core Identity +
+EF Core on Postgres with a co-hosted **Orleans** silo, where each entity grain is the single writer
+of its rows and endpoints never write through EF directly.
 
-- ☐ **[M]** **Scores, kills/deaths & ranks** — *durable* per-player post-match stats, an overall point
-  system, and player ranks. (In-match scoreboards are Stage 3.)
-- ☐ **[XL]** **Matchmaking, accounts & persistence** — player identities/auth, ELO, match history. Lobby
-  owns the persistent storage; deployed as part of the lobby project. Use **Orleans** so the lobby
-  is horizontally scalable and manages state. (BIG)
-- ☐ **[L]** **Client authentication** — clients prove identity to the lobby (per-session secrets/tokens).
-  Choose a provider that supports **passkeys**; lobby issues a session secret per client, validated
-  by game servers (JWT?).
-- ☐ **[M]** **Game-server authentication** — game servers prove identity to the lobby; on start, show a
-  link in the terminal to authenticate the session. Same userbase as clients.
+> Design, work packages and the progress log: [`LobbyRankingService.md`](LobbyRankingService.md)
+> (§1.6 slices, §8 what was built and what bit) · operator reference:
+> [`public-lobby/README.md`](../public-lobby/README.md) · what shipped and how to run/deploy it:
+> [`docs/LOBBY-ACCOUNTS-AND-RANKING.md`](../docs/LOBBY-ACCOUNTS-AND-RANKING.md) · language:
+> `public-lobby/CONTEXT.md` · decisions: ADR-0001/0002 in `docs/adr/` · day-to-day recipes: the
+> `/public-lobby` skill.
+
+- ✅ **[L]** **Client authentication** — passkeys (WebAuthn) plus Google/GitHub/Steam external
+  logins; the Godot client signs in through a device code it shows at launch and the browser approval
+  page (`AuthSession`, `SignInDialog`, in-client `AccountDialog`), or skips it for direct-by-address
+  joins. `ALLOW_PASSKEY_SIGNUP` can force every account to start from an external provider.
+- ✅ **[M]** **Game-server authentication** — a published server prints a device code + approval
+  URL on first boot, stays unlisted until approved, saves its credential to `SIM_AUTH_FILE`, and
+  re-lists silently on every restart under its operator's name (`SIM_HOSTED_BY` is gone). Listings are
+  badged **Verified** / **Unverified**; joining a Verified server needs a single-use 60 s **join token**
+  (ES256 JWT, verified offline by the server against the lobby's JWKS) carried on `Hello` — protocol 38.
+- ✅ **[M]** **Scores, kills/deaths & ranks** — servers report results through a disk spool that
+  survives lobby outages and restarts; `MatchGrain` ingests them with a plausibility rule (a result is
+  refused whole if any pilot never took a join token for that server), and `PlayerGrain` keeps the
+  durable W/L/K/D/EJ + points counters. Ranked is gated by `RANKED_RESULTS` (`flagged` default) plus a
+  per-server Ranked toggle. Web surfaces: `/ladder`, `/players/<name>`, `/servers/<id>/history`, `/me`.
+- ◐ **[XL]** **Matchmaking, accounts & persistence** — accounts, persistence and match history are done
+  (Postgres + Orleans, migrations run via `--migrate`, DataProtection keys persisted so cookies and
+  passkey state survive redeploys). **Not done:** matchmaking, and a real rating — the ladder is
+  cumulative points, not ELO/Glicko.
+
+Also shipped alongside: a public web shell on the lobby (`/`, `/login`, `/device`, `/me`, `/ladder`,
+`/players`, htmx live server strip over an anonymous `/servers/live` SSE stream, release downloads,
+responsive layout) and an `/admin` moderation console (searchable servers/players/matches tabs +
+detail pages, bans, player and game-server deletion, operator reassignment). Suites:
+`tests/PublicLobbyTest` (Testcontainers Postgres, needs Docker) and an expanded `tests/LobbyTest`;
+no CI runs either.
+
+**Open before players use it** (user-owned): Google OAuth app + Steam Web API key; one real browser
+passkey click-through; pair + Ranked-flag the dedicated server; a win-condition match driven end to
+end (needs a base kill); merge to `master` — client, server and lobby move together, proto 38
+clients cannot join proto 37 servers.
+
+- ☐ **[L]** **Slice 2** (plan §1.6) — Glicko-2 team rating once real match data exists; Steam
+  session tickets when there is an AppID.
+- ☐ **[L]** **Slice 3** (plan §1.6) — listings + WebRTC signaling into grains so the lobby can run
+  more than one replica (both are per-process today; a 2-replica scale test passed only on IPv6
+  advertising and was scaled back to 1), Apple login, loadout persistence (needs a per-server
+  content fingerprint — separate design).
 
 ### Cross-cutting / opportunistic
 
@@ -121,6 +158,11 @@ Not stage-bound — done when convenient or when a stage needs them.
 
 - ☐ **[S]** **Improve asteroid texture mapping** — reduce stretching via better UVs or tri-planar mapping;
   explore baking and in-engine parallax/height maps.
+- ✅ **[S]** **Local dev orchestration (Aspire)** — `aspire run` boots postgres → `lobby-migrate` →
+  lobby:8091 → server:8090 with the Godot `client` as explicit-start; every key in the root `.env` is a
+  parameter. Dashboard/CLI commands cover `client launch`, `lobby approve-device-code` and
+  `deploy-railway` (`aspire do deploy-lobby|deploy-server`), replacing the deploy pwsh scripts;
+  `scripts/run-server.ps1` / `run-client.ps1` now target the *hosted* lobby.
 - ◐ **[S]** **Spatial audio polish** — `SfxManager` exists; ✅ collision thuds (asteroids AND bases,
   client-side interception in `WorldRenderer.CheckCollisions` against the shared convex hulls, with
   the own-base dock-disc carve-out) and ✅ a volume settings UI (per-bus sliders in the Lobby

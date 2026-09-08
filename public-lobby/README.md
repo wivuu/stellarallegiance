@@ -58,10 +58,12 @@ works via WebRTC/STUN for most clients; it just can't serve symmetric-NAT client
 
 ---
 
-## Quick start (Docker Compose)
+## Quick start
 
 `public-lobby` is defined in the repo-root [`docker-compose.yml`](../docker-compose.yml) alongside
-the sim server. To run **just the lobby** on a dedicated box:
+the sim server, and as the `lobby` resource in the Aspire AppHost (`apphost/`) — `aspire run` /
+`aspire start` brings up Postgres, runs migrations, and starts it on `http://localhost:8091`
+alongside the sim server. To run **just the lobby** on a dedicated box with Docker Compose instead:
 
 ```bash
 # on the lobby box, in the repo:
@@ -89,10 +91,85 @@ Environment variables (see [`PublicLobby.cs`](PublicLobby.cs)):
 |---|---|---|
 | `SHARE_PORT` | `8091` | HTTP listen port. |
 | `STUN_URL` | `stun:stun.cloudflare.com:3478` | Public STUN handed to clients/servers for the WebRTC fallback. Comma/space-separate several for redundancy. |
+| `ConnectionStrings__postgres-database` | none (required) | Postgres connection string for identity, sessions, servers, matches and the ladder (`.PLAN/LobbyRankingService.md`); the process fails fast at startup if it's missing. |
+| `LOBBY_ORLEANS_CLUSTERING` | `adonet` | Orleans clustering mode: `adonet` (production — clusters through the same Postgres above) or `localhost` (dev boxes and the test suite — in-memory reminders, no Postgres clustering dependency). |
+| `ORLEANS_SILO_PORT` | `11111` | Orleans silo-to-silo port. |
+| `ORLEANS_GATEWAY_PORT` | `30000` | Orleans client gateway port. |
 
-A public STUN server is fine — there's nothing to host. It holds everything in memory (no
-database): registry entries expire 30 s after the last WebSocket ping; signaling tickets expire
-after 60 s. Run a single instance — there is no shared state across replicas.
+A public STUN server is fine — there's nothing to host for it. The live server registry and
+signaling relay still hold everything in memory (registry entries expire 30 s after the last
+WebSocket ping; signaling tickets expire after 60 s; run a single instance — there is no shared
+state across replicas), but **the lobby now requires Postgres** as its system of record for
+players, sessions, game servers and matches (see [ADR-0002](../docs/adr/0002-postgres-system-of-record-grains-single-writers.md)).
+Apply schema migrations (creating the database if absent) with migrate-and-exit mode — this is
+Railway's pre-deploy command:
+
+```bash
+dotnet public-lobby/bin/.../PublicLobby.dll --migrate    # or: dotnet run --project public-lobby -- --migrate
+```
+
+The lobby also co-hosts an Orleans silo in the same process (ADR-0002): grains are the single
+writers of their own Postgres rows through EF Core, while Orleans itself supplies only the actor
+model and, via `LOBBY_ORLEANS_CLUSTERING=adonet` (the default), ADO.NET clustering + reminders
+against that same database — `--migrate` creates the Orleans tables too. This is a single-replica
+co-hosted silo for now; a second replica is a later slice, once the in-memory server registry and
+signaling relay above also move into grains (the Orleans side already clusters across Railway
+replicas: the silo advertises its private IPv6 and listens on `[::]` when `RAILWAY_PRIVATE_DOMAIN`
+is set, `ORLEANS_ADVERTISED_IP` overrides). `GET /health/orleans` proves the silo is actually
+taking grain calls (not just that the process is up); `GET /health/cluster` returns JSON with this
+silo's address, the listening endpoints, the membership view, cross-silo runtime stats (CPU, memory,
+activations per silo) and a raw TCP probe of every live silo port — hit it a few times to land on
+each replica.
+
+Running it again against an already-migrated database is a no-op. WP4.2 documents the full
+Postgres deployment/env story; this is the short version.
+
+### Accounts, sign-in, and the web shell (WP0.3)
+
+The lobby is its own identity issuer ([ADR-0001](../docs/adr/0001-public-lobby-is-its-own-identity-issuer.md)):
+ASP.NET Core Identity, cookie auth (`lobby` cookie, 30-day sliding), and a handful of Razor Pages
+(`/login`, `/me`, `/ladder`, …) under `Pages/`. **Passkeys are always on and need zero configuration**
+(sign-up can be switched off with `ALLOW_PASSKEY_SIGNUP=false`, see below) — a bare local lobby with only `ConnectionStrings__postgres-database` set still lets a player sign up
+with a passkey at `/login`. External login providers are registered ONLY when their env vars are
+present:
+
+| Var | Purpose |
+|---|---|
+| `LOBBY_PUBLIC_URL` | The lobby's own public URL (default `http://localhost:<port>`). Used as the passkey relying-party domain and (later work packages) the device-code `verification_uri`/join-token issuer. |
+| `AUTH_GOOGLE_CLIENT_ID` / `AUTH_GOOGLE_CLIENT_SECRET` | Enables "Continue with Google" on `/login`. |
+| `AUTH_GITHUB_CLIENT_ID` / `AUTH_GITHUB_CLIENT_SECRET` | Enables "Continue with GitHub". |
+| `AUTH_STEAM_API_KEY` | Enables "Continue with Steam" (OpenID 2.0 — needs no client id/secret) and fetches the Steam persona name as the default display name. |
+| `ALLOW_PASSKEY_SIGNUP` | Default `true`. Set `false` to refuse brand-new passkey-only accounts: the "Create a passkey" form disappears from `/login` and `/login/passkey/creation-options` + `/register` answer 403 for anonymous callers. Passkey sign-in and "Add a passkey" on `/me` keep working, so every account must START from an external provider. |
+| `LOBBY_ADMINS` | Comma list of `github:<login>`, `google:<sub>`, `steam:<steamid>`, or `name:<display-name>` — a matching player gets the admin role at sign-in. |
+
+#### The live server strip
+
+"/" and "/ladder" both render the same "Servers online" section, and both keep it current without a
+page reload. The moving parts:
+
+| Piece | Where |
+|---|---|
+| The projection both halves render | `PublicView.cs` — `PublicServerStrip.From(registry.ListActive(), Shown)` |
+| The markup (one copy, no JS twin) | `Pages/Shared/_ServerStrip.cshtml` + `_ServerRow.cshtml` |
+| The re-render | `?handler=Strip` on `IndexModel`/`LadderModel` — returns the section as a partial, reads the in-memory registry only (never Postgres) |
+| The change signal | `GET /servers/live` (SSE) → `wwwroot/lobby-live.js` re-raises each announcement as a `lobby-servers` event on `<body>` |
+| The swap | htmx: `hx-get="?handler=Strip" hx-trigger="lobby-servers from:body" hx-swap="outerHTML"` |
+
+htmx does the fetching and swapping, so the section's markup lives only in Razor — the script is a
+seven-line adapter and holds no copy of the row markup. The swapped fragment carries its own
+`hx-trigger`, so it re-arms itself (there is a test for that). With JavaScript off the strip still
+renders, frozen at page load.
+
+Sign-up creates a `players` row alongside the Identity user (`public-lobby/Accounts/AccountService.cs`
+— the ONE place that happens); every later change to a player (display-name edits, `last_seen_at`,
+match aggregates) becomes WP1.2's `PlayerGrain`'s job.
+
+**Front-end build:** the web pages are styled with Tailwind CSS v4 (standalone CLI, no Node/npm — the
+`EnsureTailwindCss` MSBuild target in `PublicLobby.csproj` downloads the pinned binary into
+`tools/tailwind/` on first build and runs it against `Styles/app.css` to produce `wwwroot/app.css`;
+both are gitignored) plus [htmx](https://htmx.org) 2.0.9, vendored verbatim at
+`wwwroot/htmx.min.js` (committed, not downloaded at build time). Both work unmodified inside
+[`Dockerfile`](Dockerfile) — `dotnet publish` runs the same MSBuild target.
 
 ### The reachability probe
 
@@ -129,19 +206,23 @@ docker run -p 8091:8091 -e STUN_URL=stun:stun.cloudflare.com:3478 stellarallegia
 
 ## Pointing servers and clients at the lobby
 
-Both read **`PUBLIC_LOBBY`** (default `https://wivuu-public-lobby-production.up.railway.app`). A
+Both read **`PUBLIC_LOBBY`** (default `https://stellarlobby.wivuu.com`). A
 scheme prefix is optional — a bare `host:port` becomes `http://host:port`; pass `https://host` to
 use TLS (see below).
 
 - **Game server** — set `SIM_PUBLIC_NAME` (3–50 chars; gates registration) and
-  `PUBLIC_LOBBY=<lobby-host>:8091`. With `scripts/run-server.ps1` this is the default (no
-  `-Local`); the name defaults to the hostname. Forward the game port (default `8090`) to be
-  directly joinable; set `SIM_PUBLIC_PORT` if the forwarded external port differs.
-- **Client** — set `PUBLIC_LOBBY=<lobby-host>:8091` (or `--lobby host:port`). `scripts/run-client.ps1`
-  opens the lobby browser by default; it joins direct servers over WebSocket and NAT'd ones over
-  WebRTC automatically.
+  `PUBLIC_LOBBY=<lobby-host>:8091` (`.env` keys, or the `sim-public-name`/`public-lobby` AppHost
+  parameters). Under `aspire run` the server is already published, listed under your hostname
+  against the local lobby. Forward the game port (default `8090`) to be directly joinable; set
+  `SIM_PUBLIC_PORT` if the forwarded external port differs. First boot prints a device code and
+  stays unlisted until an Operator approves it (see "Identity: device codes…" below); the
+  credential persists to `SIM_AUTH_FILE` (default beside the sim-cache dir) so later restarts
+  re-list silently.
+- **Client** — set `PUBLIC_LOBBY=<lobby-host>:8091` (or `--lobby host:port`). `aspire resource
+  client launch --mode lobby` opens that lobby's server browser; it joins direct servers over
+  WebSocket and NAT'd ones over WebRTC automatically.
 
-The repo default is the hosted lobby at `https://wivuu-public-lobby-production.up.railway.app`;
+The repo default is the hosted lobby at `https://stellarlobby.wivuu.com`;
 override it (env, `.env`, or the code default in `ConnectionManager`/`LobbyRegistrar`) to point at
 your own lobby before sharing builds.
 
@@ -177,6 +258,7 @@ Registry:
 | `POST` | `/servers` | `{ name, port, publicEndpoint? }` | `400` if name not 3–50 chars. Lobby probes `port`; returns `{ server: { sessionId, publicEndpoint, iceServers, … }, secret }` (`publicEndpoint` null = WebRTC mode). `secret` is a per-session capability returned **only here** — never in the SSE/list — that the host echoes to mutate or close its listing. |
 | `GET` | `/servers/{sessionId}` | — | one entry, or `404`. |
 | `GET` | `/servers` | — | active server list (browser view); never includes `secret`. |
+| `GET` | `/servers/live` | — | **anonymous** SSE. Announces registry changes to the public web pages as the reduced `PublicServerStrip` projection (`PublicView.cs`) — server names, player counts, state badge, totals; never the session id, endpoint, ICE config or roster. One `snapshot` event on connect, one per change (identical snapshots suppressed), a keepalive comment every 20 s, and `503` past `PublicStreams.Max` concurrent streams. |
 | `DELETE` | `/servers/{sessionId}` | — | graceful removal on host shutdown. Requires `Authorization: Bearer <secret>`; a missing/wrong secret returns `404`. |
 
 Liveness + status come solely from the server WebSocket (`/servers/ws`): the host authenticates
@@ -191,3 +273,141 @@ Signaling (relays opaque SDP; long-polls so a join settles in ~one round trip):
 | `GET` | `/servers/{sessionId}/pending` | — | game server long-polls for offers. |
 | `POST` | `/connect/{ticket}/answer` | `{ sdpAnswer }` | game server posts its answer. |
 | `GET` | `/connect/{ticket}/answer` | — | client long-polls; `200` with answer, or `204` if not ready. |
+
+## Identity: device codes, sessions, dev login (WP1.1)
+
+Both the Godot client and a game server sign in with one RFC 8628 device-code flow:
+`POST /auth/device` (`{client:"godot"}` or `{client:"sim-server", serverName}`) returns a
+`user_code` and `verification_uri_complete`; the operator opens it, signs in on the web, and clicks
+Approve on `/device`; the peer polls `POST /auth/token` (`grant_type=urn:ietf:params:oauth:grant-type:device_code`,
+JSON or form-encoded) until it gets an access token (15 min, opaque) plus a refresh token (rotates on
+use, 90-day sliding window; reusing a rotated-away refresh token revokes the whole lineage).
+`POST /auth/revoke` with the bearer signs out. Approving a *server* code mints the durable Game
+Server owned by the approving player (its operator).
+
+`AUTH_DEV_LOGIN=true` (dev boxes and the test suite only — never production) enables two shortcuts:
+`grant_type=dev` + `display_name` on `POST /auth/token` mints a player session with no browser step,
+and `GET /login/dev?displayName=…` signs the browser in as that player (cookie).
+
+Routes live in `Auth/AuthEndpoints.cs`; the grains are `Grains/SessionGrain.cs` (one per login
+lineage) and `Grains/DeviceCodeGrain.cs`; bearer auth is the `LobbyBearer` scheme
+(`Auth/LobbyBearerAuthentication.cs`, per-silo 60 s cache) with policies `lobby-player` /
+`lobby-server`.
+
+## Profiles and the ladder (WP1.2)
+
+`GET /api/me` (player bearer) returns the profile (`PlayerProfileDto`: display name, admin flag,
+linked logins, aggregates); `PATCH /api/me {displayName}` renames (400 length, 409 taken). Both go
+through `Grains/PlayerGrain.cs`, the single writer of the `players` row, which serves repeat reads
+from memory. `/ladder` (global, ranked-counted aggregates), `/players/{name}` (public profile +
+recent matches) and the `/me` rename form read through `Grains/QueryGrain.cs`, a per-silo
+`[StatelessWorker(1)]` over a no-tracking context with a 5 s cache on lists.
+
+## Listings: Verified vs Unverified (WP1.4)
+
+The **HTTP API (reference)** table above predates identity — the listing routes now require the
+bearer tokens from the previous section. This section supersedes it for `/servers` and
+`/servers/events`.
+
+A **Listing** (`public-lobby/CONTEXT.md`) is a game server's live registration; whether it's
+**Verified** depends entirely on how `POST /servers` was authenticated, never on anything the
+request body claims:
+
+| Caller | Result |
+|---|---|
+| Server bearer (from the device-code flow, `client:"sim-server"`) | `201`, **Verified**: the listing is bound to that Game Server's id and its Operator's current display name (`gameServerId`, `operatorName` in the response); also bumps `GameServerGrain.LastListedAt`. |
+| Player bearer | `403` — players don't list servers. |
+| No bearer, or an invalid one | **Unverified** only when `ALLOW_UNVERIFIED_SERVERS=true` (default `false`): `201` with `verified:false`, `gameServerId:null`, `operatorName:null`. Otherwise `401 {"error":"unverified servers are not accepted"}`. |
+
+An Unverified listing has no Operator, never receives join tokens (WP1.3/WP2.2), and can never
+deliver match results — it behaves exactly like today's open registration, gated behind one env
+var so an operator has to opt in. `ALLOW_UNVERIFIED_SERVERS` is meant for local dev and harnesses
+(`--anonymous`/`--autofly` don't touch listing at all — this only affects a server that sets
+`SIM_PUBLIC_NAME`); leave it unset on a production lobby.
+
+Reads are gated too (plan §1.5 — "anonymous sees no server list"): `GET /servers` and
+`GET /servers/events` both require a **player** bearer now, Verified and Unverified listings alike.
+The one public read is `GET /servers/live`, which carries only what "/" and "/ladder" already
+render — the busiest few listings by name, player count and state, plus the totals (see the
+**live server strip** below). It exists so a visitor without an account can see that a match is
+running; the browsable list, and every field a client needs to actually dial a server, stay gated.
+`DELETE /servers/{sessionId}` and the server WebSocket (`/servers/ws`) are unchanged — they still
+authenticate with the per-listing `secret` from the `POST /servers` response, not a player/server
+bearer. Every roster entry (heartbeats, `/servers/ws` `update` frames) now carries an optional
+`playerId` — set once join tokens carry player identity onto the sim server (WP2.2), null for an
+Anonymous Join until then.
+
+See `public-lobby/Contracts.cs` (`RegisterRequest`/`ServerEntry`/`LobbyRosterEntry`) and
+`public-lobby/ServerRegistry.cs` (`ListingIdentity`) for the exact shapes, and
+`tests/PublicLobbyTest/ListingTests.cs` for the auth-decision coverage above.
+
+## The admin console (WP4.3)
+
+`/admin` is the whole moderation surface, cookie-authenticated and gated on the admin role
+(`LOBBY_ADMINS` at sign-in). It is entirely server-rendered — the tabs, the filter chips and the
+dialogs are all query-string states of the same pages, so every state has a URL and every mutation is
+an ordinary antiforgery-protected form POST.
+
+| Path | What it is |
+|---|---|
+| `/admin?tab=servers\|players\|matches&q=&filter=` | the console: three searchable lists, the Ranked toggle, Ban/Unban |
+| `/admin/servers/{id}` | one game server: operator, current Listing (with "Drop listing"), Ranked standing, recent matches, ban, and — for an orphan — reassign its operator |
+| `/admin/players/{id}` | one player: identity, servers operated, recent matches, ban, and complete deletion |
+| `/admin/matches/{id}` | one match, read-only: facts, both teams, who flew for them |
+
+**Ban** (`CONTEXT.md`) is reversible, carries a reason, and either expires or does not; expiry is
+evaluated when it is read, so nothing sweeps. What it stops:
+
+| Subject | Where it bites |
+|---|---|
+| Player | every bearer request (`LobbyBearerHandler` fails the token — so join tokens, `GET /servers` and the SSE stream all stop, the last of them at its next keepalive); `POST /auth/token` (`access_denied`); every cookie sign-in path; approving a device code; renaming |
+| Game server | `POST /servers`, `POST /matches`, `POST /matches/{id}/result`, and join tokens for its listings — all **403**, never 401, because a sim server reads a 401 as "refresh and retry" and an `invalid_grant` as "re-pair from scratch". Its live listing is dropped the moment the ban lands. |
+
+A banned operator's servers are refused too, which is the durable half: an operator can always
+re-pair a banned game server under a fresh id, but not under a banned account. Note that a result a
+banned server tries to report is dropped for good — its spool treats 403 as terminal — which is the
+point of the ban.
+
+**Deleting a player** is the one irreversible action, offered only on that player's own page behind
+a typed confirmation of the whole name (case-insensitive). It erases the account, its Identity
+rows (external logins, passkeys, roles, tokens — cascaded from `asp_net_users`), its sessions and
+its ladder entry.
+Two things deliberately survive:
+
+- **`join_tokens_issued` rows.** They are the plausibility evidence *every* pilot in a result must
+  have, and one missing row rejects the whole result — deleting a player mid-match would otherwise
+  cost everyone else in it the game.
+- **Their game servers**, orphaned rather than removed, because every match they reported points at
+  their id. An orphan is refused a listing until an admin reassigns it on its own page.
+
+Their pilot lines go one of two ways, chosen in the dialog: anonymised to a `Deleted pilot …`
+tombstone so each match still adds up, or erased outright.
+
+There is no admin action log: who banned whom, when and why lives on the banned row and shows in its
+banner. A deletion leaves no trace at all.
+
+## Join tokens (WP1.3)
+
+`POST /servers/{listingId}/join` (player bearer) returns a 60 s, single-use ES256 JWT for ONE
+Verified listing (`aud` = listing id, `sub` = player id, `name`, `jti`; 404 for unknown/Unverified
+listings). Keys live only in `signing_keys` (`Grains/SigningKeyGrain.cs`); the public half is at
+`/.well-known/jwks.json` (cache 60 s; retired keys stay 10 min). Every issuance is recorded in
+`join_tokens_issued` and moves the player's presence (`players.current_listing_id`). The game server
+verifies offline with `server/Net/JoinTokenVerifier.cs` (JWKS fetched at registration and on an
+unknown `kid`, once per 30 s; `jti` replay window).
+
+## Match ingestion (WP2.4)
+
+Game servers report with their bearer: `POST /matches` `{matchId, listingId, map, startedAt}` at
+match start (202; repeat → 200; the game server id is always the bearer's) and
+`POST /matches/{matchId}/result` (plan §3.3 payload) at the end → 202 accepted, 409 already
+final (ended or abandoned), 422 implausible (a pilot without a player id, or one never issued a
+join token for that game server up to 5 min after `endedAt`), 403 wrong game server. A result for
+a match that was never started is accepted (the spool may deliver out of order). Only
+`endReason=win-condition` with a winner is **counted**; the **ranked** flag is snapshotted at
+acceptance from `RANKED_RESULTS` (`flagged` default = the server's admin-set Ranked flag;
+`authenticated` = every verified server) and only ranked matches move `players` aggregates (the
+global ladder); every ended match feeds the per-server ladder. `Grains/MatchGrain.cs` is the single
+writer of `matches` / `match_teams` / `match_pilots` and registers an Orleans reminder (5 min) that
+marks a match **abandoned** once its listing has been gone for 10 min. `/servers/{gameServerId}/history`
+shows a server's matches and ladder.

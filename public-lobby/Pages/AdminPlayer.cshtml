@@ -1,0 +1,321 @@
+@page "/admin/players/{id:guid}"
+@using PublicLobby.Grains
+@model PublicLobby.Pages.AdminPlayerModel
+@{
+    var p = Model.Player;
+    ViewData["Title"] = $"{p.DisplayName} — Admin";
+}
+
+<div class="mx-auto max-w-3xl space-y-6">
+    <a href="/admin?tab=players" class="block text-[13px] text-text-2 hover:text-text-hi">&larr; Admin &middot; Players</a>
+
+    <section class="space-y-1.5">
+        <h1 class="flex flex-wrap items-center gap-2.5 font-ui text-2xl font-bold text-text-hi">
+            @p.DisplayName
+            @if (p.IsAdmin)
+            {
+                <span class="rounded border border-accent/40 bg-accent/10 px-2 py-px text-xs font-medium text-accent">Admin</span>
+            }
+            @if (Model.Banned)
+            {
+                <span class="rounded border border-danger/40 bg-danger/10 px-2 py-px text-xs font-medium text-danger">Banned</span>
+            }
+            else
+            {
+                <span class="rounded border border-ok/35 px-2 py-px text-xs font-medium text-ok">Active</span>
+            }
+        </h1>
+        <p class="text-xs text-text-dim">
+            <span class="font-mono">@p.Id</span>
+            &middot; registered @p.CreatedAt.ToString("yyyy-MM-dd")
+            &middot; last seen @p.LastSeenAt.ToString("yyyy-MM-dd HH:mm") UTC
+            &middot; <a class="text-text-2 hover:text-accent" href="/players/@Uri.EscapeDataString(p.DisplayName)">public profile</a>
+        </p>
+    </section>
+
+    @if (Model.Banned)
+    {
+        <section class="flex items-start justify-between gap-4 rounded border border-danger/40 bg-danger/10 px-3.5 py-3">
+            <div class="space-y-0.5">
+                <span class="block text-sm font-semibold text-danger">Banned @Model.BanBannerWindow</span>
+                <span class="block text-[13px] leading-relaxed text-text-2">
+                    @Model.BanReasonShown &mdash; by @Model.Ban!.ByDisplayName, @Model.Ban!.At.ToString("yyyy-MM-dd HH:mm") UTC
+                </span>
+            </div>
+            <form method="post" asp-page-handler="Unban" class="shrink-0">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@p.Id" />
+                <button type="submit" class="rounded border border-panel-hi bg-panel px-3 py-1.5 text-[13px] text-text-2 hover:border-accent hover:text-text-hi">Lift ban</button>
+            </form>
+        </section>
+    }
+
+    <section class="grid grid-cols-3 gap-3 font-mono text-data sm:grid-cols-6">
+        @foreach (var stat in Model.Stats)
+        {
+            <div class="rounded border border-panel-hi bg-panel px-3 py-2">
+                <div class="font-ui text-[10px] uppercase tracking-wide text-text-dim">@stat.Label</div>
+                <div class="text-lg">@stat.Value</div>
+            </div>
+        }
+    </section>
+
+    <section class="space-y-2">
+        <h2 class="text-sm font-semibold text-text-2">Identity</h2>
+        @if (Model.Logins.Count == 0 && Model.Passkeys.Count == 0)
+        {
+            <p class="text-sm text-text-dim">No external login or passkey is linked &mdash; this account exists only through the dev grant.</p>
+        }
+        else
+        {
+            <div class="overflow-hidden rounded border border-panel-hi">
+                @foreach (var login in Model.Logins)
+                {
+                    <div class="flex items-center justify-between gap-3 border-t border-panel-hi/60 px-3.5 py-2 text-sm first:border-t-0">
+                        <span class="flex min-w-0 items-center gap-2">
+                            <span class="text-text-hi">@login.LoginProvider</span>
+                            <span class="truncate font-mono text-xs text-text-dim">@PublicLobby.Pages.AdminPlayerModel.LoginDetail(login)</span>
+                        </span>
+                    </div>
+                }
+                @foreach (var key in Model.Passkeys)
+                {
+                    <div class="flex items-center justify-between gap-3 border-t border-panel-hi/60 px-3.5 py-2 text-sm first:border-t-0">
+                        <span class="flex min-w-0 items-center gap-2">
+                            <span class="text-text-hi">Passkey</span>
+                            <span class="truncate text-xs text-text-dim">@(string.IsNullOrWhiteSpace(key.Name) ? "unnamed" : key.Name)</span>
+                        </span>
+                        <span class="shrink-0 font-mono text-xs text-text-dim">linked @key.CreatedAt.ToString("yyyy-MM-dd")</span>
+                    </div>
+                }
+            </div>
+        }
+        <p class="text-xs text-text-dim">@Model.IdentityLine</p>
+    </section>
+
+    <section class="space-y-2">
+        <h2 class="text-sm font-semibold text-text-2">Game servers operated</h2>
+        @if (Model.View.Servers.Length == 0)
+        {
+            <p class="text-sm text-text-dim">They operate no game servers.</p>
+        }
+        else
+        {
+            <div class="overflow-hidden rounded border border-panel-hi">
+                @foreach (var server in Model.View.Servers)
+                {
+                    <div class="flex items-center justify-between gap-4 border-t border-panel-hi/60 px-3.5 py-2.5 first:border-t-0">
+                        <div class="flex min-w-0 flex-col gap-1.5">
+                            <div class="flex items-center gap-2">
+                                <a class="text-[15px] font-semibold text-text-hi hover:text-accent" href="/admin/servers/@server.Id">@server.Name</a>
+                                @if (server.Ranked)
+                                {
+                                    <span class="rounded border border-accent/40 bg-accent/10 px-1.5 py-px text-xs text-accent">Ranked</span>
+                                }
+                                else
+                                {
+                                    <span class="rounded border border-panel-hi bg-panel px-1.5 py-px text-xs text-text-dim">Unranked</span>
+                                }
+                                @if (server.Ban.IsBanned(Model.Now))
+                                {
+                                    <span class="rounded border border-danger/40 bg-danger/10 px-1.5 py-px text-xs text-danger">Banned</span>
+                                }
+                            </div>
+                            <span class="text-[13px] text-text-dim">
+                                @Model.ListedLine(server) &middot; <span class="font-mono text-data">@server.Matches.ToString("N0")</span> @(server.Matches == 1 ? "match" : "matches")
+                            </span>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </section>
+
+    <section class="space-y-2">
+        <h2 class="text-sm font-semibold text-text-2">Recent matches</h2>
+        @if (Model.View.Recent.Length == 0)
+        {
+            <p class="text-sm text-text-dim">No matches recorded yet.</p>
+        }
+        else
+        {
+            <div class="overflow-x-auto rounded border border-panel-hi">
+                <table class="w-full text-sm">
+                    <thead class="bg-panel text-left text-xs uppercase tracking-wide text-text-dim">
+                        <tr>
+                            <th class="px-3 py-2">When</th>
+                            <th class="px-3 py-2">Map</th>
+                            <th class="px-3 py-2">Server</th>
+                            <th class="px-3 py-2">Result</th>
+                            <th class="w-[40px] px-3 py-2 text-right">K</th>
+                            <th class="w-[40px] px-3 py-2 text-right">D</th>
+                            <th class="w-[44px] px-3 py-2 text-right">EJ</th>
+                            <th class="w-[52px] px-3 py-2 text-right">Pts</th>
+                        </tr>
+                    </thead>
+                    <tbody class="font-mono text-data">
+                        @foreach (var m in Model.View.Recent)
+                        {
+                            var result = Model.Result(m);
+                            <tr class="border-t border-panel-hi/60 hover:bg-panel">
+                                <td class="px-3 py-2 text-xs text-text-dim">@m.StartedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td class="px-3 py-2 font-ui"><a class="text-text-hi hover:text-accent" href="/admin/matches/@m.MatchId">@m.Map</a></td>
+                                <td class="px-3 py-2 font-ui text-text-2">@m.GameServerName</td>
+                                <td class="px-3 py-2 font-ui text-[13px] @result.Css">@result.Label</td>
+                                <td class="px-3 py-2 text-right">@m.Kills</td>
+                                <td class="px-3 py-2 text-right">@m.Deaths</td>
+                                <td class="px-3 py-2 text-right">@m.Ejects</td>
+                                <td class="px-3 py-2 text-right">@m.Points</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <section class="space-y-3 rounded border border-danger/30 p-4">
+        <h2 class="text-sm font-semibold uppercase tracking-[1px] text-danger">Danger zone</h2>
+        <div class="flex items-center justify-between gap-5">
+            <div class="space-y-0.5">
+                <span class="block text-sm font-semibold text-text-hi">@Model.BanPanel.Title</span>
+                <span class="block text-[13px] leading-relaxed text-text-2">@Model.BanPanel.Blurb</span>
+            </div>
+            @if (Model.IsSelf)
+            {
+                <span></span>
+            }
+            else if (Model.Banned)
+            {
+                <form method="post" asp-page-handler="Unban" class="shrink-0">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@p.Id" />
+                    <button type="submit" class="rounded border border-danger/40 bg-danger/10 px-3.5 py-1.5 text-[13px] font-medium text-danger hover:bg-danger/20">@Model.BanPanel.Button</button>
+                </form>
+            }
+            else
+            {
+                <a href="/admin/players/@p.Id?ban=true" class="shrink-0 rounded border border-danger/40 bg-danger/10 px-3.5 py-1.5 text-[13px] font-medium text-danger hover:bg-danger/20">@Model.BanPanel.Button</a>
+            }
+        </div>
+
+        @if (!Model.IsSelf)
+        {
+            <div class="h-px bg-danger/20"></div>
+            <div class="flex items-center justify-between gap-5">
+                <div class="space-y-0.5">
+                    <span class="block text-sm font-semibold text-text-hi">Delete this player completely</span>
+                    <span class="block text-[13px] leading-relaxed text-text-2">
+                        Erases the account and everything that identifies it. Irreversible, and the display name goes back into circulation.
+                    </span>
+                </div>
+                <a href="/admin/players/@p.Id?confirm=delete" class="shrink-0 rounded border border-danger/40 bg-danger/10 px-3.5 py-1.5 text-[13px] font-medium text-danger hover:bg-danger/20">Delete&hellip;</a>
+            </div>
+        }
+    </section>
+</div>
+
+@if (Model.ShowBanDialog && !Model.Banned && !Model.IsSelf)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-void/[0.78] p-6">
+        <form method="post" asp-page-handler="Ban" class="flex w-[470px] flex-col gap-3.5 rounded border border-panel-hi bg-panel p-5">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="id" value="@p.Id" />
+            <div class="space-y-1.5">
+                <h3 class="text-[17px] font-bold text-text-hi">Ban @p.DisplayName</h3>
+                <p class="text-[13px] leading-relaxed text-text-2">
+                    The player cannot sign in, receive join tokens or pair a new game server while the ban is in force.
+                    Their ladder standing and match history stay as they are.
+                </p>
+            </div>
+            <div class="space-y-1.5">
+                <label for="ban-reason" class="block text-xs font-semibold uppercase tracking-[1px] text-text-dim">Reason (recorded, shown to the player at sign-in)</label>
+                <input id="ban-reason" name="reason" autocomplete="off" maxlength="200" placeholder="e.g. repeated team-killing after warnings"
+                       class="w-full rounded border border-panel-hi bg-panel-deep px-3 py-2 text-sm text-text-hi placeholder:text-text-dim focus:border-accent focus:outline-none" />
+            </div>
+            <fieldset class="space-y-1.5">
+                <legend class="text-xs font-semibold uppercase tracking-[1px] text-text-dim">Duration</legend>
+                <div class="flex gap-1.5">
+                    @foreach (var d in AdminModeration.Durations)
+                    {
+                        <label class="flex-1 cursor-pointer rounded border border-panel-hi bg-panel-deep py-1.5 text-center text-[13px] font-medium text-text-2 has-checked:border-danger/40 has-checked:bg-danger/10 has-checked:text-danger">
+                            <input type="radio" name="duration" value="@d.Id" class="sr-only" checked="@(d.Id == AdminModeration.DefaultDuration)" />
+                            @d.Label
+                        </label>
+                    }
+                </div>
+            </fieldset>
+            <p class="border-l-2 border-warn/50 pl-2.5 text-xs leading-relaxed text-text-dim">@Model.BanDialogEffect</p>
+            <div class="flex items-center justify-end gap-2.5 pt-0.5">
+                <a href="/admin/players/@p.Id" class="px-3 py-2 text-sm text-text-2 hover:text-text-hi">Cancel</a>
+                <button type="submit" class="rounded bg-danger px-4 py-2 text-sm font-semibold text-void hover:bg-danger/85">Ban player</button>
+            </div>
+        </form>
+    </div>
+}
+
+@if (Model.ShowDeleteDialog && !Model.IsSelf)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-void/[0.82] p-6">
+        <div class="bracket-frame w-[520px] p-1">
+            <form method="post" asp-page-handler="Delete" class="flex flex-col gap-3.5 border border-danger/30 bg-panel p-5">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@p.Id" />
+
+                <div class="space-y-1.5">
+                    <h3 class="text-[17px] font-bold text-text-hi">Delete @p.DisplayName completely</h3>
+                    <p class="text-[13px] leading-relaxed text-text-2">
+                        Everything that identifies this player is erased. There is no undo and no grace period &mdash;
+                        if you only want them off the servers for a while, ban them instead.
+                    </p>
+                </div>
+
+                <div class="space-y-1.5">
+                    <span class="block text-xs font-semibold uppercase tracking-[1px] text-text-dim">Erased immediately</span>
+                    @foreach (var line in Model.Erased)
+                    {
+                        <span class="flex items-start gap-2 text-[13px] leading-relaxed text-text-hi">
+                            <span class="text-danger">&minus;</span>@line
+                        </span>
+                    }
+                </div>
+
+                <fieldset class="space-y-1.5">
+                    <legend class="text-xs font-semibold uppercase tracking-[1px] text-text-dim">@Model.LedgerHeading</legend>
+                    @foreach (var option in Model.LedgerOptions)
+                    {
+                        <label class="flex cursor-pointer items-start gap-2.5 rounded border border-panel-hi bg-panel-deep px-3 py-2.5 has-checked:border-danger/40 has-checked:bg-danger/[0.08]">
+                            <input type="radio" name="mode" value="@option.Id" class="mt-1 size-3 accent-danger" checked="@(option.Id == Model.LedgerChoice)" />
+                            <span class="flex flex-col gap-0.5">
+                                <span class="text-[13px] font-semibold text-text-hi">@option.Title</span>
+                                <span class="text-xs leading-relaxed text-text-2">@option.Blurb</span>
+                            </span>
+                        </label>
+                    }
+                </fieldset>
+
+                @if (Model.DeleteServersNote is { } note)
+                {
+                    <p class="border-l-2 border-warn/50 pl-2.5 text-xs leading-relaxed text-text-dim">@note</p>
+                }
+
+                <div class="space-y-1.5">
+                    <label for="confirm-name" class="block text-xs font-semibold text-text-dim">
+                        Type <span class="font-mono text-danger">@p.DisplayName</span> to confirm
+                    </label>
+                    <input id="confirm-name" name="confirmName" autocomplete="off" spellcheck="false" placeholder="Display name"
+                           class="w-full rounded border border-panel-hi bg-panel-deep px-3 py-2 font-mono text-sm text-text-hi placeholder:text-text-dim focus:border-accent focus:outline-none" />
+                    @if (Model.DeleteError is { } error)
+                    {
+                        <p class="text-[13px] text-danger">@error</p>
+                    }
+                </div>
+
+                <div class="flex items-center justify-end gap-2.5 pt-0.5">
+                    <a href="/admin/players/@p.Id" class="px-3 py-2 text-sm text-text-2 hover:text-text-hi">Cancel</a>
+                    <button type="submit" class="rounded bg-danger px-4 py-2 text-sm font-semibold text-void hover:bg-danger/85">Delete permanently</button>
+                </div>
+            </form>
+        </div>
+    </div>
+}

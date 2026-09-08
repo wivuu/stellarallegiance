@@ -55,7 +55,8 @@ public partial class UiShowcase : Control
 
     // `--ui-shot[=path]` renders one frame and saves a PNG, for screenshot verification.
     // `--ui-scroll=<px>` scrolls the gallery down first so below-the-fold sections land in shot.
-    // `--ui-open=settings|escape` opens that modal before the shot (dialog verification).
+    // `--ui-open=settings|escape|password|password-error|signin|account` opens that modal before the shot
+    // (dialog verification).
     private void MaybeCaptureAndQuit()
     {
         string? outPath = null;
@@ -90,6 +91,10 @@ public partial class UiShowcase : Control
                 ServerPasswordModal.Open(this, "IRON VEIL BASTION", _ => { });
             else if (openModal == "password-error")
                 ServerPasswordModal.Open(this, "IRON VEIL BASTION", _ => { }, error: true);
+            else if (openModal == "signin")
+                SignInDialog.Open(this);
+            else if (openModal == "account")
+                AccountDialog.Open(this);
             var shotTimer = GetTree().CreateTimer(0.2);
             shotTimer.Timeout += () =>
             {
@@ -695,7 +700,9 @@ public partial class UiShowcase : Control
         var s = Section(parent, "09 — MODALS");
         s.AddChild(
             UiKit.MakeLabel(
-                "SettingsDialog (audio / controls / pilot) and EscapeMenu (pause) — open live over the gallery; Esc dismisses.",
+                "SettingsDialog (audio / controls / pilot), EscapeMenu (pause), and SignInDialog (account "
+                    + "sign-in) — open live over the gallery; Esc dismisses. SignInDialog has no AuthSession "
+                    + "service under the showcase, so it renders its static placeholder state only.",
                 UiKit.TextStyle.Body,
                 DesignTokens.Text2
             )
@@ -710,6 +717,8 @@ public partial class UiShowcase : Control
                 ButtonVariant.Ghost
             )
         );
+        row.AddChild(UiKit.MakeButton("OPEN SIGN-IN DIALOG", () => SignInDialog.Open(parent), ButtonVariant.Ghost));
+        row.AddChild(UiKit.MakeButton("OPEN ACCOUNT DIALOG", () => AccountDialog.Open(parent), ButtonVariant.Ghost));
         s.AddChild(row);
     }
 

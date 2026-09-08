@@ -16,7 +16,7 @@ lobby. Clients connect directly to a server by `ip:port` and download everything
 ```
 client/        Godot 4.7 (C#/.NET 10) — rendering, input, client-side prediction
 server/        .NET 10 console — authoritative 20 Hz sim + lobby host (the only gameplay authority)
-public-lobby/  .NET 10 web — PUBLIC LOBBY: game-server registry + WebRTC signaling relay
+public-lobby/  .NET 10 web — PUBLIC LOBBY: player accounts + game-server registry + WebRTC signaling + match ladder (Postgres/Orleans)
 shared/        deterministic FlightModel + content defs, compiled into BOTH client and server
 tools/         simbot (load bot swarm), asteroid-gen (mesh catalog)
 tests/         ~20 test suites (FlightModel determinism/golden, Crypto, …) + factions/tests
@@ -29,76 +29,92 @@ by both sides so their physics and content stay bit-identical.
 ## Prerequisites
 
 - **.NET 10 SDK** (`dotnet --version` ≥ 10) — newer SDKs work too.
-**Godot 4.7 — Mono/.NET build**, to run the client. The scripts auto-detect it from your
-  PATH (`godot-mono`/`godot4`/`godot`) and standard install locations; pin a non-standard
-  install per-workstation with `dotnet user-secrets` (or a one-off `GODOT` env var) — see
-  [Dev setup](#dev-setup-vs-code-tasks).
-- **PowerShell 7+ (`pwsh`)** — required to run the repo scripts and VS Code tasks on all
-  platforms. Preinstalled on Windows; on macOS/Linux install it (`brew install powershell`
-  or your package manager's `apt`/`dnf` package).
-- Optional: **Docker** (to run the server via `docker compose`).
+- **Aspire CLI** — `dotnet tool install -g Aspire.Cli` or
+  `curl -sSL https://aspire.dev/install.sh | bash`. Orchestrates the local stack (`aspire run`).
+- **Docker** — runs the local Postgres container the public lobby needs.
+- **Godot 4.7 — Mono/.NET build**, to run the client. Auto-detected from the `GODOT` env var, the
+  `godot.executablePath` user secret, PATH, or standard install locations; the Aspire dashboard
+  prompts for the path (and offers to save it to user secrets) if none of those resolve.
+- **PowerShell 7+ (`pwsh`)** — only needed now for `scripts/export-clients.ps1` and the `tools/*.ps1`
+  helpers. Preinstalled on Windows; on macOS/Linux install it (`brew install powershell` or your
+  package manager's `apt`/`dnf` package).
 
 ## Quick start (local)
 
-Two terminals from the repo root. For purely local dev, pass `-Local` to both:
+From the repo root:
 
-```pwsh
-# 1. start the server (local-only, port 8090, lobby ready-up)
-scripts/run-server.ps1 -Local
-
-# 2. launch the client (connects straight to localhost:8090)
-scripts/run-client.ps1 -Local
+```bash
+aspire run
 ```
+
+This brings up a Postgres container, applies the lobby's migrations, then the public lobby
+(`http://localhost:8091`) and the sim server (`ws://localhost:8090/game`), and opens the Aspire
+dashboard. In the dashboard, click **Start** on the `client` resource to build and launch the
+Godot client (it opens the local lobby's server browser; parameter `client-mode` = `direct`
+dials `localhost:8090` instead).
 
 Pick a side, ready up, and the match starts.
 
-**Public lobby (the default).** Without `-Local`, `run-server.ps1` publishes the server to the
-public lobby (`PUBLIC_LOBBY`, default `https://wivuu-public-lobby-production.up.railway.app`) under your hostname — override the
-name with `SIM_PUBLIC_NAME="My Server"`. And `run-client.ps1` opens the **server browser** against
-that lobby so you can pick a server (or still type an address for a direct connect). See
-[Public lobby & NAT traversal](#public-lobby--nat-traversal).
+**Against the hosted lobby instead.** To publish a server to, or browse, the real public lobby
+(`https://stellarlobby.wivuu.com`) without the local stack, use the scripts:
+`scripts/run-server.ps1` (publishes under your hostname; `-Local` = private) and
+`scripts/run-client.ps1` (hosted server browser; `-Local` = direct `localhost:8090`). See
+[scripts/README.md](scripts/README.md).
 
-Solo testing tip: run the server with `scripts/run-server.ps1 -Local --autostart` to skip the
-ready-up gate and start a perpetual match immediately.
+**Configuration.** The root `.env` (see `.env.example`) is read by both `docker compose` and the
+AppHost: every `KEY=VALUE` becomes an AppHost parameter (kebab-cased, e.g. `SIM_AUTOSTART=1` →
+parameter `sim-autostart`). Anything left unresolved is prompted for in the dashboard and can be
+saved to user secrets. Local defaults turn on the lobby's dev login and register the server under
+your machine's hostname; it stays **unlisted** (direct-connect only) until you approve its device
+code — `aspire resource lobby approve-device-code --user-code XXXX-XXXX` (or the button on the
+`lobby` resource) — after which it is Verified and clients join through the lobby browser. The
+local stack always talks to the local lobby; the `lobby-public-url`/`public-lobby` parameters only
+feed Railway deploys. See
+[Public lobby & NAT traversal](#public-lobby--nat-traversal). Accounts, Verified servers, the ladder and how to deploy them: [docs/LOBBY-ACCOUNTS-AND-RANKING.md](docs/LOBBY-ACCOUNTS-AND-RANKING.md).
+
+**Accounts.** On first launch the client asks you to sign in: it shows a short code and opens the
+lobby's approval page in your browser (passkeys always work; Google/GitHub/Steam when the lobby has
+them configured). Signed in, you see the public server list with **VERIFIED** (authenticated,
+operator shown, results count on the ladder) and **UNVERIFIED** badges; joining a Verified server
+uses a single-use join token under your account name. *Continue without account* (or `--anonymous`)
+keeps direct-by-address joins only. The web pages (`/ladder`, `/players/<name>`, `/me`) live on the
+lobby.
+
+Solo testing tip: set `SIM_AUTOSTART=1` (parameter `sim-autostart`) to skip the ready-up gate and
+start a perpetual match immediately.
 
 See **[QUICKSTART.md](QUICKSTART.md)** for a step-by-step walkthrough and
 **[CONTRIBUTING.md](CONTRIBUTING.md)** for project layout, building, and tests.
 
 ## Dev setup (VS Code tasks)
 
-The repo scripts are wired up as VS Code tasks (`.vscode/tasks.json`). Run them with
+`.vscode/tasks.json` wires up the Aspire workflow as VS Code tasks. Run them with
 **Cmd/Ctrl+Shift+P → "Tasks: Run Task"**:
 
-| Task | Script | What it does |
-|------|--------|--------------|
-| **Run server** | `scripts/run-server.ps1` | Rebuild + run the sim server on :8090 (publishes to the public lobby; `-Local` to stay private). |
-| **Run client** | `scripts/run-client.ps1` | Rebuild + launch the Godot client (public lobby browser; `-Local` for direct localhost). |
+| Task | Command | What it does |
+|------|---------|--------------|
+| **Aspire: run** | `aspire run` | Start the whole local stack (Postgres, lobby, sim server) with the dashboard, in a dedicated background panel. |
+| **Aspire: launch client** | `aspire resource client launch --mode <direct\|lobby\|autofly>` | Build and launch an extra/custom Godot client (prompts for the mode). |
+| **Run server (public lobby)** | `scripts/run-server.ps1` | Build (Release) + run the sim server published to the **hosted** public lobby. |
+| **Run client (public lobby)** | `scripts/run-client.ps1` | Rebuild + launch a Godot client on the **hosted** lobby's server browser. |
 | **Export clients (all platforms)** | `scripts/export-clients.ps1` | Export macOS/Windows/Linux builds (macOS `.app` only when run on macOS). |
 | **Godot: import assets (if needed)** | `tools/godot-import.ps1` | Import GLB assets. Runs automatically on folder-open; a no-op unless something needs importing. |
 | **Godot: reimport assets (force)** | `tools/godot-import.ps1 -Force` | Force a full reimport after editing a `.glb`. |
 | **Asteroid-gen: build catalog** | `tools/asteroid-gen/build.ps1` | Regenerate the asteroid mesh catalog (Docker). |
 
-The same scripts run from a terminal — the tasks are just a convenient front-end.
+The same commands run from a terminal — the tasks are just a convenient front-end. The
+dashboard's own **Start**/**Launch client** buttons on the `client` resource cover the common case
+(a single client) without going through VS Code at all.
 
-**Godot path (configurable, not committed).** The scripts auto-detect Godot, so most setups
-need no configuration. To pin a non-standard install per-workstation, run the
-**"Godot: set executable path"** VS Code task (it prompts for the path), or equivalently:
+**Godot path (configurable, not committed).** Aspire auto-detects Godot from `GODOT`, the
+`godot.executablePath` user secret, PATH, or standard install locations, so most setups need no
+configuration; if none resolve, the dashboard prompts for the path and offers to save it to user
+secrets (`dotnet user-secrets set godot.executablePath "/path/to/Godot" --id stellarallegiance`,
+outside the repo — never committed, survives `git clean`).
 
-```powershell
-dotnet user-secrets set godot.executablePath "/path/to/Godot" --id stellarallegiance
-```
-
-The value lives in the `dotnet user-secrets` store (`%APPDATA%\Microsoft\UserSecrets` /
-`~/.microsoft/usersecrets`) — outside the repo, so it can never dirty a committed file, and it
-survives `git clean`. `scripts/godot-bin.ps1` reads it back on every launch. A one-off
-`$env:GODOT = '/path/to/Godot'` (or the `godot.executablePath` VS Code **User** setting) still
-takes precedence over the stored value. (The godot-tools extension's
-`godotTools.editorPath.godot4` is separate — set it in User settings; extensions can't read
-user-secrets.)
-
-**PowerShell 7+ required.** The scripts and VS Code tasks run under `pwsh`, which must be on
-your PATH. It's preinstalled on Windows; on macOS/Linux install it with `brew install powershell`
-or your package manager.
+**PowerShell 7+** is still needed for `scripts/export-clients.ps1` and the `tools/*.ps1` helpers
+(Godot import/export, asteroid-gen). It's preinstalled on Windows; on macOS/Linux install it with
+`brew install powershell` or your package manager.
 
 **GLB assets are one file each.** Only the `.glb` is committed (it embeds its own textures);
 Godot's `.import`/extracted-`.png` artifacts are gitignored and regenerated by the import task.
@@ -117,17 +133,19 @@ dotnet run    --project server -c Release -- --port 8090   # run the server dire
 ## Server options
 
 `dotnet run --project server -- [flags]` (also settable via env in `docker compose`, see
-`.env.example`):
+`.env.example`) — the same flags for a raw/perf-sensitive run outside Aspire:
 
-| Flag | Env | Effect |
-|------|-----|--------|
-| `--port N` | `SIM_PORT` | Listen port (default 8090). |
-| `--secret PW` | `SIM_SECRET` | Require a shared-secret password in every client Hello (open if unset). |
-| `--autostart` | `SIM_AUTOSTART=1` | Skip the lobby ready-up; run a perpetual match (bots/benchmarking). |
-| `--seed N` | — | World generation seed. |
+| Flag | Env | AppHost parameter | Effect |
+|------|-----|--------------------|--------|
+| `--port N` | `SIM_PORT` | `sim-port` | Listen port (default 8090). |
+| `--secret PW` | `SIM_SECRET` | `sim-secret` | Require a shared-secret password in every client Hello (open if unset). |
+| `--autostart` | `SIM_AUTOSTART=1` | `sim-autostart` | Skip the lobby ready-up; run a perpetual match (bots/benchmarking). |
+| `--seed N` | — | — | World generation seed. |
 
 The client reads `SIM_SECRET` (to send the password) and `PILOT_NAME` (lobby name) from the
-environment; `SIM_URI` is a dev override that connects to a full `ws://…/game` URL directly.
+environment; `SIM_URI` is a dev override that connects to a full `ws://…/game` URL directly. Under
+`aspire run`/`aspire start`, set the corresponding `.env` key (or override the parameter in the
+dashboard) instead of passing flags directly.
 
 ## Public lobby & NAT traversal
 
@@ -142,6 +160,12 @@ A player can reach a server two ways:
   (no traffic through the lobby). A server that isn't reachable (NAT, no port-forward) falls back
   to a **WebRTC DataChannel** (P2P hole-punching via public **STUN**), with only the SDP handshake
   relayed through the lobby. The same binary protocol rides both transports.
+- **Verified listings** — a server only lists as **Verified** (its Operator's display name shown as
+  "hosted by") once it authenticates with the lobby: first boot prints a one-time device code and
+  stays **unlisted** until approved at the printed URL (locally: `aspire resource lobby
+  approve-device-code --user-code XXXX-XXXX`); the resulting credential persists to
+  `SIM_AUTH_FILE` (`apphost/.local/server/` under Aspire) so later restarts re-list silently. See `public-lobby/README.md`'s "Identity:
+  device codes…" and "Listings: Verified vs Unverified".
 
 **There is no TURN relay** — the lobby never carries game traffic. The trade-off is that a client
 behind a symmetric NAT can't reach a *NAT'd* server; it can always join **direct** servers, so
@@ -151,9 +175,10 @@ port and your server is listed as directly joinable; don't, and it's listed as W
 | Flag/Env | Where | Effect |
 |----------|-------|--------|
 | `SIM_PUBLIC_NAME` | server | 3-50 char name; **gates** public-lobby registration (unset = private). |
-| `PUBLIC_LOBBY` | server + client | Lobby base — `host:port` or `https://domain` (default `https://wivuu-public-lobby-production.up.railway.app`). Client also takes `--lobby`. |
+| `PUBLIC_LOBBY` | server + client | Lobby base — `host:port` or `https://domain` (default `https://stellarlobby.wivuu.com`). Client also takes `--lobby`. |
 | `SIM_PUBLIC_PORT` | server | Public-facing port the lobby probes/advertises (default = listen port). |
 | `SIM_PUBLIC_ENDPOINT` | server | Optional address the server asserts as reachable — `host:port` (container NAT / proxy) or `https://domain` (a PaaS edge); advertised only if it answers `/health`. Auto-derives from `RAILWAY_PUBLIC_DOMAIN` on Railway. |
+| `SIM_AUTH_FILE` | server | Path to the persisted Game Server credential (device-code auth); default beside the sim-cache dir. Delete it to re-pair under a different Operator. |
 | `SHARE_PORT` | public-lobby | Listen port (default 8091; a PaaS `PORT` overrides it). |
 | `STUN_URL` | public-lobby | Public STUN URL(s) for the WebRTC fallback, comma-separated for redundancy (default Cloudflare's). |
 
@@ -179,8 +204,10 @@ docker run --rm -p 8090:8090 \
 
 ## Deployment
 
-See **[docs/DEPLOY.md](docs/DEPLOY.md)** for production (TLS termination, single-service deploy, and
-a one-project-each **Railway** recipe for the lobby + a game server).
+Deploy from the Aspire dashboard — **Deploy to Railway** on the `lobby` or `server` resource — or
+from the CLI: `aspire do deploy-lobby` / `aspire do deploy-server`. See
+**[docs/DEPLOY.md](docs/DEPLOY.md)** for production (TLS termination, single-service deploy, and
+the one-time manual Railway steps for the lobby + a game server).
 
 ## Documentation
 

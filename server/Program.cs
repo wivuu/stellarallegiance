@@ -85,8 +85,7 @@ static ulong RandomSeed()
     System.Security.Cryptography.RandomNumberGenerator.Fill(b);
     return BitConverter.ToUInt64(b);
 }
-ulong? pinnedSeed =
-    ulong.TryParse(Environment.GetEnvironmentVariable("SIM_SEED"), out var envSeed) ? envSeed : null;
+ulong? pinnedSeed = ulong.TryParse(Environment.GetEnvironmentVariable("SIM_SEED"), out var envSeed) ? envSeed : null;
 
 // Optional shared-secret password. Empty (default) = open server: any client may connect.
 string secret = Environment.GetEnvironmentVariable("SIM_SECRET") ?? "";
@@ -159,6 +158,7 @@ builder.WebHost.ConfigureKestrel(k => k.ListenAnyIP(port));
 var app = builder.Build();
 var loggerFactory = app.Services.GetRequiredService<ILoggerFactory>();
 var log = loggerFactory.CreateLogger("SimServer");
+
 // The static asset/content helpers have no instance to inject into — hand them the boot logger now,
 // before ContentLoader.Load (which merges GLB hardpoints and loads sim models) runs below.
 SimAssets.Logger = loggerFactory.CreateLogger("SimServer.Assets");
@@ -178,12 +178,20 @@ try
 }
 catch (Exception ex)
 {
-    Console.Error.WriteLine($"[SimServer] FATAL: failed to load content '{contentPath}' / world '{worldPath}': {ex.Message}");
+    Console.Error.WriteLine(
+        $"[SimServer] FATAL: failed to load content '{contentPath}' / world '{worldPath}': {ex.Message}"
+    );
     return;
 }
 var contentErrors = ContentValidator.Validate(
-    content.Ships, content.Weapons, content.Bases, content.CargoItems,
-    content.Techs, content.Developments, content.StationCatalog);
+    content.Ships,
+    content.Weapons,
+    content.Bases,
+    content.CargoItems,
+    content.Techs,
+    content.Developments,
+    content.StationCatalog
+);
 if (contentErrors.Count > 0)
 {
     Console.Error.WriteLine($"[SimServer] FATAL: content validation failed ({contentErrors.Count} error(s)):");
@@ -207,7 +215,15 @@ if (autoStart)
 IAuthenticator auth = secret.Length == 0 ? new OpenAuthenticator() : new SharedSecretAuthenticator(secret);
 IPlayerDirectory players = new InMemoryPlayerDirectory();
 IMatchmaker matchmaker = new ReadyUpMatchmaker(autoStart);
+
+// Match reporting (plan §1.3): private servers only log; a lobby-published server gets the spooling
+// LobbyMatchReporter below, once its registrar (= lobby identity) exists. The sim loop captures
+// `results` by reference, so the swap happens before the loop thread starts.
 IMatchResultSink results = new LoggingMatchResultSink(loggerFactory.CreateLogger<LoggingMatchResultSink>());
+LobbyMatchReporter? matchReporter = null;
+
+// The Listing the CURRENT match started under (null = unlisted at start → never reported).
+string? matchListingId = null;
 
 // MAP: load the available maps (stock + operator-supplied), resolve the selected one by name, and
 // overlay its sector layout onto the world config. Fail fast (like content) on a bad/nameless map
@@ -215,6 +231,7 @@ IMatchResultSink results = new LoggingMatchResultSink(loggerFactory.CreateLogger
 MapDef selectedMapDef;
 IReadOnlyList<MapCatalogEntry> mapCatalog;
 IReadOnlyDictionary<string, MapDef> maps;
+
 // Pristine (pre-ApplyTo) world config, kept so a runtime map switch can clone + re-apply a different
 // map's overrides onto a clean base (ApplyTo mutates sectors/scale/radius in place).
 WorldConfig pristineWorldCfg = MapCatalog.Clone(content.World);
@@ -242,7 +259,15 @@ string mapName = selectedMapDef.Name!.Trim();
 
 // Base health (the win-condition hull) comes from the content's base def — the validator guarantees
 // at least one base, so [0] is safe — so a YAML-tuned base max-health is the server's authority too.
-var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships, content.Bases, loggerFactory.CreateLogger<World>());
+var world = new World(
+    seed,
+    content.World,
+    content.Bases[0].MaxHealth,
+    content.Start,
+    content.Ships,
+    content.Bases,
+    loggerFactory.CreateLogger<World>()
+);
 var sim = new Simulation(world, content, loggerFactory.CreateLogger<Simulation>());
 var hub = new ClientHub(sim, auth, players, matchmaker, mapName, mapCatalog, loggerFactory.CreateLogger<ClientHub>());
 
@@ -266,9 +291,38 @@ World? BuildWorldForMap(string name)
     // seed so any live layout can be reproduced later with --seed.
     ulong matchSeed = pinnedSeed ?? RandomSeed();
     Log.MatchWorldSeed(log, name, matchSeed);
-    return new World(matchSeed, cfg, content.Bases[0].MaxHealth, content.Start, content.Ships, content.Bases, loggerFactory.CreateLogger<World>());
+    return new World(
+        matchSeed,
+        cfg,
+        content.Bases[0].MaxHealth,
+        content.Start,
+        content.Ships,
+        content.Bases,
+        loggerFactory.CreateLogger<World>()
+    );
 }
-sim.BuildMatchWorld = () => BuildWorldForMap(hub.SelectedMap);
+sim.BuildMatchWorld = () =>
+{
+    sim.MatchMapName = hub.SelectedMap; // frozen into the match report
+    return BuildWorldForMap(hub.SelectedMap);
+};
+
+// One result shape for every ending (win-condition / reset / shutdown): the sim's ledger joined
+// with the hub's pilot memo, attributed to the Listing the match started under.
+MatchResultInfo BuildMatchResult(string endReason) =>
+    MatchReportBuilder.Build(
+        sim.MatchId,
+        sim.MatchMapName,
+        sim.MatchStartedAt,
+        DateTimeOffset.UtcNow,
+        sim.Winner,
+        endReason,
+        sim.MatchStats,
+        sim.GarrisonsDestroyed,
+        sim.OutpostsDestroyed,
+        hub.PilotIdentitySnapshot(),
+        matchListingId
+    );
 sim.OnMatchStart = hub.OnMatchStart;
 
 // Behind the hosting layer's TLS-terminating proxy (wss:// -> ws://:8090): honour the
@@ -331,8 +385,6 @@ var simThread = new Thread(() =>
 
         double t0 = clock.Elapsed.TotalMilliseconds;
         sim.Step();
-        if (sim.JustEnded)
-            results.ReportResult(sim.Winner); // one-shot, fire-and-forget
         hub.AfterStep();
         // Recycle the match once the server has been empty for the grace window: end whatever
         // was running and reset to a clean idle lobby. IsIdle makes this fire once per empty
@@ -347,6 +399,17 @@ var simThread = new Thread(() =>
         {
             emptySinceMs = null;
         }
+        // Match reporting — checked AFTER the reset above so a JustReset raised by ResetMatch is
+        // seen this iteration (Step clears the one-step flags at its next start).
+        if (sim.JustStarted)
+        {
+            matchListingId = hub.LobbyIdentity.ListingId;
+            results.OnMatchStarted(new MatchStartInfo(sim.MatchId, sim.MatchMapName, sim.MatchStartedAt, matchListingId));
+        }
+        if (sim.JustEnded)
+            results.ReportResult(BuildMatchResult(StellarAllegiance.Shared.Lobby.MatchEndReason.WinCondition)); // one-shot
+        if (sim.JustReset)
+            results.ReportResult(BuildMatchResult(StellarAllegiance.Shared.Lobby.MatchEndReason.Reset));
     }
 })
 {
@@ -354,7 +417,6 @@ var simThread = new Thread(() =>
     Name = "SimLoop",
     Priority = ThreadPriority.AboveNormal,
 };
-simThread.Start();
 
 // Opt-in public-lobby publishing: when SIM_PUBLIC_NAME is set, register with the PUBLIC_LOBBY
 // (public lobby) and heartbeat. The lobby probes our port back to decide our mode — direct WebSocket
@@ -362,9 +424,35 @@ simThread.Start();
 // Start only once the HTTP server is actually listening (ApplicationStarted) so the probe reaches
 // us; shares the server-lifetime token so it deregisters and stops on shutdown.
 var registrar = LobbyRegistrar.FromEnv(hub, port, secret.Length > 0, loggerFactory);
+hub.LobbyIdentity = (ILobbyIdentity?)registrar ?? NoLobbyIdentity.Instance;
 if (registrar is not null)
+{
     app.Lifetime.ApplicationStarted.Register(() => registrar.Start(cts.Token));
+    // Results go to the public lobby through a disk spool (SIM_REPORT_SPOOL, default beside
+    // sim-cache/) so an outage or crash never loses one; unlisted matches are only logged.
+    matchReporter = new LobbyMatchReporter(
+        new HttpClient { Timeout = TimeSpan.FromSeconds(15) },
+        LobbyMatchReporter.ResolveDefaultSpoolDir(),
+        loggerFactory.CreateLogger<LobbyMatchReporter>()
+    )
+    {
+        Identity = registrar,
+    };
+    results = matchReporter;
+}
+simThread.Start();
 
 Log.ServerListening(log, port, seed, world.Asteroids.Count);
 app.Run();
 cts.Cancel();
+
+// Mid-match shutdown: the sim thread stops on the token; report a non-counting "shutdown" ending
+// for the live match and give the spool a moment to deliver (anything left is re-sent next boot).
+simThread.Join(TimeSpan.FromSeconds(2));
+if (sim.Phase == Simulation.PhaseActive && matchListingId is not null)
+    results.ReportResult(BuildMatchResult(StellarAllegiance.Shared.Lobby.MatchEndReason.Shutdown));
+if (matchReporter is not null)
+{
+    matchReporter.DrainAsync(TimeSpan.FromSeconds(3)).GetAwaiter().GetResult();
+    matchReporter.DisposeAsync().AsTask().GetAwaiter().GetResult();
+}

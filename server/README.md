@@ -30,15 +30,13 @@ Sim/
 
 ## Running
 
-From the repo root:
+From the repo root, `aspire run` (or `aspire start` for a background/agent run) brings up the
+whole stack including this server, listening on `ws://localhost:8090/game`; `SIM_AUTOSTART=1` in
+`.env` (parameter `sim-autostart`) skips the ready-up gate for a perpetual match, and the local
+stack already lists it on the local public lobby.
 
-```pwsh
-scripts/run-server.ps1 -Local                 # private, port 8090, lobby ready-up
-scripts/run-server.ps1 -Local --autostart     # skip ready-up, perpetual match (bots/benchmark)
-scripts/run-server.ps1                         # also publish to the public lobby for discovery
-```
-
-Or directly: `dotnet run --project server [--port 8090] [--seed N] [--secret PW] [--autostart]`.
+For a raw run outside Aspire (perf/benchmark measurements, or just this project):
+`dotnet run --project server -c Release -- [--port 8090] [--seed N] [--secret PW] [--autostart]`.
 
 ### Config
 
@@ -57,6 +55,7 @@ Or directly: `dotnet run --project server [--port 8090] [--seed N] [--secret PW]
 
 ## Deploy
 
-`docker compose -f docker-compose.server.yml up`, or `scripts/deploy-railway-server.ps1` to push
-a game server to Railway already wired to the default public lobby. The Docker build mounts the
-**repo root** (not just `server/`) so the `shared/` ProjectReference resolves.
+`docker compose -f docker-compose.server.yml up`, or from the Aspire dashboard **Deploy to
+Railway** on the `server` resource (equivalently `aspire do deploy-server`) to push a game server
+to Railway already wired to the default public lobby. The Docker build mounts the **repo root**
+(not just `server/`) so the `shared/` ProjectReference resolves.

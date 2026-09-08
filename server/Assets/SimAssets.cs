@@ -45,7 +45,9 @@ public static class SimAssets
 
     // Writable cache dir for the baked .simmodel hulls — deliberately NOT under the asset/Godot
     // tree. Defaults beside the binary; point SIM_CACHE_DIR at a volume for a read-only app dir.
-    private static string CacheDir
+    // Public so other writable-beside-the-binary state (the lobby credential file, WP2.1) can
+    // anchor itself relative to the same resolved location without duplicating the env lookup.
+    public static string CacheDir
     {
         get
         {

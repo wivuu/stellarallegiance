@@ -128,7 +128,7 @@ public static class Wire
     // EJ >= D), and a pod that docks or is rescued is neither. Kill credit itself is server-side
     // only (world.yaml `scoring:`) — the client only ever sees these resolved counters. Writer
     // Protocol.BuildMatchStats <-> reader GameNetClient.ApplyMatchStats.
-    public const byte ProtocolVersion = 37;
+    public const byte ProtocolVersion = 38; // 38: Hello gains a trailing u16 join-token field; MsgReject code 2
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

@@ -1,0 +1,87 @@
+@page "/login"
+@model PublicLobby.Pages.LoginModel
+@using AspNet.Security.OAuth.GitHub
+@{
+    ViewData["Title"] = "Sign in — Public Lobby";
+}
+
+<div class="mx-auto max-w-sm space-y-8">
+    <h1 class="font-ui text-2xl font-bold text-text-hi text-center">Sign in</h1>
+
+    @if (!string.IsNullOrEmpty(Model.Error))
+    {
+        <p class="rounded border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">@Model.Error</p>
+    }
+
+    @if (Model.Providers.Count > 0)
+    {
+        <section class="space-y-2">
+            @foreach (var provider in Model.Providers)
+            {
+                <a
+                    href="/login/external?provider=@Uri.EscapeDataString(provider.Scheme)&returnUrl=@Uri.EscapeDataString(Model.ReturnUrl ?? "")"
+                    class="flex w-full items-center justify-center gap-2 rounded border border-panel-hi bg-panel px-4 py-2 text-center text-sm font-medium text-text-hi hover:border-accent hover:text-accent">
+                    @if (provider.Scheme == GitHubAuthenticationDefaults.AuthenticationScheme)
+                    {
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" class="shrink-0" aria-hidden="true"><path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"></path></svg>
+                    }
+                    <span>Continue with @provider.DisplayName</span>
+                </a>
+            }
+        </section>
+        <div class="flex items-center gap-3 text-xs text-text-dim">
+            <span class="h-px flex-1 bg-panel-hi"></span>
+            <span>or</span>
+            <span class="h-px flex-1 bg-panel-hi"></span>
+        </div>
+    }
+
+    <section class="space-y-3">
+        <button
+            id="passkey-signin"
+            type="button"
+            class="block w-full rounded border border-accent bg-accent/10 px-4 py-2 text-center text-sm font-medium text-accent hover:bg-accent/20">
+            Sign in with a passkey
+        </button>
+        <p id="passkey-unavailable" hidden class="text-center text-xs text-warn">
+            Passkeys aren't available in this browser. Try Chrome, Safari, or Edge, or use another sign-in
+            option above.
+        </p>
+    </section>
+
+    @if (Model.PasskeySignupAllowed)
+    {
+    <section class="space-y-2 rounded border border-panel-hi bg-panel p-4">
+        <h2 class="text-sm font-semibold text-text-2">New here? Create a passkey</h2>
+        <form id="passkey-signup" class="space-y-2">
+            <label class="block text-xs text-text-dim" for="signup-display-name">Display name</label>
+            <input
+                id="signup-display-name"
+                name="displayName"
+                type="text"
+                required
+                minlength="3"
+                maxlength="24"
+                autocomplete="username webauthn"
+                placeholder="Vex"
+                class="w-full rounded border border-panel-hi bg-void px-3 py-2 text-sm text-text-hi placeholder:text-text-dim focus:border-accent focus:outline-none" />
+            <button
+                type="submit"
+                class="block w-full rounded border border-secondary bg-secondary/10 px-4 py-2 text-center text-sm font-medium text-secondary hover:bg-secondary/20">
+                Create passkey
+            </button>
+        </form>
+    </section>
+    }
+    else
+    {
+    <p id="passkey-signup-disabled" class="text-center text-xs text-text-dim">
+        New here? Sign in with one of the providers above; you can add a passkey to your account afterwards.
+    </p>
+    }
+
+    <p id="passkey-status" class="text-center text-sm text-text-2" role="status"></p>
+</div>
+
+<input type="hidden" id="login-return-url" value="@Model.ReturnUrl" />
+<script src="/passkeys.js"></script>

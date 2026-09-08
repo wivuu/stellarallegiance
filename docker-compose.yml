@@ -1,6 +1,7 @@
 # Local-dev / single-box deployment of the stellarallegiance backend:
 #   sim-server    the 20 Hz authoritative match + lobby host (clients connect & download content)
-#   public-lobby  the PUBLIC LOBBY: game-server registry + WebRTC signaling relay
+#   public-lobby  the PUBLIC LOBBY: identity issuer + game-server registry + WebRTC signaling relay
+#   lobby-db      Postgres 17: the lobby's system of record (players, sessions, matches, ladder)
 #
 # Discovery is DIRECT-FIRST: when a sim-server registers, the lobby probes its port and, if it's
 # reachable, advertises a direct host:port — clients then connect straight to it over WebSocket (no
@@ -31,6 +32,10 @@ services:
       SIM_AUTOSTART: ${SIM_AUTOSTART:-}
       # Public-lobby publishing (opt-in): set SIM_PUBLIC_NAME (3-50 chars) to register this server
       # with the lobby below so clients can discover + WebRTC-join it. Empty = private (direct only).
+      # First boot prints a device code and stays unlisted until approved at the lobby's /device
+      # page; the resulting credential is written to SIM_AUTH_FILE (default beside sim-cache/,
+      # inside this container — mount a volume there if you want it to survive a container rebuild
+      # instead of pairing again on every `up --build`).
       SIM_PUBLIC_NAME: ${SIM_PUBLIC_NAME:-}
       PUBLIC_LOBBY: ${PUBLIC_LOBBY:-public-lobby:8091}
       # Public-facing port the lobby probes/advertises (default = listen port; set when a
@@ -46,18 +51,74 @@ services:
       - public-lobby
     restart: unless-stopped
 
-  # Public lobby: game-server registry + WebRTC signaling relay (no game traffic flows through it).
+  # Public lobby: identity issuer (accounts, passkeys, device codes, join tokens), game-server
+  # registry + WebRTC signaling relay (no game traffic flows through it), match ledger + ladder.
   # On register it probes each server's port to decide direct-vs-WebRTC; it hands out the STUN
-  # config below for the WebRTC fallback.
+  # config below for the WebRTC fallback. Requires Postgres (lobby-db); migrations run first via
+  # the one-shot lobby-migrate service (`dotnet PublicLobby.dll --migrate`, idempotent).
   public-lobby:
     build:
       context: .                     # repo root, so it builds uniformly with sim-server / railway up
       dockerfile: public-lobby/Dockerfile
     environment:
       SHARE_PORT: 8091
+      ConnectionStrings__postgres-database: Host=lobby-db;Username=lobby;Password=${LOBBY_DB_PASSWORD:-lobby};Database=lobby
+      # Public URL players and servers reach this lobby at: the join-token issuer, the device-code
+      # approval link and the passkey relying-party domain all derive from it. Must equal the
+      # PUBLIC_LOBBY base the sim server dials.
+      LOBBY_PUBLIC_URL: ${LOBBY_PUBLIC_URL:-http://localhost:8091}
+      # Comma list of admin logins (github:<login>, google:<sub>, steam:<steamid>, name:<display>).
+      LOBBY_ADMINS: ${LOBBY_ADMINS:-}
+      # External logins are optional — passkeys always work. Set a pair to enable a provider.
+      AUTH_GOOGLE_CLIENT_ID: ${AUTH_GOOGLE_CLIENT_ID:-}
+      AUTH_GOOGLE_CLIENT_SECRET: ${AUTH_GOOGLE_CLIENT_SECRET:-}
+      AUTH_GITHUB_CLIENT_ID: ${AUTH_GITHUB_CLIENT_ID:-}
+      AUTH_GITHUB_CLIENT_SECRET: ${AUTH_GITHUB_CLIENT_SECRET:-}
+      AUTH_STEAM_API_KEY: ${AUTH_STEAM_API_KEY:-}
+      # flagged (default): only admin-flagged Ranked servers move the global ladder; authenticated:
+      # every verified server does.
+      RANKED_RESULTS: ${RANKED_RESULTS:-flagged}
+      # true accepts listings from servers that never authenticated (badged Unverified, no results).
+      ALLOW_UNVERIFIED_SERVERS: ${ALLOW_UNVERIFIED_SERVERS:-false}
+      # Dev only: grant_type=dev + GET /login/dev — never set in production.
+      AUTH_DEV_LOGIN: ${AUTH_DEV_LOGIN:-}
       # Public STUN handed to clients/servers for the WebRTC fallback (covers ~80% of NATs via
       # hole-punching). Comma-separate several to list fallbacks, e.g. "stun:a:3478,stun:b:19302".
       STUN_URL: ${STUN_URL:-stun:stun.cloudflare.com:3478}
     ports:
       - "${SHARE_PORT:-8091}:8091"
+    depends_on:
+      lobby-migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
+
+  # One-shot: apply the lobby's EF Core + Orleans migrations (creates the database if absent).
+  lobby-migrate:
+    build:
+      context: .
+      dockerfile: public-lobby/Dockerfile
+    command: ["dotnet", "PublicLobby.dll", "--migrate"]
+    environment:
+      ConnectionStrings__postgres-database: Host=lobby-db;Username=lobby;Password=${LOBBY_DB_PASSWORD:-lobby};Database=lobby
+    depends_on:
+      lobby-db:
+        condition: service_healthy
+    restart: "no"
+
+  lobby-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: lobby
+      POSTGRES_PASSWORD: ${LOBBY_DB_PASSWORD:-lobby}
+      POSTGRES_DB: lobby
+    volumes:
+      - lobby-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lobby -d lobby"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  lobby-db-data:

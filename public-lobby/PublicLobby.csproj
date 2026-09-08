@@ -7,7 +7,12 @@
 
        Was originally a .NET-10 file-based app (single PublicLobby.cs with a #:sdk header); file
        based apps can't span multiple .cs files, so it is a normal net10.0 csproj now — same
-       toolchain/Docker pattern as server/ and shared/. -->
+       toolchain/Docker pattern as server/ and shared/.
+
+       Identity/persistence/ranking (.PLAN/LobbyRankingService.md): the lobby is its own identity
+       issuer (ADR-0001) over Postgres + co-hosted Orleans (ADR-0002). The EF model lives in the
+       sibling public-lobby-data/ project; the HTTP contracts every peer compiles live in
+       shared/Lobby/. The Dockerfile copies all three directories (build context = repo root). -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -15,4 +20,76 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <RootNamespace>PublicLobby</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../public-lobby-data/PublicLobby.Data.csproj" />
+    <ProjectReference Include="../shared/Shared.csproj" />
+    <!-- WP0.2: co-hosted Orleans silo (plan §1.4/§3.5, ADR-0002). Server brings the codegen SDK
+         transitively (Microsoft.Orleans.Sdk) so grains defined in this project get generated
+         serializers. ADO.NET clustering/reminders share the lobby's Postgres (Npgsql is already
+         referenced transitively via public-lobby-data; Orleans loads it by invariant name). -->
+    <PackageReference Include="Microsoft.Orleans.Server" Version="10.3.1" />
+    <PackageReference Include="Microsoft.Orleans.Clustering.AdoNet" Version="10.3.1" />
+    <PackageReference Include="Microsoft.Orleans.Reminders.AdoNet" Version="10.3.1" />
+    <!-- WP1.3: ES256 join tokens (plan §3.2) minted with the modern JsonWebTokenHandler; the sim
+         server verifies them offline with the same library family (server/Net/JoinTokenVerifier.cs). -->
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.22.0" />
+    <!-- Telemetry (Hosting/Telemetry.cs): OTLP-exported logs/metrics/traces so an Aspire AppHost
+         dashboard can show this service alongside the rest of the distributed app. -->
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.18.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.18.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.18.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.18.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.18.0" />
+  </ItemGroup>
+
+  <!-- WP0.3 (web shell + auth providers): external-login handlers, env-gated in
+       Hosting/WebAuth.cs — see public-lobby/README.md for the AUTH_* env vars. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="10.0.11" />
+    <PackageReference Include="AspNet.Security.OAuth.GitHub" Version="10.0.0" />
+    <PackageReference Include="AspNet.Security.OpenId.Steam" Version="10.0.0" />
+  </ItemGroup>
+
+  <!-- Tailwind CSS (standalone CLI, no Node/npm) for Pages/Shared/_Layout.cshtml + friends. Downloads
+       the pinned binary for the current OS/CPU into tools/tailwind/ (repo-root-relative, gitignored;
+       absent in the Dockerfile's build context, so MakeDir below must (and does) create it) and runs it
+       against Styles/app.css, producing wwwroot/app.css (gitignored, not committed). See
+       public-lobby/README.md. -->
+  <PropertyGroup>
+    <TailwindVersion>v4.3.3</TailwindVersion>
+    <TailwindToolsDir>$(MSBuildProjectDirectory)/../tools/tailwind</TailwindToolsDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(OS)' == 'Windows_NT'">
+    <TailwindAssetName>tailwindcss-windows-x64.exe</TailwindAssetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(OS)' != 'Windows_NT' AND $([MSBuild]::IsOSPlatform('OSX'))">
+    <TailwindAssetName Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' == 'Arm64'">tailwindcss-macos-arm64</TailwindAssetName>
+    <TailwindAssetName Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' != 'Arm64'">tailwindcss-macos-x64</TailwindAssetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(OS)' != 'Windows_NT' AND $([MSBuild]::IsOSPlatform('Linux'))">
+    <TailwindAssetName Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' == 'Arm64'">tailwindcss-linux-arm64</TailwindAssetName>
+    <TailwindAssetName Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' != 'Arm64'">tailwindcss-linux-x64</TailwindAssetName>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TailwindExe>$(TailwindToolsDir)/$(TailwindAssetName)</TailwindExe>
+  </PropertyGroup>
+
+  <Target Name="EnsureTailwindCss" BeforeTargets="Build">
+    <Error
+      Condition="'$(TailwindAssetName)' == ''"
+      Text="public-lobby: unsupported OS/CPU for the pinned Tailwind CLI $(TailwindVersion); set TailwindAssetName to override." />
+
+    <MakeDir Directories="$(TailwindToolsDir)" Condition="!Exists('$(TailwindToolsDir)')" />
+
+    <DownloadFile
+      Condition="!Exists('$(TailwindExe)')"
+      SourceUrl="https://github.com/tailwindlabs/tailwindcss/releases/download/$(TailwindVersion)/$(TailwindAssetName)"
+      DestinationFolder="$(TailwindToolsDir)" />
+
+    <Exec Command="chmod +x &quot;$(TailwindExe)&quot;" Condition="'$(OS)' != 'Windows_NT'" />
+
+    <Exec
+      Command="&quot;$(TailwindExe)&quot; -i Styles/app.css -o wwwroot/app.css --minify"
+      WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
 </Project>

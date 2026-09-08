@@ -1,0 +1,52 @@
+@model PublicLobby.PublicServerStrip
+@*
+    The live "Servers online" section, shared by "/" and "/ladder" (both page models expose it as
+    `Strip` and re-render it from an `OnGetStrip` handler).
+
+    LIVE UPDATES: htmx re-GETs this whole section — heading counts and all — whenever the lobby
+    announces a change, so the markup below is the ONLY renderer; there is no second, JavaScript
+    copy of it to drift. The signal is `lobby-servers`, raised on <body> by wwwroot/lobby-live.js
+    from the GET /servers/live SSE stream. Without JavaScript the section still renders correctly,
+    just frozen at page load.
+
+    `?handler=Strip` keeps the current path (so /ladder re-renders through LadderModel) and drops
+    the rest of the query, which this section doesn't read.
+*@
+<section hx-get="?handler=Strip"
+         hx-trigger="lobby-servers from:body"
+         hx-swap="outerHTML"
+         class="flex flex-col gap-3">
+    <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h2 class="text-[22px] font-bold text-text-hi">Servers online</h2>
+        <span class="font-mono text-[13px] text-text-dim">
+            @Model.ServersOnline listed &middot; @Model.PilotsOnline @(Model.PilotsOnline == 1 ? "pilot" : "pilots")
+        </span>
+    </div>
+    <p class="text-sm leading-relaxed text-text-dim">
+        Anyone can host. A listing goes <span class="text-ok">Verified</span> once its game server
+        authenticates with the lobby &mdash; only Verified servers issue join tokens and report
+        results to the ladder.
+    </p>
+
+    @if (Model.ServersOnline == 0)
+    {
+        <p class="mt-1 rounded border border-panel-hi bg-panel px-4 py-3 text-sm text-text-2">
+            No servers listed right now. Start one and it appears here automatically.
+        </p>
+    }
+    else
+    {
+        <div class="mt-1 overflow-hidden rounded border border-panel-hi">
+            @foreach (var server in Model.Servers)
+            {
+                <partial name="_ServerRow" model="server" />
+            }
+        </div>
+        @if (Model.More > 0)
+        {
+            <p class="text-[13px] text-text-dim">
+                @Model.More more listed &mdash; sign in and open the server browser in the client to see them all.
+            </p>
+        }
+    }
+</section>

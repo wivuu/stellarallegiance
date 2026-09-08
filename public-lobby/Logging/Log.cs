@@ -8,4 +8,7 @@ internal static partial class Log
 {
     [LoggerMessage(EventId = 1, Level = LogLevel.Information, Message = "listening on {Url}  stun={StunCount}")]
     public static partial void Listening(ILogger logger, string url, int stunCount);
+
+    [LoggerMessage(EventId = 2, Level = LogLevel.Information, Message = "migrations applied")]
+    public static partial void MigrationsApplied(ILogger logger);
 }

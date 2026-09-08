@@ -17,9 +17,15 @@
 #
 # TLS: the sim server speaks plain ws:// on :8090; put a TLS proxy in front for wss:// in production.
 #
+# AUTH (device code): first boot with SIM_PUBLIC_NAME set prints a one-time code + approval URL
+# and stays UNLISTED until an Operator opens it and approves — that's what "hosted by" now comes
+# from (the SIM_HOSTED_BY free-text label is gone). The resulting credential is written to
+# SIM_AUTH_FILE; the volume below keeps it on a rebuild so you only approve once.
+#
 # First run:
 #   cp .env.example .env && edit .env   (set SIM_PUBLIC_NAME; set SIM_PUBLIC_ENDPOINT if NAT'd)
 #   docker compose -f docker-compose.server.yml up --build
+#   # watch the logs for the device-code banner and approve it at the printed URL
 services:
   sim-server:
     build:
@@ -34,13 +40,21 @@ services:
       # REQUIRED to be listed: 3-50 char public name. Empty = private (joinable only by direct address).
       SIM_PUBLIC_NAME: ${SIM_PUBLIC_NAME:-}
       # The HOSTED public lobby this server registers with.
-      PUBLIC_LOBBY: ${PUBLIC_LOBBY:-https://wivuu-public-lobby-production.up.railway.app}
+      PUBLIC_LOBBY: ${PUBLIC_LOBBY:-https://stellarlobby.wivuu.com}
       # Public-facing port the lobby probes/advertises (default = listen port; set when a
       # port-forward maps a different external port).
       SIM_PUBLIC_PORT: ${SIM_PUBLIC_PORT:-}
       # Your reachable public address so the lobby can advertise you as DIRECT (see header). For a
       # NAT'd / single-box host this is effectively required: host:port or https://domain.
       SIM_PUBLIC_ENDPOINT: ${SIM_PUBLIC_ENDPOINT:-}
+      # Persisted Game Server credential (device-code auth) — kept on the volume below so a
+      # rebuild/restart re-lists silently instead of asking you to approve a new code.
+      SIM_AUTH_FILE: /data/lobby-auth.json
+    volumes:
+      - sim-server-auth:/data
     ports:
       - "${SIM_PORT:-8090}:8090"
     restart: unless-stopped
+
+volumes:
+  sim-server-auth:

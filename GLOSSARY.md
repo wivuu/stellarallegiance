@@ -754,14 +754,13 @@ Reachability probe strategy: attempt direct P2P connection first; only fall back
 - **Notes:** NO TURN server; reintroducing TURN would add latency and cost
 
 ### Join Token
-HMAC-SHA256 signed authorization: epoch + expiry + team + faction. Server verifies at connection handshake.
+Short-lived (60s), single-use ES256 JWT the public lobby issues to a signed-in player for ONE listing (`aud` = listing id, `sub` = player id); verified offline by the game server against the lobby's JWKS. Anonymous joins carry none.
 - **Frequency:** Common
 - **Key Files:**
-  - `shared/JoinTokens.cs` — token generation and validation
-  - `server/Net/ClientHub.cs` — join validation
-  - `public-lobby/PublicLobby.cs` — token issuance
-- **Related:** [[MsgWelcome]], [[Team]]
-- **Notes:** Prevents replay attacks and unauthorized teams; expiry ~5 minutes
+  - public lobby: `public-lobby/` — issuer (WP1.3)
+  - game server: `server/Net/JoinTokenVerifier.cs` — offline JWKS verification (WP2.2, pending)
+- **Related:** [[MsgWelcome]], [[Team]], [[Public Lobby]]
+- **Notes:** See `public-lobby/CONTEXT.md` ("Join Token") for full language; replaces the old STDB-era HMAC-SHA256 derivation (`shared/JoinTokens.cs`), removed in WP0.4 — that file now holds only the constant-time compare used by the connect-time shared-secret authenticator
 
 ### MsgWelcome
 Handshake message from server to client: assigns player ID, initial ship, world state snapshot, reconnect token.
@@ -1042,18 +1041,73 @@ Standalone .NET web service: game server registry, WebRTC signaling relay, serve
   - `public-lobby/PublicLobby.cs` — main web service
   - `public-lobby/ServerRegistry.cs` — active server tracking
   - `public-lobby/Signaling.cs` — WebRTC SDP relay
-  - Live: `wivuu-public-lobby-production.up.railway.app`
-- **Related:** [[WebRTC]], [[DIRECT-FIRST]], [[Railway Deploy]]
-- **Notes:** Separate from gameplay servers; handles discovery and P2P setup only
+  - Live: `stellarlobby.wivuu.com`
+- **Related:** [[WebRTC]], [[DIRECT-FIRST]], [[Railway Deploy]], [[Verified Listing]]
+- **Notes:** Separate from gameplay servers; handles discovery and P2P setup only. Also co-hosts a single-replica Orleans silo in the same process (`public-lobby/Hosting/OrleansHosting.cs`, `public-lobby/Grains/`) — entity grains are the sole writers of their own Postgres rows through EF Core (ADR-0002); ADO.NET clustering/reminders share the lobby's Postgres by default (`LOBBY_ORLEANS_CLUSTERING=adonet`), or run in-memory for dev/tests (`=localhost`). `GET /health/orleans` checks the silo is taking grain calls. Listing routes require identity (WP1.4): `GET /servers` and `GET /servers/events` need a player bearer (anonymous sees no list); `POST /servers` needs a server bearer (Verified) or, only with `ALLOW_UNVERIFIED_SERVERS=true`, none at all (Unverified) — see [[Verified Listing]].
+- **Ubiquitous language:** identity/ranking terms (Player / Pilot / Match / Listing / Operator / Verified / Ban) are defined in `public-lobby/CONTEXT.md`; use those words for anything the service persists
+
+### Admin Console
+`/admin`: the public lobby's moderation surface — searchable game servers, players and matches, plus [[Ban]] and complete player deletion. Admin role comes from `LOBBY_ADMINS` at sign-in.
+- **Frequency:** Occasional
+- **Key Files:**
+  - `public-lobby/Pages/Admin.cshtml(.cs)` — the three-tab console
+  - `public-lobby/Pages/AdminServer.cshtml(.cs)`, `AdminPlayer.cshtml(.cs)`, `AdminMatch.cshtml(.cs)` — the detail pages
+  - `public-lobby/Pages/AdminModeration.cs` — applying a ban and its side effects
+  - `public-lobby/Grains/QueryGrain.cs` — every list and detail read
+- **Related:** [[Ban]], [[Public Lobby]], [[Verified Listing]]
+- **Notes:** Entirely server-rendered — tabs, filter chips and dialogs are query-string states of the same pages, so every state has a URL and every mutation is an antiforgery-protected form POST. Route table and what a ban stops: `public-lobby/README.md` "The admin console".
+
+### Ban
+A reversible bar on a player or a game server, with a reason and either an expiry or none; five columns on `players`/`game_servers`, read through `PublicLobby.Data.Bans.InForce`.
+- **Frequency:** Occasional
+- **Key Files:**
+  - `public-lobby-data/Bans.cs` — the in-force rule (expiry is evaluated at read time; nothing sweeps)
+  - `public-lobby/Auth/LobbyBearerAuthentication.cs` — where a player ban bites every bearer request
+  - `public-lobby/PublicLobby.cs`, `public-lobby/Api/MatchEndpoints.cs` — where a server ban bites (403, never 401)
+- **Related:** [[Admin Console]], [[Verified Listing]], [[Public Lobby]]
+- **Notes:** A banned game server is refused with **403** everywhere, never 401 or `invalid_grant` — the sim server reads those as "refresh" and "re-pair", which would loop it instead of stopping it (`server/Net/LobbyRegistrar.cs`). Banning the **operator** is the durable lever: a banned game server can be re-paired under a fresh id, a banned account cannot. Defined in `public-lobby/CONTEXT.md`.
 
 ### ServerRegistry
-Directory of active game servers: hostname, port, player count, faction mix.
+Directory of active game servers: hostname, port, player count, faction mix, Verified/Unverified status.
 - **Frequency:** Common
 - **Key Files:**
-  - `public-lobby/ServerRegistry.cs` — registry logic
-  - `public-lobby/PublicLobby.cs` — registry queries
-- **Related:** [[Public Lobby]]
-- **Notes:** Periodically probed for health; stale entries auto-removed
+  - `public-lobby/ServerRegistry.cs` — registry logic; `IServerRegistry.Register(req, publicEndpoint, ListingIdentity?)`, `ListingIdentity(GameServerId, OperatorName)`
+  - `public-lobby/PublicLobby.cs` — registry queries; `POST /servers` resolves the caller's bearer into a `ListingIdentity` (server bearer) or `null` (Unverified, gated by `ALLOW_UNVERIFIED_SERVERS`)
+- **Related:** [[Public Lobby]], [[Verified Listing]]
+- **Notes:** Periodically probed for health; stale entries auto-removed. Still in-memory (plan §1.4 slice 1) — Verified/GameServerId/OperatorName are set once at registration from the caller's identity, never from the request body.
+
+### Game Server
+Durable, operator-owned server identity minted at the first device-code approval (`public-lobby/CONTEXT.md`); a Listing is its live registration.
+- **Frequency:** Common
+- **Key Files:**
+  - `public-lobby/Grains/GameServerGrain.cs` — single writer of `game_servers` (ranked flag, last listed)
+  - `server/Net/LobbyRegistrar.cs`, `server/Net/LobbyAuthSession.cs` — device-code pairing, `SIM_AUTH_FILE` credential
+  - `public-lobby/Pages/ServerHistory.cshtml` — `/servers/{id}/history`
+- **Related:** [[Verified Listing]], [[Ranked]], [[Public Lobby]]
+
+### Ranked
+Admin-granted standing (`/admin` toggle) that lets a game server's results move the global Ladder; the lobby's `RANKED_RESULTS` trust level (`flagged` default, `authenticated`) decides whether the flag matters.
+- **Frequency:** Occasional
+- **Key Files:**
+  - `public-lobby/Grains/MatchGrain.cs` — counted/ranked snapshot at result acceptance
+  - `public-lobby/Grains/PlayerGrain.cs` — `ApplyMatch` folds ranked matches into `players` aggregates
+  - `public-lobby/Pages/Ladder.cshtml`, `public-lobby/Grains/QueryGrain.cs` — global + per-server ladders
+- **Related:** [[Game Server]], [[Match Scoreboard]]
+
+### Verified Listing
+A Listing whose Game Server authenticated with the public lobby (WP1.1 device-code flow) when it
+registered — see `public-lobby/CONTEXT.md`'s "Listing"/"Operator"/"Verified" entries for the
+ubiquitous language. `ServerEntry.Verified` is bound to the Game Server id + the Operator's current
+display name (`GameServerId`/`OperatorName`); an Unverified listing has neither, exists only when
+`ALLOW_UNVERIFIED_SERVERS=true`, and can never receive join tokens or deliver results (plan §1.2).
+- **Frequency:** Common
+- **Key Files:**
+  - `public-lobby/PublicLobby.cs` — `POST /servers` auth decision (server bearer → Verified + `GameServerGrain.OnListed`; player bearer → 403; no/invalid bearer → Unverified iff `ALLOW_UNVERIFIED_SERVERS`)
+  - `public-lobby/ServerRegistry.cs` — `ListingIdentity`, `IServerRegistry.Register`
+  - `public-lobby/Grains/GameServerGrain.cs` — `game_servers` row, `LastListedAt` (self-throttled to once/minute, refreshed on every `/servers/ws` ping/update from a Verified listing)
+  - `tests/PublicLobbyTest/ListingTests.cs` — auth-decision coverage
+- **Related:** [[Public Lobby]], [[ServerRegistry]]
+- **Notes:** `GET /servers` and `GET /servers/events` require a player bearer (plan §1.5: anonymous accounts see no server list at all, verified or not).
 
 ### Signaling
 WebRTC SDP offer/answer relay: matches peers for connection negotiation.
@@ -1116,6 +1170,40 @@ YAML-to-GLB pipeline: converts modular hull part definitions into 3D models with
   - `tools/sfx-gen/` — synthetic placeholder generation
 - **Related:** [[VFX]], [[Client-Side Hit Sparks]]
 - **Notes:** Hooked into AddBolt/DeleteShip/CheckBoltImpacts/EngineGlow; collisions+settings-UI deferred
+
+### Aspire AppHost (`apphost/`)
+The .NET Aspire distributed-application host that orchestrates the local dev stack and replaced
+the PowerShell deploy scripts (`scripts/run-server.ps1` / `run-client.ps1` remain for running
+against the HOSTED public lobby). `aspire run` (foreground, dashboard attached) or `aspire
+start` (background, for agents/harnesses) brings up a Postgres container, applies the public
+lobby's EF Core migrations, then starts `public-lobby` (`http://localhost:8091`) and `server`
+(`ws://localhost:8090/game`).
+- **Frequency:** Common
+- **Key Files:**
+  - `apphost/AppHost.cs` — resource graph (Postgres, `lobby`, `server`, `client`) + custom commands
+  - `.env` / `.env.example` — read by both `docker compose` and the AppHost; every `KEY=VALUE`
+    becomes a parameter in kebab-case (`SIM_AUTOSTART=1` → `sim-autostart`); unresolved
+    parameters are prompted for in the dashboard and can be saved to user secrets
+  - `apphost/.local/` — untracked per-workstation state: the server's `sim-cache/` and the paired
+    `lobby-auth.json` device-code credential
+- **Related:** [[Public Lobby]], [[Game Server]], [[Ranked]]
+- **Notes:** The `client` resource builds the client C# then launches Godot, resolving the Godot
+  binary the same way `scripts/godot-bin.ps1` did (GODOT env → `godot.executablePath` user secret →
+  PATH → standard install dirs), prompting in the dashboard if none resolve. The server registers under `sim-public-name` but stays
+  unlisted until `aspire resource lobby approve-device-code --user-code XXXX-XXXX` (dashboard button)
+  approves the code printed in its log; approved = Verified, which refuses direct `--host` joins
+  (`join token required`), so harness runs then use `--mode lobby --seed-dev-login --godot-args
+  "--join-listing=<name> --autofly"` (`--seed-dev-login` mints a dev player and overwrites the
+  client's `user://auth.json`). `aspire resource
+  client launch --mode <direct|lobby|autofly> [--godot-args "..."] [--write-movie <path>]
+  [--pilot-name <name>]` starts an extra/custom client (also a dashboard button); `--godot-args` is
+  one quoted, space-split string that may itself contain the `--` separator before UI-harness
+  flags. `aspire do deploy-lobby` / `aspire do deploy-server` (or the dashboard's Deploy to Railway
+  button) push `public-lobby`/`server` to Railway using the `railway-lobby-project` /
+  `railway-server-project` / `railway-environment` parameters; the one-time manual Railway steps
+  (attach Postgres, pre-deploy `--migrate`, App Sleeping off, custom domain) are unchanged. Perf
+  benchmarks still run the raw Release server directly (`dotnet run --project server -c Release`)
+  since Aspire builds Debug.
 
 ---
 

@@ -1,12 +1,14 @@
 {
-    // Project scripts, exposed as VS Code tasks. Run them with
+    // Running/deploying the game goes through the Aspire CLI (`aspire run`, `aspire resource
+    // client launch`) — see the "Aspire: …" tasks below. Run any task with
     //   Cmd/Ctrl+Shift+P → "Tasks: Run Task"
     //
-    // All tasks run through PowerShell 7+ (`pwsh`), which must be on PATH (cross-platform:
-    // Windows/macOS/Linux). The scripts auto-detect Godot from PATH and standard install
-    // locations; to pin a non-standard path per-workstation, run the "Godot: set executable
-    // path" task below (stored via `dotnet user-secrets`, outside the repo — never committed).
-    // The `godot.executablePath` setting / GODOT env var still take precedence if set.
+    // The remaining PowerShell tasks (Godot import/export, asteroid-gen) run through
+    // PowerShell 7+ (`pwsh`), which must be on PATH (cross-platform: Windows/macOS/Linux). Aspire
+    // and the scripts both auto-detect Godot from PATH and standard install locations; to pin a
+    // non-standard path per-workstation, run the "Godot: set executable path" task below (stored
+    // via `dotnet user-secrets`, outside the repo — never committed). The `godot.executablePath`
+    // setting / GODOT env var still take precedence if set.
     "version": "2.0.0",
     "options": {
         "env": { "GODOT": "${config:godot.executablePath}" }
@@ -49,7 +51,40 @@
             "problemMatcher": []
         },
         {
-            "label": "Run server",
+            "label": "Aspire: run",
+            "type": "shell",
+            "command": "aspire",
+            "args": [
+                "run"
+            ],
+            "isBackground": true,
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "group": "run"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Aspire: launch client",
+            "type": "shell",
+            "command": "aspire",
+            "args": [
+                "resource",
+                "client",
+                "launch",
+                "--mode",
+                "${input:clientMode}"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "group": "run"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Run server (public lobby)",
             "type": "shell",
             "command": "pwsh",
             "args": [
@@ -66,7 +101,7 @@
             "problemMatcher": []
         },
         {
-            "label": "Run client",
+            "label": "Run client (public lobby)",
             "type": "shell",
             "command": "pwsh",
             "args": [
@@ -141,6 +176,17 @@
             "id": "godotPath",
             "type": "promptString",
             "description": "Full path to the Godot 4 .NET (mono) executable (not a macOS .app folder)"
+        },
+        {
+            "id": "clientMode",
+            "type": "pickString",
+            "description": "How the launched client should connect",
+            "options": [
+                "lobby",
+                "direct",
+                "autofly"
+            ],
+            "default": "lobby"
         }
     ]
 }

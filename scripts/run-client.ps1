@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 #Requires -Version 7.3
 # Build and launch the Godot client. By DEFAULT it opens the server browser pointed at the public
-# lobby (PUBLIC_LOBBY, default https://wivuu-public-lobby-production.up.railway.app) so you can pick
+# lobby (PUBLIC_LOBBY, default https://stellarlobby.wivuu.com) so you can pick
 # a server; pass -Local to skip
 # the browser and connect straight to localhost. Builds the client C# fresh so godot-mono can't
 # launch a stale assembly against a rebuilt server (silent protocol skew). Other args pass through
@@ -48,7 +48,7 @@ if ($Local) {
     Write-Host "[run-client] -Local: connecting directly to localhost:$SimPort"
     $GodotArgs = @('--host', "localhost:$SimPort") + $GodotArgs
 } else {
-    if (-not $env:PUBLIC_LOBBY) { $env:PUBLIC_LOBBY = 'https://wivuu-public-lobby-production.up.railway.app' }
+    if (-not $env:PUBLIC_LOBBY) { $env:PUBLIC_LOBBY = 'https://stellarlobby.wivuu.com' }
     Write-Host "[run-client] public lobby $($env:PUBLIC_LOBBY) server browser (use -Local for direct localhost)"
 }
 

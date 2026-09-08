@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@(ViewData["Title"] as string ?? "Public Lobby")</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+        rel="stylesheet" />
+
+    <link rel="stylesheet" href="/app.css" />
+    <script src="/htmx.min.js"></script>
+</head>
+<body class="min-h-full bg-void text-text-hi font-ui antialiased">
+    <div class="min-h-dvh flex flex-col">
+        <header class="border-b border-panel-hi bg-panel">
+            <nav class="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
+                <a href="/" class="font-ui font-semibold tracking-wide text-accent">Stellar Allegiance</a>
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-text-2">
+                    <a href="/ladder" class="hover:text-text-hi">Ladder</a>
+                    @if (User.Identity?.IsAuthenticated == true)
+                    {
+                        @if (User.IsInRole(PublicLobby.Accounts.LobbyRoles.Admin))
+                        {
+                            <a href="/admin" class="hover:text-text-hi">Admin</a>
+                        }
+                        <a href="/me" class="hover:text-text-hi">Me</a>
+                        <form method="post" action="/logout" class="inline">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="hover:text-text-hi">Sign out</button>
+                        </form>
+                    }
+                    else
+                    {
+                        <a href="/login" class="hover:text-text-hi">Sign in</a>
+                    }
+                </div>
+            </nav>
+        </header>
+
+        <main class="mx-auto w-full max-w-3xl flex-1 px-4 py-6 sm:py-8">
+            @RenderBody()
+        </main>
+
+        <footer class="border-t border-panel-hi px-4 py-5">
+            <div class="mx-auto flex max-w-3xl flex-col items-center gap-2.5">
+                <div class="flex items-center gap-5 text-[13px] text-text-2">
+                    <a href="https://github.com/wivuu/stellarallegiance" class="hover:text-text-hi">GitHub</a>
+                    <a href="https://github.com/wivuu/stellarallegiance/blob/master/QUICKSTART.md" class="hover:text-text-hi">Quickstart</a>
+                    <a href="/ladder" class="hover:text-text-hi">Ladder</a>
+                </div>
+                <span class="text-xs text-text-dim">Stellar Allegiance &mdash; Public Lobby</span>
+            </div>
+        </footer>
+    </div>
+
+    @* Per-page scripts (e.g. the live server strip on "/" and "/ladder"). *@
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

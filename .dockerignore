@@ -33,3 +33,7 @@ deploy
 *.md
 .env
 .DS_Store
+# Aspire AppHost is local-dev only
+apphost
+aspire.config.json
+.aspire

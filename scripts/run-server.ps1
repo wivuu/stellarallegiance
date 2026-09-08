@@ -4,7 +4,7 @@
 # 20 Hz match; clients connect directly by ip:port and download all content from it.
 #
 # By DEFAULT it publishes itself to the hosted public lobby (PUBLIC_LOBBY, default
-# https://wivuu-public-lobby-production.up.railway.app)
+# https://stellarlobby.wivuu.com)
 # so clients can discover and WebRTC-join it; pass -Local to stay private (direct ws:// only,
 # no lobby registration).
 #
@@ -16,8 +16,13 @@
 #   scripts/run-server.ps1 --secret hunter2         # require a shared-secret password
 #   scripts/run-server.ps1 --autostart              # skip ready-up (bots / benchmarking)
 #   $env:SIM_PUBLIC_NAME="My Server"; scripts/run-server.ps1   # custom lobby name (else hostname)
-#   $env:SIM_HOSTED_BY="Vex"; scripts/run-server.ps1   # "hosted by ..." attribution in the browser
 #   $env:SIM_PORT=9000; scripts/run-server.ps1      # different port
+#
+# First publish, this box authenticates itself with the public lobby via a device code (RFC 8628):
+# it prints a one-time code + approval URL and stays UNLISTED until you open the URL and approve
+# it (as an Operator — "hosted by" now comes from your lobby account's display name). The
+# resulting credential is saved to SIM_AUTH_FILE (default beside sim-cache/) so every later restart
+# re-lists silently, with no prompt.
 param(
     [switch]$Local,
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$ServerArgs
@@ -35,7 +40,7 @@ if ($Local) {
     Write-Host "[run-server] -Local: private (not registering with the public lobby)"
 } else {
     # Public: default the lobby + a name (hostname, trimmed to the 50-char cap) so it registers.
-    if (-not $env:PUBLIC_LOBBY) { $env:PUBLIC_LOBBY = 'https://wivuu-public-lobby-production.up.railway.app' }
+    if (-not $env:PUBLIC_LOBBY) { $env:PUBLIC_LOBBY = 'https://stellarlobby.wivuu.com' }
     if (-not $env:SIM_PUBLIC_NAME) {
         $name = [System.Net.Dns]::GetHostName()
         if ($name.Length -gt 50) { $name = $name.Substring(0, 50) }

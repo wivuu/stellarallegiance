@@ -1,0 +1,90 @@
+@page "/players/{name}"
+@using PublicLobby.Data
+@model PublicLobby.Pages.PlayersModel
+@{
+    var p = Model.Profile.Player;
+    ViewData["Title"] = $"{p.DisplayName} — Public Lobby";
+}
+
+<div class="mx-auto max-w-3xl space-y-8">
+    <section class="space-y-1">
+        <h1 class="font-ui text-2xl font-bold text-text-hi">@p.DisplayName
+            @if (p.IsAdmin)
+            {
+                <span class="ml-2 align-middle rounded border border-accent/40 bg-accent/10 px-2 py-0.5 text-xs text-accent">Admin</span>
+            }
+        </h1>
+        <p class="text-xs text-text-dim">Player since @p.CreatedAt.ToString("yyyy-MM-dd") &middot; last seen @p.LastSeenAt.ToString("yyyy-MM-dd")</p>
+    </section>
+
+    <section class="grid grid-cols-3 gap-3 sm:grid-cols-6 font-mono text-data">
+        @foreach (var (label, value) in new[] { ("Points", p.Points.ToString()), ("Matches", p.MatchesPlayed.ToString()), ("Wins", p.Wins.ToString()), ("Losses", p.Losses.ToString()), ("K / D", $"{p.Kills} / {p.Deaths}"), ("Ejects", p.Ejects.ToString()) })
+        {
+            <div class="rounded border border-panel-hi bg-panel px-3 py-2">
+                <div class="text-[10px] font-ui uppercase tracking-wide text-text-dim">@label</div>
+                <div class="text-lg">@value</div>
+            </div>
+        }
+    </section>
+
+    <section class="space-y-2">
+        <h2 class="text-sm font-semibold text-text-2">Recent matches</h2>
+        @if (Model.Profile.Recent.Length == 0)
+        {
+            <p class="text-sm text-text-dim">No matches recorded yet.</p>
+        }
+        else
+        {
+            <div class="overflow-x-auto rounded border border-panel-hi">
+                <table class="w-full text-sm">
+                    <thead class="bg-panel text-left text-xs uppercase tracking-wide text-text-dim">
+                        <tr>
+                            <th class="px-3 py-2">When</th>
+                            <th class="px-3 py-2">Map</th>
+                            <th class="px-3 py-2">Server</th>
+                            <th class="px-3 py-2">Result</th>
+                            <th class="px-3 py-2 text-right">K</th>
+                            <th class="px-3 py-2 text-right">D</th>
+                            <th class="px-3 py-2 text-right">EJ</th>
+                            <th class="px-3 py-2 text-right">Pts</th>
+                            <th class="px-3 py-2">Standing</th>
+                        </tr>
+                    </thead>
+                    <tbody class="font-mono text-data">
+                        @foreach (var m in Model.Profile.Recent)
+                        {
+                            <tr class="border-t border-panel-hi/60">
+                                <td class="px-3 py-2 text-text-dim">@m.StartedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td class="px-3 py-2 font-ui text-text-hi">@m.Map</td>
+                                <td class="px-3 py-2 font-ui text-text-2">@m.GameServerName</td>
+                                <td class="px-3 py-2">
+                                    @if (m.Status == MatchStatus.Abandoned)
+                                    {
+                                        <span class="text-text-dim">abandoned</span>
+                                    }
+                                    else if (!m.Counted)
+                                    {
+                                        <span class="text-text-dim">no result</span>
+                                    }
+                                    else if (m.Won)
+                                    {
+                                        <span class="text-ok">win</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-danger">loss</span>
+                                    }
+                                </td>
+                                <td class="px-3 py-2 text-right">@m.Kills</td>
+                                <td class="px-3 py-2 text-right">@m.Deaths</td>
+                                <td class="px-3 py-2 text-right">@m.Ejects</td>
+                                <td class="px-3 py-2 text-right">@m.Points</td>
+                                <td class="px-3 py-2 font-ui text-xs text-text-dim">@(m.Counted ? (m.Ranked ? "ranked" : "counted") : "not counted")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>

@@ -44,20 +44,42 @@ Roughly grouped by responsibility:
   `AlertBox`, `DataTable`, `ContactChip`, `RadarFrame`, …). Team identity stays the
   blue/red faction colours; the cyan accent is structural chrome only.
 - **Audio** — `SfxManager` (spatial SFX via `PlayAt`/`PlayUi`, hooked into combat/engine events).
+- **Account** — `scripts/auth/AuthSession` (public-lobby sign-in session; see below).
 
 ## Running
 
-From the repo root (not this directory):
+From the repo root, with the stack up (`aspire run` or `aspire start`):
 
-```pwsh
-scripts/run-client.ps1            # opens the public-lobby server browser
-scripts/run-client.ps1 -Local     # connects straight to localhost:8090
+```bash
+aspire resource client start                                   # direct connect to localhost:8090
+aspire resource client launch --mode lobby                     # opens the local lobby's server browser
+aspire resource client launch --mode autofly --godot-args "…"  # extra/custom client, e.g. a harness
 ```
 
-`run-client.ps1` rebuilds the client C# fresh before launching so Godot can't run a stale
-assembly against a rebuilt server (which would cause silent protocol skew). See the root
-[README](../README.md) and [QUICKSTART](../QUICKSTART.md) for prerequisites (Godot Mono build,
-.NET 10 SDK).
+Or click **Start** / **Launch client** on the `client` resource in the Aspire dashboard. Either
+path rebuilds the client C# fresh before launching so Godot can't run a stale assembly against a
+rebuilt server (which would cause silent protocol skew). See the root [README](../README.md) and
+[QUICKSTART](../QUICKSTART.md) for prerequisites (Aspire CLI, Docker, Godot Mono build, .NET 10
+SDK).
+
+### Account sign-in
+
+`AuthSession` (`scripts/auth/AuthSession.cs`) owns the public-lobby session, per
+[`.PLAN/LobbyRankingService.md`](../.PLAN/LobbyRankingService.md) WP3.1. It persists **only**
+`{ refreshToken, displayName, playerId, lobbyBase }` to `user://auth.json` (never the access
+token, never `settings.cfg`); deleting that file signs the player out locally. On launch it shows
+a **SIGN IN** modal (RFC 8628 device code, opened in the system browser) whenever there's no
+usable session — unless one of these is present, in which case the modal is suppressed entirely
+and the client behaves exactly as before:
+
+- game flags (before a bare `--`): `--autofly`, `--anonymous`, `--host`/`--host=`, `--stress-*`
+- UI-harness flags (after `--`): `--ui-shot`, `--ui-open=`, `--ui-showcase`, `--hangar`, `--hangar-demo=`
+- a direct-join address via `SIM_URI`
+
+`--anonymous` (new) forces anonymous mode for the whole process the same way clicking **CONTINUE
+WITHOUT ACCOUNT** does — useful for harnesses/CI that need to skip the modal without also forcing
+a specific server via `--host`. While anonymous, the server browser shows only direct join by
+address (`+ CONNECT TO…`); the public server list requires a signed-in session.
 
 ### Design-system gallery
 
@@ -68,8 +90,24 @@ it for a screenshot:
 godot --headless --import --path client           # required once after pulling new fonts
 godot --path client -- --ui-showcase              # opens scenes/UiShowcase.tscn
 godot --path client res://scenes/UiShowcase.tscn -- --ui-shot=/tmp/ui.png   # one-frame capture
+godot --path client res://scenes/UiShowcase.tscn -- --ui-open=signin --ui-shot=/tmp/signin.png
 ```
 
 The fonts in `assets/fonts/` are variable TTFs (OFL); their `.import` sidecars are regenerated
 by `godot --headless --import` (same convention as the GLBs), and `UiFonts` falls back to the
 engine font if the import cache is cold.
+
+### Server browser, join tokens, account page (WP3.2 / WP3.3)
+
+- The list and its live stream carry the player bearer; a 401 refreshes the session once and a
+  second 401 signs you out (the SIGN IN gate returns). Rows and the detail panel badge listings
+  **VERIFIED** (operator shown) or **UNVERIFIED** (anonymous join only).
+- Joining a Verified listing requests a single-use join token (`POST /servers/{id}/join`) and
+  presents it in Hello; the server takes your name from the token. Every redial (RETRY, auto-
+  reconnect) mints a fresh one through `ConnectionManager.JoinTokenProvider`. A `MsgReject` code 2
+  shows "JOIN TOKEN REJECTED" with a retry that fetches a new token. Unverified listings join
+  anonymously under the callsign.
+- **ACCOUNT** (header button, Settings → PILOT, `--ui-open=account`): display name edit via
+  `PATCH /api/me`, career line, linked logins, MANAGE IN BROWSER (`/me`), SIGN OUT.
+- Harness: `--join-listing=<exact name>` auto-joins that listing once it appears (use with a seeded
+  `user://auth.json`; pairs with `--autofly`).

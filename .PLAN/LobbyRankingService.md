@@ -1,45 +1,644 @@
-**TODO: Research how the Steamworks API will impact this plan**
+# Public Lobby — Identity, Persistence & Ranking: hand-off plan
 
-## High level plan
-Update `lobby` service to allow retention of players across sessions. Players will be associated with an external identity, which can be used to authenticate them across sessions.
+**Status:** slice 1 IMPLEMENTED 2026-09-06 on branch `auth-lobby-ranking` and DEPLOYED 2026-09-07 to https://stellarlobby.wivuu.com (see §8 for per-package notes and what is still user-owned).
+**Language:** [`public-lobby/CONTEXT.md`](../public-lobby/CONTEXT.md) — use its words (Player, Pilot,
+Match, Listing, Game Server, Operator, Verified, Ranked, Join Token, Result, Ladder, Rating).
+**Decisions of record:** [ADR-0001](../docs/adr/0001-public-lobby-is-its-own-identity-issuer.md),
+[ADR-0002](../docs/adr/0002-postgres-system-of-record-grains-single-writers.md).
+**Steamworks TODO (resolved):** Steam joins v1 via OpenID 2.0 web login only, env-gated on a Steam Web
+API key. Steam session tickets (in-client, needs an AppID + Steamworks SDK) are a later second login
+method mapped to the same SteamID. No Steam integration exists in the repo today.
 
-### Authentication & Identity
-Clients, when they connect to a lobby, will be challenged to authenticate user their external identity. Ideally the client should launch a browser to login, and the client will either automatically receive an authentication token once the user signs in via browser.
+This document is written for an orchestrating agent that will run the work as phased packages with
+sub-agents. Section 1 is the settled design, Section 2 the current-code touch points (so sub-agents
+skip re-exploration), Section 3 the shared contracts every package codes against, Section 4 the
+work packages with dependencies and acceptance criteria, Section 5 rules and gotchas, Section 6 what
+still needs the user.
 
-Supported authentication providers:
-- Google
-- Apple
-- Steam
-- Github
+---
 
-It may make sense to host a keyclock or another managed identity service such as Auth0 to handle the authentication flow and token issuance.
+## 1. Settled design
 
-The client can derive a unique token that can be passed to each game server which the game server can use to authenticate the player, but ensuring that the game server cannot reuse that token for malicious purposes or across sessions or other servers to impersonate (single use per-server).
+### 1.1 Identity and access
+- **The public lobby is the identity issuer** (ADR-0001). ASP.NET Core Identity (.NET 10) owns users,
+  external logins, and passkeys. No Keycloak, no Auth0.
+- **Providers are env-gated:** Google + GitHub (client id/secret), Steam (Web API key, used for the
+  persona-name default; Steam OpenID itself needs no key). Passkeys are always on, so a bare local lobby
+  with zero provider config still creates accounts (passkey-only signup). Apple deferred.
+- **One device-code flow (RFC 8628) for clients AND game servers.** The client opens the browser at the
+  code-prefilled approval URL (`verification_uri_complete`); the user clicks Approve. No localhost
+  listener, no custom URI scheme.
+- **Two token families:**
+  - *Lobby sessions* (players and game servers): opaque, random, stored hashed; refresh token rotates on
+    use, 90-day sliding window; access token 15 min.
+  - *Join tokens*: ES256 JWT signed by a lobby keypair stored in Postgres and published at
+    `/.well-known/jwks.json`; `aud` = listing id, `sub` = player id, claims `name`, `jti`; 60 s expiry;
+    single use (the game server remembers `jti`s for the expiry window). Verified OFFLINE by the game
+    server. The lobby records every issuance (plausibility check for results).
+- **Display name:** unique, case-insensitive (`citext`), 3–24 chars (wire cap), defaulted from the
+  provider profile at first login, changed only via the lobby API. Match records freeze the name at play
+  time; a mid-match rename does not propagate into the live roster.
+- **Client credential storage:** `user://auth.json` (refresh token + display name only), never
+  `settings.cfg`. Sign out deletes the file and revokes at the lobby.
+- **Admins:** `LOBBY_ADMINS` env var = comma list of external logins (`github:<login>`,
+  `google:<sub>`, `steam:<steamid>`, or `name:<display-name>`); matching players get the admin role at
+  login.
 
-Game servers must authenticate with the lobby through a similar mechanism, prompting the user to enter a code at a specific URL in order to authenticate their server with their external identity.
+### 1.2 Servers, listings, trust
+- **Game Server is durable:** id minted at first device-code approval, persisted in a credential file
+  beside the sim-cache (path overridable), owned by an Operator (a Player). A **Listing** is its live
+  registration. "Hosted by" = operator display name; `SIM_HOSTED_BY` is removed.
+- **Verified vs Unverified listings:** listing requires an authenticated game server unless
+  `ALLOW_UNVERIFIED_SERVERS=true` (default false). Unverified listings have no operator, are badged in
+  the client, never get join tokens, accept anonymous joins only, and can never deliver results.
+- **A server that holds a listing (verified) requires a join token from every joiner.** Unlisted servers
+  keep today's anonymous behaviour, so `--anonymous`/`--autofly` harnesses run unchanged. `SIM_SECRET`
+  (shared password) stays orthogonal.
+- **Trust level:** `RANKED_RESULTS=flagged|authenticated` (default `flagged`): whose results move the
+  global ladder. Per-server history is recorded for every verified server regardless. The plausibility
+  check (every pilot in a result must have been issued a join token for that game server) is always on;
+  a violating result is rejected whole and logged.
+- **Presence is recorded, not enforced:** PlayerGrain tracks the current listing from roster updates
+  (which now carry player ids); a second join token simply moves the player.
 
-### Player Retention
-Once authenticated, the lobby service will associate the player's session with their external identity. This allows the service to retain player information across sessions, enabling features such as persistent ranking, loadouts, and other player-specific data.
+### 1.3 Matches and counting
+- **Ingestion is HTTP from the game server** with its access token: `POST /matches` at StartMatch
+  (server-minted match GUID + map + listing id), `POST /matches/{id}/result` at end. Idempotent by match
+  id; unsent reports spool to disk and retry with backoff.
+- **Abandoned:** a match with no result 10 min after its listing disappears → `abandoned`, kept in
+  history, never counted (Orleans reminder).
+- **Counting rules:** only win-condition endings count. Every pilot on the ledger gets the match with
+  their team's outcome, leavers included. The ranked standing is snapshotted at result acceptance from
+  the server's ranked flag + the lobby trust level at that moment.
+- **Rank is staged:** slice 1 = cumulative **Ladder** from the ledger (points, wins, K/D/EJ) — views:
+  global ranked, per-server all-matches. Slice 2 = Glicko-2 team **Rating** once real data exists.
 
-### Persistence
-- Use a Postgresql (EF Core 10+) database for persistence
-- Potentially use Garnet as a persistent caching layer
-- Use Microsoft Orleans (10+) actors as service layer in front of most postgres calls to act as distributed in-memory cache.
+### 1.4 Persistence and hosting
+- **Orleans 10.x stable, NO journaling** (`Microsoft.Orleans.Journaling` is alpha-only and ships only an
+  Azure Storage provider — verified 2026-09-05). One process co-hosts ASP.NET + silo. ADO.NET
+  clustering + reminders on the same Postgres from day one.
+- **Grains are single writers of their rows through EF Core** (ADR-0002). No Orleans grain-storage
+  provider. Single-key reads go through the entity grain (PlayerGrain / GameServerGrain / MatchGrain,
+  `[ReadOnly]` getters). Aggregates and lists go through a per-silo `[StatelessWorker(1)]` query grain
+  over a no-tracking EF context with a short cache. Leaderboards are SQL views.
+- **The live listing registry and signaling stay in memory** for slice 1 (`InMemoryServerRegistry`,
+  `SignalingRelay`). Moving them into grains waits for a real second replica.
+- **Schema** snake_cased via `EFCore.NamingConventions`; Identity tables as shipped (renamed by the
+  convention). All history kept; no retention policy.
+- **Persisted in v1:** identity, external logins, display name, sessions, game servers, matches,
+  match pilots, aggregates. **No loadouts.**
+- **Hosting:** Railway + Railway Postgres. dotnet-postgres skill contributes model, connection
+  (`NpgsqlDataSource` + `AddPostgresContext`), migrations, Testcontainers; skip Bicep/Entra. Migrations
+  run as the lobby binary's `--migrate` (migrate-and-exit) mode in Railway's pre-deploy command. Aspire
+  AppHost is local-dev only (optional).
+- **Web pages:** Razor Pages inside the lobby, htmx (vendored under wwwroot) + Tailwind via the
+  standalone CLI (MSBuild target at build + in Dockerfile; generated CSS not committed). No SPA.
 
-Actors:
-- PlayerGrain: Represents a player in the system. A player can be connected to 1 game server.
-    - Tracks the player's connection to a game server and other player-specific data that needs to be retained across sessions.
-    - Retains score from games across sessions, allowing the player's performance to be tracked over time.
-- GameServerGrain: Represents a game server in the system.
-    - Tracks the state and availability of the game server, including which players are connected to it and other server-specific data that needs to be retained across sessions.
-    - These are things Lobby currently keeps in-memory
-    - May have an associated GameGrain to track an active game hosted on this server.
-- GameGrain: Represents a game in the system; tracks the state and progress of a game, including participating players, scores, and other relevant game-specific data.
-    - Owned by GameServerGrain(s)
-    - Maintains the state of the game, including which players are participating, their scores, and other game-specific information that needs to be retained across sessions.
-    - Which map, game state, and other relevant game-specific information that needs to be retained in a distributed way
+### 1.5 Client UX
+- Sign-in modal on first launch when no session; "Continue without account" link → anonymous mode
+  shows **no server list**, only direct join by address. Harness flags (`--autofly`, `--anonymous`,
+  `--ui-shot`, `--ui-open`, `--hangar*`, `--stress-*`) suppress the modal entirely.
+- Server browser (signed in): bearer on `/servers` + SSE; Verified/Unverified badge; joining a verified
+  listing requests a join token then sends it in Hello; joining an unverified listing is an anonymous
+  join with the display name as the default callsign.
+- In-client account page: display name edit (lobby API), sign out, linked logins read-only +
+  "Manage in browser" (opens web `/me`). Settings dialog's callsign field becomes this when signed in.
+- The listing endpoints require a player session (consequence of "anonymous sees no list").
 
-### Challenges
-- Authenticating that what the game server reports about a player's actions or score is accurate and corresponds to the actual gameplay.
-- Ensuring that the distributed in-memory cache (Orleans actors) remains consistent with the underlying Postgresql database.
-- Handling scenarios where a player's session may be disconnected and later reconnected, ensuring that the player's state is correctly restored.
+### 1.6 Slices
+- **Slice 1 (this plan):** login + Player record + join tokens + server auth + ingestion + ladder.
+- **Slice 2:** Glicko-2 rating; Steam session tickets when an AppID exists.
+- **Slice 3:** live registry/signaling into grains (multi-replica), Apple login, loadouts (needs a
+  per-server content fingerprint — separate design).
+
+---
+
+## 2. Current-code touch points (verified 2026-09-06)
+
+| Area | Where | What matters |
+|---|---|---|
+| Lobby host | `public-lobby/PublicLobby.cs` | Minimal-API routes: `/health`, `POST/GET/DELETE /servers`, `/servers/ws` (server control WS, first frame `{type:"auth",sessionId,secret}`), `/servers/events` (SSE), signaling `/servers/{id}/connect`, `/pending`, `/connect/{ticket}/answer`. DI at lines ~36–40 (`LobbyEventBus`, `ServerConnectionManager`, `InMemoryServerRegistry`, `SignalingRelay`, `ReachabilityProbe`). Listens on `PORT` or `SHARE_PORT` (8091). |
+| Lobby registry | `public-lobby/ServerRegistry.cs`, `Contracts.cs` | `ServerEntry` (SessionId = today's listing id, Name, PublicEndpoint, Players, MaxPlayers, State, Roster, Protected, ProtocolVersion, HostedBy), per-listing 256-bit secret (FixedTimeEquals), 30 s TTL. `LobbyRosterEntry(Name, Team, Ready, Flying)` — will gain `PlayerId`. |
+| Lobby csproj/Docker | `public-lobby/PublicLobby.csproj` (net10.0, `Microsoft.NET.Sdk.Web`, no packages, `InvariantGlobalization=true`), `public-lobby/Dockerfile` (copies ONLY `public-lobby/` — must widen COPY once a data project exists; build context is repo root, see `scripts/deploy-railway-lobby.ps1`). |
+| Server → lobby | `server/Net/LobbyRegistrar.cs` | Registers when `SIM_PUBLIC_NAME` set; `SIM_HOSTED_BY` (line ~121, 24-char cap) → remove; bearer secret on DELETE (line ~404); WS frames `ping`/`update` (players/state/roster). Reads `PUBLIC_LOBBY` (default `https://wivuu-public-lobby-production.up.railway.app`). |
+| Server backends | `server/Backend/Backends.cs` | `IPlayerDirectory` (clientId→name; gains PlayerId), `IMatchResultSink.ReportResult(byte winner)` (default logs; becomes the lobby reporter), `SharedSecretAuthenticator` (uses `JoinTokens.ConstantTimeEquals`), `IMatchmaker`. `results.ReportResult(sim.Winner)` fires from `server/Program.cs:335`. |
+| Hello wire | `server/Net/ClientHub.cs` `TryParseHello` (~619) | v9 layout `u8 secretLen, secret, u8 nameLen, name, u8 tokenLen, reconnectToken`; every field optional. Client side `GameNetClient.SendHello` (~362). Add a trailing `u16 joinTokenLen, joinToken` (JWT ≈ 300–400 B, so NOT u8). Bump `Wire.ProtocolVersion` (shared) — THE constant. |
+| Identity memo | `server/Net/ClientHub.cs:266` `_pilotIdentity` | `(Name, Team)` per client id, used by `BuildMatchStats` for leavers — extend with `PlayerId`. Reconnect token minted at ~701 (`RandomNumberGenerator`, 16 B) — untouched. |
+| Match lifecycle | `server/Sim/Simulation.cs` | `StartMatch()` (~1222), `PhaseEnded` set at ~3458 (win condition), `_returnToLobbyAtTick` (~816). Ledger `Simulation.MatchStats` (~2600); `scoring:` block in `server/Content/core/world.yaml:359`. |
+| Dead code | `shared/JoinTokens.cs` | `Compute` has ZERO callers (STDB-era). Keep `ConstantTimeEquals` (move next to `SharedSecretAuthenticator` or leave), delete `Compute` + its comment. GLOSSARY "Join Token" entry must be rewritten to the new meaning. |
+| Client lobby UI | `client/scripts/ServerLobbyOverlay.cs` | BCL `HttpClient`; SSE at `{_cm.LobbyBase}/servers/events?protocol=…` (~419) with backoff; callsign box synced to `UserPrefs.PilotName` (~200). `ServerDto` mirrors `ServerEntry`. |
+| Client prefs | `client/scripts/UserPrefs.cs` | `PilotName` in `user://settings.cfg [player] name` (24 cap), `last_ship`. |
+| Client connect | `client/scripts/ConnectionManager.cs` | `LobbyBase` from `--lobby` / `PUBLIC_LOBBY` / default (~128–144). |
+| Client settings | `client/scripts/ui/SettingsDialog.cs` | Callsign editor (~17, ~338). Design system: `DESIGN.md`, `client/scripts/ui/*` components, `UiShowcase` (F9 / `--ui-showcase`). |
+| Tests | `tests/*Test/` | Console `dotnet run` apps, listed in `wivuullegiance.slnx`. `tests/LobbyTest` = game-server roster — new suite is `tests/PublicLobbyTest`. |
+| Scripts / deploy | `scripts/run-server.ps1`, `run-client.ps1`, `deploy-railway-lobby.ps1`, `docker-compose.yml`, `docs/DEPLOY.md`, `public-lobby/README.md` | All document `SIM_HOSTED_BY` / open registration — update. |
+
+---
+
+## 3. Shared contracts (code against these; change here first)
+
+### 3.1 Lobby HTTP surface (new/changed)
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| POST | `/auth/device` | none | `{client:"godot"\|"sim-server", serverName?}` → `{device_code, user_code, verification_uri, verification_uri_complete, expires_in, interval}` |
+| POST | `/auth/token` | none | `grant_type=urn:ietf:params:oauth:grant-type:device_code` (poll; `authorization_pending`/`slow_down`/`expired_token`) or `grant_type=refresh_token` (rotate) → `{access_token, refresh_token, expires_in, subject:{kind:"player"\|"server", id, displayName}}` |
+| POST | `/auth/revoke` | bearer | revoke this refresh lineage |
+| GET | `/.well-known/jwks.json` | none | join-token public keys (`kid`) |
+| GET/PATCH | `/api/me` | player bearer | profile; PATCH `{displayName}` (uniqueness 409) |
+| POST | `/servers/{listingId}/join` | player bearer | → `{joinToken}`; 404 unverified/unknown listing; records issuance |
+| GET | `/servers`, `/servers/events` | player bearer | now authenticated; entries gain `verified`, `operatorName` (replaces `hostedBy`), `gameServerId` |
+| POST | `/servers` | server bearer OR none | none allowed only when `ALLOW_UNVERIFIED_SERVERS=true`; response unchanged (+`verified`) |
+| POST | `/matches` | server bearer | `{matchId, listingId, map, startedAt}` idempotent |
+| POST | `/matches/{matchId}/result` | server bearer | Result payload (3.3); 202 accepted / 409 already-final / 422 plausibility |
+| GET | `/login`, `/device`, `/me`, `/ladder`, `/players/{name}`, `/servers/{id}/history`, `/admin` | cookie (web) | Razor Pages; `/admin` requires admin role |
+| POST | `/admin/servers/{gameServerId}/ranked` | admin cookie | toggle ranked |
+
+Signaling routes and `/servers/ws` are unchanged. The `ws` `update` frame's roster entries gain
+`playerId` (null for anonymous joins).
+
+### 3.2 Join token (JWT, ES256)
+`iss`=lobby public URL, `sub`=player id, `aud`=listing id, `name`=display name, `jti`, `iat`,
+`exp`=iat+60 s, header `kid`. Game server: fetch JWKS at registration and on unknown `kid`; verify
+signature/aud/exp; reject reused `jti` within the window; on success the Hello's name field is IGNORED
+and (`sub`,`name`) become the pilot's identity.
+
+### 3.3 Result payload (`POST /matches/{id}/result`)
+```json
+{ "matchId":"…", "gameServerId":"…", "listingId":"…", "map":"Brimstone Gambit",
+  "startedAt":"…", "endedAt":"…", "winnerTeam":0, "endReason":"win-condition|reset|shutdown",
+  "teams":[{"team":0,"garrisonsDestroyed":1,"outpostsDestroyed":2,"score":1234}],
+  "pilots":[{"playerId":"…","displayName":"Vex","team":0,"kills":3,"deaths":1,"ejects":2,
+             "points":275,"connectedAtEnd":true}] }
+```
+Only `endReason=win-condition` counts; others are stored as ended-uncounted.
+
+### 3.4 Tables (snake_case; Identity's own tables omitted)
+`players`(id=identity user id, display_name citext unique, is_admin, matches_played, wins, losses,
+kills, deaths, ejects, points, created_at, last_seen_at, current_listing_id?) ·
+`sessions`(id, subject_kind, subject_id, refresh_hash, parent_id?, created_at, expires_at,
+revoked_at?) · `device_codes`(device_code, user_code unique, subject_kind, requested_server_name?,
+status, approved_subject_id?, created_at, expires_at) · `signing_keys`(kid, private_pem, public_jwk,
+created_at, retired_at?) · `game_servers`(id, operator_player_id, name, ranked, created_at,
+last_listed_at?) · `join_tokens_issued`(jti, player_id, game_server_id, listing_id, issued_at,
+expires_at) · `matches`(id, game_server_id, listing_id, map, started_at, ended_at?, winner_team?,
+end_reason?, status active|ended|abandoned, counted bool, ranked bool) · `match_teams`(match_id, team,
+garrisons_destroyed, outposts_destroyed, score) · `match_pilots`(match_id, player_id,
+display_name_at_match, team, kills, deaths, ejects, points, connected_at_end, won bool). Views:
+`ladder_global` (ranked-counted only), `ladder_by_server`.
+
+### 3.5 New env vars
+Lobby: `ConnectionStrings__postgres-database`, `LOBBY_PUBLIC_URL` (issuer + verification_uri),
+`AUTH_GOOGLE_CLIENT_ID/SECRET`, `AUTH_GITHUB_CLIENT_ID/SECRET`, `AUTH_STEAM_API_KEY`, `LOBBY_ADMINS`,
+`RANKED_RESULTS` (`flagged` default), `ALLOW_UNVERIFIED_SERVERS` (`false` default), Orleans silo/gateway
+ports (defaults fine on one replica). Server: `SIM_AUTH_FILE` (credential path, default beside
+sim-cache), `SIM_REPORT_SPOOL` (default beside sim-cache). Removed: `SIM_HOSTED_BY`.
+
+---
+
+## 4. Work packages
+
+Model routing (per repo memory): plan/hard reasoning on Opus/Fable, mechanical plumbing on Sonnet,
+exploration on Haiku. Each WP names its recommended executor. "Parallel" = may run concurrently with
+siblings in the same phase once the phase's dependencies are met. Every WP ends with: touched files
+CSharpier-formatted (only touched files), suite(s) green, GLOSSARY/CONTEXT updated if a term or system
+changed.
+
+### Phase 0 — Foundations (all parallel after WP0.0)
+
+**WP0.0 Project layout + contracts stub** (Opus/Fable, ~small) — Decide and create:
+`public-lobby-data/PublicLobby.Data.csproj` (EF model, DbContext, migrations, naming convention;
+referenced by the lobby and the test suite) and `tests/PublicLobbyTest/`. Add both to
+`wivuullegiance.slnx`. Widen `public-lobby/Dockerfile` COPY to include `public-lobby-data/` (context
+is repo root already). Add a `Contracts/` folder in `public-lobby` holding the DTOs of §3.1/3.3 so
+client/server/lobby packages compile against one shape. *Accept:* solution builds; empty suite runs.
+
+**WP0.1 Data + migrations + migrate mode** (Sonnet) — dotnet-postgres skill steps 1–3 + 5 adapted:
+`NpgsqlDataSource` + `AddPostgresContext<LobbyDbContext>("postgres-database")`,
+`UseSnakeCaseNamingConvention()`, `citext` extension, entities of §3.4, Identity via
+`AddIdentityCore<LobbyUser>().AddEntityFrameworkStores<LobbyDbContext>()` + passkeys
+(`.AddPasskeys()` — .NET 10 built-in). `--migrate` mode in `PublicLobby` Program (create-if-absent,
+`MigrateAsync`, exit 0). Testcontainers `postgis/postgis` (or plain `postgres:17`) fixture in
+`tests/PublicLobbyTest` applying the real migrations. *Accept:* `dotnet run --project public-lobby --
+--migrate` against a local container succeeds twice (idempotent); suite spins a container and asserts
+the schema.
+
+**WP0.2 Orleans co-host** (Sonnet) — `Microsoft.Orleans.Server`, `Microsoft.Orleans.Clustering.AdoNet`,
+`Microsoft.Orleans.Reminders.AdoNet` (+ `Npgsql` invariant `Npgsql`), `UseAdoNetClustering` /
+`UseAdoNetReminderService` on the same connection string; run the Orleans ADO.NET SQL scripts as an EF
+migration (inline SQL, per skill `references/migrations.md`). Orleans `TestCluster` fixture in the
+suite (in-memory clustering for tests). *Accept:* lobby boots as a silo locally; a trivial grain
+round-trips in the suite.
+
+**WP0.3 Web shell + auth providers** (Sonnet UI, Opus review) — Razor Pages under `Pages/`; Tailwind
+standalone CLI MSBuild target (`BeforeBuild`, downloads pinned binary or expects it in `tools/`;
+output `wwwroot/app.css`, gitignored); vendored `wwwroot/htmx.min.js`; palette from `DESIGN.md`
+tokens. Cookie auth + external providers registered ONLY when env present (`AddGoogle`,
+`AspNet.Security.OAuth.GitHub`, `AspNet.Security.OpenId.Steam` 10.x; Steam persona via
+`ISteamUser/GetPlayerSummaries` when `AUTH_STEAM_API_KEY` set). Pages: `/login` (provider buttons +
+passkey sign-in/sign-up), `/me` (display name, linked logins, passkeys, sign-out-everywhere).
+`LOBBY_ADMINS` → admin role claim at sign-in. *Accept:* passkey-only signup works with zero provider
+env; a configured GitHub app signs in and lands on `/me`.
+
+**WP0.4 Dead join-token removal** (Sonnet, tiny) — delete `JoinTokens.Compute`, keep
+`ConstantTimeEquals`, rewrite the GLOSSARY "Join Token" entry to §1.1's meaning (pointing at
+CONTEXT.md). *Accept:* build + CryptoTest green.
+
+### Phase 1 — Identity plumbing (needs Phase 0)
+
+**WP1.1 Device-code + sessions** (Opus/Fable) — `/auth/device`, `/auth/token`, `/auth/revoke`;
+`/device` page (enter/approve code; pre-filled via `verification_uri_complete`; requires web login;
+shows "Approve Godot client" vs "Approve game server '<name>'"). Sessions table, rotation with
+lineage (reuse of a rotated token revokes the lineage), 90-day sliding, 15-min access tokens (opaque,
+looked up + cached per silo). Rate-limit polling (`interval`), user codes 8 chars from a 20-char
+alphabet, 10-min expiry. *Accept:* suite covers pending→approved→token→refresh-rotate→reuse-revokes;
+manual: approve from browser.
+
+**WP1.2 PlayerGrain + profile API** (Opus/Fable) — `PlayerGrain` (key = player id; single writer of
+`players`; `[ReadOnly]` getters; loads via EF on activate), `PATCH /api/me` (uniqueness, 3–24, cooldown
+optional), `QueryGrain` `[StatelessWorker(1)]` for `/ladder` + `/players/{name}` over no-tracking
+context with a 5 s cache. Ladder Razor pages. *Accept:* rename conflicts 409; ladder view renders from
+seeded rows; single-key read served by grain (assert no DB hit on second read).
+
+**WP1.3 Join tokens** (Opus/Fable) — `signing_keys` (generate on first boot, ES256, `kid`),
+`/.well-known/jwks.json`, `POST /servers/{listingId}/join` (verified listings only; writes
+`join_tokens_issued`), shared verifier in `shared/` (`Microsoft.IdentityModel.Tokens` +
+`System.IdentityModel.Tokens.Jwt` referenced from `server/`; `shared/` stays dependency-free — put the
+verifier in `server/Net/JoinTokenVerifier.cs`). *Accept:* suite mints + verifies + rejects wrong aud /
+expired / replayed jti.
+
+**WP1.4 Listings become authenticated + Verified** (Sonnet) — `/servers`, `/servers/events` require
+player bearer; `POST /servers` accepts server bearer (binds listing → `game_servers` row, `verified`
+true, `operatorName`) or none only if `ALLOW_UNVERIFIED_SERVERS`; `ServerEntry` gains `verified`,
+`gameServerId`, `operatorName` (drop `hostedBy`); roster entries gain `playerId`. `GameServerGrain`
+(single writer of `game_servers`, `last_listed_at`). Keep `InMemoryServerRegistry` + signaling as is.
+*Accept:* unauthenticated GET `/servers` → 401; unverified POST rejected unless flag; SSE carries
+`verified`.
+
+### Phase 2 — Game server integration (needs Phase 1; WP2.1 → WP2.2/2.3 parallel → WP2.4)
+
+**WP2.1 Server auth on boot** (Sonnet) — `LobbyRegistrar`: if `SIM_PUBLIC_NAME` set and no
+credential file → `POST /auth/device {client:"sim-server", serverName}`, print
+`verification_uri_complete` + `user_code` to the console, poll in the background, run UNLISTED
+meanwhile; on approval persist `{gameServerId, refreshToken}` to `SIM_AUTH_FILE` (0600) and register
+with the bearer. Refresh on 401. Remove `SIM_HOSTED_BY` everywhere (scripts, compose, docs).
+*Accept:* first boot prints code; after approval the listing shows Verified with the operator name;
+restart re-lists without a prompt.
+
+**WP2.2 Hello join token + identity** (Opus/Fable — protocol change) — Wire: Hello gains
+`u16 joinTokenLen + bytes` after the reconnect token; bump `Wire.ProtocolVersion`. Server: if listed
+(verified), REQUIRE a valid token (else reject Hello with the existing bad-secret path/message); else
+anonymous as today. On success set name from token, store `PlayerId` in `IPlayerDirectory` and
+`_pilotIdentity`; roster `update` frames carry `playerId`. `JoinTokenVerifier` JWKS cache keyed by
+`kid`, `jti` replay set with expiry sweep. *Accept:* LobbyTest-style unit coverage for parse;
+`--autofly` smoke against an unlisted server unchanged; manual: token join on a listed server shows the
+account name.
+
+**WP2.3 Match reporting** (Sonnet) — `LobbyMatchReporter : IMatchResultSink` replaces the logging
+sink when the server holds a credential: `POST /matches` at `StartMatch` (mint GUID in Simulation,
+expose `MatchId`), `POST /matches/{id}/result` at `PhaseEnded` (+`endReason` reset/shutdown for other
+exits) built from `Simulation.MatchStats` + `_pilotIdentity`, spooled to `SIM_REPORT_SPOOL` as JSON,
+retried with backoff until 2xx/409/422 (422 → logged, dropped). Widen `IMatchResultSink` to carry the
+ledger (keep `LoggingMatchResultSink` for unlisted servers). *Accept:* kill the lobby mid-match →
+report lands after restart; duplicate POST → 409.
+
+**WP2.4 Lobby ingestion** (Opus/Fable) — `MatchGrain` (single writer of `matches`/`match_teams`/
+`match_pilots`): `Start` (idempotent), `Complete(result)` with plausibility check against
+`join_tokens_issued` (reject whole), counted/ranked snapshot (`RANKED_RESULTS` + server flag), then
+fan-out `PlayerGrain.ApplyMatch(...)` per pilot (aggregates, `current_listing_id` clear) and
+`GameServerGrain.OnMatch`. Abandonment: reminder registered at `Start`, re-armed on listing heartbeat,
+fires 10 min after the listing vanished → `abandoned`. `ladder_*` views. *Accept:* suite: accept →
+aggregates; plausibility → 422; abandonment via `TestCluster` reminder fast-forward; per-server history
+page renders.
+
+### Phase 3 — Client (needs Phase 1 contracts; WP3.1 → WP3.2/3.3 parallel)
+
+**WP3.1 Client auth session** (Opus/Fable for the flow, Sonnet for UI) — `AuthSession` service:
+`user://auth.json`, refresh on boot, device flow (`OS.ShellOpen(verification_uri_complete)`, poll),
+sign-in modal on launch (DESIGN.md components; "Continue without account"), suppressed by harness
+flags (list in §1.5) and when `--host`/direct join is given. Anonymous mode: server browser shows a
+direct-join panel only. *Accept:* `--ui-shot` of the modal; `--autofly` never shows it; manual login.
+
+**WP3.2 Server browser + join** (Sonnet) — bearer on list + SSE; badge Verified/Unverified;
+`operatorName`; join verified → `POST /servers/{id}/join` → token into `SendHello`; join unverified →
+anonymous with display name default; protocol filter unchanged. *Accept:* `--ui-shot` badges; joining a
+listed server end-to-end locally.
+
+**WP3.3 Account page** (Sonnet) — display name edit via `PATCH /api/me`, sign out (revoke + delete
+file), linked logins read-only, "Manage in browser" (`OS.ShellOpen` `/me`); Settings dialog callsign
+row becomes this when signed in; add to `UiShowcase`. *Accept:* `--ui-open` capture; rename reflected
+after next join.
+
+### Phase 4 — Admin, ops, verification (needs Phases 2–3)
+
+**WP4.1 Admin page** (Sonnet) — `/admin`: game servers list (operator, last listed, matches), ranked
+toggle, trust level shown. *Accept:* non-admin 403; toggle persists via `GameServerGrain`.
+
+**WP4.2 Deploy + docs** (Sonnet) — Railway: attach Postgres, set env of §3.5, pre-deploy command
+`dotnet PublicLobby.dll --migrate`; `deploy-railway-lobby.ps1` updated; `docker-compose.yml` gains a
+postgres service for the lobby; `public-lobby/README.md`, `docs/DEPLOY.md`, `README.md`,
+`QUICKSTART.md`, `scripts/run-server.ps1` header updated (device-code step, removed `SIM_HOSTED_BY`);
+GLOSSARY: rewrite "Join Token", extend "Public Lobby", add "Game Server"/"Verified"/"Ranked" pointers to
+CONTEXT.md. *Accept:* fresh Railway deploy migrates and serves `/login`.
+
+**WP4.3 End-to-end verification** (Opus/Fable) — local Postgres + lobby + server (device-approved) +
+client: login → browse → join verified server → play to a win → result accepted → ladder shows it;
+then unlisted server + `--autofly` unchanged. Use the `verify` skill for captures. Needs the headless
+authenticated path from §6 item 1. *Accept:* evidence captured; regression suites green (baseline
+failures per memory: CollisionTest×4 / AutopilotTest×3 / FogTest×1 / CommanderTest flaky).
+
+---
+
+## 5. Rules and gotchas for every sub-agent
+- **This repo auto-commits AND pushes mid-session.** Leave the tree buildable at the end of every turn;
+  forward-fix, never force-push.
+- **CSharpier 1.2.6 is pinned; HEAD has ~163 format-dirty files.** Format ONLY files you touched.
+- **`Wire.ProtocolVersion` is THE protocol constant.** Any Hello/roster wire change bumps it; dotnet
+  suites don't load the Godot client, so smoke with `--autofly` (client flags BEFORE `--`; from zsh use
+  `pwsh -Command "& ./scripts/run-client.ps1 -GodotArgs @(...)"`).
+- **Headless sim needs a held connection to tick** (`--server --anonymous`).
+- **`shared/` is dependency-free by design** — JWT verification lives in `server/`.
+- **`InvariantGlobalization=true`** in the lobby csproj: fine for `citext`, but don't rely on culture
+  collation; uniqueness is `citext`.
+- **Docker build context is the repo root**; the lobby Dockerfile currently copies only `public-lobby/`.
+- **Never commit secrets**: provider secrets, `SIM_AUTH_FILE`, `auth.json`, signing keys (DB only).
+- **Prefer C# local functions over delegate variables** (repo convention).
+- **CONTEXT.md is a glossary, not a spec** — no implementation detail there; GLOSSARY.md carries the
+  key-file pointers.
+- **Testcontainers needs Docker** on the dev box; there is no CI running suites — say so in reports.
+- Orleans: entity grains are the ONLY writers of their rows; endpoints never write via EF directly;
+  lists/aggregates go through the query worker or views. Mark grain getters `[ReadOnly]`.
+
+## 6. Needs the user before/while implementing
+
+**Resolutions taken by the supervisor on 2026-09-06 (override below if you disagree):**
+1. Adopted the dev grant: `AUTH_DEV_LOGIN=true` → `POST /auth/token` `grant_type=dev` +
+   `display_name` (constant `LobbyGrantType.Dev`); refused with `unsupported_grant_type` otherwise.
+2. Still yours: Google/GitHub OAuth apps + Steam Web API key. Local dev runs passkey-only.
+3. Still yours: Railway Postgres + `LOBBY_ADMINS`. WP4.2 documents the exact env.
+4. Layout: `public-lobby-data/PublicLobby.Data.csproj` (EF model/migrations) + `tests/PublicLobbyTest/`
+   as planned. DEVIATION: the HTTP contracts live in **`shared/Lobby/LobbyContracts.cs`**
+   (`StellarAllegiance.Shared.Lobby`), not `public-lobby/Contracts/`, because the Godot client and
+   the sim server must compile the same records and neither can reference a Web SDK project. The
+   lobby now references `shared/` + `public-lobby-data/`; the Dockerfile copies all three dirs.
+5. No rename cooldown in slice 1.
+
+1. **Headless authenticated smoke.** Harnesses skip login, but WP4.3 must exercise the token path
+   non-interactively. Recommendation: a lobby dev-only grant (`AUTH_DEV_LOGIN=true` → `POST /auth/token`
+   `grant_type=dev` with a display name) that is refused unless the env is set; never set in production.
+   Confirm or propose another path.
+2. **OAuth app registrations** (Google, GitHub) and a **Steam Web API key** — the user creates them and
+   sets env on Railway; local dev works passkey-only without them.
+3. **Railway Postgres** provisioning and the initial `LOBBY_ADMINS` value (the user's own login).
+4. **Project naming** if `public-lobby-data/` is not wanted (alternative: keep everything in
+   `public-lobby/` and have the suite reference the web project).
+5. **Rename cooldown** length for display names (default proposal: none in slice 1).
+
+## 7. Definition of done (slice 1)
+A new player signs in from the Godot client via the browser, sees only Verified/Unverified badged
+listings, joins a verified server with a join token under their account name, plays a match to a win,
+and the result appears in their match history and on the global ladder (if the server is ranked or the
+trust level allows). An operator authenticates a server once with a device code and it re-lists on
+every restart under their name. Unlisted servers and every existing harness behave exactly as before.
+
+---
+
+## 8. Progress log
+
+- **2026-09-06 WP0.0 done** (supervisor): `public-lobby-data/` (LobbyDbContext stub over Identity
+  + citext), `tests/PublicLobbyTest/` (empty console suite, Testcontainers ref), `shared/Lobby/
+  LobbyContracts.cs` (all §3.1/§3.3 records + constant classes), slnx entries, Dockerfile COPY
+  widened, `dotnet-ef` 10.0.11 in `dotnet-tools.json`. Pinned versions: EF/Npgsql 10.0.3,
+  EFCore.NamingConventions 10.0.1, Identity.EntityFrameworkCore 10.0.11, Orleans 10.3.1,
+  Testcontainers.PostgreSql 4.15.0, AspNet.Security.OAuth.GitHub / OpenId.Steam 10.0.0,
+  Microsoft.IdentityModel.Tokens + System.IdentityModel.Tokens.Jwt 8.22.0.
+- **2026-09-06 WP0.1–0.4 done** (Sonnet sub-agents): EF model + `InitialSchema`/`OrleansAdoNet`
+  migrations, `--migrate` mode, `Hosting/Persistence.cs` (`AddDbContextFactory`), co-hosted silo
+  (`Hosting/OrleansHosting.cs`, `LOBBY_ORLEANS_CLUSTERING=adonet|localhost`), Razor Pages web shell
+  (`/login` passkeys + env-gated Google/GitHub/Steam, `/me`, `/logout`, Tailwind v4.3.3 standalone CLI
+  target, htmx 2.0.9), `Accounts/AccountService.cs`, dead HMAC join token removed. Suite boots the real
+  host via `WebApplicationFactory<Program>` (`tests/PublicLobbyTest/LobbyHostFixture.cs`). GOTCHAS:
+  `IdentityDbContext` 3-arg form has no passkeys table (needs the 9-arg form + `SchemaVersion=3`);
+  Identity's explicit `ToTable` names are NOT snake_cased by the convention (re-mapped by hand); the
+  Orleans PostgreSQL scripts are not in the NuGet packages (fetched from the dotnet/orleans v10.3.1 tag).
+- **2026-09-06 WP1.1 done** (supervisor): `Auth/AuthEndpoints.cs` (`/auth/device|token|revoke`, JSON or
+  form), `Grains/SessionGrain.cs` keyed by lineage (new `sessions.lineage_id` column, migration
+  `SessionLineage`; tokens are `a.<lineage:N>.<random>` / `r.…`), `Grains/DeviceCodeGrain.cs`
+  (single-use approval, slow_down, `[CollectionAgeLimit(12 min)]`), minimal `PlayerGrain` /
+  `GameServerGrain` / `QueryGrain` (`[StatelessWorker(1)]`), `LobbyBearer` auth scheme + policies,
+  `/device` page, dev grant + `GET /login/dev` (both `AUTH_DEV_LOGIN`). AccountService now flips
+  `is_admin` through `PlayerGrain.SetAdmin`. Suite section `AuthTests.cs` (55 checks); page flow verified
+  with curl + cookie jar for a client AND a server approval. Chrome extension was unresponsive, so the
+  passkey ceremony is still unverified in a real browser — user to try `/login` once.
+- **2026-09-06 WP1.2 done** (supervisor): `PlayerGrain.Rename` (409 via unique violation, row
+  reverted), `Api/ProfileEndpoints.cs` (`GET/PATCH /api/me`), `QueryGrain` gains `LadderGlobal` /
+  `LadderByServer` / `PlayerByName` (5 s `IMemoryCache`), pages `/ladder` (paged table), `/players/{name}`,
+  `/me` rename form (reads the grain snapshot now). Suite `ProfileTests.cs` incl. a `DbCommandCounter`
+  interceptor proving the second `PlayerGrain.Get()` issues no SQL. GOTCHAS: raw-seeded Identity users
+  (no security stamp) break cookie sign-in — SchemaTests now seeds "Schema Probe", never a name a later
+  section signs in as; the 5 s list cache means tests must wait it out after seeding.
+- **2026-09-06 WP1.3 + WP1.4 done** — Phase 1 complete. WP1.3 (supervisor): `SigningKeyGrain`
+  (ES256, PKCS#8 PEM + JWK in `signing_keys`, `Rotate` with 10-min grace), `Auth/JoinTokenIssuer.cs`
+  (`Microsoft.IdentityModel.JsonWebTokens` 8.22.0 — used INSTEAD of System.IdentityModel.Tokens.Jwt on
+  both peers; `kid` comes from `ECDsaSecurityKey.KeyId`, never `AdditionalHeaderClaims`),
+  `GET /.well-known/jwks.json`, `POST /servers/{id}/join` (`Auth/JoinEndpoints.cs`),
+  `PlayerGrain.RecordJoinToken` (ledger + presence), `server/Net/JoinTokenVerifier.cs` (+ 15 checks in
+  tests/LobbyTest, custom lifetime validator on an injected TimeProvider; note
+  `SecurityTokenInvalidLifetimeException` maps to Expired). WP1.4 (Sonnet): `ServerEntry` gains
+  `Verified/GameServerId/OperatorName` (drops `HostedBy`), roster entries gain `PlayerId`,
+  `IServerRegistry.Register(req, endpoint, ListingIdentity?)`, `GET /servers` + SSE need a player bearer,
+  `POST /servers` decision table in README ("Listings: Verified vs Unverified"), `ALLOW_UNVERIFIED_SERVERS`
+  read per request. Suite: 194 checks green. NOT yet done: sim server still sends `hostedBy` and
+  registers anonymously (WP2.1), Hello carries no token (WP2.2), client mirrors the old `ServerDto` (WP3.2).
+- **2026-09-06 WP2.4 done** (supervisor, lobby side of Phase 2): `Grains/MatchGrain.cs` (Start
+  idempotent, Complete with plausibility over `join_tokens_issued` + 5-min skew, counted/ranked snapshot
+  via `LobbyPolicy.RankedResultsAuthenticated` + `GameServerGrain.Ranked`, fan-out `PlayerGrain.ApplyMatch`
+  (aggregates only when ranked; presence cleared) + `GameServerGrain.OnMatch`; abandonment = reminder
+  every 5 min → `CheckAbandonment(now)` marks abandoned 10 min after the listing left the registry;
+  a result for a never-started match is accepted), `Api/MatchEndpoints.cs`, `QueryGrain.ServerHistory`,
+  page `/servers/{gameServerId}/history`. DEVIATION: ladders are LINQ in `QueryGrain` (no `ladder_*` SQL
+  views) — add views only if an external SQL consumer appears. Suite: `MatchTests.cs`; 253 checks green.
+- **2026-09-06 WP4.1 done** (supervisor, pulled forward — lobby-only): `/admin` (`[Authorize(Policy=admin)]`,
+  game servers with operator/last listed/match count, Ranked toggle via `GameServerGrain.SetRanked`,
+  trust level + unverified policy shown), `QueryGrain.ListGameServers`, Admin nav link for admins,
+  `AdminTests.cs`. FIXED a WP0.3 bug: every sign-in path applied `LOBBY_ADMINS` AFTER issuing the
+  cookie, so the admin role only appeared on the next login — now role first, then `SignInAsync`
+  (`RefreshSignInAsync` on the existing-external-login path); cookie access-denied is a plain 403.
+- **2026-09-06 WP2.1 done** (Sonnet): `server/Net/LobbyIdentity.cs` (`ILobbyIdentity` seam +
+  `NoLobbyIdentity`; `ClientHub.LobbyIdentity` property, wired in `Program.cs` right after the
+  registrar), `LobbyCredentialStore.cs` (atomic 0600 `{lobbyBase,gameServerId,serverName,
+  refreshToken}` at `SIM_AUTH_FILE`, default beside `SimAssets.CacheDir` — made public),
+  `LobbyAuthClient.cs` (`/auth/device`+`/auth/token` HTTP calls), `LobbyAuthSession.cs` (the
+  testable boot state machine: resume-from-file → refresh_token, else device-code flow with a
+  Warning-level banner, `authorization_pending`/`slow_down`/`expired_token`/`access_denied`
+  handling, injectable delay so tests don't sleep). `LobbyRegistrar` now implements
+  `ILobbyIdentity`, registers with `Authorization: Bearer <access>` (401 → force-refresh → retry;
+  refresh failure → drops the file, restarts the device flow), sets `ListingId` from the response
+  `sessionId` (cleared on any `Deregister`), and refreshes a `JoinTokenVerifier` after every
+  successful registration. `SIM_HOSTED_BY` removed everywhere (registrar, scripts/docs/compose);
+  "hosted by" now comes from the Operator's name via `verified`/`operatorName`. `IPlayerDirectory`
+  gained `PlayerIdOf`/an `OnConnect` overload (default-interface-method shim, so `ClientHub.cs`
+  needed no call-site change beyond the `LobbyIdentity` property); `LobbyEntry`/`Lobby.Snapshot`/
+  `LobbyStatus.RosterDto` gained an optional `PlayerId` plumbed through but always null today (no
+  caller passes `playerIdOf` yet — WP2.2's job). Suite: `tests/LobbyTest/LobbyAuthTests.cs` (credential
+  round-trip + 0600, malformed/mismatched file, and the full device-flow state machine — pending →
+  slow_down → approved, stored-credential resume, access_denied-stops — against a stub
+  `HttpMessageHandler`, no real sleeping). Manual smoke (local Postgres + lobby +
+  `AUTH_DEV_LOGIN=true` + dev-cookie `/device` approval) verified: banner printed, `GET /servers`
+  showed `verified:true`/`operatorName:"Operator"`, and a restart re-listed with NO code prompt
+  (same `gameServerId`, fresh `sessionId`). GOTCHA: the repo's `server/appsettings.json` console
+  formatter is `SingleLine:true`, so the multi-line banner string renders as one long line at
+  runtime (still Warning-level, still shows `user_code`/`verification_uri_complete` clearly) — left
+  as-is rather than fighting the repo's logging convention. NOT yet done: Hello still carries no
+  join token so every join stays anonymous even on a Verified listing (WP2.2), `IMatchResultSink`
+  still just logs (WP2.3), client mirrors the old `ServerDto` (WP3.2).
+- **2026-09-06 WP2.1 + WP2.2 done.** WP2.1 (Sonnet): `server/Net/LobbyIdentity.cs` (`ILobbyIdentity`,
+  `NoLobbyIdentity`), `LobbyAuthClient`/`LobbyAuthSession`/`LobbyCredentialStore` (device flow, banner,
+  `SIM_AUTH_FILE` 0600, refresh-before-use), bearer registration + `Verifier.RefreshAsync` after each
+  listing, `IPlayerDirectory.PlayerIdOf`, `SIM_HOSTED_BY` removed everywhere; smoke-verified re-list without
+  prompt. WP2.2 (supervisor): `Wire.ProtocolVersion` 37→38, `server/Net/HelloFrame.cs` (public parser/
+  builder; trailing `u16 joinTokenLen`), ClientHub Hello: Verified+listed ⇒ token REQUIRED
+  (`MsgReject` code 2 = "join token required/rejected"), identity = token (sub,name), `_players.OnConnect(…,
+  playerId)`, roster snapshots carry `PlayerId`; client `GameNetClient.SetJoinToken` + proto-38 SendHello +
+  reject reason mapping. Tests: `HelloFrameTests` (LobbyTest, 65 checks); `--autofly` against an unlisted
+  `-Local --autostart` server unchanged (ship spawned). GOTCHA: a listing's session id changes on every
+  re-registration, so a join token fetched for a stale listing fails `aud` — the client must re-fetch the
+  list and request a new token (WP3.2 handles by re-requesting on reject code 2).
+- **2026-09-06 WP3.1 done** — `client/scripts/auth/AuthSession.cs` (Node service, `Instance` static
+  like `SfxManager`; `State` enum SignedOut/Restoring/DeviceFlow/Expired/Denied/SignedIn):
+  `user://auth.json` holds ONLY `{refreshToken,displayName,playerId,lobbyBase}` (write-to-temp-then-
+  `File.Move` atomic; never the access token, never `settings.cfg`); restores on boot (refresh
+  in the background, `invalid_grant` deletes the file), full RFC 8628 device flow
+  (`StartDeviceFlowAsync`, `OS.ShellOpen`, poll respecting `slow_down`), proactive refresh 60s ahead
+  of the 15-min access-token expiry (monotonic generation counter so a stale schedule is a no-op),
+  `GetAccessTokenAsync()` for WP3.2's bearer calls, `ContinueAnonymously`/`SignOutAsync`.
+  `client/scripts/ui/SignInDialog.cs` (DESIGN.md components only) shown automatically the first time
+  `AuthSession` settles on SignedOut, suppressed by `--autofly`/`--anonymous` (new flag)/`--host`/
+  `--stress-*`/`SIM_URI` (before `--`) and `--ui-shot`/`--ui-open=`/`--ui-showcase`/`--hangar*` (after
+  `--`); added to `UiShowcase` (`--ui-open=signin`). `ServerLobbyOverlay` gates the SSE/list fetch
+  behind `AuthSession.IsSignedIn` (a "SIGN IN TO BROWSE" panel replaces the list; direct-join-by-
+  address stays usable; the expected WP3.2-pending 401 is logged, not thrown). `SettingsDialog`'s
+  PILOT tab shows the account name read-only when signed in. `ConnectionManager.ResolveLobbyBase()`
+  extracted static (both peers resolve the same lobby base without an instance-ready-order
+  dependency). GOTCHA (fixed): `SignInDialog.Open` must never be called synchronously from
+  `AuthSession._Ready()` — the engine still has Main's own children "busy setting up" at that point,
+  so `add_child` on the tree root throws; `ShowSignInModalOnce` defers via `CallDeferred`. Verified
+  live end to end against a local `postgres:17-alpine` + `AUTH_DEV_LOGIN=true` lobby: `--ui-shot` of
+  the modal (UiShowcase), `--autofly --host` unlisted-server run with NO modal + normal flight, a
+  plain launch reaching device-flow "waiting" (`[AuthSession] device code … — approve at …`), then
+  (bonus, via a curl-driven `/device` approval) the full happy path — `[AuthSession] signed in as
+  Vex`, `user://auth.json` written with exactly the 4 allowed fields, and a same-session relaunch
+  restoring SignedIn silently (refresh token visibly rotated) with no modal. `pwsh` is unavailable in
+  this sandboxed worktree (blocked outright, not just the documented `-GodotArgs` footgun) — verified
+  via direct `godot-mono` invocation instead (same `--` flag-split convention applies either way).
+- **2026-09-06 WP2.3 done** (supervisor — the Sonnet agent was cut off by a session rate limit):
+  `server/Net/MatchReport.cs` (`MatchStartInfo`/`MatchResultInfo`, pure `MatchReportBuilder.Build`),
+  `server/Net/LobbyMatchReporter.cs` (disk spool `SIM_REPORT_SPOOL`, chronological file names, worker
+  with 5 s→60 s backoff; 2xx/409 delete, 422/400/403/404 drop loudly, 401 → one forced refresh, waits
+  while unverified), `IMatchResultSink` widened (`OnMatchStarted`/`ReportResult(MatchResultInfo)`),
+  Simulation gains `MatchId`/`MatchStartedAt`/`MatchMapName`/`JustStarted`/`JustReset`; Program.cs reports
+  start (captures the listing id), win-condition, reset (empty-server recycle / ReturnToLobby while
+  Active) and shutdown (after `app.Run`, then drains ≤3 s). Tests: `MatchReporterTests` (LobbyTest now
+  88 checks). Phase 2 complete on the server side; e2e (WP4.3) still pending.
+- **2026-09-06 WP3.2 + WP3.3 done** (supervisor — Sonnet agent rate-limited): bearer on list/SSE
+  with 401 → invalidate/refresh → sign-out on a second 401; `ServerDto` gains `Verified/GameServerId/
+  OperatorName` + roster `PlayerId` (drops `HostedBy`); VERIFIED/UNVERIFIED pills + OPERATOR line;
+  `JoinWithIdentity` (token → `SetJoinToken` → dial; 404 → "listing went away"); `ConnectionManager.
+  JoinTokenProvider` mints a fresh token on EVERY redial (RetryLast + auto-reconnect — a Verified
+  server gates reconnects too), `JoinTokenRejected` + "RETRY WITH NEW TOKEN" in ConnectLinkModal;
+  signed-in header shows the account name read-only + ACCOUNT button; `AccountDialog` (PATCH /api/me,
+  career, logins, manage-in-browser, sign out; `--ui-open=account`); Settings PILOT tab → OPEN ACCOUNT.
+  Harness `--join-listing=<name>`. FIXED: sim-loop report checks moved after the empty-server reset
+  (JustReset was cleared by the next Step before being observed). Profile page: non-counted matches
+  read "no result".
+- **2026-09-06 WP4.3 evidence (headless e2e, scratchpad e2e3.sh):** fresh Postgres + lobby
+  (`AUTH_DEV_LOGIN`) → sim server pairs via device code (approved with the dev cookie + `/device`
+  form) → registers Verified with operator name → client seeded via `grant_type=dev` auto-joins with
+  `--join-listing` → server log 1106 "joined as player … (verified join token)", lobby roster carries
+  the player id → start report 202 → player leaves → empty-server reset → result(reset) 202 →
+  `/servers/{id}/history` shows the match (no winner, not counted), `/players/Erik` lists it; spool
+  empty; anonymous direct join refused (1104); a stale credential on a new DB falls back to a new
+  device code; restart re-lists silently. NOT exercised headlessly: a win-condition ending (needs a
+  base kill) and the Godot passkey/browser UI — user to click through once.
+- **2026-09-06 WP4.2 done** (supervisor): docker-compose `lobby-db` + `lobby-migrate` + full lobby env;
+  `deploy-railway-lobby.ps1` documents Postgres attach / pre-deploy `--migrate` / env and passes
+  `LOBBY_PUBLIC_URL`; DEPLOY.md "Lobby prerequisites" + "Match results" sections; README/QUICKSTART
+  account paragraphs; GLOSSARY "Game Server" / "Ranked" entries (plus "Join Token" from WP0.4,
+  "Verified Listing" from WP1.4). Docker image build verified (Tailwind CSS present). **Slice 1 complete.**
+  User-owned: OAuth app secrets, Railway Postgres + env, browser passkey click-through, win-condition
+  e2e, merge to master.
+- **2026-09-07 DEPLOYED** (supervisor, commit 128280d + docs): Railway project `wivuu-public-lobby`
+  now has a Postgres service, `ConnectionStrings__postgres-database=${{Postgres.DATABASE_URL}}`
+  (the lobby normalizes the postgres:// URL in `Hosting/PostgresConnectionString.cs` — Npgsql does
+  not), pre-deploy `dotnet PublicLobby.dll --migrate`, App Sleeping OFF, `LOBBY_PUBLIC_URL=https://stellarlobby.wivuu.com`,
+  `LOBBY_ADMINS=github:onionhammer`, GitHub provider secrets (Google/Steam unset). The baked
+  `PUBLIC_LOBBY` default in server/client/scripts/docs is now the custom domain. `ForwardedHeaders`
+  gained `XForwardedProto` (the GitHub challenge previously built an http:// redirect_uri behind
+  Railway's proxy). Verified live: /health, /health/orleans, JWKS, /login with GitHub + passkeys,
+  challenge redirect_uri = https://stellarlobby.wivuu.com/signin-github; migrations applied in the
+  pre-deploy log. Gotchas: committing a config change rebuilds the last upload immediately; the
+  Postgres template has no public TCP proxy (migrations only via pre-deploy). Still open:
+  Google OAuth app + Steam key; browser sign-in click-through; pair + Ranked-flag the dedicated
+  server; win-condition e2e; merge to master.
+- **2026-09-07 DataProtection persisted** (supervisor, commit 7aa9f22, deployment 6978a660):
+  `LobbyDbContext : IDataProtectionKeyContext` + migration `DataProtectionKeys`
+  (`data_protection_keys`), `Persistence.cs` registers
+  `AddDataProtection().SetApplicationName("public-lobby").PersistKeysToDbContext<LobbyDbContext>()`
+  — website cookies and passkey/external-login state now survive redeploys (the ring used to live in
+  `/root/.aspnet` on the ephemeral container fs). Keys are stored unencrypted, like
+  `signing_keys.private_pem` — the database is the secret store. Suite: schema expects the table and
+  a last section proves the host ring is loaded from those rows (282 checks). Stale agent worktrees
+  under `.claude/worktrees` (5, all merged) removed with their `worktree-agent-*` branches.
+- **2026-09-07 2-replica scale test** (supervisor, commits 6d80708/00e38f2/87b37c2): `/health/cluster`
+  (membership view + cross-silo `IManagementGrain.GetRuntimeStatistics` + raw TCP probe per silo +
+  listening endpoints). First attempt FAILED: Orleans advertised the container's host-local 10.x
+  IPv4, the joiner looped in "Failed to get ping responses from 1 of 1 active silos" and restarted
+  (Railway showed 2 running, crashed 0 — Kestrel never starts on a silo stuck validating, so all
+  traffic hit replica 1). Fix: on Railway (RAILWAY_PRIVATE_DOMAIN set) advertise this replica's
+  fd00::/8 private IPv6 (`ORLEANS_ADVERTISED_IP` overrides) AND set `EndpointOptions` listeners to
+  `[::]` explicitly — `ConfigureEndpoints(..., listenOnAnyHostAddress: true)` binds 0.0.0.0, which
+  never accepts the IPv6 connections the advertised address invites. Result: both replicas Active,
+  TCP open both ways, stats fetched cross-silo from both (24/24 samples, ~50/50 request split).
+  Scaled back to 1. STILL NOT SAFE to run >1 replica: `ServerRegistry` (listings + secrets) and the
+  WebRTC signaling relay are per-process (slice 3 moves them into grains). Railway gotchas:
+  `railway environment edit --service-config <svc> path value` did NOT commit (both times);
+  `railway environment edit --json` with a services patch does — and every commit REBUILT the
+  last upload (not deploy-less via CLI). Config carries a `limitOverride` of 0.5 vCPU / 2 GB.
+
+### 2026-09-07 — WP4.3 Admin console (bans, deletion, matches)
+
+`/admin` grew from one table into the moderation surface: three searchable tabs (game servers,
+players, matches) plus `/admin/servers/{id}`, `/admin/players/{id}` and `/admin/matches/{id}`.
+Design canvas: <https://claude.ai/code/artifact/3ef68780-fa26-40c4-af42-0f6361d0c21b>. Plan and the
+review that corrected it: `.claude/plans/composed-fluttering-castle.md`.
+
+- **Ban** is new vocabulary (CONTEXT.md): five columns on `players` and `game_servers`, in force per
+  `PublicLobby.Data.Bans.InForce`, expiry evaluated at read time so nothing sweeps. Migration
+  `AdminBans` (+ an index on `matches(started_at desc)` for the console's global list).
+- **A player ban bites in `LobbyBearerHandler`**, so it is immediate on every bearer route despite
+  the 60 s `AccessTokenCache`; also at `POST /auth/token` (`access_denied`), every cookie sign-in
+  path, `/device` approve (which would otherwise mint a fresh game server), `/me` rename, and the
+  SSE stream's keepalive tick.
+- **A game server ban is 403 everywhere, and leaves its session completely alone.** `LobbyRegistrar`
+  reads a 401 from `POST /servers` as "refresh and retry", and `LobbyAuthSession` deletes its stored
+  credential and re-enters the device flow on ANY refused refresh — not just `invalid_grant`
+  (`LobbyAuthSession.cs:127`). So a banned server is neither refused a token nor has its sessions
+  revoked: breaking its credential would prompt its operator to approve it all over again instead of
+  stopping it. The ban bites only at the listing, join and match seams, with a 403 carrying the
+  reason; `LobbyRegistrar` backs off two minutes on one and logs it (EventId 1237) rather than
+  retrying every 5 s forever. Caught by a live run, not by the suite — the first version *did*
+  revoke, and the test passed only because `AccessTokenCache` still held the resolved subject.
+- **Deleting a player** (migration `PlayerDeletion`) drops the `match_pilots → players` and
+  `join_tokens_issued → players` FKs and makes `game_servers.operator_player_id` nullable. Join-token
+  rows are KEPT: they are the plausibility evidence every pilot in a result needs, and one missing
+  row rejects the whole result, so deleting a player mid-match would have cost everyone else in it
+  the game. Servers are orphaned rather than removed, and `/admin/servers/{id}` gained **Reassign
+  operator** so that is not a one-way door.
+- **No admin action log and no match discounting** — both ruled out by the user. `/admin/matches/{id}`
+  is read-only, and a live match's roster comes from the in-memory Listing because `MatchGrain` only
+  writes `match_teams`/`match_pilots` at `Complete`.
+- Suite: new `[moderation]` section in `tests/PublicLobbyTest`; whole suite green (needs Docker),
+  and `tests/LobbyTest` too. It requests every tab × filter and every detail page for real — an
+  untranslatable LINQ expression (`ListMatches` ordered by a property of the record it projects) and
+  a view that throws only ever show up that way, and the first version of both got through.
+- **Pre-existing breakage fixed in passing:** `public-lobby` did not build from clean at HEAD —
+  Razor `<text>` blocks fail with this SDK (`RZ1021`). `ServerHistory.cshtml` was the last one.

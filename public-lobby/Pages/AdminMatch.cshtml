@@ -1,0 +1,105 @@
+@page "/admin/matches/{id:guid}"
+@model PublicLobby.Pages.AdminMatchModel
+@{
+    var m = Model.View;
+    ViewData["Title"] = $"{m.Match.Map} — Admin";
+}
+
+<div class="mx-auto max-w-3xl space-y-6">
+    <a href="/admin?tab=matches" class="block text-[13px] text-text-2 hover:text-text-hi">&larr; Admin &middot; Matches</a>
+
+    <section class="space-y-1.5">
+        <h1 class="flex items-center gap-2.5 font-ui text-2xl font-bold text-text-hi">
+            @m.Match.Map
+            <span class="rounded border px-2 py-px text-xs font-semibold uppercase tracking-[1px] @Model.HeadChip.Css">@Model.HeadChip.Label</span>
+            <span class="rounded border px-2 py-px text-xs font-medium @(m.Match.Ranked ? "border-accent/40 bg-accent/10 text-accent" : "border-panel-hi bg-panel text-text-dim")">@Model.Standing.Label</span>
+        </h1>
+        <p class="text-xs text-text-dim">
+            <span class="font-mono">@m.Match.Id</span>
+            &middot; reported by <a class="text-text-2 hover:text-accent" href="/admin/servers/@m.Match.GameServerId">@m.GameServerName</a>
+            @if (m.OperatorPlayerId is { } operatorId)
+            {
+                <span>&middot; operator <a class="text-text-2 hover:text-accent" href="/admin/players/@operatorId">@m.OperatorName</a></span>
+            }
+        </p>
+    </section>
+
+    <section class="grid grid-cols-2 gap-3.5 rounded border border-panel-hi bg-panel-fill p-3.5 sm:grid-cols-4">
+        @foreach (var f in Model.Facts)
+        {
+            <div class="flex flex-col gap-0.5">
+                <span class="text-[10px] font-semibold uppercase tracking-[2px] text-text-dim">@f.Label</span>
+                <span class="truncate font-mono text-[13px] @f.Css" title="@f.Value">@f.Value</span>
+            </div>
+        }
+    </section>
+
+    @if (Model.Teams.Length == 0)
+    {
+        <p class="rounded border border-panel-hi bg-panel px-4 py-3 text-sm text-text-2">@Model.EmptyRosterText</p>
+    }
+
+    @foreach (var team in Model.Teams)
+    {
+        <section class="space-y-2">
+            <div class="flex items-baseline justify-between gap-4">
+                <h2 class="flex items-center gap-2.5 text-sm font-semibold text-text-2">
+                    Team @(team.Team + 1)
+                    <span class="text-xs font-semibold uppercase tracking-[1px] @team.Outcome.Css">@team.Outcome.Label</span>
+                </h2>
+                @if (team.Tally is { } tally)
+                {
+                    <span class="text-xs text-text-dim">
+                        score <span class="font-mono text-data">@tally.Score.ToString("N0")</span>
+                        &middot; garrisons destroyed <span class="font-mono text-data">@tally.GarrisonsDestroyed</span>
+                        &middot; outposts <span class="font-mono text-data">@tally.OutpostsDestroyed</span>
+                    </span>
+                }
+            </div>
+            <div class="overflow-x-auto rounded border @(Model.View.Match.WinnerTeam == team.Team ? "border-ok/35" : "border-panel-hi")">
+                <table class="w-full text-sm">
+                    <thead class="bg-panel text-left text-xs uppercase tracking-wide text-text-dim">
+                        <tr>
+                            <th class="px-3 py-2">Pilot</th>
+                            <th class="w-[120px] px-3 py-2">Left</th>
+                            <th class="w-[44px] px-3 py-2 text-right">K</th>
+                            <th class="w-[44px] px-3 py-2 text-right">D</th>
+                            <th class="w-[48px] px-3 py-2 text-right">EJ</th>
+                            <th class="w-[56px] px-3 py-2 text-right">Pts</th>
+                        </tr>
+                    </thead>
+                    <tbody class="font-mono text-data">
+                        @foreach (var p in team.Pilots)
+                        {
+                            <tr class="border-t border-panel-hi/60 hover:bg-panel">
+                                <td class="px-3 py-2 font-ui">
+                                    @if (p.PlayerId is { } pid)
+                                    {
+                                        <a class="text-text-hi hover:text-accent" href="/admin/players/@pid">@p.Name</a>
+                                    }
+                                    else
+                                    {
+                                        <span class="italic text-text-dim">@p.Name</span>
+                                    }
+                                </td>
+                                <td class="px-3 py-2 font-ui text-xs @p.LeftCss">@p.Left</td>
+                                <td class="px-3 py-2 text-right">@p.Kills</td>
+                                <td class="px-3 py-2 text-right">@p.Deaths</td>
+                                <td class="px-3 py-2 text-right">@p.Ejects</td>
+                                <td class="px-3 py-2 text-right">@p.Points</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+
+    <section class="space-y-3 rounded border border-hairline p-4">
+        <h2 class="text-sm font-semibold uppercase tracking-[1px] text-text-2">Result</h2>
+        <div class="space-y-0.5">
+            <span class="block text-sm font-semibold text-text-hi">@Model.Result.Title</span>
+            <span class="block text-[13px] leading-relaxed text-text-2">@Model.Result.Blurb</span>
+        </div>
+    </section>
+</div>
