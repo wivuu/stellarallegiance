@@ -46,7 +46,12 @@ static class OrleansHealth
 
         app.MapGet(
             "/health/cluster",
-            async (IGrainFactory grains, ILocalSiloDetails self, IOptions<EndpointOptions> endpoints) =>
+            async (
+                IGrainFactory grains,
+                ILocalSiloDetails self,
+                IOptions<EndpointOptions> endpoints,
+                IOptions<ClusterOptions> cluster
+            ) =>
             {
                 var management = grains.GetGrain<IManagementGrain>(0);
                 var listening = new
@@ -69,6 +74,7 @@ static class OrleansHealth
                     return Results.Json(
                         new
                         {
+                            clusterId = cluster.Value.ClusterId,
                             self = self.SiloAddress.ToParsableString(),
                             hostName = self.DnsHostName,
                             listening,
@@ -107,6 +113,7 @@ static class OrleansHealth
                     return Results.Json(
                         new
                         {
+                            clusterId = cluster.Value.ClusterId,
                             self = self.SiloAddress.ToParsableString(),
                             hostName = self.DnsHostName,
                             listening,

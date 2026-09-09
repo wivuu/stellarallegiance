@@ -93,6 +93,7 @@ Environment variables (see [`PublicLobby.cs`](PublicLobby.cs)):
 | `STUN_URL` | `stun:stun.cloudflare.com:3478` | Public STUN handed to clients/servers for the WebRTC fallback. Comma/space-separate several for redundancy. |
 | `ConnectionStrings__postgres-database` | none (required) | Postgres connection string for identity, sessions, servers, matches and the ladder (`.PLAN/LobbyRankingService.md`); the process fails fast at startup if it's missing. |
 | `LOBBY_ORLEANS_CLUSTERING` | `adonet` | Orleans clustering mode: `adonet` (production — clusters through the same Postgres above) or `localhost` (dev boxes and the test suite — in-memory reminders, no Postgres clustering dependency). |
+| `LOBBY_ORLEANS_CLUSTER_ID` | `public-lobby-<RAILWAY_DEPLOYMENT_ID>`, else `public-lobby` | Orleans cluster id. Every replica of one Railway deployment shares the deployment id and clusters together; a redeploy forms a fresh cluster rather than joining the one Railway is stopping. Set explicitly for manual scale-out elsewhere (same value on every replica). |
 | `ORLEANS_SILO_PORT` | `11111` | Orleans silo-to-silo port. |
 | `ORLEANS_GATEWAY_PORT` | `30000` | Orleans client gateway port. |
 
@@ -115,11 +116,14 @@ against that same database — `--migrate` creates the Orleans tables too. This 
 co-hosted silo for now; a second replica is a later slice, once the in-memory server registry and
 signaling relay above also move into grains (the Orleans side already clusters across Railway
 replicas: the silo advertises its private IPv6 and listens on `[::]` when `RAILWAY_PRIVATE_DOMAIN`
-is set, `ORLEANS_ADVERTISED_IP` overrides). `GET /health/orleans` proves the silo is actually
-taking grain calls (not just that the process is up); `GET /health/cluster` returns JSON with this
-silo's address, the listening endpoints, the membership view, cross-silo runtime stats (CPU, memory,
-activations per silo) and a raw TCP probe of every live silo port — hit it a few times to land on
-each replica.
+is set, `ORLEANS_ADVERTISED_IP` overrides). The cluster id is per deployment
+(`LOBBY_ORLEANS_CLUSTER_ID` above): a new deployment never inherits its predecessor's membership
+row, so it never spends its first half-minute routing grain calls at a silo that is already gone
+(a `DefunctClusterSweeper` deletes the membership rows of clusters silent for a day). `GET
+/health/orleans` proves the silo is actually taking grain calls (not just that the process is up);
+`GET /health/cluster` returns JSON with the cluster id, this silo's address, the listening
+endpoints, the membership view, cross-silo runtime stats (CPU, memory, activations per silo) and a
+raw TCP probe of every live silo port — hit it a few times to land on each replica.
 
 Running it again against an already-migrated database is a no-op. WP4.2 documents the full
 Postgres deployment/env story; this is the short version.

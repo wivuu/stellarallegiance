@@ -11,4 +11,7 @@ internal static partial class Log
 
     [LoggerMessage(EventId = 2, Level = LogLevel.Information, Message = "migrations applied")]
     public static partial void MigrationsApplied(ILogger logger);
+
+    [LoggerMessage(EventId = 3, Level = LogLevel.Information, Message = "orleans cluster {ClusterId} (from {Source})")]
+    public static partial void OrleansCluster(ILogger logger, string clusterId, string source);
 }

@@ -129,14 +129,36 @@ static partial class Suite
             "rotation mints new tokens"
         );
         Eq(vexId, r1.Token.Subject.Id, "rotated session keeps its subject");
+        // Lost-rotation grace: the lobby commits a rotation before its reply leaves the process,
+        // so a client that never got the reply retries with the token it still has. Inside the
+        // grace, and as long as the new access token has not been used, that recovers.
+        var recovered = await PostTokenAsync(
+            http,
+            new TokenRequest(LobbyGrantType.RefreshToken, RefreshToken: devTok.RefreshToken)
+        );
+        Check(recovered.Token is not null, "retrying the previous refresh token right after a rotation recovers it");
+        Eq(
+            HttpStatusCode.Unauthorized,
+            await ListServersAsync(http, r1.Token.AccessToken),
+            "…and the unclaimed rotation's access token is dead"
+        );
+        Eq(
+            HttpStatusCode.OK,
+            await ListServersAsync(http, recovered.Token!.AccessToken),
+            "the recovered rotation's access token works (which marks the leaf as claimed)"
+        );
         var reuse = await PostTokenAsync(
             http,
             new TokenRequest(LobbyGrantType.RefreshToken, RefreshToken: devTok.RefreshToken)
         );
-        Eq(LobbyTokenError.InvalidGrant, reuse.Error?.Error, "reusing the rotated-away refresh token is refused");
+        Eq(
+            LobbyTokenError.InvalidGrant,
+            reuse.Error?.Error,
+            "once the current access token has been used, the rotated-away refresh token is reuse and refused"
+        );
         var lineageDead = await PostTokenAsync(
             http,
-            new TokenRequest(LobbyGrantType.RefreshToken, RefreshToken: r1.Token.RefreshToken)
+            new TokenRequest(LobbyGrantType.RefreshToken, RefreshToken: recovered.Token.RefreshToken)
         );
         Eq(LobbyTokenError.InvalidGrant, lineageDead.Error?.Error, "...and the reuse revoked the whole lineage");
 
@@ -163,6 +185,74 @@ static partial class Suite
         Check(
             await sg2.ValidateAccess(OpaqueTokens.Hash(issued2.AccessToken), t0.AddMinutes(1)) is not null,
             "…without revoking a still-valid access token"
+        );
+
+        // ---- lost-rotation grace, at the grain with explicit clocks ----
+        var grace = SessionGrain.LostRotationGrace;
+        var g1 = grains.GetGrain<ISessionGrain>(Guid.CreateVersion7());
+        var root1 = await g1.Create(SubjectKind.Player, vexId, t0);
+        Check(
+            await g1.Preflight(root1.RefreshToken, t0.AddSeconds(1)) is { } pre && pre.Id == vexId,
+            "preflight resolves the subject a refresh would rotate for…"
+        );
+        var lost1 = await g1.Refresh(root1.RefreshToken, t0.AddSeconds(1));
+        Check(lost1 is not null, "…without consuming the token");
+        var recovered1 = await g1.Refresh(root1.RefreshToken, t0.AddSeconds(6));
+        Check(recovered1 is not null, "the previous token retried inside the grace recovers the lost rotation");
+        Check(
+            await g1.ValidateAccess(OpaqueTokens.Hash(lost1!.AccessToken), t0.AddSeconds(7)) is null,
+            "…retiring the unclaimed rotation"
+        );
+        var recovered1b = await g1.Refresh(root1.RefreshToken, t0.Add(grace).AddSeconds(-5));
+        Check(
+            recovered1b is not null,
+            "the grace is anchored on the first rotation, so a later retry inside it still recovers"
+        );
+        Check(
+            await g1.ValidateAccess(OpaqueTokens.Hash(recovered1!.AccessToken), t0.Add(grace).AddSeconds(-4)) is null,
+            "…retiring the previous unclaimed recovery"
+        );
+        Check(
+            await g1.ValidateAccess(OpaqueTokens.Hash(recovered1b!.AccessToken), t0.Add(grace).AddSeconds(-4)) is not null,
+            "…and the newest one is current"
+        );
+
+        var g4 = grains.GetGrain<ISessionGrain>(Guid.CreateVersion7());
+        var root4 = await g4.Create(SubjectKind.Player, vexId, t0);
+        var r4 = await g4.Refresh(root4.RefreshToken, t0.AddSeconds(1));
+        Check(
+            await g4.Refresh(root4.RefreshToken, t0.Add(grace).AddSeconds(2)) is null,
+            "past the grace the previous token is reuse"
+        );
+        Check(
+            await g4.ValidateAccess(OpaqueTokens.Hash(r4!.AccessToken), t0.Add(grace).AddSeconds(3)) is null,
+            "…which revokes the lineage"
+        );
+
+        var g2 = grains.GetGrain<ISessionGrain>(Guid.CreateVersion7());
+        var root2 = await g2.Create(SubjectKind.Player, vexId, t0);
+        var r2 = await g2.Refresh(root2.RefreshToken, t0.AddSeconds(1));
+        Check(await g2.ValidateAccess(OpaqueTokens.Hash(r2!.AccessToken), t0.AddSeconds(2)) is not null, "(claim the leaf)");
+        Check(
+            await g2.Refresh(root2.RefreshToken, t0.AddSeconds(3)) is null,
+            "once the leaf's access token has been used its parent is reuse even inside the grace"
+        );
+        Check(
+            await g2.ValidateAccess(OpaqueTokens.Hash(r2.AccessToken), t0.AddSeconds(4)) is null,
+            "…and the lineage is revoked"
+        );
+
+        var g3 = grains.GetGrain<ISessionGrain>(Guid.CreateVersion7());
+        var root3 = await g3.Create(SubjectKind.Player, vexId, t0);
+        var lost3 = await g3.Refresh(root3.RefreshToken, t0.AddSeconds(1));
+        var recovered3 = await g3.Refresh(root3.RefreshToken, t0.AddSeconds(6));
+        Check(
+            await g3.Refresh(lost3!.RefreshToken, t0.AddSeconds(7)) is null,
+            "the retired rotation's refresh token is reuse, not a second grace"
+        );
+        Check(
+            await g3.ValidateAccess(OpaqueTokens.Hash(recovered3!.AccessToken), t0.AddSeconds(8)) is null,
+            "…and revokes the lineage"
         );
 
         // ---- device flow: game server → mints a GameServer owned by the approver ----
@@ -262,6 +352,13 @@ static partial class Suite
         r.IsSuccessStatusCode
             ? new TokenOutcome(await r.Content.ReadFromJsonAsync<TokenResponse>(), null)
             : new TokenOutcome(null, await r.Content.ReadFromJsonAsync<TokenErrorResponse>());
+
+    static async Task<HttpStatusCode> ListServersAsync(HttpClient http, string bearer)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, "/servers");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
+        return (await http.SendAsync(req)).StatusCode;
+    }
 
     static async Task<HttpStatusCode> RevokeAsync(HttpClient http, string bearer)
     {
