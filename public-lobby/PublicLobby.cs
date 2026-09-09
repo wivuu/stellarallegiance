@@ -474,11 +474,12 @@ app.MapGet(
     }
 );
 
-Log.Listening(
-    app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("PublicLobby"),
-    $"http://0.0.0.0:{port}",
-    stunServers.Count
-);
+var startupLog = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("PublicLobby");
+
+// Says out loud which Orleans cluster this process joined and why: a deploy that silently fell
+// back to the shared id would inherit the outgoing silo's membership row (see OrleansHosting).
+Log.OrleansCluster(startupLog, OrleansHosting.ClusterIdentity.Id, OrleansHosting.ClusterIdentity.Source);
+Log.Listening(startupLog, $"http://0.0.0.0:{port}", stunServers.Count);
 app.Run();
 
 // ---- Helpers ---------------------------------------------------------------

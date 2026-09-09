@@ -633,6 +633,20 @@ review that corrected it: `.claude/plans/composed-fluttering-castle.md`.
   row rejects the whole result, so deleting a player mid-match would have cost everyone else in it
   the game. Servers are orphaned rather than removed, and `/admin/servers/{id}` gained **Reassign
   operator** so that is not a one-way door.
+- **2026-09-08 a redeploy burned a production game server's credential** (branch
+  `lobby-refresh-resilience`). Chain: the fixed Orleans `ClusterId` made every new deployment join
+  the cluster of the silo Railway was stopping, so for ~30 s its grain/directory calls timed out
+  (5 s each) and `/auth/token` 500ed with an empty body; one of those 500s came AFTER
+  `SessionGrain.Refresh` had committed the rotation (the `IGameServerGrain.Get` for the display
+  name failed), the sim server retried the token it still had, and RFC 6819 reuse detection
+  revoked the lineage → `invalid_grant` → device flow. Fixes: (1) `/auth/token` resolves the
+  subject (`ResolveSubject`) BEFORE `Refresh`, via `ISessionGrain.Preflight`, so nothing after the
+  commit can lose the reply; (2) `SessionGrain.LostRotationGrace` (5 min): the leaf's parent
+  token is accepted while the leaf's access token has never validated, retiring the unclaimed
+  leaf and rotating from the parent (anchored on the FIRST superseding rotation, so it cannot be
+  renewed; a retired leaf's token is plain reuse); (3) `ClusterId` = `public-lobby-<RAILWAY_DEPLOYMENT_ID>`
+  (`LOBBY_ORLEANS_CLUSTER_ID` overrides; `ServiceId` stays fixed so reminders survive) plus a
+  `DefunctClusterSweeper` for the membership rows old clusters leave behind.
 - **No admin action log and no match discounting** — both ruled out by the user. `/admin/matches/{id}`
   is read-only, and a live match's roster comes from the in-memory Listing because `MatchGrain` only
   writes `match_teams`/`match_pilots` at `Complete`.
