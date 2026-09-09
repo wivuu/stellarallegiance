@@ -64,7 +64,7 @@
                 Add a passkey
             </button>
         </div>
-        @Html.Raw(PublicLobby.Pages.MeModel.RenderPasskeyListFragment(Model.Passkeys, Model.AntiforgeryToken))
+        <partial name="_PasskeyList" model="Model.PasskeyList" />
         <p id="add-passkey-status" class="text-sm text-text-2" role="status"></p>
     </section>
 

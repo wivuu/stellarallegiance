@@ -661,3 +661,12 @@ review that corrected it: `.claude/plans/composed-fluttering-castle.md`.
   Testcontainers, so a runner with a Docker service is the natural home.
 - **Slice 2 is unblocked.** Glicko-2 team rating now waits only on accumulating real ranked match
   data rather than on proving the counted path. Steam session tickets still need a Steam AppID.
+
+
+### 2026-09-08 — Passkey list moved into a Razor partial
+- The one place the lobby still built HTMX markup as C# strings (`Pages/Me.cshtml.cs`'s StringBuilder
+  fragment, rendered through `@Html.Raw` and `Content(..., "text/html")`) is now
+  `Pages/Shared/_PasskeyList.cshtml`, returned by `?handler=RemovePasskey` exactly like the server
+  strip's `?handler=Strip`. Razor Slices was evaluated for it (0.11.x coexists with Razor Pages via
+  `EnableDefaultRazorSlices=false`) and rejected as a dependency for a single fragment; revisit if
+  minimal-API endpoints ever need to return HTML. `tests/PublicLobbyTest` now covers the swap.

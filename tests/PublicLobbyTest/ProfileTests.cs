@@ -1,9 +1,11 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Orleans;
+using PublicLobby.Data;
 using PublicLobby.Grains;
 using StellarAllegiance.Shared.Lobby;
 
@@ -137,6 +139,52 @@ static partial class Suite
             "/me carries the rename form"
         );
         Check(meHtml.Contains("/players/Vex"), "/me links the public profile");
+
+        // ---- /me passkey list: Pages/Shared/_PasskeyList.cshtml on first paint AND as the htmx swap ----
+        Check(
+            meHtml.Contains("id=\"passkeys-list\"") && meHtml.Contains("No passkeys yet."),
+            "/me renders the empty passkey list"
+        );
+        var userManager = services.GetRequiredService<UserManager<LobbyUser>>();
+        // By id, not name: the dev grant's LobbyUser is named by its Guid (player id == user id), and
+        // SchemaTests seeds an unrelated raw Identity row literally named "vex".
+        var vexUser =
+            await userManager.FindByIdAsync(vex.Subject.Id.ToString())
+            ?? throw new InvalidOperationException("Vex has no Identity user");
+        var credentialId = Guid.NewGuid().ToByteArray();
+        var seeded = await userManager.AddOrUpdatePasskeyAsync(
+            vexUser,
+            new UserPasskeyInfo(credentialId, [1, 2, 3], DateTimeOffset.UtcNow, 0, [], true, false, false, [], [])
+            {
+                Name = "Vex laptop",
+            }
+        );
+        Check(seeded.Succeeded, "seeded a passkey for Vex");
+        meHtml = await (await cookieHttp.GetAsync("/me")).Content.ReadAsStringAsync();
+        Check(
+            meHtml.Contains("Vex laptop") && meHtml.Contains("hx-post=\"/me?handler=RemovePasskey\""),
+            "/me lists the passkey with an htmx remove form"
+        );
+        var removeToken = ExtractAntiforgery(meHtml);
+        Check(removeToken is not null, "remove form carries an antiforgery token");
+        using var removeReq = new HttpRequestMessage(HttpMethod.Post, "/me?handler=RemovePasskey")
+        {
+            Content = new FormUrlEncodedContent([
+                new("__RequestVerificationToken", removeToken ?? ""),
+                new("credentialIdBase64", Convert.ToBase64String(credentialId)),
+            ]),
+        };
+        removeReq.Headers.Add("HX-Request", "true");
+        var removed = await cookieHttp.SendAsync(removeReq);
+        Eq(HttpStatusCode.OK, removed.StatusCode, "POST /me?handler=RemovePasskey: 200");
+        var fragment = await removed.Content.ReadAsStringAsync();
+        Check(
+            fragment.TrimStart().StartsWith("<div id=\"passkeys-list\"", StringComparison.Ordinal)
+                && fragment.Contains("No passkeys yet.")
+                && !fragment.Contains("<html", StringComparison.OrdinalIgnoreCase),
+            "remove returns the re-rendered list as a fragment, not the whole page"
+        );
+        Eq(0, (await userManager.GetPasskeysAsync(vexUser)).Count, "the passkey is gone");
     }
 
     sealed record HttpJson<T>(HttpStatusCode Status, T? Body);

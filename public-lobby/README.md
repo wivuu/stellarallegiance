@@ -160,6 +160,10 @@ seven-line adapter and holds no copy of the row markup. The swapped fragment car
 `hx-trigger`, so it re-arms itself (there is a test for that). With JavaScript off the strip still
 renders, frozen at page load.
 
+The `/me` passkey list follows the same shape: `Pages/Shared/_PasskeyList.cshtml` is rendered inline
+on first paint and returned whole by `?handler=RemovePasskey` for the `hx-swap="outerHTML"`. Every
+htmx fragment the lobby serves is a Razor partial — no page markup is built as strings in C#.
+
 Sign-up creates a `players` row alongside the Identity user (`public-lobby/Accounts/AccountService.cs`
 — the ONE place that happens); every later change to a player (display-name edits, `last_seen_at`,
 match aggregates) becomes WP1.2's `PlayerGrain`'s job.

@@ -1,0 +1,34 @@
+@model PublicLobby.Pages.PasskeyListView
+@*
+    The passkey list on /me. Rendered inline on first paint (Me.cshtml) and re-rendered whole by
+    MeModel.OnPostRemovePasskeyAsync for the htmx swap (hx-swap="outerHTML" onto #passkeys-list), so
+    this file is the ONLY copy of the row markup — same pattern as _ServerStrip.cshtml.
+
+    Each remove-form carries its own antiforgery token because Razor Pages validates antiforgery on
+    every POST handler. The literal action keeps the no-JS form post working (it then receives the
+    bare fragment, unchanged from before).
+*@
+<div id="passkeys-list" class="space-y-2">
+    @if (Model.Passkeys.Count == 0)
+    {
+        <p class="text-sm text-text-dim">No passkeys yet.</p>
+    }
+    else
+    {
+        foreach (var passkey in Model.Passkeys)
+        {
+            <form method="post"
+                  action="/me?handler=RemovePasskey"
+                  hx-post="/me?handler=RemovePasskey"
+                  hx-target="#passkeys-list"
+                  hx-swap="outerHTML"
+                  class="flex items-center justify-between rounded border border-panel-hi bg-panel px-3 py-2">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="credentialIdBase64" value="@Convert.ToBase64String(passkey.CredentialId)" />
+                <span class="text-sm text-text-hi">@(string.IsNullOrWhiteSpace(passkey.Name) ? "Passkey" : passkey.Name)
+                    <span class="text-text-dim">&middot; added @passkey.CreatedAt.ToString("yyyy-MM-dd")</span></span>
+                <button type="submit" class="text-sm text-danger hover:underline">Remove</button>
+            </form>
+        }
+    }
+</div>
