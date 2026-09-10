@@ -2376,7 +2376,17 @@ public sealed partial class Simulation
         float alongT = relT.X * f.Normal.X + relT.Y * f.Normal.Y + relT.Z * f.Normal.Z;
         Vec3 latT = relT - f.Normal * alongT;
         float gap = -alongT; // distance OUTSIDE the door plane (negative = past/inside it)
-        bool onAxis = gap > ApDockStandoff * 0.8f && latT.Length() < MathF.Max(f.Eu, f.Ev) + ApDockAxisSlop;
+        // "On the corridor axis" must never be LOOSER than the capture sphere the promotion test at the
+        // bottom uses (ApDockCapture around the standoff point). The descent aims at the door plane, so
+        // a run begun from further off-axis than the capture radius still has that much lateral error at
+        // the standoff point and can never promote — it just rides the corridor down and slides through
+        // the dock trigger still in Transit, skipping Align/Creep entirely. The door half-extents are
+        // the other bound, and taking the MAX of them made a strongly rectangular door (the stock
+        // garrison authors ~32x12 ones) count a ship 44 u off its SHORT axis as "on the axis", which is
+        // exactly that dead zone. Off-axis instead falls through to the outer-axis-point approach below,
+        // which converges the lateral error to ~0 before the descent starts.
+        float axisSlop = MathF.Min(MathF.Max(f.Eu, f.Ev) + ApDockAxisSlop, ApDockCapture);
+        bool onAxis = gap > ApDockStandoff * 0.8f && latT.Length() < axisSlop;
 
         ShipInputState input;
         if (onAxis)
@@ -2475,8 +2485,8 @@ public sealed partial class Simulation
 
     // Pick (once per engagement, then sticky) which docking door to use: argmin over |P - pstand_i|
     // plus a half-ring detour penalty when the straight line to that standoff point is blocked by the
-    // base sphere, so a reachable door beats a nearer one hidden behind the hull. Stock content is N=1
-    // (this just returns door 0), but the selection stays correct for multi-door bases.
+    // base sphere, so a reachable door beats a nearer one hidden behind the hull. Stock content is
+    // multi-door (the garrison authors two, on opposing faces), so this really does choose.
     private int SelectDockDoor(ShipSim s, World.BaseSite eb, DockFace[] faces)
     {
         if (s.ApDockDoor >= 0 && s.ApDockDoor < faces.Length)
