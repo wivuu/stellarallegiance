@@ -289,7 +289,7 @@ public partial class SectorOverview : Node3D
     }
 
     private const float RockEdgeMargin = 40f; // off-screen rock-order-arrow inset from the viewport edge (px)
-    private const float RockArrowSize = 10f; // off-screen rock-order-arrow half-extent (px); TargetMarkers.ArrowSize is 13
+    private const float RockArrowSize = 10f; // off-screen rock-order-arrow half-extent (px); MarkerDraw.ArrowSize is 13
 
     private void DrawSelectionBox()
     {
