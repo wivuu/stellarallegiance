@@ -822,7 +822,9 @@ public sealed partial class Simulation
         ulong avoidBaseId = 0;
         Vec3 Avoid(Vec3 p, Vec3 d) => AvoidObstacles(s.SectorId, p, d, slot.TargetRockId, avoidBaseId);
 
-        ShipInputState Approach(Vec3 point, float stopDistance, float brakeMargin = ApBrakeMargin) =>
+        // (ApBrakeMargin is world.yaml-authored now — `ai.brake-margin` — so it can no longer be a
+        // default parameter value. No caller ever overrode it; it reads the resolved knob directly.)
+        ShipInputState Approach(Vec3 point, float stopDistance) =>
             AutoSteer.ApproachPoint(
                 myPos,
                 myRot,
@@ -833,7 +835,7 @@ public sealed partial class Simulation
                 stats.Accel,
                 stats.BackMult,
                 PigTurnGain,
-                brakeMargin,
+                ApBrakeMargin,
                 Avoid
             );
 

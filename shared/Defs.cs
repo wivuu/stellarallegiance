@@ -797,12 +797,48 @@ namespace StellarAllegiance.Shared
         public float JukeAmpMin = 0.45f;
         public float JukeAmpMax = 1f;
 
-        // Player-autopilot friendly-base docking maneuver (server-only; the DockApproach
-        // Transit->Align->Creep state machine). Not a PIG behaviour but authored in the same `ai:`
-        // block since it is server-side navigation tuning.
+        // ---- Server-side NAVIGATION tuning (player autopilot + the miner/constructor drone legs).
+        // Not PIG behaviour, but authored in the same `ai:` block so every server-side steering knob
+        // has ONE home. Consumed by Simulation's Ap* fields (InitPigTuning); never streamed.
+
+        // Extra distance (world units) kept between the flight model's computed stopping distance and
+        // the point an approach commits to braking — a discretization cushion so a ship settles at or
+        // just short of its arrival shell instead of overshooting it. Shared by every server
+        // AutoSteer.ApproachPoint caller (autopilot, miner, constructor).
+        public float BrakeMargin = 16f;
+
+        // Arrival-band generosity multiplier on a point destination's standoff distance when testing
+        // "arrived" — a ship counts as arrived a bit outside its brake target.
+        public float ArrivalBandMult = 1.2f;
+
+        // Player-autopilot friendly-base docking maneuver (the DockApproach Transit->Align->Creep
+        // state machine). The maneuver's feel is stable, so these are rarely swept — but they are
+        // geometry, and a server running re-baked base meshes may need to.
         public float DockStandoff = 25f; // standoff-point distance outside the door plane, world units
         public float DockClearance = 40f; // detour ring radius past BaseRadius when routing around the base
         public float DockCreepThrottle = 0.12f; // throttle fraction while creeping down the door corridor
+        public float DockHullMargin = 10f; // padding added to BaseRadius for the LOS/detour sphere
+        public float DockLosSlack = 35f; // endSlack in the LOS test — excuses the terminal door pocket
+        public float DockDetourStepRad = 0.6f; // per-tick azimuth advance of the orbit carrot, radians
+
+        // Within this of the standoff point promotes Transit -> Align. MUST exceed BrakeMargin: the
+        // Transit clear-line approach brakes to rest ~BrakeMargin short of the standoff point, so a
+        // capture radius below that margin is a dead zone the ship can never enter (validated in
+        // WorldLoader).
+        public float DockCapture = 20f;
+
+        // Outer axis-acquire point for Transit. MUST exceed DockStandoff: unlike the standoff point
+        // (which may sit inside a recessed door pocket WITHIN the padded hull sphere) this one has to
+        // clear that sphere with margin, or the straight-in leg's LOS test flaps on lateral drift.
+        public float DockOuterStandoff = 60f;
+
+        public float DockAxisSlop = 12f; // lateral slack past the door half-extents that counts as "on the corridor axis"
+        public float DockDescentMargin = 8f; // arrest cushion on the on-axis descent (speeds are low; BrakeMargin would park short)
+        public float DockDescentMaxThrottle = 0.3f; // descent speed cap (fraction of MaxSpeed) — dock-pattern pace, not cruise
+        public float DockCaptureSpeedSq = 9f; // ...and speed² below this (~3 u/s) so the ship has settled
+        public float DockRollGain = 3f; // FaceAndRoll roll proportional gain
+        public float DockFacingDot = 0.995f; // Align -> Creep: nose-onto-door facing threshold
+        public float DockRollTol = 0.10f; // Align -> Creep: |localUp.X| roll-alignment tolerance
     }
 
     // Collision-damage + sector-boundary-hazard tuning (world.yaml `combat:`). Server-side

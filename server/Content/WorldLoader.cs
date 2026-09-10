@@ -112,7 +112,7 @@ public sealed class WorldDef
     /// </summary>
     public double? RockRadarSignature { get; set; }
 
-    /// <summary>PIG drone AI tuning (server-side only — never streamed). Null -&gt; stock values.</summary>
+    /// <summary>PIG drone AI + server-side navigation/docking tuning (never streamed). Null -&gt; stock values.</summary>
     public WorldAiDef? Ai { get; set; }
 
     /// <summary>Collision-damage / boundary-hazard tuning (server-side only). Null -&gt; stock.</summary>
@@ -138,10 +138,13 @@ public sealed class WorldDef
 }
 
 /// <summary>
-/// PIG drone AI tuning, authored under <c>ai:</c>. Every field is optional — a null falls back to
-/// the stock value at projection (the shared <c>WorldAiTuning</c> initializers), so an author only
-/// writes the knobs they sweep. Durations are authored in SECONDS (the sim converts to ticks);
-/// mirrors the constants ported verbatim from the module's PigAI.
+/// PIG drone AI tuning — plus the server-side navigation/docking knobs the player autopilot and the
+/// miner/constructor drone legs share — authored under <c>ai:</c>. Every field is optional: a null
+/// falls back to the stock value at projection (the shared <c>WorldAiTuning</c> initializers), so an
+/// author only writes the knobs they sweep, and an omitted <c>ai:</c> block means "all stock".
+/// Durations are authored in SECONDS (the sim converts to ticks); the PIG knobs mirror the constants
+/// ported verbatim from the module's PigAI. Cross-knob invariants are checked in
+/// <c>WorldLoader.ValidateAi</c> (a bad sweep refuses boot, never wedges a dock mid-match).
 /// </summary>
 public sealed class WorldAiDef
 {
@@ -250,7 +253,14 @@ public sealed class WorldAiDef
     /// <summary>Maximum juke side-thrust amplitude fraction.</summary>
     public double? JukeAmpMax { get; set; }
 
-    // Player-autopilot friendly-base docking maneuver (server-only; DockApproach).
+    // Server-side navigation tuning: the shared approach-braking cushions (player autopilot AND the
+    // miner/constructor drone legs) plus the friendly-base docking maneuver (DockApproach).
+    /// <summary>Cushion between the flight model's stopping distance and the brake commit point, world units.</summary>
+    public double? BrakeMargin { get; set; }
+
+    /// <summary>Arrival-band generosity multiplier applied to a point destination's standoff distance.</summary>
+    public double? ArrivalBandMult { get; set; }
+
     /// <summary>Standoff-point distance outside a docking door's plane, world units.</summary>
     public double? DockStandoff { get; set; }
 
@@ -259,6 +269,42 @@ public sealed class WorldAiDef
 
     /// <summary>Throttle fraction while creeping down the docking corridor.</summary>
     public double? DockCreepThrottle { get; set; }
+
+    /// <summary>Padding added to the base radius for the docking line-of-sight / detour sphere, world units.</summary>
+    public double? DockHullMargin { get; set; }
+
+    /// <summary>Trailing slack excused by the docking line-of-sight test (the terminal door pocket), world units.</summary>
+    public double? DockLosSlack { get; set; }
+
+    /// <summary>Per-tick azimuth advance of the detour orbit carrot, radians.</summary>
+    public double? DockDetourStepRad { get; set; }
+
+    /// <summary>Capture radius around the standoff point that promotes Transit to Align — must exceed brake-margin.</summary>
+    public double? DockCapture { get; set; }
+
+    /// <summary>Outer axis-acquire distance outside the door plane — must exceed dock-standoff.</summary>
+    public double? DockOuterStandoff { get; set; }
+
+    /// <summary>Lateral slack past the door half-extents still counted as "on the corridor axis", world units.</summary>
+    public double? DockAxisSlop { get; set; }
+
+    /// <summary>Arrest cushion on the on-axis docking descent, world units.</summary>
+    public double? DockDescentMargin { get; set; }
+
+    /// <summary>Cap on the docking descent throttle, as a fraction of max speed (0..1].</summary>
+    public double? DockDescentMaxThrottle { get; set; }
+
+    /// <summary>Squared speed below which a ship at the standoff point counts as settled, (world units/s)².</summary>
+    public double? DockCaptureSpeedSq { get; set; }
+
+    /// <summary>Proportional roll gain used by the docking face-and-roll steering.</summary>
+    public double? DockRollGain { get; set; }
+
+    /// <summary>Nose-onto-door facing dot required to promote Align to Creep (0..1].</summary>
+    public double? DockFacingDot { get; set; }
+
+    /// <summary>Roll-alignment tolerance required to promote Align to Creep — must be positive.</summary>
+    public double? DockRollTol { get; set; }
 }
 
 /// <summary>
@@ -680,10 +726,27 @@ public static class WorldLoader
             t.JukePeriodSeconds = F(ai.JukePeriodSeconds, t.JukePeriodSeconds);
             t.JukeAmpMin = F(ai.JukeAmpMin, t.JukeAmpMin);
             t.JukeAmpMax = F(ai.JukeAmpMax, t.JukeAmpMax);
+            t.BrakeMargin = F(ai.BrakeMargin, t.BrakeMargin);
+            t.ArrivalBandMult = F(ai.ArrivalBandMult, t.ArrivalBandMult);
             t.DockStandoff = F(ai.DockStandoff, t.DockStandoff);
             t.DockClearance = F(ai.DockClearance, t.DockClearance);
             t.DockCreepThrottle = F(ai.DockCreepThrottle, t.DockCreepThrottle);
+            t.DockHullMargin = F(ai.DockHullMargin, t.DockHullMargin);
+            t.DockLosSlack = F(ai.DockLosSlack, t.DockLosSlack);
+            t.DockDetourStepRad = F(ai.DockDetourStepRad, t.DockDetourStepRad);
+            t.DockCapture = F(ai.DockCapture, t.DockCapture);
+            t.DockOuterStandoff = F(ai.DockOuterStandoff, t.DockOuterStandoff);
+            t.DockAxisSlop = F(ai.DockAxisSlop, t.DockAxisSlop);
+            t.DockDescentMargin = F(ai.DockDescentMargin, t.DockDescentMargin);
+            t.DockDescentMaxThrottle = F(ai.DockDescentMaxThrottle, t.DockDescentMaxThrottle);
+            t.DockCaptureSpeedSq = F(ai.DockCaptureSpeedSq, t.DockCaptureSpeedSq);
+            t.DockRollGain = F(ai.DockRollGain, t.DockRollGain);
+            t.DockFacingDot = F(ai.DockFacingDot, t.DockFacingDot);
+            t.DockRollTol = F(ai.DockRollTol, t.DockRollTol);
         }
+        // Unconditional: the stock initializers satisfy every rule, so this costs nothing on an
+        // omitted `ai:` block and still refuses boot on a bad sweep.
+        ValidateAi(cfg.Ai);
         if (w.Combat is { } co)
         {
             var t = cfg.Combat;
@@ -794,6 +857,50 @@ public static class WorldLoader
 
     // Authored-override resolve: a knob the author wrote wins; null keeps the stock default.
     private static float F(double? authored, float stock) => authored is { } v ? (float)v : stock;
+
+    // Cross-knob invariants on the resolved `ai:` navigation/docking tuning. These are the rules the
+    // DockApproach state machine's comments document: break one and the maneuver doesn't misbehave
+    // visibly, it silently stops working (a capture radius inside the brake cushion is a dead zone the
+    // ship can never enter, so it only ever docks by sliding through the door in Transit). Fail fast at
+    // boot with the offending YAML key named, like the rest of content loading — never mid-match.
+    private static void ValidateAi(WorldAiTuning t)
+    {
+        void Positive(float v, string key)
+        {
+            if (!(v > 0f))
+                throw new InvalidDataException($"ai.{key}: must be > 0 (got {v}).");
+        }
+
+        void Fraction(float v, string key)
+        {
+            if (!(v > 0f) || v > 1f)
+                throw new InvalidDataException($"ai.{key}: must be in (0, 1] (got {v}).");
+        }
+
+        Positive(t.BrakeMargin, "brake-margin");
+        Positive(t.ArrivalBandMult, "arrival-band-mult");
+        Positive(t.DockStandoff, "dock-standoff");
+        Positive(t.DockCapture, "dock-capture");
+        Positive(t.DockOuterStandoff, "dock-outer-standoff");
+        Fraction(t.DockCreepThrottle, "dock-creep-throttle");
+        Fraction(t.DockDescentMaxThrottle, "dock-descent-max-throttle");
+        Fraction(t.DockFacingDot, "dock-facing-dot");
+        Positive(t.DockRollTol, "dock-roll-tol");
+
+        if (t.DockCapture <= t.BrakeMargin)
+            throw new InvalidDataException(
+                $"ai.dock-capture ({t.DockCapture}) MUST exceed ai.brake-margin ({t.BrakeMargin}): Transit brakes to "
+                    + "rest ~brake-margin short of the standoff point, so a smaller capture radius is a dead zone the "
+                    + "ship can never enter — it would never promote to Align/Creep."
+            );
+
+        if (t.DockOuterStandoff <= t.DockStandoff)
+            throw new InvalidDataException(
+                $"ai.dock-outer-standoff ({t.DockOuterStandoff}) MUST exceed ai.dock-standoff ({t.DockStandoff}): the "
+                    + "outer axis-acquire point has to clear the padded base sphere that the standoff point may sit "
+                    + "inside (a recessed door pocket), or the straight-in leg's line-of-sight test flaps on drift."
+            );
+    }
 
     // Project + validate an authored special-class weight block into the runtime SpecialWeights.
     // Null in → null out (caller keeps its default). Fail-fast (like the rest of content loading) on
