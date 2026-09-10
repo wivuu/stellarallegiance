@@ -154,6 +154,8 @@ public partial class UiShowcase : Control
                 ("Void", DesignTokens.Void),
                 ("Panel", DesignTokens.Panel),
                 ("Panel Hi", DesignTokens.PanelHi),
+                ("Panel Solid", DesignTokens.PanelSolid),
+                ("Border Mid", DesignTokens.BorderMid),
                 ("Accent", DesignTokens.TeamAccent),
                 ("Secondary", DesignTokens.Secondary),
                 ("Text Hi", DesignTokens.TextHi),
@@ -174,10 +176,13 @@ public partial class UiShowcase : Control
         s.AddChild(swatches);
 
         s.AddChild(UiKit.MakeLabel("VALKYRIE", UiKit.TextStyle.Display));
+        s.AddChild(UiKit.MakeLabel("LINK ESTABLISHED", UiKit.TextStyle.Hero));
         s.AddChild(UiKit.MakeLabel("SECTOR BRIEFING", UiKit.TextStyle.Title));
         s.AddChild(UiKit.MakeLabel("TARGET CONTACT", UiKit.TextStyle.Label));
         s.AddChild(UiKit.MakeLabel("Hostile interceptor on intercept vector.", UiKit.TextStyle.Body));
         s.AddChild(UiKit.MakeLabel("RNG 1,240m · 218 m/s", UiKit.TextStyle.Data));
+        s.AddChild(UiKit.MakeLabel("Caption tier — dense meta rows and slot sublines.", UiKit.TextStyle.Caption));
+        s.AddChild(UiKit.MakeLabel("MICRO TIER — UNIT SUFFIXES", UiKit.TextStyle.Micro));
     }
 
     private static void Surfaces(VBoxContainer parent)

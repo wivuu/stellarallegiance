@@ -15,6 +15,9 @@ public static class UiKit
         Label, // 13 / caps + letter-spacing
         Body, // 15 / regular
         Data, // 14 / mono
+        Hero, // 26 / bold — between Title and Display
+        Caption, // 11 / regular — the sub-Label tier
+        Micro, // 9 / regular — smallest legible tier
     }
 
     public static Label MakeLabel(string text, TextStyle style = TextStyle.Body, Color? color = null)
@@ -24,9 +27,12 @@ public static class UiKit
         (Font font, int size, Color def) = style switch
         {
             TextStyle.Display => (UiFonts.SairaBold, DesignTokens.DisplaySize, DesignTokens.TextHi),
+            TextStyle.Hero => (UiFonts.SairaBold, DesignTokens.HeroSize, DesignTokens.TextHi),
             TextStyle.Title => (UiFonts.SairaBold, DesignTokens.TitleSize, DesignTokens.TextHi),
             TextStyle.Label => (UiFonts.SairaLabel, DesignTokens.LabelSize, DesignTokens.Text2),
             TextStyle.Data => (UiFonts.Mono, DesignTokens.DataSize, DesignTokens.Data),
+            TextStyle.Caption => (UiFonts.Saira, DesignTokens.CaptionSize, DesignTokens.Text2),
+            TextStyle.Micro => (UiFonts.Saira, DesignTokens.MicroSize, DesignTokens.TextDim),
             _ => (UiFonts.Saira, DesignTokens.BodySize, DesignTokens.TextHi),
         };
         l.AddThemeFontOverride("font", font);
@@ -182,6 +188,31 @@ public static class UiKit
             o.Selected = selected;
         o.ItemSelected += i => onSelect?.Invoke((int)i);
         return o;
+    }
+
+    // ---- Modulate tints ------------------------------------------------------
+    // Card/slot availability states dim a whole subtree with Modulate rather than recolouring
+    // each child. These name the two ends of that idiom so the raw white literal stays here.
+    public static readonly Color TintFull = Colors.White; // identity — fully lit
+
+    public static Color Tint(float alpha) => new(1f, 1f, 1f, alpha);
+
+    // Buttons that paint their own content (roster tabs, sort headers, ChamferButton) keep the
+    // stock Button's input handling but must not draw its default glyph on top.
+    public static void BlankStockLabel(Button b)
+    {
+        foreach (
+            string c in new[]
+            {
+                "font_color",
+                "font_hover_color",
+                "font_pressed_color",
+                "font_focus_color",
+                "font_hover_pressed_color",
+                "font_disabled_color",
+            }
+        )
+            b.AddThemeColorOverride(c, Colors.Transparent);
     }
 
     private static string Percent(double v, double min, double max)
