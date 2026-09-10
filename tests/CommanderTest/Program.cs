@@ -20,8 +20,7 @@
 //   7. Cross-sector goto: point in a gate-linked sector → the pig warps, arrives, holds.
 //   8. Miner rock order: pins the slot's TargetRockId + authorizes the rock's sector.
 //   9. Repeatability: the same goto scenario twice → both runs holding inside the arrive band.
-//      NOT bit-exact: drone skill/patrol draws ride the intentionally unseeded Simulation._rng
-//      (drones are never client-predicted — see RandomPatrolPoint). The bit-exact guard for the
+//      Band, not bit-exactness: the two sims are separate arenas. The bit-exact guard for the
 //      shared AutoSteer geometry itself is AutopilotTest scenario 8; orders reuse that same path.
 //  10. Multi-subject orders: the F3 multi-select fans out one MsgOrder per selected ship — the
 //      sim must hold independent per-subject orders side by side, and a per-subject clear sweep
@@ -37,6 +36,10 @@
 //      where it entered, never a run at the sector center.
 //  14. Sector order (targetKind 4), miner, fog on: prospect-patrols the ordered sector (sweeping
 //      undiscovered rocks) until helium-3 turns up, then mines it.
+//
+// Determinism: every BootSim pins the Simulation's server-only RNG (see its rngSeed parameter) as
+// well as the World seed, so the drone patrol/launch draws that steer the timing bands below
+// repeat run to run. Production supplies no seed and stays time-seeded, exactly as before.
 
 using System.Linq;
 using SimServer.Content;
@@ -61,13 +64,18 @@ string worldPath = Path.Combine(AppContext.BaseDirectory, "content", "core", "wo
 // world.yaml ai tuning this test leans on (see InitPigTuning): radar-range 1200, fire-range 360,
 // patrol-arrive 120 (the goto arrival shell), brain-hz 5 (a decision every 4 ticks).
 const float FireRange = 360f;
+const float RadarRange = 1200f;
 const float ArriveSlack = 200f; // patrol-arrive + wobble
 
+// The scenario seed pins BOTH halves of the arena: the World generator (layout) and — via the
+// Simulation's rngSeed — the server-only PIG draw stream (patrol waypoints, launch-exit pick).
+// Without the second half the drone behaviour under an order varies run to run and the timing
+// bands below are a coin flip (scenario 5 in particular). Production leaves rngSeed null.
 Simulation BootSim(ulong seed, bool pigs, bool miners = false, bool fog = false)
 {
     var content = ContentLoader.Load(stockPath, worldPath);
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
-    var sim = new Simulation(world, content);
+    var sim = new Simulation(world, content, rngSeed: (int)seed);
     sim.PigsEnabled = pigs;
     sim.MinersEnabled = miners;
     sim.ShieldsEnabled = false;
@@ -83,6 +91,17 @@ void PlaceAt(Simulation.ShipSim s, uint sector, Vec3 pos)
     s.State.Vel = new Vec3(0f, 0f, 0f);
     s.State.Rot = Quat.Identity;
     s.State.AngVel = new Vec3(0f, 0f, 0f);
+}
+
+// Park a ship out of every PIG range WITHOUT sailing it out of the sector. Anything past the
+// sector radius sits in the boundary hazard (world.yaml `combat: boundary-*-dps`, up to 60 dps)
+// and erodes to nothing within seconds — a "parked" hull put out there is dead, not idle, and a
+// scenario that later reuses it is silently testing an absent ship. Sits on +Z at 2x radar range
+// from the reference point, clamped well inside the boundary.
+void ParkOutOfRadar(Simulation sim, Simulation.ShipSim s, uint sector, Vec3 from)
+{
+    float ring = MathF.Min(RadarRange * 2f, sim.World.SectorRadius(sector) - from.Length() - 200f);
+    PlaceAt(s, sector, from + new Vec3(0f, 0f, ring));
 }
 
 Simulation.ShipSim SpawnPlayer(Simulation sim, int client, byte team, byte cls)
@@ -231,9 +250,9 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
     var enemy = SpawnPlayer(sim, 2, team: 1, cls: FlightModel.ClassScout);
     var pig = WaitForPig(sim);
     uint sector = pig.SectorId;
-    PlaceAt(enemy, sector, new Vec3(4000f, 4000f, 4000f)); // parked far out of every range for now
 
     var hold = new Vec3(0f, 500f, 0f);
+    ParkOutOfRadar(sim, enemy, sector, hold); // out of every range for now — and still ALIVE for step 5
     PlaceAt(pig, sector, new Vec3(0f, 500f, -800f));
     sim.EnqueueCommandOrder(1, "Cmdr", 0, pig.ShipId, targetKind: 3, targetId: 0, sector: sector, pos: hold);
     StepQuiet(sim, pig.ShipId);
@@ -284,7 +303,7 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
     );
 
     sim.EnqueueInput(2, 0, default); // cease fire
-    PlaceAt(enemy, sector, new Vec3(4000f, 4000f, 4000f)); // aggressor gone (far outside radar)
+    ParkOutOfRadar(sim, enemy, sector, hold); // aggressor gone (outside radar, still inside the sector)
     float backTo = float.MaxValue;
     for (int i = 0; i < 600; i++)
     {

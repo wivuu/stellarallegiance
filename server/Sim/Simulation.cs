@@ -449,9 +449,11 @@ public sealed partial class Simulation
     private uint _tick;
 
     // Server-only RNG for non-deterministic gameplay effects whose result is baked into
-    // ship state (warp exit jitter, pod eject impulse/tumble) — clients read the result
-    // from snapshots, they never reproduce the draw, so plain Random is fine.
-    private readonly Random _rng = new();
+    // ship state (warp exit jitter, pod eject impulse/tumble, PIG patrol waypoints, launch-exit
+    // pick) — clients read the result from snapshots, they never reproduce the draw, so plain
+    // Random is fine. Time-seeded in production; a console suite (or SIM_RNG_SEED) can pin it so
+    // PIG behaviour repeats run to run — see the ctor's rngSeed parameter.
+    private readonly Random _rng;
 
     // Inputs/joins from socket threads, drained by the sim thread each step.
     private readonly Queue<(int clientId, uint tick, ShipInputState input)> _inputQueue = new();
@@ -620,11 +622,25 @@ public sealed partial class Simulation
     // The hub gates spawn requests (MsgSpawn) on this — ships only spawn during a live match.
     public bool IsActive => Phase == PhaseActive;
 
-    public Simulation(World world, ContentSet content, ILogger? log = null)
+    // rngSeed pins the server-only _rng stream (PIG patrol waypoints, launch-exit pick, warp-exit
+    // jitter, pod eject impulse) so a headless run repeats exactly. Production passes nothing and
+    // stays time-seeded, as it always was; the SIM_RNG_SEED env knob is the same escape hatch for
+    // the shipped binary (mirrors SIM_SEED, which pins the WORLD generator instead).
+    public Simulation(World world, ContentSet content, ILogger? log = null, int? rngSeed = null)
     {
         _log = log ?? NullLogger.Instance;
         World = world;
         Content = content;
+        _rng = ResolveRng(rngSeed);
+
+        static Random ResolveRng(int? seed)
+        {
+            if (seed is { } s)
+                return new Random(s);
+            return int.TryParse(Environment.GetEnvironmentVariable("SIM_RNG_SEED"), out var env)
+                ? new Random(env)
+                : new Random(); // production: time-seeded, one fresh stream per Simulation
+        }
 
         // Resolve the authored server-side tuning blocks (world.yaml) once. Stock values
         // come from the shared classes' initializers when a block/knob is unauthored.
