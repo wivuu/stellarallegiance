@@ -122,6 +122,46 @@ namespace StellarAllegiance.Shared
 
         public static Vec3 Cross(Vec3 a, Vec3 b) =>
             new Vec3(a.Y * b.Z - a.Z * b.Y, a.Z * b.X - a.X * b.Z, a.X * b.Y - a.Y * b.X);
+
+        public static float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
+
+        // ---- normalize: THREE degenerate-guard flavours, deliberately kept apart -----------------
+        // Every call site here is sim/prediction/asset-geometry code, so the guard is part of the
+        // contract, not an implementation detail: which vector comes back for a (near-)zero input
+        // changes downstream steering and face orientation. The float expressions below are verbatim
+        // from the private copies they replaced — same comparison DIRECTION, same reciprocal-multiply
+        // — so do not "unify" them into one body.
+
+        // Degenerate (len <= 1e-6) ⇒ +Z forward. The default for direction-from-geometry.
+        public static Vec3 Normalize(Vec3 v)
+        {
+            float len = v.Length();
+            return len > 1e-6f ? v * (1f / len) : new Vec3(0f, 0f, 1f);
+        }
+
+        // Degenerate (len <= 1e-6) ⇒ the zero vector, so callers can test the result for "no
+        // direction" instead of being handed a plausible-looking axis.
+        public static Vec3 NormalizeOrZero(Vec3 v)
+        {
+            float l = v.Length();
+            return l > 1e-6f ? v * (1f / l) : default;
+        }
+
+        // Degenerate (len < 1e-6) ⇒ a caller-supplied fallback — the steering flavour, where the
+        // fallback is usually the ship's current nose so a zero-length desire holds heading.
+        public static Vec3 NormalizeOr(Vec3 v, Vec3 fallback)
+        {
+            float n = v.Length();
+            return n < 1e-6f ? fallback : v * (1f / n);
+        }
+    }
+
+    // Scalar math shared by the steering code on BOTH sides of the wire (shared/AutoSteer.cs and the
+    // server PIG brain). Kept next to Vec3 so there is one copy of each expression.
+    public static class MathUtil
+    {
+        // Clamp a stick axis to [-1, 1].
+        public static float Clamp1(float v) => v < -1f ? -1f : (v > 1f ? 1f : v);
     }
 
     [StructLayout(LayoutKind.Sequential)]

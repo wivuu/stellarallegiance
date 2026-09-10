@@ -44,6 +44,7 @@ using System.Linq;
 using SimServer.Content;
 using SimServer.Sim;
 using StellarAllegiance.Shared;
+using static StellarAllegiance.Shared.Vec3;
 
 int failures = 0;
 void Check(bool cond, string pass, string fail)
@@ -98,7 +99,6 @@ Simulation.ShipSim Spawn(Simulation sim, int client, byte team, byte cls)
 }
 
 float Dist(Vec3 a, Vec3 b) => (a - b).Length();
-float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
 
 // ---- 1. Waypoint: approach, brake, settle in the standoff band, disengage --------------------------
 {

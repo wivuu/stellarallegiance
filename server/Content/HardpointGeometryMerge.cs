@@ -154,14 +154,14 @@ public static class HardpointGeometryMerge
                     throw new InvalidDataException(
                         $"{ctx}: hardpoint kind={hp.Kind} index={hp.Index} has a zero-length authored direction"
                     );
-                d = Normalize(d);
+                d = NormalizeExact(d);
                 hp.DirX = d.X;
                 hp.DirY = d.Y;
                 hp.DirZ = d.Z;
             }
             else if (hasNode)
             {
-                var d = Normalize(node.Fwd);
+                var d = NormalizeExact(node.Fwd);
                 hp.DirX = d.X;
                 hp.DirY = d.Y;
                 hp.DirZ = d.Z;
@@ -179,7 +179,7 @@ public static class HardpointGeometryMerge
         {
             var (kind, index) = kv.Key;
             var (pos, fwd) = kv.Value;
-            var d = Normalize(fwd);
+            var d = NormalizeExact(fwd);
             hps.Add(
                 new Factions.Hardpoint
                 {
@@ -223,7 +223,11 @@ public static class HardpointGeometryMerge
         return true;
     }
 
-    private static Vec3 Normalize(Vec3 v)
+    // NOT Vec3.Normalize: a much smaller epsilon (1e-12), the INPUT returned for a degenerate
+    // vector rather than a substituted axis, and per-component division instead of a reciprocal
+    // multiply. Content-merge geometry only — swapping in the shared one would move authored
+    // hardpoint forwards in the last float bits, so it stays local under its own name.
+    private static Vec3 NormalizeExact(Vec3 v)
     {
         float len = v.Length();
         return len < 1e-12f ? v : new Vec3(v.X / len, v.Y / len, v.Z / len);

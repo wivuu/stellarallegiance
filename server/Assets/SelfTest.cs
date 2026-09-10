@@ -1,6 +1,7 @@
 using SimServer.Content;
 using SimServer.Sim;
 using StellarAllegiance.Shared;
+using static StellarAllegiance.Shared.Vec3;
 
 namespace SimServer.Assets;
 
@@ -264,8 +265,6 @@ public static class SelfTest
         if (!ok)
             _failures++;
     }
-
-    private static float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
 
     private static string F(Vec3 v) => $"{v.X:0.###}, {v.Y:0.###}, {v.Z:0.###}";
 }

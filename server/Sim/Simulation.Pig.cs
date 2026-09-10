@@ -1,4 +1,6 @@
 using StellarAllegiance.Shared;
+using static StellarAllegiance.Shared.MathUtil;
+using static StellarAllegiance.Shared.Vec3;
 
 namespace SimServer.Sim;
 
@@ -1194,17 +1196,11 @@ public sealed partial class Simulation
     }
 
     // ---- small server-only math helpers ----
-    private static float Clamp1(float v) => v < -1f ? -1f : (v > 1f ? 1f : v);
-
+    // Clamp1 / Dot / NormalizeOr are shared with AutoSteer.cs (MathUtil + Vec3, `using static`
+    // above) — the PIG brain and the client-side steering must stay float-identical.
     private static float Clamp01(float v) => v < 0f ? 0f : (v > 1f ? 1f : v);
 
     private static Quat Conjugate(Quat q) => new(-q.X, -q.Y, -q.Z, q.W);
-
-    private static Vec3 NormalizeOr(Vec3 v, Vec3 fallback)
-    {
-        float n = v.Length();
-        return n < 1e-6f ? fallback : v * (1f / n);
-    }
 
     private static Vec3 PerpendicularTo(Vec3 v)
     {

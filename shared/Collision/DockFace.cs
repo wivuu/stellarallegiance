@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using static StellarAllegiance.Shared.Vec3;
 
 namespace StellarAllegiance.Shared;
 
@@ -105,7 +106,7 @@ public static class DockFaceParser
     {
         int face = FaceMarker(ent, start);
         Vec3 center = ent[face].Pos * ws;
-        Vec3 n = Normalize(ent[face].Fwd);
+        Vec3 n = NormalizeOrZero(ent[face].Fwd);
 
         // Project the 4 boundary points onto the face plane (don't require exact coplanarity —
         // source art authors them slightly off the face marker's plane).
@@ -124,15 +125,15 @@ public static class DockFaceParser
         for (int i = 0; i < 4; i++)
             if (proj[i].LengthSquared() > 1e-8f)
             {
-                u = Normalize(proj[i]);
+                u = NormalizeOrZero(proj[i]);
                 break;
             }
         if (u.LengthSquared() < 0.5f)
             u = AnyPerp(n); // all boundary points coincide with the face marker — degenerate door
 
-        Vec3 v = Normalize(Vec3.Cross(n, u));
+        Vec3 v = NormalizeOrZero(Vec3.Cross(n, u));
         // Re-orthogonalize U from the exact {V,N} pair so {U,V,N} is a clean orthonormal triad.
-        u = Normalize(Vec3.Cross(v, n));
+        u = NormalizeOrZero(Vec3.Cross(v, n));
 
         float eu = 0f,
             ev = 0f;
@@ -157,7 +158,7 @@ public static class DockFaceParser
         float bestScore = float.MaxValue;
         for (int i = start; i < start + 5; i++)
         {
-            Vec3 f = Normalize(ent[i].Fwd);
+            Vec3 f = NormalizeOrZero(ent[i].Fwd);
             if (f.LengthSquared() < 0.5f)
                 continue; // degenerate forward can't be scored — never the face marker
             float score = 0f;
@@ -165,7 +166,7 @@ public static class DockFaceParser
             {
                 if (j == i)
                     continue;
-                Vec3 d = Normalize(ent[j].Pos - ent[i].Pos);
+                Vec3 d = NormalizeOrZero(ent[j].Pos - ent[i].Pos);
                 if (d.LengthSquared() < 0.5f)
                     continue; // coincident markers carry no direction
                 score = MathF.Max(score, MathF.Abs(Dot(f, d)));
@@ -184,12 +185,12 @@ public static class DockFaceParser
     private static DockFace LegacyDisc(Vec3 posAuthored, float ws)
     {
         Vec3 center = posAuthored * ws;
-        Vec3 n = Normalize(posAuthored * -1f); // inward = toward the base centre
+        Vec3 n = NormalizeOrZero(posAuthored * -1f); // inward = toward the base centre
         if (n.LengthSquared() < 0.5f)
             n = new Vec3(0f, 1f, 0f);
         Vec3 u = AnyPerp(n);
-        Vec3 v = Normalize(Vec3.Cross(n, u));
-        u = Normalize(Vec3.Cross(v, n));
+        Vec3 v = NormalizeOrZero(Vec3.Cross(n, u));
+        u = NormalizeOrZero(Vec3.Cross(v, n));
         return new DockFace(center, n, u, v, LegacyDiscRadius, LegacyDiscRadius);
     }
 
@@ -202,18 +203,10 @@ public static class DockFaceParser
         return 0;
     }
 
-    private static float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
-
-    private static Vec3 Normalize(Vec3 v)
-    {
-        float l = v.Length();
-        return l > 1e-6f ? v * (1f / l) : default;
-    }
-
     // Some unit vector perpendicular to n (n assumed unit-ish). Pick the world axis least aligned.
     private static Vec3 AnyPerp(Vec3 n)
     {
         Vec3 a = MathF.Abs(n.Y) < 0.9f ? new Vec3(0f, 1f, 0f) : new Vec3(1f, 0f, 0f);
-        return Normalize(Vec3.Cross(n, a));
+        return NormalizeOrZero(Vec3.Cross(n, a));
     }
 }

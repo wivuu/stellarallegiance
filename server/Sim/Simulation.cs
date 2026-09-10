@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using SimServer.Assets;
 using SimServer.Content;
 using StellarAllegiance.Shared;
+using static StellarAllegiance.Shared.Vec3;
 
 namespace SimServer.Sim;
 
@@ -3951,6 +3952,4 @@ public sealed partial class Simulation
             return new Quat(1f, 0f, 0f, 0f);
         return new Quat(-dir.Y, dir.X, 0f, 1f + d).Normalized();
     }
-
-    private static float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
 }
