@@ -169,6 +169,18 @@ Not stage-bound — done when convenient or when a stage needs them.
 
 ## Deep backlog
 
+- ☐ **[M]** **Explicit host transfer + runtime arena rebuild** — the game server's host is implicit:
+  `ClientHub` seeds `_hostId` to the first pilot to connect (`ReceiveLoop`, the `MsgHello` case)
+  and, when the host drops, hands it to the lowest remaining client id (`HandleConnection`'s
+  disconnect path). A host cannot pass the role deliberately and nobody can pick one, so map
+  control just follows join order. Wanted: an explicit host-selection/transfer frame plus the lobby
+  UI for it. Blocking the same feature: `MsgSetMap` (`ReceiveLoop`) only advertises the pick as the
+  "next" map, because the live `World` is built once at boot — making a mid-lobby map change take
+  effect needs an arena-rebuild seam (regen the `World`, re-`Welcome` every client). Lifted from
+  four `// TODO`s in `server/Net/ClientHub.cs`.
+- ☐ **[S]** **simbot speaks proto 7** — `tools/simbot` hand-builds its frames instead of
+  referencing `shared/Net/Wire.cs`, and its header still says "Protocol v7". Port it to `Wire` so a
+  protocol bump can't silently rot the load harness, or delete it.
 - ☐ **[M]** **Spectator mode** — follow players with Tab (camera orbits target); pick sectors from the
   lobby.
 - ☐ **[L]** **Replay system** — tick log or time-travel query playback.

@@ -297,7 +297,7 @@ public sealed class ClientHub
     // snapshot), so no dedicated lock. Team-name defaults come from the design ("IRON COIL"/"ASH
     // SYNDICATE"), overwritten as pilots rename their side.
     private readonly string[] _teamNames = { "IRON COIL", "ASH SYNDICATE" };
-    private int _hostId = -1; // first pilot on the server; -1 when empty. TODO: allow explicit host transfer.
+    private int _hostId = -1; // first pilot on the server; -1 when empty.
     private string _selectedMap; // the current/"next" map name (advertised only — see MsgSetMap)
     private readonly IReadOnlyList<MapCatalogEntry> _mapCatalog; // available maps, built once at boot
 
@@ -621,7 +621,7 @@ public sealed class ClientHub
             );
             _lobby.Remove(client.Id);
             // Host left → transfer to the earliest remaining pilot (lowest id), or -1 if the server
-            // emptied. TODO: later allow explicit host selection rather than implicit earliest-joined.
+            // emptied.
             if (_hostId == client.Id)
                 _hostId = _lobby.Snapshot().Select(e => e.Id).DefaultIfEmpty(-1).Min();
             _players.OnDisconnect(client.Id);
@@ -727,7 +727,6 @@ public sealed class ClientHub
                     client.Team = _lobby.TeamOf(client.Id);
                     // First pilot on the server becomes host (only they may change the map). Ids are
                     // monotonic, so "unset -> this id" makes the earliest joiner host until they leave.
-                    // TODO: later allow explicit host selection/transfer instead of implicit first-pilot.
                     if (_hostId < 0)
                         _hostId = client.Id;
 
@@ -877,7 +876,7 @@ public sealed class ClientHub
                     // Host-only (enforced here, not just client-side). Cheap path: advertise the chosen
                     // map as the selected/"next" map and rebroadcast; we do NOT rebuild the live World
                     // mid-lobby (that needs a World regen + re-Welcome of every client — the arena is
-                    // built once at boot). TODO: wire an arena-rebuild seam to make this take effect.
+                    // built once at boot).
                     if (client.Id == _hostId)
                     {
                         int len = BitConverter.ToUInt16(buffer, 1);
