@@ -24,21 +24,28 @@
     <Project Path="shared/Shared.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/AlephTest/AlephTest.csproj" />
+    <Project Path="tests/AutopilotTest/AutopilotTest.csproj" />
     <Project Path="tests/CollisionTest/CollisionTest.csproj" />
     <Project Path="tests/CommanderTest/CommanderTest.csproj" />
+    <Project Path="tests/ConstructorTest/ConstructorTest.csproj" />
     <Project Path="tests/ContentTest/ContentTest.csproj" />
     <Project Path="tests/CryptoTest/CryptoTest.csproj" />
     <Project Path="tests/FactionsTest/FactionsTest.csproj" />
     <Project Path="tests/FlightModelTest/FlightModelTest.csproj" />
+    <Project Path="tests/FogTest/FogTest.csproj" />
     <Project Path="tests/FuelPodTest/FuelPodTest.csproj" />
     <Project Path="tests/LoadoutTest/LoadoutTest.csproj" />
     <Project Path="tests/LobbyTest/LobbyTest.csproj" />
     <Project Path="tests/MatchStatsStoreTest/MatchStatsStoreTest.csproj" />
+    <Project Path="tests/MineTest/MineTest.csproj" />
     <Project Path="tests/MiningTest/MiningTest.csproj" />
     <Project Path="tests/MissileTest/MissileTest.csproj" />
     <Project Path="tests/PublicLobbyTest/PublicLobbyTest.csproj" />
     <Project Path="tests/ReloadTest/ReloadTest.csproj" />
+    <Project Path="tests/RescueTest/RescueTest.csproj" />
     <Project Path="tests/ScoreboardTest/ScoreboardTest.csproj" />
+    <Project Path="tests/ShieldTest/ShieldTest.csproj" />
     <Project Path="tests/StrategyTest/StrategyTest.csproj" />
     <Project Path="tests/TeamStateStoreTest/TeamStateStoreTest.csproj" />
   </Folder>
