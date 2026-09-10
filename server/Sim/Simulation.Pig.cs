@@ -112,11 +112,27 @@ public sealed partial class Simulation
         PigJukeAmpMax = t.JukeAmpMax;
         PigAimSinDeg = MathF.Sin(t.AimDeg * (MathF.PI / 180f));
 
-        // Player-autopilot friendly-base docking maneuver (DockApproach) — authored in the same `ai:`
-        // block; server-only navigation, not a PIG behaviour.
+        // Server-side navigation tuning — authored in the same `ai:` block, but NOT a PIG behaviour:
+        // the shared approach-brake cushions (autopilot + the miner/constructor drone legs) and the
+        // player-autopilot friendly-base docking maneuver (DockApproach). Cross-knob invariants were
+        // already enforced at load (WorldLoader.ValidateAi), so these are copied straight through.
+        ApBrakeMargin = t.BrakeMargin;
+        ApArrivalBandMult = t.ArrivalBandMult;
         ApDockStandoff = t.DockStandoff;
         ApDockClearance = t.DockClearance;
         ApDockCreepThrottle = t.DockCreepThrottle;
+        ApDockHullMargin = t.DockHullMargin;
+        ApDockLosSlack = t.DockLosSlack;
+        ApDockDetourStepRad = t.DockDetourStepRad;
+        ApDockCapture = t.DockCapture;
+        ApDockOuterStandoff = t.DockOuterStandoff;
+        ApDockAxisSlop = t.DockAxisSlop;
+        ApDockDescentMargin = t.DockDescentMargin;
+        ApDockDescentMaxThrottle = t.DockDescentMaxThrottle;
+        ApDockCaptureSpeedSq = t.DockCaptureSpeedSq;
+        ApDockRollGain = t.DockRollGain;
+        ApDockFacingDot = t.DockFacingDot;
+        ApDockRollTol = t.DockRollTol;
     }
 
     // Lead solving uses the drone's primary weapon (all server weapons share these). Instance

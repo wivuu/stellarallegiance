@@ -1962,44 +1962,49 @@ public sealed partial class Simulation
     // the arrival shell rather than overshooting it. The arrival bands are standoff-generous, so a small
     // early stop still counts as "arrived"; only the friendly-base dock (which needs the door window)
     // opts out of this by aiming its stop shell just inside the door.
-    private const float ApBrakeMargin = 16f;
+    private float ApBrakeMargin = 16f;
 
     // Arrival-band generosity multiplier applied to a point-destination's standoff distance when
     // testing Arrived (see ArriveAt) — the ship counts as "arrived" a bit outside its brake target.
-    private const float ApArrivalBandMult = 1.2f;
+    private float ApArrivalBandMult = 1.2f;
 
     // ---- Friendly-base docking maneuver tuning (server-only; see DockApproach) ----
-    // Compile-time geometry gates (the maneuver's feel is stable; only the three world.yaml knobs
-    // below are worth per-server tuning).
-    private const float ApDockHullMargin = 10f; // padding added to BaseRadius for the LOS/detour sphere
-    private const float ApDockLosSlack = 35f; // endSlack in the LOS test — excuses the terminal door pocket
-    private const float ApDockDetourStepRad = 0.6f; // per-tick azimuth advance of the orbit carrot (rad)
+    // Every knob in this section is world.yaml-overridable under `ai:` (the kebab-case key is the
+    // field name minus the Ap prefix — ApDockCapture = ai.dock-capture) and resolved once in
+    // InitPigTuning from WorldAiTuning; the initializers here mirror the stock defaults so the shape
+    // of the maneuver is readable in place. Cross-knob invariants are enforced at load
+    // (WorldLoader.ValidateAi) — a sweep that breaks one refuses boot rather than wedging a dock.
+    private float ApDockHullMargin = 10f; // padding added to BaseRadius for the LOS/detour sphere
+    private float ApDockLosSlack = 35f; // endSlack in the LOS test — excuses the terminal door pocket
+    private float ApDockDetourStepRad = 0.6f; // per-tick azimuth advance of the orbit carrot (rad)
 
-    // MUST exceed ApBrakeMargin (16): the Transit clear-line ApproachPoint brakes to rest ~ApBrakeMargin
+    // MUST exceed ApBrakeMargin (enforced at load): the Transit clear-line ApproachPoint brakes to rest ~ApBrakeMargin
     // short of the standoff point, so a capture radius below that margin is a dead zone the ship can
     // never enter — Transit would park just outside it and never promote to Align/Creep (the maneuver
     // would only ever dock by sliding into the door during Transit, never via the intended align+creep).
-    private const float ApDockCapture = 20f; // within this of the standoff point promotes Transit -> Align
+    private float ApDockCapture = 20f; // within this of the standoff point promotes Transit -> Align
 
     // Outer axis-acquire point for Transit: far enough out that (unlike the standoff point, which may
     // sit inside a recessed door pocket WITHIN the padded sphere) it clears the padded base sphere with
-    // margin, so the straight-in leg's LOS test doesn't flap on small lateral drift.
-    private const float ApDockOuterStandoff = 60f;
-    private const float ApDockAxisSlop = 12f; // lateral slack past the door half-extents that counts as "on the corridor axis"
-    private const float ApDockDescentMargin = 8f; // arrest cushion on the on-axis descent (speeds are low; ApBrakeMargin would park short)
-    private const float ApDockDescentMaxThrottle = 0.3f; // descent speed cap (fraction of MaxSpeed) — dock-pattern pace, not cruise
-    private const float ApDockCaptureSpeedSq = 9f; // ...and speed^2 below this (~3 u/s) so the ship has settled
-    private const float ApDockRollGain = 3f; // FaceAndRoll roll proportional gain
-    private const float ApDockFacingDot = 0.995f; // Align -> Creep: nose-onto-door facing threshold
-    private const float ApDockRollTol = 0.10f; // Align -> Creep: |localUp.X| roll-alignment tolerance
-    private const float ApDockCreepFacingDot = 0.9f; // Creep demotes below this facing dot
-    private const uint ApDockAlignTimeout = 300; // ticks in Align before demoting to Transit
-    private const uint ApDockCreepTimeout = 200; // ticks in Creep before demoting to Transit
-
-    // world.yaml-overridable (ai.dock-*) — resolved in InitPigTuning from WorldAiTuning.
+    // margin, so the straight-in leg's LOS test doesn't flap on small lateral drift. MUST exceed
+    // ApDockStandoff.
+    private float ApDockOuterStandoff = 60f;
+    private float ApDockAxisSlop = 12f; // lateral slack past the door half-extents that counts as "on the corridor axis"
+    private float ApDockDescentMargin = 8f; // arrest cushion on the on-axis descent (speeds are low; ApBrakeMargin would park short)
+    private float ApDockDescentMaxThrottle = 0.3f; // descent speed cap (fraction of MaxSpeed) — dock-pattern pace, not cruise
+    private float ApDockCaptureSpeedSq = 9f; // ...and speed^2 below this (~3 u/s) so the ship has settled
+    private float ApDockRollGain = 3f; // FaceAndRoll roll proportional gain
+    private float ApDockFacingDot = 0.995f; // Align -> Creep: nose-onto-door facing threshold
+    private float ApDockRollTol = 0.10f; // Align -> Creep: |localUp.X| roll-alignment tolerance
     private float ApDockStandoff = 25f; // standoff point distance outside the door plane
     private float ApDockClearance = 40f; // detour ring radius = BaseRadius + this
     private float ApDockCreepThrottle = 0.12f; // creep throttle fraction (~19 u/s for a Scout)
+
+    // Still compile-time: phase-demotion backstops, not geometry (nothing about a re-baked base mesh
+    // or a per-server sweep changes what "faced away" or "stuck too long" should mean).
+    private const float ApDockCreepFacingDot = 0.9f; // Creep demotes below this facing dot
+    private const uint ApDockAlignTimeout = 300; // ticks in Align before demoting to Transit
+    private const uint ApDockCreepTimeout = 200; // ticks in Creep before demoting to Transit
 
     private ShipInputState AutopilotStep(ShipSim s, uint tick)
     {
