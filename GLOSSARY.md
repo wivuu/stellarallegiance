@@ -61,7 +61,8 @@ Distance-based visibility culling: server only streams entities within fixed dis
 Two-tier write discipline on the per-client outbound frame queue (bounded, `FullMode.Wait`). RELIABLE (`SendReliable`) is for one-shot frames with no repair path — Welcome, Defs, YouAre, ShipGone, chat, lobby roster, gone-events, rock deltas; a full queue parks them in the client's `PendingControl`, flushed FIFO next tick (delayed, never lost). LOSSY (`SendLossy`) is for self-healing streams — snapshots, change+keepalive frames, FX; a full queue just drops the write.
 - **Frequency:** Every outbound frame
 - **Key Files:**
-  - `server/Net/ClientHub.cs` — `SendReliable` / `FlushReliable` / `SendLossy`, `OutboundQueueDepth`
+  - `server/Net/OutboundChannel.cs` — `OutboundChannel` (one per client: `SendReliable` / `FlushReliable` / `SendLossy` / `TryWrite`, `QueueDepth`), `OutFrame`, `OutboundStats` (drop/park counters)
+  - `server/Net/ClientHub.cs` — holds one `OutboundChannel` per `Client` and picks the tier at every send site
 - **Related:** [[Snapshot]], [[AOI (Area of Interest)]]
 - **Notes:** NEVER use `DropOldest` or raw `TryWrite` for control frames — evicting a one-shot YouAre/ShipGone deadlocks the relaunch flow (client retries MsgSpawn forever; server drops each as "already flying"). Queue pressure is logged throttled (`OutboundQueuePressure`). The client additionally self-heals its local-ship binding from the lobby roster (`GameNetClient.ApplyLobbyState` adopt/ghost heal).
 
