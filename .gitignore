@@ -500,8 +500,15 @@ $RECYCLE.BIN/
 *.lnk
 
 # Vim temporary swap files
-*.swpreport-spool/
+*.swp
+
+# sim server's match-result spool (SIM_REPORT_SPOOL, default beside sim-cache/)
+report-spool/
 
 # Aspire AppHost local state (server sim-cache + lobby device-code credential)
 apphost/.local/
 .aspire/
+
+# Claude Code session plan files — local scratch, regenerated per session.
+# `.claude/settings.json` and `.claude/skills/**` stay tracked.
+.claude/plans/
