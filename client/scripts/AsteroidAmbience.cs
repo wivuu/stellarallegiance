@@ -29,23 +29,23 @@ using Godot;
 public partial class AsteroidAmbience : Node
 {
     // ---- Asteroid hum ---------------------------------------------------
-    private const int PoolSize = 4;              // simultaneous humming rocks (nearest N)
-    private const float HumUnitSize = 40f;       // 3D attenuation scale (matches world's large units)
-    private const float HumMaxDistance = 700f;   // hard cutoff for the emitter's own falloff
-    private const float LatchRange = 500f;       // a rock within this (and in-sector) grabs a free emitter
-    private const float UnlatchRange = 560f;     // ...and holds it until it drifts past this (hysteresis)
-    private const float BoundaryBand = 120f;     // crossfade the last stretch to 0 so rocks don't pop at the edge
-    private const float FadeInRate = 4f;         // per-latch volume ease (units/s → ~0.25s), masks the latch teleport
+    private const int PoolSize = 4; // simultaneous humming rocks (nearest N)
+    private const float HumUnitSize = 40f; // 3D attenuation scale (matches world's large units)
+    private const float HumMaxDistance = 700f; // hard cutoff for the emitter's own falloff
+    private const float LatchRange = 500f; // a rock within this (and in-sector) grabs a free emitter
+    private const float UnlatchRange = 560f; // ...and holds it until it drifts past this (hysteresis)
+    private const float BoundaryBand = 120f; // crossfade the last stretch to 0 so rocks don't pop at the edge
+    private const float FadeInRate = 4f; // per-latch volume ease (units/s → ~0.25s), masks the latch teleport
 
     // ---- Probe ping -----------------------------------------------------
-    private const float ProbePingRadius = 400f;  // ship must be within this of a probe to hear it
-    private const float PingInterval = 2.0f;     // steady seconds between pings anywhere in range
+    private const float ProbePingRadius = 400f; // ship must be within this of a probe to hear it
+    private const float PingInterval = 2.0f; // steady seconds between pings anywhere in range
 
     private sealed class Emitter
     {
         public AudioStreamPlayer3D Player = null!;
-        public ulong RockId;   // the asteroid this emitter is glued to (0 = free)
-        public float FadeIn;   // 0..1 envelope ramped after each fresh latch
+        public ulong RockId; // the asteroid this emitter is glued to (0 = free)
+        public float FadeIn; // 0..1 envelope ramped after each fresh latch
     }
 
     private readonly List<Emitter> _pool = new();
@@ -79,7 +79,14 @@ public partial class AsteroidAmbience : Node
             };
             AddChild(p);
             p.Play(); // loops run continuously — we drive audibility with VolumeDb, never Play/Stop churn
-            _pool.Add(new Emitter { Player = p, RockId = 0, FadeIn = 0f });
+            _pool.Add(
+                new Emitter
+                {
+                    Player = p,
+                    RockId = 0,
+                    FadeIn = 0f,
+                }
+            );
         }
         _poolBuilt = true;
     }
@@ -91,7 +98,8 @@ public partial class AsteroidAmbience : Node
         Vector3 listenerPos,
         uint sector,
         IReadOnlyDictionary<ulong, Node3D> asteroids,
-        IReadOnlyDictionary<ulong, ProbeView> probes)
+        IReadOnlyDictionary<ulong, ProbeView> probes
+    )
     {
         EnsurePool();
         if (_poolBuilt)
@@ -99,7 +107,12 @@ public partial class AsteroidAmbience : Node
         UpdateProbePings(delta, listenerPos, sector, probes);
     }
 
-    private void UpdateAsteroidHum(float delta, Vector3 listenerPos, uint sector, IReadOnlyDictionary<ulong, Node3D> asteroids)
+    private void UpdateAsteroidHum(
+        float delta,
+        Vector3 listenerPos,
+        uint sector,
+        IReadOnlyDictionary<ulong, Node3D> asteroids
+    )
     {
         // Pass 1 — service latched emitters: drop any whose rock vanished, left the sector, or drifted past the
         // unlatch range; otherwise glue the emitter to the rock and shape its volume by proximity.
@@ -177,7 +190,12 @@ public partial class AsteroidAmbience : Node
         return false;
     }
 
-    private void UpdateProbePings(float delta, Vector3 listenerPos, uint sector, IReadOnlyDictionary<ulong, ProbeView> probes)
+    private void UpdateProbePings(
+        float delta,
+        Vector3 listenerPos,
+        uint sector,
+        IReadOnlyDictionary<ulong, ProbeView> probes
+    )
     {
         var sfx = SfxManager.Instance;
         if (sfx == null)
@@ -220,6 +238,5 @@ public partial class AsteroidAmbience : Node
 
     // Mirrors WorldRenderer's node "sector" meta contract (SetNodeSector): a node with no tag is treated as
     // not-in-sector (silent), never as a match.
-    private static bool InSector(Node3D n, uint sector) =>
-        n.HasMeta("sector") && (int)n.GetMeta("sector") == (int)sector;
+    private static bool InSector(Node3D n, uint sector) => n.HasMeta("sector") && (int)n.GetMeta("sector") == (int)sector;
 }

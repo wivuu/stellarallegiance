@@ -72,8 +72,7 @@ public sealed partial class Simulation
 
     private float PigAimSinDeg; // precomputed sin(aim half-angle); used in PigChaseInput + PigAttackPoint
 
-    private static uint SecondsToTicks(float seconds) =>
-        (uint)System.Math.Max(0, (int)MathF.Round(seconds * TickHz));
+    private static uint SecondsToTicks(float seconds) => (uint)System.Math.Max(0, (int)MathF.Round(seconds * TickHz));
 
     // Resolve the authored world.yaml `ai:` block into the tick-domain fields above. Ctor-only.
     private void InitPigTuning(WorldAiTuning t)
@@ -1112,7 +1111,14 @@ public sealed partial class Simulation
     // injecting the PIG's obstacle avoidance + turn gain. excludeBaseId (default 0 = none) skips
     // one base from the avoidance field — the pod-home leg flies INTO its own base door and must
     // not be steered off it.
-    private ShipInputState PigSteerTo(ShipSim me, Vec3 myPos, Quat myRot, Vec3 point, float thrustWhenFacing, ulong excludeBaseId = 0) =>
+    private ShipInputState PigSteerTo(
+        ShipSim me,
+        Vec3 myPos,
+        Quat myRot,
+        Vec3 point,
+        float thrustWhenFacing,
+        ulong excludeBaseId = 0
+    ) =>
         AutoSteer.SteerToPoint(
             myPos,
             myRot,

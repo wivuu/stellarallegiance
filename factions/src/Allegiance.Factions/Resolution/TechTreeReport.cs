@@ -29,9 +29,9 @@ public static class TechTreeReport
         var reachable = TechResolver.ResolveReachable(core, faction);
 
         var techs = new Dictionary<string, TechInfo>();
-        foreach (var tech in core.Techs
-                     .Where(t => reachable.Techs.Contains(t.Id))
-                     .OrderBy(t => t.Id, StringComparer.Ordinal))
+        foreach (
+            var tech in core.Techs.Where(t => reachable.Techs.Contains(t.Id)).OrderBy(t => t.Id, StringComparer.Ordinal)
+        )
             techs[tech.Id] = DescribeTech(core, tech.Id);
 
         var buildables = new Dictionary<string, BuildableInfo>();
@@ -52,7 +52,8 @@ public static class TechTreeReport
             ReachableTechs = Sorted(reachable.Techs),
             ReachableCapabilities = Sorted(reachable.Capabilities),
             AvailableAtStart = SortedIds(
-                BuildableResolver.GetBuildables(core, faction.BaseTechs, faction.BaseCapabilities).Select(b => b.Id)),
+                BuildableResolver.GetBuildables(core, faction.BaseTechs, faction.BaseCapabilities).Select(b => b.Id)
+            ),
             Techs = techs,
             Buildables = buildables,
         };
@@ -78,8 +79,8 @@ public static class TechTreeReport
 
     private static BuildableInfo DescribeBuildable(Core core, Faction faction, Buildable b)
     {
-        bool atStart = b.RequiredTechs.IsSubsetOf(faction.BaseTechs)
-                       && b.RequiredCapabilities.IsSubsetOf(faction.BaseCapabilities);
+        bool atStart =
+            b.RequiredTechs.IsSubsetOf(faction.BaseTechs) && b.RequiredCapabilities.IsSubsetOf(faction.BaseCapabilities);
 
         // What this faction must build/research first: the buildables whose grants satisfy this
         // item's still-unmet tech/capability requirements (e.g. the shipyard that grants
@@ -88,12 +89,12 @@ public static class TechTreeReport
         if (!atStart)
         {
             foreach (var t in b.RequiredTechs.Where(t => !faction.BaseTechs.Contains(t)))
-                foreach (var g in GrantersOf(core, t))
-                    unlockedBy.Add(g.Id);
+            foreach (var g in GrantersOf(core, t))
+                unlockedBy.Add(g.Id);
 
             foreach (var c in b.RequiredCapabilities.Where(c => !faction.BaseCapabilities.Contains(c)))
-                foreach (var g in core.AllBuildables().Where(x => x.GrantedCapabilities.Contains(c)))
-                    unlockedBy.Add(g.Id);
+            foreach (var g in core.AllBuildables().Where(x => x.GrantedCapabilities.Contains(c)))
+                unlockedBy.Add(g.Id);
         }
 
         return new BuildableInfo
@@ -115,7 +116,8 @@ public static class TechTreeReport
     // Catalog fact shared by DescribeTech and DescribeBuildable: every buildable that grants a given
     // tech, either directly (GrantedTechs) or as a station's local-only research (LocalTechs).
     private static IEnumerable<Buildable> GrantersOf(Core core, string techId) =>
-        core.AllBuildables().Where(b => b.GrantedTechs.Contains(techId) || (b is Station s && s.LocalTechs.Contains(techId)));
+        core.AllBuildables()
+            .Where(b => b.GrantedTechs.Contains(techId) || (b is Station s && s.LocalTechs.Contains(techId)));
 
     private static List<string> Sorted(TechSet techs) => techs.OrderBy(t => t, StringComparer.Ordinal).ToList();
 

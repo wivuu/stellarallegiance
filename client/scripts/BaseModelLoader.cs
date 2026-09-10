@@ -47,6 +47,7 @@ public static class BaseModelLoader
     public static readonly Color NavGreen = new(0.15f, 1f, 0.35f); // starboard / docking entrance
     public static readonly Color NavRed = new(1f, 0.18f, 0.18f); // port / docking exit
     public static readonly Color NavWhite = new(1f, 0.96f, 0.9f); // everything else (slightly warm)
+
     // Base beacon size (world units). Ships scale their own down off the hull length.
     public const float BeaconMoteSize = 0.9f; // billboard mote diameter
     public const float BeaconRange = 4.5f; // OmniLight reach when lit
@@ -250,6 +251,7 @@ public partial class BaseBeacon : Node3D
     // defaults — base visuals are unchanged unless a caller opts in by setting them.
     public float MoteSize = BaseModelLoader.BeaconMoteSize; // billboard mote diameter (world units)
     public float Range = BaseModelLoader.BeaconRange; // OmniLight reach when lit
+
     // Multiplies both the mote's emission energy and the OmniLight's lit energy — a single
     // brightness knob for callers that want a dimmer/brighter blink than the base default.
     public float Intensity = 1f;

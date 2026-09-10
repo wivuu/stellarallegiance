@@ -41,7 +41,10 @@ public static class UiKit
         {
             Text = text,
             Variant = variant,
-            CustomMinimumSize = new Vector2(variant == ButtonVariant.Icon ? 46 : 130, variant == ButtonVariant.Icon ? 46 : 38),
+            CustomMinimumSize = new Vector2(
+                variant == ButtonVariant.Icon ? 46 : 130,
+                variant == ButtonVariant.Icon ? 46 : 38
+            ),
         };
         if (onPressed != null)
             b.Pressed += onPressed;

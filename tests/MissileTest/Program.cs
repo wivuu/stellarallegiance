@@ -91,9 +91,13 @@ Simulation BootSim(ulong seed)
 (Simulation sim, Simulation.ShipSim attacker, Simulation.ShipSim target, WeaponDef seeker) SetupDuel(ulong seed)
 {
     var sim = BootSim(seed);
-    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassScout,
-        cargo: new (uint, byte)[] { (3u, 2) },        // 2 sensor-decoy (old default hold)
-        mounts: new (byte, uint)[] { (1, 3u) });      // scout hp index 1 = seeker rack
+    sim.EnqueueJoin(
+        1,
+        team: 0,
+        cls: FlightModel.ClassScout,
+        cargo: new (uint, byte)[] { (3u, 2) }, // 2 sensor-decoy (old default hold)
+        mounts: new (byte, uint)[] { (1, 3u) }
+    ); // scout hp index 1 = seeker rack
     sim.EnqueueJoin(2, team: 1, cls: FlightModel.ClassFighter);
     sim.Step(); // tick 1: DrainQueues -> ProcessRespawns spawns both ships this very step
 
@@ -166,7 +170,11 @@ Simulation.MissileSim? FindMissile(Simulation sim, ulong id)
         $"MissileAmmo decremented on launch ({ammoBeforeFire} -> {attacker.MissileAmmo})",
         $"MissileAmmo did not decrement on launch (stayed {attacker.MissileAmmo})"
     );
-    Check(sim.Missiles.Count == 1, "exactly one MissileSim appears after launch", $"expected 1 missile in flight, found {sim.Missiles.Count}");
+    Check(
+        sim.Missiles.Count == 1,
+        "exactly one MissileSim appears after launch",
+        $"expected 1 missile in flight, found {sim.Missiles.Count}"
+    );
     var mis = sim.Missiles[0];
     Check(
         mis.OwnerShipId == attacker.ShipId && mis.TargetShipId == target.ShipId && mis.WeaponId == seeker.WeaponId,
@@ -190,9 +198,21 @@ Simulation.MissileSim? FindMissile(Simulation sim, ulong id)
                 impactReason = g.reason;
             }
     }
-    Check(impactSeen, "missile resolves within its lifetime (MissileGoneThisStep fires)", "missile never resolved (no MissileGoneThisStep entry) within ProjectileLifeTicks");
-    Check(impactReason == 1, $"missile gone-reason is impact (1), got {impactReason}", $"missile gone-reason was {impactReason}, expected impact (1)");
-    Check(sim.Missiles.Count == 0, "missile removed from Missiles after resolving", $"missile list still has {sim.Missiles.Count} entries");
+    Check(
+        impactSeen,
+        "missile resolves within its lifetime (MissileGoneThisStep fires)",
+        "missile never resolved (no MissileGoneThisStep entry) within ProjectileLifeTicks"
+    );
+    Check(
+        impactReason == 1,
+        $"missile gone-reason is impact (1), got {impactReason}",
+        $"missile gone-reason was {impactReason}, expected impact (1)"
+    );
+    Check(
+        sim.Missiles.Count == 0,
+        "missile removed from Missiles after resolving",
+        $"missile list still has {sim.Missiles.Count} entries"
+    );
     float directDamage = seeker.Damage * seeker.DirectHitMult;
     Check(
         target.Health == healthBeforeImpact - directDamage,
@@ -211,7 +231,11 @@ Simulation.MissileSim? FindMissile(Simulation sim, ulong id)
     }
     attacker.HeldInput = new ShipInputState { LockTargetId = target.ShipId, Firing2 = true };
     sim.Step();
-    Check(sim.Missiles.Count == 1, "one missile launched before killing the target", $"expected 1 missile in flight, found {sim.Missiles.Count}");
+    Check(
+        sim.Missiles.Count == 1,
+        "one missile launched before killing the target",
+        $"expected 1 missile in flight, found {sim.Missiles.Count}"
+    );
     ulong missileId = sim.Missiles[0].MissileId;
     ulong lockedTargetId = sim.Missiles[0].TargetShipId;
 
@@ -241,9 +265,21 @@ Simulation.MissileSim? FindMissile(Simulation sim, ulong id)
         "coasting missile never retargets (TargetShipId field is never reassigned)",
         "coasting missile's TargetShipId changed after its target died"
     );
-    Check(!impactSeen, "coasting missile never impacts anyone after its target dies", "coasting missile impacted despite a dead/invalid target");
-    Check(expiredSeen, "coasting missile eventually expires (gone-reason 0)", "coasting missile never expired within its lifetime");
-    Check(sim.Missiles.Count == 0, "missile removed from Missiles after expiring", $"missile list still has {sim.Missiles.Count} entries");
+    Check(
+        !impactSeen,
+        "coasting missile never impacts anyone after its target dies",
+        "coasting missile impacted despite a dead/invalid target"
+    );
+    Check(
+        expiredSeen,
+        "coasting missile eventually expires (gone-reason 0)",
+        "coasting missile never expired within its lifetime"
+    );
+    Check(
+        sim.Missiles.Count == 0,
+        "missile removed from Missiles after expiring",
+        $"missile list still has {sim.Missiles.Count} entries"
+    );
     Check(
         attacker.Health == attackerHealthBefore,
         "attacker (owner) took no damage from its own coasting missile",
@@ -277,7 +313,11 @@ Simulation.MissileSim? FindMissile(Simulation sim, ulong id)
             lastAmmo = attacker.MissileAmmo;
         }
     }
-    Check(launches == seeker.MagazineSize, $"fired exactly MagazineSize ({seeker.MagazineSize}) missiles before running dry", $"launched {launches} missiles, expected {seeker.MagazineSize}");
+    Check(
+        launches == seeker.MagazineSize,
+        $"fired exactly MagazineSize ({seeker.MagazineSize}) missiles before running dry",
+        $"launched {launches} missiles, expected {seeker.MagazineSize}"
+    );
     Check(attacker.MissileAmmo == 0, "ammo reached exactly 0", $"ammo left at {attacker.MissileAmmo}");
 
     // Further Firing2 (held, still locked) launches nothing further: no new missile id ever appears.
@@ -411,7 +451,11 @@ Simulation.MissileSim? FindMissile(Simulation sim, ulong id)
                     expiredSeen = true;
             }
     }
-    Check(!veered, "dumbfire round flies dead straight (no steering without a lock)", "dumbfire round veered off its launch direction");
+    Check(
+        !veered,
+        "dumbfire round flies dead straight (no steering without a lock)",
+        "dumbfire round veered off its launch direction"
+    );
     Check(
         expiredSeen && !impactSeen && target.Health == targetHealthBefore,
         "off-boresight dumbfire expires harmlessly (no homing, no damage)",
@@ -433,12 +477,14 @@ Simulation.MissileSim? FindMissile(Simulation sim, ulong id)
     var enemyNear = sim.Ships.First(s => s.OwnerClientId == 3);
     var friendlyNear = sim.Ships.First(s => s.OwnerClientId == 4);
     var enemyFar = sim.Ships.First(s => s.OwnerClientId == 5);
-    foreach (var (s, pos) in new[]
-    {
-        (enemyNear, new Vec3(15f, 0f, 300f)),
-        (friendlyNear, new Vec3(-15f, 0f, 300f)),
-        (enemyFar, new Vec3(0f, 0f, 800f)),
-    })
+    foreach (
+        var (s, pos) in new[]
+        {
+            (enemyNear, new Vec3(15f, 0f, 300f)),
+            (friendlyNear, new Vec3(-15f, 0f, 300f)),
+            (enemyFar, new Vec3(0f, 0f, 800f)),
+        }
+    )
     {
         s.SectorId = EmptySector;
         s.State.Pos = pos;
@@ -454,7 +500,11 @@ Simulation.MissileSim? FindMissile(Simulation sim, ulong id)
     }
     attacker.HeldInput = new ShipInputState { LockTargetId = target.ShipId, Firing2 = true };
     sim.Step();
-    Check(sim.Missiles.Count == 1, "blast scenario launched one missile", $"expected 1 missile in flight, found {sim.Missiles.Count}");
+    Check(
+        sim.Missiles.Count == 1,
+        "blast scenario launched one missile",
+        $"expected 1 missile in flight, found {sim.Missiles.Count}"
+    );
     ulong missileId = sim.Missiles[0].MissileId;
     attacker.HeldInput = new ShipInputState { LockTargetId = target.ShipId, Firing2 = false };
 
@@ -535,7 +585,11 @@ void PositionNoseOnBase(Simulation.ShipSim ship, Vec3 basePos, float standoff = 
 // Join a bomber (class 2 — the only hull mounting the anti-base-torpedo rack, weapon-id 5) and
 // place it nose-on ~200u from the enemy (other-team) base. Returns the ship, the projected torpedo
 // WeaponDef, and the enemy base's index into World.Bases/World.BaseHealth.
-(Simulation sim, Simulation.ShipSim bomber, WeaponDef torpedo, int baseIdx) SetupBaseSiege(ulong seed, int clientId = 1, byte team = 0)
+(Simulation sim, Simulation.ShipSim bomber, WeaponDef torpedo, int baseIdx) SetupBaseSiege(
+    ulong seed,
+    int clientId = 1,
+    byte team = 0
+)
 {
     var sim = BootSim(seed);
     sim.EnqueueJoin(clientId, team: team, cls: FlightModel.ClassBomber);
@@ -646,9 +700,13 @@ void PositionNoseOnBase(Simulation.ShipSim ship, Vec3 basePos, float standoff = 
     var sim = BootSim(seed: 102);
     // No hull mounts a seeker by default — arm a scout's empty missile-typed hp1 with one (the
     // fighter's gun mounts no longer take racks) so this scenario actually exercises a seeker-vs-base lock.
-    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassScout,
+    sim.EnqueueJoin(
+        1,
+        team: 0,
+        cls: FlightModel.ClassScout,
         cargo: new (uint, byte)[] { (3u, 2) },
-        mounts: new (byte, uint)[] { (1, 3u) });
+        mounts: new (byte, uint)[] { (1, 3u) }
+    );
     sim.Step();
     var ship = sim.Ships.First(s => s.OwnerClientId == 1);
     int baseIdx = sim.World.Bases.FindIndex(b => b.Team != ship.Team);
@@ -677,9 +735,13 @@ void PositionNoseOnBase(Simulation.ShipSim ship, Vec3 basePos, float standoff = 
     var sim = BootSim(seed: 103);
     // Arm a scout's empty missile-typed hp1 with the seeker (see scenario 8) so it actually has
     // something to dumbfire — no stock hull mounts one by default.
-    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassScout,
+    sim.EnqueueJoin(
+        1,
+        team: 0,
+        cls: FlightModel.ClassScout,
         cargo: new (uint, byte)[] { (3u, 2) },
-        mounts: new (byte, uint)[] { (1, 3u) });
+        mounts: new (byte, uint)[] { (1, 3u) }
+    );
     sim.Step();
     var ship = sim.Ships.First(s => s.OwnerClientId == 1);
     int baseIdx = sim.World.Bases.FindIndex(b => b.Team != ship.Team);
@@ -690,9 +752,17 @@ void PositionNoseOnBase(Simulation.ShipSim ship, Vec3 basePos, float standoff = 
 
     ship.HeldInput = new ShipInputState { Firing2 = true }; // no lock -> dumbfire, straight at the base
     sim.Step();
-    Check(sim.Missiles.Count == 1, "dumbfire seeker launched toward the base", $"expected 1 missile, found {sim.Missiles.Count}");
+    Check(
+        sim.Missiles.Count == 1,
+        "dumbfire seeker launched toward the base",
+        $"expected 1 missile, found {sim.Missiles.Count}"
+    );
     ulong dumbId = sim.Missiles[0].MissileId;
-    Check(sim.Missiles[0].TargetShipId == 0, "dumbfire seeker carries no target (unguided)", $"dumbfire seeker has target {sim.Missiles[0].TargetShipId}");
+    Check(
+        sim.Missiles[0].TargetShipId == 0,
+        "dumbfire seeker carries no target (unguided)",
+        $"dumbfire seeker has target {sim.Missiles[0].TargetShipId}"
+    );
     ship.HeldInput = new ShipInputState { Firing2 = false };
 
     bool impactSeen = false;
@@ -707,7 +777,11 @@ void PositionNoseOnBase(Simulation.ShipSim ship, Vec3 basePos, float standoff = 
                 impactReason = g.reason;
             }
     }
-    Check(impactSeen && impactReason == 1, $"dumbfire seeker detonates on the base hull (gone-reason 1), got {impactReason}", $"dumbfire seeker never impacted (impactSeen={impactSeen}, reason={impactReason})");
+    Check(
+        impactSeen && impactReason == 1,
+        $"dumbfire seeker detonates on the base hull (gone-reason 1), got {impactReason}",
+        $"dumbfire seeker never impacted (impactSeen={impactSeen}, reason={impactReason})"
+    );
     Check(
         sim.World.BaseHealth[baseIdx] == baseHealthBefore,
         "the seeker's base impact leaves BaseHealth unchanged (non-siege weapon)",
@@ -822,7 +896,16 @@ void PositionNoseOnBase(Simulation.ShipSim ship, Vec3 basePos, float standoff = 
         {
             var (t1, id1, p1, v1) = run1.flight[i];
             var (t2, id2, p2, v2) = run2.flight[i];
-            if (t1 != t2 || id1 != id2 || p1.X != p2.X || p1.Y != p2.Y || p1.Z != p2.Z || v1.X != v2.X || v1.Y != v2.Y || v1.Z != v2.Z)
+            if (
+                t1 != t2
+                || id1 != id2
+                || p1.X != p2.X
+                || p1.Y != p2.Y
+                || p1.Z != p2.Z
+                || v1.X != v2.X
+                || v1.Y != v2.Y
+                || v1.Z != v2.Z
+            )
             {
                 same = false;
                 break;
@@ -895,7 +978,11 @@ void LayChaffCloud(Simulation sim, Simulation.ShipSim ship, int count)
     var (sim, attacker, target, seeker) = SetupDuel(seed: 12);
     var mis = LockAndFire(sim, attacker, target.ShipId, seeker);
     ulong missileId = mis.MissileId;
-    Check(mis.TargetShipId == target.ShipId, "seeker launched locked onto the target ship", $"seeker target wrong ({mis.TargetShipId})");
+    Check(
+        mis.TargetShipId == target.ShipId,
+        "seeker launched locked onto the target ship",
+        $"seeker target wrong ({mis.TargetShipId})"
+    );
 
     // Lay a cloud from the target (puffs spawn ~4u aft of it at z≈296, far from the missile still
     // near the origin — no premature decoy), then find a puff whose id WINS the decoy roll.
@@ -910,7 +997,11 @@ void LayChaffCloud(Simulation sim, Simulation.ShipSim ship, int count)
             break;
         }
     }
-    Check(winner is not null, "the chaff cloud contains a puff that wins the seeker decoy roll", "no winning puff found in the cloud (seeker decoy roll)");
+    Check(
+        winner is not null,
+        "the chaff cloud contains a puff that wins the seeker decoy roll",
+        "no winning puff found in the cloud (seeker decoy roll)"
+    );
 
     // Plant the winner squarely on the missile's +Z path at z=200 (80u short of the target at 300,
     // well beyond the 25u blast so its detonation can't splash the target); banish every other puff
@@ -952,14 +1043,26 @@ void LayChaffCloud(Simulation sim, Simulation.ShipSim ship, int count)
                 gonePos = g.pos;
             }
     }
-    Check(decoyed && decoyId == winner!.ChaffId, "seeker's ship-lock breaks and it homes on the winning puff (TargetShipId→0, DecoyChaffId set)", $"seeker was not decoyed onto the winning puff (decoyed={decoyed}, decoyId={decoyId}, winner={winner!.ChaffId})");
-    Check(goneSeen && goneReason == 1, $"decoyed seeker detonates (MissileGone reason 1), got {goneReason}", $"decoyed seeker never detonated (goneSeen={goneSeen}, reason={goneReason})");
+    Check(
+        decoyed && decoyId == winner!.ChaffId,
+        "seeker's ship-lock breaks and it homes on the winning puff (TargetShipId→0, DecoyChaffId set)",
+        $"seeker was not decoyed onto the winning puff (decoyed={decoyed}, decoyId={decoyId}, winner={winner!.ChaffId})"
+    );
+    Check(
+        goneSeen && goneReason == 1,
+        $"decoyed seeker detonates (MissileGone reason 1), got {goneReason}",
+        $"decoyed seeker never detonated (goneSeen={goneSeen}, reason={goneReason})"
+    );
     Check(
         (gonePos - target.State.Pos).Length() > seeker.BlastRadius,
         $"decoy detonation is clear of the target (>{seeker.BlastRadius}u away)",
         $"decoy detonated within blast range of the target (dist {(gonePos - target.State.Pos).Length()})"
     );
-    Check(target.Health == targetHealthStart, "decoyed target takes no damage (no direct hit, no splash)", $"target took damage despite being decoyed away ({targetHealthStart} -> {target.Health})");
+    Check(
+        target.Health == targetHealthStart,
+        "decoyed target takes no damage (no direct hit, no splash)",
+        $"target took damage despite being decoyed away ({targetHealthStart} -> {target.Health})"
+    );
 }
 
 // ---- 13. Chaff resistance: a torpedo (resistance 2.5) shrugs off a losing-roll cloud -------------
@@ -980,11 +1083,19 @@ void LayChaffCloud(Simulation sim, Simulation.ShipSim ship, int count)
     }
     var torpedo = sim.Content.Weapons.First(w => w.WeaponId == 5);
     var seekerDef = sim.Content.Weapons.First(w => w.WeaponId == 3);
-    Check(torpedo.ChaffResistance > seekerDef.ChaffResistance, "torpedo authored with higher chaff-resistance than the seeker", $"torpedo chaff-resistance ({torpedo.ChaffResistance}) not greater than the seeker's ({seekerDef.ChaffResistance})");
+    Check(
+        torpedo.ChaffResistance > seekerDef.ChaffResistance,
+        "torpedo authored with higher chaff-resistance than the seeker",
+        $"torpedo chaff-resistance ({torpedo.ChaffResistance}) not greater than the seeker's ({seekerDef.ChaffResistance})"
+    );
 
     var mis = LockAndFire(sim, attacker, target.ShipId, torpedo);
     ulong torpId = mis.MissileId;
-    Check(mis.TargetShipId == target.ShipId, "torpedo launched locked onto the target ship", $"torpedo target wrong ({mis.TargetShipId})");
+    Check(
+        mis.TargetShipId == target.ShipId,
+        "torpedo launched locked onto the target ship",
+        $"torpedo target wrong ({mis.TargetShipId})"
+    );
 
     // Lay a cloud, then keep ONLY the puffs whose id LOSES the torpedo's roll on the missile's path
     // (banish any winner to another sector). Every puff the torpedo can see is a guaranteed loser, so
@@ -1006,7 +1117,11 @@ void LayChaffCloud(Simulation sim, Simulation.ShipSim ship, int count)
             c.SectorId = 998; // a winner — keep it out of the torpedo's sector
         }
     }
-    Check(losersOnPath > 0, $"cloud has losing-roll puffs on the torpedo's path ({losersOnPath})", "no losing-roll puffs available to prove resistance");
+    Check(
+        losersOnPath > 0,
+        $"cloud has losing-roll puffs on the torpedo's path ({losersOnPath})",
+        "no losing-roll puffs available to prove resistance"
+    );
 
     float targetHealthStart = target.Health;
     bool everDecoyed = false;
@@ -1025,8 +1140,16 @@ void LayChaffCloud(Simulation sim, Simulation.ShipSim ship, int count)
                 impactReason = g.reason;
             }
     }
-    Check(!everDecoyed, "torpedo is NOT decoyed by a losing-roll chaff cloud (keeps its ship lock)", "torpedo was decoyed despite losing every chaff roll");
-    Check(impactSeen && impactReason == 1, $"torpedo flies through the cloud and impacts its target (reason 1), got {impactReason}", $"torpedo never impacted its target (impactSeen={impactSeen}, reason={impactReason})");
+    Check(
+        !everDecoyed,
+        "torpedo is NOT decoyed by a losing-roll chaff cloud (keeps its ship lock)",
+        "torpedo was decoyed despite losing every chaff roll"
+    );
+    Check(
+        impactSeen && impactReason == 1,
+        $"torpedo flies through the cloud and impacts its target (reason 1), got {impactReason}",
+        $"torpedo never impacted its target (impactSeen={impactSeen}, reason={impactReason})"
+    );
     Check(
         target.Health == targetHealthStart - torpedo.Damage * torpedo.DirectHitMult,
         $"undeterred torpedo deals its full direct hit ({torpedo.Damage * torpedo.DirectHitMult})",
@@ -1056,7 +1179,11 @@ void LayChaffCloud(Simulation sim, Simulation.ShipSim ship, int count)
             spawnTicks.Add(sim.Tick);
     }
 
-    Check(spawnTicks.Count == ammo, $"held DropChaff ejects exactly ChaffAmmo ({ammo}) puffs then stops", $"expected {ammo} chaff spawns, got {spawnTicks.Count}");
+    Check(
+        spawnTicks.Count == ammo,
+        $"held DropChaff ejects exactly ChaffAmmo ({ammo}) puffs then stops",
+        $"expected {ammo} chaff spawns, got {spawnTicks.Count}"
+    );
     Check(target.ChaffAmmo == 0, "chaff ammo reaches exactly 0", $"chaff ammo left at {target.ChaffAmmo}");
     bool spacingOk = true;
     for (int i = 1; i < spawnTicks.Count; i++)
@@ -1100,12 +1227,20 @@ void DockAtOwnBase(Simulation sim, Simulation.ShipSim ship)
     var ship = sim.Ships.First(s => s.OwnerClientId == 1);
     int paid = ship.PaidCost;
     int creditsAfterSpawn = sim.World.TeamStates[team].Credits;
-    Check(paid > 0 && creditsAfterSpawn == creditsStart - paid, $"spawn deducts the hull cost ({paid}) from team credits", $"spawn cost bookkeeping wrong (paid {paid}, credits {creditsStart} -> {creditsAfterSpawn})");
+    Check(
+        paid > 0 && creditsAfterSpawn == creditsStart - paid,
+        $"spawn deducts the hull cost ({paid}) from team credits",
+        $"spawn cost bookkeeping wrong (paid {paid}, credits {creditsStart} -> {creditsAfterSpawn})"
+    );
 
     DockAtOwnBase(sim, ship);
     for (int i = 0; i < 5 && sim.Ships.Any(s => s.OwnerClientId == 1); i++)
         sim.Step();
-    Check(!sim.Ships.Any(s => s.OwnerClientId == 1), "fighter docks at its own base", "fighter never docked at its own base");
+    Check(
+        !sim.Ships.Any(s => s.OwnerClientId == 1),
+        "fighter docks at its own base",
+        "fighter never docked at its own base"
+    );
     int creditsAfterDock = sim.World.TeamStates[team].Credits;
     Check(
         creditsAfterDock == creditsAfterSpawn + paid,
@@ -1122,7 +1257,11 @@ void DockAtOwnBase(Simulation sim, Simulation.ShipSim ship)
     ship2.Health = 0f;
     sim.Step(); // resolves death → ejects a pod
     var pod = sim.Ships.First(s => s.IsPod && s.Team == team);
-    Check(sim.World.TeamStates[team].Credits == creditsBeforeDeath, "a ship's death refunds nothing", $"death changed credits ({creditsBeforeDeath} -> {sim.World.TeamStates[team].Credits})");
+    Check(
+        sim.World.TeamStates[team].Credits == creditsBeforeDeath,
+        "a ship's death refunds nothing",
+        $"death changed credits ({creditsBeforeDeath} -> {sim.World.TeamStates[team].Credits})"
+    );
 
     DockAtOwnBase(sim, pod);
     for (int i = 0; i < 5 && sim.Ships.Any(s => s == pod); i++)
@@ -1216,12 +1355,19 @@ void DockAtOwnBase(Simulation sim, Simulation.ShipSim ship)
 // Join a scout carrying the dumbfire rack on its untyped empty hp index 1 (same override
 // convention as SetupDuel — the fighter's gun-typed mounts don't take racks) and park it
 // nose-to-nose with an enemy fighter.
-(Simulation sim, Simulation.ShipSim attacker, Simulation.ShipSim target, WeaponDef dumbfire) SetupDumbfireDuel(ulong seed, Vec3 targetPos)
+(Simulation sim, Simulation.ShipSim attacker, Simulation.ShipSim target, WeaponDef dumbfire) SetupDumbfireDuel(
+    ulong seed,
+    Vec3 targetPos
+)
 {
     var sim = BootSim(seed);
-    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassScout,
+    sim.EnqueueJoin(
+        1,
+        team: 0,
+        cls: FlightModel.ClassScout,
         cargo: new (uint, byte)[] { (3u, 2) },
-        mounts: new (byte, uint)[] { (1, 24u) }); // scout hp index 1 = dumbfire rack (weapon-id 24)
+        mounts: new (byte, uint)[] { (1, 24u) }
+    ); // scout hp index 1 = dumbfire rack (weapon-id 24)
     sim.EnqueueJoin(2, team: 1, cls: FlightModel.ClassFighter);
     sim.Step();
 
@@ -1281,8 +1427,16 @@ void DockAtOwnBase(Simulation sim, Simulation.ShipSim ship)
                 impactReason = g.reason;
             }
     }
-    Check(steered, "the guided dumbfire round steers off its launch axis to correct onto the target (low turn-rate still tracks)", "dumbfire round never picked up lateral velocity — flew dead-straight like an unguided round");
-    Check(impactSeen && impactReason == 1, $"dumbfire round tracks the off-boresight target to impact (gone-reason 1), got {impactReason}", $"dumbfire round never impacted the off-boresight target (impactSeen={impactSeen}, reason={impactReason})");
+    Check(
+        steered,
+        "the guided dumbfire round steers off its launch axis to correct onto the target (low turn-rate still tracks)",
+        "dumbfire round never picked up lateral velocity — flew dead-straight like an unguided round"
+    );
+    Check(
+        impactSeen && impactReason == 1,
+        $"dumbfire round tracks the off-boresight target to impact (gone-reason 1), got {impactReason}",
+        $"dumbfire round never impacted the off-boresight target (impactSeen={impactSeen}, reason={impactReason})"
+    );
     float directDamage = dumbfire.Damage * dumbfire.DirectHitMult;
     Check(
         target.Health == healthBeforeImpact - directDamage,
@@ -1294,9 +1448,13 @@ void DockAtOwnBase(Simulation sim, Simulation.ShipSim ship)
 // ---- 18. Dumbfire is non-siege: never locks a base, and an unlocked launch leaves BaseHealth alone --
 {
     var sim = BootSim(seed: 18);
-    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassScout,
+    sim.EnqueueJoin(
+        1,
+        team: 0,
+        cls: FlightModel.ClassScout,
         cargo: new (uint, byte)[] { (3u, 2) },
-        mounts: new (byte, uint)[] { (1, 24u) });
+        mounts: new (byte, uint)[] { (1, 24u) }
+    );
     sim.Step();
     var ship = sim.Ships.First(s => s.OwnerClientId == 1);
     int baseIdx = sim.World.Bases.FindIndex(b => b.Team != ship.Team);
@@ -1322,7 +1480,11 @@ void DockAtOwnBase(Simulation sim, Simulation.ShipSim ship)
     float baseHealthBefore = sim.World.BaseHealth[baseIdx];
     ship.HeldInput = new ShipInputState { Firing2 = true }; // no lock -> unguided launch, straight at the base
     sim.Step();
-    Check(sim.Missiles.Count == 1, "unlocked dumbfire launched toward the base", $"expected 1 missile, found {sim.Missiles.Count}");
+    Check(
+        sim.Missiles.Count == 1,
+        "unlocked dumbfire launched toward the base",
+        $"expected 1 missile, found {sim.Missiles.Count}"
+    );
     ulong dumbId = sim.Missiles[0].MissileId;
     ship.HeldInput = new ShipInputState { Firing2 = false };
 
@@ -1338,7 +1500,11 @@ void DockAtOwnBase(Simulation sim, Simulation.ShipSim ship)
                 impactReason = g.reason;
             }
     }
-    Check(impactSeen && impactReason == 1, $"dumbfire round detonates on the base hull (gone-reason 1), got {impactReason}", $"dumbfire round never impacted (impactSeen={impactSeen}, reason={impactReason})");
+    Check(
+        impactSeen && impactReason == 1,
+        $"dumbfire round detonates on the base hull (gone-reason 1), got {impactReason}",
+        $"dumbfire round never impacted (impactSeen={impactSeen}, reason={impactReason})"
+    );
     Check(
         sim.World.BaseHealth[baseIdx] == baseHealthBefore,
         "the dumbfire's base impact leaves BaseHealth unchanged (non-siege weapon, CanDamageBase false)",

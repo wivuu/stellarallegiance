@@ -22,8 +22,7 @@ public sealed partial class Simulation
         if (dt <= 0f)
             return 0f;
         // Only a He3 rock with ore left is harvestable.
-        if (!World.RockOre.TryGetValue(rockId, out var ore)
-            || ore.Class != RockClass.Helium3 || ore.OreRemaining <= 0f)
+        if (!World.RockOre.TryGetValue(rockId, out var ore) || ore.Class != RockClass.Helium3 || ore.OreRemaining <= 0f)
             return 0f;
         // The rock must exist and share the miner's sector (positions are sector-local — a same-coords
         // rock in another sector must never register as in range).
@@ -112,9 +111,9 @@ public sealed partial class Simulation
     // range of the ordered point — wide enough that the approach's brake/settle never stalls it.
     private const float ProspectArriveRange = 300f;
 
-
     private readonly List<MinerSlot> _miners = [];
     private ulong _nextMinerId = 1;
+
     // (team, launchBaseId): the garrison the commander was docked at when they ordered, so the miner
     // joins THAT garrison's build pipeline (0 = resolve the team's default garrison). Drained under
     // _qLock in DrainQueues.
@@ -159,8 +158,16 @@ public sealed partial class Simulation
     // Read-only slot view for tests/diagnostics (sim thread only): one row per owned slot, in slot
     // order. Ship is null while the miner is docked (offloading / idle); State names the private FSM
     // state ("ToRock"/"Harvesting"/"ToBase"). TargetBaseId is the current offload destination (0 = none).
-    public IReadOnlyList<(ulong MinerId, byte Team, ShipSim? Ship, ulong TargetRockId, ulong LastRockId, ulong TargetBaseId, string State, bool Idle)>
-        MinerSlotsView()
+    public IReadOnlyList<(
+        ulong MinerId,
+        byte Team,
+        ShipSim? Ship,
+        ulong TargetRockId,
+        ulong LastRockId,
+        ulong TargetBaseId,
+        string State,
+        bool Idle
+    )> MinerSlotsView()
     {
         var rows = new List<(ulong, byte, ShipSim?, ulong, ulong, ulong, string, bool)>(_miners.Count);
         foreach (var m in _miners)
@@ -251,7 +258,9 @@ public sealed partial class Simulation
         else
         {
             NewMinerProductionSlot(team, tick, orderTicks, launchBase);
-            MinerNoticesThisStep.Add((team, $"Miner ordered — building {orderSec}s ({MinerCount(team)}/{_mining.MaxMinersPerTeam})."));
+            MinerNoticesThisStep.Add(
+                (team, $"Miner ordered — building {orderSec}s ({MinerCount(team)}/{_mining.MaxMinersPerTeam}).")
+            );
         }
     }
 
@@ -309,8 +318,9 @@ public sealed partial class Simulation
         for (int i = 0; i < _miners.Count; i++)
             if (ReferenceEquals(_miners[i].Ship, s))
             {
-                MinerNoticesThisStep.Add((s.Team,
-                    $"Miner destroyed ({MinerCount(s.Team) - 1}/{_mining.MaxMinersPerTeam} left)."));
+                MinerNoticesThisStep.Add(
+                    (s.Team, $"Miner destroyed ({MinerCount(s.Team) - 1}/{_mining.MaxMinersPerTeam} left).")
+                );
                 _miners.RemoveAt(i);
                 TeamStateChangedThisStep = true; // restream the miner-count tail so the card ticks down
                 break;
@@ -381,8 +391,12 @@ public sealed partial class Simulation
                 else if (!slot.Idle)
                 {
                     slot.Idle = true; // notice once; a new commander order or buy re-arms the announcement
-                    MinerNoticesThisStep.Add((slot.Team,
-                        "Miner idle: no eligible helium-3 rock. Commander: order it to a sector to authorize mining."));
+                    MinerNoticesThisStep.Add(
+                        (
+                            slot.Team,
+                            "Miner idle: no eligible helium-3 rock. Commander: order it to a sector to authorize mining."
+                        )
+                    );
                 }
                 continue;
             }
@@ -416,8 +430,9 @@ public sealed partial class Simulation
                         // Announce the drop + why BEFORE clearing the target — relays to team chat so
                         // manual verification shows every target switch and its cause.
                         string reason = RockIneligibleReason(slot.Team, slot.TargetRockId);
-                        MinerNoticesThisStep.Add((slot.Team,
-                            $"Miner dropped rock {slot.TargetRockId} — {reason}; retargeting."));
+                        MinerNoticesThisStep.Add(
+                            (slot.Team, $"Miner dropped rock {slot.TargetRockId} — {reason}; retargeting.")
+                        );
                         slot.TargetRockId = 0;
                         if (PickRock(slot, s.SectorId, s.State.Pos) is ulong next)
                         {
@@ -501,8 +516,9 @@ public sealed partial class Simulation
             }
             // Every rock in the sector is discovered and none is eligible: provably
             // dry. Give up loudly and fall back to autonomy.
-            MinerNoticesThisStep.Add((slot.Team,
-                $"Miner found no eligible helium-3 in {World.SectorName(slot.ProspectSector)}."));
+            MinerNoticesThisStep.Add(
+                (slot.Team, $"Miner found no eligible helium-3 in {World.SectorName(slot.ProspectSector)}.")
+            );
             slot.ProspectSector = 0;
             slot.ProspectPatrol = false;
             if (PickRock(slot, s.SectorId, s.State.Pos) is ulong next)
@@ -517,8 +533,10 @@ public sealed partial class Simulation
         // Journey phase — the waypoint is LITERAL: no mid-flight shortcuts, even when
         // a rock sits right next to the mark (blowing past it read as the order being
         // ignored). Arrived: pick sector-wide FROM the mark, else start the sweep.
-        if (s.SectorId == slot.ProspectSector
-            && (s.State.Pos - slot.ProspectPos).LengthSquared() <= ProspectArriveRange * ProspectArriveRange)
+        if (
+            s.SectorId == slot.ProspectSector
+            && (s.State.Pos - slot.ProspectPos).LengthSquared() <= ProspectArriveRange * ProspectArriveRange
+        )
         {
             if (PickRock(slot, slot.ProspectSector, slot.ProspectPos, onlySector: slot.ProspectSector) is ulong near)
             {
@@ -661,8 +679,7 @@ public sealed partial class Simulation
             return "depleted";
         if (World.RockById(rockId) is not World.Rock rock)
             return "rock gone";
-        if (!World.TeamStates.TryGetValue(team, out var ts)
-            || !ts.AuthorizedMiningSectors.Contains(rock.SectorId))
+        if (!World.TeamStates.TryGetValue(team, out var ts) || !ts.AuthorizedMiningSectors.Contains(rock.SectorId))
             return "sector not authorized";
         if (FogEnabled && VisionFor(team) is { } tv && !tv.DiscoveredRocks.Contains(rockId))
             return "not discovered (fog)";
@@ -706,7 +723,8 @@ public sealed partial class Simulation
         (int hops, float d2, ulong id) bestKey = default;
         ulong bestUnclaimedId = 0;
         (int hops, float d2, ulong id) bestUnclaimedKey = default;
-        bool lastEligible = false, lastClaimed = false;
+        bool lastEligible = false,
+            lastClaimed = false;
 
         foreach (var rockId in World.RockOre.Keys)
         {
@@ -810,8 +828,17 @@ public sealed partial class Simulation
 
         ShipInputState Approach(Vec3 point, float stopDistance) =>
             AutoSteer.ApproachPoint(
-                myPos, myRot, s.State.Vel, point, stopDistance,
-                stats.MaxSpeed, stats.Accel, stats.BackMult, PigTurnGain, ApBrakeMargin, Avoid
+                myPos,
+                myRot,
+                s.State.Vel,
+                point,
+                stopDistance,
+                stats.MaxSpeed,
+                stats.Accel,
+                stats.BackMult,
+                PigTurnGain,
+                ApBrakeMargin,
+                Avoid
             );
 
         // Cross-sector leg toward destSector: FULL-THRUST run at the next-hop gate mouth (TryWarp
@@ -889,7 +916,14 @@ public sealed partial class Simulation
                 if (d > hold + 8f)
                     return Approach(rock.Pos, hold);
                 return AutoSteer.FaceAndRoll(
-                    myPos, myRot, rock.Pos, myRot.Rotate(new Vec3(0f, 1f, 0f)), PigTurnGain, 0f, 0f);
+                    myPos,
+                    myRot,
+                    rock.Pos,
+                    myRot.Rotate(new Vec3(0f, 1f, 0f)),
+                    PigTurnGain,
+                    0f,
+                    0f
+                );
             }
             case MinerState.Prospect:
             {
@@ -913,7 +947,9 @@ public sealed partial class Simulation
                 // small and a fast misaligned miner would otherwise orbit it forever.
                 if (World.BaseDockFacesOf(b.BaseTypeId).Length == 0 || World.BaseHullOf(b.BaseTypeId) is null)
                 {
-                    Vec3 aim = World.BaseHullOf(b.BaseTypeId) is not null ? b.Pos + World.BaseDoorCenterOf(b.BaseTypeId) : b.Pos;
+                    Vec3 aim = World.BaseHullOf(b.BaseTypeId) is not null
+                        ? b.Pos + World.BaseDoorCenterOf(b.BaseTypeId)
+                        : b.Pos;
                     return AlignGated(AutoSteer.SteerToPoint(myPos, myRot, aim, PigTurnGain, 1f, Avoid), aim);
                 }
                 return DockApproach(s, tick, b, stats, Avoid);

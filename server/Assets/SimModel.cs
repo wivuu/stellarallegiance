@@ -17,6 +17,7 @@ namespace SimServer.Assets;
 public static class SimModelCache
 {
     private const uint Magic = 0x4C444D53; // "SMDL"
+
     // Version 2 appends compound sub-hulls after the v1 blocks (hullCount + per-part planes). A v1
     // sidecar fails this version gate in TryRead → the SHA self-heal rebuilds from the GLB (which now
     // carries the authored COL_ parts), so an old cache never crashes — it's just recomputed once.
@@ -119,7 +120,10 @@ public static class SimModelCache
                     int subPlaneCount = r.ReadInt32();
                     var subPlanes = new ConvexHull.Plane[subPlaneCount];
                     for (int i = 0; i < subPlaneCount; i++)
-                        subPlanes[i] = new ConvexHull.Plane(new Vec3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle()), r.ReadSingle());
+                        subPlanes[i] = new ConvexHull.Plane(
+                            new Vec3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle()),
+                            r.ReadSingle()
+                        );
                     subHulls[h] = ConvexHull.FromPlanes(subPlanes, subBr, subLa);
                 }
             }

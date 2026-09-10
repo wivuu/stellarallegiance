@@ -19,8 +19,15 @@ public sealed partial class SectorMapPreview : Control
 
     // MapX/MapY (valid when HasMapPos) is the authored 2D diagram position, normalized ~[-1,1].
     public sealed record SectorModel(
-        uint Id, float Radius, List<BaseMark> Bases, List<Vector2> Gates, string? Name = null,
-        float MapX = 0f, float MapY = 0f, bool HasMapPos = false);
+        uint Id,
+        float Radius,
+        List<BaseMark> Bases,
+        List<Vector2> Gates,
+        string? Name = null,
+        float MapX = 0f,
+        float MapY = 0f,
+        bool HasMapPos = false
+    );
 
     // Links are bidirectional sector-id pairs (aleph gate topology) drawn as lines between sector
     // node centers. Both feeds populate them: the game lobby from the advertised link list, the
@@ -79,7 +86,10 @@ public sealed partial class SectorMapPreview : Control
         DrawRect(r, DesignTokens.Well, filled: true);
 
         // Faint alignment grid, then the bracket frame on top.
-        var grid = DesignTokens.BorderLo with { A = 0.06f };
+        var grid = DesignTokens.BorderLo with
+        {
+            A = 0.06f,
+        };
         for (float x = GridStep; x < Size.X; x += GridStep)
             DrawLine(new Vector2(x, 0), new Vector2(x, Size.Y), grid);
         for (float y = GridStep; y < Size.Y; y += GridStep)
@@ -122,8 +132,12 @@ public sealed partial class SectorMapPreview : Control
             var linkColor = DesignTokens.Data with { A = 0.35f };
             foreach (var (a, b) in _map.Links)
             {
-                if (indexById.TryGetValue(a, out int ia) && indexById.TryGetValue(b, out int ib)
-                    && radii[ia] > 4f && radii[ib] > 4f)
+                if (
+                    indexById.TryGetValue(a, out int ia)
+                    && indexById.TryGetValue(b, out int ib)
+                    && radii[ia] > 4f
+                    && radii[ib] > 4f
+                )
                     DrawLine(centers[ia], centers[ib], linkColor, 1f, antialiased: true);
             }
         }
@@ -152,7 +166,19 @@ public sealed partial class SectorMapPreview : Control
             {
                 float p = 0.5f + 0.5f * Mathf.Sin(_pulse);
                 float rr = circleR + 5f + p * 4f;
-                DrawArc(center, rr, 0, Mathf.Tau, 48, DesignTokens.TeamAccent with { A = 0.35f + 0.45f * p }, 2f, antialiased: true);
+                DrawArc(
+                    center,
+                    rr,
+                    0,
+                    Mathf.Tau,
+                    48,
+                    DesignTokens.TeamAccent with
+                    {
+                        A = 0.35f + 0.45f * p,
+                    },
+                    2f,
+                    antialiased: true
+                );
             }
 
             foreach (var g in s.Gates)
@@ -179,7 +205,13 @@ public sealed partial class SectorMapPreview : Control
     // lay the whole map out in that normalized 2D space (star/custom shapes); otherwise we fall back to
     // sqrt(radius)-weighted horizontal slots (the legacy look for maps/servers without map-pos).
     private void LayoutSectors(
-        List<SectorModel> sectors, float pad, float usableW, float usableH, Vector2[] centers, float[] radii)
+        List<SectorModel> sectors,
+        float pad,
+        float usableW,
+        float usableH,
+        Vector2[] centers,
+        float[] radii
+    )
     {
         bool useMapPos = sectors.Exists(s => s.HasMapPos);
         if (useMapPos)
@@ -187,7 +219,10 @@ public sealed partial class SectorMapPreview : Control
             // Bounds of the authored positions (unit box fallback for any sector missing a map-pos,
             // which sits at origin). Node circle radius scales with sqrt(radius) but is capped by the
             // spacing so neighbours don't overlap.
-            float minX = float.MaxValue, maxX = float.MinValue, minY = float.MaxValue, maxY = float.MinValue;
+            float minX = float.MaxValue,
+                maxX = float.MinValue,
+                minY = float.MaxValue,
+                maxY = float.MinValue;
             foreach (var s in sectors)
             {
                 float px = s.HasMapPos ? s.MapX : 0f,
@@ -218,7 +253,8 @@ public sealed partial class SectorMapPreview : Control
                     v = (py - minY) / spanY;
                 centers[i] = new Vector2(
                     Mathf.Lerp(left, right, spanX < 0.01f ? 0.5f : u),
-                    Mathf.Lerp(top, bottom, spanY < 0.01f ? 0.5f : v)); // +Y down = screen down
+                    Mathf.Lerp(top, bottom, spanY < 0.01f ? 0.5f : v)
+                ); // +Y down = screen down
                 radii[i] = nodeR * Mathf.Sqrt(Mathf.Max(s.Radius, 1f) / maxRadius);
             }
             return;

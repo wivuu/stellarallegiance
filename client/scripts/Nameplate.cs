@@ -48,8 +48,7 @@ public static class Nameplate
 
     // Lightened versions of WorldRenderer's team hull colors (team 0 blue, team 1 red) so the text
     // reads clearly against the dark sector.
-    public static Color TeamColor(byte team) =>
-        team == 0 ? new Color(0.5f, 0.7f, 1f, 1f) : new Color(1f, 0.55f, 0.5f, 1f);
+    public static Color TeamColor(byte team) => team == 0 ? new Color(0.5f, 0.7f, 1f, 1f) : new Color(1f, 0.55f, 0.5f, 1f);
 
     // Shared create/update/hide logic for a pilot nameplate — the null-coalesce, the
     // unchanged-name short-circuit, the empty-name hide, and the lazy Create+AddChild that

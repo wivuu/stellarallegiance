@@ -50,7 +50,10 @@ public partial class WarpFlash : CanvasLayer
     {
         _tween?.Kill();
         _tween = CreateTween();
-        _tween.TweenProperty(_rect, "color:a", PeakAlpha, RiseDur).SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.Out);
+        _tween
+            .TweenProperty(_rect, "color:a", PeakAlpha, RiseDur)
+            .SetTrans(Tween.TransitionType.Sine)
+            .SetEase(Tween.EaseType.Out);
     }
 
     // Clear the flash: ease the alpha back to 0, revealing the (now loaded) destination sector. Safe to

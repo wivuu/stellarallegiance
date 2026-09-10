@@ -63,8 +63,7 @@ public partial class Simulation
         return Content.Bases.Count > 0 ? Content.Bases[0].ResearchSlots : 1;
     }
 
-    private uint ResearchDurationTicks(DevelopmentDef dev) =>
-        (uint)dev.BuildTimeSeconds * TickHz;
+    private uint ResearchDurationTicks(DevelopmentDef dev) => (uint)dev.BuildTimeSeconds * TickHz;
 
     private void ApplyResearchOp(int cid, byte team, byte op, ulong baseId, ushort devIndex, uint tick)
     {
@@ -113,8 +112,13 @@ public partial class Simulation
                 // Availability = the exact offer rule the unlock gate uses (required techs/caps
                 // owned, not obsoleted, not an already-granted tech-only development).
                 bool offered = false;
-                foreach (var b in Allegiance.Factions.Resolution.BuildableResolver
-                    .GetBuildables(Content.Catalog, ts.OwnedTechs, ts.OwnedCapabilities))
+                foreach (
+                    var b in Allegiance.Factions.Resolution.BuildableResolver.GetBuildables(
+                        Content.Catalog,
+                        ts.OwnedTechs,
+                        ts.OwnedCapabilities
+                    )
+                )
                     if (b is Allegiance.Factions.Model.Development fd && fd.Id == dev.Id)
                     {
                         offered = true;
@@ -160,14 +164,17 @@ public partial class Simulation
                     ResearchNoticesThisStep.Add((cid, $"Not enough credits for {dev.Name} ({dev.Price:N0})."));
                     return;
                 }
-                string baseTypeName = BaseDefForType(World.Bases[baseIdx].BaseTypeId)?.Name
+                string baseTypeName =
+                    BaseDefForType(World.Bases[baseIdx].BaseTypeId)?.Name
                     ?? (Content.Bases.Count > 0 ? Content.Bases[0].Name : "Base");
                 string baseName = $"{baseTypeName} {World.SectorName(World.Bases[baseIdx].SectorId)}";
                 if (state.Active.Count < SlotsFor(baseIdx))
                 {
                     ts.Credits -= dev.Price; // deduct at start (authoritative moment)
                     state.Active.Add((devIndex, tick, ResearchDurationTicks(dev)));
-                    ResearchTeamNoticesThisStep.Add((team, $"Research started: {dev.Name} at {baseName} ({dev.BuildTimeSeconds}s)."));
+                    ResearchTeamNoticesThisStep.Add(
+                        (team, $"Research started: {dev.Name} at {baseName} ({dev.BuildTimeSeconds}s).")
+                    );
                 }
                 else if (state.OnDeck is null)
                 {
@@ -258,7 +265,9 @@ public partial class Simulation
         state.OnDeck = null;
         var dev = Content.Developments[queued];
         state.Active.Add((queued, tick, ResearchDurationTicks(dev)));
-        ResearchTeamNoticesThisStep.Add((World.Bases[baseIdx].Team, $"On-deck research started: {dev.Name} ({dev.BuildTimeSeconds}s)."));
+        ResearchTeamNoticesThisStep.Add(
+            (World.Bases[baseIdx].Team, $"On-deck research started: {dev.Name} ({dev.BuildTimeSeconds}s).")
+        );
         ResearchChangedThisStep = true;
     }
 
@@ -399,7 +408,11 @@ public partial class Simulation
             // The dev counts as completed when the team owns every tech it grants.
             bool owned = true;
             foreach (ushort t in dev.GrantedTechIdx)
-                if (t >= Content.Techs.Count || !ts.OwnedTechs.Contains(Content.Techs[t].Id)) { owned = false; break; }
+                if (t >= Content.Techs.Count || !ts.OwnedTechs.Contains(Content.Techs[t].Id))
+                {
+                    owned = false;
+                    break;
+                }
             if (!owned)
                 continue;
             var ups = TriggeredUpgrades(dev);
@@ -459,7 +472,9 @@ public partial class Simulation
         BasesChangedThisStep = true;
         RestreamUpgradedBase(team, site.Id);
         var st = StationCatalogFor(toType);
-        ResearchTeamNoticesThisStep.Add((team, $"BASE UPGRADED: {st?.Name ?? "new tier"} ({World.SectorName(site.SectorId)})."));
+        ResearchTeamNoticesThisStep.Add(
+            (team, $"BASE UPGRADED: {st?.Name ?? "new tier"} ({World.SectorName(site.SectorId)}).")
+        );
     }
 
     // Push the upgraded base's full static (carrying the new BaseTypeId) to clients. Fog-on: re-append

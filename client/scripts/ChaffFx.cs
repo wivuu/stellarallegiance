@@ -57,17 +57,20 @@ public partial class ChaffFx : Node3D
         Vector3 angVel = new(
             (MinefieldLayout.Hash01(id, 1) * 2f - 1f) * 1.6f,
             (MinefieldLayout.Hash01(id, 2) * 2f - 1f) * 1.6f,
-            (MinefieldLayout.Hash01(id, 3) * 2f - 1f) * 1.6f);
+            (MinefieldLayout.Hash01(id, 3) * 2f - 1f) * 1.6f
+        );
 
-        _decoys.Add(new Decoy
-        {
-            Node = root,
-            Vel = vel,
-            AngVel = angVel,
-            Age = 0,
-            Life = life,
-            Sector = (int)sector,
-        });
+        _decoys.Add(
+            new Decoy
+            {
+                Node = root,
+                Vel = vel,
+                AngVel = angVel,
+                Age = 0,
+                Life = life,
+                Sector = (int)sector,
+            }
+        );
 
         // The dispensing pop. Sector-gated like the node above: these positions are sector-LOCAL, so
         // a teammate ejecting in another sector would otherwise sound like it happened alongside you.

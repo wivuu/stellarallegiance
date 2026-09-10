@@ -49,9 +49,7 @@ public static class ChatFormat
         Color nameColor = nameColorForTeam(line.FromTeam);
         string tag = line.Scope == 1 ? $"[color=#{muteHex}]\\[{teamTagLabel(line.FromTeam)}][/color] " : "";
         string name = $"[color=#{nameColor.ToHtml(false)}]{Escape(line.Name)}[/color]";
-        string text = messageColor is Color c
-            ? $"[color=#{c.ToHtml(false)}]{Escape(line.Text)}[/color]"
-            : Escape(line.Text);
+        string text = messageColor is Color c ? $"[color=#{c.ToHtml(false)}]{Escape(line.Text)}[/color]" : Escape(line.Text);
         return $"{stamp} {tag}{name}: {text}";
     }
 }

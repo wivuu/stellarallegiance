@@ -70,7 +70,13 @@ public sealed class MeshRaycaster
     // of Mesh resources across instances), so this is cheap to call per frame. Returns the nearest hit
     // to `fromW`, or false on a miss. Asteroid node scale is uniform, so the normal maps back through
     // the basis with a re-normalize (no inverse-transpose needed).
-    public static bool IntersectMeshInstance(MeshInstance3D mi, Vector3 fromW, Vector3 toW, out Vector3 hitW, out Vector3 normalW)
+    public static bool IntersectMeshInstance(
+        MeshInstance3D mi,
+        Vector3 fromW,
+        Vector3 toW,
+        out Vector3 hitW,
+        out Vector3 normalW
+    )
     {
         hitW = default;
         normalW = default;

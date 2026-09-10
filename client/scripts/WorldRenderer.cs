@@ -783,7 +783,8 @@ public partial class WorldRenderer
         // (only lobby UI to jank) and under the warp flash (covered, and the settle window holds until
         // the drain quiesces); conservative in open flight. When a drain completes, nudge the shadow-
         // occluder re-gather — its movement throttle would otherwise ignore the newly-present field.
-        float insertBudgetMs = _shipRenderer.LocalShip == null ? 8f
+        float insertBudgetMs =
+            _shipRenderer.LocalShip == null ? 8f
             : _warp.Covering || _warp.Settling ? 6f
             : 2.5f;
         if (_rocks.DrainInserts(insertBudgetMs))

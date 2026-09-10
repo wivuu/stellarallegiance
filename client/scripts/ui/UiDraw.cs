@@ -36,13 +36,7 @@ public static class UiDraw
             y = r.Position.Y;
         float x2 = x + r.Size.X,
             y2 = y + r.Size.Y;
-        return new[]
-        {
-            new Vector2(x, y),
-            new Vector2(x2, y),
-            new Vector2(x2 - slant, y2),
-            new Vector2(x, y2),
-        };
+        return new[] { new Vector2(x, y), new Vector2(x2, y), new Vector2(x2 - slant, y2), new Vector2(x, y2) };
     }
 
     // Fill a chamfered rect and (optionally) stroke its outline. The anti-aliased border
@@ -102,7 +96,15 @@ public static class UiDraw
     // the nav-waypoint / order-glyph marker (waypoint "NAV", commander-order "CMD", rock-order
     // "BUILD"/"MINE"). Four DrawLine segments (a HOLLOW outline, unlike the filled Diamond blip
     // above) so it never reads as a solid contact marker.
-    public static void HollowDiamondMarker(CanvasItem ci, Vector2 center, float r, Color color, string tag, Font font, int fontSize)
+    public static void HollowDiamondMarker(
+        CanvasItem ci,
+        Vector2 center,
+        float r,
+        Color color,
+        string tag,
+        Font font,
+        int fontSize
+    )
     {
         Vector2 top = center + new Vector2(0f, -r);
         Vector2 right = center + new Vector2(r, 0f);

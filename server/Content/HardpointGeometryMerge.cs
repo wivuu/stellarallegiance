@@ -47,9 +47,7 @@ public static class HardpointGeometryMerge
     {
         foreach (var hull in core.Hulls)
         {
-            SimModel? glb = string.IsNullOrEmpty(hull.ModelName)
-                ? null
-                : SimAssets.TryLoad($"ships/{hull.ModelName}.glb");
+            SimModel? glb = string.IsNullOrEmpty(hull.ModelName) ? null : SimAssets.TryLoad($"ships/{hull.ModelName}.glb");
             float ws = ShipScale(hull, glb);
             Merge($"hull '{hull.Id}'", hull.Hardpoints, glb, ws);
         }
@@ -74,9 +72,12 @@ public static class HardpointGeometryMerge
             return 1f;
         if (hull.ModelLength <= 0)
             throw new InvalidDataException(
-                $"hull '{hull.Id}' has model-name '{hull.ModelName}' but ModelLength {hull.ModelLength} <= 0 — cannot world-scale its hardpoints");
+                $"hull '{hull.Id}' has model-name '{hull.ModelName}' but ModelLength {hull.ModelLength} <= 0 — cannot world-scale its hardpoints"
+            );
         if (glb.LongestAxis <= 1e-6f)
-            throw new InvalidDataException($"hull '{hull.Id}' GLB '{hull.ModelName}' has a degenerate LongestAxis {glb.LongestAxis}");
+            throw new InvalidDataException(
+                $"hull '{hull.Id}' GLB '{hull.ModelName}' has a degenerate LongestAxis {glb.LongestAxis}"
+            );
         return (float)(hull.ModelLength / glb.LongestAxis);
     }
 
@@ -87,9 +88,12 @@ public static class HardpointGeometryMerge
             return 1f;
         if (station.Radius <= 0)
             throw new InvalidDataException(
-                $"station '{station.Id}' has model-name '{station.ModelName}' but Radius {station.Radius} <= 0 — cannot world-scale its hardpoints");
+                $"station '{station.Id}' has model-name '{station.ModelName}' but Radius {station.Radius} <= 0 — cannot world-scale its hardpoints"
+            );
         if (glb.LongestAxis <= 1e-6f)
-            throw new InvalidDataException($"station '{station.Id}' GLB '{station.ModelName}' has a degenerate LongestAxis {glb.LongestAxis}");
+            throw new InvalidDataException(
+                $"station '{station.Id}' GLB '{station.ModelName}' has a degenerate LongestAxis {glb.LongestAxis}"
+            );
         return (float)(station.Radius * 2.0 / glb.LongestAxis);
     }
 
@@ -107,7 +111,9 @@ public static class HardpointGeometryMerge
                 }
                 var key = (kind, index);
                 if (!nodes.TryAdd(key, (pos * ws, fwd)))
-                    throw new InvalidDataException($"{ctx}: duplicate GLB hardpoint node kind={kind} index={index} ('{name}')");
+                    throw new InvalidDataException(
+                        $"{ctx}: duplicate GLB hardpoint node kind={kind} index={index} ('{name}')"
+                    );
             }
 
         // YAML entries bind + override (their YAML order is preserved at the head of the list).
@@ -135,7 +141,8 @@ public static class HardpointGeometryMerge
             }
             else
                 throw new InvalidDataException(
-                    $"{ctx}: hardpoint kind={hp.Kind} index={hp.Index} has no position — author off-* or add an HP_{hp.Kind}_{hp.Index} mesh node");
+                    $"{ctx}: hardpoint kind={hp.Kind} index={hp.Index} has no position — author off-* or add an HP_{hp.Kind}_{hp.Index} mesh node"
+                );
 
             // Direction: any authored dir-* component wins (must be non-zero, normalized); else
             // inherit the mesh node's forward; else boot error.
@@ -144,7 +151,9 @@ public static class HardpointGeometryMerge
             {
                 var d = new Vec3((float)(hp.DirX ?? 0), (float)(hp.DirY ?? 0), (float)(hp.DirZ ?? 0));
                 if (d.LengthSquared() < 1e-12f)
-                    throw new InvalidDataException($"{ctx}: hardpoint kind={hp.Kind} index={hp.Index} has a zero-length authored direction");
+                    throw new InvalidDataException(
+                        $"{ctx}: hardpoint kind={hp.Kind} index={hp.Index} has a zero-length authored direction"
+                    );
                 d = Normalize(d);
                 hp.DirX = d.X;
                 hp.DirY = d.Y;
@@ -159,34 +168,36 @@ public static class HardpointGeometryMerge
             }
             else
                 throw new InvalidDataException(
-                    $"{ctx}: hardpoint kind={hp.Kind} index={hp.Index} has no direction — author dir-* or add an HP_{hp.Kind}_{hp.Index} mesh node");
+                    $"{ctx}: hardpoint kind={hp.Kind} index={hp.Index} has no direction — author dir-* or add an HP_{hp.Kind}_{hp.Index} mesh node"
+                );
         }
 
         // Append every unclaimed mesh node, ordered by (kind byte, index) — deterministic.
-        foreach (var kv in nodes
-                     .Where(n => !claimed.Contains(n.Key))
-                     .OrderBy(n => (byte)n.Key.Kind)
-                     .ThenBy(n => n.Key.Index))
+        foreach (
+            var kv in nodes.Where(n => !claimed.Contains(n.Key)).OrderBy(n => (byte)n.Key.Kind).ThenBy(n => n.Key.Index)
+        )
         {
             var (kind, index) = kv.Key;
             var (pos, fwd) = kv.Value;
             var d = Normalize(fwd);
-            hps.Add(new Factions.Hardpoint
-            {
-                Kind = kind,
-                Index = index,
-                OffX = pos.X,
-                OffY = pos.Y,
-                OffZ = pos.Z,
-                DirX = d.X,
-                DirY = d.Y,
-                DirZ = d.Z,
-                // An unbound weapon mount is EMPTY (null WeaponId -> HardpointDef.NoWeapon at
-                // projection); every other kind ignores WeaponId. With no YAML entry there is no
-                // authored `mount:` either, so an appended weapon mount projects to
-                // WeaponMountKind.NonMountable — hidden in the hangar, not a loadout slot. Author a
-                // YAML entry with `mount:` (and no weapon-id) to expose it as an empty typed mount.
-            });
+            hps.Add(
+                new Factions.Hardpoint
+                {
+                    Kind = kind,
+                    Index = index,
+                    OffX = pos.X,
+                    OffY = pos.Y,
+                    OffZ = pos.Z,
+                    DirX = d.X,
+                    DirY = d.Y,
+                    DirZ = d.Z,
+                    // An unbound weapon mount is EMPTY (null WeaponId -> HardpointDef.NoWeapon at
+                    // projection); every other kind ignores WeaponId. With no YAML entry there is no
+                    // authored `mount:` either, so an appended weapon mount projects to
+                    // WeaponMountKind.NonMountable — hidden in the hangar, not a loadout slot. Author a
+                    // YAML entry with `mount:` (and no weapon-id) to expose it as an empty typed mount.
+                }
+            );
         }
     }
 

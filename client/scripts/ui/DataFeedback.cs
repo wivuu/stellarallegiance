@@ -48,12 +48,28 @@ public partial class RadialGauge : Control
         if (!string.IsNullOrEmpty(CenterText))
         {
             var sz = UiFonts.Mono.GetStringSize(CenterText, HorizontalAlignment.Left, -1, 20);
-            DrawString(UiFonts.Mono, center + new Vector2(-sz.X * 0.5f, -2), CenterText, HorizontalAlignment.Left, -1, 20, DesignTokens.TextHi);
+            DrawString(
+                UiFonts.Mono,
+                center + new Vector2(-sz.X * 0.5f, -2),
+                CenterText,
+                HorizontalAlignment.Left,
+                -1,
+                20,
+                DesignTokens.TextHi
+            );
         }
         if (!string.IsNullOrEmpty(Caption))
         {
             var sz = UiFonts.SairaLabel.GetStringSize(Caption, HorizontalAlignment.Left, -1, 9);
-            DrawString(UiFonts.SairaLabel, center + new Vector2(-sz.X * 0.5f, 14), Caption, HorizontalAlignment.Left, -1, 9, DesignTokens.TextDim);
+            DrawString(
+                UiFonts.SairaLabel,
+                center + new Vector2(-sz.X * 0.5f, 14),
+                Caption,
+                HorizontalAlignment.Left,
+                -1,
+                9,
+                DesignTokens.TextDim
+            );
         }
     }
 }
@@ -198,7 +214,12 @@ public partial class AlertBox : PanelContainer
         _sub.Text = sub;
         _sub.Visible = !string.IsNullOrEmpty(sub);
 
-        var sb = new StyleBoxFlat { BgColor = new Color(c, 0.10f), BorderColor = c, AntiAliasing = false };
+        var sb = new StyleBoxFlat
+        {
+            BgColor = new Color(c, 0.10f),
+            BorderColor = c,
+            AntiAliasing = false,
+        };
         sb.SetCornerRadiusAll(0);
         sb.BorderWidthLeft = 3;
         sb.ContentMarginLeft = 12;
@@ -220,7 +241,12 @@ public partial class StatReadout : PanelContainer
     {
         if (_value != null)
             return;
-        var sb = new StyleBoxFlat { BgColor = DesignTokens.Well, BorderColor = DesignTokens.BorderLo, AntiAliasing = false };
+        var sb = new StyleBoxFlat
+        {
+            BgColor = DesignTokens.Well,
+            BorderColor = DesignTokens.BorderLo,
+            AntiAliasing = false,
+        };
         sb.SetCornerRadiusAll(0);
         sb.SetBorderWidthAll(1);
         sb.SetContentMarginAll(8);
@@ -317,7 +343,12 @@ public partial class ToastHost : Control
     public void Show(string message, float seconds = 3f)
     {
         var panel = new PanelContainer();
-        var sb = new StyleBoxFlat { BgColor = DesignTokens.Panel, BorderColor = DesignTokens.BorderHi, AntiAliasing = false };
+        var sb = new StyleBoxFlat
+        {
+            BgColor = DesignTokens.Panel,
+            BorderColor = DesignTokens.BorderHi,
+            AntiAliasing = false,
+        };
         sb.SetCornerRadiusAll(0);
         sb.SetBorderWidthAll(1);
         sb.ContentMarginLeft = sb.ContentMarginRight = 12;
@@ -326,7 +357,12 @@ public partial class ToastHost : Control
 
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 10);
-        var dot = new ColorRect { Color = DesignTokens.TeamAccent, CustomMinimumSize = new Vector2(8, 8), SizeFlagsVertical = SizeFlags.ShrinkCenter };
+        var dot = new ColorRect
+        {
+            Color = DesignTokens.TeamAccent,
+            CustomMinimumSize = new Vector2(8, 8),
+            SizeFlagsVertical = SizeFlags.ShrinkCenter,
+        };
         row.AddChild(dot);
         row.AddChild(UiKit.MakeLabel(message, UiKit.TextStyle.Body));
         panel.AddChild(row);

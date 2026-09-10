@@ -27,8 +27,7 @@ public sealed class CollisionSystem
     // Visible local-sector ships collected each CheckCollisions sweep (reused buffer). Per-ship pose +
     // collision hull + bounding radius is captured ONCE here so the O(n²) pair sweep does no per-pair
     // interop reads (GlobalPosition/Quaternion) or ShipClassOf/ShipHull lookups — it reads these fields.
-    private readonly List<(ulong Id, Vector3 Pos, Quaternion Rot, ConvexHull? Hull, float Bound)> _pairScratch =
-        new();
+    private readonly List<(ulong Id, Vector3 Pos, Quaternion Rot, ConvexHull? Hull, float Bound)> _pairScratch = new();
 
     public CollisionSystem(
         CollisionWorld collisionWorld,

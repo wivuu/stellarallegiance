@@ -147,7 +147,10 @@ public partial class AssetPreloader : Node
             if (status == ResourceLoader.ThreadLoadStatus.InProgress)
                 continue;
             _pendingScenes.RemoveAt(i);
-            if (status == ResourceLoader.ThreadLoadStatus.Loaded && ResourceLoader.LoadThreadedGet(path) is PackedScene scene)
+            if (
+                status == ResourceLoader.ThreadLoadStatus.Loaded
+                && ResourceLoader.LoadThreadedGet(path) is PackedScene scene
+            )
             {
                 _scenes[path] = scene;
                 _finishQueue.Enqueue(path);

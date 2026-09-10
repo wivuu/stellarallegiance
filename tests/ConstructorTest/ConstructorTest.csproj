@@ -12,6 +12,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="../../server/content/core/**/*.yaml" Link="content/core/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content
+      Include="../../server/content/core/**/*.yaml"
+      Link="content/core/%(RecursiveDir)%(Filename)%(Extension)"
+      CopyToOutputDirectory="PreserveNewest"
+    />
   </ItemGroup>
 </Project>

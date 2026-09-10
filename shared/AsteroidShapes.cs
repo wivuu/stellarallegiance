@@ -45,10 +45,10 @@ public static class AsteroidShapes
     private static readonly Dictionary<RockClass, byte[]> ClassPools = new()
     {
         [RockClass.Carbonaceous] = new byte[] { 0, 1 },
-        [RockClass.Silicon]      = new byte[] { 2, 3 },
-        [RockClass.Uranium]      = new byte[] { 4, 5 },
-        [RockClass.Helium3]      = new byte[] { 6, 7 },
-        [RockClass.Regolith]     = new byte[] { 8, 9, 10, 11, 12 },
+        [RockClass.Silicon] = new byte[] { 2, 3 },
+        [RockClass.Uranium] = new byte[] { 4, 5 },
+        [RockClass.Helium3] = new byte[] { 6, 7 },
+        [RockClass.Regolith] = new byte[] { 8, 9, 10, 11, 12 },
     };
 
     // Deterministic variant index for a rock of `cls`, chosen from its class pool by `hash`

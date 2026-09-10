@@ -57,7 +57,15 @@ public partial class HairlinePanel : MarginContainer
         var tab = new Rect2(0, 0, w, 28);
         DrawColoredPolygon(UiDraw.TabPoints(tab, 10f), new Color(DesignTokens.TeamAccent, 0.12f));
         DrawLine(new Vector2(0, 28), new Vector2(w - 10, 28), DesignTokens.BorderHi, 1f);
-        DrawString(UiFonts.SairaLabel, new Vector2(12, 19), Title, HorizontalAlignment.Left, -1, DesignTokens.LabelSize, DesignTokens.Data);
+        DrawString(
+            UiFonts.SairaLabel,
+            new Vector2(12, 19),
+            Title,
+            HorizontalAlignment.Left,
+            -1,
+            DesignTokens.LabelSize,
+            DesignTokens.Data
+        );
     }
 }
 
@@ -66,7 +74,12 @@ public partial class InsetWell : PanelContainer
 {
     public override void _Ready()
     {
-        var sb = new StyleBoxFlat { BgColor = DesignTokens.Well, BorderColor = DesignTokens.BorderLo, AntiAliasing = false };
+        var sb = new StyleBoxFlat
+        {
+            BgColor = DesignTokens.Well,
+            BorderColor = DesignTokens.BorderLo,
+            AntiAliasing = false,
+        };
         sb.SetCornerRadiusAll(0);
         sb.SetBorderWidthAll(1);
         sb.SetContentMarginAll(10);

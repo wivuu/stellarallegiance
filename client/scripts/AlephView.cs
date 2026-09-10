@@ -175,7 +175,7 @@ public partial class AlephView : Node3D
         {
             _vortexShader = new Shader();
             _vortexShader.Code =
-            @"
+                @"
 shader_type spatial;
 render_mode unshaded, cull_disabled, blend_add;
 

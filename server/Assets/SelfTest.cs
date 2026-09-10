@@ -56,7 +56,8 @@ public static class SelfTest
         }
         var content = ContentLoader.Load(
             Path.Combine(AppContext.BaseDirectory, "content", "core", "core.manifest.yaml"),
-            Path.Combine(AppContext.BaseDirectory, "content", "core", "world.yaml"));
+            Path.Combine(AppContext.BaseDirectory, "content", "core", "world.yaml")
+        );
         var world = new World(1, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships, content.Bases);
         Check("world: base hull loaded", world.BaseHull is not null);
         Check("world: base hull has planes", world.BaseHull is { Planes.Length: > 0 });
@@ -67,7 +68,10 @@ public static class SelfTest
         // welded mesh) BaseSubHulls collapses to 1 and this fails loudly, so ships would silently bounce
         // off (and fly through) the merged shrink-wrap again. The window is a sane cap, not the exact
         // count, so a re-bake at a different box_res stays green while a missing bake still fails.
-        Check($"world: base has generated sub-hulls (got {world.BaseSubHulls.Length}, expect 8..512)", world.BaseSubHulls.Length is >= 8 and <= 512);
+        Check(
+            $"world: base has generated sub-hulls (got {world.BaseSubHulls.Length}, expect 8..512)",
+            world.BaseSubHulls.Length is >= 8 and <= 512
+        );
         bool allSubHullsSolid = true;
         foreach (var sub in world.BaseSubHulls)
             if (sub.Planes.Length <= 3)
@@ -94,9 +98,15 @@ public static class SelfTest
             float du = Dot(f.U, f.V),
                 dun = Dot(f.U, f.Normal),
                 dvn = Dot(f.V, f.Normal);
-            if (MathF.Abs(f.U.Length() - 1f) > 1e-3f || MathF.Abs(f.V.Length() - 1f) > 1e-3f
-                || MathF.Abs(du) > 1e-3f || MathF.Abs(dun) > 1e-3f || MathF.Abs(dvn) > 1e-3f
-                || f.Eu <= 0f || f.Ev <= 0f)
+            if (
+                MathF.Abs(f.U.Length() - 1f) > 1e-3f
+                || MathF.Abs(f.V.Length() - 1f) > 1e-3f
+                || MathF.Abs(du) > 1e-3f
+                || MathF.Abs(dun) > 1e-3f
+                || MathF.Abs(dvn) > 1e-3f
+                || f.Eu <= 0f
+                || f.Ev <= 0f
+            )
                 faceAxesOrthonormal = false;
         }
         Check("world: dock face normals are unit", faceNormalsUnit);
@@ -147,7 +157,10 @@ public static class SelfTest
                 // The face sits at t == probe; a sub-hull entered before the depth window begins
                 // (t < probe − (DockFaceDepth − ShipRadius)) blocks the approach. Base sub-hulls
                 // are identity-frame, world-scaled ⇒ ray in local == world.
-                if (sub.RayEntry(origin, dir, probe, 0f, out float th) && th < probe - (World.DockFaceDepth - World.ShipRadius))
+                if (
+                    sub.RayEntry(origin, dir, probe, 0f, out float th)
+                    && th < probe - (World.DockFaceDepth - World.ShipRadius)
+                )
                     corridorsClear = false;
         }
         Check("world: every dock approach reaches its face window without hitting a sub-hull", corridorsClear);
@@ -178,7 +191,10 @@ public static class SelfTest
                 foreach (var sub in subs)
                     if (sub.ResolveSphere(spawn, World.ShipRadius, out _, out float p) && p > pen)
                         pen = p;
-                Check($"world: base type {t} exit {i} spawn clears the bay mouth (pen {pen:0.##} < ShipRadius)", pen < World.ShipRadius);
+                Check(
+                    $"world: base type {t} exit {i} spawn clears the bay mouth (pen {pen:0.##} < ShipRadius)",
+                    pen < World.ShipRadius
+                );
             }
             bool typeCorridorsClear = true;
             foreach (var f in doors)
@@ -189,11 +205,16 @@ public static class SelfTest
                     // Same window semantics as the garrison check above: the approach only has to
                     // stay clear until the dock trigger's depth window (uncarved aperture crust
                     // may sit at the face plane).
-                    if (sub.RayEntry(origin, f.Normal, probe, 0f, out float th) && th < probe - (World.DockFaceDepth - World.ShipRadius))
+                    if (
+                        sub.RayEntry(origin, f.Normal, probe, 0f, out float th)
+                        && th < probe - (World.DockFaceDepth - World.ShipRadius)
+                    )
                         typeCorridorsClear = false;
             }
             Check($"world: base type {t} every dock approach reaches its face window", typeCorridorsClear);
-            Console.WriteLine($"  base type {t} ({bd.Name}): {subs.Length} sub-hulls, {exits.Length} exits, {doors.Length} doors, radius {typeR:0.#}");
+            Console.WriteLine(
+                $"  base type {t} ({bd.Name}): {subs.Length} sub-hulls, {exits.Length} exits, {doors.Length} doors, radius {typeR:0.#}"
+            );
         }
 
         TestShipHulls(world);

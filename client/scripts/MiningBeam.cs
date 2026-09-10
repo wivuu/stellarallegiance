@@ -150,8 +150,16 @@ public partial class MiningBeam : Node3D
             // against the rock's real triangles (segment extended a little past center so a near-side
             // face is always caught) and pin the emitter to the true hit + face normal; a miss keeps
             // the sphere fallback. Ensure the normal faces back toward the miner (rock → miner).
-            if (rockMesh != null
-                && MeshRaycaster.IntersectMeshInstance(rockMesh, from, rockCenter + dir * rockRadius, out Vector3 hit, out Vector3 nrm))
+            if (
+                rockMesh != null
+                && MeshRaycaster.IntersectMeshInstance(
+                    rockMesh,
+                    from,
+                    rockCenter + dir * rockRadius,
+                    out Vector3 hit,
+                    out Vector3 nrm
+                )
+            )
             {
                 surface = hit;
                 surfaceNormal = nrm.Dot(-dir) >= 0f ? nrm : -nrm;
@@ -223,7 +231,14 @@ public partial class MiningBeam : Node3D
             VertexColorUseAsAlbedo = true,
             Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
         };
-        var dust = new SphereMesh { Radius = 0.18f, Height = 0.36f, RadialSegments = 6, Rings = 3, Material = dustMat };
+        var dust = new SphereMesh
+        {
+            Radius = 0.18f,
+            Height = 0.36f,
+            RadialSegments = 6,
+            Rings = 3,
+            Material = dustMat,
+        };
 
         var gp = new GpuParticles3D
         {

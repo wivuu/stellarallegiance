@@ -57,9 +57,18 @@ to `shared/FlightModel.cs`.
 
 ## Formatting
 
-Code is formatted with [CSharpier](https://csharpier.com) (pinned in `dotnet-tools.json`):
+Code is formatted with [CSharpier](https://csharpier.com) (pinned at 1.2.6 in
+`dotnet-tools.json`; it formats `.cs` **and** `.csproj`). **Format only the files you touched** —
+pass them as paths:
 
 ```bash
 dotnet tool restore
-dotnet csharpier format .
+dotnet csharpier format server/Net/ClientHub.cs shared/Net/Wire.cs   # the paths you changed
+dotnet csharpier check .                                             # must print nothing dirty
 ```
+
+The tree was blanket-formatted once, on 2026-09-09, so `dotnet csharpier check .` is clean at HEAD
+and stays that way as long as everyone formats what they touch. Do **not** repeat a blanket
+`dotnet csharpier format .` inside feature work: it buries the real change under hundreds of
+unrelated reformats and makes the diff unreviewable. EF Core migrations (`**/Migrations/*.cs`) are
+excluded in `.csharpierignore`.

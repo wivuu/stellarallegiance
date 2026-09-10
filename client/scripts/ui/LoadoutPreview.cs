@@ -124,16 +124,22 @@ public partial class LoadoutPreview : SubViewportContainer
         HoverIndex = null;
 
         // Fallback material only matters when a GLB is missing (placeholder silhouette).
-        var mat = new StandardMaterial3D { AlbedoColor = new Color(0.55f, 0.65f, 0.75f), Metallic = 0.4f, Roughness = 0.5f };
+        var mat = new StandardMaterial3D
+        {
+            AlbedoColor = new Color(0.55f, 0.65f, 0.75f),
+            Metallic = 0.4f,
+            Roughness = 0.5f,
+        };
         _model = ShipModelLoader.Build(defs, (ShipClass)classId, isPod: false, mat);
         _viewport.AddChild(_model);
 
         // Frame the orbit camera off the hull's authored silhouette length (the same
         // ShipClassDef.ModelLength the model loader normalizes the GLB to); DefaultModelLength
         // guards a hull that authored none.
-        float len = defs.TryGetShipDef(classId, out ShipClassDef def) && def.ModelLength > 0f
-            ? def.ModelLength
-            : ShipModelLoader.DefaultModelLength;
+        float len =
+            defs.TryGetShipDef(classId, out ShipClassDef def) && def.ModelLength > 0f
+                ? def.ModelLength
+                : ShipModelLoader.DefaultModelLength;
         _dist = len * 1.9f;
         _minDist = len * 0.9f;
         _maxDist = len * 5f;

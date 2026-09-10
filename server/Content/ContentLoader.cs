@@ -39,7 +39,8 @@ public static class ContentLoader
         if (!vr.IsValid)
             throw new InvalidDataException(
                 $"content bundle '{manifestPath}' failed validation ({vr.Errors.Count} error(s)):\n  - "
-                + string.Join("\n  - ", vr.Errors));
+                    + string.Join("\n  - ", vr.Errors)
+            );
 
         // GLB-authoritative hardpoint inventory + geometry: the mesh HP_ nodes supply how many
         // mounts a hull/station has and where they sit; YAML binds weapon-ids + overrides geometry.

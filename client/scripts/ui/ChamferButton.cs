@@ -60,7 +60,17 @@ public partial class ChamferButton : Button
         UiFonts.EnsureLoaded();
         foreach (string s in new[] { "normal", "hover", "pressed", "focus", "disabled" })
             AddThemeStyleboxOverride(s, new StyleBoxEmpty());
-        foreach (string c in new[] { "font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color", "font_disabled_color" })
+        foreach (
+            string c in new[]
+            {
+                "font_color",
+                "font_hover_color",
+                "font_pressed_color",
+                "font_focus_color",
+                "font_hover_pressed_color",
+                "font_disabled_color",
+            }
+        )
             AddThemeColorOverride(c, Colors.Transparent);
         Pressed += () => SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiClick);
         _floor = CustomMinimumSize;

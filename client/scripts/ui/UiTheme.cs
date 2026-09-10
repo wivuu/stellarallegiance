@@ -52,7 +52,11 @@ public static class UiTheme
         //     default so any plain Button still reads as part of the system) ----
         t.SetStylebox("normal", "Button", Box(DesignTokens.PanelFill, DesignTokens.BorderHi, 1, 14, 8));
         t.SetStylebox("hover", "Button", Box(new Color(DesignTokens.TeamAccent, 0.18f), DesignTokens.TeamAccent, 1, 14, 8));
-        t.SetStylebox("pressed", "Button", Box(new Color(DesignTokens.TeamAccent, 0.28f), DesignTokens.TeamAccent, 1, 14, 8));
+        t.SetStylebox(
+            "pressed",
+            "Button",
+            Box(new Color(DesignTokens.TeamAccent, 0.28f), DesignTokens.TeamAccent, 1, 14, 8)
+        );
         t.SetStylebox("disabled", "Button", Box(new Color(DesignTokens.BorderLo, 0.5f), DesignTokens.BorderLo, 1, 14, 8));
 
         // --- horizontal slider (volume rows) ---------------------------------

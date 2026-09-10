@@ -204,8 +204,7 @@ public static class GlbReader
 
     // A default (unpassed) Quat is the zero quat, and Quat.Identity is our explicit no-op — either
     // means "no pre-rotation", so the root walk starts from a literal Mat4.Identity.
-    private static bool IsIdentity(Quat q) =>
-        q.X == 0f && q.Y == 0f && q.Z == 0f && (q.W == 0f || q.W == 1f);
+    private static bool IsIdentity(Quat q) => q.X == 0f && q.Y == 0f && q.Z == 0f && (q.W == 0f || q.W == 1f);
 
     // ---- glTF node local transform ----
 

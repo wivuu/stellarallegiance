@@ -745,8 +745,7 @@ public partial class ResearchTab : Control
         _techFamily = techFam;
     }
 
-    private byte FamilyRootOf(byte type) =>
-        _familyRoots != null && _familyRoots.TryGetValue(type, out byte r) ? r : type;
+    private byte FamilyRootOf(byte type) => _familyRoots != null && _familyRoots.TryGetValue(type, out byte r) ? r : type;
 
     // The base family a development is researched at. Single-scope upgrades home to the base they must be
     // authorized at; everything else homes to the base family that grants its gating tech. Devs gated

@@ -19,6 +19,7 @@ public partial class ProjectileView : Node3D
     private Vector3 _pos;
     private Vector3 _vel;
     private Vector3 _aimDir; // normalized muzzle/shot direction, used only to orient the tracer
+
     // Flight time since spawn, accumulated from _Process delta — NOT wall clock. The ship and
     // camera render on the accumulated-delta timeline (PredictionController._tickTimer, CameraRig),
     // and a bolt inherits the firing ship's velocity, so the strafe component only cancels in the

@@ -50,8 +50,25 @@ public partial class ViewModeIndicator : Control
 
         // Top-centre chip, below the screen edge and clear of the top-left telemetry labels.
         Vector2 pos = new Vector2(GetViewportRect().Size.X * 0.5f - totalW * 0.5f, 28f);
-        DrawRect(new Rect2(pos + new Vector2(-6f, -size - 2f), new Vector2(totalW + 12f, size + 8f)), DesignTokens.Scrim with { A = DesignTokens.Scrim.A * alpha });
+        DrawRect(
+            new Rect2(pos + new Vector2(-6f, -size - 2f), new Vector2(totalW + 12f, size + 8f)),
+            DesignTokens.Scrim with
+            {
+                A = DesignTokens.Scrim.A * alpha,
+            }
+        );
         DrawString(font, pos, tag, HorizontalAlignment.Left, -1, size, DesignTokens.TeamAccent with { A = alpha });
-        DrawString(font, pos + new Vector2(tagW, 0f), value, HorizontalAlignment.Left, -1, size, DesignTokens.TextHi with { A = alpha });
+        DrawString(
+            font,
+            pos + new Vector2(tagW, 0f),
+            value,
+            HorizontalAlignment.Left,
+            -1,
+            size,
+            DesignTokens.TextHi with
+            {
+                A = alpha,
+            }
+        );
     }
 }

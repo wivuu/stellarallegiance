@@ -24,12 +24,16 @@ public partial class ServerPasswordModal : Control
     {
         if (Active)
             return;
-        ModalHost.Ensure(context).AddChild(new ServerPasswordModal
-        {
-            _serverName = serverName,
-            _onSubmit = onSubmit,
-            _error = error,
-        });
+        ModalHost
+            .Ensure(context)
+            .AddChild(
+                new ServerPasswordModal
+                {
+                    _serverName = serverName,
+                    _onSubmit = onSubmit,
+                    _error = error,
+                }
+            );
     }
 
     private string _serverName = "";
@@ -96,7 +100,9 @@ public partial class ServerPasswordModal : Control
 
         var body = UiKit.MakeLabel(
             "This server requires a password to join. Enter the passphrase provided by the host.",
-            UiKit.TextStyle.Data, DesignTokens.Text2);
+            UiKit.TextStyle.Data,
+            DesignTokens.Text2
+        );
         body.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         body.CustomMinimumSize = new Vector2(400, 0);
         col.AddChild(body);
@@ -128,16 +134,17 @@ public partial class ServerPasswordModal : Control
         header.AddThemeConstantOverride("separation", 12);
         col.AddChild(header);
 
-        header.AddChild(new LockIcon
-        {
-            CustomMinimumSize = new Vector2(26, 32),
-            SizeFlagsVertical = SizeFlags.ShrinkCenter,
-        });
+        header.AddChild(
+            new LockIcon { CustomMinimumSize = new Vector2(26, 32), SizeFlagsVertical = SizeFlags.ShrinkCenter }
+        );
 
         var titles = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         titles.AddThemeConstantOverride("separation", 2);
         titles.AddChild(UiKit.MakeLabel("PROTECTED SERVER", UiKit.TextStyle.Label, DesignTokens.Warn));
-        var title = UiKit.MakeLabel(string.IsNullOrEmpty(_serverName) ? "LOCKED SERVER" : _serverName, UiKit.TextStyle.Title);
+        var title = UiKit.MakeLabel(
+            string.IsNullOrEmpty(_serverName) ? "LOCKED SERVER" : _serverName,
+            UiKit.TextStyle.Title
+        );
         title.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         titles.AddChild(title);
         header.AddChild(titles);
@@ -172,7 +179,12 @@ public partial class ServerPasswordModal : Control
 
     private static StyleBoxFlat InputStyle(Color border)
     {
-        var sb = new StyleBoxFlat { BgColor = DesignTokens.Void, BorderColor = border, AntiAliasing = false };
+        var sb = new StyleBoxFlat
+        {
+            BgColor = DesignTokens.Void,
+            BorderColor = border,
+            AntiAliasing = false,
+        };
         sb.SetCornerRadiusAll(0);
         sb.SetBorderWidthAll(1);
         sb.ContentMarginLeft = sb.ContentMarginRight = 13;

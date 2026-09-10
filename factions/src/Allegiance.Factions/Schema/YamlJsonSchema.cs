@@ -31,8 +31,7 @@ public static class YamlJsonSchema
     // names CoreSerializer writes (avoids KebabCaseLower-vs-Hyphenated divergence on edge cases).
     private sealed class HyphenatedPolicy : JsonNamingPolicy
     {
-        public override string ConvertName(string name) =>
-            HyphenatedNamingConvention.Instance.Apply(name);
+        public override string ConvertName(string name) => HyphenatedNamingConvention.Instance.Apply(name);
     }
 
     // Mirrors CoreSerializer's config: kebab-case properties + dictionary keys, and enums serialized
@@ -72,20 +71,21 @@ public static class YamlJsonSchema
                 // the type doc for an object node.
                 if (!obj.ContainsKey("description"))
                 {
-                    string? desc = context.PropertyInfo?.AttributeProvider is MemberInfo member
-                        ? docs.ForMember(member)
-                        : context.PropertyInfo is null
-                            ? docs.ForType(context.TypeInfo.Type)
-                            : null;
+                    string? desc =
+                        context.PropertyInfo?.AttributeProvider is MemberInfo member ? docs.ForMember(member)
+                        : context.PropertyInfo is null ? docs.ForType(context.TypeInfo.Type)
+                        : null;
                     if (!string.IsNullOrEmpty(desc))
                         obj["description"] = desc;
                 }
 
                 // Reject unknown keys on POCO objects (mirrors the old generator's strictness), but
                 // leave dictionaries alone — their `additionalProperties` is a value schema, not a bool.
-                if (context.TypeInfo.Kind == JsonTypeInfoKind.Object
+                if (
+                    context.TypeInfo.Kind == JsonTypeInfoKind.Object
                     && obj.ContainsKey("properties")
-                    && !obj.ContainsKey("additionalProperties"))
+                    && !obj.ContainsKey("additionalProperties")
+                )
                 {
                     obj["additionalProperties"] = false;
                 }
@@ -155,7 +155,8 @@ public static class YamlJsonSchema
         public string? ForMember(MemberInfo member) =>
             member.DeclaringType?.FullName is { } declaring
             && _summaries.TryGetValue("P:" + declaring + "." + member.Name, out var s)
-                ? s : null;
+                ? s
+                : null;
 
         // Render a <summary> to plain text: keep text/<c>/<para> inner text, and turn inline
         // references (<see cref="P:...Foo"/>, <paramref name="x"/>) into their short identifier so
@@ -195,7 +196,6 @@ public static class YamlJsonSchema
         }
 
         // XML doc summaries carry the source's newlines/indentation — collapse to a single line.
-        private static string Collapse(string text) =>
-            Regex.Replace(text, @"\s+", " ").Trim();
+        private static string Collapse(string text) => Regex.Replace(text, @"\s+", " ").Trim();
     }
 }

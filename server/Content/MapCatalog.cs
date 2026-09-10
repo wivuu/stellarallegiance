@@ -11,8 +11,14 @@ public sealed record MapCatalogBase(byte Team);
 // One sector of a map thumbnail: its id, radius, display name, garrison markers, and optional 2D
 // map-diagram position (MapX/MapY valid when HasMapPos; else the client auto-lays it out).
 public sealed record MapCatalogSector(
-    uint Id, float Radius, string Name, IReadOnlyList<MapCatalogBase> Bases,
-    float MapX, float MapY, bool HasMapPos);
+    uint Id,
+    float Radius,
+    string Name,
+    IReadOnlyList<MapCatalogBase> Bases,
+    float MapX,
+    float MapY,
+    bool HasMapPos
+);
 
 // One aleph gate link on a map thumbnail: a bidirectional sector-id pair, drawn as a connecting
 // line between the two sector nodes in the lobby preview.
@@ -29,7 +35,8 @@ public sealed record MapCatalogEntry(
     string SectorLabel,
     int GarrisonCount,
     IReadOnlyList<MapCatalogSector> Sectors,
-    IReadOnlyList<MapCatalogLink> Links);
+    IReadOnlyList<MapCatalogLink> Links
+);
 
 // Projects the server's available maps into the client-facing catalog. Most map metadata isn't
 // authored in the map YAML (only name + sector radii), so mode is read from an optional MapDef.Mode
@@ -44,7 +51,8 @@ public static class MapCatalog
         ulong seed,
         float baseMaxHealth,
         FactionStart start,
-        IReadOnlyList<ShipClassDef> ships)
+        IReadOnlyList<ShipClassDef> ships
+    )
     {
         var list = new List<MapCatalogEntry>(maps.Count);
         // Stable order so the client's picker grid is deterministic run-to-run.
@@ -57,16 +65,16 @@ public static class MapCatalog
             MapLoader.ApplyTo(map, cfg);
             var world = new World(seed, cfg, baseMaxHealth, start, ships);
 
-            var sectors = world.Sectors
-                .Select(s => new MapCatalogSector(
+            var sectors = world
+                .Sectors.Select(s => new MapCatalogSector(
                     s.Id,
                     MathF.Round(s.Radius),
                     string.IsNullOrWhiteSpace(s.Name) ? $"SECTOR {s.Id:00}" : s.Name,
-                    world.Bases
-                        .Where(b => b.SectorId == s.Id)
-                        .Select(b => new MapCatalogBase(b.Team))
-                        .ToList(),
-                    s.MapX, s.MapY, s.HasMapPos))
+                    world.Bases.Where(b => b.SectorId == s.Id).Select(b => new MapCatalogBase(b.Team)).ToList(),
+                    s.MapX,
+                    s.MapY,
+                    s.HasMapPos
+                ))
                 .ToList();
 
             float maxRadius = world.Sectors.Count == 0 ? 0f : world.Sectors.Max(s => s.Radius);
@@ -84,65 +92,70 @@ public static class MapCatalog
                     links.Add(new MapCatalogLink(edge.Item1, edge.Item2));
             }
 
-            list.Add(new MapCatalogEntry(
-                map.Name!.Trim(),
-                mode,
-                SizeLabel(maxRadius),
-                sectorLabel,
-                world.Bases.Count,
-                sectors,
-                links));
+            list.Add(
+                new MapCatalogEntry(
+                    map.Name!.Trim(),
+                    mode,
+                    SizeLabel(maxRadius),
+                    sectorLabel,
+                    world.Bases.Count,
+                    sectors,
+                    links
+                )
+            );
         }
         return list;
     }
 
     // Coarse size bucket from the largest sector radius (authored radii run in the thousands —
     // Brimstone's home sector is 4000 → LARGE). Purely cosmetic flavour for the Sector Intel panel.
-    private static string SizeLabel(float maxRadius) => maxRadius switch
-    {
-        < 1500f => "SMALL",
-        < 3000f => "MEDIUM",
-        < 5000f => "LARGE",
-        _ => "HUGE",
-    };
+    private static string SizeLabel(float maxRadius) =>
+        maxRadius switch
+        {
+            < 1500f => "SMALL",
+            < 3000f => "MEDIUM",
+            < 5000f => "LARGE",
+            _ => "HUGE",
+        };
 
     // Shallow clone of the world config. ApplyTo reassigns Sectors to a new list, so a fresh list
     // copy is enough; every other field is a value type carried straight across. Keep in sync if
     // WorldConfig gains fields that World construction reads. Public so the runtime map-switch path
     // (Program's buildWorld closure) can clone the pristine config before ApplyTo, same as Build does.
-    public static WorldConfig Clone(WorldConfig w) => new()
-    {
-        Id = w.Id,
-        SectorScale = w.SectorScale,
-        SectorRadius = w.SectorRadius,
-        AsteroidDensity = w.AsteroidDensity,
-        Sectors = new List<WorldSectorConfig>(w.Sectors),
-        Links = new List<SectorLink>(w.Links),
-        DebugFreezeBrain = w.DebugFreezeBrain,
-        DebugNoFire = w.DebugNoFire,
-        FogOfWar = w.FogOfWar,
-        FogEyeballMultiplier = w.FogEyeballMultiplier,
-        FireSignatureBoost = w.FireSignatureBoost,
-        FireSignatureWindow = w.FireSignatureWindow,
-        BoostSignatureMult = w.BoostSignatureMult,
-        ShieldSignatureMult = w.ShieldSignatureMult,
-        DustSignatureMult = w.DustSignatureMult,
-        SignatureMinMult = w.SignatureMinMult,
-        SignatureMaxMult = w.SignatureMaxMult,
-        FogGhostTimeout = w.FogGhostTimeout,
-        AlephRadarSignature = w.AlephRadarSignature,
-        RockRadarSignature = w.RockRadarSignature,
-        // Tuning blocks are read-only after projection, so the clone shares the instances (maps
-        // never override them — MapLoader.ApplyTo touches sectors/links/scale/radius only). EVERY
-        // tuning block World construction reads must be carried across: a dropped block silently
-        // reverts to the WorldConfig field-initializer default (e.g. omitting Build reset an authored
-        // build.parallel-limit back to 4, defeating the per-garrison build pipeline on any mapped game).
-        Ai = w.Ai,
-        Combat = w.Combat,
-        Mechanics = w.Mechanics,
-        Mining = w.Mining,
-        Seeding = w.Seeding,
-        Constructor = w.Constructor,
-        Build = w.Build,
-    };
+    public static WorldConfig Clone(WorldConfig w) =>
+        new()
+        {
+            Id = w.Id,
+            SectorScale = w.SectorScale,
+            SectorRadius = w.SectorRadius,
+            AsteroidDensity = w.AsteroidDensity,
+            Sectors = new List<WorldSectorConfig>(w.Sectors),
+            Links = new List<SectorLink>(w.Links),
+            DebugFreezeBrain = w.DebugFreezeBrain,
+            DebugNoFire = w.DebugNoFire,
+            FogOfWar = w.FogOfWar,
+            FogEyeballMultiplier = w.FogEyeballMultiplier,
+            FireSignatureBoost = w.FireSignatureBoost,
+            FireSignatureWindow = w.FireSignatureWindow,
+            BoostSignatureMult = w.BoostSignatureMult,
+            ShieldSignatureMult = w.ShieldSignatureMult,
+            DustSignatureMult = w.DustSignatureMult,
+            SignatureMinMult = w.SignatureMinMult,
+            SignatureMaxMult = w.SignatureMaxMult,
+            FogGhostTimeout = w.FogGhostTimeout,
+            AlephRadarSignature = w.AlephRadarSignature,
+            RockRadarSignature = w.RockRadarSignature,
+            // Tuning blocks are read-only after projection, so the clone shares the instances (maps
+            // never override them — MapLoader.ApplyTo touches sectors/links/scale/radius only). EVERY
+            // tuning block World construction reads must be carried across: a dropped block silently
+            // reverts to the WorldConfig field-initializer default (e.g. omitting Build reset an authored
+            // build.parallel-limit back to 4, defeating the per-garrison build pipeline on any mapped game).
+            Ai = w.Ai,
+            Combat = w.Combat,
+            Mechanics = w.Mechanics,
+            Mining = w.Mining,
+            Seeding = w.Seeding,
+            Constructor = w.Constructor,
+            Build = w.Build,
+        };
 }

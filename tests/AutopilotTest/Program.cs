@@ -133,17 +133,29 @@ float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
     }
 
     Check(!ship.ApEngaged, "waypoint: autopilot disengaged on arrival", "waypoint: never disengaged (never arrived)");
-    Check(minDist <= Standoff * 1.2f, $"waypoint: ship reached the standoff band (min {minDist:0.0} <= {Standoff * 1.2f:0.0})",
-        $"waypoint: ship never entered the standoff band (min dist {minDist:0.0})");
-    Check(ship.State.Vel.Length() < 2f, $"waypoint: ship braked to a stop (final speed {ship.State.Vel.Length():0.00})",
-        $"waypoint: ship did not brake (final speed {ship.State.Vel.Length():0.0})");
+    Check(
+        minDist <= Standoff * 1.2f,
+        $"waypoint: ship reached the standoff band (min {minDist:0.0} <= {Standoff * 1.2f:0.0})",
+        $"waypoint: ship never entered the standoff band (min dist {minDist:0.0})"
+    );
+    Check(
+        ship.State.Vel.Length() < 2f,
+        $"waypoint: ship braked to a stop (final speed {ship.State.Vel.Length():0.00})",
+        $"waypoint: ship did not brake (final speed {ship.State.Vel.Length():0.0})"
+    );
     // Physics braking (Issue 2): the ship must NOT fly through the waypoint and ram out the far side —
     // it should decelerate and settle at/just short of it. Allow only a small overshoot (well under the
     // arrival band); a pre-fix AttackPoint approach blew ~hundreds of units past before turning back.
-    Check(maxOvershoot < 20f, $"waypoint: ship braked without flying through (max overshoot {maxOvershoot:0.0} < 20)",
-        $"waypoint: ship overshot the waypoint (flew {maxOvershoot:0.0} past it before braking)");
-    Check(maxSpeed > 5f && !everWentBackward, $"waypoint: distance fell monotonically-ish (max speed {maxSpeed:0.0})",
-        "waypoint: distance did not fall monotonically-ish");
+    Check(
+        maxOvershoot < 20f,
+        $"waypoint: ship braked without flying through (max overshoot {maxOvershoot:0.0} < 20)",
+        $"waypoint: ship overshot the waypoint (flew {maxOvershoot:0.0} past it before braking)"
+    );
+    Check(
+        maxSpeed > 5f && !everWentBackward,
+        $"waypoint: distance fell monotonically-ish (max speed {maxSpeed:0.0})",
+        "waypoint: distance did not fall monotonically-ish"
+    );
 }
 
 // ---- 2. Manual override: a real stick input disengages and the ship flies the pilot ----------------
@@ -160,10 +172,16 @@ float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
     sim.EnqueueInput(1, tick: 0, input: new ShipInputState { Yaw = 1f });
     sim.Step();
 
-    Check(!ship.ApEngaged, "override: a hard-yaw stick input disengaged autopilot", "override: autopilot did not disengage on manual input");
-    Check(MathF.Abs(ship.State.AngVel.Y) > 0.01f && ship.HeldInput.Yaw == 1f,
+    Check(
+        !ship.ApEngaged,
+        "override: a hard-yaw stick input disengaged autopilot",
+        "override: autopilot did not disengage on manual input"
+    );
+    Check(
+        MathF.Abs(ship.State.AngVel.Y) > 0.01f && ship.HeldInput.Yaw == 1f,
         "override: the ship flew the pilot's input after disengage (yaw applied)",
-        "override: the pilot's input did not take effect after disengage");
+        "override: the pilot's input did not take effect after disengage"
+    );
 }
 
 // ---- 3. Enemy-ship follow: close to standoff, keep station, never fire ------------------------------
@@ -194,20 +212,31 @@ float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
         minGap = MathF.Min(minGap, Dist(ship.State.Pos, enemyPos));
     }
 
-    Check(stayedEngaged && ship.ApEngaged, "follow: autopilot follows the enemy indefinitely (stays engaged)",
-        "follow: autopilot disengaged while following an enemy ship");
-    Check(minGap <= Standoff * 1.5f, $"follow: ship closed to the standoff band (min gap {minGap:0.0})",
-        $"follow: ship never closed to standoff (min gap {minGap:0.0})");
+    Check(
+        stayedEngaged && ship.ApEngaged,
+        "follow: autopilot follows the enemy indefinitely (stays engaged)",
+        "follow: autopilot disengaged while following an enemy ship"
+    );
+    Check(
+        minGap <= Standoff * 1.5f,
+        $"follow: ship closed to the standoff band (min gap {minGap:0.0})",
+        $"follow: ship never closed to standoff (min gap {minGap:0.0})"
+    );
     // Issue 2: a static target must not be RAMMED — physics braking arrests the closing speed at the
     // standoff shell, so the ship never collides. (Pre-fix, AttackPoint's coast/reverse schedule
     // overshot and rammed a static target down to a near-zero gap.) Floor well above the ShipRadius.
-    Check(minGap > 40f, $"follow: never collided with the static target (min gap {minGap:0.0} > 40)",
-        $"follow: rammed the static target (min gap {minGap:0.0} <= 40)");
+    Check(
+        minGap > 40f,
+        $"follow: never collided with the static target (min gap {minGap:0.0} > 40)",
+        $"follow: rammed the static target (min gap {minGap:0.0} <= 40)"
+    );
     // The autopilot never pulls a trigger — the follow ship's fire cadence stamps stay pristine
     // (no player held Firing/Firing2, so TryFire/TryFireMissile were never called on it).
-    Check(ship.LastFireTick == 0 && ship.LastMissileTick == 0,
+    Check(
+        ship.LastFireTick == 0 && ship.LastMissileTick == 0,
         "follow: autopilot never fired on the target (no gun or missile ever discharged)",
-        $"follow: the autopilot ship fired unprompted (gun tick {ship.LastFireTick}, missile tick {ship.LastMissileTick})");
+        $"follow: the autopilot ship fired unprompted (gun tick {ship.LastFireTick}, missile tick {ship.LastMissileTick})"
+    );
 }
 
 // ---- 4. Enemy base: arrive at standoff and disengage -----------------------------------------------
@@ -228,13 +257,23 @@ float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
     }
     float gap = Dist(ship.State.Pos, enemyBase.Pos);
 
-    Check(!ship.ApEngaged, "enemy base: autopilot disengaged on arrival at standoff", "enemy base: never arrived/disengaged");
-    Check(ship.Alive && gap > World.BaseRadius, $"enemy base: ship stood off the base (gap {gap:0.0} > radius {World.BaseRadius})",
-        $"enemy base: ship did not hold standoff (gap {gap:0.0}, alive {ship.Alive})");
+    Check(
+        !ship.ApEngaged,
+        "enemy base: autopilot disengaged on arrival at standoff",
+        "enemy base: never arrived/disengaged"
+    );
+    Check(
+        ship.Alive && gap > World.BaseRadius,
+        $"enemy base: ship stood off the base (gap {gap:0.0} > radius {World.BaseRadius})",
+        $"enemy base: ship did not hold standoff (gap {gap:0.0}, alive {ship.Alive})"
+    );
     // Issue 2: the braking approach never intersects the base collision radius on ANY tick — it brakes
     // to the standoff shell instead of ramming through it.
-    Check(baseMinGap > World.BaseRadius, $"enemy base: never rammed the base (min gap {baseMinGap:0.0} > radius {World.BaseRadius})",
-        $"enemy base: rammed the base (min gap {baseMinGap:0.0} <= radius {World.BaseRadius})");
+    Check(
+        baseMinGap > World.BaseRadius,
+        $"enemy base: never rammed the base (min gap {baseMinGap:0.0} > radius {World.BaseRadius})",
+        $"enemy base: rammed the base (min gap {baseMinGap:0.0} <= radius {World.BaseRadius})"
+    );
 }
 
 // ---- 4b. Rock approach: brake to standoff without ever intersecting the rock, then disengage --------
@@ -255,11 +294,16 @@ float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
     }
     float rockGap = Dist(ship.State.Pos, rock.Pos);
 
-    Check(rockMinGap > rock.Radius, $"rock: braking approach never intersected the rock (min gap {rockMinGap:0.0} > radius {rock.Radius})",
-        $"rock: the ship rammed the rock (min gap {rockMinGap:0.0} <= radius {rock.Radius})");
-    Check(!ship.ApEngaged && rockGap <= rock.Radius + Standoff * 1.3f && ship.State.Vel.Length() < 3f,
+    Check(
+        rockMinGap > rock.Radius,
+        $"rock: braking approach never intersected the rock (min gap {rockMinGap:0.0} > radius {rock.Radius})",
+        $"rock: the ship rammed the rock (min gap {rockMinGap:0.0} <= radius {rock.Radius})"
+    );
+    Check(
+        !ship.ApEngaged && rockGap <= rock.Radius + Standoff * 1.3f && ship.State.Vel.Length() < 3f,
         $"rock: arrived at standoff and stopped (gap {rockGap:0.0}, speed {ship.State.Vel.Length():0.00})",
-        $"rock: did not settle at standoff (engaged {ship.ApEngaged}, gap {rockGap:0.0}, speed {ship.State.Vel.Length():0.0})");
+        $"rock: did not settle at standoff (engaged {ship.ApEngaged}, gap {rockGap:0.0}, speed {ship.State.Vel.Length():0.0})"
+    );
 }
 
 // ---- 5. Friendly base: straight-on start — decelerate, turn+roll, creep in, dock -------------------
@@ -272,9 +316,11 @@ float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
     // Loud guard: the real base.glb must have parsed exactly one docking door. Without it (CI missing
     // client/assets) the friendly branch silently takes the modelless full-thrust fallback and the
     // maneuver assertions below become meaningless — so fail HERE, loudly, first.
-    Check(sim.World.BaseDockFaces.Length == 1,
+    Check(
+        sim.World.BaseDockFaces.Length == 1,
         $"friendly base: base.glb loaded with exactly one docking door (BaseDockFaces.Length {sim.World.BaseDockFaces.Length})",
-        $"friendly base: expected exactly one parsed docking door — got {sim.World.BaseDockFaces.Length} (assets not loaded?)");
+        $"friendly base: expected exactly one parsed docking door — got {sim.World.BaseDockFaces.Length} (assets not loaded?)"
+    );
 
     // Door world geometry, derived from the booted sim (identity-oriented base: doorW = base.Pos + Center).
     var f = sim.World.BaseDockFaces[0];
@@ -289,10 +335,10 @@ float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
 
     bool docked = false;
     bool sawStandoffPause = false; // some tick paused near the standoff point (decelerated to arrive, not ram)
-    float maxFacing = 0f;          // best nose (local +Z) alignment with the door's inward normal
-    float maxUpAlign = 0f;         // best roll alignment onto a door in-plane axis (sampled only while facing)
-    float lastSpeed = 0f;          // speed on the final tick before the ship is removed (impact speed)
-    byte lastPhase = 0;            // ApDockPhase on the final tick — the dock must fire FROM Creep (2)
+    float maxFacing = 0f; // best nose (local +Z) alignment with the door's inward normal
+    float maxUpAlign = 0f; // best roll alignment onto a door in-plane axis (sampled only while facing)
+    float lastSpeed = 0f; // speed on the final tick before the ship is removed (impact speed)
+    byte lastPhase = 0; // ApDockPhase on the final tick — the dock must fire FROM Creep (2)
     float minPocketGap = float.PositiveInfinity; // pre-Creep along-normal gap to the door plane while inside the door column
     for (int i = 0; i < 1500 && !docked; i++)
     {
@@ -325,35 +371,60 @@ float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
         Vec3 rel = pos - doorW;
         float along = Dot(rel, f.Normal);
         Vec3 lat = rel - f.Normal * along;
-        if (ship.ApDockPhase < 2
+        if (
+            ship.ApDockPhase < 2
             && MathF.Abs(Dot(lat, f.U)) <= f.Eu + World.ShipRadius
-            && MathF.Abs(Dot(lat, f.V)) <= f.Ev + World.ShipRadius)
+            && MathF.Abs(Dot(lat, f.V)) <= f.Ev + World.ShipRadius
+        )
             minPocketGap = MathF.Min(minPocketGap, -along);
     }
 
-    Check(docked, "friendly base: autopilot flew the ship home and it docked (removed from the world)",
-        "friendly base: the ship never docked");
-    Check(!sim.Ships.Any(s => s.OwnerClientId == 1), "friendly base: the docked player was returned to the spawn menu",
-        "friendly base: the player still owns a flying ship after docking");
+    Check(
+        docked,
+        "friendly base: autopilot flew the ship home and it docked (removed from the world)",
+        "friendly base: the ship never docked"
+    );
+    Check(
+        !sim.Ships.Any(s => s.OwnerClientId == 1),
+        "friendly base: the docked player was returned to the spawn menu",
+        "friendly base: the player still owns a flying ship after docking"
+    );
     // Decelerate-to-arrive: the ship pauses near-stopped at the standoff point instead of barreling in.
-    Check(sawStandoffPause, "friendly base: paused near-stopped at the door standoff point (decelerated to arrive)",
-        "friendly base: never paused at the standoff point (no deceleration phase)");
+    Check(
+        sawStandoffPause,
+        "friendly base: paused near-stopped at the door standoff point (decelerated to arrive)",
+        "friendly base: never paused at the standoff point (no deceleration phase)"
+    );
     // Turn-to-face: the nose comes onto the door's inward normal during Align/Creep.
-    Check(maxFacing > 0.99f, $"friendly base: turned to face the door (max facing dot {maxFacing:0.000} > 0.99)",
-        $"friendly base: never turned to face the door (max facing dot {maxFacing:0.000})");
+    Check(
+        maxFacing > 0.99f,
+        $"friendly base: turned to face the door (max facing dot {maxFacing:0.000} > 0.99)",
+        $"friendly base: never turned to face the door (max facing dot {maxFacing:0.000})"
+    );
     // Roll alignment: ship "up" rolls onto the door's up-axis (guards FaceAndRoll's roll sign).
-    Check(maxUpAlign > 0.95f, $"friendly base: rolled onto the door up-axis (max up-align {maxUpAlign:0.000} > 0.95)",
-        $"friendly base: never rolled onto the door up-axis (max up-align {maxUpAlign:0.000})");
+    Check(
+        maxUpAlign > 0.95f,
+        $"friendly base: rolled onto the door up-axis (max up-align {maxUpAlign:0.000} > 0.95)",
+        $"friendly base: never rolled onto the door up-axis (max up-align {maxUpAlign:0.000})"
+    );
     // Creep-in: docks at a gentle speed, not the old ~160 u/s hull slam.
-    Check(lastSpeed < 40f, $"friendly base: crept in and docked slowly (impact speed {lastSpeed:0.0} < 40)",
-        $"friendly base: slammed the dock hot (impact speed {lastSpeed:0.0})");
+    Check(
+        lastSpeed < 40f,
+        $"friendly base: crept in and docked slowly (impact speed {lastSpeed:0.0} < 40)",
+        $"friendly base: slammed the dock hot (impact speed {lastSpeed:0.0})"
+    );
     // The dock must fire FROM the Creep phase — docking by sliding through the trigger during
     // Transit means the maneuver overshot the standoff point instead of stopping to align.
-    Check(lastPhase == 2, "friendly base: docked from the Creep phase (full maneuver, not a transit slide)",
-        $"friendly base: docked from phase {lastPhase}, not Creep — overshot the standoff maneuver");
-    Check(minPocketGap > 10f,
+    Check(
+        lastPhase == 2,
+        "friendly base: docked from the Creep phase (full maneuver, not a transit slide)",
+        $"friendly base: docked from phase {lastPhase}, not Creep — overshot the standoff maneuver"
+    );
+    Check(
+        minPocketGap > 10f,
         $"friendly base: never overshot the standoff into the door pocket before Creep (min plane gap {minPocketGap:0.0} > 10)",
-        $"friendly base: overshot toward the door before aligning (min plane gap {minPocketGap:0.0} <= 10)");
+        $"friendly base: overshot toward the door before aligning (min plane gap {minPocketGap:0.0} <= 10)"
+    );
 }
 
 // ---- 5b. Friendly base far side: detour AROUND the base sphere, then dock ---------------------------
@@ -361,11 +432,13 @@ float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
 // oblique one rides the detour ring the longest and clears line-of-sight to the standoff point at the
 // last moment — the geometry where a late throttle cut overshoots the standoff point into the door
 // pocket (the MaxArrestableSpeed governor on the arc is what keeps the handoff speed stoppable).
-foreach (var (label, seed, offset) in new (string, ulong, Func<DockFace, Vec3>)[]
-{
-    ("axial", 55, face => face.Normal * 300f),
-    ("oblique", 56, face => face.Normal * 180f + face.U * 240f),
-})
+foreach (
+    var (label, seed, offset) in new (string, ulong, Func<DockFace, Vec3>)[]
+    {
+        ("axial", 55, face => face.Normal * 300f),
+        ("oblique", 56, face => face.Normal * 180f + face.U * 240f),
+    }
+)
 {
     var sim = BootSim(seed: seed);
     var ship = Spawn(sim, 1, team: 0, cls: FlightModel.ClassScout);
@@ -384,10 +457,10 @@ foreach (var (label, seed, offset) in new (string, ulong, Func<DockFace, Vec3>)[
     sim.Step();
 
     bool docked = false;
-    bool enteredTerminal = false;    // first tick the ship comes within 60 of the standoff point
+    bool enteredTerminal = false; // first tick the ship comes within 60 of the standoff point
     float minCenterGap = float.PositiveInfinity; // closest the ship gets to the base CENTRE before terminal
     float lastSpeed = 0f;
-    byte lastPhase = 0;              // ApDockPhase on the final tick — the dock must fire FROM Creep (2)
+    byte lastPhase = 0; // ApDockPhase on the final tick — the dock must fire FROM Creep (2)
     float minPocketGap = float.PositiveInfinity; // pre-Creep along-normal gap to the plane inside the door column
     for (int i = 0; i < 2500 && !docked; i++)
     {
@@ -409,28 +482,46 @@ foreach (var (label, seed, offset) in new (string, ulong, Func<DockFace, Vec3>)[
         Vec3 rel = pos - doorW;
         float along = Dot(rel, f.Normal);
         Vec3 lat = rel - f.Normal * along;
-        if (ship.ApDockPhase < 2
+        if (
+            ship.ApDockPhase < 2
             && MathF.Abs(Dot(lat, f.U)) <= f.Eu + World.ShipRadius
-            && MathF.Abs(Dot(lat, f.V)) <= f.Ev + World.ShipRadius)
+            && MathF.Abs(Dot(lat, f.V)) <= f.Ev + World.ShipRadius
+        )
             minPocketGap = MathF.Min(minPocketGap, -along);
     }
 
-    Check(docked, $"friendly base far side ({label}): detoured around the base and docked (removed from the world)",
-        $"friendly base far side ({label}): the ship never docked");
-    Check(!sim.Ships.Any(s => s.OwnerClientId == 1), $"friendly base far side ({label}): the docked player was returned to the spawn menu",
-        $"friendly base far side ({label}): the player still owns a flying ship after docking");
+    Check(
+        docked,
+        $"friendly base far side ({label}): detoured around the base and docked (removed from the world)",
+        $"friendly base far side ({label}): the ship never docked"
+    );
+    Check(
+        !sim.Ships.Any(s => s.OwnerClientId == 1),
+        $"friendly base far side ({label}): the docked player was returned to the spawn menu",
+        $"friendly base far side ({label}): the player still owns a flying ship after docking"
+    );
     // Detour proof: on the whole approach leg (before the terminal corridor) it stayed outside the base
     // sphere — it routed AROUND the hull rather than plowing/bouncing straight through it.
-    Check(minCenterGap > World.BaseRadius,
+    Check(
+        minCenterGap > World.BaseRadius,
         $"friendly base far side ({label}): kept clear of the base sphere on the detour (min centre gap {minCenterGap:0.0} > radius {World.BaseRadius})",
-        $"friendly base far side ({label}): cut through the base sphere (min centre gap {minCenterGap:0.0} <= radius {World.BaseRadius})");
-    Check(lastSpeed < 40f, $"friendly base far side ({label}): crept in and docked slowly (impact speed {lastSpeed:0.0} < 40)",
-        $"friendly base far side ({label}): slammed the dock hot (impact speed {lastSpeed:0.0})");
-    Check(lastPhase == 2, $"friendly base far side ({label}): docked from the Creep phase (full maneuver, not a transit slide)",
-        $"friendly base far side ({label}): docked from phase {lastPhase}, not Creep — overshot the standoff maneuver");
-    Check(minPocketGap > 10f,
+        $"friendly base far side ({label}): cut through the base sphere (min centre gap {minCenterGap:0.0} <= radius {World.BaseRadius})"
+    );
+    Check(
+        lastSpeed < 40f,
+        $"friendly base far side ({label}): crept in and docked slowly (impact speed {lastSpeed:0.0} < 40)",
+        $"friendly base far side ({label}): slammed the dock hot (impact speed {lastSpeed:0.0})"
+    );
+    Check(
+        lastPhase == 2,
+        $"friendly base far side ({label}): docked from the Creep phase (full maneuver, not a transit slide)",
+        $"friendly base far side ({label}): docked from phase {lastPhase}, not Creep — overshot the standoff maneuver"
+    );
+    Check(
+        minPocketGap > 10f,
         $"friendly base far side ({label}): never overshot the standoff into the door pocket before Creep (min plane gap {minPocketGap:0.0} > 10)",
-        $"friendly base far side ({label}): overshot toward the door before aligning (min plane gap {minPocketGap:0.0} <= 10)");
+        $"friendly base far side ({label}): overshot toward the door before aligning (min plane gap {minPocketGap:0.0} <= 10)"
+    );
 }
 
 // ---- 5c. Friendly base override + re-engage: manual disengage mid-dock, then dock on re-engage ------
@@ -447,16 +538,22 @@ foreach (var (label, seed, offset) in new (string, ulong, Func<DockFace, Vec3>)[
     PlaceAt(ship, homeBase.SectorId, basePos + f.Normal * 300f);
     sim.EnqueueSetAutopilot(1, mode: 1, kind: 1, id: homeBase.Id, sector: 0, pos: default);
     sim.Step();
-    Check(ship.ApEngaged, "override+re-engage: autopilot engaged on the far-side dock run",
-        "override+re-engage: autopilot failed to engage");
+    Check(
+        ship.ApEngaged,
+        "override+re-engage: autopilot engaged on the far-side dock run",
+        "override+re-engage: autopilot failed to engage"
+    );
 
     // Let the maneuver get underway (transit/detour), then a hard-yaw stick input overrides it.
     for (int i = 0; i < 100 && ship.ApEngaged; i++)
         sim.Step();
     sim.EnqueueInput(1, tick: 0, input: new ShipInputState { Yaw = 1f });
     sim.Step();
-    Check(!ship.ApEngaged, "override+re-engage: a hard-yaw stick input disengaged autopilot mid-dock",
-        "override+re-engage: autopilot did not disengage on manual input");
+    Check(
+        !ship.ApEngaged,
+        "override+re-engage: a hard-yaw stick input disengaged autopilot mid-dock",
+        "override+re-engage: autopilot did not disengage on manual input"
+    );
 
     // Re-engage: a real pilot releases the stick before re-arming — the held override input persists
     // otherwise and would instantly re-disengage. Neutralize it, then re-engage (the drain applies the
@@ -464,8 +561,11 @@ foreach (var (label, seed, offset) in new (string, ulong, Func<DockFace, Vec3>)[
     sim.EnqueueInput(1, tick: 0, input: new ShipInputState { });
     sim.EnqueueSetAutopilot(1, mode: 1, kind: 1, id: homeBase.Id, sector: 0, pos: default);
     sim.Step();
-    Check(ship.ApEngaged, "override+re-engage: autopilot re-engaged after the manual override",
-        "override+re-engage: autopilot failed to re-engage");
+    Check(
+        ship.ApEngaged,
+        "override+re-engage: autopilot re-engaged after the manual override",
+        "override+re-engage: autopilot failed to re-engage"
+    );
 
     bool docked = false;
     for (int i = 0; i < 3000 && !docked; i++)
@@ -475,10 +575,16 @@ foreach (var (label, seed, offset) in new (string, ulong, Func<DockFace, Vec3>)[
             docked = true;
     }
 
-    Check(docked, "override+re-engage: the re-engaged autopilot flew home and docked (phase/door reset held)",
-        "override+re-engage: the ship never docked after re-engaging");
-    Check(!sim.Ships.Any(s => s.OwnerClientId == 1), "override+re-engage: the docked player was returned to the spawn menu",
-        "override+re-engage: the player still owns a flying ship after docking");
+    Check(
+        docked,
+        "override+re-engage: the re-engaged autopilot flew home and docked (phase/door reset held)",
+        "override+re-engage: the ship never docked after re-engaging"
+    );
+    Check(
+        !sim.Ships.Any(s => s.OwnerClientId == 1),
+        "override+re-engage: the docked player was returned to the spawn menu",
+        "override+re-engage: the player still owns a flying ship after docking"
+    );
 }
 
 // ---- 6. Aleph transit: waypoint in an adjacent sector → warp, then arrive --------------------------
@@ -502,10 +608,16 @@ foreach (var (label, seed, offset) in new (string, ulong, Func<DockFace, Vec3>)[
             warped = true;
     }
 
-    Check(warped, $"aleph: the ship warped into the destination sector {destSector}", "aleph: the ship never warped through the gate");
-    Check(!ship.ApEngaged && ship.SectorId == destSector,
+    Check(
+        warped,
+        $"aleph: the ship warped into the destination sector {destSector}",
+        "aleph: the ship never warped through the gate"
+    );
+    Check(
+        !ship.ApEngaged && ship.SectorId == destSector,
         "aleph: after transit the ship arrived at the cross-sector waypoint and disengaged",
-        $"aleph: did not arrive/disengage in the destination sector (engaged {ship.ApEngaged}, sector {ship.SectorId})");
+        $"aleph: did not arrive/disengage in the destination sector (engaged {ship.ApEngaged}, sector {ship.SectorId})"
+    );
 }
 
 // ---- 7. Avoidance: a rock on the line to the waypoint — never intersect, still arrive ---------------
@@ -526,11 +638,16 @@ foreach (var (label, seed, offset) in new (string, ulong, Func<DockFace, Vec3>)[
         minRockGap = MathF.Min(minRockGap, Dist(ship.State.Pos, rock.Pos));
     }
 
-    Check(minRockGap > rock.Radius, $"avoidance: the ship never intersected the rock (min gap {minRockGap:0.0} > radius {rock.Radius})",
-        $"avoidance: the ship penetrated the rock (min gap {minRockGap:0.0} <= radius {rock.Radius})");
-    Check(!ship.ApEngaged && Dist(ship.State.Pos, wp) <= Standoff * 1.3f,
+    Check(
+        minRockGap > rock.Radius,
+        $"avoidance: the ship never intersected the rock (min gap {minRockGap:0.0} > radius {rock.Radius})",
+        $"avoidance: the ship penetrated the rock (min gap {minRockGap:0.0} <= radius {rock.Radius})"
+    );
+    Check(
+        !ship.ApEngaged && Dist(ship.State.Pos, wp) <= Standoff * 1.3f,
         "avoidance: the ship still reached the waypoint past the rock and disengaged",
-        $"avoidance: the ship did not arrive past the rock (engaged {ship.ApEngaged}, dist {Dist(ship.State.Pos, wp):0.0})");
+        $"avoidance: the ship did not arrive past the rock (engaged {ship.ApEngaged}, dist {Dist(ship.State.Pos, wp):0.0})"
+    );
 }
 
 // ---- 7b. Base avoidance: a base on the line to the waypoint — never touch its hull, still arrive ----
@@ -558,12 +675,16 @@ foreach (var (label, seed, offset) in new (string, ulong, Func<DockFace, Vec3>)[
         minBaseGap = MathF.Min(minBaseGap, Dist(ship.State.Pos, basePos));
     }
 
-    Check(minBaseGap > baseR + World.ShipRadius,
+    Check(
+        minBaseGap > baseR + World.ShipRadius,
         $"base avoidance: the ship never touched the base hull (min gap {minBaseGap:0.0} > {baseR + World.ShipRadius:0.0})",
-        $"base avoidance: the ship ground into the base hull (min gap {minBaseGap:0.0} <= {baseR + World.ShipRadius:0.0})");
-    Check(!ship.ApEngaged && Dist(ship.State.Pos, wp) <= Standoff * 1.3f,
+        $"base avoidance: the ship ground into the base hull (min gap {minBaseGap:0.0} <= {baseR + World.ShipRadius:0.0})"
+    );
+    Check(
+        !ship.ApEngaged && Dist(ship.State.Pos, wp) <= Standoff * 1.3f,
         "base avoidance: the ship still reached the waypoint past the base and disengaged",
-        $"base avoidance: the ship did not arrive past the base (engaged {ship.ApEngaged}, dist {Dist(ship.State.Pos, wp):0.0})");
+        $"base avoidance: the ship did not arrive past the base (engaged {ship.ApEngaged}, dist {Dist(ship.State.Pos, wp):0.0})"
+    );
 }
 
 // ---- 8. Determinism: the same waypoint scenario twice → bit-identical final position ---------------
@@ -579,12 +700,19 @@ foreach (var (label, seed, offset) in new (string, ulong, Func<DockFace, Vec3>)[
         for (int i = 0; i < 600 && ship.ApEngaged; i++)
             sim.Step();
         var p = ship.State.Pos;
-        return (BitConverter.SingleToInt32Bits(p.X), BitConverter.SingleToInt32Bits(p.Y), BitConverter.SingleToInt32Bits(p.Z));
+        return (
+            BitConverter.SingleToInt32Bits(p.X),
+            BitConverter.SingleToInt32Bits(p.Y),
+            BitConverter.SingleToInt32Bits(p.Z)
+        );
     }
     var a = Run(11);
     var b = Run(11);
-    Check(a == b, "determinism: two identical autopilot runs end at the bit-identical position",
-        $"determinism: final positions diverged ({a} vs {b})");
+    Check(
+        a == b,
+        "determinism: two identical autopilot runs end at the bit-identical position",
+        $"determinism: final positions diverged ({a} vs {b})"
+    );
 }
 
 // ---- 9. Target-loss: kill the followed enemy → autopilot disengages ---------------------------------
@@ -603,10 +731,18 @@ foreach (var (label, seed, offset) in new (string, ulong, Func<DockFace, Vec3>)[
     PlaceAt(enemy, EmptySector, new Vec3(0f, 0f, 600f));
     ulong enemyId = enemy.ShipId;
     sim.Step();
-    Check(!sim.Ships.Any(s => s.ShipId == enemyId), "target-loss: the followed enemy was destroyed", "target-loss: the target survived the kill");
+    Check(
+        !sim.Ships.Any(s => s.ShipId == enemyId),
+        "target-loss: the followed enemy was destroyed",
+        "target-loss: the target survived the kill"
+    );
     sim.Step(); // next autopilot resolve sees the target gone
 
-    Check(!ship.ApEngaged, "target-loss: autopilot disengaged once the target was gone", "target-loss: autopilot kept flying at a dead target");
+    Check(
+        !ship.ApEngaged,
+        "target-loss: autopilot disengaged once the target was gone",
+        "target-loss: autopilot kept flying at a dead target"
+    );
 }
 
 // ---- 10. Multi-hop transit: a waypoint two sectors away → transit BOTH gates and arrive -----------
@@ -618,9 +754,19 @@ foreach (var (label, seed, offset) in new (string, ulong, Func<DockFace, Vec3>)[
     var cfg = content.World;
     cfg.Sectors = new List<WorldSectorConfig>
     {
-        new() { Id = 10, Asteroids = AsteroidKind.None, Garrison = new SectorGarrison { Team = 0 } },
+        new()
+        {
+            Id = 10,
+            Asteroids = AsteroidKind.None,
+            Garrison = new SectorGarrison { Team = 0 },
+        },
         new() { Id = 20, Asteroids = AsteroidKind.None },
-        new() { Id = 30, Asteroids = AsteroidKind.None, Garrison = new SectorGarrison { Team = 1 } },
+        new()
+        {
+            Id = 30,
+            Asteroids = AsteroidKind.None,
+            Garrison = new SectorGarrison { Team = 1 },
+        },
     };
     cfg.Links = new List<SectorLink> { new(10, 20), new(20, 30) };
     var world = new World(seed: 10, cfg, content.Bases[0].MaxHealth, content.Start, content.Ships);
@@ -632,7 +778,11 @@ foreach (var (label, seed, offset) in new (string, ulong, Func<DockFace, Vec3>)[
     sim.StartMatch();
 
     var ship = Spawn(sim, 1, team: 0, cls: FlightModel.ClassScout);
-    Check(ship.SectorId == 10, "multi-hop: player spawned in the origin sector A", $"multi-hop: player spawned in sector {ship.SectorId}, not A(10)");
+    Check(
+        ship.SectorId == 10,
+        "multi-hop: player spawned in the origin sector A",
+        $"multi-hop: player spawned in sector {ship.SectorId}, not A(10)"
+    );
 
     // Waypoint at the centre of the far sector C; autopilot must hop A->B->C to reach it.
     sim.EnqueueSetAutopilot(1, mode: 1, kind: 3, id: 0, sector: 30, pos: new Vec3(0f, 0f, 0f));
@@ -649,11 +799,21 @@ foreach (var (label, seed, offset) in new (string, ulong, Func<DockFace, Vec3>)[
             arrivedC = true;
     }
 
-    Check(transitedB, "multi-hop: the ship transited the intermediate sector B on the way", "multi-hop: the ship never passed through sector B");
-    Check(arrivedC, "multi-hop: the ship reached the destination sector C two hops away", "multi-hop: the ship never reached sector C");
-    Check(!ship.ApEngaged && ship.SectorId == 30,
+    Check(
+        transitedB,
+        "multi-hop: the ship transited the intermediate sector B on the way",
+        "multi-hop: the ship never passed through sector B"
+    );
+    Check(
+        arrivedC,
+        "multi-hop: the ship reached the destination sector C two hops away",
+        "multi-hop: the ship never reached sector C"
+    );
+    Check(
+        !ship.ApEngaged && ship.SectorId == 30,
         "multi-hop: after both transits the ship arrived at the cross-sector waypoint and disengaged",
-        $"multi-hop: did not arrive/disengage in C (engaged {ship.ApEngaged}, sector {ship.SectorId})");
+        $"multi-hop: did not arrive/disengage in C (engaged {ship.ApEngaged}, sector {ship.SectorId})"
+    );
 }
 
 Console.WriteLine(failures == 0 ? "\nALL AUTOPILOT TESTS PASSED" : $"\n{failures} AUTOPILOT TEST(S) FAILED");

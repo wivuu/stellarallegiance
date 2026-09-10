@@ -56,8 +56,10 @@ public partial class SectorEnvironment : Node3D
     // bakes a shader-extrudable shadow-volume mesh per occluder and PARENTS it to the node so it tumbles
     // with the rock; the vertex shader extrudes it downsun every frame (ShadowVolume + ShaftShaderCode).
     // The set is distance-based and re-handed as the camera moves; empty = no shafts.
-    private System.Collections.Generic.IReadOnlyList<(Node3D Node, Vector3[] LocalVerts)> _occluders =
-        System.Array.Empty<(Node3D, Vector3[])>();
+    private System.Collections.Generic.IReadOnlyList<(Node3D Node, Vector3[] LocalVerts)> _occluders = System.Array.Empty<(
+        Node3D,
+        Vector3[]
+    )>();
 
     // Shared billboard look. One QuadMesh + one custom shader back EVERY puff in EVERY cloud; each puff's
     // (varied) colour + opacity ride the MultiMesh per-instance colour, and the shader adds fbm noise
@@ -79,6 +81,7 @@ public partial class SectorEnvironment : Node3D
     // in the dust follows the rock's real (spinning) silhouette. The sun axis is static per sector, so
     // only the per-occluder MODEL transform (free, inherited) changes frame to frame.
     private ShaderMaterial _shaftMat = null!;
+
     // The live shadow-volume MeshInstance3Ds, KEYED by the occluder node each parents under. The occluder
     // set is DISTANCE-BASED (the rocks near the camera; see WorldRenderer.GatherShadowOccluders) and
     // re-evaluated as the camera moves, so SyncShafts only builds/frees the delta — a rock already casting
@@ -96,6 +99,7 @@ public partial class SectorEnvironment : Node3D
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Vector3[], ArrayMesh> _volumeCache = new();
     private const float ShaftLength = 3500f; // how far downsun a shaft reaches (multiply fades it in dust)
     private const float ShaftDarkness = 0.98f; // multiply factor at the shaft core — lower = starker/darker
+
     // Distance (m) downsun over which the shadow fades to nothing: full-dark at the rock, gone a few
     // hundred metres out, so a rock only shades the dust close to it rather than casting a 3.5 km streak.
     private const float ShaftFadeDistance = 750f;
@@ -105,6 +109,7 @@ public partial class SectorEnvironment : Node3D
     // the cloud emerges from their heavy overlap.
     private const float PuffAlphaGain = 0.42f;
     private const float PuffAlphaMax = 0.6f;
+
     // Puff diameter as a fraction of the cloud radius (further scaled per-puff by the local fractal
     // strength). Kept small so the many puffs read as fine dust rather than a few big poofy balls.
     private const float PuffSizeFrac = 0.6f;
@@ -152,7 +157,12 @@ public partial class SectorEnvironment : Node3D
         var rayRect = new ColorRect { Material = _godRayMat, Color = Colors.White };
         rayRect.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         rayRect.MouseFilter = Control.MouseFilterEnum.Ignore;
-        _godRayLayer = new CanvasLayer { Name = "GodRays", Layer = -1, Visible = false };
+        _godRayLayer = new CanvasLayer
+        {
+            Name = "GodRays",
+            Layer = -1,
+            Visible = false,
+        };
         _godRayLayer.AddChild(rayRect);
         AddChild(_godRayLayer);
     }
@@ -162,7 +172,8 @@ public partial class SectorEnvironment : Node3D
     public void Apply(
         uint sector,
         SectorEnv? env,
-        System.Collections.Generic.IReadOnlyList<(Node3D Node, Vector3[] LocalVerts)>? occluders = null)
+        System.Collections.Generic.IReadOnlyList<(Node3D Node, Vector3[] LocalVerts)>? occluders = null
+    )
     {
         // Re-apply when the sector changes OR when a previous same-sector call had NO env and now one
         // arrived. The fog-gated pre-team Welcome can call us with a null env for the home sector before
@@ -194,8 +205,7 @@ public partial class SectorEnvironment : Node3D
     // Refresh ONLY the shadow-volume set for the CURRENT sector (sun + dust are static per sector). Called
     // as the camera moves so the distance-based occluder selection tracks it: SyncShafts builds volumes for
     // newly-near occluders and frees those that fell out of range, leaving unchanged ones untouched.
-    public void UpdateOccluders(
-        System.Collections.Generic.IReadOnlyList<(Node3D Node, Vector3[] LocalVerts)> occluders)
+    public void UpdateOccluders(System.Collections.Generic.IReadOnlyList<(Node3D Node, Vector3[] LocalVerts)> occluders)
     {
         _occluders = occluders;
         SyncShafts();
@@ -384,7 +394,8 @@ public partial class SectorEnvironment : Node3D
         Color warm = new Color(
             dustColor.R * (0.6f + 0.8f * sunC.R),
             dustColor.G * (0.55f + 0.7f * sunC.G),
-            dustColor.B * (0.5f + 0.6f * sunC.B));
+            dustColor.B * (0.5f + 0.6f * sunC.B)
+        );
         Color cool = new Color(dustColor.R * 0.72f, dustColor.G * 0.78f, dustColor.B * 0.95f);
 
         // Opacity scales how opaque the dust RENDERS (per-puff alpha), matching the radar attenuation the
@@ -416,8 +427,12 @@ public partial class SectorEnvironment : Node3D
     // aim the shared puff shader's forward-scatter at this sector's sun, and show the root.
     private void ShowDust(uint sector, SectorEnv? env)
     {
-        if (_dustShown is { } prev && prev != sector && _dustBySector.TryGetValue(prev, out var prevRoot)
-            && GodotObject.IsInstanceValid(prevRoot))
+        if (
+            _dustShown is { } prev
+            && prev != sector
+            && _dustBySector.TryGetValue(prev, out var prevRoot)
+            && GodotObject.IsInstanceValid(prevRoot)
+        )
             prevRoot.Visible = false;
         _dustShown = sector;
 
@@ -575,7 +590,8 @@ public partial class SectorEnvironment : Node3D
         var axisScale = new Vector3(
             rng.RandfRange(0.6f, 1.45f),
             rng.RandfRange(0.5f, 1.05f), // squash Y a touch — dust reads as a drifting sheet, not a ball
-            rng.RandfRange(0.6f, 1.45f));
+            rng.RandfRange(0.6f, 1.45f)
+        );
 
         // Per-instance data goes straight into the MultiMesh's packed buffer — ONE bulk assignment
         // instead of 2×count marshalled SetInstance* calls. Layout per instance (Transform3D format +
@@ -614,9 +630,13 @@ public partial class SectorEnvironment : Node3D
             Vector3 pos = center + shaped;
 
             float size = c.Radius * PuffSizeFrac * (0.5f + 0.7f * strength) * rng.RandfRange(0.8f, 1.15f);
-            float alpha = Mathf.Max(0f,
+            float alpha = Mathf.Max(
+                0f,
                 Mathf.Min(c.Density * PuffAlphaGain * rng.RandfRange(0.75f, 1.2f), PuffAlphaMax)
-                * strength * (1f - 0.5f * rFrac) * opacity); // fractal weight × rim fade × opacity (see BuildDust)
+                    * strength
+                    * (1f - 0.5f * rFrac)
+                    * opacity
+            ); // fractal weight × rim fade × opacity (see BuildDust)
 
             // Sun shading (baked): puffs on the sun-facing side of the cloud are brighter than the far
             // side. Two-tone colour blend + brightness jitter give the per-puff colour variation.
@@ -751,8 +771,7 @@ public partial class SectorEnvironment : Node3D
     // FORWARD-SCATTER term (per-instance phase lobe) so dust ignites with the sun colour when the camera
     // looks sunward through it. Unshaded because the static sun shading is baked into the instance colour
     // (BuildCloudBillboards) — only the view-dependent scatter is live.
-    private ShaderMaterial BuildPuffMaterial() =>
-        new() { Shader = new Shader { Code = PuffShaderCode } };
+    private ShaderMaterial BuildPuffMaterial() => new() { Shader = new Shader { Code = PuffShaderCode } };
 
     // A small tiling fbm noise texture that replaces the shader's live per-fragment fbm. Value-cubic +
     // 3 fractal octaves mirrors the old vnoise-based fbm's soft cloudy character; Seamless lets the

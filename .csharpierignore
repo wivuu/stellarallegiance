@@ -1,2 +1,1 @@
-src/**/Migrations/*.cs
-Directory.Packages.props
+**/Migrations/*.cs

@@ -351,7 +351,9 @@ failures per memory: CollisionTest×4 / AutopilotTest×3 / FogTest×1 / Commande
 ## 5. Rules and gotchas for every sub-agent
 - **This repo auto-commits AND pushes mid-session.** Leave the tree buildable at the end of every turn;
   forward-fix, never force-push.
-- **CSharpier 1.2.6 is pinned; HEAD has ~163 format-dirty files.** Format ONLY files you touched.
+- **CSharpier 1.2.6 is pinned. The drift was cleared on 2026-09-09** (one blanket format commit), so
+  `dotnet csharpier check .` is clean at HEAD. Format ONLY the files you touched — never re-run a
+  blanket `format .`.
 - **`Wire.ProtocolVersion` is THE protocol constant.** Any Hello/roster wire change bumps it; dotnet
   suites don't load the Godot client, so smoke with `--autofly` (client flags BEFORE `--`; from zsh use
   `pwsh -Command "& ./scripts/run-client.ps1 -GodotArgs @(...)"`).

@@ -22,8 +22,7 @@ public partial class BuildSphere : Node3D
     private const float FadeSeconds = 1.2f;
 
     // Shared noise/fresnel helpers for both the additive shells and the mix-blended core.
-    private const string NoiseHelpers =
-        """
+    private const string NoiseHelpers = """
         uniform vec4 tint : source_color;
         uniform float energy;
         uniform float u_t;      // ever-increasing time (seconds) for animation
@@ -60,20 +59,20 @@ public partial class BuildSphere : Node3D
         + NoiseHelpers
         + """
 
-        void fragment() {
-            vec3 n = normalize(local_pos);
-            float fres = pow(1.0 - clamp(dot(normalize(world_normal), normalize(view_dir)), 0.0, 1.0), 2.0);
-            float t = u_t * band_dir;
-            float f = vnoise(n * 4.0 + vec3(0.0, t * 0.6, 0.0)) * 0.6
-                    + vnoise(n * 8.0 + vec3(t * 0.9, 0.0, 0.0)) * 0.4;
-            float bands = 0.5 + 0.5 * sin(n.y * 10.0 + t * 2.0 + f * 6.2831);
-            // Baseline (0.18) keeps the whole shell self-lit rather than only glowing at the fresnel rim.
-            float intensity = clamp(0.18 + fres * 0.7 + bands * 0.5 * f, 0.0, 1.0);
-            ALBEDO = tint.rgb;
-            EMISSION = tint.rgb * energy * intensity;
-            ALPHA = alpha * clamp(fres + bands * 0.4, 0.0, 1.0);
-        }
-        """;
+            void fragment() {
+                vec3 n = normalize(local_pos);
+                float fres = pow(1.0 - clamp(dot(normalize(world_normal), normalize(view_dir)), 0.0, 1.0), 2.0);
+                float t = u_t * band_dir;
+                float f = vnoise(n * 4.0 + vec3(0.0, t * 0.6, 0.0)) * 0.6
+                        + vnoise(n * 8.0 + vec3(t * 0.9, 0.0, 0.0)) * 0.4;
+                float bands = 0.5 + 0.5 * sin(n.y * 10.0 + t * 2.0 + f * 6.2831);
+                // Baseline (0.18) keeps the whole shell self-lit rather than only glowing at the fresnel rim.
+                float intensity = clamp(0.18 + fres * 0.7 + bands * 0.5 * f, 0.0, 1.0);
+                ALBEDO = tint.rgb;
+                EMISSION = tint.rgb * energy * intensity;
+                ALPHA = alpha * clamp(fres + bands * 0.4, 0.0, 1.0);
+            }
+            """;
 
     // Mix-blended core: a near-solid inner shell whose opacity (cover) ramps up to hide the drone as it
     // embeds. Front faces only (cull_back), so the near hemisphere occludes the drone behind it.
@@ -84,17 +83,17 @@ public partial class BuildSphere : Node3D
         + NoiseHelpers
         + """
 
-        void fragment() {
-            vec3 n = normalize(local_pos);
-            float t = u_t * band_dir;
-            float f = vnoise(n * 3.5 + vec3(0.0, t * 0.5, 0.0)) * 0.6
-                    + vnoise(n * 7.0 + vec3(t * 0.7, 0.0, 0.0)) * 0.4;
-            float bands = 0.5 + 0.5 * sin(n.y * 8.0 + t * 1.6 + f * 6.2831);
-            ALBEDO = tint.rgb * (0.30 + 0.35 * bands);
-            EMISSION = tint.rgb * energy * (0.35 + 0.55 * f);
-            ALPHA = cover;
-        }
-        """;
+            void fragment() {
+                vec3 n = normalize(local_pos);
+                float t = u_t * band_dir;
+                float f = vnoise(n * 3.5 + vec3(0.0, t * 0.5, 0.0)) * 0.6
+                        + vnoise(n * 7.0 + vec3(t * 0.7, 0.0, 0.0)) * 0.4;
+                float bands = 0.5 + 0.5 * sin(n.y * 8.0 + t * 1.6 + f * 6.2831);
+                ALBEDO = tint.rgb * (0.30 + 0.35 * bands);
+                EMISSION = tint.rgb * energy * (0.35 + 0.55 * f);
+                ALPHA = cover;
+            }
+            """;
 
     // ONE compiled Shader per source, shared by every BuildSphere instance (uniforms live on the
     // per-instance ShaderMaterials): compiling per spawn re-parsed the source on every build event,
@@ -115,12 +114,12 @@ public partial class BuildSphere : Node3D
     private ShaderMaterial _outerMat = null!;
     private ShaderMaterial _innerMat = null!;
     private ShaderMaterial _coreMat = null!;
-    private float _radius;      // current world-unit shell radius (eased toward _target)
-    private float _target;      // desired shell radius (rockRadius * envelop)
-    private float _cover;       // eased current core opacity
+    private float _radius; // current world-unit shell radius (eased toward _target)
+    private float _target; // desired shell radius (rockRadius * envelop)
+    private float _cover; // eased current core opacity
     private float _coverTarget; // desired core opacity (0..1)
     private bool _fading;
-    private float _fade;        // 0 = full, 1 = gone
+    private float _fade; // 0 = full, 1 = gone
     private double _age;
 
     public override void _Ready()
@@ -131,15 +130,42 @@ public partial class BuildSphere : Node3D
         // sub-pixel camera motion → visible flicker). Force a deterministic back-to-front draw: core
         // (occluder) first, then the inner and outer additive glows on top of it. The band starts at 1
         // (not 0) so all three also outrank the fading rock (default priority 0, same center) beneath them.
-        _outer = MakeShell(ShellShaderObj, radius: 1f, energy: 6.0f, bandDir: 1f, OuterAlpha, "alpha", priority: 3, out _outerMat);
-        _inner = MakeShell(ShellShaderObj, radius: 0.82f, energy: 8.0f, bandDir: -1f, InnerAlpha, "alpha", priority: 2, out _innerMat);
+        _outer = MakeShell(
+            ShellShaderObj,
+            radius: 1f,
+            energy: 6.0f,
+            bandDir: 1f,
+            OuterAlpha,
+            "alpha",
+            priority: 3,
+            out _outerMat
+        );
+        _inner = MakeShell(
+            ShellShaderObj,
+            radius: 0.82f,
+            energy: 8.0f,
+            bandDir: -1f,
+            InnerAlpha,
+            "alpha",
+            priority: 2,
+            out _innerMat
+        );
         _core = MakeShell(CoreShaderObj, radius: 0.74f, energy: 3.5f, bandDir: 1f, 0f, "cover", priority: 1, out _coreMat);
         AddChild(_core);
         AddChild(_inner);
         AddChild(_outer);
     }
 
-    private MeshInstance3D MakeShell(Shader shader, float radius, float energy, float bandDir, float opacity, string opacityParam, int priority, out ShaderMaterial mat)
+    private MeshInstance3D MakeShell(
+        Shader shader,
+        float radius,
+        float energy,
+        float bandDir,
+        float opacity,
+        string opacityParam,
+        int priority,
+        out ShaderMaterial mat
+    )
     {
         mat = new ShaderMaterial { Shader = shader, RenderPriority = priority };
         mat.SetShaderParameter("tint", Tint);
@@ -149,7 +175,13 @@ public partial class BuildSphere : Node3D
         mat.SetShaderParameter(opacityParam, opacity);
         return new MeshInstance3D
         {
-            Mesh = new SphereMesh { Radius = radius, Height = radius * 2f, RadialSegments = 40, Rings = 22 },
+            Mesh = new SphereMesh
+            {
+                Radius = radius,
+                Height = radius * 2f,
+                RadialSegments = 40,
+                Rings = 22,
+            },
             MaterialOverride = mat,
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         };

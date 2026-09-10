@@ -91,13 +91,7 @@ var victimPos = new Vec3(0f, 0f, 40f);
 
 // Hold the trigger (re-parking both ships each tick so neither drifts out of the firing line) until
 // `done` reports the effect under test landed. Returns false if it never did.
-bool ShootUntil(
-    Simulation sim,
-    Simulation.ShipSim attacker,
-    Simulation.ShipSim target,
-    Func<bool> done,
-    int maxTicks = 120
-)
+bool ShootUntil(Simulation sim, Simulation.ShipSim attacker, Simulation.ShipSim target, Func<bool> done, int maxTicks = 120)
 {
     for (int i = 0; i < maxTicks; i++)
     {
@@ -430,7 +424,11 @@ Simulation siegeSim;
     var (sim, attacker, victim) = SetupDuel(seed: 11);
     victim.Health = 1f;
     ShootUntil(sim, attacker, victim, () => !sim.Ships.Contains(victim));
-    Check(sim.StatsChangedThisStep, "the scoring step raised StatsChangedThisStep", "the scoring step left StatsChangedThisStep clear");
+    Check(
+        sim.StatsChangedThisStep,
+        "the scoring step raised StatsChangedThisStep",
+        "the scoring step left StatsChangedThisStep clear"
+    );
     sim.Step();
     Check(
         !sim.StatsChangedThisStep,

@@ -25,6 +25,7 @@ public static class CollisionConfig
     // The pitch correction as a shared-math quaternion for the collision reader. Deterministic
     // (MathDet sin/cos) so the client-prediction and server-sim hulls stay bit-identical.
     public static Quat BaseModelRotation => Quat.FromRotationVector(new Vec3(BaseModelPitchRadians, 0f, 0f));
+
     // Docking-door depth window: the inward slack (along the face normal) of the bounded rectangular
     // docking FACE test (Collide.IntersectsDockFace). The lateral extent is now authored in the GLB
     // (the 4 boundary markers per door), so only this depth constant lives here. Window along the
@@ -49,6 +50,7 @@ public static class CollisionConfig
     // ship thuds/bounces on the crust in the same breath as the dock.
     public const float DockDirectionDeadzoneSq = 4f; // (2 u/s)²
     public const float AsteroidCollisionScale = 0.95f; // fraction of a rock's visual radius that's solid
+
     // ponytail: a FIXED fraction means the inward slop scales with the rock — 0.82 left a ~13-unit-deep
     // soft shell on the biggest rocks (R~70), enough to fly a whole ship inside before bouncing. 0.95
     // keeps a small inward margin (hull is the convex envelope, ≥ the mesh, so this avoids bouncing on

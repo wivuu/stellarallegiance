@@ -302,7 +302,15 @@ Collide.ResolveStatics(ref docker, shipR, new[] { discBody }, localTeam: 0, 0, r
 Check("compound: own dock door skips the whole body (no bounce)", Near(docker.Pos.X, -4.4f) && Near(docker.Vel.X, 1f));
 Check(
     "compound: dock door still bypasses when Touches probes",
-    !Collide.Touches(new Vec3(-4.4f, 0, 0), new Vec3(1, 0, 0), shipR, new[] { discBody }, localTeam: 0, 0, CollisionConfig.DockFaceDepth)
+    !Collide.Touches(
+        new Vec3(-4.4f, 0, 0),
+        new Vec3(1, 0, 0),
+        shipR,
+        new[] { discBody },
+        localTeam: 0,
+        0,
+        CollisionConfig.DockFaceDepth
+    )
 );
 
 // Regression guard: a SINGLE-hull StaticBody routed through SphereVsBody === the old SphereVsHull.
@@ -620,11 +628,27 @@ else
     // Touches mirrors the same gating (collision-thud parity with the bounce above).
     Check(
         "touches: restricted hull thuds in the side door",
-        Collide.Touches(new Vec3(-1.4f, 0, 0), new Vec3(1, 0, 0), shipR, new[] { shipyardBase }, 0, shipyardMask, CollisionConfig.DockFaceDepth)
+        Collide.Touches(
+            new Vec3(-1.4f, 0, 0),
+            new Vec3(1, 0, 0),
+            shipR,
+            new[] { shipyardBase },
+            0,
+            shipyardMask,
+            CollisionConfig.DockFaceDepth
+        )
     );
     Check(
         "touches: restricted hull silent in the largest door",
-        !Collide.Touches(new Vec3(1.4f, 0, 0), new Vec3(-1, 0, 0), shipR, new[] { shipyardBase }, 0, shipyardMask, CollisionConfig.DockFaceDepth)
+        !Collide.Touches(
+            new Vec3(1.4f, 0, 0),
+            new Vec3(-1, 0, 0),
+            shipR,
+            new[] { shipyardBase },
+            0,
+            shipyardMask,
+            CollisionConfig.DockFaceDepth
+        )
     );
 
     // The onlyFace overload the filter rides on: exactly one door is tested.

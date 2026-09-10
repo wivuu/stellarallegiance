@@ -70,7 +70,8 @@ static void PrintUsage() =>
           roundtrip <manifest.yaml>            Load, re-serialize, re-parse, and confirm a stable round-trip.
           dump      <manifest.yaml> [-o <f>]   Flatten + annotate the tech tree to YAML (stdout if no --output).
           schema [--output <file.json>]        Emit the JSON schema for the data model (stdout if no output).
-        """);
+        """
+    );
 
 static int Validate(string manifestPath)
 {
@@ -85,17 +86,19 @@ static int Validate(string manifestPath)
     if (result.IsValid)
     {
         Console.WriteLine(
-            $"OK — {core.Factions.Count} faction(s), {core.Techs.Count} tech(s), " +
-            $"{core.Hulls.Count} hull(s), {core.AllParts().Count()} part(s), " +
-            $"{core.Stations.Count} station(s), {core.Developments.Count} development(s).");
+            $"OK — {core.Factions.Count} faction(s), {core.Techs.Count} tech(s), "
+                + $"{core.Hulls.Count} hull(s), {core.AllParts().Count()} part(s), "
+                + $"{core.Stations.Count} station(s), {core.Developments.Count} development(s)."
+        );
 
         foreach (var faction in core.Factions)
         {
             var reachable = TechResolver.ResolveReachable(core, faction);
             var buildables = BuildableResolver.GetBuildables(core, reachable);
             Console.WriteLine(
-                $"  faction '{faction.Id}': {reachable.Capabilities.Count} capability(ies) + " +
-                $"{reachable.Techs.Count} tech(s), {buildables.Count} buildable(s).");
+                $"  faction '{faction.Id}': {reachable.Capabilities.Count} capability(ies) + "
+                    + $"{reachable.Techs.Count} tech(s), {buildables.Count} buildable(s)."
+            );
         }
         return 0;
     }

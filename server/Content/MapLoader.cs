@@ -209,9 +209,7 @@ public static class MapLoader
     {
         if (maps.TryGetValue(selectedName, out var m))
             return m;
-        string avail = maps.Count == 0
-            ? "(none found)"
-            : string.Join(", ", maps.Values.Select(v => $"'{v.Name}'"));
+        string avail = maps.Count == 0 ? "(none found)" : string.Join(", ", maps.Values.Select(v => $"'{v.Name}'"));
         throw new InvalidDataException($"map '{selectedName}' not found. Available maps: {avail}.");
     }
 
@@ -220,8 +218,8 @@ public static class MapLoader
     // scale / asteroid-density / sector-radius / links override the content defaults when specified.
     public static void ApplyTo(MapDef map, WorldConfig world)
     {
-        world.Sectors = map.Sectors
-            .Select(s =>
+        world.Sectors = map
+            .Sectors.Select(s =>
             {
                 var garrison = ProjectGarrison(s.Garrison, s.Id);
                 // A team's HOME (garrison) sector defaults to the leaner world he3-per-home-sector count
@@ -245,7 +243,9 @@ public static class MapLoader
                     // Which special CLASS this sector's specials become (null → world default).
                     // Validated (non-negative, at least one positive) via the shared world-loader parse.
                     SpecialWeights = WorldLoader.ParseSpecialWeights(
-                        s.SpecialWeights, $"map '{map.Name}' sector {s.Id}: special-weights"),
+                        s.SpecialWeights,
+                        $"map '{map.Name}' sector {s.Id}: special-weights"
+                    ),
                     OreRichnessMult = F(s.OreRichnessMult),
                     // Ore-capacity band resolves sector → map → world: a sector's own bound wins,
                     // else the map-wide default, else (null here) the world ore-capacity-min/max in
@@ -276,10 +276,12 @@ public static class MapLoader
             {
                 if (pair is not { Count: 2 })
                     throw new InvalidDataException(
-                        $"map '{map.Name}': every `links` entry must be a pair [a, b]; got {pair?.Count ?? 0} ids.");
+                        $"map '{map.Name}': every `links` entry must be a pair [a, b]; got {pair?.Count ?? 0} ids."
+                    );
                 if (!ids.Contains(pair[0]) || !ids.Contains(pair[1]))
                     throw new InvalidDataException(
-                        $"map '{map.Name}': link [{pair[0]}, {pair[1]}] references a sector id not in `sectors`.");
+                        $"map '{map.Name}': link [{pair[0]}, {pair[1]}] references a sector id not in `sectors`."
+                    );
                 world.Links.Add(new SectorLink(pair[0], pair[1]));
             }
         }
@@ -300,8 +302,7 @@ public static class MapLoader
             null or "" or "field" => AsteroidKind.Field,
             "belt" => AsteroidKind.Belt,
             "none" => AsteroidKind.None,
-            _ => throw new InvalidDataException(
-                $"sector {sectorId}: `asteroids` must be field|belt|none, got '{s}'."),
+            _ => throw new InvalidDataException($"sector {sectorId}: `asteroids` must be field|belt|none, got '{s}'."),
         };
 
     // Project the authored YAML env DTOs onto the runtime SectorEnvironment (double→float, [r,g,b]→Vec3).
@@ -312,30 +313,36 @@ public static class MapLoader
             return null;
         return new SectorEnvironment
         {
-            Sun = e.Sun is null ? null : new SectorSun
-            {
-                Azimuth = F(e.Sun.Azimuth),
-                Elevation = F(e.Sun.Elevation),
-                Color = ToVec3(e.Sun.Color),
-                Energy = F(e.Sun.Energy),
-                Ambient = F(e.Sun.Ambient),
-                Size = F(e.Sun.Size),
-                GodRays = F(e.Sun.GodRays) ?? 0f,
-            },
-            Nebula = e.Nebula is null ? null : new SectorNebula
-            {
-                ColorA = ToVec3(e.Nebula.ColorA),
-                ColorB = ToVec3(e.Nebula.ColorB),
-                Intensity = F(e.Nebula.Intensity),
-                Seed = e.Nebula.Seed,
-            },
-            Dust = e.Dust is null ? null : new SectorDust
-            {
-                Amount = Math.Clamp(F(e.Dust.Amount) ?? 0.6f, 0f, 1f),
-                Opacity = Math.Clamp(F(e.Dust.Opacity) ?? 1f, 0f, 1f),
-                Color = ToVec3(e.Dust.Color),
-                Seed = e.Dust.Seed,
-            },
+            Sun = e.Sun is null
+                ? null
+                : new SectorSun
+                {
+                    Azimuth = F(e.Sun.Azimuth),
+                    Elevation = F(e.Sun.Elevation),
+                    Color = ToVec3(e.Sun.Color),
+                    Energy = F(e.Sun.Energy),
+                    Ambient = F(e.Sun.Ambient),
+                    Size = F(e.Sun.Size),
+                    GodRays = F(e.Sun.GodRays) ?? 0f,
+                },
+            Nebula = e.Nebula is null
+                ? null
+                : new SectorNebula
+                {
+                    ColorA = ToVec3(e.Nebula.ColorA),
+                    ColorB = ToVec3(e.Nebula.ColorB),
+                    Intensity = F(e.Nebula.Intensity),
+                    Seed = e.Nebula.Seed,
+                },
+            Dust = e.Dust is null
+                ? null
+                : new SectorDust
+                {
+                    Amount = Math.Clamp(F(e.Dust.Amount) ?? 0.6f, 0f, 1f),
+                    Opacity = Math.Clamp(F(e.Dust.Opacity) ?? 1f, 0f, 1f),
+                    Color = ToVec3(e.Dust.Color),
+                    Seed = e.Dust.Seed,
+                },
         };
     }
 

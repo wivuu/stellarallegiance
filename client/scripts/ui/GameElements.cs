@@ -129,7 +129,11 @@ public partial class ContactChip : Control
 
         var track = new Rect2(12, 52, Size.X - 24, 4);
         DrawRect(track, new Color(DesignTokens.BorderLo, 0.6f), filled: true);
-        DrawRect(new Rect2(track.Position, new Vector2(track.Size.X * _bar, track.Size.Y)), DesignTokens.TeamAccent, filled: true);
+        DrawRect(
+            new Rect2(track.Position, new Vector2(track.Size.X * _bar, track.Size.Y)),
+            DesignTokens.TeamAccent,
+            filled: true
+        );
     }
 }
 
@@ -152,7 +156,12 @@ public partial class ResourceReadout : HBoxContainer
         _symbol.HorizontalAlignment = HorizontalAlignment.Center;
         _symbol.VerticalAlignment = VerticalAlignment.Center;
         _symbol.CustomMinimumSize = new Vector2(30, 30);
-        var sb = new StyleBoxFlat { BgColor = Colors.Transparent, BorderColor = _color, AntiAliasing = false };
+        var sb = new StyleBoxFlat
+        {
+            BgColor = Colors.Transparent,
+            BorderColor = _color,
+            AntiAliasing = false,
+        };
         sb.SetCornerRadiusAll(0);
         sb.SetBorderWidthAll(1);
         _symbol.AddThemeStyleboxOverride("normal", sb);
