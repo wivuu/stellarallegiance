@@ -3,7 +3,9 @@
 ---
 
 ## QUICKNOTES:
-- ◐ **[M]** Code cleanup and refactor — in progress on `post-38-cleanup` (2026-09-09)
+- ✅ **[M]** Code cleanup and refactor — DONE 2026-09-09 on `post-38-cleanup` (repo-wide CSharpier, all 24
+  suites green via `scripts/run-tests.ps1`, shared Vec3 helpers, autopilot knobs in world.yaml `ai:`,
+  UI on DesignTokens, Simulation/ClientHub/GameNetClient/TargetMarkers splits). Follow-ups in Deep backlog.
 - Proceed to dropped salvage below
 - Look for opportunities to utilize native vector3 and SIMD for performance improvements
 ---
@@ -168,6 +170,13 @@ Not stage-bound — done when convenient or when a stage needs them.
   - Use audio-index.md for reference
 
 ## Deep backlog
+
+- ☐ **[S]** **Cleanup follow-ups (from the 2026-09-09 pass)** — design-token migration second group
+  (`TechDetailPanel`, `RosterCells`, `CommandSidebar`, `DataFeedback`; ~130 raw literals remain client-wide,
+  mostly 3D VFX which may stay); `Simulation.Docking.cs` partial for the ~800-line `DockApproach` block;
+  ClientHub receive-side/snapshot-AOI extraction (needs an interface design, not a pure move);
+  `ApDockCreepFacingDot`/`ApDockAlignTimeout`/`ApDockCreepTimeout` still compile-time (seconds-authored keys
+  if they ever need tuning).
 
 - ☐ **[M]** **Explicit host transfer + runtime arena rebuild** — the game server's host is implicit:
   `ClientHub` seeds `_hostId` to the first pilot to connect (`ReceiveLoop`, the `MsgHello` case)
