@@ -10,6 +10,8 @@ namespace StellarAllegiance.Ui;
 // interactive (the hangar's hardpoint rows): set Accent/Selected and listen to Pressed.
 public partial class LoadoutSlot : PanelContainer
 {
+    private const int MetaSize = 10; // slot caption + stat line — off the DesignTokens type scale
+
     private Label _slot = null!;
     private Label _name = null!;
     private Label _stats = null!;
@@ -42,12 +44,12 @@ public partial class LoadoutSlot : PanelContainer
         col.AddThemeConstantOverride("separation", 6);
         _slot = UiKit.MakeLabel("PRIMARY  ◆", UiKit.TextStyle.Data);
         _slot.AddThemeColorOverride("font_color", DesignTokens.Data);
-        _slot.AddThemeFontSizeOverride("font_size", 10);
+        _slot.AddThemeFontSizeOverride("font_size", MetaSize);
         _name = UiKit.MakeLabel("", UiKit.TextStyle.Body);
         _name.AddThemeFontOverride("font", UiFonts.SairaSemi);
         _stats = UiKit.MakeLabel("", UiKit.TextStyle.Data);
         _stats.AddThemeColorOverride("font_color", DesignTokens.Text2);
-        _stats.AddThemeFontSizeOverride("font_size", 10);
+        _stats.AddThemeFontSizeOverride("font_size", MetaSize);
         col.AddChild(_slot);
         col.AddChild(_name);
         col.AddChild(_stats);
@@ -140,6 +142,8 @@ public partial class ContactChip : Control
 // Resource readout — a bordered symbol box, a mono value, and a per-second rate.
 public partial class ResourceReadout : HBoxContainer
 {
+    private const int ValueSize = 18; // the headline figure — off the DesignTokens type scale
+
     private Label _symbol = null!;
     private Label _value = null!;
     private Label _rate = null!;
@@ -158,7 +162,7 @@ public partial class ResourceReadout : HBoxContainer
         _symbol.CustomMinimumSize = new Vector2(30, 30);
         var sb = new StyleBoxFlat
         {
-            BgColor = Colors.Transparent,
+            BgColor = Colors.Transparent, // absence of fill, not a palette colour
             BorderColor = _color,
             AntiAliasing = false,
         };
@@ -169,9 +173,9 @@ public partial class ResourceReadout : HBoxContainer
         var col = new VBoxContainer();
         col.AddThemeConstantOverride("separation", 0);
         _value = UiKit.MakeLabel("", UiKit.TextStyle.Data);
-        _value.AddThemeFontSizeOverride("font_size", 18);
+        _value.AddThemeFontSizeOverride("font_size", ValueSize);
         _rate = UiKit.MakeLabel("", UiKit.TextStyle.Data);
-        _rate.AddThemeFontSizeOverride("font_size", 9);
+        _rate.AddThemeFontSizeOverride("font_size", DesignTokens.MicroSize);
         _rate.AddThemeColorOverride("font_color", DesignTokens.TextDim);
         col.AddChild(_value);
         col.AddChild(_rate);

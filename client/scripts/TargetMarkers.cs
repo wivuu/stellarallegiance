@@ -68,6 +68,23 @@ public partial class TargetMarkers : Control
     // matching the AlephView vortex rather than a team color.
     private static readonly Color AlephColor = new(0.45f, 0.85f, 1f);
 
+    // Rock-class glyph tints: gameplay IDENTITY read off streamed rock data, echoing the 3D
+    // material families — deliberately NOT chrome tokens (same rule as Faction0/Faction1).
+    private static readonly Color RockHelium3 = new(0.45f, 0.85f, 0.95f); // bright cyan — the valuable one
+    private static readonly Color RockUranium = new(0.95f, 0.45f, 0.25f); // orange-red — hazard
+    private static readonly Color RockSilicon = new(0.65f, 0.85f, 0.60f); // pale green
+    private static readonly Color RockCarbonaceous = new(0.55f, 0.68f, 0.90f); // cool blue
+
+    // The He3 glyph's specular sparkle. A near-white highlight, not a text tier.
+    private static readonly Color GlyphHighlight = new(1f, 1f, 1f, 0.85f);
+
+    // Hull-health traffic light: green → yellow → red. A gameplay readability ramp, kept separate
+    // from the Ok/Warn/Danger chrome tokens (those are a mint/amber/pink family that would wash the
+    // bar out against the sector). HealthColor lerps between these.
+    private static readonly Color HealthFull = new(0.15f, 0.85f, 0.15f);
+    private static readonly Color HealthHalf = new(0.9f, 0.85f, 0.15f);
+    private static readonly Color HealthLow = new(0.9f, 0.15f, 0.15f);
+
     // Asteroids are team-neutral navigation targets — a focused rock reads in the bright mono-data
     // chrome tint rather than a faction color (it's never a combat lock). The waypoint diamond uses
     // the cyan structural accent (chrome), distinct from the enemy-red brackets.
@@ -260,7 +277,7 @@ public partial class TargetMarkers : Control
     // brightened SHADE of the target's team color, so it reads as the SAME faction as the ship it
     // wraps while still popping hotter than the plain team marker. Replaces the old fixed amber /
     // red so a target indicator never carries a color unrelated to whose side it's on.
-    private static Color FocusTint(byte team) => TeamColor(team).Lerp(Colors.White, 0.35f);
+    private static Color FocusTint(byte team) => TeamColor(team).Lightened(0.35f);
 
     // The screen point of the aim reticle (the real firing line): the muzzle projected
     // forward along the ship's nose. The chase camera is offset above/behind the ship, so
@@ -1456,7 +1473,7 @@ public partial class TargetMarkers : Control
         // Dark backdrop with a 1px border so the bar reads against bright or dark scenery.
         DrawRect(
             new Rect2(topLeft - Vector2.One, new Vector2(BaseBarWidth + 2f, BaseBarHeight + 2f)),
-            new Color(0.03f, 0.03f, 0.04f, 0.75f)
+            new Color(DesignTokens.Void, 0.75f)
         );
         // Left-anchored fill, width scaled by the health fraction.
         DrawRect(new Rect2(topLeft, new Vector2(BaseBarWidth * frac, BaseBarHeight)), HealthColor(frac));
@@ -1553,9 +1570,7 @@ public partial class TargetMarkers : Control
 
     // Green at full health, through yellow at half, to red when nearly destroyed.
     private static Color HealthColor(float frac) =>
-        frac > 0.5f
-            ? new Color(Mathf.Lerp(0.9f, 0.15f, (frac - 0.5f) * 2f), 0.85f, 0.15f)
-            : new Color(0.9f, Mathf.Lerp(0.15f, 0.85f, frac * 2f), 0.15f);
+        frac > 0.5f ? HealthHalf.Lerp(HealthFull, (frac - 0.5f) * 2f) : HealthLow.Lerp(HealthHalf, frac * 2f);
 
     // True when the font carries a glyph for every char of s (BMP codepoints — the authored hull
     // symbols are all single BMP chars). Guards the text path in DrawClassGlyph so an authored symbol
@@ -1593,7 +1608,7 @@ public partial class TargetMarkers : Control
             case Kind.Base:
                 // Station: filled square with a punched-out center dot.
                 DrawRect(new Rect2(p - new Vector2(r, r), new Vector2(r * 2f, r * 2f)), color);
-                DrawCircle(p, r * 0.4f, new Color(0f, 0f, 0f, 0.85f));
+                DrawCircle(p, r * 0.4f, new Color(DesignTokens.Void, 0.85f));
                 break;
             case Kind.Scout:
                 // Slim upward triangle.
@@ -1691,7 +1706,7 @@ public partial class TargetMarkers : Control
                 _poly4[2] = center + new Vector2(0f, r);
                 _poly4[3] = center + new Vector2(-r * 0.72f, 0f);
                 DrawColoredPolygon(_poly4, color);
-                DrawCircle(center + new Vector2(0f, -r * 0.28f), r * 0.22f, new Color(1f, 1f, 1f, 0.85f));
+                DrawCircle(center + new Vector2(0f, -r * 0.28f), r * 0.22f, GlyphHighlight);
                 break;
             case RockClass.Uranium:
                 // Radiation trefoil: three filled blades at 120° around a hot center dot — a hazard read,
@@ -1727,10 +1742,10 @@ public partial class TargetMarkers : Control
     private static Color RockGlyphColor(byte cls) =>
         (RockClass)cls switch
         {
-            RockClass.Helium3 => new Color(0.45f, 0.85f, 0.95f), // bright cyan — the valuable one
-            RockClass.Uranium => new Color(0.95f, 0.45f, 0.25f), // orange-red — hazard
-            RockClass.Silicon => new Color(0.65f, 0.85f, 0.60f), // pale green
-            RockClass.Carbonaceous => new Color(0.55f, 0.68f, 0.90f), // cool blue
+            RockClass.Helium3 => RockHelium3,
+            RockClass.Uranium => RockUranium,
+            RockClass.Silicon => RockSilicon,
+            RockClass.Carbonaceous => RockCarbonaceous,
             _ => DesignTokens.Text2,
         };
 
