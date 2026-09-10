@@ -115,7 +115,9 @@ HashSet<(byte, ulong)> Run(Simulation sim, Action hold, int ticks)
 Simulation.TeamVision Vision(Simulation sim, byte team) => sim.VisionFor(team)!;
 
 // Parse the (base, rock, aleph) static counts out of a MsgWelcome frame, asserting count == body.
-(int s, int b, int r, int a) WelcomeCounts(byte[] frame)
+// `sectorIds`, when passed, collects the ids of the sector records the frame actually carried — the
+// sector-gating tests assert the SET the Welcome leaked, not just how many records rode along.
+(int s, int b, int r, int a) WelcomeCounts(byte[] frame, List<uint>? sectorIds = null)
 {
     using var ms = new MemoryStream(frame);
     using var br = new BinaryReader(ms);
@@ -130,7 +132,8 @@ Simulation.TeamVision Vision(Simulation sim, byte team) => sim.VisionFor(team)!;
     int ns = br.ReadUInt16();
     for (int i = 0; i < ns; i++)
     {
-        br.ReadUInt32();
+        uint sid = br.ReadUInt32();
+        sectorIds?.Add(sid);
         br.ReadSingle();
         br.ReadString(); // id, radius, name
         if (br.ReadByte() != 0)
@@ -1778,7 +1781,11 @@ Vec3 AtAngle(float dist, float angleDeg)
         $"a fog NoTeam Welcome leaked statics ({noTeam.s} sectors, {noTeam.b} bases, {noTeam.r} rocks, {noTeam.a} alephs)"
     );
 
-    var team = WelcomeCounts(Protocol.BuildWelcome(1, 0, sim.World, sim.Tick, Array.Empty<byte>(), fog: true, vision: tv0));
+    var teamSectors = new List<uint>();
+    var team = WelcomeCounts(
+        Protocol.BuildWelcome(1, 0, sim.World, sim.Tick, Array.Empty<byte>(), fog: true, vision: tv0),
+        teamSectors
+    );
     Check(
         team.b == tv0.DiscoveredBases.Count && team.r == tv0.DiscoveredRocks.Count && team.a == tv0.DiscoveredAlephs.Count,
         $"fog-on team Welcome carries exactly the discovered set ({team.b}B/{team.r}R/{team.a}A)",
@@ -1789,11 +1796,111 @@ Vec3 AtAngle(float dist, float angleDeg)
         "the discovered set (and its Welcome) includes the scouted rock",
         "the scouted rock was missing from the team Welcome"
     );
-    // Sector gating: without discovering the aleph to sector 1, team 0 knows only its home sector.
+    // Sector gating, SET semantics: the Welcome carries the discovered sector IDS — no more, no fewer.
+    // (Count alone is not the test: on this default 2-sector arena the home garrison's own radar picks
+    // up the aleph standing in its sector within the first boundaries, and an aleph discovery reveals
+    // BOTH endpoints, so team 0 legitimately ends up knowing the whole map here. Section 15c is the
+    // hidden-sector proof, on a world big enough to have a sector that stays undiscovered.)
+    uint homeSector = sim.World.Bases.First(b => b.Team == 0).SectorId;
     Check(
-        team.s == tv0.DiscoveredSectors.Count && team.s >= 1 && team.s < sim.World.Sectors.Count,
-        $"fog-on team Welcome carries only discovered sectors ({team.s} of {sim.World.Sectors.Count}) — undiscovered sectors are hidden",
-        $"fog-on team Welcome leaked sectors ({team.s} sent, {tv0.DiscoveredSectors.Count} discovered, {sim.World.Sectors.Count} total)"
+        team.s == teamSectors.Count
+            && new HashSet<uint>(teamSectors).SetEquals(tv0.DiscoveredSectors)
+            && teamSectors.Contains(homeSector),
+        $"fog-on team Welcome carries exactly the discovered sector set ([{string.Join(",", teamSectors)}] of {sim.World.Sectors.Count}, home included)",
+        $"fog-on team Welcome sector set != discovered set (sent [{string.Join(",", teamSectors)}], discovered [{string.Join(",", tv0.DiscoveredSectors)}])"
+    );
+    Check(
+        teamSectors.All(id => sim.World.Sectors.Any(s => s.Id == id)) && !tv0.DiscoveredSectors.Contains(EmptySector),
+        "every sector the Welcome carries is a real world sector — parking in the sentinel test sector invents no discovery",
+        $"the Welcome/discovered set carried a non-world sector (sent [{string.Join(",", teamSectors)}])"
+    );
+}
+
+// ================================================================================================
+// 15c. Sector gating, hidden-sector proof: a 3-sector CHAIN (0 —aleph— 1 —aleph— 2) with team 0's
+//      garrison in sector 0 and team 1's in sector 2. Team 0 scouts its home aleph, so it knows
+//      {0,1} — sector 2 is two hops out, never discovered, and must NOT ride its Welcome.
+// ================================================================================================
+{
+    var content = ContentLoader.Load(stockPath, worldPath);
+    content.World.AsteroidDensity = 0f; // no rocks — nothing can occlude the scout→aleph sightline
+    content.World.Sectors = new List<WorldSectorConfig>
+    {
+        new()
+        {
+            Id = 0,
+            Garrison = new SectorGarrison { Team = 0 },
+        },
+        new() { Id = 1 }, // the middle sector: reachable from home, so it IS discovered with the aleph
+        new()
+        {
+            Id = 2,
+            Garrison = new SectorGarrison { Team = 1 },
+        }, // two hops out — must stay hidden
+    };
+    content.World.Links = new List<SectorLink> { new(0, 1), new(1, 2) }; // a CHAIN, not the default ring
+    var world = new World(153, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
+    var sim = new Simulation(world, content);
+    sim.PigsEnabled = false;
+    sim.MinersEnabled = false;
+    sim.AttributesEnabled = false;
+    sim.FogEnabled = true;
+    sim.VisionSynchronous = true;
+    sim.StartMatch();
+
+    var homeGate = sim.World.Alephs.First(g => g.SectorId == 0); // the sector-0 mouth of the 0↔1 link
+    var tv = Vision(sim, 0);
+    Check(
+        sim.World.Sectors.Count == 3 && !tv.DiscoveredSectors.Contains(2u),
+        "the 3-sector chain boots with sector 2 undiscovered (pre-condition)",
+        $"chain world wrong ({sim.World.Sectors.Count} sectors, discovered [{string.Join(",", tv.DiscoveredSectors)}])"
+    );
+
+    // Park the scout a few hundred units short of the mouth: inside its radar reach of the aleph,
+    // outside the warp trigger radius (18u) so it stays in sector 0 instead of falling through.
+    float mlen = homeGate.Pos.Length();
+    var spot = mlen > 1f ? homeGate.Pos * ((mlen - 300f) / mlen) : new Vec3(300f, 0f, 0f);
+    var scout = Join(sim, 1, 0, FlightModel.ClassScout);
+    Run(sim, () => Park(scout, 0u, spot), Settle);
+    var tv3 = Vision(sim, 0);
+    Check(
+        scout.SectorId == 0u && tv3.DiscoveredAlephs.Contains(homeGate.Id),
+        "the scout discovers the home aleph without warping (pre-condition)",
+        $"aleph discovery pre-condition failed (scout sector {scout.SectorId}, alephs [{string.Join(",", tv3.DiscoveredAlephs)}])"
+    );
+    Check(
+        tv3.DiscoveredSectors.SetEquals(new[] { 0u, 1u }),
+        "the aleph reveals home + its neighbour and NOTHING further along the chain",
+        $"discovered sectors wrong ([{string.Join(",", tv3.DiscoveredSectors)}], expected 0,1)"
+    );
+
+    var chainSectors = new List<uint>();
+    var chain = WelcomeCounts(
+        Protocol.BuildWelcome(1, 0, sim.World, sim.Tick, Array.Empty<byte>(), fog: true, vision: tv3),
+        chainSectors
+    );
+    Check(
+        chain.s == 2 && !chainSectors.Contains(2u) && new HashSet<uint>(chainSectors).SetEquals(tv3.DiscoveredSectors),
+        $"fog-on team Welcome hides the undiscovered sector (carries [{string.Join(",", chainSectors)}] of {sim.World.Sectors.Count})",
+        $"fog-on team Welcome leaked an undiscovered sector (sent [{string.Join(",", chainSectors)}], discovered [{string.Join(",", tv3.DiscoveredSectors)}])"
+    );
+    // The hidden sector's contents stay hidden with it: team 1's garrison lives in sector 2.
+    Check(
+        chain.b == tv3.DiscoveredBases.Count && !tv3.DiscoveredBases.Contains(sim.World.Bases.First(b => b.Team == 1).Id),
+        "the enemy garrison inside the hidden sector is absent from the Welcome too",
+        $"the hidden sector's base leaked ({chain.b} bases sent, {tv3.DiscoveredBases.Count} discovered)"
+    );
+
+    // Fog OFF over the SAME world still dumps every sector — the gating is fog-only (byte-compat guard).
+    var offSectors = new List<uint>();
+    var off = WelcomeCounts(
+        Protocol.BuildWelcome(1, 0, sim.World, sim.Tick, Array.Empty<byte>(), fog: false, vision: null),
+        offSectors
+    );
+    Check(
+        off.s == sim.World.Sectors.Count && offSectors.Contains(2u),
+        "fog-off over the same 3-sector world still carries every sector (fog-off path untouched)",
+        $"fog-off Welcome did not carry all sectors ([{string.Join(",", offSectors)}])"
     );
 }
 
