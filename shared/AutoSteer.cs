@@ -17,6 +17,8 @@
 // =====================================================================
 
 using System;
+using static StellarAllegiance.Shared.MathUtil;
+using static StellarAllegiance.Shared.Vec3;
 
 namespace StellarAllegiance.Shared
 {
@@ -417,17 +419,9 @@ namespace StellarAllegiance.Shared
             return err >= 0f ? stick : -stick;
         }
 
-        // ---- small math helpers (verbatim from Simulation.Pig.cs) ----
-        private static float Clamp1(float v) => v < -1f ? -1f : (v > 1f ? 1f : v);
-
-        private static float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
-
+        // ---- small math helpers ----
+        // Clamp1 / Dot / NormalizeOr now come from MathUtil + Vec3 (see the `using static` above);
+        // this file and Simulation.Pig.cs must keep sharing float-identical bodies.
         private static Quat Conjugate(Quat q) => new(-q.X, -q.Y, -q.Z, q.W);
-
-        private static Vec3 NormalizeOr(Vec3 v, Vec3 fallback)
-        {
-            float n = v.Length();
-            return n < 1e-6f ? fallback : v * (1f / n);
-        }
     }
 }

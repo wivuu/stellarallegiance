@@ -1,3 +1,5 @@
+using static StellarAllegiance.Shared.Vec3;
+
 namespace StellarAllegiance.Shared;
 
 // =====================================================================
@@ -13,8 +15,6 @@ namespace StellarAllegiance.Shared;
 // =====================================================================
 public static class Collide
 {
-    private static float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
-
     // Sphere(center=spherePos, radius) vs a convex hull placed at (center, rot, uniform scale). On
     // contact returns the WORLD outward normal (out of the hull toward the sphere) and the world
     // penetration depth. The kernel behind every hull bounce — asteroids and bases.

@@ -1168,7 +1168,7 @@ public sealed class World
                 exits.Add(
                     new BaseExit(
                         hp.Pos * ws,
-                        hp.Forward.LengthSquared() > 1e-6f ? Normalize(hp.Forward * -1f) : Normalize(hp.Pos)
+                        hp.Forward.LengthSquared() > 1e-6f ? Vec3.Normalize(hp.Forward * -1f) : Vec3.Normalize(hp.Pos)
                     )
                 );
         BaseExit[] exitArr = exits.Count > 0 ? exits.ToArray() : fallbackExits;
@@ -1187,7 +1187,7 @@ public sealed class World
             normalSum += f.Normal;
         }
         Vec3 doorCenter = faces.Length > 0 ? centerSum * (1f / faces.Length) : default;
-        Vec3 entryAxis = faces.Length > 0 ? Normalize(normalSum) : exitArr[0].Dir;
+        Vec3 entryAxis = faces.Length > 0 ? Vec3.Normalize(normalSum) : exitArr[0].Dir;
         if (entryAxis.LengthSquared() < 0.5f)
             entryAxis = exitArr[0].Dir; // faces' normals canceled (opposed doors) — fall back to a unit axis
         return new BaseModelData
@@ -1236,12 +1236,6 @@ public sealed class World
         // ponytail: one-line proof of hull-vs-sphere collision. 0/N here == every rock is a sphere
         // (assets dir not found by THIS running server — check the [SimAssets] line above it).
         Log.RockHullsLoaded(_log, RockBodies.Count, Asteroids.Count);
-    }
-
-    private static Vec3 Normalize(Vec3 v)
-    {
-        float l = v.Length();
-        return l > 1e-6f ? v * (1f / l) : new Vec3(0f, 0f, 1f);
     }
 
     public Dictionary<(int, int, int), List<Rock>> RockGrid(uint sector) =>

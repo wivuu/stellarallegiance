@@ -130,7 +130,7 @@ public static class GlbReader
         if (name is not null && name.StartsWith("HP_", StringComparison.Ordinal))
         {
             Vec3 pos = world.TransformPoint(new Vec3(0f, 0f, 0f));
-            Vec3 fwd = Normalize(world.TransformDir(new Vec3(0f, 0f, 1f)));
+            Vec3 fwd = Vec3.Normalize(world.TransformDir(new Vec3(0f, 0f, 1f)));
             model.Hardpoints.Add((name, pos, fwd));
         }
 
@@ -271,12 +271,6 @@ public static class GlbReader
                 v[i++] = (float)e.GetDouble();
         }
         return new Quat(v[0], v[1], v[2], v[3]);
-    }
-
-    private static Vec3 Normalize(Vec3 v)
-    {
-        float len = v.Length();
-        return len > 1e-6f ? v * (1f / len) : new Vec3(0f, 0f, 1f);
     }
 }
 
