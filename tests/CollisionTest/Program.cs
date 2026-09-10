@@ -43,7 +43,7 @@ var cube = ConvexHull.Build(
 );
 
 const float shipR = 0.5f;
-const float rest = CollisionConfig.CollisionRestitution; // 0.3
+const float rest = CollisionConfig.CollisionRestitution; // the shared constant IS the expectation
 
 // 1) Sphere just inside the +X face → outward normal +X, penetration = radius − faceGap.
 //    pos.X 1.4, faceGap = 1.0, so the 0.5-radius sphere overlaps by 0.5 − 0.4 = 0.1.
@@ -51,13 +51,18 @@ bool hit = Collide.SphereVsHull(new Vec3(1.4f, 0, 0), shipR, cube, default, Quat
 Check("sphere-vs-cube: contacts +X face", hit && Near(n.X, 1f) && Near(n.Y, 0f) && Near(n.Z, 0f));
 Check("sphere-vs-cube: penetration 0.1", Near(pen, 0.1f));
 
-// 2) Bounce pushes the ship to the surface and reflects the inbound normal velocity.
-//    Inbound vn = −1 (moving −X into the face); reflected vx = −1 − (1+0.3)·(−1) = 0.3.
+// 2) Bounce pushes the ship to the surface and reflects the inbound normal velocity: it applies
+//    vel −= n·((1+rest)·vn), so an inbound vn = −1 (moving −X into the face) leaves
+//    vx = −1 − (1+rest)·(−1) = rest.
+//    EVERY restitution-dependent expectation below is DERIVED from `rest`, never a literal: the
+//    suite silently rotted once when CollisionConfig.CollisionRestitution went 0.3 → 0.6 and four
+//    hardcoded 0.3-era numbers stayed behind. Keep it that way.
+const float bounceVx = rest;
 var s = new ShipState { Pos = new Vec3(1.4f, 0, 0), Vel = new Vec3(-1, 0, 0) };
 Collide.Bounce(ref s, n, pen, rest, out float vn);
 Check("bounce: reports closing vn = −1", Near(vn, -1f));
 Check("bounce: pushed out to x = 1.5", Near(s.Pos.X, 1.5f));
-Check("bounce: reflected vx = 0.3", Near(s.Vel.X, 0.3f));
+Check($"bounce: reflected vx = rest ({bounceVx:0.###})", Near(s.Vel.X, bounceVx));
 
 // 3) ResolveStatics over a body list: an asteroid hull bounces the ship out.
 var rock = Collide.StaticBody.AsteroidHull(cube, default, Quat.Identity, 1f);
@@ -790,8 +795,10 @@ else
     Check("ship-ship: own hull contact negates n to b→a (−X)", mirHit && Near(mn.X, -1f) && Near(mp, 0.1f));
 
     // (d) ResolveShipsLocal, equal masses (1 vs 1): the local ship takes HALF the push-out and half
-    //     the restitution impulse. n = +X, pen 0.2, relVn = −1 ⇒ Δv = (1+0.3)·1/2 = 0.65,
-    //     Δpos = 0.2·(1/2) = 0.1.
+    //     the restitution impulse. iA = iB = 1 ⇒ invSum = 2; n = +X, pen 0.2, relVn = −1, so
+    //     Δv = −(1+rest)·relVn/invSum·iA = (1+rest)/2 ⇒ vx = −1 + (1+rest)/2. The push-out share
+    //     Δpos = pen·(iA/invSum) = 0.2·(1/2) = 0.1 ⇒ x = 0.9 carries no restitution.
+    const float equalShareVx = -1f + (1f + rest) / 2f;
     var others = new[] { new Collide.MovingShip(new Vec3(0, 0, 0), Quat.Identity, new Vec3(0, 0, 0), 1f, null, shipR) };
     var loc = new ShipState
     {
@@ -801,10 +808,13 @@ else
     };
     bool locHit = Collide.ResolveShipsLocal(ref loc, shipR, null, shipR, others, rest, out _);
     Check("ship-ship local: half push-out (x = 0.9)", locHit && Near(loc.Pos.X, 0.9f));
-    Check("ship-ship local: half impulse (vx = −0.35)", Near(loc.Vel.X, -0.35f));
+    Check($"ship-ship local: half impulse (vx = −1 + (1+rest)/2 = {equalShareVx:0.###})", Near(loc.Vel.X, equalShareVx));
 
     // (e) Mass weighting: a 3× heavier other ship ⇒ iA=1, iB=1/3, invSum=4/3. The light local ship
-    //     absorbs more: Δv = 1.3·1/(4/3) = 0.975 ⇒ vx = −0.025; Δpos = 0.2·(1/(4/3)) = 0.15 ⇒ 0.95.
+    //     absorbs the larger share (iA/invSum = 3/4): Δv = (1+rest)·1·(3/4) ⇒ vx = −1 + (1+rest)·3/4.
+    //     The push-out Δpos = 0.2·(3/4) = 0.15 ⇒ x = 0.95 is again restitution-independent.
+    const float heavyShare = 1f / (4f / 3f); // iA/invSum with iA = 1, invSum = 4/3
+    const float heavyVx = -1f + (1f + rest) * heavyShare;
     var heavy = new[] { new Collide.MovingShip(new Vec3(0, 0, 0), Quat.Identity, new Vec3(0, 0, 0), 3f, null, shipR) };
     var loc2 = new ShipState
     {
@@ -814,7 +824,7 @@ else
     };
     Collide.ResolveShipsLocal(ref loc2, shipR, null, shipR, heavy, rest, out _);
     Check("ship-ship local: heavy other ⇒ larger local share (x = 0.95)", Near(loc2.Pos.X, 0.95f));
-    Check("ship-ship local: heavy other ⇒ vx = −0.025", Near(loc2.Vel.X, -0.025f));
+    Check($"ship-ship local: heavy other ⇒ vx = −1 + (1+rest)·3/4 = {heavyVx:0.###}", Near(loc2.Vel.X, heavyVx));
 
     // (f) Separating contact (relVn ≥ 0): overlap still pushes out, but NO impulse (same gate as the
     //     server's ResolveShipImpulse).
@@ -829,6 +839,8 @@ else
 
     // (g) The other ship's velocity feeds the relative-velocity gate: local drifting +X at 1 while a
     //     faster other chases at +2 ⇒ relVn = −1 (closing) despite the local ship moving away.
+    //     Equal masses again, so the local share is (1+rest)/2 ⇒ vx = 1 + (1+rest)/2.
+    const float chasedVx = 1f + (1f + rest) / 2f;
     var chasing = new[] { new Collide.MovingShip(new Vec3(0, 0, 0), Quat.Identity, new Vec3(2, 0, 0), 1f, null, shipR) };
     var loc4 = new ShipState
     {
@@ -837,7 +849,10 @@ else
         Mass = 1f,
     };
     Collide.ResolveShipsLocal(ref loc4, shipR, null, shipR, chasing, rest, out _);
-    Check("ship-ship local: chased from behind ⇒ knocked forward (vx = 1.65)", Near(loc4.Vel.X, 1.65f));
+    Check(
+        $"ship-ship local: chased from behind ⇒ knocked forward (vx = 1 + (1+rest)/2 = {chasedVx:0.###})",
+        Near(loc4.Vel.X, chasedVx)
+    );
 }
 
 Console.WriteLine(failures == 0 ? "ALL TESTS PASSED" : $"{failures} TEST(S) FAILED");
