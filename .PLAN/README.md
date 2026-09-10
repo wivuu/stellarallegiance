@@ -3,7 +3,7 @@
 ---
 
 ## QUICKNOTES:
-- **[M]** Code cleanup and refactor
+- ◐ **[M]** Code cleanup and refactor — in progress on `post-38-cleanup` (2026-09-09)
 - Proceed to dropped salvage below
 - Look for opportunities to utilize native vector3 and SIMD for performance improvements
 ---
@@ -101,8 +101,8 @@ Stage-1 YAML pipeline.
 
 ### Stage 5 — Social & persistence (independent track) — ◐ accounts + ranking DONE (2026-09-07)
 
-Orthogonal to the strategy loop, which runs on ephemeral per-match state. **Slice 1 shipped on
-`auth-lobby-ranking` and is deployed at <https://stellarlobby.wivuu.com>.** The lobby is no longer a
+Orthogonal to the strategy loop, which runs on ephemeral per-match state. **Slice 1 is merged to
+`master`** (PR #73, `9077060`) **and deployed at <https://stellarlobby.wivuu.com>.** The lobby is no longer a
 stateless directory: it is the identity issuer and the system of record — ASP.NET Core Identity +
 EF Core on Postgres with a co-hosted **Orleans** silo, where each entity grain is the single writer
 of its rows and endpoints never write through EF directly.
@@ -141,9 +141,7 @@ detail pages, bans, player and game-server deletion, operator reassignment). Sui
 no CI runs either.
 
 **Open before players use it** (user-owned): Google OAuth app + Steam Web API key; one real browser
-passkey click-through; pair + Ranked-flag the dedicated server; a win-condition match driven end to
-end (needs a base kill); merge to `master` — client, server and lobby move together, proto 38
-clients cannot join proto 37 servers.
+passkey click-through; pair + Ranked-flag the dedicated server.
 
 - ☐ **[L]** **Slice 2** (plan §1.6) — Glicko-2 team rating once real match data exists; Steam
   session tickets when there is an AppID.
