@@ -14,6 +14,12 @@ public partial class ConnectLinkModal : Control
     private const double FlashSec = 0.7; // how long the 100% success state lingers
     private const float StageEaseSec = 1.5f; // active stage's contribution eases toward full
 
+    // Three sizes in the Connecting.dc.html spec sit off the DesignTokens type scale and are
+    // specific to this modal's proportions; everything else uses a token tier.
+    private const int ReadoutSize = 16; // the well's lead line: server name + ping value
+    private const int MonoRowSize = 12; // mono body rows: progress subline, caret, stage log
+    private const int StageTimeSize = 10; // the stage log's trailing elapsed-time column
+
     private ConnectionManager _cm = null!;
     private ShipController _ship = null!;
 
@@ -100,14 +106,10 @@ public partial class ConnectLinkModal : Control
         var header = new HBoxContainer();
         var titles = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         titles.AddThemeConstantOverride("separation", 2);
-        _eyebrow = new Label { Text = "SECURE LINK" };
+        _eyebrow = UiKit.MakeLabel("SECURE LINK", UiKit.TextStyle.Caption, DesignTokens.TextDim);
         _eyebrow.AddThemeFontOverride("font", UiFonts.WithGlyphSpacing(UiFonts.Mono, 3));
-        _eyebrow.AddThemeFontSizeOverride("font_size", 11);
-        _eyebrow.AddThemeColorOverride("font_color", DesignTokens.TextDim);
         titles.AddChild(_eyebrow);
-        _title = new Label();
-        _title.AddThemeFontOverride("font", UiFonts.SairaBold);
-        _title.AddThemeFontSizeOverride("font_size", 26);
+        _title = UiKit.MakeLabel("", UiKit.TextStyle.Hero);
         titles.AddChild(_title);
         header.AddChild(titles);
         _pill = new StatusPill { SizeFlagsVertical = SizeFlags.ShrinkBegin };
@@ -124,24 +126,21 @@ public partial class ConnectLinkModal : Control
         target.AddThemeConstantOverride("separation", 1);
         _name = new Label { TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis };
         _name.AddThemeFontOverride("font", UiFonts.SairaSemi);
-        _name.AddThemeFontSizeOverride("font_size", 16);
+        _name.AddThemeFontSizeOverride("font_size", ReadoutSize);
         target.AddChild(_name);
-        _addr = new Label();
+        _addr = UiKit.MakeLabel("", UiKit.TextStyle.Caption, DesignTokens.Text2);
         _addr.AddThemeFontOverride("font", UiFonts.Mono);
-        _addr.AddThemeFontSizeOverride("font_size", 11);
-        _addr.AddThemeColorOverride("font_color", DesignTokens.Text2);
         target.AddChild(_addr);
         wellRow.AddChild(target);
         var pingCol = new VBoxContainer { SizeFlagsVertical = SizeFlags.ShrinkCenter };
         pingCol.AddThemeConstantOverride("separation", 0);
-        var pingCaption = new Label { Text = "PING", HorizontalAlignment = HorizontalAlignment.Right };
+        var pingCaption = UiKit.MakeLabel("PING", UiKit.TextStyle.Micro, DesignTokens.TextDim);
+        pingCaption.HorizontalAlignment = HorizontalAlignment.Right;
         pingCaption.AddThemeFontOverride("font", UiFonts.WithGlyphSpacing(UiFonts.Mono, 1));
-        pingCaption.AddThemeFontSizeOverride("font_size", 9);
-        pingCaption.AddThemeColorOverride("font_color", DesignTokens.TextDim);
         pingCol.AddChild(pingCaption);
         _ping = new Label { HorizontalAlignment = HorizontalAlignment.Right };
         _ping.AddThemeFontOverride("font", UiFonts.Mono);
-        _ping.AddThemeFontSizeOverride("font_size", 16);
+        _ping.AddThemeFontSizeOverride("font_size", ReadoutSize);
         pingCol.AddChild(_ping);
         wellRow.AddChild(pingCol);
         well.AddChild(wellRow);
@@ -168,19 +167,17 @@ public partial class ConnectLinkModal : Control
         sub.AddThemeConstantOverride("separation", 0);
         _subline = new Label();
         _subline.AddThemeFontOverride("font", UiFonts.Mono);
-        _subline.AddThemeFontSizeOverride("font_size", 12);
+        _subline.AddThemeFontSizeOverride("font_size", MonoRowSize);
         _subline.AddThemeColorOverride("font_color", DesignTokens.Text2);
         sub.AddChild(_subline);
         _caret = new Label { Text = "_" };
         _caret.AddThemeFontOverride("font", UiFonts.Mono);
-        _caret.AddThemeFontSizeOverride("font_size", 12);
+        _caret.AddThemeFontSizeOverride("font_size", MonoRowSize);
         _caret.AddThemeColorOverride("font_color", DesignTokens.TeamAccent);
         sub.AddChild(_caret);
         sub.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
-        _context = new Label();
+        _context = UiKit.MakeLabel("", UiKit.TextStyle.Caption, DesignTokens.TextDim);
         _context.AddThemeFontOverride("font", UiFonts.Mono);
-        _context.AddThemeFontSizeOverride("font_size", 11);
-        _context.AddThemeColorOverride("font_color", DesignTokens.TextDim);
         sub.AddChild(_context);
         col.AddChild(sub);
 
@@ -456,12 +453,12 @@ public partial class ConnectLinkModal : Control
                 var row = new HBoxContainer();
                 row.AddThemeConstantOverride("separation", 10);
                 var r = new StageRow();
-                r.Mark = MonoLabel("○", 12, DesignTokens.TextDim);
+                r.Mark = MonoLabel("○", MonoRowSize, DesignTokens.TextDim);
                 r.Mark.CustomMinimumSize = new Vector2(14, 0);
-                r.Name = MonoLabel(rec.Label, 12, DesignTokens.TextDim);
+                r.Name = MonoLabel(rec.Label, MonoRowSize, DesignTokens.TextDim);
                 r.Name.AddThemeFontOverride("font", UiFonts.WithGlyphSpacing(UiFonts.Mono, 1));
                 r.Name.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-                r.Time = MonoLabel("", 10, DesignTokens.TextDim);
+                r.Time = MonoLabel("", StageTimeSize, DesignTokens.TextDim);
                 r.Time.HorizontalAlignment = HorizontalAlignment.Right;
                 row.AddChild(r.Mark);
                 row.AddChild(r.Name);
@@ -509,13 +506,13 @@ public partial class ConnectLinkModal : Control
                         row.Time.Text = "";
                         break;
                 }
-                row.Mark.Modulate = Colors.White;
+                row.Mark.Modulate = UiKit.TintFull;
             }
             // Pulse the active row's mark (the design's saPulse animation).
             if (rec.State == ConnectionManager.StageState.Active)
             {
                 float a = 0.35f + 0.65f * Mathf.Abs(Mathf.Sin((float)_pulseT * Mathf.Pi / 1.1f));
-                row.Mark.Modulate = new Color(1, 1, 1, a);
+                row.Mark.Modulate = UiKit.Tint(a);
             }
         }
     }

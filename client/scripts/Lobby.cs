@@ -41,6 +41,14 @@ public partial class Lobby : Control
     // solid UI over the dimmed game scene behind.
     private static readonly Color ChromeBar = new(DesignTokens.Void, 0.55f);
 
+    // Sizes the lobby chrome needs that sit off the DesignTokens type scale (the tokens cover
+    // every other label here). Named for the surface they belong to rather than their value.
+    private const int BrandSize = 16; // "STELLAR ALLEGIANCE" wordmark in the header
+    private const int ClockSize = 24; // match clock, the header's largest readout
+    private const int TeamCardScoreSize = 18; // big score digit on a team card
+    private const int StatCaptionSize = 10; // caption over a roster-header stat column
+    private const int StatValueSize = 20; // value under it
+
     private ConnectionManager _cm = null!;
     private WorldRenderer _world = null!;
     private GameNetClient _net = null!;
@@ -194,7 +202,7 @@ public partial class Lobby : Control
         );
         var word = UiKit.MakeLabel("STELLAR ALLEGIANCE", UiKit.TextStyle.Label, DesignTokens.TextHi);
         word.AddThemeFontOverride("font", UiFonts.WithGlyphSpacing(UiFonts.SairaBold, 3));
-        word.AddThemeFontSizeOverride("font_size", 16);
+        word.AddThemeFontSizeOverride("font_size", BrandSize);
         brand.AddChild(word);
         brand.AddChild(UiChips.AccentChip("MATCH", 16, 6, 12));
         row.AddChild(brand);
@@ -232,16 +240,16 @@ public partial class Lobby : Control
         _phasePill = new StatusPill();
         left.AddChild(_phasePill);
         _clock = UiKit.MakeLabel("00:00", UiKit.TextStyle.Data, DesignTokens.TextHi);
-        _clock.AddThemeFontSizeOverride("font_size", 24);
+        _clock.AddThemeFontSizeOverride("font_size", ClockSize);
         left.AddChild(_clock);
         // Match name / mode / sector — placeholder flavour text (not carried by the protocol).
         var titleCol = new VBoxContainer();
         titleCol.AddThemeConstantOverride("separation", 0);
         _matchTitle = UiKit.MakeLabel("SKIRMISH", UiKit.TextStyle.Title, DesignTokens.TextHi);
-        _matchTitle.AddThemeFontSizeOverride("font_size", 15);
+        _matchTitle.AddThemeFontSizeOverride("font_size", DesignTokens.BodySize);
         titleCol.AddChild(_matchTitle);
         _matchSub = UiKit.MakeLabel("CONQUEST · UNCHARTED SECTOR", UiKit.TextStyle.Data, DesignTokens.Text2);
-        _matchSub.AddThemeFontSizeOverride("font_size", 11);
+        _matchSub.AddThemeFontSizeOverride("font_size", DesignTokens.CaptionSize);
         titleCol.AddChild(_matchSub);
         left.AddChild(titleCol);
         row.AddChild(left);
@@ -256,15 +264,15 @@ public partial class Lobby : Control
         _scoreName0.SizeFlagsVertical = SizeFlags.ShrinkCenter;
         score.AddChild(_scoreName0);
         _score0 = UiKit.MakeLabel("0", UiKit.TextStyle.Data, Team0);
-        _score0.AddThemeFontSizeOverride("font_size", 22);
+        _score0.AddThemeFontSizeOverride("font_size", DesignTokens.TitleSize);
         score.AddChild(_score0);
         score.AddChild(
             UiKit
                 .MakeLabel("—", UiKit.TextStyle.Data, DesignTokens.TextDim)
-                .With(l => l.AddThemeFontSizeOverride("font_size", 22))
+                .With(l => l.AddThemeFontSizeOverride("font_size", DesignTokens.TitleSize))
         );
         _score1 = UiKit.MakeLabel("0", UiKit.TextStyle.Data, Team1);
-        _score1.AddThemeFontSizeOverride("font_size", 22);
+        _score1.AddThemeFontSizeOverride("font_size", DesignTokens.TitleSize);
         score.AddChild(_score1);
         _scoreName1 = UiKit.MakeLabel(TeamName(1), UiKit.TextStyle.Label, Team1);
         _scoreName1.SizeFlagsVertical = SizeFlags.ShrinkCenter;
@@ -328,7 +336,7 @@ public partial class Lobby : Control
         _rosterNameRow = new HBoxContainer();
         _rosterNameRow.AddThemeConstantOverride("separation", 10);
         _rosterTeamSub = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.Text2);
-        _rosterTeamSub.AddThemeFontSizeOverride("font_size", 11);
+        _rosterTeamSub.AddThemeFontSizeOverride("font_size", DesignTokens.CaptionSize);
         nameCol.AddChild(_rosterNameRow);
         nameCol.AddChild(_rosterTeamSub);
         headRow.AddChild(nameCol);
@@ -420,7 +428,7 @@ public partial class Lobby : Control
         _mapName = UiKit.MakeLabel("—", UiKit.TextStyle.Label, DesignTokens.TextHi);
         _mapName.MouseFilter = MouseFilterEnum.Ignore;
         _mapMeta = RosterCells.Mono("—", DesignTokens.Text2);
-        _mapMeta.AddThemeFontSizeOverride("font_size", 9);
+        _mapMeta.AddThemeFontSizeOverride("font_size", DesignTokens.MicroSize);
         barNames.AddChild(_mapName);
         barNames.AddChild(_mapMeta);
         barRow.AddChild(barNames);
@@ -553,10 +561,14 @@ public partial class Lobby : Control
         var left = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         left.AddThemeConstantOverride("separation", 8);
         left.AddChild(RosterCells.Diamond(color, false));
-        left.AddChild(RosterCells.Mono(label, DesignTokens.TextHi).With(l => l.AddThemeFontSizeOverride("font_size", 11)));
+        left.AddChild(
+            RosterCells
+                .Mono(label, DesignTokens.TextHi)
+                .With(l => l.AddThemeFontSizeOverride("font_size", DesignTokens.CaptionSize))
+        );
         row.AddChild(left);
         var cnt = RosterCells.Mono($"{count}/{total}", color, HorizontalAlignment.Right);
-        cnt.AddThemeFontSizeOverride("font_size", 11);
+        cnt.AddThemeFontSizeOverride("font_size", DesignTokens.CaptionSize);
         row.AddChild(cnt);
         return row;
     }
@@ -572,9 +584,13 @@ public partial class Lobby : Control
         panel.AddThemeStyleboxOverride("panel", sb);
         var c = new VBoxContainer();
         c.AddThemeConstantOverride("separation", 4);
-        c.AddChild(RosterCells.Mono(caption, DesignTokens.TextDim).With(l => l.AddThemeFontSizeOverride("font_size", 9)));
+        c.AddChild(
+            RosterCells
+                .Mono(caption, DesignTokens.TextDim)
+                .With(l => l.AddThemeFontSizeOverride("font_size", DesignTokens.MicroSize))
+        );
         value = UiKit.MakeLabel("—", UiKit.TextStyle.Label, valueColor);
-        value.AddThemeFontSizeOverride("font_size", 14);
+        value.AddThemeFontSizeOverride("font_size", DesignTokens.DataSize);
         c.AddChild(value);
         panel.AddChild(c);
         return panel;
@@ -707,7 +723,7 @@ public partial class Lobby : Control
         inputWrap.AddChild(inputRow);
         _sendChip = new Label();
         _sendChip.AddThemeFontOverride("font", UiFonts.MonoMedium);
-        _sendChip.AddThemeFontSizeOverride("font_size", 14);
+        _sendChip.AddThemeFontSizeOverride("font_size", DesignTokens.DataSize);
         var chipStyle = new StyleBoxFlat
         {
             BgColor = DesignTokens.PanelFill,
@@ -1090,8 +1106,7 @@ public partial class Lobby : Control
         };
         foreach (string s in new[] { "normal", "hover", "pressed", "focus", "disabled" })
             btn.AddThemeStyleboxOverride(s, RosterCells.TabStyle(accent, selected));
-        foreach (string c in new[] { "font_color", "font_hover_color", "font_pressed_color", "font_focus_color" })
-            btn.AddThemeColorOverride(c, Colors.Transparent);
+        UiKit.BlankStockLabel(btn);
         int captured = team;
         btn.Pressed += () =>
         {
@@ -1114,13 +1129,13 @@ public partial class Lobby : Control
         top.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         top.AddChild(RosterCells.Diamond(accent, team == NoatTeam));
         var name = UiKit.MakeLabel(TeamName(team), UiKit.TextStyle.Label, DesignTokens.TextHi);
-        name.AddThemeFontSizeOverride("font_size", 14);
+        name.AddThemeFontSizeOverride("font_size", DesignTokens.DataSize);
         name.MouseFilter = MouseFilterEnum.Ignore;
         top.AddChild(name);
         top.AddChild(RosterCells.Spacer());
         string bigNum = team == NoatTeam ? CountFor(team).ToString() : _world.TeamState.Score((byte)team).ToString();
         var num = UiKit.MakeLabel(bigNum, UiKit.TextStyle.Data, accent);
-        num.AddThemeFontSizeOverride("font_size", 18);
+        num.AddThemeFontSizeOverride("font_size", TeamCardScoreSize);
         num.MouseFilter = MouseFilterEnum.Ignore;
         top.AddChild(num);
         col.AddChild(top);
@@ -1342,9 +1357,13 @@ public partial class Lobby : Control
         var col = new VBoxContainer();
         col.AddThemeConstantOverride("separation", 0);
         col.SizeFlagsVertical = SizeFlags.ShrinkCenter;
-        col.AddChild(RosterCells.Mono(caption, DesignTokens.TextDim).With(l => l.AddThemeFontSizeOverride("font_size", 10)));
+        col.AddChild(
+            RosterCells
+                .Mono(caption, DesignTokens.TextDim)
+                .With(l => l.AddThemeFontSizeOverride("font_size", StatCaptionSize))
+        );
         var v = UiKit.MakeLabel("—", UiKit.TextStyle.Data, valueColor);
-        v.AddThemeFontSizeOverride("font_size", 20);
+        v.AddThemeFontSizeOverride("font_size", StatValueSize);
         col.AddChild(v);
         var wrap = new MarginContainer();
         wrap.AddThemeConstantOverride("margin_left", 26);
