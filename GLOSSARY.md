@@ -22,9 +22,10 @@ Single `ulong` from which the whole static arena — base positions, asteroid fi
 Core deterministic physics system shared between server and client for ship movement, thrust, and rotation.
 - **Frequency:** Very common
 - **Key Files:** 
-  - `shared/FlightModel.cs` — deterministic physics (shared across server/client)
+  - `shared/FlightModel.cs` — deterministic physics (shared across server/client); also the canonical `Vec3.Dot/Normalize/NormalizeOrZero/NormalizeOr` and `MathUtil.Clamp1` helpers (single copies since 2026-09-09 — never re-add private duplicates, they must stay bit-identical)
   - `client/scripts/PredictionController.cs` — client-side input prediction and reconciliation
-  - `server/Sim/Simulation.cs` — authoritative server simulation loop (20 Hz tick)
+  - `server/Sim/Simulation.cs` — authoritative server simulation loop (20 Hz tick); partial family: `.Firing.cs` (TryFire/ResolveDueShots/base damage), `.Missiles.cs`, `.Collisions.cs`, `.Warp.cs`, `.Vision.cs`, `.Pig.cs`, `.Constructors.cs`, `.Mining.cs`, `.Orders.cs`, `.Research.cs`, `.Scoring.cs`, `.Mines.cs`, `.Chaff.cs`, `.Probes.cs`, `.Avoidance.cs`
+  - `client/scripts/GameNetClient.cs` — connection lifecycle, Send API, socket I/O; frame application lives in `client/scripts/net/FrameApplier.cs` (per-message handlers + streamed state) and `client/scripts/net/DefsApplier.cs` (MsgDefs → DefRegistry mirror)
 - **Related:** [[SimTick]], [[Held-Input Replay]]
 - **Notes:** Server is single source of truth; client predicts and reconciles against server snapshots
 
