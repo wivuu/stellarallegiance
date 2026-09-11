@@ -38,9 +38,9 @@ public class SerializationTests
         var yaml = CoreSerializer.Serialize(core);
 
         Assert.Contains("base-capabilities:", yaml);
-        Assert.Contains("shipyard-allowed", yaml);   // kebab-cased Capability enum value
-        Assert.Contains("max-armor-ship:", yaml);    // kebab-cased GameAttribute dictionary key
-        Assert.Contains("is-lifepod", yaml);          // kebab-cased HullAbility enum value
+        Assert.Contains("shipyard-allowed", yaml); // kebab-cased Capability enum value
+        Assert.Contains("max-armor-ship:", yaml); // kebab-cased GameAttribute dictionary key
+        Assert.Contains("is-lifepod", yaml); // kebab-cased HullAbility enum value
     }
 
     [Fact]
@@ -66,10 +66,16 @@ public class SerializationTests
     [Fact]
     public void OreCapacity_RoundTripsAsKebabCase()
     {
-        var hull = new Hull { Id = "miner", Name = "Miner", ClassId = 4, OreCapacity = 2000 };
+        var hull = new Hull
+        {
+            Id = "miner",
+            Name = "Miner",
+            ClassId = 4,
+            OreCapacity = 2000,
+        };
 
         var yaml = CoreSerializer.Serialize(hull);
-        Assert.Contains("ore-capacity: 2000", yaml);          // kebab-cased key
+        Assert.Contains("ore-capacity: 2000", yaml); // kebab-cased key
 
         var reloaded = CoreSerializer.Deserialize<Hull>(yaml);
         Assert.Equal(2000, reloaded.OreCapacity);
@@ -79,7 +85,12 @@ public class SerializationTests
     public void OreCapacity_OmittedWhenDefault()
     {
         // Omit-when-default keeps non-mining hulls terse (no ore-capacity: 0 noise).
-        var hull = new Hull { Id = "scout", Name = "Scout", ClassId = 0 };
+        var hull = new Hull
+        {
+            Id = "scout",
+            Name = "Scout",
+            ClassId = 0,
+        };
 
         Assert.DoesNotContain("ore-capacity", CoreSerializer.Serialize(hull));
     }
@@ -87,10 +98,15 @@ public class SerializationTests
     [Fact]
     public void UpgradeScope_RoundTripsAsKebabCase()
     {
-        var dev = new Development { Id = "dev-upgrade", Name = "Upgrade", UpgradeScope = UpgradeScope.Single };
+        var dev = new Development
+        {
+            Id = "dev-upgrade",
+            Name = "Upgrade",
+            UpgradeScope = UpgradeScope.Single,
+        };
 
         var yaml = CoreSerializer.Serialize(dev);
-        Assert.Contains("upgrade-scope: single", yaml);   // kebab-cased key + hyphenated enum value
+        Assert.Contains("upgrade-scope: single", yaml); // kebab-cased key + hyphenated enum value
 
         var reloaded = CoreSerializer.Deserialize<Development>(yaml);
         Assert.Equal(UpgradeScope.Single, reloaded.UpgradeScope);
@@ -108,10 +124,15 @@ public class SerializationTests
     [Fact]
     public void IsHealing_RoundTripsAsKebabCase()
     {
-        var weapon = new Weapon { Id = "nanite", Name = "Nanite", IsHealing = true };
+        var weapon = new Weapon
+        {
+            Id = "nanite",
+            Name = "Nanite",
+            IsHealing = true,
+        };
 
         var yaml = CoreSerializer.Serialize(weapon);
-        Assert.Contains("is-healing: true", yaml);   // kebab-cased runtime-extension key
+        Assert.Contains("is-healing: true", yaml); // kebab-cased runtime-extension key
 
         var reloaded = CoreSerializer.Deserialize<Weapon>(yaml);
         Assert.True(reloaded.IsHealing);
@@ -131,13 +152,29 @@ public class SerializationTests
     {
         var core = new Core
         {
-            Stations = { new Station { Id = "lab", Name = "Lab", ResearchSlots = 3 } },
-            Weapons = { new Weapon { Id = "gun", Name = "Gun", ObsoletedByTechs = new TechSet(new[] { "cannon-tier-2" }) } },
+            Stations =
+            {
+                new Station
+                {
+                    Id = "lab",
+                    Name = "Lab",
+                    ResearchSlots = 3,
+                },
+            },
+            Weapons =
+            {
+                new Weapon
+                {
+                    Id = "gun",
+                    Name = "Gun",
+                    ObsoletedByTechs = new TechSet(new[] { "cannon-tier-2" }),
+                },
+            },
         };
 
         var yaml = CoreSerializer.Serialize(core);
-        Assert.Contains("research-slots: 3", yaml);       // kebab-cased key
-        Assert.Contains("obsoleted-by-techs:", yaml);     // kebab-cased key
+        Assert.Contains("research-slots: 3", yaml); // kebab-cased key
+        Assert.Contains("obsoleted-by-techs:", yaml); // kebab-cased key
 
         var reloaded = CoreSerializer.Deserialize(yaml);
         Assert.Equal(3, reloaded.Stations.Single().ResearchSlots);
@@ -151,8 +188,14 @@ public class SerializationTests
         // empty obsoleted-by-techs noise).
         var core = new Core
         {
-            Stations = { new Station { Id = "garrison", Name = "Garrison" } },
-            Weapons = { new Weapon { Id = "gun", Name = "Gun" } },
+            Stations =
+            {
+                new Station { Id = "garrison", Name = "Garrison" },
+            },
+            Weapons =
+            {
+                new Weapon { Id = "gun", Name = "Gun" },
+            },
         };
 
         var yaml = CoreSerializer.Serialize(core);
@@ -171,7 +214,8 @@ public class SerializationTests
               - { kind: weapon, index: 0, weapon-id: 2 }
               - { kind: weapon, index: 1, mount: missile }
               - { kind: weapon, index: 2, weapon-id: 3, mount: any }
-            """);
+            """
+        );
 
         Assert.Equal(2u, hull.Hardpoints[0].WeaponId);
         Assert.Null(hull.Hardpoints[0].Mount); // un-authored: derived from the bound weapon downstream
@@ -188,7 +232,8 @@ public class SerializationTests
             id: x
             name: X
             required-techs: [base, base, gun-tier-2]
-            """);
+            """
+        );
 
         Assert.IsType<TechSet>(hull.RequiredTechs);
         Assert.Equal(2, hull.RequiredTechs.Count); // duplicate collapsed

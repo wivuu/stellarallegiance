@@ -21,8 +21,10 @@ from these tokens and components** — never re-hardcode colors, fonts, or sizes
 | `Panel` | `#0B1320` | opaque surface |
 | `PanelHi` | `#16243A` | raised surface |
 | `PanelFill` | `rgba(8,14,24,.60)` | translucent panel body |
+| `PanelSolid` | `rgba(8,14,24,.88)` | near-opaque panel body — surfaces that must stay readable over the live 3D scene |
 | `Well` | `#05070F` (opaque) | recessed data well |
 | `BorderHi` / `BorderLo` | `rgba(120,190,255,.25/.16)` | hairline borders |
+| `BorderMid` | `rgba(120,190,255,.40)` | emphasised hairline — framed panels / rails read over the sector |
 | `TeamAccent` | `#37E0FF` | **structural chrome only** — brackets, primary buttons, gauges, diamonds |
 | `Secondary` | `#FF9D4D` | highlight / credits |
 | `TextHi` / `Text2` / `TextDim` | `#CFE6F5` / `#7FA6C8` / `#5A7390` | primary / secondary / dim text |
@@ -38,8 +40,16 @@ static chrome accent — it is never tinted toward the local team's faction colo
 - **Saira** — UI / headings / labels. **JetBrains Mono** — telemetry, numbers, coordinates.
 - Both are **variable TTFs** in `client/assets/fonts/`; weights are realized as `FontVariation`
   (no per-weight files). The caps "Label" style bakes in `LabelLetterSpacing`.
-- Styles: `Display` 34/bold · `Title` 22/bold · `Label` 13 caps+spacing · `Body` 15 · `Data` 14 mono.
+- Styles: `Display` 34/bold · `Hero` 26/bold · `Title` 22/bold · `Body` 15 · `Data` 14 mono ·
+  `Label` 13 caps+spacing · `Caption` 11 · `Micro` 9.
+- `Hero` is the oversized modal headline between `Title` and `Display`; `Caption` is the dense
+  sub-`Label` tier (meta rows, slot sublines) and `Micro` the smallest legible tier (unit
+  suffixes, sub-captions). Mono readouts that need those sizes take the size token directly
+  (`DesignTokens.CaptionSize`) on top of `TextStyle.Data`.
 - Build labels with `UiKit.MakeLabel(text, TextStyle, color?)` — don't set font overrides by hand.
+- `UiKit.Tint(alpha)` / `UiKit.TintFull` are the named ends of the "dim a card with `Modulate`"
+  idiom; `UiKit.BlankStockLabel(button)` hides the stock `Button` glyph on buttons that paint
+  their own content. Use them instead of raw `Colors.White` / `Colors.Transparent`.
 
 ## Components
 

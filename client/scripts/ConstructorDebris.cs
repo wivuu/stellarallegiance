@@ -22,30 +22,30 @@ public partial class ConstructorDebris : Node3D
         var proc = new ParticleProcessMaterial
         {
             EmissionShape = ParticleProcessMaterial.EmissionShapeEnum.Sphere,
-            EmissionSphereRadius = 2.5f,            // spat from across the grind footprint, not a point
+            EmissionSphereRadius = 2.5f, // spat from across the grind footprint, not a point
             Direction = new Vector3(0f, 1f, 0f),
-            Spread = 180f,                          // fling out every which way off the contact point
+            Spread = 180f, // fling out every which way off the contact point
             InitialVelocityMin = 6f,
             InitialVelocityMax = 16f,
-            Gravity = Vector3.Zero,                 // space — drag alone brings the chunks to rest
+            Gravity = Vector3.Zero, // space — drag alone brings the chunks to rest
             DampingMin = 3f,
             DampingMax = 7f,
-            AngularVelocityMin = -260f,             // tumbling rock, not drifting sprites
+            AngularVelocityMin = -260f, // tumbling rock, not drifting sprites
             AngularVelocityMax = 260f,
             ScaleMin = 0.5f,
             ScaleMax = 1.4f,
-            Color = new Color(0.55f, 0.48f, 0.4f),  // dusty rock-grey (fed to vertex colour)
+            Color = new Color(0.55f, 0.48f, 0.4f), // dusty rock-grey (fed to vertex colour)
         };
         _particles = new GpuParticles3D
         {
             Amount = 48,
             Lifetime = ChunkLifetime,
-            OneShot = false,                        // continuous while the drone sinks
-            Explosiveness = 0f,                     // a steady stream, not a single burst
-            LocalCoords = false,                    // chunks fly in world space; the node can track the drone
+            OneShot = false, // continuous while the drone sinks
+            Explosiveness = 0f, // a steady stream, not a single burst
+            LocalCoords = false, // chunks fly in world space; the node can track the drone
             ProcessMaterial = proc,
             DrawPass1 = ChunkMesh(),
-            Emitting = true,                        // set last, after Amount/ProcessMaterial
+            Emitting = true, // set last, after Amount/ProcessMaterial
         };
         AddChild(_particles);
     }

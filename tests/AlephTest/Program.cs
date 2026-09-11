@@ -107,8 +107,11 @@ const int BurstTicks = 30;
 {
     var (sim, shooter, target) = SetupBoltDuel(seed: 1, range: BoltRange);
     float dmg = FireBurst(sim, shooter, target, BoltRange, BurstTicks);
-    Check(dmg > 0f, $"control: bolts land on the enemy with no gate present (took {dmg} damage)",
-        $"control: enemy took no damage even without a gate — geometry never lands a hit (dmg {dmg})");
+    Check(
+        dmg > 0f,
+        $"control: bolts land on the enemy with no gate present (took {dmg} damage)",
+        $"control: enemy took no damage even without a gate — geometry never lands a hit (dmg {dmg})"
+    );
 }
 
 // ---- 2. Bolt blocked: a gate on the shot line → the enemy takes ZERO damage --------------------
@@ -116,8 +119,11 @@ const int BurstTicks = 30;
     var (sim, shooter, target) = SetupBoltDuel(seed: 1, range: BoltRange);
     sim.World.AddAlephForTest(EmptySector, new Vec3(0f, 0f, BoltRange * 0.5f)); // midway down the shot line
     float dmg = FireBurst(sim, shooter, target, BoltRange, BurstTicks);
-    Check(dmg == 0f, "bolts blocked: a gate on the shot line stops every bolt (enemy took no damage)",
-        $"bolts leaked through the gate: enemy took {dmg} damage");
+    Check(
+        dmg == 0f,
+        "bolts blocked: a gate on the shot line stops every bolt (enemy took no damage)",
+        $"bolts leaked through the gate: enemy took {dmg} damage"
+    );
 }
 
 // ---- 3. Missile blocked: a dumbfired missile detonates ON the gate, target beyond survives -----
@@ -127,8 +133,14 @@ const int BurstTicks = 30;
     var sim = BootSim(seed: 3);
     // No stock hull mounts a seeker by default (and the fighter's gun-typed mounts don't take
     // racks) — arm a scout's untyped empty hp 1 with one so the shooter has a seeker to dumbfire.
-    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassScout,
-        cargo: System.Array.Empty<(uint, byte)>(), 0, new (byte, uint)[] { (1, 3u) });
+    sim.EnqueueJoin(
+        1,
+        team: 0,
+        cls: FlightModel.ClassScout,
+        cargo: System.Array.Empty<(uint, byte)>(),
+        0,
+        new (byte, uint)[] { (1, 3u) }
+    );
     sim.EnqueueJoin(2, team: 1, cls: FlightModel.ClassFighter);
     sim.Step();
     var shooter = sim.Ships.First(s => s.OwnerClientId == 1);
@@ -162,13 +174,22 @@ const int BurstTicks = 30;
                 gonePos = g.pos;
             }
     }
-    Check(impact && reason == 1, $"missile detonates on the gate (impact reason 1, got {reason})",
-        $"missile did not impact the gate (impact {impact}, reason {reason})");
+    Check(
+        impact && reason == 1,
+        $"missile detonates on the gate (impact reason 1, got {reason})",
+        $"missile did not impact the gate (impact {impact}, reason {reason})"
+    );
     float distToGate = (gonePos - new Vec3(0f, 0f, GateZ)).Length();
-    Check(distToGate < 40f, $"missile detonated AT the gate ({distToGate:0.0}u from the mouth), not the target",
-        $"missile detonated {distToGate:0.0}u from the gate mouth — not the barrier");
-    Check(target.Health == h0, "missile blocked: the target beyond the gate took no damage",
-        $"target beyond the gate lost health ({h0} -> {target.Health})");
+    Check(
+        distToGate < 40f,
+        $"missile detonated AT the gate ({distToGate:0.0}u from the mouth), not the target",
+        $"missile detonated {distToGate:0.0}u from the gate mouth — not the barrier"
+    );
+    Check(
+        target.Health == h0,
+        "missile blocked: the target beyond the gate took no damage",
+        $"target beyond the gate lost health ({h0} -> {target.Health})"
+    );
 }
 
 // ---- 4. Determinism: the blocked-bolt script is bit-identical across two fresh sims -------------
@@ -190,8 +211,11 @@ const int BurstTicks = 30;
     }
     var a = Run(7);
     var b = Run(7);
-    Check(a.SequenceEqual(b), "determinism: identical scripts yield bit-identical target-health timelines",
-        "determinism: target-health timelines diverged between two identical runs");
+    Check(
+        a.SequenceEqual(b),
+        "determinism: identical scripts yield bit-identical target-health timelines",
+        "determinism: target-health timelines diverged between two identical runs"
+    );
 }
 
 // ================================================================================================
@@ -225,58 +249,85 @@ string GateStr(World.Gate? g) => g is World.Gate x ? $"{x.SectorId}->{x.DestSect
 
 // ---- 5. Next-hop on a 3-sector chain A(10)-B(20)-C(30) -----------------------------------------
 {
-    var world = BuildChainWorld(1,
+    var world = BuildChainWorld(
+        1,
         new (uint, byte?)[] { (10, 0), (20, null), (30, 1) },
-        new (uint, uint)[] { (10, 20), (20, 30) });
+        new (uint, uint)[] { (10, 20), (20, 30) }
+    );
 
     // From A toward C the next hop is the A->B gate (10->20), NOT a nonexistent direct A->C gate.
     var ac = world.NextGateTo(10, 30);
-    Check(ac is World.Gate hop && hop.SectorId == 10 && hop.DestSectorId == 20,
+    Check(
+        ac is World.Gate hop && hop.SectorId == 10 && hop.DestSectorId == 20,
         $"routing: A->C next hop is the A->B gate ({GateStr(ac)})",
-        $"routing: A->C should hop through B first, got {GateStr(ac)}");
+        $"routing: A->C should hop through B first, got {GateStr(ac)}"
+    );
 
     // Direct legs resolve to their direct gate.
     var ab = world.NextGateTo(10, 20);
-    Check(ab is World.Gate g1 && g1.SectorId == 10 && g1.DestSectorId == 20,
-        $"routing: A->B next hop is the direct A->B gate ({GateStr(ab)})", $"routing: A->B wrong gate {GateStr(ab)}");
+    Check(
+        ab is World.Gate g1 && g1.SectorId == 10 && g1.DestSectorId == 20,
+        $"routing: A->B next hop is the direct A->B gate ({GateStr(ab)})",
+        $"routing: A->B wrong gate {GateStr(ab)}"
+    );
     var bc = world.NextGateTo(20, 30);
-    Check(bc is World.Gate g2 && g2.SectorId == 20 && g2.DestSectorId == 30,
-        $"routing: B->C next hop is the direct B->C gate ({GateStr(bc)})", $"routing: B->C wrong gate {GateStr(bc)}");
+    Check(
+        bc is World.Gate g2 && g2.SectorId == 20 && g2.DestSectorId == 30,
+        $"routing: B->C next hop is the direct B->C gate ({GateStr(bc)})",
+        $"routing: B->C wrong gate {GateStr(bc)}"
+    );
 
     // Reverse: C toward A hops through B first (the C->B gate 30->20).
     var ca = world.NextGateTo(30, 10);
-    Check(ca is World.Gate g3 && g3.SectorId == 30 && g3.DestSectorId == 20,
+    Check(
+        ca is World.Gate g3 && g3.SectorId == 30 && g3.DestSectorId == 20,
         $"routing: C->A next hop is the C->B gate ({GateStr(ca)})",
-        $"routing: C->A should hop through B first, got {GateStr(ca)}");
+        $"routing: C->A should hop through B first, got {GateStr(ca)}"
+    );
 }
 
 // ---- 6. Unreachable sector ⇒ null; fromSector == toSector ⇒ null --------------------------------
 {
     // Sector 40 is authored but has no link — nothing routes to it.
-    var world = BuildChainWorld(2,
+    var world = BuildChainWorld(
+        2,
         new (uint, byte?)[] { (10, 0), (20, null), (30, 1), (40, null) },
-        new (uint, uint)[] { (10, 20), (20, 30) });
-    Check(world.NextGateTo(10, 40) is null, "routing: an unreachable sector returns null (autopilot then disengages)",
-        $"routing: unreachable sector 40 returned {GateStr(world.NextGateTo(10, 40))}");
-    Check(world.NextGateTo(10, 10) is null, "routing: fromSector == toSector returns null",
-        $"routing: self-route returned {GateStr(world.NextGateTo(10, 10))}");
+        new (uint, uint)[] { (10, 20), (20, 30) }
+    );
+    Check(
+        world.NextGateTo(10, 40) is null,
+        "routing: an unreachable sector returns null (autopilot then disengages)",
+        $"routing: unreachable sector 40 returned {GateStr(world.NextGateTo(10, 40))}"
+    );
+    Check(
+        world.NextGateTo(10, 10) is null,
+        "routing: fromSector == toSector returns null",
+        $"routing: self-route returned {GateStr(world.NextGateTo(10, 10))}"
+    );
 }
 
 // ---- 7. Determinism: two Worlds, same seed ⇒ bit-identical next-hop table -----------------------
 {
     (uint from, uint to, ulong gate)[] Table(ulong seed)
     {
-        var w = BuildChainWorld(seed,
+        var w = BuildChainWorld(
+            seed,
             new (uint, byte?)[] { (10, 0), (20, null), (30, 1) },
-            new (uint, uint)[] { (10, 20), (20, 30) });
+            new (uint, uint)[] { (10, 20), (20, 30) }
+        );
         uint[] ids = { 10, 20, 30 };
-        return (from f in ids from t in ids
-                let g = w.NextGateTo(f, t)
-                select (f, t, g is World.Gate x ? x.Id : 0UL)).ToArray();
+        return (
+            from f in ids
+            from t in ids
+            let g = w.NextGateTo(f, t)
+            select (f, t, g is World.Gate x ? x.Id : 0UL)
+        ).ToArray();
     }
-    Check(Table(4242).SequenceEqual(Table(4242)),
+    Check(
+        Table(4242).SequenceEqual(Table(4242)),
         "routing: two Worlds built from the same seed yield an identical next-hop table",
-        "routing: next-hop table diverged between two same-seed Worlds");
+        "routing: next-hop table diverged between two same-seed Worlds"
+    );
 }
 
 // ================================================================================================
@@ -294,8 +345,7 @@ World BuildHub(ulong seed, float gap)
     var cfg = content.World;
     cfg.Seeding.AlephMinGap = gap;
     var secs = new (uint id, byte? team)[] { (0, 0), (1, null), (2, 1), (3, null) };
-    cfg.Sectors = secs
-        .Select(s => new WorldSectorConfig
+    cfg.Sectors = secs.Select(s => new WorldSectorConfig
         {
             Id = s.id,
             Radius = 900f,
@@ -312,20 +362,20 @@ float ClosestSameSectorPair(World w)
 {
     float min = float.MaxValue;
     for (int i = 0; i < w.Alephs.Count; i++)
-        for (int j = i + 1; j < w.Alephs.Count; j++)
-            if (w.Alephs[i].SectorId == w.Alephs[j].SectorId)
-            {
-                float d = (w.Alephs[i].Pos - w.Alephs[j].Pos).Length();
-                if (d < min)
-                    min = d;
-            }
+    for (int j = i + 1; j < w.Alephs.Count; j++)
+        if (w.Alephs[i].SectorId == w.Alephs[j].SectorId)
+        {
+            float d = (w.Alephs[i].Pos - w.Alephs[j].Pos).Length();
+            if (d < min)
+                min = d;
+        }
     return min;
 }
 
 // ---- 8. Spacing: with the gap ON no two gates share a sector too closely; with it OFF some do ------
 {
     const float Gap = 400f; // comfortably satisfiable in the radius-900 hub, so ON is never a fallback
-    bool violatedOn = false;   // gap ON: a same-sector pair closer than the gap (a real violation)
+    bool violatedOn = false; // gap ON: a same-sector pair closer than the gap (a real violation)
     bool everCloseOff = false; // gap OFF: at least one seed lands a pair inside the gap (knob non-vacuous)
     float worstOn = float.MaxValue;
     for (ulong seed = 1; seed <= 60; seed++)
@@ -338,18 +388,26 @@ float ClosestSameSectorPair(World w)
         if (off < Gap)
             everCloseOff = true;
     }
-    Check(!violatedOn, $"spacing: no two gates in a sector are ever closer than {Gap}u across 60 seeds (worst {worstOn:0}u)",
-        $"spacing: aleph-min-gap violated — a sector held two gates only {worstOn:0}u apart (< {Gap}u)");
-    Check(everCloseOff, "spacing: with the gap OFF some seed DOES pack two gates inside the gap (the knob isn't vacuous)",
-        "spacing: even with spacing off no seed produced a close pair — the test can't prove the gap does anything");
+    Check(
+        !violatedOn,
+        $"spacing: no two gates in a sector are ever closer than {Gap}u across 60 seeds (worst {worstOn:0}u)",
+        $"spacing: aleph-min-gap violated — a sector held two gates only {worstOn:0}u apart (< {Gap}u)"
+    );
+    Check(
+        everCloseOff,
+        "spacing: with the gap OFF some seed DOES pack two gates inside the gap (the knob isn't vacuous)",
+        "spacing: even with spacing off no seed produced a close pair — the test can't prove the gap does anything"
+    );
 }
 
 // ---- 9. The stock world.yaml ships a non-zero aleph-min-gap (spacing is on by default) -------------
 {
     var content = ContentLoader.Load(stockPath, worldPath);
-    Check(content.World.Seeding.AlephMinGap > 0f,
+    Check(
+        content.World.Seeding.AlephMinGap > 0f,
         $"spacing: stock world.yaml enables aleph spacing by default (aleph-min-gap = {content.World.Seeding.AlephMinGap:0})",
-        "spacing: stock world.yaml ships aleph-min-gap = 0 — gate spacing is off by default");
+        "spacing: stock world.yaml ships aleph-min-gap = 0 — gate spacing is off by default"
+    );
 }
 
 Console.WriteLine(failures == 0 ? "\nALL PASS" : $"\n{failures} FAILURE(S)");

@@ -122,7 +122,15 @@ public partial class LinkRadar : Control
         DrawString(UiFonts.Mono, center + new Vector2(-sz.X * 0.5f, 4), pct, HorizontalAlignment.Left, -1, 24, pctColor);
         const string caption = "LINK";
         var cs = UiFonts.SairaLabel.GetStringSize(caption, HorizontalAlignment.Left, -1, 8);
-        DrawString(UiFonts.SairaLabel, center + new Vector2(-cs.X * 0.5f, 18), caption, HorizontalAlignment.Left, -1, 8, DesignTokens.TextDim);
+        DrawString(
+            UiFonts.SairaLabel,
+            center + new Vector2(-cs.X * 0.5f, 18),
+            caption,
+            HorizontalAlignment.Left,
+            -1,
+            8,
+            DesignTokens.TextDim
+        );
     }
 }
 

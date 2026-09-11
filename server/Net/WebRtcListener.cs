@@ -64,7 +64,7 @@ public sealed class WebRtcTransport : IClientTransport
                 // Send the frame slice straight from the caller's pooled buffer — no copy.
                 // SIPSorcery copies the bytes into its own SCTP chunks synchronously
                 // (SctpDataSender.SendData -> Buffer.BlockCopy) before send() returns, so it
-                // never retains our array. That's why ClientHub.SendLoop can recycle frame.Buf
+                // never retains our array. That's why OutboundChannel.SendLoop can recycle frame.Buf
                 // the instant this ValueTask completes. The old data.ToArray() was a redundant
                 // second copy on top of SIPSorcery's; pass the backing array + range instead.
                 if (MemoryMarshal.TryGetArray(data, out var seg) && seg.Array is not null)

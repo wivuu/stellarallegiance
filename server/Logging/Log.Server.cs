@@ -21,20 +21,38 @@ internal static partial class Log
     [LoggerMessage(EventId = 1002, Level = LogLevel.Information, Message = "world: loaded '{Path}'{Suffix}")]
     public static partial void WorldLoaded(ILogger logger, string path, string suffix);
 
-    [LoggerMessage(EventId = 1003, Level = LogLevel.Warning,
-        Message = "open server (no --secret/SIM_SECRET) — do not expose to untrusted networks.")]
+    [LoggerMessage(
+        EventId = 1003,
+        Level = LogLevel.Warning,
+        Message = "open server (no --secret/SIM_SECRET) — do not expose to untrusted networks."
+    )]
     public static partial void OpenServer(ILogger logger);
 
-    [LoggerMessage(EventId = 1004, Level = LogLevel.Information, Message = "auth enabled (shared-secret password required).")]
+    [LoggerMessage(
+        EventId = 1004,
+        Level = LogLevel.Information,
+        Message = "auth enabled (shared-secret password required)."
+    )]
     public static partial void AuthEnabled(ILogger logger);
 
-    [LoggerMessage(EventId = 1005, Level = LogLevel.Information, Message = "autostart on — perpetual match, lobby ready-up bypassed.")]
+    [LoggerMessage(
+        EventId = 1005,
+        Level = LogLevel.Information,
+        Message = "autostart on — perpetual match, lobby ready-up bypassed."
+    )]
     public static partial void AutostartOn(ILogger logger);
 
-    [LoggerMessage(EventId = 1006, Level = LogLevel.Information, Message = "map: '{Name}' ({Sectors} sector override(s)){Suffix}")]
+    [LoggerMessage(
+        EventId = 1006,
+        Level = LogLevel.Information,
+        Message = "map: '{Name}' ({Sectors} sector override(s)){Suffix}"
+    )]
     public static partial void MapLoaded(ILogger logger, string name, int sectors, string suffix);
 
-    [LoggerMessage(EventId = 1007, Level = LogLevel.Information,
-        Message = "ws://localhost:{Port}/game  seed={Seed}  asteroids={Asteroids}  20 Hz")]
+    [LoggerMessage(
+        EventId = 1007,
+        Level = LogLevel.Information,
+        Message = "ws://localhost:{Port}/game  seed={Seed}  asteroids={Asteroids}  20 Hz"
+    )]
     public static partial void ServerListening(ILogger logger, int port, ulong seed, int asteroids);
 }

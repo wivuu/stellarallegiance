@@ -87,10 +87,33 @@ ai:
   juke-period-seconds: 0.65
   juke-amp-min: 0.45
   juke-amp-max: 1.0
-  # Player-autopilot friendly-base docking maneuver (server-only; DockApproach Transit->Align->Creep).
-  # dock-standoff: 25         # standoff-point distance outside the door plane (world units)
-  # dock-clearance: 40        # detour ring radius past BaseRadius when routing around the base
-  # dock-creep-throttle: 0.12 # throttle fraction while creeping down the door corridor (~19 u/s Scout)
+  # ---- Server-side NAVIGATION tuning (not PIG behaviour, but the same block so every server-side
+  # steering knob has one home). Shared approach braking, used by the player autopilot AND the
+  # miner/constructor drone legs:
+  brake-margin: 16         # cushion between the model's stopping distance and the brake commit point
+  arrival-band-mult: 1.2   # "arrived" band generosity, × a point destination's standoff distance
+  # Player-autopilot friendly-base docking maneuver (DockApproach Transit->Align->Creep). Geometry
+  # gates: a server running re-baked base meshes may need them, otherwise leave them alone. Two
+  # cross-knob invariants are enforced at load (boot refuses, naming the key):
+  #   dock-capture      > brake-margin   (a smaller capture radius is a dead zone Transit can't enter)
+  #   dock-outer-standoff > dock-standoff (the acquire point must clear the padded hull sphere)
+  # and dock-creep-throttle / dock-descent-max-throttle / dock-facing-dot must be in (0, 1],
+  # dock-roll-tol > 0.
+  dock-standoff: 25            # standoff-point distance outside the door plane (world units)
+  dock-clearance: 40           # detour ring radius past BaseRadius when routing around the base
+  dock-creep-throttle: 0.12    # throttle fraction while creeping down the door corridor (~19 u/s Scout)
+  dock-hull-margin: 10         # padding on BaseRadius for the line-of-sight / detour sphere
+  dock-los-slack: 35           # trailing slack the LOS test excuses (the terminal door pocket)
+  dock-detour-step-rad: 0.6    # per-tick azimuth advance of the detour orbit carrot (radians)
+  dock-capture: 20             # within this of the standoff point promotes Transit -> Align
+  dock-outer-standoff: 60      # outer axis-acquire point, outside the door plane
+  dock-axis-slop: 12           # lateral slack past the door half-extents still counted as "on axis"
+  dock-descent-margin: 8       # arrest cushion on the on-axis descent (speeds are low here)
+  dock-descent-max-throttle: 0.3 # descent speed cap, fraction of max speed — dock pace, not cruise
+  dock-capture-speed-sq: 9     # ...and speed² below this (~3 u/s) so the ship has settled
+  dock-roll-gain: 3            # FaceAndRoll roll proportional gain
+  dock-facing-dot: 0.995       # Align -> Creep: nose-onto-door facing threshold
+  dock-roll-tol: 0.10          # Align -> Creep: |localUp.X| roll-alignment tolerance
 
 # Collision damage + sector-boundary hazard (kinematics stay in the shared CollisionConfig —
 # the client predicts bounces; damage is server-only).

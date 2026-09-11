@@ -20,8 +20,7 @@
 //   7. Cross-sector goto: point in a gate-linked sector → the pig warps, arrives, holds.
 //   8. Miner rock order: pins the slot's TargetRockId + authorizes the rock's sector.
 //   9. Repeatability: the same goto scenario twice → both runs holding inside the arrive band.
-//      NOT bit-exact: drone skill/patrol draws ride the intentionally unseeded Simulation._rng
-//      (drones are never client-predicted — see RandomPatrolPoint). The bit-exact guard for the
+//      Band, not bit-exactness: the two sims are separate arenas. The bit-exact guard for the
 //      shared AutoSteer geometry itself is AutopilotTest scenario 8; orders reuse that same path.
 //  10. Multi-subject orders: the F3 multi-select fans out one MsgOrder per selected ship — the
 //      sim must hold independent per-subject orders side by side, and a per-subject clear sweep
@@ -37,6 +36,10 @@
 //      where it entered, never a run at the sector center.
 //  14. Sector order (targetKind 4), miner, fog on: prospect-patrols the ordered sector (sweeping
 //      undiscovered rocks) until helium-3 turns up, then mines it.
+//
+// Determinism: every BootSim pins the Simulation's server-only RNG (see its rngSeed parameter) as
+// well as the World seed, so the drone patrol/launch draws that steer the timing bands below
+// repeat run to run. Production supplies no seed and stays time-seeded, exactly as before.
 
 using System.Linq;
 using SimServer.Content;
@@ -61,13 +64,18 @@ string worldPath = Path.Combine(AppContext.BaseDirectory, "content", "core", "wo
 // world.yaml ai tuning this test leans on (see InitPigTuning): radar-range 1200, fire-range 360,
 // patrol-arrive 120 (the goto arrival shell), brain-hz 5 (a decision every 4 ticks).
 const float FireRange = 360f;
+const float RadarRange = 1200f;
 const float ArriveSlack = 200f; // patrol-arrive + wobble
 
+// The scenario seed pins BOTH halves of the arena: the World generator (layout) and — via the
+// Simulation's rngSeed — the server-only PIG draw stream (patrol waypoints, launch-exit pick).
+// Without the second half the drone behaviour under an order varies run to run and the timing
+// bands below are a coin flip (scenario 5 in particular). Production leaves rngSeed null.
 Simulation BootSim(ulong seed, bool pigs, bool miners = false, bool fog = false)
 {
     var content = ContentLoader.Load(stockPath, worldPath);
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
-    var sim = new Simulation(world, content);
+    var sim = new Simulation(world, content, rngSeed: (int)seed);
     sim.PigsEnabled = pigs;
     sim.MinersEnabled = miners;
     sim.ShieldsEnabled = false;
@@ -83,6 +91,17 @@ void PlaceAt(Simulation.ShipSim s, uint sector, Vec3 pos)
     s.State.Vel = new Vec3(0f, 0f, 0f);
     s.State.Rot = Quat.Identity;
     s.State.AngVel = new Vec3(0f, 0f, 0f);
+}
+
+// Park a ship out of every PIG range WITHOUT sailing it out of the sector. Anything past the
+// sector radius sits in the boundary hazard (world.yaml `combat: boundary-*-dps`, up to 60 dps)
+// and erodes to nothing within seconds — a "parked" hull put out there is dead, not idle, and a
+// scenario that later reuses it is silently testing an absent ship. Sits on +Z at 2x radar range
+// from the reference point, clamped well inside the boundary.
+void ParkOutOfRadar(Simulation sim, Simulation.ShipSim s, uint sector, Vec3 from)
+{
+    float ring = MathF.Min(RadarRange * 2f, sim.World.SectorRadius(sector) - from.Length() - 200f);
+    PlaceAt(s, sector, from + new Vec3(0f, 0f, ring));
 }
 
 Simulation.ShipSim SpawnPlayer(Simulation sim, int client, byte team, byte cls)
@@ -121,8 +140,7 @@ Simulation.ShipSim WaitForPig(Simulation sim)
             if (s.IsPig && s.Team == 1)
                 s.Health = 0f;
         sim.Step();
-        pig = sim.Ships.Where(s => s.IsPig && !s.IsPod && s.Team == 0 && s.Alive)
-            .OrderBy(s => s.ShipId).FirstOrDefault();
+        pig = sim.Ships.Where(s => s.IsPig && !s.IsPod && s.Team == 0 && s.Alive).OrderBy(s => s.ShipId).FirstOrDefault();
     }
     if (pig is null)
         throw new Exception("no team-0 pig spawned within 400 ticks");
@@ -146,9 +164,11 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
     // Scout, Enh Fighter, Bomber — authors decoys, so a seeded hold is never empty. Nothing
     // consumes these charges yet (PIG input never raises the drop flags), so this assertion is
     // the ONLY thing keeping the drone hold from silently regressing to empty.
-    Check(pig.ChaffAmmo > 0 && pig.ChaffWeaponId != 0,
+    Check(
+        pig.ChaffAmmo > 0 && pig.ChaffWeaponId != 0,
         "spawned drone carries its hull's authored hold (chaff seeded)",
-        $"drone hold empty (chaff {pig.ChaffAmmo}, weapon {pig.ChaffWeaponId}, class {pig.Class})");
+        $"drone hold empty (chaff {pig.ChaffAmmo}, weapon {pig.ChaffWeaponId}, class {pig.Class})"
+    );
 
     // Enemy parked ~1400 from the pig — beyond radar-range 1200, so autonomy would never chase it;
     // the commander (and the issuer's own ship) parked well clear of the fight.
@@ -159,10 +179,16 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
     sim.EnqueueCommandOrder(1, "Cmdr", 0, pig.ShipId, targetKind: 0, targetId: enemy.ShipId, sector: 0, pos: default);
     StepQuiet(sim, pig.ShipId); // drain + apply
     var orders = sim.PigOrdersView();
-    Check(orders.Count == 1 && orders[0].ShipId == pig.ShipId && orders[0].Kind == 1 && orders[0].TargetShipId == enemy.ShipId,
-        "attack order stored against the ordered pig", $"order not stored as expected (count {orders.Count})");
-    Check(sim.OrderDirectivesThisStep.Any(d => d.Team == 0 && d.Text.Contains("attack")),
-        "team directive announced the attack order", "no attack directive emitted");
+    Check(
+        orders.Count == 1 && orders[0].ShipId == pig.ShipId && orders[0].Kind == 1 && orders[0].TargetShipId == enemy.ShipId,
+        "attack order stored against the ordered pig",
+        $"order not stored as expected (count {orders.Count})"
+    );
+    Check(
+        sim.OrderDirectivesThisStep.Any(d => d.Team == 0 && d.Text.Contains("attack")),
+        "team directive announced the attack order",
+        "no attack directive emitted"
+    );
 
     float start = Dist(pig.State.Pos, enemy.State.Pos);
     float best = start;
@@ -173,15 +199,20 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
         if (best <= FireRange)
             break;
     }
-    Check(best <= FireRange,
+    Check(
+        best <= FireRange,
         $"ordered pig closed from {start:F0} to fire range ({best:F0} ≤ {FireRange})",
-        $"ordered pig never closed (start {start:F0}, best {best:F0})");
+        $"ordered pig never closed (start {start:F0}, best {best:F0})"
+    );
 
     // 2. Target leaves → the order completes and the drone reverts to autonomy.
     sim.EnqueueLeave(2);
     StepQuiet(sim, pig.ShipId, 8); // leave + ≥1 brain tick
-    Check(sim.PigOrdersView().Count == 0, "order removed once its target was gone (revert to autonomy)",
-        $"stale order survived target loss ({sim.PigOrdersView().Count})");
+    Check(
+        sim.PigOrdersView().Count == 0,
+        "order removed once its target was gone (revert to autonomy)",
+        $"stale order survived target loss ({sim.PigOrdersView().Count})"
+    );
 }
 
 // ---- 3. Fog: an attack order on a never-seen enemy is refused ------------------------------------
@@ -191,15 +222,25 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
     var enemy = SpawnPlayer(sim, 2, team: 1, cls: FlightModel.ClassScout);
     var pig = WaitForPig(sim);
     // The enemy sits in its own garrison sector, which team 0 has never scouted under fog.
-    Check(!sim.TeamRadarSees(0, enemy.ShipId), "fog precondition: team 0 has no radar contact on the enemy",
-        "precondition broken — enemy already radar-visible");
+    Check(
+        !sim.TeamRadarSees(0, enemy.ShipId),
+        "fog precondition: team 0 has no radar contact on the enemy",
+        "precondition broken — enemy already radar-visible"
+    );
 
     sim.EnqueueCommandOrder(1, "Cmdr", 0, pig.ShipId, targetKind: 0, targetId: enemy.ShipId, sector: 0, pos: default);
     StepQuiet(sim, pig.ShipId);
     Check(sim.PigOrdersView().Count == 0, "fog-blind attack order stored nothing", "order stored despite no radar contact");
-    Check(sim.OrderNoticesThisStep.Any(nx => nx.ClientId == 1 && nx.Text.Contains("radar")),
-        "issuer got the no-radar-contact rejection", "no rejection notice reached the issuer");
-    Check(sim.OrderDirectivesThisStep.Count == 0, "no team directive for a rejected order", "rejected order still announced");
+    Check(
+        sim.OrderNoticesThisStep.Any(nx => nx.ClientId == 1 && nx.Text.Contains("radar")),
+        "issuer got the no-radar-contact rejection",
+        "no rejection notice reached the issuer"
+    );
+    Check(
+        sim.OrderDirectivesThisStep.Count == 0,
+        "no team directive for a rejected order",
+        "rejected order still announced"
+    );
 }
 
 // ---- 4 + 5 + 6. Goto-idle: arrive + hold, defend the point, explicit clear -----------------------
@@ -209,9 +250,9 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
     var enemy = SpawnPlayer(sim, 2, team: 1, cls: FlightModel.ClassScout);
     var pig = WaitForPig(sim);
     uint sector = pig.SectorId;
-    PlaceAt(enemy, sector, new Vec3(4000f, 4000f, 4000f)); // parked far out of every range for now
 
     var hold = new Vec3(0f, 500f, 0f);
+    ParkOutOfRadar(sim, enemy, sector, hold); // out of every range for now — and still ALIVE for step 5
     PlaceAt(pig, sector, new Vec3(0f, 500f, -800f));
     sim.EnqueueCommandOrder(1, "Cmdr", 0, pig.ShipId, targetKind: 3, targetId: 0, sector: sector, pos: hold);
     StepQuiet(sim, pig.ShipId);
@@ -229,9 +270,11 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
         StepQuiet(sim, pig.ShipId);
         worst = MathF.Max(worst, Dist(pig.State.Pos, hold));
     }
-    Check(worst <= ArriveSlack + 150f,
+    Check(
+        worst <= ArriveSlack + 150f,
         $"holding pig station-kept within {worst:F0} of the point",
-        $"holding pig drifted {worst:F0} from the point");
+        $"holding pig drifted {worst:F0} from the point"
+    );
 
     // 5. Self-defense: the enemy fires just off the hold point → the pig chases WITHOUT dropping
     // the order; once the aggressor is gone it falls back to the hold point.
@@ -248,28 +291,40 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
         StepQuiet(sim, pig.ShipId);
         toAggr = MathF.Min(toAggr, Dist(pig.State.Pos, enemy.State.Pos));
     }
-    Check(toAggr < 250f, $"holding pig turned on the aggressor (closed to {toAggr:F0})",
-        $"holding pig ignored the aggressor (best {toAggr:F0})");
-    Check(sim.PigOrdersView().Any(o => o.ShipId == pig.ShipId), "goto order survived the self-defense chase",
-        "self-defense chase dropped the order");
+    Check(
+        toAggr < 250f,
+        $"holding pig turned on the aggressor (closed to {toAggr:F0})",
+        $"holding pig ignored the aggressor (best {toAggr:F0})"
+    );
+    Check(
+        sim.PigOrdersView().Any(o => o.ShipId == pig.ShipId),
+        "goto order survived the self-defense chase",
+        "self-defense chase dropped the order"
+    );
 
     sim.EnqueueInput(2, 0, default); // cease fire
-    PlaceAt(enemy, sector, new Vec3(4000f, 4000f, 4000f)); // aggressor gone (far outside radar)
+    ParkOutOfRadar(sim, enemy, sector, hold); // aggressor gone (outside radar, still inside the sector)
     float backTo = float.MaxValue;
     for (int i = 0; i < 600; i++)
     {
         StepQuiet(sim, pig.ShipId);
         backTo = MathF.Min(backTo, Dist(pig.State.Pos, hold));
     }
-    Check(backTo <= ArriveSlack + 150f, $"pig resumed holding after the threat left (back to {backTo:F0})",
-        $"pig never returned to the hold point ({backTo:F0})");
+    Check(
+        backTo <= ArriveSlack + 150f,
+        $"pig resumed holding after the threat left (back to {backTo:F0})",
+        $"pig never returned to the hold point ({backTo:F0})"
+    );
 
     // 6. Explicit clear (targetKind 255).
     sim.EnqueueCommandOrder(1, "Cmdr", 0, pig.ShipId, targetKind: 255, targetId: 0, sector: 0, pos: default);
     StepQuiet(sim, pig.ShipId);
     Check(sim.PigOrdersView().Count == 0, "explicit clear removed the order", "clear left the order in place");
-    Check(sim.OrderNoticesThisStep.Any(nx => nx.ClientId == 1 && nx.Text.Contains("autonomy")),
-        "issuer told the drone was released to autonomy", "no release notice");
+    Check(
+        sim.OrderNoticesThisStep.Any(nx => nx.ClientId == 1 && nx.Text.Contains("autonomy")),
+        "issuer told the drone was released to autonomy",
+        "no release notice"
+    );
 }
 
 // ---- 7. Cross-sector goto: gate transit, then arrive + hold --------------------------------------
@@ -284,7 +339,8 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
 
     PlaceAt(pig, from, new Vec3(0f, 400f, 0f));
     sim.EnqueueCommandOrder(1, "Cmdr", 0, pig.ShipId, targetKind: 3, targetId: 0, sector: dest, pos: point);
-    bool warped = false, arrived = false;
+    bool warped = false,
+        arrived = false;
     for (int i = 0; i < 6000 && !arrived && pig.Alive; i++)
     {
         StepQuiet(sim, pig.ShipId);
@@ -293,8 +349,11 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
     }
     Check(warped, $"ordered pig warped {from} → {dest}", "pig never crossed the gate");
     Check(arrived, "pig arrived and holds in the destination sector", "pig never settled at the cross-sector point");
-    Check(pig.SectorId == dest && Dist(pig.State.Pos, point) <= ArriveSlack + 150f,
-        $"holding {Dist(pig.State.Pos, point):F0} from the ordered point", "pig holds far from the ordered point");
+    Check(
+        pig.SectorId == dest && Dist(pig.State.Pos, point) <= ArriveSlack + 150f,
+        $"holding {Dist(pig.State.Pos, point):F0} from the ordered point",
+        "pig holds far from the ordered point"
+    );
 }
 
 // ---- 8. Miner rock order: pins the claim + authorizes the sector ---------------------------------
@@ -319,43 +378,63 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
             sim.World.RockOre.TryGetValue(r.Id, out var ore)
             && ore.Class == RockClass.Helium3
             && ore.OreRemaining > 0f
-            && !authorized.Contains(r.SectorId));
+            && !authorized.Contains(r.SectorId)
+        );
 
         sim.EnqueueCommandOrder(1, "Cmdr", 0, drone.ShipId, targetKind: 2, targetId: rock.Id, sector: 0, pos: default);
         sim.Step();
         var slot = sim.MinerSlotsView().First(m => m.Team == 0);
-        Check(slot.TargetRockId == rock.Id, "miner claim pinned to the ordered rock",
-            $"claim not pinned (target {slot.TargetRockId}, wanted {rock.Id})");
+        Check(
+            slot.TargetRockId == rock.Id,
+            "miner claim pinned to the ordered rock",
+            $"claim not pinned (target {slot.TargetRockId}, wanted {rock.Id})"
+        );
         Check(slot.State == "ToRock", "miner en route to the ordered rock", $"miner state {slot.State}");
-        Check(authorized.Contains(rock.SectorId), "ordered rock's sector was authorized for the team",
-            "sector not authorized by the order");
-        Check(sim.OrderDirectivesThisStep.Any(d => d.Team == 0 && d.Text.Contains("mine")),
-            "team directive announced the mining order", "no mining directive emitted");
+        Check(
+            authorized.Contains(rock.SectorId),
+            "ordered rock's sector was authorized for the team",
+            "sector not authorized by the order"
+        );
+        Check(
+            sim.OrderDirectivesThisStep.Any(d => d.Team == 0 && d.Text.Contains("mine")),
+            "team directive announced the mining order",
+            "no mining directive emitted"
+        );
 
         // Sector-level point order (the F3 minimap right-click sends targetKind 3 with the
         // sector's center, pos 0): the miner must end up on a rock IN that sector — straight away
         // when one sits near the mark, else via the Prospect leg (fly to the mark, then pick
         // sector-wide from it; fog is OFF here so the arrival pick always lands).
-        var otherSector = sim.World.Asteroids.First(r =>
-            sim.World.RockOre.TryGetValue(r.Id, out var ore)
-            && ore.Class == RockClass.Helium3
-            && ore.OreRemaining > 0f
-            && r.SectorId != rock.SectorId).SectorId;
+        var otherSector = sim
+            .World.Asteroids.First(r =>
+                sim.World.RockOre.TryGetValue(r.Id, out var ore)
+                && ore.Class == RockClass.Helium3
+                && ore.OreRemaining > 0f
+                && r.SectorId != rock.SectorId
+            )
+            .SectorId;
         sim.EnqueueCommandOrder(1, "Cmdr", 0, drone.ShipId, targetKind: 3, targetId: 0, sector: otherSector, pos: default);
         sim.Step();
-        Check(sim.World.TeamStates[0].AuthorizedMiningSectors.Contains(otherSector),
-            "sector point order authorized the sector", "sector not authorized by the point order");
+        Check(
+            sim.World.TeamStates[0].AuthorizedMiningSectors.Contains(otherSector),
+            "sector point order authorized the sector",
+            "sector not authorized by the point order"
+        );
         bool retargeted = false;
         for (int i = 0; i < 9000 && !retargeted; i++)
         {
             var slot2 = sim.MinerSlotsView().First(m => m.Team == 0);
-            retargeted = slot2.TargetRockId != 0
+            retargeted =
+                slot2.TargetRockId != 0
                 && sim.World.Asteroids.First(r => r.Id == slot2.TargetRockId).SectorId == otherSector;
             if (!retargeted)
                 sim.Step();
         }
-        Check(retargeted, "sector point order put the miner on a rock in the ordered sector",
-            $"miner never targeted a rock in sector {otherSector}");
+        Check(
+            retargeted,
+            "sector point order put the miner on a rock in the ordered sector",
+            $"miner never targeted a rock in sector {otherSector}"
+        );
     }
 }
 
@@ -370,17 +449,18 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
         SpawnPlayer(sim, 1, team: 0, cls: FlightModel.ClassScout);
         var pig = WaitForPig(sim);
         PlaceAt(pig, pig.SectorId, new Vec3(0f, 500f, -600f));
-        sim.EnqueueCommandOrder(1, "Cmdr", 0, pig.ShipId, targetKind: 3, targetId: 0,
-            sector: pig.SectorId, pos: point);
+        sim.EnqueueCommandOrder(1, "Cmdr", 0, pig.ShipId, targetKind: 3, targetId: 0, sector: pig.SectorId, pos: point);
         StepQuiet(sim, pig.ShipId, 500);
         bool holding = sim.PigOrdersView().Any(o => o.ShipId == pig.ShipId && o.Holding);
         return (holding, Dist(pig.State.Pos, point));
     }
     var a = RunOnce();
     var b = RunOnce();
-    Check(a.Holding && b.Holding && a.Dist <= ArriveSlack + 150f && b.Dist <= ArriveSlack + 150f,
+    Check(
+        a.Holding && b.Holding && a.Dist <= ArriveSlack + 150f && b.Dist <= ArriveSlack + 150f,
         $"both identical runs hold inside the arrive band ({a.Dist:F0} / {b.Dist:F0})",
-        $"runs diverged: holding {a.Holding}/{b.Holding}, dist {a.Dist:F0}/{b.Dist:F0}");
+        $"runs diverged: holding {a.Holding}/{b.Holding}, dist {a.Dist:F0}/{b.Dist:F0}"
+    );
 }
 
 // ---- 10. Multi-subject orders: independent per-ship orders coexist, clear sweep empties them ----
@@ -411,8 +491,7 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
             if (s.IsPig && s.Team == 1)
                 s.Health = 0f;
         sim.Step();
-        pigs = sim.Ships.Where(s => s.IsPig && !s.IsPod && s.Team == 0 && s.Alive)
-            .OrderBy(s => s.ShipId).Take(2).ToList();
+        pigs = sim.Ships.Where(s => s.IsPig && !s.IsPod && s.Team == 0 && s.Alive).OrderBy(s => s.ShipId).Take(2).ToList();
     }
     Check(pigs.Count == 2, "two team-0 pigs up for the group order", $"only {pigs.Count} pig(s) spawned");
     if (pigs.Count == 2)
@@ -424,20 +503,43 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
         uint sector = pigs[0].SectorId;
         PlaceAt(pigs[0], sector, new Vec3(0f, 500f, -600f));
         PlaceAt(pigs[1], sector, new Vec3(200f, 500f, -600f));
-        sim.EnqueueCommandOrder(1, "Cmdr", 0, ids[0], targetKind: 3, targetId: 0, sector: sector, pos: new Vec3(-300f, 500f, 400f));
-        sim.EnqueueCommandOrder(1, "Cmdr", 0, ids[1], targetKind: 3, targetId: 0, sector: sector, pos: new Vec3(300f, 500f, 400f));
+        sim.EnqueueCommandOrder(
+            1,
+            "Cmdr",
+            0,
+            ids[0],
+            targetKind: 3,
+            targetId: 0,
+            sector: sector,
+            pos: new Vec3(-300f, 500f, 400f)
+        );
+        sim.EnqueueCommandOrder(
+            1,
+            "Cmdr",
+            0,
+            ids[1],
+            targetKind: 3,
+            targetId: 0,
+            sector: sector,
+            pos: new Vec3(300f, 500f, 400f)
+        );
         StepQuietMany(ids);
         var orders = sim.PigOrdersView();
-        Check(orders.Count == 2 && ids.All(id => orders.Any(o => o.ShipId == id)),
+        Check(
+            orders.Count == 2 && ids.All(id => orders.Any(o => o.ShipId == id)),
             "both subjects hold their own order side by side",
-            $"expected 2 coexisting orders, got {orders.Count} ({string.Join(",", orders.Select(o => o.ShipId))})");
+            $"expected 2 coexisting orders, got {orders.Count} ({string.Join(",", orders.Select(o => o.ShipId))})"
+        );
 
         // Release sweep — one clear frame per subject, mirroring right-click-release on a selected ship.
         foreach (ulong id in ids)
             sim.EnqueueCommandOrder(1, "Cmdr", 0, id, targetKind: 255, targetId: 0, sector: 0, pos: default);
         StepQuietMany(ids);
-        Check(sim.PigOrdersView().Count == 0, "per-subject clear sweep released the whole group",
-            $"orders survived the clear sweep ({sim.PigOrdersView().Count})");
+        Check(
+            sim.PigOrdersView().Count == 0,
+            "per-subject clear sweep released the whole group",
+            $"orders survived the clear sweep ({sim.PigOrdersView().Count})"
+        );
     }
 }
 
@@ -462,23 +564,30 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
         uint homeSector = drone.SectorId;
         // An He3 field in a sector the team has NOT authorized (and, under fog, not scouted).
         var authorized = sim.World.TeamStates[0].AuthorizedMiningSectors;
-        uint dest = sim.World.Asteroids.First(r =>
-            sim.World.RockOre.TryGetValue(r.Id, out var ore)
-            && ore.Class == RockClass.Helium3
-            && ore.OreRemaining > 0f
-            && r.SectorId != homeSector
-            && !authorized.Contains(r.SectorId)).SectorId;
+        uint dest = sim
+            .World.Asteroids.First(r =>
+                sim.World.RockOre.TryGetValue(r.Id, out var ore)
+                && ore.Class == RockClass.Helium3
+                && ore.OreRemaining > 0f
+                && r.SectorId != homeSector
+                && !authorized.Contains(r.SectorId)
+            )
+            .SectorId;
 
         sim.EnqueueCommandOrder(1, "Cmdr", 0, drone.ShipId, targetKind: 3, targetId: 0, sector: dest, pos: default);
         sim.Step();
         var after = sim.MinerSlotsView().First(m => m.Team == 0);
-        Check(after.State == "Prospect" && after.TargetRockId == 0,
+        Check(
+            after.State == "Prospect" && after.TargetRockId == 0,
             "fog-blind sector order flipped the harvesting miner to Prospect",
-            $"order did not start a prospect run (state {after.State}, rock {after.TargetRockId})");
+            $"order did not start a prospect run (state {after.State}, rock {after.TargetRockId})"
+        );
 
         // The run must actually leave for the ordered sector, and must resolve loudly: either a
         // rock IN the ordered sector (discovered en route) or the give-up notice on arrival.
-        bool reached = false, resolved = false, ignored = false;
+        bool reached = false,
+            resolved = false,
+            ignored = false;
         for (int i = 0; i < 12000 && !resolved; i++)
         {
             sim.Step();
@@ -500,10 +609,17 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
                 }
             }
         }
-        Check(!ignored, "prospecting miner never re-picked its old field", "miner fell back to another sector's rock (order ignored)");
+        Check(
+            !ignored,
+            "prospecting miner never re-picked its old field",
+            "miner fell back to another sector's rock (order ignored)"
+        );
         Check(reached, "prospecting miner traveled to the ordered sector", "miner never entered the ordered sector");
-        Check(resolved, "prospect resolved (rock in the ordered sector, or gave up with a notice)",
-            "prospect neither found a rock there nor announced giving up");
+        Check(
+            resolved,
+            "prospect resolved (rock in the ordered sector, or gave up with a notice)",
+            "prospect neither found a rock there nor announced giving up"
+        );
     }
 }
 
@@ -532,26 +648,40 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
             && r.Id != currentRock
             && sim.World.RockOre.TryGetValue(r.Id, out var ore)
             && ore.Class == RockClass.Helium3
-            && ore.OreRemaining > 0f);
+            && ore.OreRemaining > 0f
+        );
         if (other.Id == 0)
             Console.WriteLine("SKIP: home sector has a single He3 rock — same-sector retarget not testable on this map");
         else
         {
-            sim.EnqueueCommandOrder(1, "Cmdr", 0, drone.ShipId, targetKind: 3, targetId: 0,
-                sector: drone.SectorId, pos: other.Pos);
+            sim.EnqueueCommandOrder(
+                1,
+                "Cmdr",
+                0,
+                drone.ShipId,
+                targetKind: 3,
+                targetId: 0,
+                sector: drone.SectorId,
+                pos: other.Pos
+            );
             sim.Step();
             var slot = sim.MinerSlotsView().First(m => m.Team == 0);
-            Check(slot.State == "Prospect" && slot.TargetRockId == 0,
+            Check(
+                slot.State == "Prospect" && slot.TargetRockId == 0,
                 "waypoint order dropped the harvesting miner into a literal goto (Prospect)",
-                $"order didn't start the waypoint run (state {slot.State}, rock {slot.TargetRockId})");
+                $"order didn't start the waypoint run (state {slot.State}, rock {slot.TargetRockId})"
+            );
             bool onMarkedField = false;
             for (int i = 0; i < 6000 && !onMarkedField; i++)
             {
                 sim.Step();
                 onMarkedField = sim.MinerSlotsView().First(m => m.Team == 0).TargetRockId == other.Id;
             }
-            Check(onMarkedField, "miner visited the mark and took the marked field",
-                "miner never ended up on the marked field");
+            Check(
+                onMarkedField,
+                "miner visited the mark and took the marked field",
+                "miner never ended up on the marked field"
+            );
         }
     }
 }
@@ -567,7 +697,8 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
 
     sim.EnqueueCommandOrder(1, "Cmdr", 0, pig.ShipId, targetKind: 4, targetId: 0, sector: dest, pos: default);
     Vec3 entry = default;
-    bool entered = false, holding = false;
+    bool entered = false,
+        holding = false;
     for (int i = 0; i < 6000 && !holding && pig.Alive; i++)
     {
         StepQuiet(sim, pig.ShipId);
@@ -581,9 +712,11 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
     Check(entered, $"sector-ordered pig transited {from} → {dest}", "pig never crossed the gate");
     Check(holding, "sector-ordered pig settled into Holding", "pig never settled after the transit");
     float offEntry = Dist(pig.State.Pos, entry);
-    Check(pig.SectorId == dest && offEntry <= ArriveSlack + 150f,
+    Check(
+        pig.SectorId == dest && offEntry <= ArriveSlack + 150f,
         $"pig holds just inside the aleph ({offEntry:F0} from its entry point)",
-        $"pig ran on from the aleph ({offEntry:F0} from entry — center-run regression?)");
+        $"pig ran on from the aleph ({offEntry:F0} from entry — center-run regression?)"
+    );
 }
 
 // ---- 14. Sector order: miner prospect-patrols under fog until helium-3 turns up ------------------
@@ -602,28 +735,36 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
     {
         uint home = drone.SectorId;
         var authorized = sim.World.TeamStates[0].AuthorizedMiningSectors;
-        uint dest = sim.World.Asteroids.First(r =>
-            sim.World.RockOre.TryGetValue(r.Id, out var ore)
-            && ore.Class == RockClass.Helium3
-            && ore.OreRemaining > 0f
-            && r.SectorId != home
-            && !authorized.Contains(r.SectorId)).SectorId;
+        uint dest = sim
+            .World.Asteroids.First(r =>
+                sim.World.RockOre.TryGetValue(r.Id, out var ore)
+                && ore.Class == RockClass.Helium3
+                && ore.OreRemaining > 0f
+                && r.SectorId != home
+                && !authorized.Contains(r.SectorId)
+            )
+            .SectorId;
 
         sim.EnqueueCommandOrder(1, "Cmdr", 0, drone.ShipId, targetKind: 4, targetId: 0, sector: dest, pos: default);
         sim.Step();
-        Check(sim.MinerSlotsView().First(m => m.Team == 0).State == "Prospect",
-            "sector order started the prospect run", "no prospect run after the sector order");
+        Check(
+            sim.MinerSlotsView().First(m => m.Team == 0).State == "Prospect",
+            "sector order started the prospect run",
+            "no prospect run after the sector order"
+        );
 
         bool mined = false;
         for (int i = 0; i < 20000 && !mined; i++)
         {
             sim.Step();
             var slot = sim.MinerSlotsView().First(m => m.Team == 0);
-            mined = slot.TargetRockId != 0
-                && sim.World.Asteroids.First(r => r.Id == slot.TargetRockId).SectorId == dest;
+            mined = slot.TargetRockId != 0 && sim.World.Asteroids.First(r => r.Id == slot.TargetRockId).SectorId == dest;
         }
-        Check(mined, "prospect patrol found helium-3 in the ordered sector",
-            "patrol never landed on an He3 rock in the ordered sector");
+        Check(
+            mined,
+            "prospect patrol found helium-3 in the ordered sector",
+            "patrol never landed on an He3 rock in the ordered sector"
+        );
     }
 }
 

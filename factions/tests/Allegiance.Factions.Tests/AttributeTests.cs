@@ -16,11 +16,7 @@ public class AttributeTests
     public void Combine_MultipliesElementWise()
     {
         var a = new AttributeModifiers { [GameAttribute.MaxArmorShip] = 1.1 };
-        var b = new AttributeModifiers
-        {
-            [GameAttribute.MaxArmorShip] = 1.2,
-            [GameAttribute.MaxSpeed] = 0.9,
-        };
+        var b = new AttributeModifiers { [GameAttribute.MaxArmorShip] = 1.2, [GameAttribute.MaxSpeed] = 0.9 };
 
         var combined = a.Combine(b);
 
@@ -32,10 +28,7 @@ public class AttributeTests
     [Fact]
     public void Resolve_StacksFactionBaselineWithCompletedDevelopments()
     {
-        var faction = new Faction
-        {
-            BaseAttributes = new AttributeModifiers { [GameAttribute.MaxArmorShip] = 1.1 },
-        };
+        var faction = new Faction { BaseAttributes = new AttributeModifiers { [GameAttribute.MaxArmorShip] = 1.1 } };
         var developments = new[]
         {
             new Development { Attributes = new AttributeModifiers { [GameAttribute.MaxArmorShip] = 1.15 } },

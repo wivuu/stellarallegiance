@@ -63,12 +63,20 @@
     <TailwindAssetName>tailwindcss-windows-x64.exe</TailwindAssetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(OS)' != 'Windows_NT' AND $([MSBuild]::IsOSPlatform('OSX'))">
-    <TailwindAssetName Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' == 'Arm64'">tailwindcss-macos-arm64</TailwindAssetName>
-    <TailwindAssetName Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' != 'Arm64'">tailwindcss-macos-x64</TailwindAssetName>
+    <TailwindAssetName Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' == 'Arm64'"
+      >tailwindcss-macos-arm64</TailwindAssetName
+    >
+    <TailwindAssetName Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' != 'Arm64'"
+      >tailwindcss-macos-x64</TailwindAssetName
+    >
   </PropertyGroup>
   <PropertyGroup Condition="'$(OS)' != 'Windows_NT' AND $([MSBuild]::IsOSPlatform('Linux'))">
-    <TailwindAssetName Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' == 'Arm64'">tailwindcss-linux-arm64</TailwindAssetName>
-    <TailwindAssetName Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' != 'Arm64'">tailwindcss-linux-x64</TailwindAssetName>
+    <TailwindAssetName Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' == 'Arm64'"
+      >tailwindcss-linux-arm64</TailwindAssetName
+    >
+    <TailwindAssetName Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' != 'Arm64'"
+      >tailwindcss-linux-x64</TailwindAssetName
+    >
   </PropertyGroup>
   <PropertyGroup>
     <TailwindExe>$(TailwindToolsDir)/$(TailwindAssetName)</TailwindExe>
@@ -77,19 +85,22 @@
   <Target Name="EnsureTailwindCss" BeforeTargets="Build">
     <Error
       Condition="'$(TailwindAssetName)' == ''"
-      Text="public-lobby: unsupported OS/CPU for the pinned Tailwind CLI $(TailwindVersion); set TailwindAssetName to override." />
+      Text="public-lobby: unsupported OS/CPU for the pinned Tailwind CLI $(TailwindVersion); set TailwindAssetName to override."
+    />
 
     <MakeDir Directories="$(TailwindToolsDir)" Condition="!Exists('$(TailwindToolsDir)')" />
 
     <DownloadFile
       Condition="!Exists('$(TailwindExe)')"
       SourceUrl="https://github.com/tailwindlabs/tailwindcss/releases/download/$(TailwindVersion)/$(TailwindAssetName)"
-      DestinationFolder="$(TailwindToolsDir)" />
+      DestinationFolder="$(TailwindToolsDir)"
+    />
 
     <Exec Command="chmod +x &quot;$(TailwindExe)&quot;" Condition="'$(OS)' != 'Windows_NT'" />
 
     <Exec
       Command="&quot;$(TailwindExe)&quot; -i Styles/app.css -o wwwroot/app.css --minify"
-      WorkingDirectory="$(MSBuildProjectDirectory)" />
+      WorkingDirectory="$(MSBuildProjectDirectory)"
+    />
   </Target>
 </Project>

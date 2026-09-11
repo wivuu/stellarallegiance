@@ -71,6 +71,18 @@ public partial class Scoreboard : Control
     // it's only a handful of labels — so they're re-texted in place on this cadence instead of
     // rebuilding the board every frame.
     private const double LiveRefreshSec = 0.25;
+
+    // Sizes this board needs that sit off the DesignTokens type scale, named for the surface
+    // they belong to. Everything else uses a token tier.
+    private const int BrandSize = 16; // "SCOREBOARD" / "STELLAR ALLEGIANCE" wordmark
+    private const int MetaSize = 12; // mono meta lines: key caps, map name, win reason
+    private const int TightCaptionSize = 10; // captions under the big tallies / stat columns
+    private const int TeamScoreSize = 18; // team strip + team card score
+    private const int StatValueSize = 20; // POST stat-column value
+    private const int CompareNumSize = 16; // team-comparison row numbers
+    private const int LiveTallyDashSize = 18; // LIVE garrison tally em-dash
+    private const int PostTallyNumSize = 44; // POST garrison tally numerals, the board's largest type
+    private const int PostTallyDashSize = 30; // and its em-dash
     private double _liveRefreshAccum;
     private readonly List<(int ClientId, Label Text, Control BadgeHost)> _liveCells = new();
 
@@ -259,11 +271,11 @@ public partial class Scoreboard : Control
     private static Control KeyCap(string key)
     {
         var l = UiKit.MakeLabel(key, UiKit.TextStyle.Data, DesignTokens.Data);
-        l.AddThemeFontSizeOverride("font_size", 12);
+        l.AddThemeFontSizeOverride("font_size", MetaSize);
         var sb = new StyleBoxFlat
         {
-            BgColor = Colors.Transparent,
-            BorderColor = new Color(120f / 255f, 190f / 255f, 255f / 255f, 0.40f),
+            BgColor = Colors.Transparent, // absence of fill, not a palette colour
+            BorderColor = DesignTokens.BorderMid,
             AntiAliasing = false,
         };
         sb.SetCornerRadiusAll(0);
@@ -275,7 +287,7 @@ public partial class Scoreboard : Control
         return l;
     }
 
-    private static Label Caption(string text, int size = 11) =>
+    private static Label Caption(string text, int size = DesignTokens.CaptionSize) =>
         RosterCells.Mono(text, DesignTokens.TextDim).With(l => l.AddThemeFontSizeOverride("font_size", size));
 
     private static Label Num(string text, Color color, int size)
@@ -393,7 +405,7 @@ public partial class Scoreboard : Control
         var panel = new BracketPanel
         {
             CustomMinimumSize = new Vector2(1240, 600),
-            FillOverride = new Color(8f / 255f, 14f / 255f, 24f / 255f, 0.88f),
+            FillOverride = DesignTokens.PanelSolid,
             MouseFilter = MouseFilterEnum.Ignore,
         };
         center.AddChild(panel);
@@ -419,27 +431,29 @@ public partial class Scoreboard : Control
         );
         var word = UiKit.MakeLabel("SCOREBOARD", UiKit.TextStyle.Label, DesignTokens.TextHi);
         word.AddThemeFontOverride("font", UiFonts.WithGlyphSpacing(UiFonts.SairaBold, 3));
-        word.AddThemeFontSizeOverride("font_size", 16);
+        word.AddThemeFontSizeOverride("font_size", BrandSize);
         word.SizeFlagsVertical = SizeFlags.ShrinkCenter;
         title.AddChild(word);
         var pill = new StatusPill { MouseFilter = MouseFilterEnum.Ignore, SizeFlagsVertical = SizeFlags.ShrinkCenter };
         title.AddChild(pill);
         pill.Configure("● LIVE", StatusPill.Kind.Danger, pulse: true);
-        _clock = Num(MatchDuration(), DesignTokens.TextHi, 22);
+        _clock = Num(MatchDuration(), DesignTokens.TextHi, DesignTokens.TitleSize);
         title.AddChild(_clock);
 
         title.AddChild(RosterCells.Spacer());
         var tally = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
         tally.AddThemeConstantOverride("separation", 12);
-        tally.AddChild(GarrisonTally(numSize: 26, dashSize: 18, nameSize: 13));
-        tally.AddChild(Caption("GARRISONS", 10).With(l => l.SizeFlagsVertical = SizeFlags.ShrinkCenter));
+        tally.AddChild(
+            GarrisonTally(numSize: DesignTokens.HeroSize, dashSize: LiveTallyDashSize, nameSize: DesignTokens.LabelSize)
+        );
+        tally.AddChild(Caption("GARRISONS", TightCaptionSize).With(l => l.SizeFlagsVertical = SizeFlags.ShrinkCenter));
         title.AddChild(tally);
         title.AddChild(RosterCells.Spacer());
 
         title.AddChild(
             RosterCells
                 .Mono(MapName().ToUpperInvariant(), DesignTokens.Text2)
-                .With(l => l.AddThemeFontSizeOverride("font_size", 12))
+                .With(l => l.AddThemeFontSizeOverride("font_size", MetaSize))
                 .With(l => l.SizeFlagsVertical = SizeFlags.ShrinkCenter)
         );
         var close = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
@@ -520,17 +534,17 @@ public partial class Scoreboard : Control
         head.AddChild(
             UiKit
                 .MakeLabel(TeamName(team), UiKit.TextStyle.Label, DesignTokens.TextHi)
-                .With(l => l.AddThemeFontSizeOverride("font_size", 15))
+                .With(l => l.AddThemeFontSizeOverride("font_size", DesignTokens.BodySize))
                 .With(l => l.SizeFlagsVertical = SizeFlags.ShrinkCenter)
         );
         head.AddChild(RosterCells.Spacer());
         head.AddChild(
             RosterCells
                 .Mono($"{Stats.PilotCount(team)} PILOTS · {Stats.TeamKills(team)} KILLS", DesignTokens.Text2)
-                .With(l => l.AddThemeFontSizeOverride("font_size", 11))
+                .With(l => l.AddThemeFontSizeOverride("font_size", DesignTokens.CaptionSize))
                 .With(l => l.SizeFlagsVertical = SizeFlags.ShrinkCenter)
         );
-        head.AddChild(Num(_world.TeamState.Score(team).ToString(), accent, 18));
+        head.AddChild(Num(_world.TeamState.Score(team).ToString(), accent, TeamScoreSize));
         col.AddChild(strip);
 
         // Column header (read-only in live mode — sorting is a post-match affordance).
@@ -703,7 +717,7 @@ public partial class Scoreboard : Control
         );
         var word = UiKit.MakeLabel("STELLAR ALLEGIANCE", UiKit.TextStyle.Label, DesignTokens.TextHi);
         word.AddThemeFontOverride("font", UiFonts.WithGlyphSpacing(UiFonts.SairaBold, 3));
-        word.AddThemeFontSizeOverride("font_size", 16);
+        word.AddThemeFontSizeOverride("font_size", BrandSize);
         brand.AddChild(word);
         brand.AddChild(UiChips.AccentChip("MATCH RESULT", 16, 6, 12));
         row.AddChild(brand);
@@ -741,7 +755,7 @@ public partial class Scoreboard : Control
         var pill = new StatusPill { SizeFlagsVertical = SizeFlags.ShrinkCenter };
         line1.AddChild(pill);
         pill.Configure("ENDED", StatusPill.Kind.Warn);
-        line1.AddChild(Num(MatchDuration(), DesignTokens.TextHi, 22));
+        line1.AddChild(Num(MatchDuration(), DesignTokens.TextHi, DesignTokens.TitleSize));
         line1.AddChild(Caption("MATCH DURATION").With(l => l.SizeFlagsVertical = SizeFlags.ShrinkCenter));
         left.AddChild(line1);
 
@@ -769,15 +783,19 @@ public partial class Scoreboard : Control
         left.AddChild(
             RosterCells
                 .Mono(winner is 0 or 1 ? $"ALL WIN-CONDITION GARRISONS DESTROYED · {where}" : where, DesignTokens.Text2)
-                .With(l => l.AddThemeFontSizeOverride("font_size", 12))
+                .With(l => l.AddThemeFontSizeOverride("font_size", MetaSize))
         );
         row.AddChild(left);
 
         row.AddChild(RosterCells.Spacer());
         var tally = new VBoxContainer { SizeFlagsVertical = SizeFlags.ShrinkCenter };
         tally.AddThemeConstantOverride("separation", 3);
-        tally.AddChild(Caption("GARRISONS DESTROYED", 10).With(l => l.HorizontalAlignment = HorizontalAlignment.Center));
-        tally.AddChild(GarrisonTally(numSize: 44, dashSize: 30, nameSize: 13));
+        tally.AddChild(
+            Caption("GARRISONS DESTROYED", TightCaptionSize).With(l => l.HorizontalAlignment = HorizontalAlignment.Center)
+        );
+        tally.AddChild(
+            GarrisonTally(numSize: PostTallyNumSize, dashSize: PostTallyDashSize, nameSize: DesignTokens.LabelSize)
+        );
         row.AddChild(tally);
         row.AddChild(RosterCells.Spacer());
 
@@ -820,7 +838,7 @@ public partial class Scoreboard : Control
         var hintCol = new VBoxContainer();
         hintCol.AddThemeConstantOverride("separation", 8);
         hint.AddChild(hintCol);
-        hintCol.AddChild(Caption("SUMMONED ANY TIME", 10));
+        hintCol.AddChild(Caption("SUMMONED ANY TIME", TightCaptionSize));
         hintCol.AddChild(HintRow("F5", "TOGGLE SCOREBOARD"));
         hintCol.AddChild(HintRow("ESC", "BACK TO LOBBY"));
         col.AddChild(hint);
@@ -835,7 +853,7 @@ public partial class Scoreboard : Control
         row.AddChild(
             RosterCells
                 .Mono(text, DesignTokens.Text2)
-                .With(l => l.AddThemeFontSizeOverride("font_size", 11))
+                .With(l => l.AddThemeFontSizeOverride("font_size", DesignTokens.CaptionSize))
                 .With(l => l.SizeFlagsVertical = SizeFlags.ShrinkCenter)
         );
         return row;
@@ -856,8 +874,7 @@ public partial class Scoreboard : Control
         };
         foreach (string s in new[] { "normal", "hover", "pressed", "focus", "disabled" })
             btn.AddThemeStyleboxOverride(s, RosterCells.TabStyle(accent, selected));
-        foreach (string c in new[] { "font_color", "font_hover_color", "font_pressed_color", "font_focus_color" })
-            btn.AddThemeColorOverride(c, Colors.Transparent);
+        UiKit.BlankStockLabel(btn);
         byte captured = team;
         btn.Pressed += () =>
         {
@@ -882,13 +899,15 @@ public partial class Scoreboard : Control
         top.AddChild(
             UiKit
                 .MakeLabel(TeamName(team), UiKit.TextStyle.Label, DesignTokens.TextHi)
-                .With(l => l.AddThemeFontSizeOverride("font_size", 14))
+                .With(l => l.AddThemeFontSizeOverride("font_size", DesignTokens.DataSize))
                 .With(l => l.MouseFilter = MouseFilterEnum.Ignore)
         );
         top.AddChild(RosterCells.Spacer());
         // The team cards lead with their SCORE (what the match is decided on); the neutral card has
         // no score of its own, so it leads with the pilot count.
-        top.AddChild(Num(all ? Stats.PilotCount(team).ToString() : _world.TeamState.Score(team).ToString(), accent, 18));
+        top.AddChild(
+            Num(all ? Stats.PilotCount(team).ToString() : _world.TeamState.Score(team).ToString(), accent, TeamScoreSize)
+        );
         col.AddChild(top);
 
         var sub = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
@@ -917,9 +936,7 @@ public partial class Scoreboard : Control
         var nameCol = new VBoxContainer();
         nameCol.AddThemeConstantOverride("separation", 2);
         nameCol.AddChild(
-            UiKit
-                .MakeLabel(TeamName(_filterTeam), UiKit.TextStyle.Title, all ? DesignTokens.TextHi : TeamColor(_filterTeam))
-                .With(l => l.AddThemeFontSizeOverride("font_size", 22))
+            UiKit.MakeLabel(TeamName(_filterTeam), UiKit.TextStyle.Title, all ? DesignTokens.TextHi : TeamColor(_filterTeam))
         );
         int pilots = Stats.PilotCount(_filterTeam);
         nameCol.AddChild(
@@ -929,7 +946,7 @@ public partial class Scoreboard : Control
                         + $"{Stats.TeamEjects(_filterTeam)} ejections · {Stats.TeamDeaths(_filterTeam)} pods lost",
                     DesignTokens.Text2
                 )
-                .With(l => l.AddThemeFontSizeOverride("font_size", 11))
+                .With(l => l.AddThemeFontSizeOverride("font_size", DesignTokens.CaptionSize))
         );
         headRow.AddChild(nameCol);
         headRow.AddChild(RosterCells.Spacer());
@@ -973,8 +990,8 @@ public partial class Scoreboard : Control
         var col = new VBoxContainer();
         col.AddThemeConstantOverride("separation", 0);
         col.SizeFlagsVertical = SizeFlags.ShrinkCenter;
-        col.AddChild(Caption(caption, 10));
-        col.AddChild(Num(value, valueColor, 20));
+        col.AddChild(Caption(caption, TightCaptionSize));
+        col.AddChild(Num(value, valueColor, StatValueSize));
         var wrap = new MarginContainer();
         wrap.AddThemeConstantOverride("margin_left", 26);
         wrap.AddChild(col);
@@ -1003,8 +1020,7 @@ public partial class Scoreboard : Control
         bool on = _sortKey == key;
         var btn = new Button { Flat = true, FocusMode = FocusModeEnum.None };
         RosterCells.Cell(btn, ratio);
-        foreach (string c in new[] { "font_color", "font_hover_color", "font_pressed_color", "font_focus_color" })
-            btn.AddThemeColorOverride(c, Colors.Transparent);
+        UiKit.BlankStockLabel(btn);
         btn.Pressed += () =>
         {
             if (_sortKey == key)
@@ -1037,7 +1053,7 @@ public partial class Scoreboard : Control
             content.AddChild(
                 RosterCells
                     .Mono(_sortDesc ? "▼" : "▲", DesignTokens.TeamAccent)
-                    .With(l => l.AddThemeFontSizeOverride("font_size", 9))
+                    .With(l => l.AddThemeFontSizeOverride("font_size", DesignTokens.MicroSize))
                     .With(l => l.SizeFlagsVertical = SizeFlags.ShrinkCenter)
             );
         btn.AddChild(content);
@@ -1090,7 +1106,7 @@ public partial class Scoreboard : Control
 
         col.AddChild(RosterCells.Spacer(vertical: true));
         col.AddChild(
-            Caption("SORT BY ANY COLUMN · SELECT A TEAM AT LEFT\nSCORES FINAL AT MATCH END", 10)
+            Caption("SORT BY ANY COLUMN · SELECT A TEAM AT LEFT\nSCORES FINAL AT MATCH END", TightCaptionSize)
                 .With(l => l.AutowrapMode = TextServer.AutowrapMode.WordSmart)
         );
         return margin;
@@ -1103,11 +1119,11 @@ public partial class Scoreboard : Control
         col.AddThemeConstantOverride("separation", 4);
 
         var line = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        line.AddChild(Num(blue.ToString(), DesignTokens.Faction0, 16));
+        line.AddChild(Num(blue.ToString(), DesignTokens.Faction0, CompareNumSize));
         line.AddChild(RosterCells.Spacer());
         line.AddChild(RosterCells.Lbl(label).With(l => l.SizeFlagsVertical = SizeFlags.ShrinkCenter));
         line.AddChild(RosterCells.Spacer());
-        line.AddChild(Num(red.ToString(), DesignTokens.Faction1, 16));
+        line.AddChild(Num(red.ToString(), DesignTokens.Faction1, CompareNumSize));
         col.AddChild(line);
 
         // Share of the total, clamped so one side never collapses to an invisible sliver at 0-0

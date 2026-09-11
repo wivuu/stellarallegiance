@@ -50,14 +50,6 @@ public sealed class ClientHub
     private static readonly float MovingExitSpeed = EnvF("SIM_MOVING_SPEED_EXIT", 1.0f);
     private static readonly float MovingFullRateRadius = EnvF("SIM_MOVING_FULLRATE_RADIUS", 1500f);
 
-    // Per-client outbound queue depth. The queue is FullMode.Wait (TryWrite fails when full),
-    // NEVER DropOldest: evicting the oldest frame silently discards one-shot control frames
-    // (YouAre, ShipGone, Welcome...) that are written earliest each tick and are never re-sent —
-    // a lost YouAre deadlocks the relaunch flow (client retries MsgSpawn forever, server drops
-    // each as "already flying"). Reliable frames that miss the queue park in the client's
-    // PendingControl and retry next tick; lossy frames (snapshots, keepalives) just drop.
-    private const int OutboundQueueDepth = 64;
-
     // AOI broad-phase grid cell (server/Net only — distinct from the sim's 160 u collision grid,
     // which is far too fine for these radii). Held >= FullRateRadius so a viewer's full-rate set
     // is always covered by its 3x3x3 (AoiCellRadius=1) cell neighborhood; AfterStep gathers
@@ -94,33 +86,15 @@ public sealed class ClientHub
 
     private static int CellOf(float v) => (int)MathF.Floor(v / AoiGridCell);
 
-    // One queued outbound frame. Snapshot frames are rented from ArrayPool and oversized, so
-    // they carry their own length and a Pooled flag; the send loop returns them after the
-    // write. Broadcast/handshake frames (Welcome/YouAre/Gone/Bases) are exact-sized and not
-    // pooled. A frame dropped by the bounded channel (slow client) just isn't returned —
-    // ArrayPool tolerates that, falling back to allocation, which is the pre-pool behaviour.
-    private readonly struct OutFrame
-    {
-        public readonly byte[] Buf;
-        public readonly int Len;
-        public readonly bool Pooled;
-
-        public OutFrame(byte[] buf, int len, bool pooled)
-        {
-            Buf = buf;
-            Len = len;
-            Pooled = pooled;
-        }
-
-        public static OutFrame Whole(byte[] b) => new(b, b.Length, false);
-    }
-
     private sealed class Client
     {
         public int Id;
         public byte Team;
+
+        // Receive side of this connection (the hub's receive loop reads/rejects/closes on it).
+        // The write side lives in Out — see OutboundChannel.cs for the reliable/lossy tiers.
         public IClientTransport Transport = null!;
-        public Channel<OutFrame> Outbound = null!;
+        public OutboundChannel Out = null!;
         public ulong ShipId;
 
         // Reconnect token, minted at Hello and handed to the client in its Welcome. A returning
@@ -132,15 +106,6 @@ public sealed class ClientHub
         // of parking it for the reconnect grace window. A bare socket close (no Bye) is an
         // unexpected drop and DOES park the ship.
         public bool Leaving;
-
-        // Reliable control frames that found the outbound queue full when written. Flushed FIFO
-        // (FlushReliable) at the top of this client's AfterStep pre-pass each tick, so nothing
-        // one-shot is ever lost — only delayed. Doubles as its own lock: reliable frames are
-        // written from the sim thread AND receive tasks (Welcome/chat), so both writers and the
-        // flusher serialize on it. Ordering caveat (accepted): a parked control frame lands
-        // after any lossy frames enqueued in the meantime; every such frame tolerates that
-        // (late YouAre → NetPromoteLocal re-inserts, late ShipGone → one-tick lingering hull).
-        public readonly Queue<OutFrame> PendingControl = new();
 
         // AOI anchor, cached each tick by AfterStep's sequential pre-pass (own ship pos/sector,
         // or the home-sector origin before a ship exists) so the parallel snapshot build reads
@@ -258,6 +223,9 @@ public sealed class ClientHub
     private readonly ConcurrentDictionary<int, Client> _clients = new();
     private int _nextClientId;
 
+    // Backpressure counters shared by every client's OutboundChannel (see OutboundChannel.cs).
+    private readonly OutboundStats _outStats = new();
+
     // Name + team of every pilot seen THIS MATCH, leavers included — the scoreboard's memo. The sim
     // ledger is keyed by client id and outlives a disconnect, but the disconnect path drops the
     // pilot from BOTH _lobby and _players, so by the time the end-of-match board is built the server
@@ -297,7 +265,7 @@ public sealed class ClientHub
     // snapshot), so no dedicated lock. Team-name defaults come from the design ("IRON COIL"/"ASH
     // SYNDICATE"), overwritten as pilots rename their side.
     private readonly string[] _teamNames = { "IRON COIL", "ASH SYNDICATE" };
-    private int _hostId = -1; // first pilot on the server; -1 when empty. TODO: allow explicit host transfer.
+    private int _hostId = -1; // first pilot on the server; -1 when empty.
     private string _selectedMap; // the current/"next" map name (advertised only — see MsgSetMap)
     private readonly IReadOnlyList<MapCatalogEntry> _mapCatalog; // available maps, built once at boot
 
@@ -404,7 +372,7 @@ public sealed class ClientHub
     // the sim thread. Shared by the workers and the sim thread's own drain-while-waiting loop.
     private void BuildAndCountDown(Client client)
     {
-        SendLossy(client, BuildSnapshotFor(client, _dispatchShips, _dispatchMid, _dispatchCoarse));
+        client.Out.SendLossy(BuildSnapshotFor(client, _dispatchShips, _dispatchMid, _dispatchCoarse));
         if (Interlocked.Decrement(ref _fanoutPending) == 0)
             _fanoutDone.Set();
     }
@@ -463,7 +431,7 @@ public sealed class ClientHub
             _lobby.CommanderOf(1)
         );
         foreach (var c in _clients.Values)
-            SendReliable(c, OutFrame.Whole(frame));
+            c.Out.SendReliable(OutFrame.Whole(frame));
     }
 
     // Build + fan out the match scoreboard. Rows are the sim's ledger joined with the name/team
@@ -514,7 +482,7 @@ public sealed class ClientHub
         var frame = Protocol.BuildMatchStats(rows, teams);
         _matchStatsFrame = frame;
         foreach (var c in _clients.Values)
-            SendReliable(c, OutFrame.Whole(frame));
+            c.Out.SendReliable(OutFrame.Whole(frame));
     }
 
     // Build + send this client's Welcome for its CURRENT team, seeding its fog reveal cursors to the
@@ -562,7 +530,7 @@ public sealed class ClientHub
                 vision
             );
         }
-        SendReliable(client, OutFrame.Whole(frame));
+        client.Out.SendReliable(OutFrame.Whole(frame));
         // A Welcome REBUILDS the client's world (ApplyWelcome -> WorldRenderer.Reset), and that
         // wipes its scoreboard ledger — so re-seeding the board is part of what a Welcome means.
         // Every re-Welcome site (join, team change, reclaim, match start, the fog re-sync on a phase
@@ -571,7 +539,7 @@ public sealed class ClientHub
         // frame is immutable and the reference read is atomic, so this is safe off the sim thread;
         // callers that just mutated the ledger rebuild the cache (BroadcastMatchStats) FIRST.
         if (_matchStatsFrame is { } statsFrame)
-            SendReliable(client, OutFrame.Whole(statsFrame));
+            client.Out.SendReliable(OutFrame.Whole(statsFrame));
     }
 
     public async Task HandleConnection(IClientTransport transport, CancellationToken ct)
@@ -580,18 +548,10 @@ public sealed class ClientHub
         {
             Id = Interlocked.Increment(ref _nextClientId),
             Transport = transport,
-            Outbound = Channel.CreateBounded<OutFrame>(
-                new BoundedChannelOptions(OutboundQueueDepth)
-                {
-                    // Wait = TryWrite returns false when full (nothing is silently evicted).
-                    // See the OutboundQueueDepth comment for why DropOldest is forbidden here.
-                    FullMode = BoundedChannelFullMode.Wait,
-                    SingleReader = true,
-                }
-            ),
+            Out = new OutboundChannel(transport, _outStats),
         };
 
-        var sendTask = SendLoop(client, ct);
+        var sendTask = client.Out.SendLoop(ct);
         try
         {
             await ReceiveLoop(client, ct);
@@ -621,11 +581,11 @@ public sealed class ClientHub
             );
             _lobby.Remove(client.Id);
             // Host left → transfer to the earliest remaining pilot (lowest id), or -1 if the server
-            // emptied. TODO: later allow explicit host selection rather than implicit earliest-joined.
+            // emptied.
             if (_hostId == client.Id)
                 _hostId = _lobby.Snapshot().Select(e => e.Id).DefaultIfEmpty(-1).Min();
             _players.OnDisconnect(client.Id);
-            client.Outbound.Writer.TryComplete();
+            client.Out.Complete();
             BroadcastLobby(); // roster shrank (and possibly host/selected-map changed)
             // The leaver's scoreboard row stays (the ledger outlives them) but its connected bit must
             // drop so it renders as LEFT — a disconnect moves no counter, so nothing else would
@@ -727,7 +687,6 @@ public sealed class ClientHub
                     client.Team = _lobby.TeamOf(client.Id);
                     // First pilot on the server becomes host (only they may change the map). Ids are
                     // monotonic, so "unset -> this id" makes the earliest joiner host until they leave.
-                    // TODO: later allow explicit host selection/transfer instead of implicit first-pilot.
                     if (_hostId < 0)
                         _hostId = client.Id;
 
@@ -737,10 +696,10 @@ public sealed class ClientHub
                     // NOTHING under fog until it picks a side (then the MsgSetTeam hook re-Welcomes it).
                     // Fog off: byte-identical full-world Welcome as before.
                     SendWelcome(client);
-                    SendReliable(client, OutFrame.Whole(Protocol.BuildDefs(_sim.Content)));
+                    client.Out.SendReliable(OutFrame.Whole(Protocol.BuildDefs(_sim.Content)));
                     // The available-maps catalog is static for the server's lifetime — send it once,
                     // right after Defs, so the lobby's sector pane + map picker have data to render.
-                    SendReliable(client, OutFrame.Whole(Protocol.BuildMapList(_mapCatalog)));
+                    client.Out.SendReliable(OutFrame.Whole(Protocol.BuildMapList(_mapCatalog)));
                     BroadcastLobby();
                     // SendWelcome above already handed this joiner the cached board (mid-match F5 has
                     // to work the moment they're in; in the lobby the previous match's board is still
@@ -877,7 +836,7 @@ public sealed class ClientHub
                     // Host-only (enforced here, not just client-side). Cheap path: advertise the chosen
                     // map as the selected/"next" map and rebroadcast; we do NOT rebuild the live World
                     // mid-lobby (that needs a World regen + re-Welcome of every client — the arena is
-                    // built once at boot). TODO: wire an arena-rebuild seam to make this take effect.
+                    // built once at boot).
                     if (client.Id == _hostId)
                     {
                         int len = BitConverter.ToUInt16(buffer, 1);
@@ -920,7 +879,7 @@ public sealed class ClientHub
                         var frame = Protocol.BuildChatRelay(scope, fromTeam, _players.NameOf(client.Id), text);
                         foreach (var c in _clients.Values)
                             if (scope == 0 || c.Team == fromTeam)
-                                SendReliable(c, OutFrame.Whole(frame));
+                                c.Out.SendReliable(OutFrame.Whole(frame));
                     }
                     break;
                 }
@@ -1039,7 +998,7 @@ public sealed class ClientHub
                     // Bounce the nonce straight back through the outbound channel — the same
                     // queue snapshots use, so the measured RTT reflects real send-side latency.
                     uint nonce = BitConverter.ToUInt32(buffer, 1);
-                    SendLossy(client, OutFrame.Whole(Protocol.BuildPong(nonce)));
+                    client.Out.SendLossy(OutFrame.Whole(Protocol.BuildPong(nonce)));
                     break;
                 }
             }
@@ -1271,7 +1230,7 @@ public sealed class ClientHub
             var frame = Protocol.BuildChatRelay(gold ? (byte)2 : (byte)1, team, _players.NameOf(client.Id), text);
             foreach (var c in _clients.Values)
                 if (_lobby.TeamOf(c.Id) == team)
-                    SendReliable(c, OutFrame.Whole(frame));
+                    c.Out.SendReliable(OutFrame.Whole(frame));
             return;
         }
 
@@ -1316,13 +1275,13 @@ public sealed class ClientHub
 
     // System chat lines reuse the normal chat-relay wire type; "★" is the sender name.
     private void SystemTo(Client client, string text) =>
-        SendReliable(client, OutFrame.Whole(Protocol.BuildChatRelay(0, _lobby.TeamOf(client.Id), "★", text)));
+        client.Out.SendReliable(OutFrame.Whole(Protocol.BuildChatRelay(0, _lobby.TeamOf(client.Id), "★", text)));
 
     private void SystemAll(Client origin, string text)
     {
         var frame = Protocol.BuildChatRelay(0, _lobby.TeamOf(origin.Id), "★", text);
         foreach (var c in _clients.Values)
-            SendReliable(c, OutFrame.Whole(frame));
+            c.Out.SendReliable(OutFrame.Whole(frame));
     }
 
     // System line to every client currently on `team` (miner notices).
@@ -1342,71 +1301,8 @@ public sealed class ClientHub
             if (_lobby.TeamOf(c.Id) == team)
             {
                 frame ??= buildFrame();
-                SendReliable(c, OutFrame.Whole(frame));
+                c.Out.SendReliable(OutFrame.Whole(frame));
             }
-    }
-
-    // ---- Outbound write discipline ---------------------------------------
-    // Two tiers. RELIABLE: one-shot frames with no repair path (Welcome, Defs, YouAre, ShipGone,
-    // chat, lobby roster, gone-events, rock deltas) — a full queue parks them in PendingControl,
-    // flushed FIFO next tick; they are delayed, never lost. LOSSY: self-healing frames (snapshots,
-    // change+keepalive streams, FX) — a full queue drops the write and the next cadence heals it.
-
-    private void SendReliable(Client client, in OutFrame frame)
-    {
-        lock (client.PendingControl)
-        {
-            // FIFO among reliable frames: once anything is parked, everything queues behind it.
-            if (client.PendingControl.Count == 0 && client.Outbound.Writer.TryWrite(frame))
-                return;
-            client.PendingControl.Enqueue(frame);
-            Interlocked.Increment(ref _controlParked);
-        }
-    }
-
-    // Called once per client per tick (AfterStep pre-pass) — drains parked reliable frames into
-    // whatever room the send loop has freed, oldest first.
-    private void FlushReliable(Client client)
-    {
-        if (client.PendingControl.Count == 0)
-            return;
-        lock (client.PendingControl)
-        {
-            while (client.PendingControl.Count > 0 && client.Outbound.Writer.TryWrite(client.PendingControl.Peek()))
-                client.PendingControl.Dequeue();
-        }
-    }
-
-    private void SendLossy(Client client, in OutFrame frame)
-    {
-        if (client.Outbound.Writer.TryWrite(frame))
-            return;
-        Interlocked.Increment(ref _lossyDropped);
-        if (frame.Pooled)
-            ArrayPool<byte>.Shared.Return(frame.Buf);
-    }
-
-    // Diagnostics: how many lossy frames were dropped on a full queue and how many reliable
-    // frames had to be parked for retry, logged throttled from AfterStep so a live repro can
-    // confirm (or rule out) queue pressure.
-    private long _lossyDropped;
-    private long _controlParked;
-    private long _lastDropLogged;
-    private long _lastParkedLogged;
-    private uint _nextDropLogTick;
-
-    private void LogQueuePressure(uint tick)
-    {
-        if (tick < _nextDropLogTick)
-            return;
-        long dropped = Interlocked.Read(ref _lossyDropped);
-        long parked = Interlocked.Read(ref _controlParked);
-        if (dropped == _lastDropLogged && parked == _lastParkedLogged)
-            return;
-        Log.OutboundQueuePressure(_log, dropped - _lastDropLogged, parked - _lastParkedLogged);
-        _lastDropLogged = dropped;
-        _lastParkedLogged = parked;
-        _nextDropLogTick = tick + 100; // ~5 s at 20 Hz between reports
     }
 
     // AOI/bandwidth telemetry: the LOD's real fan-out (ship records + snapshots streamed per second),
@@ -1426,7 +1322,7 @@ public sealed class ClientHub
         PruneMotionMemory();
         long records = Interlocked.Read(ref _recordsSent);
         long snaps = Interlocked.Read(ref _snapshotCount);
-        long lossy = Interlocked.Read(ref _lossyDropped);
+        long lossy = _outStats.LossyDropped;
         if (_nextAoiLogTick != 0) // skip the seed call (no window yet)
         {
             float secs = (tick - _lastAoiLogTick) / (float)Simulation.TickHz;
@@ -1446,16 +1342,6 @@ public sealed class ClientHub
         _nextAoiLogTick = tick + 100; // ~5 s at 20 Hz between reports
     }
 
-    private async Task SendLoop(Client client, CancellationToken ct)
-    {
-        await foreach (var frame in client.Outbound.Reader.ReadAllAsync(ct))
-        {
-            await client.Transport.SendAsync(frame.Buf.AsMemory(0, frame.Len), ct);
-            if (frame.Pooled)
-                ArrayPool<byte>.Shared.Return(frame.Buf); // safe: SendAsync has drained it
-        }
-    }
-
     // Called by the SIM THREAD after every Step(): death events + per-client snapshots.
     public void AfterStep()
     {
@@ -1463,7 +1349,7 @@ public sealed class ClientHub
         var ships = _sim.Ships;
 
         // Surface queue pressure (dropped lossy frames / parked reliable frames) at most every ~5 s.
-        LogQueuePressure(tick);
+        _outStats.LogQueuePressure(_log, tick);
 
         // Push a fresh lobby roster on every phase transition (Lobby->Active->Ended->Lobby) so
         // clients flip their UI between lobby and match in lockstep with the authority.
@@ -1912,7 +1798,7 @@ public sealed class ClientHub
         // respawn), so re-issue YouAre whenever it flips. A 0 id = dead/awaiting respawn
         // (no ship to claim); the AOI then anchors on the home-sector origin.
         // Parked reliable frames from earlier full-queue ticks go out before anything new.
-        FlushReliable(client);
+        client.Out.FlushReliable();
 
         ulong sid = _sim.ShipIdOf(client.Id);
         if (sid != client.ShipId)
@@ -1922,7 +1808,7 @@ public sealed class ClientHub
             // RELIABLE: this is the only time the flip is ever announced — losing it strands
             // the client on a ship it doesn't know is its own (stuck "LAUNCHING…" hangar).
             if (sid != 0)
-                SendReliable(client, OutFrame.Whole(Protocol.BuildYouAre(sid)));
+                client.Out.SendReliable(OutFrame.Whole(Protocol.BuildYouAre(sid)));
         }
 
         if (sid != 0 && _shipIndexById.TryGetValue(sid, out int si))
@@ -1968,49 +1854,48 @@ public sealed class ClientHub
         // was the client's own dock/despawn).
         if (frames.GoneFrames is not null)
             foreach (var f in frames.GoneFrames)
-                SendReliable(client, OutFrame.Whole(f));
+                client.Out.SendReliable(OutFrame.Whole(f));
 
         if (frames.BasesFrame is not null)
-            SendLossy(client, OutFrame.Whole(frames.BasesFrame));
+            client.Out.SendLossy(OutFrame.Whole(frames.BasesFrame));
 
         if (frames.TeamStateFrame is not null)
-            SendLossy(client, OutFrame.Whole(frames.TeamStateFrame));
+            client.Out.SendLossy(OutFrame.Whole(frames.TeamStateFrame));
 
         // Ship weapon-mount table (see the build note above): reliable one-shot per cadence tick.
         if (frames.LoadoutFrame is not null)
-            SendReliable(client, OutFrame.Whole(frames.LoadoutFrame));
+            client.Out.SendReliable(OutFrame.Whole(frames.LoadoutFrame));
 
         // Research orders (v36): per-team, lazy-built once per team; NoTeam spectators get none.
         if (frames.SendResearch && client.Team <= 1)
         {
             byte[] BuildResearchFrame() => Protocol.BuildResearchStateFor(_sim.World, client.Team);
-            SendLossy(client, OutFrame.Whole(TeamFrame(frames.ResearchFramesByTeam!, client.Team, BuildResearchFrame)));
+            client.Out.SendLossy(OutFrame.Whole(TeamFrame(frames.ResearchFramesByTeam!, client.Team, BuildResearchFrame)));
         }
 
         if (frames.MinerTargetsFrame is not null)
-            SendLossy(client, OutFrame.Whole(frames.MinerTargetsFrame));
+            client.Out.SendLossy(OutFrame.Whole(frames.MinerTargetsFrame));
 
         if (frames.ConstructorBuildsFrame is not null)
-            SendLossy(client, OutFrame.Whole(frames.ConstructorBuildsFrame));
+            client.Out.SendLossy(OutFrame.Whole(frames.ConstructorBuildsFrame));
 
         // Constructor roster (v38): per-team, lazy-built once per team; NoTeam spectators get none.
         if (frames.SendConstructor && client.Team <= 1)
         {
             byte[] BuildConstructorFrame() => Protocol.BuildConstructorState(_sim, client.Team);
-            SendLossy(
-                client,
+            client.Out.SendLossy(
                 OutFrame.Whole(TeamFrame(frames.ConstructorFramesByTeam!, client.Team, BuildConstructorFrame))
             );
         }
 
         // Fog-off new-base reveal (reliable — a one-shot static the client must not miss).
         if (frames.BaseRevealFrame is not null)
-            SendReliable(client, OutFrame.Whole(frames.BaseRevealFrame));
+            client.Out.SendReliable(OutFrame.Whole(frames.BaseRevealFrame));
 
         // Rock despawn (reliable — a one-shot removal the client must not miss, or a ghost rock
         // lingers under the finished base). Broadcast to every client regardless of fog.
         if (frames.RockGoneFrame is not null)
-            SendReliable(client, OutFrame.Whole(frames.RockGoneFrame));
+            client.Out.SendReliable(OutFrame.Whole(frames.RockGoneFrame));
 
         // Fog-on per-team frames. All built lazily (once per team). This whole pre-pass runs on
         // the sim thread with Step() done, so TeamVision reads/drains are safe (quiescent).
@@ -2022,7 +1907,7 @@ public sealed class ClientHub
             if (frames.SendBases)
             {
                 byte[] BuildBasesFrame() => Protocol.BuildBasesFor(_sim.World, vision);
-                SendLossy(client, OutFrame.Whole(TeamFrame(frames.BaseFramesByTeam!, client.Team, BuildBasesFrame)));
+                client.Out.SendLossy(OutFrame.Whole(TeamFrame(frames.BaseFramesByTeam!, client.Team, BuildBasesFrame)));
             }
 
             // MsgReveal (per-team, PER-CLIENT cursor): stream the bounded slice of the reveal log
@@ -2044,7 +1929,7 @@ public sealed class ClientHub
                     out int na,
                     out int ns
                 );
-                if (rf is not null && client.Outbound.Writer.TryWrite(OutFrame.Whole(rf)))
+                if (rf is not null && client.Out.TryWrite(OutFrame.Whole(rf)))
                 {
                     client.RevealBaseCur = nb;
                     client.RevealRockCur = nr;
@@ -2063,21 +1948,23 @@ public sealed class ClientHub
                     vision.ContactsDirty = false;
                     return f;
                 }
-                SendLossy(client, OutFrame.Whole(TeamFrame(frames.ContactFramesByTeam!, client.Team, BuildContactsFrame)));
+                client.Out.SendLossy(
+                    OutFrame.Whole(TeamFrame(frames.ContactFramesByTeam!, client.Team, BuildContactsFrame))
+                );
             }
 
             // Lost-contact quiet fades to this team only. RELIABLE: a reason-2 ShipGone is the
             // only removal path for a faded contact's mesh (no omission reconcile client-side).
             if (frames.LostByTeam is not null && frames.LostByTeam.TryGetValue(client.Team, out var lostFrames))
                 foreach (var f in lostFrames)
-                    SendReliable(client, OutFrame.Whole(f));
+                    client.Out.SendReliable(OutFrame.Whole(f));
         }
 
         // RELIABLE: gone-events are one-shot removal/FX authority (a lost MissileGone leaves a
         // ghost missile — in-flight streams stop, and the client only removes on the event).
         if (frames.MissileGoneFrames is not null)
             foreach (var f in frames.MissileGoneFrames)
-                SendReliable(client, OutFrame.Whole(f));
+                client.Out.SendReliable(OutFrame.Whole(f));
 
         // Chaff spawns: broadcast when fog off. When fog on, an ENEMY team receives a pop only if
         // its pop point is visible to that team at the spawn instant (own-team chaff always shown).
@@ -2099,23 +1986,23 @@ public sealed class ClientHub
                     )
                         continue;
                 }
-                SendLossy(client, OutFrame.Whole(frames.ChaffFrames[ci]));
+                client.Out.SendLossy(OutFrame.Whole(frames.ChaffFrames[ci]));
             }
 
         if (frames.MineGoneFrames is not null)
             foreach (var f in frames.MineGoneFrames)
-                SendReliable(client, OutFrame.Whole(f));
+                client.Out.SendReliable(OutFrame.Whole(f));
 
         // Recon probes: gone events broadcast to everyone (unknown ids no-op client-side).
         // RELIABLE: MsgProbes has no reconcile-by-omission — ProbeGone is the ONLY removal.
         if (frames.ProbeGoneFrames is not null)
             foreach (var f in frames.ProbeGoneFrames)
-                SendReliable(client, OutFrame.Whole(f));
+                client.Out.SendReliable(OutFrame.Whole(f));
 
         if (frames.SendProbes)
         {
             byte[] BuildProbesFrame() => BuildProbesFor(client.Team);
-            SendLossy(client, OutFrame.Whole(TeamFrame(frames.ProbeFramesByTeam!, client.Team, BuildProbesFrame)));
+            client.Out.SendLossy(OutFrame.Whole(TeamFrame(frames.ProbeFramesByTeam!, client.Team, BuildProbesFrame)));
         }
 
         // Minefield frame for this client's anchor sector (change + coarse keepalive + anchor-sector
@@ -2127,7 +2014,7 @@ public sealed class ClientHub
         bool wantMinefields = frames.SendMinefields || client.AnchorSector != client.LastMinefieldAnchor;
         if (
             wantMinefields
-            && client.Outbound.Writer.TryWrite(
+            && client.Out.TryWrite(
                 OutFrame.Whole(
                     BuildMinefieldsFor(client.AnchorSector, client.Team, MineVisFor(frames.MineVisCache, fog, client.Team))
                 )
@@ -2145,7 +2032,7 @@ public sealed class ClientHub
             if (!fog)
             {
                 foreach (var f in frames.RockBroadcast!)
-                    SendReliable(client, OutFrame.Whole(f));
+                    client.Out.SendReliable(OutFrame.Whole(f));
             }
             else
             {
@@ -2156,7 +2043,7 @@ public sealed class ClientHub
                         frames.ChangedRockList!
                     );
                 foreach (var f in rkf)
-                    SendReliable(client, OutFrame.Whole(f));
+                    client.Out.SendReliable(OutFrame.Whole(f));
             }
         }
 
@@ -2169,7 +2056,7 @@ public sealed class ClientHub
         {
             byte[]? missileFrame = BuildMissilesFor(client, frames.Missiles, tick);
             if (missileFrame is not null)
-                SendLossy(client, OutFrame.Whole(missileFrame));
+                client.Out.SendLossy(OutFrame.Whole(missileFrame));
         }
 
         return rosterDirty;
@@ -2193,7 +2080,7 @@ public sealed class ClientHub
             {
                 var shared = OutFrame.Whole(BuildSharedCoarseSnapshot());
                 for (int i = 0; i < n; i++)
-                    SendLossy(_dispatchList[i], shared);
+                    _dispatchList[i].Out.SendLossy(shared);
                 _recordsSent += (long)_aliveCount * n; // sim thread only here, no interlock needed
                 _snapshotCount += n;
                 return;
@@ -2209,7 +2096,7 @@ public sealed class ClientHub
                 var c = _dispatchList[i];
                 if (!byTeam.TryGetValue(c.Team, out var entry))
                     byTeam[c.Team] = entry = BuildCoarseSnapshotForTeam(c.Team, ships);
-                SendLossy(c, OutFrame.Whole(entry.buf));
+                c.Out.SendLossy(OutFrame.Whole(entry.buf));
                 _recordsSent += entry.recs;
                 _snapshotCount += 1;
             }
@@ -2242,7 +2129,7 @@ public sealed class ClientHub
         else
         {
             for (int i = 0; i < n; i++)
-                SendLossy(_dispatchList[i], BuildSnapshotFor(_dispatchList[i], ships, mid, coarse));
+                _dispatchList[i].Out.SendLossy(BuildSnapshotFor(_dispatchList[i], ships, mid, coarse));
         }
     }
 

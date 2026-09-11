@@ -9,7 +9,7 @@
 | `shared/` | Deterministic `FlightModel` + content `Defs` (ship/weapon/base/world). **Referenced** by both client and server so physics + content stay bit-identical — edit it once, here. |
 | `tools/simbot/` | Bot swarm for load testing the server. |
 | `tools/asteroid-gen/` | Generates the asteroid mesh/normal-map catalog. |
-| `tests/` | ~20 suites — `FlightModelTest` (determinism + golden), `CryptoTest` (shared-secret HMAC), plus `ShieldTest`, `FogTest`, `MissileTest`, `MineTest`, `MiningTest`, `CommanderTest`, `ConstructorTest`, `FuelPodTest`, `LoadoutTest`, and more (one `.csproj` per suite). |
+| `tests/` | 24 suites — `FlightModelTest` (determinism + golden), `CryptoTest` (shared-secret HMAC), plus `ShieldTest`, `FogTest`, `MissileTest`, `MineTest`, `MiningTest`, `CommanderTest`, `ConstructorTest`, `FuelPodTest`, `LoadoutTest`, and more (one `.csproj` per suite). |
 
 ## Architecture in one paragraph
 
@@ -40,13 +40,23 @@ local loop, including the Aspire CLI/Docker prerequisites.
 
 ## Tests
 
+Everything at once, with a pass/fail summary table (local only — this repo has **no CI**):
+
+```bash
+scripts/run-tests.ps1                     # every suite except PublicLobbyTest
+scripts/run-tests.ps1 -Filter Collision   # just the suites whose name matches
+scripts/run-tests.ps1 -IncludeDocker      # also PublicLobbyTest (needs Docker)
+```
+
+Some suites are known-red at the time of writing, so read the table rather than the exit code
+alone. The two load-bearing smoke tests, individually:
+
 ```bash
 dotnet run --project tests/FlightModelTest/FlightModelTest.csproj -c Release   # must print ALL TESTS PASSED
 dotnet run --project tests/CryptoTest/CryptoTest.csproj -c Release             # must print all checks passed
 ```
 
-The two above are the load-bearing smoke tests, but `tests/` holds ~20 suites in total (one
-`.csproj` each — `ShieldTest`, `FogTest`, `MissileTest`, `MineTest`, `MiningTest`,
+`tests/` holds 24 suites in total (one `.csproj` each — `ShieldTest`, `FogTest`, `MissileTest`, `MineTest`, `MiningTest`,
 `CommanderTest`, `ConstructorTest`, `FuelPodTest`, `LoadoutTest`, and more); run the suite(s)
 covering whatever you touched with the same `dotnet run --project tests/<Suite>/<Suite>.csproj`
 pattern.
@@ -57,9 +67,18 @@ to `shared/FlightModel.cs`.
 
 ## Formatting
 
-Code is formatted with [CSharpier](https://csharpier.com) (pinned in `dotnet-tools.json`):
+Code is formatted with [CSharpier](https://csharpier.com) (pinned at 1.2.6 in
+`dotnet-tools.json`; it formats `.cs` **and** `.csproj`). **Format only the files you touched** —
+pass them as paths:
 
 ```bash
 dotnet tool restore
-dotnet csharpier format .
+dotnet csharpier format server/Net/ClientHub.cs shared/Net/Wire.cs   # the paths you changed
+dotnet csharpier check .                                             # must print nothing dirty
 ```
+
+The tree was blanket-formatted once, on 2026-09-09, so `dotnet csharpier check .` is clean at HEAD
+and stays that way as long as everyone formats what they touch. Do **not** repeat a blanket
+`dotnet csharpier format .` inside feature work: it buries the real change under hundreds of
+unrelated reformats and makes the diff unreviewable. EF Core migrations (`**/Migrations/*.cs`) are
+excluded in `.csharpierignore`.

@@ -41,8 +41,7 @@ public static class TechResolver
 
             foreach (var station in core.Stations)
                 changed |= TryGrant(station, techs, capabilities);
-        }
-        while (changed);
+        } while (changed);
 
         return new TechState(techs, capabilities);
     }

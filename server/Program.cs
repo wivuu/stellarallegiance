@@ -78,7 +78,9 @@ int port =
 // Pin it with SIM_SEED / --seed (flag wins over env, matching the SIM_MAP/--map convention) to
 // reproduce an EXACT layout for tests / benchmarks / bug repro: a pinned seed is used everywhere
 // (boot world, every match world) and the per-match reroll is suppressed. Every rolled seed is logged
-// so any live layout can be reproduced later with --seed.
+// so any live layout can be reproduced later with --seed. SIM_SEED pins the WORLD only; the sim's
+// own runtime RNG (PIG patrol waypoints, launch-exit pick, warp-exit jitter) has a separate knob,
+// SIM_RNG_SEED, read in the Simulation ctor — unset there too means time-seeded, as in production.
 static ulong RandomSeed()
 {
     Span<byte> b = stackalloc byte[8];

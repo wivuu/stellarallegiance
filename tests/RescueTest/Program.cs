@@ -71,7 +71,8 @@ sim.Step();
 Check(
     sim.DeathsThisStep.Any(d => d.id == victimId && d.reason == Simulation.GoneDestroyed),
     "a destroyed combat hull is reported GoneDestroyed (client plays the blast)",
-    "the destroyed hull's ShipGone did not carry GoneDestroyed");
+    "the destroyed hull's ShipGone did not carry GoneDestroyed"
+);
 
 var pod = sim.Ships.FirstOrDefault(s => s.IsPod && s.OwnerClientId == 1);
 Check(pod != null, "victim ejected a player-flown escape pod", "no escape pod ejected on death");
@@ -87,17 +88,20 @@ if (pod != null)
     Check(
         sim.DeathsThisStep.Any(d => d.id == podId && d.reason == Simulation.GoneClean),
         "a rescued pod is reported GoneClean (client despawns it silently — no blast)",
-        "the rescued pod's ShipGone did not carry GoneClean (it would play the death explosion)");
+        "the rescued pod's ShipGone did not carry GoneClean (it would play the death explosion)"
+    );
 
     Check(
         sim.Ships.All(s => s.ShipId != podId),
         "the rescued pod is removed from the world",
-        "the rescued pod is still present after the rescue");
+        "the rescued pod is still present after the rescue"
+    );
 
     Check(
         !sim.Ships.Any(s => s.OwnerClientId == 1),
         "the rescued player is returned to base (no flying ship — spawn menu reopens)",
-        "the rescued player still owns a flying ship after rescue");
+        "the rescued player still owns a flying ship after rescue"
+    );
 }
 
 Console.WriteLine(failures == 0 ? "\nALL RESCUE TESTS PASSED" : $"\n{failures} RESCUE TEST(S) FAILED");

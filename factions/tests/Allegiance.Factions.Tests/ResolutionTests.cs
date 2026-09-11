@@ -22,7 +22,7 @@ public class ResolutionTests
         Assert.Contains(Capability.TacticalAllowed, reachable.Capabilities);
         Assert.Contains(Capability.SupremacyAllowed, reachable.Capabilities); // supremacy-center: shipyard-allowed + heavy-hulls
         Assert.Contains("advanced-reactors", reachable.Techs);
-        Assert.Contains("heavy-hulls", reachable.Techs);   // only reachable via a two-step dev chain
+        Assert.Contains("heavy-hulls", reachable.Techs); // only reachable via a two-step dev chain
         Assert.Contains("cloak-tech", reachable.Techs);
         Assert.Equal(5, reachable.Capabilities.Count);
         Assert.Equal(5, reachable.Techs.Count);
@@ -63,21 +63,36 @@ public class ResolutionTests
     {
         var core = new Core
         {
-            Techs = { new Tech { Id = "cannon-tier-2", Name = "Class-2 Cannons" } },
+            Techs =
+            {
+                new Tech { Id = "cannon-tier-2", Name = "Class-2 Cannons" },
+            },
             Weapons =
             {
-                new Weapon { Id = "gun-t1", Name = "Cannon I", ObsoletedByTechs = new TechSet(new[] { "cannon-tier-2" }) },
-                new Weapon { Id = "gun-t2", Name = "Cannon II", RequiredTechs = new TechSet(new[] { "cannon-tier-2" }) },
+                new Weapon
+                {
+                    Id = "gun-t1",
+                    Name = "Cannon I",
+                    ObsoletedByTechs = new TechSet(new[] { "cannon-tier-2" }),
+                },
+                new Weapon
+                {
+                    Id = "gun-t2",
+                    Name = "Cannon II",
+                    RequiredTechs = new TechSet(new[] { "cannon-tier-2" }),
+                },
             },
         };
 
         var before = BuildableResolver.GetBuildables(core, new TechState(new TechSet(), new CapabilitySet()));
-        Assert.Contains(before, b => b.Id == "gun-t1");        // offered while the tech is unowned
-        Assert.DoesNotContain(before, b => b.Id == "gun-t2");  // successor still gated
+        Assert.Contains(before, b => b.Id == "gun-t1"); // offered while the tech is unowned
+        Assert.DoesNotContain(before, b => b.Id == "gun-t2"); // successor still gated
 
         var after = BuildableResolver.GetBuildables(
-            core, new TechState(new TechSet(new[] { "cannon-tier-2" }), new CapabilitySet()));
-        Assert.DoesNotContain(after, b => b.Id == "gun-t1");   // retired by the owned successor tech
-        Assert.Contains(after, b => b.Id == "gun-t2");         // successor now available
+            core,
+            new TechState(new TechSet(new[] { "cannon-tier-2" }), new CapabilitySet())
+        );
+        Assert.DoesNotContain(after, b => b.Id == "gun-t1"); // retired by the owned successor tech
+        Assert.Contains(after, b => b.Id == "gun-t2"); // successor now available
     }
 }

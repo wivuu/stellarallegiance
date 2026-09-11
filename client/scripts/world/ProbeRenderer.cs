@@ -60,9 +60,12 @@ public sealed class ProbeRenderer : IProbeQuery
         // mid-life (sector entry, reconnect, an enemy buoy drifting into radar) stay silent. Same
         // freshness idea MinefieldViews uses ("first seen while still arming"), and sector-gated for
         // the same reason: these positions are sector-LOCAL.
-        if (def is not null && def.ProjectileLifeTicks > 0
+        if (
+            def is not null
+            && def.ProjectileLifeTicks > 0
             && row.TicksLeft + FreshDeployTicks >= def.ProjectileLifeTicks
-            && row.SectorId == _sectors.ViewSector)
+            && row.SectorId == _sectors.ViewSector
+        )
             SfxManager.Instance?.PlayAt(SfxManager.SfxId.DeployObject, pos, volumeDb: -6f);
     }
 

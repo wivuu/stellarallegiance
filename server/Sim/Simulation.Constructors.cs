@@ -18,14 +18,15 @@ public sealed partial class Simulation
     // the asteroid); on the build timer the base is created and the drone despawns.
     private enum ConstructorState : byte
     {
-        Producing,   // bought but not yet launched — being built at the garrison (no ship yet)
-        Idle,        // launched, no build order yet — holds station near the launch garrison
-        ToRock,      // en route to TargetRockId (cross-sector legs steer gate to gate)
-        MoveTo,      // commander move order: fly to MoveSector/MovePos and hold there
-        Aligning,    // at the rock's standoff shell, nose-locked, counting down the station's align time
+        Producing, // bought but not yet launched — being built at the garrison (no ship yet)
+        Idle, // launched, no build order yet — holds station near the launch garrison
+        ToRock, // en route to TargetRockId (cross-sector legs steer gate to gate)
+        MoveTo, // commander move order: fly to MoveSector/MovePos and hold there
+        Aligning, // at the rock's standoff shell, nose-locked, counting down the station's align time
         Approaching, // creeping (approach-speed) from the standoff shell until the hull touches the rock
-        Sinking,     // touching — creeping (sink-speed) until embedded; DISTANCE-gated, not timed
-        Building,    // embedded, station-keeping while the build sphere runs (build-time-seconds)
+        Sinking, // touching — creeping (sink-speed) until embedded; DISTANCE-gated, not timed
+        Building, // embedded, station-keeping while the build sphere runs (build-time-seconds)
+
         // Queued MUST stay LAST so the byte values above match the wire (MsgConstructorState) — an
         // ordered item waiting for a build slot at its garrison (0% progress). PromoteQueuedBuilds
         // flips it to Producing (stamps PhaseStartTick) when the garrison drops below the parallel
@@ -41,6 +42,7 @@ public sealed partial class Simulation
         public byte Team;
         public ShipSim? Ship;
         public byte BuildStationTypeId; // the BaseTypeId this drone will raise (outpost = 1)
+
         // A MINER order shares this production queue (same Producing lifecycle + Build-tab roster), but
         // on completion it graduates into a MinerSlot instead of launching a base-builder: it never
         // enters the launched states below (Idle/ToRock/…). BuildStationTypeId/LaunchBaseId are unused.
@@ -50,6 +52,7 @@ public sealed partial class Simulation
         public ulong TargetRockId; // the rock it is ordered to build on (0 = none; other constructors avoid it)
         public ulong LaunchBaseId; // the garrison it launched from (relaunch/idle anchor)
         public uint PhaseStartTick; // tick the current Producing/Aligning/Sinking/Building phase began
+
         // Commander move order (MoveTo): fly to a sector-local point, or in through the aleph.
         public uint MoveSector;
         public Vec3 MovePos;
@@ -65,9 +68,11 @@ public sealed partial class Simulation
     // speeds (approach/sink), the standoff shell, the embed depth, and the sink backstop.
     private WorldConstructorTuning _constructor => World.Constructor;
     private const float ConstructorGateAlignRange = 200f;
+
     // Slack (world units) on the DISTANCE-gated Sinking -> Building transition: the creep commands
     // throttle 0 once inside the embed shell, so it settles a hair outside; the gate must tolerate that.
     private const float ConstructorEmbedSlack = 1.5f;
+
     // Once the hull touches the rock and starts embedding (Sinking), the descent is deliberately halved
     // (50%) vs the commanded sink speed, so the mesh eases into the surface — the beat where the client
     // plays the rock-spitting debris VFX — rather than dropping straight in at full creep.
@@ -85,10 +90,13 @@ public sealed partial class Simulation
     // lock-free as "immutable", so mutating it mid-compute would race it — CommitPendingRockRemovals
     // drains this only when the worker is joined (fog on: the VisionStep join; fog off: no worker).
     private readonly List<ulong> _pendingRockRemovals = new();
+
     // Buy queue: (team, stationTypeId, launchBaseId). Drained under _qLock in DrainQueues.
     private readonly Queue<(byte Team, byte StationType, ulong LaunchBase)> _constructorBuyQueue = new();
+
     // Cancel-production queue: (team, constructorId). Drained under _qLock in DrainQueues.
     private readonly Queue<(byte Team, ulong ConstructorId)> _constructorCancelQueue = new();
+
     // Rocks that already carry (or are building) a base — no second base builds on them; miners /
     // constructors treat them as taken.
     private readonly HashSet<ulong> _rocksWithBase = new();
@@ -142,15 +150,23 @@ public sealed partial class Simulation
     {
         int n = 0;
         foreach (var c in _constructors)
-            if (c.LaunchBaseId == launchBaseId
-                && (c.State == ConstructorState.Queued || c.State == ConstructorState.Producing))
+            if (
+                c.LaunchBaseId == launchBaseId
+                && (c.State == ConstructorState.Queued || c.State == ConstructorState.Producing)
+            )
                 n++;
         return n;
     }
 
     // Read-only slot view (sim thread only) for tests/diagnostics.
-    public IReadOnlyList<(ulong Id, byte Team, ShipSim? Ship, byte StationType, ulong TargetRockId, string State)>
-        ConstructorSlotsView()
+    public IReadOnlyList<(
+        ulong Id,
+        byte Team,
+        ShipSim? Ship,
+        byte StationType,
+        ulong TargetRockId,
+        string State
+    )> ConstructorSlotsView()
     {
         var rows = new List<(ulong, byte, ShipSim?, byte, ulong, string)>(_constructors.Count);
         foreach (var c in _constructors)
@@ -167,34 +183,69 @@ public sealed partial class Simulation
     // client can name the destination. Id is the slot ordinal (what a cancel names); ShipId is the
     // LAUNCHED drone's ship id (0 while queued/producing), the only key that ties a rendered ship back
     // to the station type it carries — the F3 map labels a drone from it. Sim thread only.
-    public IReadOnlyList<(ulong Id, byte Team, byte StationType, byte State, uint StartTick, uint DurationTicks, ulong TargetId, bool ProducesMiner, ulong LaunchBaseId, ulong ShipId)>
-        ConstructorStatesView()
+    public IReadOnlyList<(
+        ulong Id,
+        byte Team,
+        byte StationType,
+        byte State,
+        uint StartTick,
+        uint DurationTicks,
+        ulong TargetId,
+        bool ProducesMiner,
+        ulong LaunchBaseId,
+        ulong ShipId
+    )> ConstructorStatesView()
     {
         var rows = new List<(ulong, byte, byte, byte, uint, uint, ulong, bool, ulong, ulong)>(_constructors.Count);
         foreach (var c in _constructors)
         {
             // Queued (and Idle) leave start/dur/target at 0 → the client renders an untimed note row
             // (no progress bar): a queued order reads 0% because it hasn't started counting down.
-            uint start = 0, dur = 0;
+            uint start = 0,
+                dur = 0;
             ulong target = 0;
             switch (c.State)
             {
                 case ConstructorState.Producing:
-                    start = c.PhaseStartTick; dur = c.ProductionTicks; break;
+                    start = c.PhaseStartTick;
+                    dur = c.ProductionTicks;
+                    break;
                 case ConstructorState.ToRock:
-                    target = c.TargetRockId; break;
+                    target = c.TargetRockId;
+                    break;
                 case ConstructorState.MoveTo:
-                    target = c.MoveSector; break;
+                    target = c.MoveSector;
+                    break;
                 case ConstructorState.Aligning:
-                    start = c.PhaseStartTick; dur = AlignTicksFor(c.BuildStationTypeId); target = c.TargetRockId; break;
+                    start = c.PhaseStartTick;
+                    dur = AlignTicksFor(c.BuildStationTypeId);
+                    target = c.TargetRockId;
+                    break;
                 // Approaching/Sinking are DISTANCE-gated (creep legs), not timed — 0/0 like ToRock.
                 case ConstructorState.Approaching:
                 case ConstructorState.Sinking:
-                    target = c.TargetRockId; break;
+                    target = c.TargetRockId;
+                    break;
                 case ConstructorState.Building:
-                    start = c.PhaseStartTick; dur = BuildTicksFor(c.BuildStationTypeId); target = c.TargetRockId; break;
+                    start = c.PhaseStartTick;
+                    dur = BuildTicksFor(c.BuildStationTypeId);
+                    target = c.TargetRockId;
+                    break;
             }
-            rows.Add((c.ConstructorId, c.Team, c.BuildStationTypeId, (byte)c.State, start, dur, target, c.ProducesMiner, c.LaunchBaseId, c.Ship?.ShipId ?? 0));
+            rows.Add(
+                (
+                    c.ConstructorId,
+                    c.Team,
+                    c.BuildStationTypeId,
+                    (byte)c.State,
+                    start,
+                    dur,
+                    target,
+                    c.ProducesMiner,
+                    c.LaunchBaseId,
+                    c.Ship?.ShipId ?? 0
+                )
+            );
         }
         return rows;
     }
@@ -224,9 +275,13 @@ public sealed partial class Simulation
                     break;
                 }
                 case ConstructorState.Approaching:
-                    phase = 0; progress = 1f; break; // aligned, still closing — no sphere yet
+                    phase = 0;
+                    progress = 1f;
+                    break; // aligned, still closing — no sphere yet
                 case ConstructorState.Sinking:
-                    phase = 1; progress = ConstructorEmbedProgress(s, c.TargetRockId); break;
+                    phase = 1;
+                    progress = ConstructorEmbedProgress(s, c.TargetRockId);
+                    break;
                 case ConstructorState.Building:
                 {
                     uint span = BuildTicksFor(c.BuildStationTypeId);
@@ -234,7 +289,8 @@ public sealed partial class Simulation
                     progress = span > 0 ? MathF.Min(1f, (Tick - c.PhaseStartTick) / (float)span) : 1f;
                     break;
                 }
-                default: continue; // Idle/ToRock/MoveTo: no build sphere yet
+                default:
+                    continue; // Idle/ToRock/MoveTo: no build sphere yet
             }
             rows.Add((s.ShipId, c.TargetRockId, phase, progress));
         }
@@ -259,8 +315,7 @@ public sealed partial class Simulation
 
     // The stop shell of the embed creep: the drone's center rests this far from the rock center,
     // SinkDepthFrac of the radius below the surface (floored so a tiny rock still leaves a shell).
-    private float ConstructorEmbedShell(float rockR) =>
-        MathF.Max(2f, rockR * (1f - _constructor.SinkDepthFrac));
+    private float ConstructorEmbedShell(float rockR) => MathF.Max(2f, rockR * (1f - _constructor.SinkDepthFrac));
 
     // ---- Purchase (thread-safe enqueue; applied on the sim thread in DrainQueues) ----
 
@@ -399,7 +454,9 @@ public sealed partial class Simulation
         ts.Credits -= station.Price;
         TeamStateChangedThisStep = true;
         NewConstructorSlot(team, stationType, gb.Id, tick);
-        Notice($"Constructor building {station.Name} purchased — order it to a {RockClassName(station.BuildRockClass)} asteroid.");
+        Notice(
+            $"Constructor building {station.Name} purchased — order it to a {RockClassName(station.BuildRockClass)} asteroid."
+        );
     }
 
     // A purchase creates the slot QUEUED (no ship yet). PromoteQueuedBuilds (run right after the buy
@@ -429,15 +486,17 @@ public sealed partial class Simulation
     // graduates it into a MinerSlot (NewMinerSlot).
     private void NewMinerProductionSlot(byte team, uint tick, uint orderTicks, ulong launchBaseId)
     {
-        _constructors.Add(new ConstructorSlot
-        {
-            ConstructorId = _nextConstructorId++,
-            Team = team,
-            ProducesMiner = true,
-            ProductionTicks = orderTicks,
-            LaunchBaseId = launchBaseId,
-            State = ConstructorState.Queued,
-        });
+        _constructors.Add(
+            new ConstructorSlot
+            {
+                ConstructorId = _nextConstructorId++,
+                Team = team,
+                ProducesMiner = true,
+                ProductionTicks = orderTicks,
+                LaunchBaseId = launchBaseId,
+                State = ConstructorState.Queued,
+            }
+        );
         ConstructorChangedThisStep = true;
         TeamStateChangedThisStep = true; // producing/queued miners count toward MinerCount → restream the "X / N" tail
     }
@@ -449,8 +508,11 @@ public sealed partial class Simulation
         for (int i = 0; i < _constructors.Count; i++)
         {
             var slot = _constructors[i];
-            if (slot.Team != team || slot.ConstructorId != constructorId
-                || slot.State is not (ConstructorState.Producing or ConstructorState.Queued))
+            if (
+                slot.Team != team
+                || slot.ConstructorId != constructorId
+                || slot.State is not (ConstructorState.Producing or ConstructorState.Queued)
+            )
                 continue;
             // Refund what was charged: a miner order paid the miner hull cost; a constructor paid the
             // station price. Both were deducted at buy time (TryReserveSpawn / ts.Credits -= price).
@@ -485,9 +547,10 @@ public sealed partial class Simulation
             Kind = ShipKind.Constructor,
             Alive = true,
         };
-        World.BaseSite? at = World.BaseById(slot.LaunchBaseId) is World.BaseSite b && BaseIsAlive(slot.LaunchBaseId)
-            ? b
-            : ResolveConstructorLaunchBase(slot.Team, 0);
+        World.BaseSite? at =
+            World.BaseById(slot.LaunchBaseId) is World.BaseSite b && BaseIsAlive(slot.LaunchBaseId)
+                ? b
+                : ResolveConstructorLaunchBase(slot.Team, 0);
         PlaceAtBase(s, World.ShipRadius + 6f, tick, at);
         s.State.Mass = StatsFor(s.Class, false).Mass;
         s.Health = HullFor(s.Class);
@@ -547,14 +610,21 @@ public sealed partial class Simulation
                         _constructors.RemoveAt(i);
                         NewMinerSlot(slot.Team, tick); // launches on the next brain tick like a seed miner
                         ConstructorChangedThisStep = true;
-                        MinerNoticesThisStep.Add((slot.Team, $"Miner ready ({MinerCount(slot.Team)}/{_mining.MaxMinersPerTeam})."));
+                        MinerNoticesThisStep.Add(
+                            (slot.Team, $"Miner ready ({MinerCount(slot.Team)}/{_mining.MaxMinersPerTeam}).")
+                        );
                         continue;
                     }
                     SpawnConstructor(slot, tick);
                     slot.State = ConstructorState.Idle;
                     ConstructorChangedThisStep = true;
                     StationCatalogDef? st = StationCatalogFor(slot.BuildStationTypeId);
-                    ConstructorNoticesThisStep.Add((slot.Team, $"Constructor for {st?.Name ?? "a base"} launched — order it to a {RockClassName(st?.BuildRockClass ?? 255)} asteroid."));
+                    ConstructorNoticesThisStep.Add(
+                        (
+                            slot.Team,
+                            $"Constructor for {st?.Name ?? "a base"} launched — order it to a {RockClassName(st?.BuildRockClass ?? 255)} asteroid."
+                        )
+                    );
                 }
                 continue;
             }
@@ -574,7 +644,9 @@ public sealed partial class Simulation
                     // its timer out (CompleteConstruction retires the drone if the rock vanished).
                     if (World.RockById(slot.TargetRockId) is null || _rocksWithBase.Contains(slot.TargetRockId))
                     {
-                        ConstructorNoticesThisStep.Add((slot.Team, "Constructor's build site is gone — order it to another asteroid."));
+                        ConstructorNoticesThisStep.Add(
+                            (slot.Team, "Constructor's build site is gone — order it to another asteroid.")
+                        );
                         slot.TargetRockId = 0;
                         slot.State = ConstructorState.Idle;
                         // Idle holds HERE (see ConstructorExecute) — never a trek back to the garrison.
@@ -587,8 +659,10 @@ public sealed partial class Simulation
                     // ToRock->Aligning, Approaching->Sinking, and Sinking->Building are DISTANCE-gated
                     // in ConstructorExecute (20 Hz). The sink backstop lives there too (same method
                     // that would stall).
-                    if (slot.State == ConstructorState.Aligning
-                        && tick - slot.PhaseStartTick >= AlignTicksFor(slot.BuildStationTypeId))
+                    if (
+                        slot.State == ConstructorState.Aligning
+                        && tick - slot.PhaseStartTick >= AlignTicksFor(slot.BuildStationTypeId)
+                    )
                     {
                         slot.State = ConstructorState.Approaching;
                         slot.PhaseStartTick = tick;
@@ -682,9 +756,14 @@ public sealed partial class Simulation
     {
         // Approaching is included: the phase ENDS by touching the rock, and the contact resolver must
         // not bounce the drone off at that boundary before the 20 Hz state flip lands.
-        if (ConstructorSlotFor(s) is ConstructorSlot slot
-            && slot.State is ConstructorState.Aligning or ConstructorState.Approaching
-                or ConstructorState.Sinking or ConstructorState.Building)
+        if (
+            ConstructorSlotFor(s) is ConstructorSlot slot
+            && slot.State
+                is ConstructorState.Aligning
+                    or ConstructorState.Approaching
+                    or ConstructorState.Sinking
+                    or ConstructorState.Building
+        )
             return slot.TargetRockId;
         return 0;
     }
@@ -743,10 +822,22 @@ public sealed partial class Simulation
         ulong avoidBaseId = 0;
         Vec3 Avoid(Vec3 p, Vec3 d) => AvoidObstacles(s.SectorId, p, d, slot.TargetRockId, avoidBaseId);
 
-        ShipInputState Approach(Vec3 point, float stopDistance, float brakeMargin = ApBrakeMargin) =>
+        // (ApBrakeMargin is world.yaml-authored now — `ai.brake-margin` — so it can no longer be a
+        // default parameter value. No caller ever overrode it; it reads the resolved knob directly.)
+        ShipInputState Approach(Vec3 point, float stopDistance) =>
             AutoSteer.ApproachPoint(
-                myPos, myRot, s.State.Vel, point, stopDistance,
-                stats.MaxSpeed, stats.Accel, stats.BackMult, PigTurnGain, brakeMargin, Avoid);
+                myPos,
+                myRot,
+                s.State.Vel,
+                point,
+                stopDistance,
+                stats.MaxSpeed,
+                stats.Accel,
+                stats.BackMult,
+                PigTurnGain,
+                ApBrakeMargin,
+                Avoid
+            );
 
         bool CrossSector(uint destSector, out ShipInputState input)
         {
@@ -877,7 +968,8 @@ public sealed partial class Simulation
                     return default;
                 float rockR = World.RockCurrentRadius(rock.Id);
                 float embed = ConstructorEmbedShell(rockR);
-                bool arrived = (myPos - rock.Pos).LengthSquared() <= (embed + ConstructorEmbedSlack) * (embed + ConstructorEmbedSlack);
+                bool arrived =
+                    (myPos - rock.Pos).LengthSquared() <= (embed + ConstructorEmbedSlack) * (embed + ConstructorEmbedSlack);
                 bool stalled = tick - slot.PhaseStartTick >= SecondsToTicks(_constructor.SinkBackstopSeconds);
                 if (arrived || stalled)
                 {
@@ -890,7 +982,7 @@ public sealed partial class Simulation
                 return Creep(rock.Pos, _constructor.SinkSpeed * ConstructorDescentSlow, embed);
             }
             default: // Building — hold embedded (nose on the rock, throttle 0; Creep keeps a drifted
-            {        // drone burrowing back to depth) while the build timer runs.
+            { // drone burrowing back to depth) while the build timer runs.
                 if (World.RockById(slot.TargetRockId) is not World.Rock rock || rock.SectorId != s.SectorId)
                     return default;
                 return Creep(rock.Pos, _constructor.SinkSpeed, ConstructorEmbedShell(World.RockCurrentRadius(rock.Id)));
@@ -904,7 +996,15 @@ public sealed partial class Simulation
     // Point/Sector order flies the drone there and holds (like a miner move); Base/ship are refused.
     // Clear cancels back to Idle. An in-progress build (Sinking/Building) is committed and won't divert.
     private void ApplyConstructorCommandOrder(
-        int cid, string issuer, byte team, ConstructorSlot slot, byte targetKind, ulong targetId, uint sector, Vec3 pos)
+        int cid,
+        string issuer,
+        byte team,
+        ConstructorSlot slot,
+        byte targetKind,
+        ulong targetId,
+        uint sector,
+        Vec3 pos
+    )
     {
         void Notice(string t) => OrderNoticesThisStep.Add((cid, t));
 
@@ -1027,8 +1127,13 @@ public sealed partial class Simulation
     // of the team. Honors an explicit launchBaseId when it is a live friendly garrison.
     private World.BaseSite? ResolveConstructorLaunchBase(byte team, ulong launchBaseId)
     {
-        if (launchBaseId != 0 && World.BaseById(launchBaseId) is World.BaseSite pick
-            && pick.Team == team && BaseIsAlive(launchBaseId) && IsWinConditionBase(pick.BaseTypeId))
+        if (
+            launchBaseId != 0
+            && World.BaseById(launchBaseId) is World.BaseSite pick
+            && pick.Team == team
+            && BaseIsAlive(launchBaseId)
+            && IsWinConditionBase(pick.BaseTypeId)
+        )
             return pick;
         for (int i = 0; i < World.Bases.Count; i++)
         {
@@ -1089,7 +1194,6 @@ public sealed partial class Simulation
             var site = World.BaseById(baseId);
             tv.DiscoveredSectors.Add(site?.SectorId ?? World.DefaultSector);
             tv.LastKnownBaseHealth[baseId] = World.BaseMaxHealthOf(site?.BaseTypeId ?? 0, team); // per-type full hull × team factor (v41)
-
         }
     }
 

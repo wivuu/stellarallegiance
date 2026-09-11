@@ -30,6 +30,9 @@ public partial class ServerLobbyOverlay : Control
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
     private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
 
+    // The wordmark is the one size here that sits off the DesignTokens type scale.
+    private const int BrandSize = 16;
+
     // Wire DTOs mirroring public-lobby/Contracts.cs (additive fields are nullable so servers
     // that predate them keep rendering with graceful fallbacks).
     // PlayerId: the lobby Player behind a pilot who joined with a verified join token (null =
@@ -219,7 +222,7 @@ public partial class ServerLobbyOverlay : Control
         bar.AddChild(diamond);
         var brand = new Label { Text = "STELLAR ALLEGIANCE" };
         brand.AddThemeFontOverride("font", UiFonts.WithGlyphSpacing(UiFonts.SairaBold, 3));
-        brand.AddThemeFontSizeOverride("font_size", 16);
+        brand.AddThemeFontSizeOverride("font_size", BrandSize);
         brand.AddThemeColorOverride("font_color", DesignTokens.TextHi);
         bar.AddChild(brand);
         bar.AddChild(UiChips.AccentChip("LOBBY", 12, 3));
@@ -236,7 +239,7 @@ public partial class ServerLobbyOverlay : Control
             CustomMinimumSize = new Vector2(180, 34),
         };
         _name.AddThemeFontOverride("font", UiFonts.Mono);
-        _name.AddThemeFontSizeOverride("font_size", 15);
+        _name.AddThemeFontSizeOverride("font_size", DesignTokens.BodySize);
         bar.AddChild(_name);
 
         // Account page (display name, linked logins, sign out) — signed in only (RefreshAuthGate).
@@ -421,7 +424,7 @@ public partial class ServerLobbyOverlay : Control
         _modal.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         AddChild(_modal);
 
-        var dim = new ColorRect { Color = new Color(0.01f, 0.02f, 0.04f, 0.82f) };
+        var dim = new ColorRect { Color = DesignTokens.Scrim };
         dim.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         dim.MouseFilter = MouseFilterEnum.Stop;
         dim.GuiInput += ev =>
@@ -454,7 +457,7 @@ public partial class ServerLobbyOverlay : Control
             CustomMinimumSize = new Vector2(0, 42),
         };
         _address.AddThemeFontOverride("font", UiFonts.Mono);
-        _address.AddThemeFontSizeOverride("font_size", 15);
+        _address.AddThemeFontSizeOverride("font_size", DesignTokens.BodySize);
         _address.TextSubmitted += _ => SubmitDirect();
         col.AddChild(_address);
 
@@ -466,7 +469,7 @@ public partial class ServerLobbyOverlay : Control
             CustomMinimumSize = new Vector2(0, 42),
         };
         _password.AddThemeFontOverride("font", UiFonts.Mono);
-        _password.AddThemeFontSizeOverride("font_size", 15);
+        _password.AddThemeFontSizeOverride("font_size", DesignTokens.BodySize);
         _password.TextSubmitted += _ => SubmitDirect();
         col.AddChild(_password);
 
@@ -864,7 +867,7 @@ public partial class ServerLobbyOverlay : Control
             col.AddChild(row);
             row.AddChild(UiKit.MakeLabel(r.Flying ? "◆" : "▸", UiKit.TextStyle.Data, r.Flying ? tc : DesignTokens.TextDim));
             var pilot = UiKit.MakeLabel(r.Name, UiKit.TextStyle.Body, DesignTokens.TextHi);
-            pilot.AddThemeFontSizeOverride("font_size", 13);
+            pilot.AddThemeFontSizeOverride("font_size", DesignTokens.LabelSize);
             pilot.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
             pilot.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             row.AddChild(pilot);

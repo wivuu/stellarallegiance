@@ -84,8 +84,10 @@ public record TurnRates
 {
     /// <summary>Rotation about the vertical axis (nose left/right), in degrees/second.</summary>
     public double Yaw { get; set; }
+
     /// <summary>Rotation about the lateral axis (nose up/down), in degrees/second.</summary>
     public double Pitch { get; set; }
+
     /// <summary>Rotation about the longitudinal axis (barrel roll), in degrees/second.</summary>
     public double Roll { get; set; }
 }

@@ -10,7 +10,7 @@ using Godot;
 public partial class ShieldFlash : Node3D
 {
     private const double LifeSec = 0.15;
-    private const float Energy = 6.5f;    // additive bloom at the lit hotspot / front
+    private const float Energy = 6.5f; // additive bloom at the lit hotspot / front
     private const float PeakAlpha = 0.05f; // opacity at the brightest point (rest of the sphere is clear)
 
     // Impact-centred radial shader. `impact_dir` is the unit direction (sphere-local) from the ship
@@ -26,8 +26,7 @@ public partial class ShieldFlash : Node3D
 
     internal static void WarmShaders() => _ = SharedShader;
 
-    private const string ShaderCode =
-        """
+    private const string ShaderCode = """
         shader_type spatial;
         render_mode unshaded, blend_add, cull_disabled, depth_draw_never;
 
@@ -69,7 +68,7 @@ public partial class ShieldFlash : Node3D
         """;
 
     private readonly Vector3 _impactDir; // unit normal from the ship centre toward the impact point
-    private readonly float _radius;      // bubble radius (≈ the ship's visual radius)
+    private readonly float _radius; // bubble radius (≈ the ship's visual radius)
     private readonly Color _tint;
 
     private MeshInstance3D _sphere = null!;

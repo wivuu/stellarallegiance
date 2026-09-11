@@ -204,15 +204,11 @@ namespace StellarAllegiance.Shared
                 if (w.MagazineSize == 0)
                     errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has MagazineSize 0 — empty launcher");
                 if (w.ProjectileLifeTicks == 0)
-                    errors.Add(
-                        $"missile weapon {w.WeaponId} (\"{w.Name}\") has ProjectileLifeTicks 0 — instantly culled"
-                    );
+                    errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has ProjectileLifeTicks 0 — instantly culled");
                 if (w.BlastPower <= 0f)
                     errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive BlastPower {w.BlastPower}");
                 if (w.BlastRadius <= 0f)
-                    errors.Add(
-                        $"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive BlastRadius {w.BlastRadius}"
-                    );
+                    errors.Add($"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive BlastRadius {w.BlastRadius}");
                 if (w.DirectHitMult <= 0f)
                     errors.Add(
                         $"missile weapon {w.WeaponId} (\"{w.Name}\") has non-positive DirectHitMult {w.DirectHitMult}"
@@ -240,9 +236,7 @@ namespace StellarAllegiance.Shared
                     );
                 // Radar signature must resolve positive (projection maps 0 -> 1).
                 if (w.MineSignature <= 0f)
-                    errors.Add(
-                        $"mine weapon {w.WeaponId} (\"{w.Name}\") has non-positive MineSignature {w.MineSignature}"
-                    );
+                    errors.Add($"mine weapon {w.WeaponId} (\"{w.Name}\") has non-positive MineSignature {w.MineSignature}");
                 RequireCargo("mine");
             }
             else if (w.Kind == WeaponKind.Chaff)
@@ -250,9 +244,7 @@ namespace StellarAllegiance.Shared
                 // Chaff-kind dispenser: decoy strength/radius/life must be live, and it must link
                 // to a stockable cargo item (the chaff expendable it consumes).
                 if (w.ChaffStrength <= 0f)
-                    errors.Add(
-                        $"chaff weapon {w.WeaponId} (\"{w.Name}\") has non-positive ChaffStrength {w.ChaffStrength}"
-                    );
+                    errors.Add($"chaff weapon {w.WeaponId} (\"{w.Name}\") has non-positive ChaffStrength {w.ChaffStrength}");
                 if (w.DecoyRadius <= 0f)
                     errors.Add($"chaff weapon {w.WeaponId} (\"{w.Name}\") has non-positive DecoyRadius {w.DecoyRadius}");
                 if (w.ProjectileLifeTicks == 0)

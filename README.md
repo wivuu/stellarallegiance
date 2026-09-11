@@ -216,7 +216,8 @@ the one-time manual Railway steps for the lobby + a game server).
 - [docs/DEPLOY.md](docs/DEPLOY.md) — production deployment.
 - [docs/PROTOTYPE-ARCHITECTURE.md](docs/PROTOTYPE-ARCHITECTURE.md) — historical STDB-era prototype
   architecture (superseded; see [CONTRIBUTING.md](CONTRIBUTING.md) for the current design).
-- [.PLAN/](.PLAN/) — roadmap (`README.md`), flight-model reference (`ship_movement/`).
+- [.PLAN/](.PLAN/) — roadmap (`README.md`), flight-model reference (`ship_movement/`),
+  completed handoffs (`archive/`).
   Historical build-order notes are archived under `docs/archive/`.
 
 ## Third-party assets

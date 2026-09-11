@@ -1,4 +1,6 @@
 using StellarAllegiance.Shared;
+using static StellarAllegiance.Shared.MathUtil;
+using static StellarAllegiance.Shared.Vec3;
 
 namespace SimServer.Sim;
 
@@ -72,8 +74,7 @@ public sealed partial class Simulation
 
     private float PigAimSinDeg; // precomputed sin(aim half-angle); used in PigChaseInput + PigAttackPoint
 
-    private static uint SecondsToTicks(float seconds) =>
-        (uint)System.Math.Max(0, (int)MathF.Round(seconds * TickHz));
+    private static uint SecondsToTicks(float seconds) => (uint)System.Math.Max(0, (int)MathF.Round(seconds * TickHz));
 
     // Resolve the authored world.yaml `ai:` block into the tick-domain fields above. Ctor-only.
     private void InitPigTuning(WorldAiTuning t)
@@ -113,11 +114,27 @@ public sealed partial class Simulation
         PigJukeAmpMax = t.JukeAmpMax;
         PigAimSinDeg = MathF.Sin(t.AimDeg * (MathF.PI / 180f));
 
-        // Player-autopilot friendly-base docking maneuver (DockApproach) — authored in the same `ai:`
-        // block; server-only navigation, not a PIG behaviour.
+        // Server-side navigation tuning — authored in the same `ai:` block, but NOT a PIG behaviour:
+        // the shared approach-brake cushions (autopilot + the miner/constructor drone legs) and the
+        // player-autopilot friendly-base docking maneuver (DockApproach). Cross-knob invariants were
+        // already enforced at load (WorldLoader.ValidateAi), so these are copied straight through.
+        ApBrakeMargin = t.BrakeMargin;
+        ApArrivalBandMult = t.ArrivalBandMult;
         ApDockStandoff = t.DockStandoff;
         ApDockClearance = t.DockClearance;
         ApDockCreepThrottle = t.DockCreepThrottle;
+        ApDockHullMargin = t.DockHullMargin;
+        ApDockLosSlack = t.DockLosSlack;
+        ApDockDetourStepRad = t.DockDetourStepRad;
+        ApDockCapture = t.DockCapture;
+        ApDockOuterStandoff = t.DockOuterStandoff;
+        ApDockAxisSlop = t.DockAxisSlop;
+        ApDockDescentMargin = t.DockDescentMargin;
+        ApDockDescentMaxThrottle = t.DockDescentMaxThrottle;
+        ApDockCaptureSpeedSq = t.DockCaptureSpeedSq;
+        ApDockRollGain = t.DockRollGain;
+        ApDockFacingDot = t.DockFacingDot;
+        ApDockRollTol = t.DockRollTol;
     }
 
     // Lead solving uses the drone's primary weapon (all server weapons share these). Instance
@@ -1112,7 +1129,14 @@ public sealed partial class Simulation
     // injecting the PIG's obstacle avoidance + turn gain. excludeBaseId (default 0 = none) skips
     // one base from the avoidance field — the pod-home leg flies INTO its own base door and must
     // not be steered off it.
-    private ShipInputState PigSteerTo(ShipSim me, Vec3 myPos, Quat myRot, Vec3 point, float thrustWhenFacing, ulong excludeBaseId = 0) =>
+    private ShipInputState PigSteerTo(
+        ShipSim me,
+        Vec3 myPos,
+        Quat myRot,
+        Vec3 point,
+        float thrustWhenFacing,
+        ulong excludeBaseId = 0
+    ) =>
         AutoSteer.SteerToPoint(
             myPos,
             myRot,
@@ -1188,17 +1212,11 @@ public sealed partial class Simulation
     }
 
     // ---- small server-only math helpers ----
-    private static float Clamp1(float v) => v < -1f ? -1f : (v > 1f ? 1f : v);
-
+    // Clamp1 / Dot / NormalizeOr are shared with AutoSteer.cs (MathUtil + Vec3, `using static`
+    // above) — the PIG brain and the client-side steering must stay float-identical.
     private static float Clamp01(float v) => v < 0f ? 0f : (v > 1f ? 1f : v);
 
     private static Quat Conjugate(Quat q) => new(-q.X, -q.Y, -q.Z, q.W);
-
-    private static Vec3 NormalizeOr(Vec3 v, Vec3 fallback)
-    {
-        float n = v.Length();
-        return n < 1e-6f ? fallback : v * (1f / n);
-    }
 
     private static Vec3 PerpendicularTo(Vec3 v)
     {

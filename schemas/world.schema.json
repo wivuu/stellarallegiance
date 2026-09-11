@@ -344,6 +344,20 @@
           ],
           "description": "Maximum juke side-thrust amplitude fraction."
         },
+        "brake-margin": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Cushion between the flight model\u0027s stopping distance and the brake commit point, world units."
+        },
+        "arrival-band-mult": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Arrival-band generosity multiplier applied to a point destination\u0027s standoff distance."
+        },
         "dock-standoff": {
           "type": [
             "number",
@@ -364,9 +378,93 @@
             "null"
           ],
           "description": "Throttle fraction while creeping down the docking corridor."
+        },
+        "dock-hull-margin": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Padding added to the base radius for the docking line-of-sight / detour sphere, world units."
+        },
+        "dock-los-slack": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Trailing slack excused by the docking line-of-sight test (the terminal door pocket), world units."
+        },
+        "dock-detour-step-rad": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Per-tick azimuth advance of the detour orbit carrot, radians."
+        },
+        "dock-capture": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Capture radius around the standoff point that promotes Transit to Align \u2014 must exceed brake-margin."
+        },
+        "dock-outer-standoff": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Outer axis-acquire distance outside the door plane \u2014 must exceed dock-standoff."
+        },
+        "dock-axis-slop": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Lateral slack past the door half-extents still counted as \u0022on the corridor axis\u0022, world units."
+        },
+        "dock-descent-margin": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Arrest cushion on the on-axis docking descent, world units."
+        },
+        "dock-descent-max-throttle": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Cap on the docking descent throttle, as a fraction of max speed (0..1]."
+        },
+        "dock-capture-speed-sq": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Squared speed below which a ship at the standoff point counts as settled, (world units/s)\u00B2."
+        },
+        "dock-roll-gain": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Proportional roll gain used by the docking face-and-roll steering."
+        },
+        "dock-facing-dot": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Nose-onto-door facing dot required to promote Align to Creep (0..1]."
+        },
+        "dock-roll-tol": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Roll-alignment tolerance required to promote Align to Creep \u2014 must be positive."
         }
       },
-      "description": "PIG drone AI tuning (server-side only \u2014 never streamed). Null -\u003E stock values.",
+      "description": "PIG drone AI \u002B server-side navigation/docking tuning (never streamed). Null -\u003E stock values.",
       "additionalProperties": false
     },
     "combat": {

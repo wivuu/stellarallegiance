@@ -123,7 +123,12 @@ public partial class MapPickerModal : Control
     private Control LockedNotice()
     {
         var panel = new PanelContainer();
-        var sb = new StyleBoxFlat { BgColor = new Color(DesignTokens.PanelFill, 0.6f), BorderColor = DesignTokens.Secondary, AntiAliasing = false };
+        var sb = new StyleBoxFlat
+        {
+            BgColor = new Color(DesignTokens.PanelFill, 0.6f),
+            BorderColor = DesignTokens.Secondary,
+            AntiAliasing = false,
+        };
         sb.SetCornerRadiusAll(0);
         sb.BorderWidthLeft = 3;
         sb.ContentMarginLeft = sb.ContentMarginRight = 14;
@@ -135,7 +140,9 @@ public partial class MapPickerModal : Control
         row.AddChild(UiKit.MakeLabel("⏻", UiKit.TextStyle.Body, DesignTokens.Secondary));
         var msg = UiKit.MakeLabel(
             "Only the match host can change the sector map. You can preview the rotation below.",
-            UiKit.TextStyle.Data, DesignTokens.Text2);
+            UiKit.TextStyle.Data,
+            DesignTokens.Text2
+        );
         msg.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         row.AddChild(msg);
         return panel;
@@ -188,7 +195,11 @@ public partial class MapPickerModal : Control
         col.AddThemeConstantOverride("separation", 0);
         panel.AddChild(col);
 
-        var thumb = new SectorMapPreview { CustomMinimumSize = new Vector2(0, 132), SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        var thumb = new SectorMapPreview
+        {
+            CustomMinimumSize = new Vector2(0, 132),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+        };
         thumb.SetMap(m.Layout);
         col.AddChild(thumb);
 
@@ -207,7 +218,9 @@ public partial class MapPickerModal : Control
         names.AddChild(UiKit.MakeLabel(m.Name, UiKit.TextStyle.Label, DesignTokens.TextHi));
         var meta = UiKit.MakeLabel(
             $"{m.Mode} · {m.SectorLabel} · {m.GarrisonCount} GARRISONS · {m.SizeLabel}",
-            UiKit.TextStyle.Data, DesignTokens.Text2);
+            UiKit.TextStyle.Data,
+            DesignTokens.Text2
+        );
         meta.AddThemeFontSizeOverride("font_size", 10);
         names.AddChild(meta);
         frow.AddChild(names);
@@ -219,7 +232,11 @@ public partial class MapPickerModal : Control
         }
         else
         {
-            var check = UiKit.MakeLabel("◆", UiKit.TextStyle.Title, selected ? DesignTokens.TeamAccent : DesignTokens.BorderHi);
+            var check = UiKit.MakeLabel(
+                "◆",
+                UiKit.TextStyle.Title,
+                selected ? DesignTokens.TeamAccent : DesignTokens.BorderHi
+            );
             check.MouseFilter = MouseFilterEnum.Ignore;
             check.SizeFlagsVertical = SizeFlags.ShrinkCenter;
             frow.AddChild(check);
@@ -265,7 +282,9 @@ public partial class MapPickerModal : Control
 
         var note = UiKit.MakeLabel(
             Host ? "Applies to next match · all pilots notified" : "Read-only · host controls rotation",
-            UiKit.TextStyle.Data, DesignTokens.Text2);
+            UiKit.TextStyle.Data,
+            DesignTokens.Text2
+        );
         note.SizeFlagsVertical = SizeFlags.ShrinkCenter;
         row.AddChild(note);
         row.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });

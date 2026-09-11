@@ -29,8 +29,12 @@ public partial class ResearchTab : Control
         Locked,
     }
 
-    // Rail-line colour (plan spec rgba(120,190,255,0.26)); cyan when the parent is done.
-    private static readonly Color RailColor = new(120f / 255f, 190f / 255f, 255f / 255f, 0.26f);
+    // Rail-line colour; cyan when the parent is done. The plan spec asked for
+    // rgba(120,190,255,0.26) — BorderHi is that hairline at 0.25, a 0.01 alpha difference.
+    private static readonly Color RailColor = DesignTokens.BorderHi;
+
+    // The base tile's glyph is the one size in this tab that sits off the type scale.
+    private const int BaseGlyphSize = 24;
 
     private DefRegistry? _defs;
     private WorldRenderer? _world;
@@ -184,7 +188,7 @@ public partial class ResearchTab : Control
             VerticalAlignment = VerticalAlignment.Center,
         };
         _baseGlyph.AddThemeFontOverride("font", UiFonts.Mono);
-        _baseGlyph.AddThemeFontSizeOverride("font_size", 24);
+        _baseGlyph.AddThemeFontSizeOverride("font_size", BaseGlyphSize);
         _baseGlyph.AddThemeColorOverride("font_color", DesignTokens.TeamAccent);
         var tileSb = new StyleBoxFlat
         {
@@ -745,8 +749,7 @@ public partial class ResearchTab : Control
         _techFamily = techFam;
     }
 
-    private byte FamilyRootOf(byte type) =>
-        _familyRoots != null && _familyRoots.TryGetValue(type, out byte r) ? r : type;
+    private byte FamilyRootOf(byte type) => _familyRoots != null && _familyRoots.TryGetValue(type, out byte r) ? r : type;
 
     // The base family a development is researched at. Single-scope upgrades home to the base they must be
     // authorized at; everything else homes to the base family that grants its gating tech. Devs gated
@@ -1037,7 +1040,7 @@ internal partial class ClusterHeader : PanelContainer
         _label = UiKit.MakeLabel("", UiKit.TextStyle.Label, DesignTokens.TextHi);
         _label.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _count = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.Text2);
-        _count.AddThemeFontSizeOverride("font_size", 11);
+        _count.AddThemeFontSizeOverride("font_size", DesignTokens.CaptionSize);
         row.AddChild(_chevron);
         row.AddChild(_label);
         row.AddChild(_count);
@@ -1120,6 +1123,10 @@ internal partial class RailStrip : Control
 // and pulse the badge (only while visible).
 internal partial class NodeCard : PanelContainer
 {
+    // Card-local sizes off the DesignTokens type scale.
+    private const int BadgeSize = 16; // the 32px status badge's glyph
+    private const int PriceSize = 12; // trailing amber price readout
+
     public event Action? Pressed;
     public event Action? ChevronPressed;
 
@@ -1156,7 +1163,7 @@ internal partial class NodeCard : PanelContainer
             VerticalAlignment = VerticalAlignment.Center,
         };
         _badge.AddThemeFontOverride("font", UiFonts.Mono);
-        _badge.AddThemeFontSizeOverride("font_size", 16);
+        _badge.AddThemeFontSizeOverride("font_size", BadgeSize);
         row.AddChild(_badge);
 
         var texts = new VBoxContainer
@@ -1167,17 +1174,17 @@ internal partial class NodeCard : PanelContainer
         texts.AddThemeConstantOverride("separation", 0);
         _name = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.TextHi);
         _name.AddThemeFontOverride("font", UiFonts.SairaSemi);
-        _name.AddThemeFontSizeOverride("font_size", 13);
+        _name.AddThemeFontSizeOverride("font_size", DesignTokens.LabelSize);
         _name.ClipText = true;
         _name.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         _statusLabel = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.Text2);
-        _statusLabel.AddThemeFontSizeOverride("font_size", 9);
+        _statusLabel.AddThemeFontSizeOverride("font_size", DesignTokens.MicroSize);
         texts.AddChild(_name);
         texts.AddChild(_statusLabel);
         row.AddChild(texts);
 
         _price = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.Warn);
-        _price.AddThemeFontSizeOverride("font_size", 12);
+        _price.AddThemeFontSizeOverride("font_size", PriceSize);
         _price.VerticalAlignment = VerticalAlignment.Center;
         row.AddChild(_price);
 
@@ -1227,9 +1234,9 @@ internal partial class NodeCard : PanelContainer
         // Locked dims hardest (0.6); an Available node the team can't yet afford is a softer situational
         // grey (0.7, matching the hangar's TooPoor ship card) with its amber price still legible.
         Modulate =
-            status == ResearchTab.Status.Locked ? new Color(1, 1, 1, 0.6f)
-            : status == ResearchTab.Status.Available && !affordable ? new Color(1, 1, 1, 0.7f)
-            : Colors.White;
+            status == ResearchTab.Status.Locked ? UiKit.Tint(0.6f)
+            : status == ResearchTab.Status.Available && !affordable ? UiKit.Tint(0.7f)
+            : UiKit.TintFull;
         Restyle();
     }
 
@@ -1257,7 +1264,7 @@ internal partial class NodeCard : PanelContainer
         _statusLabel.AddThemeColorOverride("font_color", labelColor);
         _underlay.Visible = status == ResearchTab.Status.InProgress;
         _underlay.Progress = progress;
-        Modulate = status == ResearchTab.Status.Locked ? new Color(1, 1, 1, 0.6f) : Colors.White;
+        Modulate = status == ResearchTab.Status.Locked ? UiKit.Tint(0.6f) : UiKit.TintFull;
         Restyle();
     }
 
@@ -1328,7 +1335,7 @@ internal partial class NodeCard : PanelContainer
         _underlay.QueueRedraw();
         _statusLabel.Text = $"◷ {TechDetailPanel.MmssRemaining(_world, start, dur)}";
         float pulse = 0.6f + 0.4f * Mathf.Sin(Time.GetTicksMsec() / 240f);
-        _badge.Modulate = new Color(1, 1, 1, pulse);
+        _badge.Modulate = UiKit.Tint(pulse);
     }
 
     public override void _GuiInput(InputEvent @event)
@@ -1372,6 +1379,8 @@ internal partial class ProgressUnderlay : Control
 // bar + commander cancel), on-deck (data-blue), or idle (dashed dim note).
 internal partial class ActiveBanner : PanelContainer
 {
+    private const int CountSize = 12; // mono queue/countdown readout — off the type scale
+
     private WorldRenderer? _world;
     private uint _start;
     private uint _dur;
@@ -1493,7 +1502,7 @@ internal partial class ActiveBanner : PanelContainer
         _title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         row.AddChild(_title);
         _count = UiKit.MakeLabel(countText, UiKit.TextStyle.Data, accent);
-        _count.AddThemeFontSizeOverride("font_size", 12);
+        _count.AddThemeFontSizeOverride("font_size", CountSize);
         row.AddChild(_count);
         if (onCancel != null)
         {

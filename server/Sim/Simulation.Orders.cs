@@ -87,12 +87,29 @@ public sealed partial class Simulation
     }
 
     // Read-only order view for tests/diagnostics (sim thread only).
-    public IReadOnlyList<(ulong ShipId, byte Kind, ulong TargetShipId, ulong TargetBaseId, uint Sector, Vec3 Pos, bool Holding)>
-        PigOrdersView()
+    public IReadOnlyList<(
+        ulong ShipId,
+        byte Kind,
+        ulong TargetShipId,
+        ulong TargetBaseId,
+        uint Sector,
+        Vec3 Pos,
+        bool Holding
+    )> PigOrdersView()
     {
         var rows = new List<(ulong, byte, ulong, ulong, uint, Vec3, bool)>(_pigOrders.Count);
         foreach (var kv in _pigOrders)
-            rows.Add((kv.Key, kv.Value.Kind, kv.Value.TargetShipId, kv.Value.TargetBaseId, kv.Value.Sector, kv.Value.Pos, kv.Value.Holding));
+            rows.Add(
+                (
+                    kv.Key,
+                    kv.Value.Kind,
+                    kv.Value.TargetShipId,
+                    kv.Value.TargetBaseId,
+                    kv.Value.Sector,
+                    kv.Value.Pos,
+                    kv.Value.Holding
+                )
+            );
         return rows;
     }
 
@@ -188,7 +205,16 @@ public sealed partial class Simulation
     // _pigOrders entry TryObeyOrder consumes. Ship/Base infer attack-vs-escort from team+alive;
     // Rock/Point/Sector are plain goto-and-hold orders.
     private void ApplyPigCommandOrder(
-        int cid, string issuer, byte team, ulong subject, ShipSim ship, byte targetKind, ulong targetId, uint sector, Vec3 pos)
+        int cid,
+        string issuer,
+        byte team,
+        ulong subject,
+        ShipSim ship,
+        byte targetKind,
+        ulong targetId,
+        uint sector,
+        Vec3 pos
+    )
     {
         void Notice(string text) => OrderNoticesThisStep.Add((cid, text));
         void Directive(string text) => OrderDirectivesThisStep.Add((team, issuer, text));
@@ -280,7 +306,12 @@ public sealed partial class Simulation
                     Notice("No such sector.");
                     return;
                 }
-                _pigOrders[subject] = new PigOrder { Kind = OrderGoto, Sector = sector, Pos = pos };
+                _pigOrders[subject] = new PigOrder
+                {
+                    Kind = OrderGoto,
+                    Sector = sector,
+                    Pos = pos,
+                };
                 Directive($"{subjectName}: move to {World.SectorName(sector)}");
                 return;
             }
@@ -293,9 +324,20 @@ public sealed partial class Simulation
                 }
                 // Already there → hold in place; otherwise hold where it comes through the aleph
                 // (EntryHold anchors on entry) — a sector order never sends anyone to the center.
-                _pigOrders[subject] = ship.SectorId == sector
-                    ? new PigOrder { Kind = OrderGoto, Sector = sector, Pos = ship.State.Pos }
-                    : new PigOrder { Kind = OrderGoto, Sector = sector, EntryHold = true };
+                _pigOrders[subject] =
+                    ship.SectorId == sector
+                        ? new PigOrder
+                        {
+                            Kind = OrderGoto,
+                            Sector = sector,
+                            Pos = ship.State.Pos,
+                        }
+                        : new PigOrder
+                        {
+                            Kind = OrderGoto,
+                            Sector = sector,
+                            EntryHold = true,
+                        };
                 Directive($"{subjectName}: move to {World.SectorName(sector)}");
                 return;
             }
@@ -575,11 +617,7 @@ public sealed partial class Simulation
                 // Holding is NOT passive: an aggressor near the hold point gets chased (the order
                 // persists — with the threat gone, the next brain tick resumes station-keeping).
                 float defend = PigFireRange * 2f;
-                if (
-                    o.Holding
-                    && ctx.BestAggr is ShipSim aggr
-                    && (aggr.State.Pos - o.Pos).LengthSquared() <= defend * defend
-                )
+                if (o.Holding && ctx.BestAggr is ShipSim aggr && (aggr.State.Pos - o.Pos).LengthSquared() <= defend * defend)
                     return MakeChasePlan(in ctx, aggr);
                 if (ctx.Slot is PigSlot sg)
                 {

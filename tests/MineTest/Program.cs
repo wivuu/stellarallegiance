@@ -166,7 +166,11 @@ Simulation.ShipSim JoinShip(Simulation sim, int clientId, byte team)
         layer.HeldInput = new ShipInputState { DropMine = true };
         sim.Step();
     }
-    Check(sim.Minefields.Count == 1, "a held DropMine deploys exactly one field (cadence gate holds)", $"expected 1 field, found {sim.Minefields.Count}");
+    Check(
+        sim.Minefields.Count == 1,
+        "a held DropMine deploys exactly one field (cadence gate holds)",
+        $"expected 1 field, found {sim.Minefields.Count}"
+    );
 
     var field = sim.Minefields[0];
     Check(
@@ -181,7 +185,11 @@ Simulation.ShipSim JoinShip(Simulation sim, int clientId, byte team)
     );
 
     bool allInside = field.MinePos.All(p => (p - field.Center).Length() <= mineW.MineCloudRadius + 1e-3f);
-    Check(allInside, $"every mine sits within cloud-radius ({mineW.MineCloudRadius}) of the field center", "a mine landed outside the cloud radius");
+    Check(
+        allInside,
+        $"every mine sits within cloud-radius ({mineW.MineCloudRadius}) of the field center",
+        "a mine landed outside the cloud radius"
+    );
     Check(
         field.ArmAtTick > sim.Tick - 5 && field.ExpireAtTick > field.ArmAtTick,
         $"field arm/expire ticks sane (arm {field.ArmAtTick}, expire {field.ExpireAtTick}, now {sim.Tick})",
@@ -212,12 +220,20 @@ Simulation.ShipSim JoinShip(Simulation sim, int clientId, byte team)
         if (sim.MineGoneThisStep.Any(g => g.fieldId == fieldId))
             anyEarlyGone = true;
     }
-    Check(!anyEarlyDamage && !anyEarlyGone, "a ship moving through an UNARMED field takes no damage and triggers no FX", "an unarmed field damaged / pinged a ship moving through it");
+    Check(
+        !anyEarlyDamage && !anyEarlyGone,
+        "a ship moving through an UNARMED field takes no damage and triggers no FX",
+        "an unarmed field damaged / pinged a ship moving through it"
+    );
 
     // Next step reaches ArmAtTick -> the volume goes live and damages the moving enemy.
     PlaceMoving(enemy, c, vel);
     sim.Step();
-    Check(sim.Tick >= field.ArmAtTick, $"stepped to ArmAtTick ({field.ArmAtTick}) at tick {sim.Tick}", $"tick bookkeeping off (now {sim.Tick}, arm {field.ArmAtTick})");
+    Check(
+        sim.Tick >= field.ArmAtTick,
+        $"stepped to ArmAtTick ({field.ArmAtTick}) at tick {sim.Tick}",
+        $"tick bookkeeping off (now {sim.Tick}, arm {field.ArmAtTick})"
+    );
     Check(
         enemy.Health < healthBefore && sim.MineGoneThisStep.Any(g => g.fieldId == fieldId && g.reason == 2),
         $"the first armed tick damages a moving enemy inside the field ({healthBefore} -> {enemy.Health}) and emits a reason-2 hit-FX ping",
@@ -338,7 +354,10 @@ Simulation.ShipSim JoinShip(Simulation sim, int clientId, byte team)
         sim.Step();
     }
 
-    float e1b = e1.Health, e2b = e2.Health, frb = friendly.Health, fab = farEnemy.Health;
+    float e1b = e1.Health,
+        e2b = e2.Health,
+        frb = friendly.Health,
+        fab = farEnemy.Health;
     PlaceAll();
     sim.Step(); // first armed tick — the volume goes live
 
@@ -347,8 +366,16 @@ Simulation.ShipSim JoinShip(Simulation sim, int clientId, byte team)
         $"every enemy inside the volume takes damage the same tick (e1 {e1b}->{e1.Health}, e2 {e2b}->{e2.Health})",
         $"an enemy inside the volume was not hit (e1 {e1b}->{e1.Health}, e2 {e2b}->{e2.Health})"
     );
-    Check(friendly.Health == frb, "a friendly inside the volume takes nothing", $"friendly inside took damage ({frb} -> {friendly.Health})");
-    Check(farEnemy.Health == fab, $"an enemy outside cloud-radius ({r}) takes nothing", $"out-of-range enemy took damage ({fab} -> {farEnemy.Health})");
+    Check(
+        friendly.Health == frb,
+        "a friendly inside the volume takes nothing",
+        $"friendly inside took damage ({frb} -> {friendly.Health})"
+    );
+    Check(
+        farEnemy.Health == fab,
+        $"an enemy outside cloud-radius ({r}) takes nothing",
+        $"out-of-range enemy took damage ({fab} -> {farEnemy.Health})"
+    );
 }
 
 // ---- 5. Expiry ---------------------------------------------------------------------------------
@@ -373,9 +400,21 @@ Simulation.ShipSim JoinShip(Simulation sim, int clientId, byte team)
             changedOnRemoval = sim.MinefieldsChangedThisStep;
         }
     }
-    Check(removed && sim.Tick >= expireAt, $"field removed at/after ExpireAtTick ({expireAt}) (removed at tick {sim.Tick})", $"field never expired (removed={removed}, now {sim.Tick}, expire {expireAt})");
-    Check(!anyGone, "an untouched field expires with zero FX pings (nobody inside)", "an untouched field emitted a hit-FX ping before expiring");
-    Check(changedOnRemoval, "MinefieldsChangedThisStep fires on the expiry/removal tick", "the removal tick did not raise MinefieldsChangedThisStep");
+    Check(
+        removed && sim.Tick >= expireAt,
+        $"field removed at/after ExpireAtTick ({expireAt}) (removed at tick {sim.Tick})",
+        $"field never expired (removed={removed}, now {sim.Tick}, expire {expireAt})"
+    );
+    Check(
+        !anyGone,
+        "an untouched field expires with zero FX pings (nobody inside)",
+        "an untouched field emitted a hit-FX ping before expiring"
+    );
+    Check(
+        changedOnRemoval,
+        "MinefieldsChangedThisStep fires on the expiry/removal tick",
+        "the removal tick did not raise MinefieldsChangedThisStep"
+    );
 }
 
 // ---- 6. Determinism ----------------------------------------------------------------------------
@@ -411,7 +450,8 @@ Simulation.ShipSim JoinShip(Simulation sim, int clientId, byte team)
     var a = RunMineScript(4242);
     var b = RunMineScript(4242);
 
-    bool same = a.minePos.Length == b.minePos.Length && a.maskTL.Count == b.maskTL.Count && a.healthTL.Count == b.healthTL.Count;
+    bool same =
+        a.minePos.Length == b.minePos.Length && a.maskTL.Count == b.maskTL.Count && a.healthTL.Count == b.healthTL.Count;
     if (same)
         for (int i = 0; i < a.minePos.Length; i++)
         {
@@ -429,7 +469,11 @@ Simulation.ShipSim JoinShip(Simulation sim, int clientId, byte team)
                 same = false;
                 break;
             }
-    Check(same, $"two fresh sims produce bit-identical MinePos + AliveMask + health timelines ({a.minePos.Length} mines, {a.maskTL.Count} ticks)", "minefield sim diverged between two fresh runs (determinism broken)");
+    Check(
+        same,
+        $"two fresh sims produce bit-identical MinePos + AliveMask + health timelines ({a.minePos.Length} mines, {a.maskTL.Count} ticks)",
+        "minefield sim diverged between two fresh runs (determinism broken)"
+    );
 }
 
 // ---- Pure layout: MinefieldLayout.Positions is a function of its inputs alone -------------------
@@ -445,7 +489,11 @@ Simulation.ShipSim JoinShip(Simulation sim, int clientId, byte team)
             pure = false;
             break;
         }
-    Check(pure, "MinefieldLayout.Positions is pure (same seed → identical array twice)", "MinefieldLayout.Positions returned different arrays for the same seed");
+    Check(
+        pure,
+        "MinefieldLayout.Positions is pure (same seed → identical array twice)",
+        "MinefieldLayout.Positions returned different arrays for the same seed"
+    );
 }
 
 // ---- 8. Tier resolution: owning mine-2 upgrades a spawn's dispenser to prox-mine-dispenser-2 (29) --
@@ -492,13 +540,24 @@ Simulation BootHubSim(ulong seed, bool fog)
     content.Start.BaseTechs.Add("bomber");
     content.Start.BaseTechs.Add("supremacy-1"); // unlock the Enh Fighter hull (gated since Phase 4)
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
-    return new Simulation(world, content) { PigsEnabled = false, MinersEnabled = false, FogEnabled = fog, VisionSynchronous = true };
+    return new Simulation(world, content)
+    {
+        PigsEnabled = false,
+        MinersEnabled = false,
+        FogEnabled = fog,
+        VisionSynchronous = true,
+    };
 }
 
 ClientHub MakeHub(Simulation sim, bool autoStart) =>
-    new ClientHub(sim, new SimServer.Backend.OpenAuthenticator(),
-        new SimServer.Backend.InMemoryPlayerDirectory(), new SimServer.Backend.ReadyUpMatchmaker(autoStart),
-        "Test Arena", System.Array.Empty<MapCatalogEntry>());
+    new ClientHub(
+        sim,
+        new SimServer.Backend.OpenAuthenticator(),
+        new SimServer.Backend.InMemoryPlayerDirectory(),
+        new SimServer.Backend.ReadyUpMatchmaker(autoStart),
+        "Test Arena",
+        System.Array.Empty<MapCatalogEntry>()
+    );
 
 // Fresh-join Hello (v9): [MsgHello][secretLen 0][nameLen][name][tokenLen 0].
 void FeedHello(FakeHubTransport ft)
@@ -567,7 +626,14 @@ uint ExpectedAnchor(Simulation sim, byte team)
     ft.Feed(new byte[] { Protocol.MsgSetTeam, 0 });
     System.Threading.Thread.Sleep(50);
 
-    void Pump(int n) { for (int i = 0; i < n; i++) { sim.Step(); hub.AfterStep(); } }
+    void Pump(int n)
+    {
+        for (int i = 0; i < n; i++)
+        {
+            sim.Step();
+            hub.AfterStep();
+        }
+    }
     Pump(20); // matchmaker auto-starts the match
     ft.Feed(new byte[] { Protocol.MsgSpawn, FlightModel.ClassBomber, 0, 0, 0, 0, 0, 0, 0, 0 }); // v36: [4][cls][u64 launchBaseId=0]
     System.Threading.Thread.Sleep(50);
@@ -584,39 +650,62 @@ uint ExpectedAnchor(Simulation sim, byte team)
     layer.HeldInput = new ShipInputState { DropMine = true };
     sim.Step();
     layer.HeldInput = new ShipInputState();
-    Check(sim.Minefields.Count == 1, "hub: one field deployed in sector A (pre-condition)", $"expected 1 field, got {sim.Minefields.Count}");
+    Check(
+        sim.Minefields.Count == 1,
+        "hub: one field deployed in sector A (pre-condition)",
+        $"expected 1 field, got {sim.Minefields.Count}"
+    );
     ulong fieldId = sim.Minefields[0].FieldId;
 
     ft.Sent.Clear();
     hub.AfterStep(); // MinefieldsChangedThisStep → a frame goes out
     var f1 = WaitMinefields(ft);
-    bool okHeader = f1 is not null
+    bool okHeader =
+        f1 is not null
         && MineHeader(f1).sector == (ushort)sectorA
         && MineHeader(f1).count == 1
         && f1.Length == 4 + Protocol.MinefieldRecordSize
-        && BitConverter.ToUInt64(f1, 4) == fieldId          // record fieldId (guards the +2 header shift)
+        && BitConverter.ToUInt64(f1, 4) == fieldId // record fieldId (guards the +2 header shift)
         && BitConverter.ToUInt16(f1, 4 + 13) == (ushort)sectorA; // record's own sector field
-    Check(okHeader,
+    Check(
+        okHeader,
         $"hub: deploy in sector A yields a MsgMinefields frame with u16 header sector {sectorA}, count 1, correct record offsets",
-        $"the deploy frame header/offsets are wrong (frame={(f1 is null ? "none" : $"sector {MineHeader(f1).sector}, count {MineHeader(f1).count}, len {f1.Length}")})");
+        $"the deploy frame header/offsets are wrong (frame={(f1 is null ? "none" : $"sector {MineHeader(f1).sector}, count {MineHeader(f1).count}, len {f1.Length}")})"
+    );
 
     // ---- warp to sector B on a NON-COARSE, no-mine-change tick → an immediate count-0 frame for B ----
     uint sectorB = EmptySector; // distinct from the garrison sector A; the field stays behind in A
     // Advance (ship still in A) until the NEXT step lands on a non-coarse tick, so the frame below is
     // emitted PURELY by the anchor-change trigger — not the coarse keepalive.
-    while ((sim.Tick + 1) % CoarseEvery == 0) { sim.Step(); hub.AfterStep(); }
+    while ((sim.Tick + 1) % CoarseEvery == 0)
+    {
+        sim.Step();
+        hub.AfterStep();
+    }
     ft.Sent.Clear();
     layer.SectorId = sectorB;
     sim.Step();
     hub.AfterStep();
     var f2 = WaitMinefields(ft);
-    Check(sim.Tick % CoarseEvery != 0, "hub: the warp frame was measured on a non-coarse tick (premise)", $"the measured tick {sim.Tick} was coarse — anchor-change trigger not isolated");
-    Check(f2 is not null && MineHeader(f2).sector == (ushort)sectorB && MineHeader(f2).count == 0,
+    Check(
+        sim.Tick % CoarseEvery != 0,
+        "hub: the warp frame was measured on a non-coarse tick (premise)",
+        $"the measured tick {sim.Tick} was coarse — anchor-change trigger not isolated"
+    );
+    Check(
+        f2 is not null && MineHeader(f2).sector == (ushort)sectorB && MineHeader(f2).count == 0,
         $"hub: an anchor-sector change (warp A→B) emits an immediate empty frame for sector B (count 0)",
-        $"the warp did not trigger a fresh minefields frame for B (frame={(f2 is null ? "none" : $"sector {MineHeader(f2).sector}, count {MineHeader(f2).count}")})");
+        $"the warp did not trigger a fresh minefields frame for B (frame={(f2 is null ? "none" : $"sector {MineHeader(f2).sector}, count {MineHeader(f2).count}")})"
+    );
 
     cts.Cancel();
-    try { conn.Wait(2000); } catch { /* teardown */ }
+    try
+    {
+        conn.Wait(2000);
+    }
+    catch
+    { /* teardown */
+    }
 }
 
 // ---- 7c. Sentinel: the FIRST AfterStep after Hello sends a frame even on a plain tick (no coarse wait) ----
@@ -635,17 +724,26 @@ uint ExpectedAnchor(Simulation sim, byte team)
     // The client is registered but NO AfterStep has run yet (LastMinefieldAnchor == uint.MaxValue).
     // Step the sim (WITHOUT AfterStep) to a non-coarse tick, then run the FIRST AfterStep there: the
     // sentinel must force a frame even though sendMinefields is false on this plain lobby tick.
-    while (sim.Tick % CoarseEvery == 0) sim.Step();
+    while (sim.Tick % CoarseEvery == 0)
+        sim.Step();
     ft.Sent.Clear();
     hub.AfterStep();
     var f = WaitMinefields(ft);
     uint expected = ExpectedAnchor(sim, 0);
-    Check(sim.Tick % CoarseEvery != 0 && f is not null && MineHeader(f).sector == (ushort)expected && MineHeader(f).count == 0,
+    Check(
+        sim.Tick % CoarseEvery != 0 && f is not null && MineHeader(f).sector == (ushort)expected && MineHeader(f).count == 0,
         $"hub: the first AfterStep after Hello sends a frame via the uint.MaxValue sentinel (garrison anchor {expected}, no coarse wait)",
-        $"the fresh join got no immediate minefields frame (tick {sim.Tick}, frame={(f is null ? "none" : $"sector {MineHeader(f).sector}, count {MineHeader(f).count}")}, expected sector {expected})");
+        $"the fresh join got no immediate minefields frame (tick {sim.Tick}, frame={(f is null ? "none" : $"sector {MineHeader(f).sector}, count {MineHeader(f).count}")}, expected sector {expected})"
+    );
 
     cts.Cancel();
-    try { conn.Wait(2000); } catch { /* teardown */ }
+    try
+    {
+        conn.Wait(2000);
+    }
+    catch
+    { /* teardown */
+    }
 }
 
 // ---- 7d. Fog on: an LOS-revealed enemy field still appears in an ANCHOR-CHANGE frame (lazy mineVisByTeam) ----
@@ -663,7 +761,14 @@ uint ExpectedAnchor(Simulation sim, byte team)
     ft.Feed(new byte[] { Protocol.MsgSetTeam, 0 });
     System.Threading.Thread.Sleep(50);
 
-    void Pump(int n) { for (int i = 0; i < n; i++) { sim.Step(); hub.AfterStep(); } }
+    void Pump(int n)
+    {
+        for (int i = 0; i < n; i++)
+        {
+            sim.Step();
+            hub.AfterStep();
+        }
+    }
     Pump(20); // auto-start
     ft.Feed(new byte[] { Protocol.MsgSpawn, FlightModel.ClassScout, 0, 0, 0, 0, 0, 0, 0, 0 }); // v36: [4][cls][u64 launchBaseId=0]
     System.Threading.Thread.Sleep(50);
@@ -673,7 +778,8 @@ uint ExpectedAnchor(Simulation sim, byte team)
     // Lay an ENEMY (team 1) field in sector B via a bare sim ship (not a hub client).
     uint sectorB = EmptySector;
     sim.EnqueueJoin(2, team: 1, cls: FlightModel.ClassBomber);
-    sim.Step(); hub.AfterStep();
+    sim.Step();
+    hub.AfterStep();
     var enemyLayer = sim.Ships.First(s => s.OwnerClientId == 2);
     var mineW = sim.Content.Weapons.First(w => w.WeaponId == 7);
     enemyLayer.SectorId = sectorB;
@@ -682,7 +788,8 @@ uint ExpectedAnchor(Simulation sim, byte team)
     enemyLayer.MineAmmo = 1;
     enemyLayer.MineWeaponId = mineW.WeaponId;
     enemyLayer.HeldInput = new ShipInputState { DropMine = true };
-    sim.Step(); hub.AfterStep();
+    sim.Step();
+    hub.AfterStep();
     enemyLayer.HeldInput = new ShipInputState();
     var enemyField = sim.Minefields.First(mf => mf.Team == 1);
     ulong enemyFieldId = enemyField.FieldId;
@@ -694,7 +801,11 @@ uint ExpectedAnchor(Simulation sim, byte team)
     // Warp the viewer onto the field in sector B on a non-coarse, no-mine-change tick: the frame is
     // emitted only by the anchor-change trigger, and its enemy-visibility comes from the LAZILY-computed
     // mineVisByTeam (IsPointVisibleToTeam reads the viewer's live pos → LOS at distance 0).
-    while ((sim.Tick + 1) % CoarseEvery == 0) { sim.Step(); hub.AfterStep(); }
+    while ((sim.Tick + 1) % CoarseEvery == 0)
+    {
+        sim.Step();
+        hub.AfterStep();
+    }
     ft.Sent.Clear();
     viewer.SectorId = sectorB;
     viewer.State.Pos = fieldCenter;
@@ -702,13 +813,25 @@ uint ExpectedAnchor(Simulation sim, byte team)
     sim.Step();
     hub.AfterStep();
     var f = WaitMinefields(ft);
-    Check(sim.Tick % CoarseEvery != 0, "hub (fog): LOS frame measured on a non-coarse tick (premise)", $"the measured tick {sim.Tick} was coarse");
-    Check(f is not null && MineHeader(f).sector == (ushort)sectorB && MineFrameHas(f, enemyFieldId),
+    Check(
+        sim.Tick % CoarseEvery != 0,
+        "hub (fog): LOS frame measured on a non-coarse tick (premise)",
+        $"the measured tick {sim.Tick} was coarse"
+    );
+    Check(
+        f is not null && MineHeader(f).sector == (ushort)sectorB && MineFrameHas(f, enemyFieldId),
         "hub (fog): an LOS-revealed enemy field appears in an anchor-change frame (lazy mineVisByTeam holds)",
-        $"the anchor-change frame dropped the LOS-visible enemy field (frame={(f is null ? "none" : $"sector {MineHeader(f).sector}, count {MineHeader(f).count}")})");
+        $"the anchor-change frame dropped the LOS-visible enemy field (frame={(f is null ? "none" : $"sector {MineHeader(f).sector}, count {MineHeader(f).count}")})"
+    );
 
     cts.Cancel();
-    try { conn.Wait(2000); } catch { /* teardown */ }
+    try
+    {
+        conn.Wait(2000);
+    }
+    catch
+    { /* teardown */
+    }
 }
 
 Console.WriteLine(failures == 0 ? "\nALL MINE TESTS PASSED" : $"\n{failures} MINE TEST(S) FAILED");

@@ -21,8 +21,19 @@ public class ValidationTests
     {
         var core = new Core
         {
-            Techs = { new Tech { Id = "base", Name = "Base" } },
-            Hulls = { new Hull { Id = "scout", Name = "Scout", RequiredTechs = new TechSet(new[] { "does-not-exist" }) } },
+            Techs =
+            {
+                new Tech { Id = "base", Name = "Base" },
+            },
+            Hulls =
+            {
+                new Hull
+                {
+                    Id = "scout",
+                    Name = "Scout",
+                    RequiredTechs = new TechSet(new[] { "does-not-exist" }),
+                },
+            },
         };
 
         var result = CoreValidator.Validate(core);
@@ -37,14 +48,35 @@ public class ValidationTests
         // A healing gun can never also siege a base — its heal power would damage bases. Boot-fatal.
         var core = new Core
         {
-            Projectiles = { new Projectile { Id = "bolt", Name = "Bolt", Power = 10 } },
-            Weapons = { new Weapon { Id = "bad-nanite", Name = "Bad Nanite", ProjectileId = "bolt", IsHealing = true, CanDamageBase = true } },
+            Projectiles =
+            {
+                new Projectile
+                {
+                    Id = "bolt",
+                    Name = "Bolt",
+                    Power = 10,
+                },
+            },
+            Weapons =
+            {
+                new Weapon
+                {
+                    Id = "bad-nanite",
+                    Name = "Bad Nanite",
+                    ProjectileId = "bolt",
+                    IsHealing = true,
+                    CanDamageBase = true,
+                },
+            },
         };
 
         var result = CoreValidator.Validate(core);
 
         Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, e => e.Contains("bad-nanite") && e.Contains("is-healing") && e.Contains("can-damage-base"));
+        Assert.Contains(
+            result.Errors,
+            e => e.Contains("bad-nanite") && e.Contains("is-healing") && e.Contains("can-damage-base")
+        );
     }
 
     [Fact]
@@ -52,8 +84,19 @@ public class ValidationTests
     {
         var core = new Core
         {
-            Techs = { new Tech { Id = "base", Name = "Base" } },
-            Weapons = { new Weapon { Id = "gun", Name = "Gun", ObsoletedByTechs = new TechSet(new[] { "ghost-tech" }) } },
+            Techs =
+            {
+                new Tech { Id = "base", Name = "Base" },
+            },
+            Weapons =
+            {
+                new Weapon
+                {
+                    Id = "gun",
+                    Name = "Gun",
+                    ObsoletedByTechs = new TechSet(new[] { "ghost-tech" }),
+                },
+            },
         };
 
         var result = CoreValidator.Validate(core);
@@ -67,7 +110,15 @@ public class ValidationTests
     {
         var core = new Core
         {
-            Stations = { new Station { Id = "lab", Name = "Lab", ResearchSlots = -1 } },
+            Stations =
+            {
+                new Station
+                {
+                    Id = "lab",
+                    Name = "Lab",
+                    ResearchSlots = -1,
+                },
+            },
         };
 
         var result = CoreValidator.Validate(core);
@@ -82,17 +133,33 @@ public class ValidationTests
         // garrison --successor--> garrison-str (requires garrison-str tech); dev grants garrison-str.
         var core = new Core
         {
-            Techs = { new Tech { Id = "garrison-str", Name = "Garrison (Str)" } },
+            Techs =
+            {
+                new Tech { Id = "garrison-str", Name = "Garrison (Str)" },
+            },
             Stations =
             {
-                new Station { Id = "garrison", Name = "Garrison", BaseTypeId = 0, SuccessorStationId = "garrison-str" },
-                new Station { Id = "garrison-str", Name = "Garrison (Str)", BaseTypeId = 4, RequiredTechs = new TechSet(new[] { "garrison-str" }) },
+                new Station
+                {
+                    Id = "garrison",
+                    Name = "Garrison",
+                    BaseTypeId = 0,
+                    SuccessorStationId = "garrison-str",
+                },
+                new Station
+                {
+                    Id = "garrison-str",
+                    Name = "Garrison (Str)",
+                    BaseTypeId = 4,
+                    RequiredTechs = new TechSet(new[] { "garrison-str" }),
+                },
             },
             Developments =
             {
                 new Development
                 {
-                    Id = "dev-upgrade-garrison", Name = "Upgrade Garrison",
+                    Id = "dev-upgrade-garrison",
+                    Name = "Upgrade Garrison",
                     UpgradeScope = UpgradeScope.Single,
                     GrantedTechs = new TechSet(new[] { "garrison-str" }),
                 },
@@ -117,14 +184,27 @@ public class ValidationTests
             },
             Stations =
             {
-                new Station { Id = "garrison", Name = "Garrison", BaseTypeId = 0, SuccessorStationId = "garrison-str" },
-                new Station { Id = "garrison-str", Name = "Garrison (Str)", BaseTypeId = 4, RequiredTechs = new TechSet(new[] { "garrison-str" }) },
+                new Station
+                {
+                    Id = "garrison",
+                    Name = "Garrison",
+                    BaseTypeId = 0,
+                    SuccessorStationId = "garrison-str",
+                },
+                new Station
+                {
+                    Id = "garrison-str",
+                    Name = "Garrison (Str)",
+                    BaseTypeId = 4,
+                    RequiredTechs = new TechSet(new[] { "garrison-str" }),
+                },
             },
             Developments =
             {
                 new Development
                 {
-                    Id = "dev-upgrade-garrison", Name = "Upgrade Garrison",
+                    Id = "dev-upgrade-garrison",
+                    Name = "Upgrade Garrison",
                     UpgradeScope = UpgradeScope.Single,
                     GrantedTechs = new TechSet(new[] { "unrelated" }),
                 },
@@ -142,7 +222,10 @@ public class ValidationTests
     {
         var core = new Core
         {
-            Hulls = { new Hull { Id = "pod", Name = "Pod" } },
+            Hulls =
+            {
+                new Hull { Id = "pod", Name = "Pod" },
+            },
             Factions =
             {
                 new Faction
@@ -166,8 +249,14 @@ public class ValidationTests
     {
         var core = new Core
         {
-            Hulls = { new Hull { Id = "pod", Name = "Pod" } },
-            Stations = { new Station { Id = "depot", Name = "Depot" } }, // no Restart ability
+            Hulls =
+            {
+                new Hull { Id = "pod", Name = "Pod" },
+            },
+            Stations =
+            {
+                new Station { Id = "depot", Name = "Depot" },
+            }, // no Restart ability
             Factions =
             {
                 new Faction
@@ -191,7 +280,11 @@ public class ValidationTests
     {
         var core = new Core
         {
-            Techs = { new Tech { Id = "dup", Name = "A" }, new Tech { Id = "dup", Name = "B" } },
+            Techs =
+            {
+                new Tech { Id = "dup", Name = "A" },
+                new Tech { Id = "dup", Name = "B" },
+            },
         };
 
         var result = CoreValidator.Validate(core);
@@ -231,7 +324,13 @@ public class ValidationTests
         {
             Hulls =
             {
-                new Hull { Id = "miner", Name = "Miner", ClassId = 4, OreCapacity = 2000 },
+                new Hull
+                {
+                    Id = "miner",
+                    Name = "Miner",
+                    ClassId = 4,
+                    OreCapacity = 2000,
+                },
             },
         };
 
@@ -257,8 +356,24 @@ public class ValidationTests
     {
         var core = new Core
         {
-            Missiles = { new Missile { Id = "m1", Name = "M1", CargoId = 1 } },
-            Mines = { new Mine { Id = "n1", Name = "N1", CargoId = 1 } },
+            Missiles =
+            {
+                new Missile
+                {
+                    Id = "m1",
+                    Name = "M1",
+                    CargoId = 1,
+                },
+            },
+            Mines =
+            {
+                new Mine
+                {
+                    Id = "n1",
+                    Name = "N1",
+                    CargoId = 1,
+                },
+            },
         };
 
         var result = CoreValidator.Validate(core);
@@ -347,14 +462,25 @@ public class ValidationTests
         {
             Launchers =
             {
-                new Launcher { Id = "rack", Name = "Rack", WeaponId = 3, Amount = 6, FireIntervalTicks = 30, ExpendableId = "does-not-exist" },
+                new Launcher
+                {
+                    Id = "rack",
+                    Name = "Rack",
+                    WeaponId = 3,
+                    Amount = 6,
+                    FireIntervalTicks = 30,
+                    ExpendableId = "does-not-exist",
+                },
             },
         };
 
         var result = CoreValidator.Validate(core);
 
         Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, e => e.Contains("must resolve to a missile, mine, chaff, or probe") && e.Contains("rack"));
+        Assert.Contains(
+            result.Errors,
+            e => e.Contains("must resolve to a missile, mine, chaff, or probe") && e.Contains("rack")
+        );
     }
 
     // A probe dispenser (launcher → Probe) is a valid, boot-accepted launcher kind.
@@ -366,7 +492,15 @@ public class ValidationTests
             Probes = { ValidProbe() },
             Launchers =
             {
-                new Launcher { Id = "probe-rack", Name = "Probe Rack", WeaponId = 8, Amount = 1, FireIntervalTicks = 100, ExpendableId = "recon-probe" },
+                new Launcher
+                {
+                    Id = "probe-rack",
+                    Name = "Probe Rack",
+                    WeaponId = 8,
+                    Amount = 1,
+                    FireIntervalTicks = 100,
+                    ExpendableId = "recon-probe",
+                },
             },
         };
 
@@ -386,7 +520,15 @@ public class ValidationTests
             Probes = { probe },
             Launchers =
             {
-                new Launcher { Id = "probe-rack", Name = "Probe Rack", WeaponId = 8, Amount = 1, FireIntervalTicks = 100, ExpendableId = "recon-probe" },
+                new Launcher
+                {
+                    Id = "probe-rack",
+                    Name = "Probe Rack",
+                    WeaponId = 8,
+                    Amount = 1,
+                    FireIntervalTicks = 100,
+                    ExpendableId = "recon-probe",
+                },
             },
         };
 
@@ -407,7 +549,15 @@ public class ValidationTests
             Mines = { mine },
             Launchers =
             {
-                new Launcher { Id = "mine-rack", Name = "Mine Rack", WeaponId = 7, Amount = 4, FireIntervalTicks = 100, ExpendableId = "proximity-mine" },
+                new Launcher
+                {
+                    Id = "mine-rack",
+                    Name = "Mine Rack",
+                    WeaponId = 7,
+                    Amount = 4,
+                    FireIntervalTicks = 100,
+                    ExpendableId = "proximity-mine",
+                },
             },
         };
 
@@ -426,7 +576,15 @@ public class ValidationTests
             Mines = { ValidMine() },
             Launchers =
             {
-                new Launcher { Id = "mine-rack", Name = "Mine Rack", WeaponId = 7, Amount = 4, FireIntervalTicks = 100, ExpendableId = "proximity-mine" },
+                new Launcher
+                {
+                    Id = "mine-rack",
+                    Name = "Mine Rack",
+                    WeaponId = 7,
+                    Amount = 4,
+                    FireIntervalTicks = 100,
+                    ExpendableId = "proximity-mine",
+                },
             },
         };
 
@@ -446,7 +604,15 @@ public class ValidationTests
             Chaffs = { chaff },
             Launchers =
             {
-                new Launcher { Id = "chaff-rack", Name = "Chaff Rack", WeaponId = 6, Amount = 1, FireIntervalTicks = 40, ExpendableId = "sensor-decoy" },
+                new Launcher
+                {
+                    Id = "chaff-rack",
+                    Name = "Chaff Rack",
+                    WeaponId = 6,
+                    Amount = 1,
+                    FireIntervalTicks = 40,
+                    ExpendableId = "sensor-decoy",
+                },
             },
         };
 
@@ -470,7 +636,10 @@ public class ValidationTests
                     Name = "Fighter",
                     ClassId = 1,
                     PayloadCapacity = 20,
-                    DefaultCargo = { new CargoLoad { Item = "does-not-exist", Count = 2 } },
+                    DefaultCargo =
+                    {
+                        new CargoLoad { Item = "does-not-exist", Count = 2 },
+                    },
                 },
             },
         };
@@ -496,11 +665,31 @@ public class ValidationTests
                     Name = "Fighter",
                     ClassId = 1,
                     PayloadCapacity = 12,
-                    Hardpoints = { new Hardpoint { Kind = RuntimeHardpointKind.Weapon, Index = 0, WeaponId = 1 } },
-                    DefaultCargo = { new CargoLoad { Item = "sensor-decoy", Count = 3 } }, // gun 5 + 3×3 = 14 > 12
+                    Hardpoints =
+                    {
+                        new Hardpoint
+                        {
+                            Kind = RuntimeHardpointKind.Weapon,
+                            Index = 0,
+                            WeaponId = 1,
+                        },
+                    },
+                    DefaultCargo =
+                    {
+                        new CargoLoad { Item = "sensor-decoy", Count = 3 },
+                    }, // gun 5 + 3×3 = 14 > 12
                 },
             },
-            Weapons = { new Weapon { Id = "cannon", Name = "Cannon", WeaponId = 1, Mass = 5 } },
+            Weapons =
+            {
+                new Weapon
+                {
+                    Id = "cannon",
+                    Name = "Cannon",
+                    WeaponId = 1,
+                    Mass = 5,
+                },
+            },
             Chaffs = { ValidChaff() },
         };
 
@@ -519,7 +708,15 @@ public class ValidationTests
             Missiles = { ValidMissile() },
             Launchers =
             {
-                new Launcher { Id = "rack", Name = "Rack", WeaponId = 3, Amount = 0, FireIntervalTicks = 30, ExpendableId = "seeker" },
+                new Launcher
+                {
+                    Id = "rack",
+                    Name = "Rack",
+                    WeaponId = 3,
+                    Amount = 0,
+                    FireIntervalTicks = 30,
+                    ExpendableId = "seeker",
+                },
             },
         };
 
@@ -546,16 +743,44 @@ public class ValidationTests
                     PayloadCapacity = 8,
                     Hardpoints =
                     {
-                        new Hardpoint { Kind = RuntimeHardpointKind.Weapon, Index = 0, WeaponId = 1 },
-                        new Hardpoint { Kind = RuntimeHardpointKind.Weapon, Index = 1, WeaponId = 3 },
+                        new Hardpoint
+                        {
+                            Kind = RuntimeHardpointKind.Weapon,
+                            Index = 0,
+                            WeaponId = 1,
+                        },
+                        new Hardpoint
+                        {
+                            Kind = RuntimeHardpointKind.Weapon,
+                            Index = 1,
+                            WeaponId = 3,
+                        },
                     },
                 },
             },
-            Weapons = { new Weapon { Id = "cannon", Name = "Cannon", WeaponId = 1, Mass = 5 } },
+            Weapons =
+            {
+                new Weapon
+                {
+                    Id = "cannon",
+                    Name = "Cannon",
+                    WeaponId = 1,
+                    Mass = 5,
+                },
+            },
             Missiles = { ValidMissile() },
             Launchers =
             {
-                new Launcher { Id = "rack", Name = "Rack", WeaponId = 3, Mass = 4, Amount = 6, FireIntervalTicks = 30, ExpendableId = "seeker" },
+                new Launcher
+                {
+                    Id = "rack",
+                    Name = "Rack",
+                    WeaponId = 3,
+                    Mass = 4,
+                    Amount = 6,
+                    FireIntervalTicks = 30,
+                    ExpendableId = "seeker",
+                },
             },
         };
 
@@ -574,7 +799,16 @@ public class ValidationTests
             Missiles = { ValidMissile() },
             Launchers =
             {
-                new Launcher { Id = "rack", Name = "Rack", WeaponId = 3, Mass = 4, Amount = 6, FireIntervalTicks = 30, ExpendableId = "seeker" },
+                new Launcher
+                {
+                    Id = "rack",
+                    Name = "Rack",
+                    WeaponId = 3,
+                    Mass = 4,
+                    Amount = 6,
+                    FireIntervalTicks = 30,
+                    ExpendableId = "seeker",
+                },
             },
         };
 
@@ -597,7 +831,15 @@ public class ValidationTests
             Missiles = { missile },
             Launchers =
             {
-                new Launcher { Id = "rack", Name = "Rack", WeaponId = 3, Amount = 6, FireIntervalTicks = 30, ExpendableId = "seeker" },
+                new Launcher
+                {
+                    Id = "rack",
+                    Name = "Rack",
+                    WeaponId = 3,
+                    Amount = 6,
+                    FireIntervalTicks = 30,
+                    ExpendableId = "seeker",
+                },
             },
         };
 
@@ -618,7 +860,12 @@ public class ValidationTests
         {
             Missiles =
             {
-                new Missile { Id = "torpedo", Name = "Torpedo", CanDamageBase = true },
+                new Missile
+                {
+                    Id = "torpedo",
+                    Name = "Torpedo",
+                    CanDamageBase = true,
+                },
                 new Missile { Id = "seeker", Name = "Seeker" }, // unauthored -> defaults false
             },
         };
@@ -721,11 +968,30 @@ public class ValidationTests
                     PayloadCapacity = payloadCapacity,
                     Hardpoints =
                     {
-                        new Hardpoint { Kind = RuntimeHardpointKind.Weapon, Index = 0, WeaponId = 1 },
-                        new Hardpoint { Kind = RuntimeHardpointKind.Weapon, Index = 1, WeaponId = 1 },
+                        new Hardpoint
+                        {
+                            Kind = RuntimeHardpointKind.Weapon,
+                            Index = 0,
+                            WeaponId = 1,
+                        },
+                        new Hardpoint
+                        {
+                            Kind = RuntimeHardpointKind.Weapon,
+                            Index = 1,
+                            WeaponId = 1,
+                        },
                     },
                 },
             },
-            Weapons = { new Weapon { Id = "cannon", Name = "Cannon", WeaponId = 1, Mass = 5 } },
+            Weapons =
+            {
+                new Weapon
+                {
+                    Id = "cannon",
+                    Name = "Cannon",
+                    WeaponId = 1,
+                    Mass = 5,
+                },
+            },
         };
 }

@@ -849,6 +849,10 @@ public partial class BuildTab : Control
 // =====================================================================
 internal partial class StationCard : PanelContainer
 {
+    // Card-local sizes off the DesignTokens type scale.
+    private const int NameSize = 16; // station name — one step over Body
+    private const int MetaSize = 10; // status chip + kind line
+
     public event Action? Pressed;
 
     private Label _glyph = null!;
@@ -886,7 +890,7 @@ internal partial class StationCard : PanelContainer
             VerticalAlignment = VerticalAlignment.Center,
         };
         _glyph.AddThemeFontOverride("font", UiFonts.Mono);
-        _glyph.AddThemeFontSizeOverride("font_size", 22);
+        _glyph.AddThemeFontSizeOverride("font_size", DesignTokens.TitleSize);
         _glyph.AddThemeColorOverride("font_color", DesignTokens.TeamAccent);
         var tileSb = new StyleBoxFlat
         {
@@ -899,7 +903,7 @@ internal partial class StationCard : PanelContainer
         _glyph.AddThemeStyleboxOverride("normal", tileSb);
         top.AddChild(_glyph);
         _status = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.TeamAccent);
-        _status.AddThemeFontSizeOverride("font_size", 10);
+        _status.AddThemeFontSizeOverride("font_size", MetaSize);
         _status.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _status.VerticalAlignment = VerticalAlignment.Center;
         _status.HorizontalAlignment = HorizontalAlignment.Right;
@@ -908,17 +912,17 @@ internal partial class StationCard : PanelContainer
 
         _name = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.TextHi);
         _name.AddThemeFontOverride("font", UiFonts.SairaSemi);
-        _name.AddThemeFontSizeOverride("font_size", 16);
+        _name.AddThemeFontSizeOverride("font_size", NameSize);
         _name.ClipText = true;
         _name.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         col.AddChild(_name);
 
         _kind = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.TextDim);
-        _kind.AddThemeFontSizeOverride("font_size", 10);
+        _kind.AddThemeFontSizeOverride("font_size", MetaSize);
         col.AddChild(_kind);
 
         _desc = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.Data);
-        _desc.AddThemeFontSizeOverride("font_size", 11);
+        _desc.AddThemeFontSizeOverride("font_size", DesignTokens.CaptionSize);
         _desc.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _desc.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         _desc.CustomMinimumSize = new Vector2(0, 30);
@@ -927,10 +931,10 @@ internal partial class StationCard : PanelContainer
 
         var footer = new HBoxContainer();
         _price = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.Warn);
-        _price.AddThemeFontSizeOverride("font_size", 13);
+        _price.AddThemeFontSizeOverride("font_size", DesignTokens.LabelSize);
         _price.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _build = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.Text2);
-        _build.AddThemeFontSizeOverride("font_size", 11);
+        _build.AddThemeFontSizeOverride("font_size", DesignTokens.CaptionSize);
         footer.AddChild(_price);
         footer.AddChild(_build);
         col.AddChild(footer);
@@ -1007,10 +1011,10 @@ internal partial class StationCard : PanelContainer
         // unaffordable card is a softer situational grey (0.70, matching the hangar's TooPoor ship card)
         // so its amber price stays readable; a selected card is always full-bright.
         Modulate =
-            _selected ? Colors.White
-            : !_available ? new Color(1, 1, 1, 0.62f)
-            : !_affordable ? new Color(1, 1, 1, 0.70f)
-            : Colors.White;
+            _selected ? UiKit.TintFull
+            : !_available ? UiKit.Tint(0.62f)
+            : !_affordable ? UiKit.Tint(0.70f)
+            : UiKit.TintFull;
     }
 
     public override void _GuiInput(InputEvent @event)

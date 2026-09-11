@@ -1,4 +1,5 @@
 using StellarAllegiance.Shared;
+using static StellarAllegiance.Shared.Vec3;
 
 namespace SimServer.Sim;
 

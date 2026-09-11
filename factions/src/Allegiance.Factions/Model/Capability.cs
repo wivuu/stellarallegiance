@@ -33,7 +33,8 @@ public sealed class CapabilitySet : HashSet<Capability>
 {
     public CapabilitySet() { }
 
-    public CapabilitySet(IEnumerable<Capability> capabilities) : base(capabilities) { }
+    public CapabilitySet(IEnumerable<Capability> capabilities)
+        : base(capabilities) { }
 
     public CapabilitySet Clone() => new(this);
 }

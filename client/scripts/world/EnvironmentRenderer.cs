@@ -70,8 +70,7 @@ public sealed class EnvironmentRenderer
     // Force the next Tick to re-gather the occluder set regardless of camera movement. Called when the
     // time-sliced rock insert queue finishes draining: the field just materialized around a possibly
     // stationary camera, which the movement throttle alone would never notice.
-    public void MarkOccludersDirty() =>
-        _lastOccluderCamPos = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
+    public void MarkOccludersDirty() => _lastOccluderCamPos = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
 
     // World teardown: clear the per-node hull cache (keyed by the freed rock nodes) + reset the throttle.
     public void ClearCaches()

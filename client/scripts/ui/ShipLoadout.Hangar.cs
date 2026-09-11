@@ -17,6 +17,10 @@ namespace StellarAllegiance.Ui;
 // =====================================================================
 public partial class ShipLoadout
 {
+    // Hangar sizes that sit off the DesignTokens type scale, named for their row.
+    private const int ArsenalFitSize = 10; // "fits N" note beside the arsenal title
+    private const int CargoNameSize = 12; // an arsenal row's item name
+
     // Hangar tab content: [ center column (card strip + 3D preview + stats) | right column ].
     private Control BuildHangarContent()
     {
@@ -82,10 +86,10 @@ public partial class ShipLoadout
         {
             var head = new HBoxContainer();
             var name = UiKit.MakeLabel(stat, UiKit.TextStyle.Data, DesignTokens.TextDim);
-            name.AddThemeFontSizeOverride("font_size", 11);
+            name.AddThemeFontSizeOverride("font_size", DesignTokens.CaptionSize);
             name.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             var value = UiKit.MakeLabel("", UiKit.TextStyle.Data);
-            value.AddThemeFontSizeOverride("font_size", 11);
+            value.AddThemeFontSizeOverride("font_size", DesignTokens.CaptionSize);
             head.AddChild(name);
             head.AddChild(value);
             var bar = new SegmentedBar { Segments = 24, CustomMinimumSize = new Vector2(0, 8) };
@@ -213,7 +217,7 @@ public partial class ShipLoadout
         // Payload capacity readout — placeholder numbers (LoadoutState) with real behavior.
         var payHead = new HBoxContainer();
         var payLabel = UiKit.MakeLabel("PAYLOAD CAPACITY", UiKit.TextStyle.Data, DesignTokens.TextDim);
-        payLabel.AddThemeFontSizeOverride("font_size", 11);
+        payLabel.AddThemeFontSizeOverride("font_size", DesignTokens.CaptionSize);
         payLabel.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _payloadText = UiKit.MakeLabel("", UiKit.TextStyle.Data);
         payHead.AddChild(payLabel);
@@ -231,7 +235,7 @@ public partial class ShipLoadout
             UiKit.TextStyle.Data,
             DesignTokens.DangerText
         );
-        _overCapacity.AddThemeFontSizeOverride("font_size", 11);
+        _overCapacity.AddThemeFontSizeOverride("font_size", DesignTokens.CaptionSize);
         _overCapacity.Visible = false;
         col.AddChild(_overCapacity);
 
@@ -258,10 +262,10 @@ public partial class ShipLoadout
         _arsenalFrame.AddChild(frameCol);
         var frameHead = new HBoxContainer();
         _arsenalTitle = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.Data);
-        _arsenalTitle.AddThemeFontSizeOverride("font_size", 11);
+        _arsenalTitle.AddThemeFontSizeOverride("font_size", DesignTokens.CaptionSize);
         _arsenalTitle.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _arsenalFit = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.Text2);
-        _arsenalFit.AddThemeFontSizeOverride("font_size", 10);
+        _arsenalFit.AddThemeFontSizeOverride("font_size", ArsenalFitSize);
         frameHead.AddChild(_arsenalTitle);
         frameHead.AddChild(_arsenalFit);
         frameCol.AddChild(frameHead);
@@ -324,7 +328,7 @@ public partial class ShipLoadout
             int tier = _defs.DispenserTier(itemId, Team, _world);
             string liveName = tier > 1 ? $"{item.Name} {tier}" : item.Name;
             var name = UiKit.MakeLabel(liveName.ToUpperInvariant(), UiKit.TextStyle.Data, DesignTokens.TextHi);
-            name.AddThemeFontSizeOverride("font_size", 12);
+            name.AddThemeFontSizeOverride("font_size", CargoNameSize);
             // Dispensers load in PACKS of ChargesPerPack charges (one per press); show the multiplier
             // so the count reads as packs. Legacy single-charge items (ChargesPerPack 1) stay "EA".
             string cargoSub =
@@ -332,7 +336,7 @@ public partial class ShipLoadout
                     ? $"{item.Mass:0} PAYLOAD/PACK · {item.ChargesPerPack}× CHARGES · {item.Description}"
                     : $"{item.Mass:0} PAYLOAD EA · {item.Description}";
             var sub = UiKit.MakeLabel(cargoSub, UiKit.TextStyle.Data, DesignTokens.TextDim);
-            sub.AddThemeFontSizeOverride("font_size", 9);
+            sub.AddThemeFontSizeOverride("font_size", DesignTokens.MicroSize);
             sub.ClipText = true;
             sub.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
             nameCol.AddChild(name);
@@ -725,6 +729,8 @@ public partial class ShipLoadout
     // UiShowcase gallery. Cyan here is chrome (the selection cursor), never team identity.
     public sealed partial class ShipCard : PanelContainer
     {
+        private const int SubSize = 10; // the role · cost line under the name — off the type scale
+
         private Label _glyph = null!;
         private Label _name = null!;
         private Label _sub = null!;
@@ -753,12 +759,12 @@ public partial class ShipLoadout
             var col = new VBoxContainer();
             col.AddThemeConstantOverride("separation", 3);
             _glyph = UiKit.MakeLabel("◇", UiKit.TextStyle.Data, DesignTokens.TeamAccent);
-            _glyph.AddThemeFontSizeOverride("font_size", 22);
+            _glyph.AddThemeFontSizeOverride("font_size", DesignTokens.TitleSize);
             _name = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.TextHi);
             _name.AddThemeFontOverride("font", UiFonts.SairaSemi);
-            _name.AddThemeFontSizeOverride("font_size", 13);
+            _name.AddThemeFontSizeOverride("font_size", DesignTokens.LabelSize);
             _sub = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.Text2);
-            _sub.AddThemeFontSizeOverride("font_size", 10);
+            _sub.AddThemeFontSizeOverride("font_size", SubSize);
             _sub.ClipText = true;
             _sub.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
             col.AddChild(_glyph);
@@ -790,22 +796,22 @@ public partial class ShipLoadout
                 case TeamStateStore.SpawnGate.Locked:
                     _sub.Text = "⚿ TECH LOCKED";
                     _sub.AddThemeColorOverride("font_color", DesignTokens.TextDim);
-                    Modulate = new Color(1, 1, 1, 0.6f);
+                    Modulate = UiKit.Tint(0.6f);
                     break;
                 case TeamStateStore.SpawnGate.WrongBase:
                     _sub.Text = $"⚿ {wrongBaseLabel ?? "WRONG BASE"}";
                     _sub.AddThemeColorOverride("font_color", DesignTokens.Warn);
-                    Modulate = new Color(1, 1, 1, 0.7f);
+                    Modulate = UiKit.Tint(0.7f);
                     break;
                 case TeamStateStore.SpawnGate.TooPoor:
                     _sub.Text = _normalSub;
                     _sub.AddThemeColorOverride("font_color", DesignTokens.Warn);
-                    Modulate = new Color(1, 1, 1, 0.7f);
+                    Modulate = UiKit.Tint(0.7f);
                     break;
                 default:
                     _sub.Text = _normalSub;
                     _sub.AddThemeColorOverride("font_color", DesignTokens.Text2);
-                    Modulate = Colors.White;
+                    Modulate = UiKit.TintFull;
                     break;
             }
         }
@@ -864,8 +870,8 @@ public partial class HoloBackdrop : Control
         for (int i = 3; i >= 1; i--)
             DrawCircle(center, radius * i / 3f, new Color(DesignTokens.TeamAccentBase, 0.022f));
 
-        // Diagonal hatch.
-        var hatch = new Color(0.47f, 0.75f, 1f, 0.045f);
+        // Diagonal hatch — the hairline blue at a whisper of alpha.
+        var hatch = new Color(DesignTokens.BorderHi, 0.045f);
         for (float x = -Size.Y; x < Size.X; x += 16f)
             DrawLine(new Vector2(x, 0), new Vector2(x + Size.Y, Size.Y), hatch, 6f);
 

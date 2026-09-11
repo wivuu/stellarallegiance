@@ -116,7 +116,13 @@ public partial class MinefieldViews : Node3D
     // Build the field's MultiMeshInstance3D: n mine meshes at their seed-regenerated local offsets,
     // each normalized to MineSize and given a deterministic per-instance rotation. Falls back to a
     // small box marker mesh if the mine GLB is unavailable (never-invisible guarantee).
-    private static MultiMeshInstance3D BuildCloud(Minefield row, WeaponDef def, int n, out Vector3[] finalOrigins, out Basis[] bases)
+    private static MultiMeshInstance3D BuildCloud(
+        Minefield row,
+        WeaponDef def,
+        int n,
+        out Vector3[] finalOrigins,
+        out Basis[] bases
+    )
     {
         var (mesh, scale) = LoadMineMesh(def.ModelName);
 
@@ -292,7 +298,12 @@ public partial class MinefieldViews : Node3D
         var box = new BoxMesh
         {
             Size = Vector3.One,
-            Material = new StandardMaterial3D { AlbedoColor = new Color(0.7f, 0.72f, 0.78f), Metallic = 0.6f, Roughness = 0.4f },
+            Material = new StandardMaterial3D
+            {
+                AlbedoColor = new Color(0.7f, 0.72f, 0.78f),
+                Metallic = 0.6f,
+                Roughness = 0.4f,
+            },
         };
         return (box, MineSize);
     }

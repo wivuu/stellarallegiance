@@ -16,8 +16,7 @@ public static class BuildableResolver
     /// </summary>
     public static IReadOnlyList<Buildable> GetBuildables(Core core, TechState owned) =>
         core.AllBuildables()
-            .Where(b => b.RequiredTechs.IsSubsetOf(owned.Techs)
-                        && b.RequiredCapabilities.IsSubsetOf(owned.Capabilities))
+            .Where(b => b.RequiredTechs.IsSubsetOf(owned.Techs) && b.RequiredCapabilities.IsSubsetOf(owned.Capabilities))
             .Where(b => !IsObsolete(b, owned))
             // Successor retirement: ANY owned obsoleted-by tech pulls this item from the catalog
             // (e.g. researching a tier-2 gun's tech retires the tier-1 gun). Empty set never matches.

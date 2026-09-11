@@ -1,5 +1,4 @@
 <Project Sdk="Aspire.AppHost.Sdk/13.5.3">
-
   <!--
     Aspire AppHost: one `aspire run` boots Postgres -> lobby migrations -> public lobby -> sim server,
     with dashboard commands to launch Godot clients, approve a server's device code, and deploy the
@@ -30,5 +29,4 @@
     <ProjectReference Include="../public-lobby/PublicLobby.csproj" />
     <ProjectReference Include="../server/SimServer.csproj" />
   </ItemGroup>
-
 </Project>

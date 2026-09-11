@@ -15,6 +15,7 @@ public partial class Sun : MeshInstance3D
     // Far enough to sit well beyond any sector geometry but inside the camera's
     // far plane. The quad is sized to subtend a believable stylised disc.
     public const float Distance = 4500f;
+
     // Default visible-disc quad width. A sector with no `sun.size` override streams a -1 sentinel and
     // SectorEnvironment falls back to this; maps set a larger/smaller disc via YAML (see SetDiscSize).
     public const float DefaultSize = 900f;
@@ -110,7 +111,8 @@ public partial class Sun : MeshInstance3D
         var emission = EmissionColorFor(lightColor);
         _mat.Emission = emission;
         _mat.EmissionEnergyMultiplier =
-            BaseEnergy * Mathf.Min(MaxEnergyBoost, LinearLuminance(BaseEmission) / Mathf.Max(1e-4f, LinearLuminance(emission)));
+            BaseEnergy
+            * Mathf.Min(MaxEnergyBoost, LinearLuminance(BaseEmission) / Mathf.Max(1e-4f, LinearLuminance(emission)));
     }
 
     // The disc's peak-normalised, corona-deepened hue for a given light colour. Peak-normalising keeps
@@ -119,20 +121,15 @@ public partial class Sun : MeshInstance3D
     private static Color DeepTintFor(Color lightColor)
     {
         float peak = Mathf.Max(lightColor.R, Mathf.Max(lightColor.G, lightColor.B));
-        var tint = peak > 1e-4f
-            ? new Color(lightColor.R / peak, lightColor.G / peak, lightColor.B / peak)
-            : new Color(1f, 1f, 1f);
-        return new Color(
-            Mathf.Pow(tint.R, CoronaDeepen),
-            Mathf.Pow(tint.G, CoronaDeepen),
-            Mathf.Pow(tint.B, CoronaDeepen));
+        var tint =
+            peak > 1e-4f ? new Color(lightColor.R / peak, lightColor.G / peak, lightColor.B / peak) : new Color(1f, 1f, 1f);
+        return new Color(Mathf.Pow(tint.R, CoronaDeepen), Mathf.Pow(tint.G, CoronaDeepen), Mathf.Pow(tint.B, CoronaDeepen));
     }
 
     // The disc's emission tint for a given light colour. Public so the sky glare that hugs the disc
     // (Starscape's sun_glow_color) can derive from the SAME hue — the halo and the disc must always
     // agree or the sky shows a glow in one direction and the sun in another.
-    public static Color EmissionColorFor(Color lightColor) =>
-        Colors.White.Lerp(DeepTintFor(lightColor), 0.6f);
+    public static Color EmissionColorFor(Color lightColor) => Colors.White.Lerp(DeepTintFor(lightColor), 0.6f);
 
     // Rec.709 luminance of an sRGB-authored colour in LINEAR space — the space the renderer (and the
     // bloom threshold) actually sees, since Color material properties are source_color-converted.

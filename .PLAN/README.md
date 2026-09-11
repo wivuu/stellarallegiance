@@ -3,7 +3,9 @@
 ---
 
 ## QUICKNOTES:
-- **[M]** Code cleanup and refactor
+- ✅ **[M]** Code cleanup and refactor — DONE 2026-09-09 on `post-38-cleanup` (repo-wide CSharpier, all 24
+  suites green via `scripts/run-tests.ps1`, shared Vec3 helpers, autopilot knobs in world.yaml `ai:`,
+  UI on DesignTokens, Simulation/ClientHub/GameNetClient/TargetMarkers splits). Follow-ups in Deep backlog.
 - Proceed to dropped salvage below
 - Look for opportunities to utilize native vector3 and SIMD for performance improvements
 ---
@@ -101,8 +103,8 @@ Stage-1 YAML pipeline.
 
 ### Stage 5 — Social & persistence (independent track) — ◐ accounts + ranking DONE (2026-09-07)
 
-Orthogonal to the strategy loop, which runs on ephemeral per-match state. **Slice 1 shipped on
-`auth-lobby-ranking` and is deployed at <https://stellarlobby.wivuu.com>.** The lobby is no longer a
+Orthogonal to the strategy loop, which runs on ephemeral per-match state. **Slice 1 is merged to
+`master`** (PR #73, `9077060`) **and deployed at <https://stellarlobby.wivuu.com>.** The lobby is no longer a
 stateless directory: it is the identity issuer and the system of record — ASP.NET Core Identity +
 EF Core on Postgres with a co-hosted **Orleans** silo, where each entity grain is the single writer
 of its rows and endpoints never write through EF directly.
@@ -141,9 +143,7 @@ detail pages, bans, player and game-server deletion, operator reassignment). Sui
 no CI runs either.
 
 **Open before players use it** (user-owned): Google OAuth app + Steam Web API key; one real browser
-passkey click-through; pair + Ranked-flag the dedicated server; a win-condition match driven end to
-end (needs a base kill); merge to `master` — client, server and lobby move together, proto 38
-clients cannot join proto 37 servers.
+passkey click-through; pair + Ranked-flag the dedicated server.
 
 - ☐ **[L]** **Slice 2** (plan §1.6) — Glicko-2 team rating once real match data exists; Steam
   session tickets when there is an AppID.
@@ -171,6 +171,25 @@ Not stage-bound — done when convenient or when a stage needs them.
 
 ## Deep backlog
 
+- ☐ **[S]** **Cleanup follow-ups (from the 2026-09-09 pass)** — design-token migration second group
+  (`TechDetailPanel`, `RosterCells`, `CommandSidebar`, `DataFeedback`; ~130 raw literals remain client-wide,
+  mostly 3D VFX which may stay); `Simulation.Docking.cs` partial for the ~800-line `DockApproach` block;
+  ClientHub receive-side/snapshot-AOI extraction (needs an interface design, not a pure move);
+  `ApDockCreepFacingDot`/`ApDockAlignTimeout`/`ApDockCreepTimeout` still compile-time (seconds-authored keys
+  if they ever need tuning).
+
+- ☐ **[M]** **Explicit host transfer + runtime arena rebuild** — the game server's host is implicit:
+  `ClientHub` seeds `_hostId` to the first pilot to connect (`ReceiveLoop`, the `MsgHello` case)
+  and, when the host drops, hands it to the lowest remaining client id (`HandleConnection`'s
+  disconnect path). A host cannot pass the role deliberately and nobody can pick one, so map
+  control just follows join order. Wanted: an explicit host-selection/transfer frame plus the lobby
+  UI for it. Blocking the same feature: `MsgSetMap` (`ReceiveLoop`) only advertises the pick as the
+  "next" map, because the live `World` is built once at boot — making a mid-lobby map change take
+  effect needs an arena-rebuild seam (regen the `World`, re-`Welcome` every client). Lifted from
+  four `// TODO`s in `server/Net/ClientHub.cs`.
+- ☐ **[S]** **simbot speaks proto 7** — `tools/simbot` hand-builds its frames instead of
+  referencing `shared/Net/Wire.cs`, and its header still says "Protocol v7". Port it to `Wire` so a
+  protocol bump can't silently rot the load harness, or delete it.
 - ☐ **[M]** **Spectator mode** — follow players with Tab (camera orbits target); pick sectors from the
   lobby.
 - ☐ **[L]** **Replay system** — tick log or time-travel query playback.

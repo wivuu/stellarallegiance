@@ -26,6 +26,12 @@ For the full local stack (local lobby + Postgres + server + dashboard) use `aspi
 |--------|--------------|
 | `godot-bin.ps1` | **Dot-sourced**, not run. `. scripts/godot-bin.ps1` defines `Resolve-Godot`, which returns the path to a runnable Godot 4 .NET ("mono") binary as a string (or `$null`) — callers do `$Godot = Resolve-Godot`. Resolution order: preset `$env:GODOT` → the per-workstation `dotnet user-secrets` store (key `godot.executablePath`, id `stellarallegiance`; set via the "Godot: set executable path" VS Code task) → `godot-mono`/`godot4`/`godot` on PATH → standard install locations. Dot-sourced by `export-clients.ps1`, `tools/godot-import.ps1`, and `tools/glb-gallery/gallery.ps1`; the Aspire AppHost uses the same resolution order independently for the `client` resource. |
 
+## Tests
+
+| Script | What it does |
+|--------|--------------|
+| `run-tests.ps1` | Runs every suite under `tests/` (each is a console app: `dotnet run --project tests/<Suite> -c Release`, printing its own PASS/FAIL lines and exiting non-zero on failure), then prints a suite/result/seconds summary table and exits 1 if any failed. `-Filter <substring>[,<substring>]` runs a subset (`-Filter Collision`). `tests/PublicLobbyTest` is skipped unless `-IncludeDocker` is passed — its schema/grain sections need a reachable Docker for the Testcontainers Postgres. **Local only; there is no CI**, so nothing runs these but you. Some suites are known-red at the moment. |
+
 ## Export
 
 | Script | What it does |

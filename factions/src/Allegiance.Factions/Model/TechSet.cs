@@ -10,9 +10,11 @@ namespace Allegiance.Factions.Model;
 /// </remarks>
 public sealed class TechSet : HashSet<string>
 {
-    public TechSet() : base(StringComparer.Ordinal) { }
+    public TechSet()
+        : base(StringComparer.Ordinal) { }
 
-    public TechSet(IEnumerable<string> techIds) : base(techIds, StringComparer.Ordinal) { }
+    public TechSet(IEnumerable<string> techIds)
+        : base(techIds, StringComparer.Ordinal) { }
 
     public TechSet Clone() => new(this);
 }

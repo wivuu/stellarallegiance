@@ -5,8 +5,10 @@ public record Drone : Buildable
 {
     /// <summary>AI aiming accuracy/skill, from 0 (worst) to 1 (best).</summary>
     public double ShootSkill { get; set; }
+
     /// <summary>AI piloting/maneuvering skill, from 0 (worst) to 1 (best).</summary>
     public double MoveSkill { get; set; }
+
     /// <summary>AI willingness to engage/hold in combat, from 0 (timid) to 1 (fearless).</summary>
     public double Bravery { get; set; }
 

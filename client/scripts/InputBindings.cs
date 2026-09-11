@@ -189,7 +189,8 @@ public static class InputBindings
                 Key pk = k.PhysicalKeycode != Key.None ? k.PhysicalKeycode : k.Keycode;
                 return pk == Key.None ? null : new InputEventKey { PhysicalKeycode = pk };
             case InputEventMouseButton { Pressed: true } m
-                when m.ButtonIndex is not (MouseButton.WheelUp or MouseButton.WheelDown or MouseButton.WheelLeft or MouseButton.WheelRight):
+                when m.ButtonIndex
+                    is not (MouseButton.WheelUp or MouseButton.WheelDown or MouseButton.WheelLeft or MouseButton.WheelRight):
                 return new InputEventMouseButton { ButtonIndex = m.ButtonIndex };
             case InputEventJoypadButton { Pressed: true } jb:
                 return new InputEventJoypadButton { ButtonIndex = jb.ButtonIndex };
@@ -231,8 +232,7 @@ public static class InputBindings
         return list;
     }
 
-    private static string DeviceClass(InputEvent e) =>
-        e is InputEventJoypadButton or InputEventJoypadMotion ? "pad" : "kbm";
+    private static string DeviceClass(InputEvent e) => e is InputEventJoypadButton or InputEventJoypadMotion ? "pad" : "kbm";
 
     private static bool SequenceEqual(string[] a, string[] b)
     {
@@ -341,33 +341,52 @@ public static class InputBindings
 
         // Flight (keyboard defaults preserve today's ShipController.Axis() layout; joypad = a
         // conventional flight-stick starter mapping, easy to retune here).
-        K("thrust_forward", Key.W); Ax("thrust_forward", JoyAxis.TriggerRight, 1f);
-        K("thrust_back", Key.S); Ax("thrust_back", JoyAxis.TriggerLeft, 1f);
-        K("strafe_right", Key.A); Pad("strafe_right", JoyButton.DpadRight);
-        K("strafe_left", Key.D); Pad("strafe_left", JoyButton.DpadLeft);
+        K("thrust_forward", Key.W);
+        Ax("thrust_forward", JoyAxis.TriggerRight, 1f);
+        K("thrust_back", Key.S);
+        Ax("thrust_back", JoyAxis.TriggerLeft, 1f);
+        K("strafe_right", Key.A);
+        Pad("strafe_right", JoyButton.DpadRight);
+        K("strafe_left", Key.D);
+        Pad("strafe_left", JoyButton.DpadLeft);
         K("strafe_up", Key.X);
         K("strafe_down", Key.Z);
-        K("yaw_left", Key.Left); Ax("yaw_left", JoyAxis.LeftX, -1f);
-        K("yaw_right", Key.Right); Ax("yaw_right", JoyAxis.LeftX, 1f);
-        K("pitch_up", Key.Up); Ax("pitch_up", JoyAxis.LeftY, -1f);
-        K("pitch_down", Key.Down); Ax("pitch_down", JoyAxis.LeftY, 1f);
-        K("roll_right", Key.E); Ax("roll_right", JoyAxis.RightX, 1f);
-        K("roll_left", Key.Q); Ax("roll_left", JoyAxis.RightX, -1f);
+        K("yaw_left", Key.Left);
+        Ax("yaw_left", JoyAxis.LeftX, -1f);
+        K("yaw_right", Key.Right);
+        Ax("yaw_right", JoyAxis.LeftX, 1f);
+        K("pitch_up", Key.Up);
+        Ax("pitch_up", JoyAxis.LeftY, -1f);
+        K("pitch_down", Key.Down);
+        Ax("pitch_down", JoyAxis.LeftY, 1f);
+        K("roll_right", Key.E);
+        Ax("roll_right", JoyAxis.RightX, 1f);
+        K("roll_left", Key.Q);
+        Ax("roll_left", JoyAxis.RightX, -1f);
 
         // Combat.
-        K("fire_primary", Key.Space); Pad("fire_primary", JoyButton.RightShoulder);
-        K("fire_secondary", Key.F); Pad("fire_secondary", JoyButton.LeftShoulder);
-        K("afterburner", Key.Shift); Pad("afterburner", JoyButton.A);
-        K("drop_chaff", Key.C); Pad("drop_chaff", JoyButton.B);
-        K("drop_mine", Key.B); Pad("drop_mine", JoyButton.X);
-        K("drop_probe", Key.G); Pad("drop_probe", JoyButton.Y);
-        K("cycle_target", Key.Tab); Pad("cycle_target", JoyButton.RightStick);
+        K("fire_primary", Key.Space);
+        Pad("fire_primary", JoyButton.RightShoulder);
+        K("fire_secondary", Key.F);
+        Pad("fire_secondary", JoyButton.LeftShoulder);
+        K("afterburner", Key.Shift);
+        Pad("afterburner", JoyButton.A);
+        K("drop_chaff", Key.C);
+        Pad("drop_chaff", JoyButton.B);
+        K("drop_mine", Key.B);
+        Pad("drop_mine", JoyButton.X);
+        K("drop_probe", Key.G);
+        Pad("drop_probe", JoyButton.Y);
+        K("cycle_target", Key.Tab);
+        Pad("cycle_target", JoyButton.RightStick);
         // Autopilot toggle: T on keyboard; D-pad Down on the pad (D-pad Up is Toggle View, the
         // other D-pad directions strafe, so Down is the one unused D-pad button).
-        K("engage_autopilot", Key.T); Pad("engage_autopilot", JoyButton.DpadDown);
+        K("engage_autopilot", Key.T);
+        Pad("engage_autopilot", JoyButton.DpadDown);
 
         // View (scope zoom stays keyboard-only by default — a niche control).
-        K("toggle_view", Key.V); Pad("toggle_view", JoyButton.DpadUp);
+        K("toggle_view", Key.V);
+        Pad("toggle_view", JoyButton.DpadUp);
         K("scope_zoom_in", Key.Equal);
         Add("scope_zoom_in", new InputEventKey { PhysicalKeycode = Key.KpAdd });
         K("scope_zoom_out", Key.Minus);

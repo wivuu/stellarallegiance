@@ -9,8 +9,10 @@ public record Tech
 {
     /// <summary>Stable, unique id used for references (kebab-case by convention, e.g. "heavy-hulls").</summary>
     public string Id { get; set; } = "";
+
     /// <summary>Human-readable display name shown in the tech tree.</summary>
     public string Name { get; set; } = "";
+
     /// <summary>Flavor/UI text shown for this tech.</summary>
     public string? Description { get; set; }
 }

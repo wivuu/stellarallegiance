@@ -1,4 +1,5 @@
 using StellarAllegiance.Shared;
+using static StellarAllegiance.Shared.Vec3;
 
 namespace SimServer.Sim;
 
@@ -77,6 +78,7 @@ public sealed partial class Simulation
 
     // ---- Public read surface consumed by WP3 (ClientHub) ----
     public IReadOnlyDictionary<byte, TeamVision> TeamVisions => _teamVisions;
+
     public TeamVision? VisionFor(byte team) => _teamVisions.TryGetValue(team, out var tv) ? tv : null;
 
     // True if `team` has RADAR contact on ship `shipId` this vision interval (eyeball-tier does NOT
@@ -161,6 +163,7 @@ public sealed partial class Simulation
         public readonly List<ulong> RevealLogRocks = new();
         public readonly List<ulong> RevealLogAlephs = new();
         public readonly List<uint> RevealLogSectors = new();
+
         // ContactsDirty gates the ghost frame (MsgContacts).
         public bool ContactsDirty;
 
@@ -203,6 +206,7 @@ public sealed partial class Simulation
 
     // Worker-private cell-walk scratch (NEVER the sim-thread _rayCells the bolt path reuses).
     private readonly HashSet<(int, int, int)> _workerCellBuf = new();
+
     // Sim-thread cell-walk scratch for IsPointVisibleToTeam (also never _rayCells).
     private readonly HashSet<(int, int, int)> _pointCellBuf = new();
 
@@ -295,10 +299,12 @@ public sealed partial class Simulation
         public readonly List<ulong> NewAlephs = [];
         public readonly List<(ulong id, float health)> BaseHealth = [];
         public readonly Dictionary<ulong, GhostContact> StreamInfo = [];
+
         // Enemy probes this team can radar-detect this compute (radar tier only — a probe either
         // shows or it doesn't; no eyeball glimpse, no ghost). Drives the enemy MsgProbes stream so a
         // team can see (and shoot) an enemy probe within sensor range.
         public readonly HashSet<ulong> VisibleEnemyProbes = [];
+
         // Enemy ARMED minefields this team can radar-detect this compute (radar tier only, like
         // probes). Unioned with the direct-LOS gate in the hub's MsgMinefields build.
         public readonly HashSet<ulong> VisibleEnemyMines = [];
@@ -314,14 +320,16 @@ public sealed partial class Simulation
         _eyeballMult = Content.World.FogEyeballMultiplier > 0f ? Content.World.FogEyeballMultiplier : 1.5f;
         _sigKnobs = new SignatureKnobs(
             FireBoost: Content.World.FireSignatureBoost > 0f ? Content.World.FireSignatureBoost : 2.5f,
-            FireWindowTicks: (Content.World.FireSignatureWindow > 0f ? Content.World.FireSignatureWindow : 4f) * FlightModel.TickRate,
+            FireWindowTicks: (Content.World.FireSignatureWindow > 0f ? Content.World.FireSignatureWindow : 4f)
+                * FlightModel.TickRate,
             BoostMult: Content.World.BoostSignatureMult,
             ShieldMult: Content.World.ShieldSignatureMult,
             DustMult: Content.World.DustSignatureMult,
             MinMult: Content.World.SignatureMinMult,
             MaxMult: Content.World.SignatureMaxMult
         );
-        _ghostTimeoutTicks = (uint)MathF.Round((Content.World.FogGhostTimeout > 0f ? Content.World.FogGhostTimeout : 120f) * FlightModel.TickRate);
+        _ghostTimeoutTicks = (uint)
+            MathF.Round((Content.World.FogGhostTimeout > 0f ? Content.World.FogGhostTimeout : 120f) * FlightModel.TickRate);
         _alephSig = Content.World.AlephRadarSignature;
         _rockSig = Content.World.RockRadarSignature;
 
@@ -584,10 +592,27 @@ public sealed partial class Simulation
             // Every base is a discovery/health-refresh TARGET (a destroyed base stays re-scoutable and
             // records health 0 — stale memory shows it destroyed); its captured health is what the
             // worker reads, never live World.BaseHealth (F5).
-            _inBaseTargets.Add(new BaseTargetSnap { Id = b.Id, Team = b.Team, Sector = b.SectorId, Pos = b.Pos, Health = health });
+            _inBaseTargets.Add(
+                new BaseTargetSnap
+                {
+                    Id = b.Id,
+                    Team = b.Team,
+                    Sector = b.SectorId,
+                    Pos = b.Pos,
+                    Health = health,
+                }
+            );
             // Only an ALIVE base is a VIEWER — a destroyed base stops watching its surroundings.
             if (health > 0f)
-                _inBaseViewers.Add(new BaseSnap { Team = b.Team, Sector = b.SectorId, Pos = b.Pos, SphereRadius = baseSphere });
+                _inBaseViewers.Add(
+                    new BaseSnap
+                    {
+                        Team = b.Team,
+                        Sector = b.SectorId,
+                        Pos = b.Pos,
+                        SphereRadius = baseSphere,
+                    }
+                );
         }
 
         // Recon probes (WP5, Simulation.Probes.cs): each alive probe is just another unoccluded
@@ -817,7 +842,15 @@ public sealed partial class Simulation
     // lock; bases have no eyeball tier, cone has none). One LoS scan per viewer, shared by all its
     // volumes since they share the viewer→target segment. Runs on the worker —
     // reads only the value-copy snapshot + the immutable rock grid, with its own cell-walk buffer.
-    private void ClassifyTarget(byte team, uint sector, Vec3 pos, float sig, ulong excludeRock, out bool radar, out bool eyeball)
+    private void ClassifyTarget(
+        byte team,
+        uint sector,
+        Vec3 pos,
+        float sig,
+        ulong excludeRock,
+        out bool radar,
+        out bool eyeball
+    )
     {
         radar = false;
         eyeball = false;
@@ -886,8 +919,7 @@ public sealed partial class Simulation
             if (d2b > brMax * brMax)
                 continue; // outside even the un-attenuated sphere
             float br = brMax * DustVisionMult(sector, b.Pos, pos);
-            if (d2b <= br * br
-                && !SegmentBlockedByRock(sector, b.Pos, pos, excludeRock, _workerCellBuf))
+            if (d2b <= br * br && !SegmentBlockedByRock(sector, b.Pos, pos, excludeRock, _workerCellBuf))
             {
                 radar = true;
                 return;
@@ -914,20 +946,20 @@ public sealed partial class Simulation
             int z0 = World.CellOf(center.Z - range),
                 z1 = World.CellOf(center.Z + range);
             for (int cx = x0; cx <= x1; cx++)
-                for (int cy = y0; cy <= y1; cy++)
-                    for (int cz = z0; cz <= z1; cz++)
-                    {
-                        if (!grid.TryGetValue((cx, cy, cz), out var rocks))
-                            continue;
-                        foreach (var r in rocks)
-                        {
-                            if (tv.DiscoveredRocks.Contains(r.Id) || tr.NewRocks.Contains(r.Id))
-                                continue;
-                            ClassifyTarget(team, r.SectorId, r.Pos, _rockSig, r.Id, out bool radar, out _);
-                            if (radar)
-                                tr.NewRocks.Add(r.Id);
-                        }
-                    }
+            for (int cy = y0; cy <= y1; cy++)
+            for (int cz = z0; cz <= z1; cz++)
+            {
+                if (!grid.TryGetValue((cx, cy, cz), out var rocks))
+                    continue;
+                foreach (var r in rocks)
+                {
+                    if (tv.DiscoveredRocks.Contains(r.Id) || tr.NewRocks.Contains(r.Id))
+                        continue;
+                    ClassifyTarget(team, r.SectorId, r.Pos, _rockSig, r.Id, out bool radar, out _);
+                    if (radar)
+                        tr.NewRocks.Add(r.Id);
+                }
+            }
         }
 
         foreach (var v in _inViewers)
@@ -1082,8 +1114,7 @@ public sealed partial class Simulation
             // already reads visible while the ship hasn't yet landed in newEyeball, and the bare
             // set-check would kill a ghost the soft-track is about to reposition. A ship we still
             // see keeps its ghost (soft-tracked to the live pose here / next interval).
-            if (!TeamStillSeesShipLive(team, tv, g.ShipId)
-                && IsPointVisibleToTeam(team, g.Sector, g.Pos))
+            if (!TeamStillSeesShipLive(team, tv, g.ShipId) && IsPointVisibleToTeam(team, g.Sector, g.Pos))
             {
                 tv.Ghosts.Remove(g.ShipId);
                 tv.ContactsDirty = true;
@@ -1147,7 +1178,14 @@ public sealed partial class Simulation
     private readonly List<GhostContact> _ghostScratch = new();
 
     // Resolve one ship's transition out of the streamed union.
-    private void HandleLeave(byte team, TeamVision tv, ulong id, HashSet<ulong> newRadar, HashSet<ulong> newEyeball, uint tick)
+    private void HandleLeave(
+        byte team,
+        TeamVision tv,
+        ulong id,
+        HashSet<ulong> newRadar,
+        HashSet<ulong> newEyeball,
+        uint tick
+    )
     {
         if (newRadar.Contains(id) || newEyeball.Contains(id))
             return; // still streamed
@@ -1190,8 +1228,8 @@ public sealed partial class Simulation
         {
             if (!vw.Alive || vw.Team != team || vw.SectorId != s.SectorId)
                 continue;
-            float er = VisionDefFor(vw).VisionSphereRadius * _eyeballMult
-                * DustVisionMult(s.SectorId, vw.State.Pos, s.State.Pos);
+            float er =
+                VisionDefFor(vw).VisionSphereRadius * _eyeballMult * DustVisionMult(s.SectorId, vw.State.Pos, s.State.Pos);
             if (er > 0f && (s.State.Pos - vw.State.Pos).LengthSquared() <= er * er)
                 return true;
         }
@@ -1217,8 +1255,7 @@ public sealed partial class Simulation
             float dust = DustVisionMult(sector, s.State.Pos, pos);
 
             float sr = def.VisionSphereRadius * dust;
-            if (sr > 0f && d2 <= sr * sr
-                && !SegmentBlockedByRock(sector, s.State.Pos, pos, 0UL, _pointCellBuf))
+            if (sr > 0f && d2 <= sr * sr && !SegmentBlockedByRock(sector, s.State.Pos, pos, 0UL, _pointCellBuf))
                 return true;
 
             float cl = def.VisionConeLength * dust;
@@ -1246,8 +1283,11 @@ public sealed partial class Simulation
             if (!WeaponDefs.TryGetValue(p.WeaponId, out var pw))
                 continue;
             float pr = pw.ProbeSightRadius * DustVisionMult(sector, p.Pos, pos);
-            if (pr > 0f && (pos - p.Pos).LengthSquared() <= pr * pr
-                && !SegmentBlockedByRock(sector, p.Pos, pos, 0UL, _pointCellBuf))
+            if (
+                pr > 0f
+                && (pos - p.Pos).LengthSquared() <= pr * pr
+                && !SegmentBlockedByRock(sector, p.Pos, pos, 0UL, _pointCellBuf)
+            )
                 return true;
         }
 
@@ -1262,8 +1302,10 @@ public sealed partial class Simulation
                 if (b.Team != team || b.SectorId != sector)
                     continue;
                 float br = baseR * DustVisionMult(sector, b.Pos, pos);
-                if ((pos - b.Pos).LengthSquared() <= br * br
-                    && !SegmentBlockedByRock(sector, b.Pos, pos, 0UL, _pointCellBuf))
+                if (
+                    (pos - b.Pos).LengthSquared() <= br * br
+                    && !SegmentBlockedByRock(sector, b.Pos, pos, 0UL, _pointCellBuf)
+                )
                     return true;
             }
         return false;
@@ -1296,40 +1338,43 @@ public sealed partial class Simulation
             _warpRevealPending[s.Team] = pending = new List<ulong>();
 
         Vec3 center = s.State.Pos;
-        int x0 = World.CellOf(center.X - range), x1 = World.CellOf(center.X + range);
-        int y0 = World.CellOf(center.Y - range), y1 = World.CellOf(center.Y + range);
-        int z0 = World.CellOf(center.Z - range), z1 = World.CellOf(center.Z + range);
+        int x0 = World.CellOf(center.X - range),
+            x1 = World.CellOf(center.X + range);
+        int y0 = World.CellOf(center.Y - range),
+            y1 = World.CellOf(center.Y + range);
+        int z0 = World.CellOf(center.Z - range),
+            z1 = World.CellOf(center.Z + range);
         float r2 = range * range;
         // Append under DiscoverLock so a concurrent off-thread BuildWelcome (a join) sees a consistent
         // discovered-set / reveal-log-length pair (its cursor seed). The lock is uncontended in steady state.
         lock (tv.DiscoverLock)
         {
             for (int cx = x0; cx <= x1; cx++)
-                for (int cy = y0; cy <= y1; cy++)
-                    for (int cz = z0; cz <= z1; cz++)
-                    {
-                        if (!grid.TryGetValue((cx, cy, cz), out var rocks))
-                            continue;
-                        foreach (var rk in rocks)
-                        {
-                            if (tv.DiscoveredRocks.Contains(rk.Id))
-                                continue; // already known (persisted)
-                            if ((rk.Pos - center).LengthSquared() > r2)
-                                continue; // sphere-only
-                            // Dedupe against rocks already staged this interval (a second nearby warp):
-                            // a rock in the reveal log but NOT yet in DiscoveredRocks is exactly `pending`
-                            // (the apply appends to the log and DiscoveredRocks atomically), so this O(1)
-                            // check subsumes an O(log) rescan of RevealLogRocks.
-                            if (pending.Contains(rk.Id))
-                                continue;
-                            tv.RevealLogRocks.Add(rk.Id); // stream immediately via each client's cursor
-                            pending.Add(rk.Id);
-                            // Fold the class mask NOW (not at the deferred MergeWarpDiscoveries):
-                            // the worker never reads TeamState, so this is safe from the sim thread,
-                            // and it keeps the Build tab in lockstep with the rock the client just saw.
-                            DiscoverRockClass(s.Team, rk.Id);
-                        }
-                    }
+            for (int cy = y0; cy <= y1; cy++)
+            for (int cz = z0; cz <= z1; cz++)
+            {
+                if (!grid.TryGetValue((cx, cy, cz), out var rocks))
+                    continue;
+                foreach (var rk in rocks)
+                {
+                    if (tv.DiscoveredRocks.Contains(rk.Id))
+                        continue; // already known (persisted)
+                    if ((rk.Pos - center).LengthSquared() > r2)
+                        continue; // sphere-only
+                    // Dedupe against rocks already staged this interval (a second nearby warp):
+                    // a rock in the reveal log but NOT yet in DiscoveredRocks is exactly `pending`
+                    // (the apply appends to the log and DiscoveredRocks atomically), so this O(1)
+                    // check subsumes an O(log) rescan of RevealLogRocks.
+                    if (pending.Contains(rk.Id))
+                        continue;
+                    tv.RevealLogRocks.Add(rk.Id); // stream immediately via each client's cursor
+                    pending.Add(rk.Id);
+                    // Fold the class mask NOW (not at the deferred MergeWarpDiscoveries):
+                    // the worker never reads TeamState, so this is safe from the sim thread,
+                    // and it keeps the Build tab in lockstep with the rock the client just saw.
+                    DiscoverRockClass(s.Team, rk.Id);
+                }
+            }
         }
     }
 
@@ -1418,9 +1463,9 @@ public sealed partial class Simulation
                 cy = World.CellOf(p.Y),
                 cz = World.CellOf(p.Z);
             for (int dx = -1; dx <= 1; dx++)
-                for (int dy = -1; dy <= 1; dy++)
-                    for (int dz = -1; dz <= 1; dz++)
-                        into.Add((cx + dx, cy + dy, cz + dz));
+            for (int dy = -1; dy <= 1; dy++)
+            for (int dz = -1; dz <= 1; dz++)
+                into.Add((cx + dx, cy + dy, cz + dz));
         }
     }
 

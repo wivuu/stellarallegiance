@@ -17,9 +17,11 @@ public static class DesignTokens
     public static readonly Color Panel = Color.FromHtml("0B1320"); // opaque surface
     public static readonly Color PanelHi = Color.FromHtml("16243A"); // raised surface
     public static readonly Color PanelFill = new(8f / 255f, 14f / 255f, 24f / 255f, 0.60f); // translucent panel body
+    public static readonly Color PanelSolid = new(8f / 255f, 14f / 255f, 24f / 255f, 0.88f); // near-opaque panel body — same hue as PanelFill, for surfaces that must stay readable over the live 3D scene
     public static readonly Color Well = new(0.02f, 0.027f, 0.06f, 1f); // recessed data well (≈ Void, opaque)
     public static readonly Color PanelDeep = Color.FromHtml("070B14"); // modal body — between Void and Panel
     public static readonly Color Scrim = new(3f / 255f, 5f / 255f, 11f / 255f, 0.78f); // modal backdrop dim
+    public static readonly Color BorderMid = new(120f / 255f, 190f / 255f, 255f / 255f, 0.40f); // emphasised hairline — framed panels and rails that must read over the sector
     public static readonly Color BorderHi = new(120f / 255f, 190f / 255f, 255f / 255f, 0.25f); // strong hairline
     public static readonly Color BorderLo = new(120f / 255f, 190f / 255f, 255f / 255f, 0.16f); // faint hairline
 
@@ -52,10 +54,13 @@ public static class DesignTokens
 
     // ---- Type scale (px) -----------------------------------------------------
     public const int DisplaySize = 34;
+    public const int HeroSize = 26; // oversized headline between Title and Display (modal hero lines)
     public const int TitleSize = 22;
-    public const int LabelSize = 13; // caps + letter-spacing
     public const int BodySize = 15;
     public const int DataSize = 14; // mono
+    public const int LabelSize = 13; // caps + letter-spacing
+    public const int CaptionSize = 11; // dense caption / meta row — the sub-Label tier
+    public const int MicroSize = 9; // smallest legible tier: unit suffixes, sub-captions
 
     // Extra per-glyph spacing applied to the caps "Label" style (Saira has no native
     // letter-spacing on Label; we bake it onto a FontVariation in UiFonts).

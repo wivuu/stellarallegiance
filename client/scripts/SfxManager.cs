@@ -88,7 +88,14 @@ public partial class SfxManager : Node
     };
 
     // Streams that should play as seamless loops (engine bed, ambience).
-    private static readonly HashSet<SfxId> Loops = new() { SfxId.AmbientHum, SfxId.EngineLoop, SfxId.BoosterLoop, SfxId.AsteroidAmbient, SfxId.MiningLoop };
+    private static readonly HashSet<SfxId> Loops = new()
+    {
+        SfxId.AmbientHum,
+        SfxId.EngineLoop,
+        SfxId.BoosterLoop,
+        SfxId.AsteroidAmbient,
+        SfxId.MiningLoop,
+    };
 
     private const int Pool3DSize = 24;
     private const int PoolUiSize = 6;

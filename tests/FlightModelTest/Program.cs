@@ -24,18 +24,100 @@ static class Program
     // production content is authored in YAML and reaches the sim/client as ShipClassDef (resolved via
     // ShipStats.FromDef). Pinned here so the golden trajectory stays fixed regardless of the bundle.
     //                                            maxSpd accel mass  yaw  pit  rol  dYaw dPit side  back  abAcc onR  offR
-    static readonly ShipStats Scout = ShipStats.Create(160f, 30f, 40f, 50f, 50f, 50f, 5f, 5f, 0.5f, 0.25f, 0f, 2.0f, 1.0f, 0f, 0f, 0f);
-    static readonly ShipStats Fighter = ShipStats.Create(100f, 25f, 36f, 60f, 60f, 60f, 5f, 5f, 0.5f, 0.5f, 10f, 2.0f, 1.0f, 0f, 0f, 0f);
-    static readonly ShipStats Bomber = ShipStats.Create(60f, 15f, 50f, 20f, 20f, 20f, 8f, 8f, 0.5f, 0.5f, 0f, 2.0f, 1.0f, 0f, 0f, 0f);
-    static readonly ShipStats Pod = ShipStats.Create(60f, 15f, 10f, 40f, 40f, 40f, 8f, 8f, 1.0f, 1.0f, 0f, 2.0f, 1.0f, 0f, 0f, 0f);
+    static readonly ShipStats Scout = ShipStats.Create(
+        160f,
+        30f,
+        40f,
+        50f,
+        50f,
+        50f,
+        5f,
+        5f,
+        0.5f,
+        0.25f,
+        0f,
+        2.0f,
+        1.0f,
+        0f,
+        0f,
+        0f
+    );
+    static readonly ShipStats Fighter = ShipStats.Create(
+        100f,
+        25f,
+        36f,
+        60f,
+        60f,
+        60f,
+        5f,
+        5f,
+        0.5f,
+        0.5f,
+        10f,
+        2.0f,
+        1.0f,
+        0f,
+        0f,
+        0f
+    );
+    static readonly ShipStats Bomber = ShipStats.Create(
+        60f,
+        15f,
+        50f,
+        20f,
+        20f,
+        20f,
+        8f,
+        8f,
+        0.5f,
+        0.5f,
+        0f,
+        2.0f,
+        1.0f,
+        0f,
+        0f,
+        0f
+    );
+    static readonly ShipStats Pod = ShipStats.Create(
+        60f,
+        15f,
+        10f,
+        40f,
+        40f,
+        40f,
+        8f,
+        8f,
+        1.0f,
+        1.0f,
+        0f,
+        2.0f,
+        1.0f,
+        0f,
+        0f,
+        0f
+    );
 
     // Fueled-fighter fixture for the booster-fuel feel tests (#9 below): identical to Fighter above
     // but with a fuel gauge (maxFuel/fuelDrain/fuelRecharge). Kept independent of the authored
     // fighter content numbers (covered separately by ContentTest/FactionsTest) so this file's feel
     // tests aren't coupled to YAML tuning.
     static readonly ShipStats FueledFighter = ShipStats.Create(
-        100f, 25f, 36f, 60f, 60f, 60f, 5f, 5f, 0.5f, 0.5f, 10f, 2.0f, 1.0f,
-        maxFuel: 10f, fuelDrain: 3f, fuelRecharge: 0.5f
+        100f,
+        25f,
+        36f,
+        60f,
+        60f,
+        60f,
+        5f,
+        5f,
+        0.5f,
+        0.5f,
+        10f,
+        2.0f,
+        1.0f,
+        maxFuel: 10f,
+        fuelDrain: 3f,
+        fuelRecharge: 0.5f
     );
 
     // A fixed, reproducible input sequence — no randomness, no time reads.
@@ -182,12 +264,7 @@ static class Program
         // 4b. No-boost hulls (design intent): the Scout, Bomber and Pod have no
         //     afterburner, so AbThrust is 0 and holding Boost never exceeds MaxSpeed.
         {
-            (string name, ShipStats st)[] noBoost =
-            {
-                ("Scout", Scout),
-                ("Bomber", Bomber),
-                ("Pod", Pod),
-            };
+            (string name, ShipStats st)[] noBoost = { ("Scout", Scout), ("Bomber", Bomber), ("Pod", Pod) };
             foreach (var (name, st) in noBoost)
             {
                 var s = new ShipState { Rot = Quat.Identity };
@@ -414,8 +491,22 @@ static class Program
         //     event, out of scope for the flight model).
         {
             var stats = ShipStats.Create(
-                100f, 25f, 36f, 60f, 60f, 60f, 5f, 5f, 0.5f, 0.5f, 10f, 2.0f, 1.0f,
-                maxFuel: 10f, fuelDrain: 3f, fuelRecharge: 0f
+                100f,
+                25f,
+                36f,
+                60f,
+                60f,
+                60f,
+                5f,
+                5f,
+                0.5f,
+                0.5f,
+                10f,
+                2.0f,
+                1.0f,
+                maxFuel: 10f,
+                fuelDrain: 3f,
+                fuelRecharge: 0f
             );
             var s = new ShipState { Rot = Quat.Identity, Fuel = stats.MaxFuel };
             var boost = new ShipInputState { Thrust = 1f, Boost = true };
@@ -434,7 +525,9 @@ static class Program
             }
             else
             {
-                Console.WriteLine($"PASS: dock-only — FuelRecharge=0 keeps the tank pinned at 0 with Boost released ({s.Fuel:R})");
+                Console.WriteLine(
+                    $"PASS: dock-only — FuelRecharge=0 keeps the tank pinned at 0 with Boost released ({s.Fuel:R})"
+                );
             }
         }
 
@@ -510,7 +603,9 @@ static class Program
             }
             else
             {
-                Console.WriteLine($"PASS: unmodeled fuel — boosted speed {speed:R} reaches boost equilibrium, Fuel stays {s.Fuel:R}");
+                Console.WriteLine(
+                    $"PASS: unmodeled fuel — boosted speed {speed:R} reaches boost equilibrium, Fuel stays {s.Fuel:R}"
+                );
             }
         }
 

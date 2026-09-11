@@ -1,3 +1,5 @@
+using static StellarAllegiance.Shared.Vec3;
+
 namespace StellarAllegiance.Shared;
 
 // =====================================================================
@@ -393,6 +395,4 @@ public sealed class ConvexHull
         var key = a < b ? (a, b) : (b, a);
         m[key] = m.TryGetValue(key, out int v) ? v + 1 : 1;
     }
-
-    internal static float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
 }

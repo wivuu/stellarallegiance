@@ -3,6 +3,7 @@ using Godot;
 using StellarAllegiance.Net;
 using StellarAllegiance.Shared;
 using StellarAllegiance.Ui;
+using Kind = StellarAllegiance.Ui.MarkerDraw.Kind;
 
 // On-screen + off-screen HUD indicators for every relevant entity — friendly AND enemy
 // ships AND bases — plus enemy target focus and a lead-indicator reticle.
@@ -21,43 +22,22 @@ using StellarAllegiance.Ui;
 // target is drawn larger/brighter, and once a forward firing solution exists within weapon
 // range a lead circle marks where to aim so a shot fired now connects.
 //
-// This is a pure overlay: it reads render transforms + the camera and draws, never
-// touching authoritative state. It is created and wired up by the Hud.
+// This overlay is the SELECTION half: it decides which contacts get a marker (fog gating, the
+// distance cap, the Tab focus, the missile/threat state) and hands each one to MarkerDraw, which
+// owns every screen-space primitive and the projection behind it. It reads render transforms + the
+// camera and draws, never touching authoritative state. It is created and wired up by the Hud.
 public partial class TargetMarkers : Control
 {
-    private const float FocusHalf = 16f; // focused lock-bracket half-extent (px)
-    private const float ArrowSize = 13f; // off-screen arrow half-extent (px)
-    private const float EdgeMargin = 34f; // off-screen arrow inset from viewport edge (px)
-    private const float LeadRadius = 13f; // lead-indicator circle radius (px)
-    private const float AimRadius = 8f; // aim-reticle gunsight radius (px)
-    private const float GlyphSize = 8f; // class-glyph radius (px)
-
     // Beyond this range from the local ship, a FRIENDLY probe drops its off-screen edge marker so
     // your own distant probes don't crowd the screen edges — it still draws when you look right at
     // it (on screen). Enemy (radar-detected) probes are never suppressed. Hardcoded; tweak to taste.
     private const float ProbeEdgeMarkerRange = 500f;
-
-    // Fog last-known ghost contact opacity — dim enough to read as memory, not a live marker.
-    private const float GhostAlpha = 0.32f;
-
-    // Screen-space base damage bar (px). Drawn directly over each damaged base's projected
-    // position so it can never clip behind the base geometry the way a world-space quad did.
-    private const float BaseBarWidth = 64f;
-    private const float BaseBarHeight = 6f;
-    private const float BaseBarYOffset = 22f; // bar centre this many px above the base centre
 
     // No hand-mirrored muzzle numbers here anymore: the aim line and lead solution read
     // the SAME streamed WeaponDef row the server's TryFire fires from (via ResolveLocalGun
     // below), so ProjectileSpeed / muzzle offset / effective range can never drift out of
     // sync with the server. MaxLeadTime is derived per-gun as ProjectileLifeTicks × FlightModel.Dt.
     private const float DefaultAimRange = 500f; // aim-reticle anchor when no gun (pod/unarmed, or defs not streamed yet)
-
-    // Chrome pulls from the shared design tokens. Focus = the amber "selection" highlight
-    // (Secondary); the lead indicator shares that amber so it reads as belonging to the
-    // focused target (the design colours the lead to the target's chrome). Aim reticle = the
-    // cyan structural accent.
-    private static readonly Color FocusColor = DesignTokens.Secondary;
-    private static readonly Color AimColor = DesignTokens.TeamAccent;
 
     // Team palette = the faction identity tokens (same colours as WorldRenderer's 3D ship/
     // base materials) so a marker reads as the SAME colour as the ship it points at.
@@ -69,31 +49,21 @@ public partial class TargetMarkers : Control
     private static readonly Color AlephColor = new(0.45f, 0.85f, 1f);
 
     // Asteroids are team-neutral navigation targets — a focused rock reads in the bright mono-data
-    // chrome tint rather than a faction color (it's never a combat lock). The waypoint diamond uses
-    // the cyan structural accent (chrome), distinct from the enemy-red brackets.
+    // chrome tint rather than a faction color (it's never a combat lock).
     private static readonly Color AsteroidFocusColor = DesignTokens.Data;
-    private static readonly Color WaypointColor = DesignTokens.TeamAccent;
-
-    // The per-class symbol drawn at each marker. A pod overrides the hull class; Aleph is a
-    // world landmark (warp gate) rather than a ship/base; Probe is a deployed recon beacon.
-    private enum Kind
-    {
-        Base,
-        Scout,
-        Fighter,
-        Bomber,
-        Miner,
-        Pod,
-        Aleph,
-        Probe,
-        Mine,
-        Asteroid,
-    }
 
     private WorldRenderer _world = null!;
     private Camera3D _camera = null!;
     private GameNetClient _net = null!; // own missile ammo / lock state + the live missile set
     private DefRegistry _defs = null!; // resolves the local hull's missile mount (siege capability)
+
+    // Every screen-space primitive (class glyphs, brackets, rings, bars, arrows, captions, banners)
+    // renders through this collaborator onto this Control — see MarkerDraw, which also owns the
+    // marker geometry sizes and the Kind glyph vocabulary aliased at the top of this file.
+    // Constructed here rather than in Init so a _Draw that lands first still has one.
+    private readonly MarkerDraw _mk;
+
+    public TargetMarkers() => _mk = new MarkerDraw(this);
 
     // Missile HUD state, updated in _Process and read by _Draw. The lock tone fires on the rising
     // edge into a full lock; the incoming warning tracks the nearest missile homing on the local
@@ -190,13 +160,6 @@ public partial class TargetMarkers : Control
             _instance._focused = encodedId == 0 ? (ulong?)null : encodedId;
     }
 
-    // Reusable scratch arrays for DrawColoredPolygon — Godot copies on call so sequential
-    // reuse is safe. Eliminates per-draw allocation for every entity marker drawn.
-    private readonly Vector2[] _poly3 = new Vector2[3]; // Scout tri
-    private readonly Vector2[] _poly4 = new Vector2[4]; // Fighter chevron
-    private readonly Vector2[] _poly5 = new Vector2[5]; // Miner pentagon
-    private readonly Vector2[] _poly6 = new Vector2[6]; // Bomber hexagon
-
     // Scratch for the focus cycle: visible targets, each with a GROUP RANK (0 enemy ships, 1 enemy
     // bases, 2 friendly bases, 3 friendly ships, 4 asteroids) and their distance (px²) from the AIM
     // RETICLE (the firing line). Sorted by rank then nearest-first, so Tab steps enemy ships → enemy
@@ -260,7 +223,7 @@ public partial class TargetMarkers : Control
     // brightened SHADE of the target's team color, so it reads as the SAME faction as the ship it
     // wraps while still popping hotter than the plain team marker. Replaces the old fixed amber /
     // red so a target indicator never carries a color unrelated to whose side it's on.
-    private static Color FocusTint(byte team) => TeamColor(team).Lerp(Colors.White, 0.35f);
+    private static Color FocusTint(byte team) => TeamColor(team).Lightened(0.35f);
 
     // The screen point of the aim reticle (the real firing line): the muzzle projected
     // forward along the ship's nose. The chase camera is offset above/behind the ship, so
@@ -703,11 +666,11 @@ public partial class TargetMarkers : Control
                 // Fog stale memory: a destroyed base still remembered on the team map draws as a
                 // dim hollow marker (no health bar — Bases.VisibleHealth() skips it) so it reads as
                 // wreckage, not a live station.
-                DrawStaleBase(view, pos, team);
+                _mk.StaleBase(Cam, view, pos, TeamColor(team));
             else
-                DrawEntity(view, pos, Kind.Base, TeamColor(team), focused: false, friendly: true);
+                _mk.Entity(Cam, view, pos, Kind.Base, TeamColor(team), focused: false, friendly: true);
         foreach (var (pos, frac) in _world.Bases.VisibleHealth())
-            DrawBaseHealthBar(view, pos, frac);
+            _mk.BaseHealthBar(Cam, view, pos, frac);
     }
 
     // The focused base itself: same bright bracket + TARGET tag treatment as a focused ship, in
@@ -728,7 +691,7 @@ public partial class TargetMarkers : Control
     {
         if (focusedBasePos is Vector3 fp)
         {
-            DrawEntity(view, fp, Kind.Base, FocusTint(focusedBaseTeam), focused: true, friendly: false);
+            _mk.Entity(Cam, view, fp, Kind.Base, FocusTint(focusedBaseTeam), focused: true, friendly: false);
             DrawFocusTag(view, fp, FocusTint(focusedBaseTeam), _world.Ships.LocalShip);
             // Lock arc ONLY for an enemy base the local hull can actually siege — never for a friendly
             // base (a dock destination), which focuses for navigation but can't be locked/damaged.
@@ -743,7 +706,7 @@ public partial class TargetMarkers : Control
                 if (id == rockId)
                 {
                     Vector3 rp = node.GlobalPosition;
-                    DrawEntity(view, rp, Kind.Asteroid, AsteroidFocusColor, focused: true, friendly: false);
+                    _mk.Entity(Cam, view, rp, Kind.Asteroid, AsteroidFocusColor, focused: true, friendly: false);
                     DrawFocusTag(view, rp, AsteroidFocusColor, _world.Ships.LocalShip);
                     DrawRockDetail(view, rp, rockId);
                     break;
@@ -807,27 +770,18 @@ public partial class TargetMarkers : Control
                 Vector2 sp = rockCam.UnprojectPosition(rp);
                 if (!new Rect2(Vector2.Zero, view).HasPoint(sp))
                     continue;
-                string label = RockLabel(rock);
-                float w = UiFonts.Mono.GetStringSize(label, HorizontalAlignment.Left, -1, 10).X;
-                DrawString(
-                    UiFonts.Mono,
-                    sp + new Vector2(-w * 0.5f, GlyphSize + 12f),
-                    label,
-                    HorizontalAlignment.Left,
-                    -1,
-                    10,
-                    DesignTokens.Text2
-                );
+                const float labelDy = MarkerDraw.GlyphSize + 12f;
+                float w = _mk.CenteredText(sp, labelDy, RockLabel(rock), 10, DesignTokens.Text2);
                 // Special rocks (He3/U/Si/C) get a distinctive material-tinted glyph just left of the
                 // label so the valuable classes read at a glance; commons draw text only.
                 if (IsSpecialRock(rock.RockClass))
                 {
                     const float rg = 5.5f;
-                    DrawRockGlyph(
-                        sp + new Vector2(-w * 0.5f - rg - 4f, GlyphSize + 12f - 3f),
+                    _mk.RockGlyph(
+                        sp + new Vector2(-w * 0.5f - rg - 4f, labelDy - 3f),
                         rock.RockClass,
                         rg,
-                        RockGlyphColor(rock.RockClass)
+                        MarkerDraw.RockGlyphColor(rock.RockClass)
                     );
                 }
                 shown++;
@@ -844,7 +798,16 @@ public partial class TargetMarkers : Control
     private void DrawAlephsPass(Vector2 view)
     {
         foreach (var (pos, dest) in _world.Alephs.Visible())
-            DrawEntity(view, pos, Kind.Aleph, AlephColor, focused: false, friendly: true, label: _world.SectorName(dest));
+            _mk.Entity(
+                Cam,
+                view,
+                pos,
+                Kind.Aleph,
+                AlephColor,
+                focused: false,
+                friendly: true,
+                label: _world.SectorName(dest)
+            );
     }
 
     // Recon probes: a subtle team-tinted beacon glyph, drawn like the neutral gate markers
@@ -863,7 +826,8 @@ public partial class TargetMarkers : Control
             bool beyondRange =
                 probeRef != null
                 && pos.DistanceSquaredTo(probeRef.GlobalPosition) > ProbeEdgeMarkerRange * ProbeEdgeMarkerRange;
-            DrawEntity(
+            _mk.Entity(
+                Cam,
                 view,
                 pos,
                 Kind.Probe,
@@ -882,7 +846,7 @@ public partial class TargetMarkers : Control
     private void DrawMinefieldsPass(Vector2 view)
     {
         foreach (var (pos, team) in _world.Minefields.VisibleMinefields())
-            DrawEntity(view, pos, Kind.Mine, TeamColor(team), focused: false, friendly: true, hideOffScreen: true);
+            _mk.Entity(Cam, view, pos, Kind.Mine, TeamColor(team), focused: false, friendly: true, hideOffScreen: true);
     }
 
     // Friendly ships: a subtle team glyph, or — when Tab-focused — the same bright focus bracket as
@@ -977,9 +941,9 @@ public partial class TargetMarkers : Control
     {
         bool focused = !fr.IsPod && _focused is ulong ff && ff == fr.ShipId;
         Color color = focused ? FocusTint(fr.Team) : TeamColor(fr.Team);
-        DrawEntity(view, fr.GlobalPosition, KindOf(fr), color, focused, friendly: !focused, GlyphOf(fr));
+        _mk.Entity(Cam, view, fr.GlobalPosition, KindOf(fr), color, focused, friendly: !focused, GlyphOf(fr));
         if (f3 && !focused)
-            DrawShipTypeLabel(view, fr.GlobalPosition, ShipTypeLabel(fr), TeamColor(fr.Team));
+            _mk.TypeLabel(Cam, view, fr.GlobalPosition, ShipTypeLabel(fr), TeamColor(fr.Team));
     }
 
     // Draw one enemy ship's marker (bracket reticle + class glyph, brighter when Tab-focused). Same F3
@@ -988,9 +952,9 @@ public partial class TargetMarkers : Control
     {
         bool focused = _focused is ulong f && f == e.ShipId;
         Color color = focused ? FocusTint(e.Team) : TeamColor(e.Team);
-        DrawEntity(view, e.GlobalPosition, KindOf(e), color, focused, friendly: false, GlyphOf(e));
+        _mk.Entity(Cam, view, e.GlobalPosition, KindOf(e), color, focused, friendly: false, GlyphOf(e));
         if (f3 && !focused)
-            DrawShipTypeLabel(view, e.GlobalPosition, ShipTypeLabel(e), TeamColor(e.Team));
+            _mk.TypeLabel(Cam, view, e.GlobalPosition, ShipTypeLabel(e), TeamColor(e.Team));
     }
 
     // The human-readable ship type for the F3 map caption. Utility drones read as their role (the
@@ -1019,33 +983,6 @@ public partial class TargetMarkers : Control
         return "Constructor";
     }
 
-    // A small mono type caption centred just below a ship's glyph on the F3 map. Team-coloured and
-    // slightly dimmed so it annotates without competing with the glyph. Skipped when the text is
-    // empty (pods) or the ship is behind the camera / projects off screen.
-    private void DrawShipTypeLabel(Vector2 view, Vector3 worldPos, string text, Color color)
-    {
-        if (text.Length == 0)
-            return;
-        Camera3D cam = Cam;
-        if (cam.IsPositionBehind(worldPos))
-            return;
-        Vector2 sp = cam.UnprojectPosition(worldPos);
-        if (!new Rect2(Vector2.Zero, view).HasPoint(sp))
-            return;
-        Font font = UiFonts.Mono;
-        const int fs = 9;
-        float w = font.GetStringSize(text, HorizontalAlignment.Left, -1, fs).X;
-        DrawString(
-            font,
-            sp + new Vector2(-w * 0.5f, GlyphSize + 12f),
-            text,
-            HorizontalAlignment.Left,
-            -1,
-            fs,
-            new Color(color, 0.85f)
-        );
-    }
-
     // A mono "TARGET" tag + range over the focused enemy — a light echo of the design's
     // target chrome — plus the missile lock-progress arc on its bracket, filling as the
     // server-authoritative lock timer runs and snapping to a steady ring once locked.
@@ -1064,22 +1001,22 @@ public partial class TargetMarkers : Control
         {
             DrawFocusTag(view, focusedShip, local);
             DrawLockArc(focusedShip);
-            DrawTargetHealthArc(focusedShip);
+            DrawTargetHealthArc(view, focusedShip);
             // A non-combat drone reads as its role under its bracket so it's obvious at focus.
             if (focusedShip.IsMiner)
-                DrawShipRoleTag(view, focusedShip.GlobalPosition, "MINER");
+                _mk.RoleTag(Cam, view, focusedShip.GlobalPosition, "MINER");
             else if (focusedShip.IsConstructor)
-                DrawShipRoleTag(view, focusedShip.GlobalPosition, "CONSTRUCTOR");
+                _mk.RoleTag(Cam, view, focusedShip.GlobalPosition, "CONSTRUCTOR");
         }
 
         if (focusedFriendly != null)
         {
             DrawFocusTag(view, focusedFriendly, local);
-            DrawTargetHealthArc(focusedFriendly);
+            DrawTargetHealthArc(view, focusedFriendly);
             if (focusedFriendly.IsMiner)
-                DrawShipRoleTag(view, focusedFriendly.GlobalPosition, "MINER");
+                _mk.RoleTag(Cam, view, focusedFriendly.GlobalPosition, "MINER");
             else if (focusedFriendly.IsConstructor)
-                DrawShipRoleTag(view, focusedFriendly.GlobalPosition, "CONSTRUCTOR");
+                _mk.RoleTag(Cam, view, focusedFriendly.GlobalPosition, "CONSTRUCTOR");
         }
     }
 
@@ -1124,13 +1061,13 @@ public partial class TargetMarkers : Control
                     Vector2? targetSp = Cam.IsPositionBehind(focusedShip.GlobalPosition)
                         ? null
                         : Cam.UnprojectPosition(focusedShip.GlobalPosition);
-                    DrawLeadIndicator(targetSp, lp);
+                    _mk.LeadIndicator(targetSp, lp);
                 }
             }
 
             Vector3 reticlePoint = muzzle + fwd * aimRange;
             if (!Cam.IsPositionBehind(reticlePoint))
-                DrawAimReticle(Cam.UnprojectPosition(reticlePoint));
+                _mk.AimReticle(Cam.UnprojectPosition(reticlePoint));
         }
         else
         {
@@ -1139,7 +1076,7 @@ public partial class TargetMarkers : Control
             // reticle on the firing line at the default range.
             Vector3 reticlePoint = local.GlobalPosition + fwd * DefaultAimRange;
             if (!Cam.IsPositionBehind(reticlePoint))
-                DrawAimReticle(Cam.UnprojectPosition(reticlePoint));
+                _mk.AimReticle(Cam.UnprojectPosition(reticlePoint));
         }
 
         // Incoming-missile threat: a flashing banner + an edge arrow pointing at the nearest
@@ -1159,41 +1096,18 @@ public partial class TargetMarkers : Control
     // top-center missile/lock banners by sitting in the lower third.
     private void DrawAutopilotStatus(Vector2 view)
     {
-        Font font = UiFonts.Mono;
         if (ShipController.ApEngagedLocal)
         {
             // Gentle breathing pulse so it reads as an active, hands-off state (not an alarm).
             float pulse = 0.7f + 0.3f * Mathf.Sin(Time.GetTicksMsec() / 1000f * 2.2f);
-            Color c = new(DesignTokens.TeamAccent, pulse);
-            const string txt = "◈  AUTOPILOT";
-            float w = font.GetStringSize(txt, HorizontalAlignment.Left, -1, 14).X;
-            DrawString(
-                font,
-                new Vector2(view.X * 0.5f - w * 0.5f, view.Y * 0.66f),
-                txt,
-                HorizontalAlignment.Left,
-                -1,
-                14,
-                c
-            );
+            _mk.CenterBanner(view, 0.66f, "◈  AUTOPILOT", 14, new Color(DesignTokens.TeamAccent, pulse));
             return;
         }
         double now = Time.GetTicksMsec() / 1000.0;
         if (now < _apToastUntil)
         {
             float alpha = Mathf.Clamp((float)((_apToastUntil - now) / ApToastSec), 0f, 1f); // fade out
-            Color c = new(DesignTokens.TeamAccent, alpha);
-            const string txt = "AUTOPILOT DISENGAGED";
-            float w = font.GetStringSize(txt, HorizontalAlignment.Left, -1, 13).X;
-            DrawString(
-                font,
-                new Vector2(view.X * 0.5f - w * 0.5f, view.Y * 0.66f),
-                txt,
-                HorizontalAlignment.Left,
-                -1,
-                13,
-                c
-            );
+            _mk.CenterBanner(view, 0.66f, "AUTOPILOT DISENGAGED", 13, new Color(DesignTokens.TeamAccent, alpha));
         }
     }
 
@@ -1211,11 +1125,8 @@ public partial class TargetMarkers : Control
         // one. Same throb idiom as the incoming banner (no timer node).
         float hz = locked ? 8f : 5f;
         float pulse = 0.55f + 0.45f * Mathf.Sin(Time.GetTicksMsec() / 1000f * hz);
-        Color c = new(baseColor, pulse);
-        Font font = UiFonts.Mono;
         string txt = locked ? "⚠  MISSILE LOCK" : "⚠  MISSILE LOCKING";
-        float w = font.GetStringSize(txt, HorizontalAlignment.Left, -1, 15).X;
-        DrawString(font, new Vector2(view.X * 0.5f - w * 0.5f, view.Y * 0.37f), txt, HorizontalAlignment.Left, -1, 15, c);
+        _mk.CenterBanner(view, 0.37f, txt, 15, new Color(baseColor, pulse));
     }
 
     // The missile lock-progress arc wrapping the focused target's bracket, driven by the local
@@ -1232,26 +1143,7 @@ public partial class TargetMarkers : Control
         (bool locked, int progress) = WeaponsPanel.DecodeLockState(_net.LocalLockState);
         if (!locked && progress == 0)
             return;
-
-        Camera3D cam = Cam;
-        if (cam.IsPositionBehind(worldPos))
-            return;
-        Vector2 sp = cam.UnprojectPosition(worldPos);
-        float r = FocusHalf + 7f;
-        if (locked)
-        {
-            Color lockColor = FocusTint(team);
-            DrawArc(sp, r, 0f, Mathf.Tau, 32, lockColor, 2.5f, true);
-            const string tag = "LOCK";
-            float tw = UiFonts.Mono.GetStringSize(tag, HorizontalAlignment.Left, -1, 9).X;
-            DrawString(UiFonts.Mono, sp + new Vector2(-tw * 0.5f, -r - 3f), tag, HorizontalAlignment.Left, -1, 9, lockColor);
-        }
-        else
-        {
-            float start = -Mathf.Pi * 0.5f; // 12 o'clock
-            float sweep = Mathf.Clamp(progress / 100f, 0f, 1f) * Mathf.Tau;
-            DrawArc(sp, r, start, start + sweep, 32, AimColor, 2f, true);
-        }
+        _mk.LockRing(Cam, worldPos, locked, progress, FocusTint(team));
     }
 
     // The focused target's condition indicator: a bottom-left quarter arc wrapping the bracket that
@@ -1259,57 +1151,21 @@ public partial class TargetMarkers : Control
     // (shielded hulls only) — the design's target HP arc. Uses the same tiered colours as the local
     // SystemRing gauge so the target and own-ship readouts agree. Only drawn when the target is on
     // screen and has taken damage, so a pristine target stays uncluttered.
-    private void DrawTargetHealthArc(RemoteShip ship)
+    private void DrawTargetHealthArc(Vector2 view, RemoteShip ship)
     {
         if (ship.MaxHealth <= 0f)
             return; // class def not streamed yet — no baked fallback, hold off until it lands
 
-        Camera3D cam = Cam;
-        if (cam.IsPositionBehind(ship.GlobalPosition))
-            return;
-        Vector2 sp = cam.UnprojectPosition(ship.GlobalPosition);
-        if (!new Rect2(Vector2.Zero, GetViewportRect().Size).HasPoint(sp))
-            return;
-
-        float hullFrac = Mathf.Clamp(ship.Health / ship.MaxHealth, 0f, 1f);
         bool hasShield = ship.MaxShield > 0f;
-        float shieldFrac = hasShield ? Mathf.Clamp(ship.Shield / ship.MaxShield, 0f, 1f) : 0f;
-        // Nothing to say about a pristine target — keep the marker clean until it's actually hurt.
-        if (hullFrac >= 1f && (!hasShield || shieldFrac >= 1f))
-            return;
-
-        // Bottom-left quarter: 6 o'clock (Godot 90°) → 9 o'clock (180°), the fill growing from the
-        // 6 o'clock end so the arc drains toward 9 o'clock like the design's HP arc and the bottom-lit
-        // SystemRing gauges. (Design degrees are 0=top clockwise; Godot's DrawArc is 0=+X clockwise,
-        // so a design degree maps to Godot angle = deg − 90.)
-        const float lo = Mathf.Pi * 0.5f; // 6 o'clock
-        const float hi = Mathf.Pi; // 9 o'clock
-        Color track = DesignTokens.BorderLo;
-
-        // HULL arc — just outside the bracket, inside the lock ring (FocusHalf + 7f) so the
-        // bottom-left quarter reads distinctly against the full lock ring.
-        float hullR = FocusHalf + 6f;
-        DrawArc(sp, hullR, lo, hi, 24, track, 3f, true);
-        DrawArc(sp, hullR, lo, lo + (hi - lo) * hullFrac, 24, HullColor(hullFrac), 3f, true);
-
-        // SHIELD band — a thinner cyan (chrome) arc one band outside the hull, on shielded hulls,
-        // filled from the same 6 o'clock end. Mirrors SystemRing's solid outer SHLD band.
-        if (hasShield)
-        {
-            float shieldR = FocusHalf + 11f;
-            DrawArc(sp, shieldR, lo, hi, 24, track, 2f, true);
-            if (shieldFrac > 0f)
-                DrawArc(sp, shieldR, lo, lo + (hi - lo) * shieldFrac, 24, DesignTokens.TeamAccent, 2f, true);
-        }
+        _mk.TargetHealthArc(
+            Cam,
+            view,
+            ship.GlobalPosition,
+            Mathf.Clamp(ship.Health / ship.MaxHealth, 0f, 1f),
+            hasShield,
+            hasShield ? Mathf.Clamp(ship.Shield / ship.MaxShield, 0f, 1f) : 0f
+        );
     }
-
-    // Tiered green→amber→red ramp matching the design's HP arc (#4dffa6 / #ffb347 / #ff5a6a) and
-    // the local SystemRing gauge. Distinct from HealthColor's continuous lerp, which the base-health
-    // bar deliberately keeps.
-    private static Color HullColor(float frac) =>
-        frac > 0.5f ? DesignTokens.Ok
-        : frac > 0.25f ? DesignTokens.Warn
-        : DesignTokens.Danger;
 
     // Flashing "incoming missile" banner + an edge-clamped arrow pointing toward the nearest
     // missile homing on the local ship. No-op when nothing is inbound (_inbound set in _Process).
@@ -1321,21 +1177,11 @@ public partial class TargetMarkers : Control
         // Pulse the alpha so the warning flashes (a ~4 Hz throb) without a per-frame timer node.
         float pulse = 0.55f + 0.45f * Mathf.Sin(Time.GetTicksMsec() / 1000f * 8f);
         Color c = new(DesignTokens.Danger, pulse);
-        Font font = UiFonts.Mono;
-        const string txt = "⚠  INCOMING MISSILE";
-        float w = font.GetStringSize(txt, HorizontalAlignment.Left, -1, 15).X;
-        DrawString(font, new Vector2(view.X * 0.5f - w * 0.5f, view.Y * 0.32f), txt, HorizontalAlignment.Left, -1, 15, c);
+        _mk.CenterBanner(view, 0.32f, "⚠  INCOMING MISSILE", 15, c);
 
         // Edge arrow toward the threat, reusing the off-screen clamp path (points the way to turn
         // even when the missile is on screen — a threat indicator, not just an off-screen marker).
-        Vector2 center = view * 0.5f;
-        Camera3D cam = Cam;
-        bool behind = cam.IsPositionBehind(threat);
-        Vector2 sp = cam.UnprojectPosition(threat);
-        if (behind)
-            sp = center * 2f - sp;
-        Vector2 edge = ClampToEdge(sp, view, out Vector2 dir);
-        DrawArrow(edge, dir, c);
+        _mk.EdgeArrowTo(Cam, view, threat, c);
     }
 
     // Map a ship to its HUD glyph. The ship's ROLE (ShipKind) wins first: a pod uses the pod symbol
@@ -1361,169 +1207,20 @@ public partial class TargetMarkers : Control
     private string GlyphOf(RemoteShip s) =>
         !s.IsPod && _defs.TryGetShipDef((byte)s.Class, out ShipClassDef def) ? def.Glyph : "";
 
-    // Draw one entity marker. On screen: enemies get a corner bracket + class glyph (focus =
-    // larger/brighter); friendlies/bases get a subtle, dimmer class glyph. Off screen or
-    // behind the camera: an edge-clamped class glyph + an arrow pointing the way to turn — unless
-    // hideOffScreen is set, in which case an off-screen entity draws nothing (used to keep distant
-    // friendly probes from crowding the screen edges while still marking them when in view).
-    private void DrawEntity(
-        Vector2 size,
-        Vector3 worldPos,
-        Kind kind,
-        Color color,
-        bool focused,
-        bool friendly,
-        string glyph = "",
-        string label = "",
-        bool hideOffScreen = false
-    )
-    {
-        Vector2 center = size * 0.5f;
-
-        Camera3D cam = Cam;
-        bool behind = cam.IsPositionBehind(worldPos);
-        Vector2 sp = cam.UnprojectPosition(worldPos);
-        // A point behind the camera unprojects mirrored about the center; flip it back
-        // so the edge arrow points to the correct side.
-        if (behind)
-            sp = center * 2f - sp;
-
-        var viewRect = new Rect2(Vector2.Zero, size).Grow(-EdgeMargin);
-        bool onScreen = !behind && viewRect.HasPoint(sp);
-
-        if (onScreen)
-        {
-            if (friendly)
-            {
-                // Subtle teammate / base marker: dimmer and small so it never competes with
-                // the enemy reticles or clutters the view.
-                DrawClassGlyph(sp, kind, new Color(color, 0.55f), GlyphSize * 0.85f, glyph);
-                if (label.Length > 0)
-                    DrawEntityLabel(sp, GlyphSize * 0.85f, color, label);
-            }
-            else
-            {
-                // Enemy on screen: the same class glyph as the off-screen indicator so the
-                // marker reads identically whether it's at the edge or in view. The focused
-                // target is enlarged, recolored, and wrapped in a lock bracket (there's no
-                // edge arrow on screen to set it apart otherwise).
-                DrawClassGlyph(sp, kind, color, focused ? GlyphSize * 1.15f : GlyphSize, glyph);
-                if (focused)
-                    DrawBracket(sp, FocusHalf, color, 2.5f);
-            }
-            return;
-        }
-
-        if (hideOffScreen)
-            return; // off screen and suppressed (e.g. a distant friendly probe) — no edge marker
-
-        // Off screen: clamp the marker to the inset viewport edge along the ray from center,
-        // draw the class glyph there and an arrow just outside it pointing outward.
-        Vector2 edge = ClampToEdge(sp, size, out Vector2 dir);
-        float glyphScale = focused ? GlyphSize * 1.15f : GlyphSize;
-        Vector2 glyphPos = edge - dir * (ArrowSize + 2f);
-        DrawClassGlyph(glyphPos, kind, color, glyphScale, glyph);
-        DrawArrow(edge, dir, color);
-        if (label.Length > 0)
-            DrawEntityLabel(glyphPos, glyphScale, color, label);
-    }
-
-    // A small mono caption drawn just to the right of an entity glyph (e.g. the destination
-    // sector name beside a warp gate). Dimmer than the glyph so it annotates without competing.
-    private void DrawEntityLabel(Vector2 p, float r, Color color, string label)
-    {
-        Font font = UiFonts.Mono;
-        const int fs = 10;
-        var pos = new Vector2(p.X + r + 5f, p.Y + (font.GetAscent(fs) - font.GetDescent(fs)) * 0.5f);
-        DrawString(font, pos, label, HorizontalAlignment.Left, -1, fs, new Color(color, 0.8f));
-    }
-
-    // Screen-space damage bar over a base: project the base centre, then draw a fixed-size
-    // pixel bar a little above it (a dark backdrop + a left-anchored fill that depletes
-    // rightward and ramps green->red). Being a 2D overlay it always draws on top, so unlike
-    // the old world-space quad it never clips behind the base from a low angle. Skipped when
-    // the base is behind the camera or its centre projects off screen.
-    private void DrawBaseHealthBar(Vector2 view, Vector3 worldPos, float frac)
-    {
-        Camera3D cam = Cam;
-        if (cam.IsPositionBehind(worldPos))
-            return;
-        Vector2 sp = cam.UnprojectPosition(worldPos);
-        if (!new Rect2(Vector2.Zero, view).HasPoint(sp))
-            return;
-
-        Vector2 topLeft = sp + new Vector2(-BaseBarWidth * 0.5f, -BaseBarYOffset);
-        // Dark backdrop with a 1px border so the bar reads against bright or dark scenery.
-        DrawRect(
-            new Rect2(topLeft - Vector2.One, new Vector2(BaseBarWidth + 2f, BaseBarHeight + 2f)),
-            new Color(0.03f, 0.03f, 0.04f, 0.75f)
-        );
-        // Left-anchored fill, width scaled by the health fraction.
-        DrawRect(new Rect2(topLeft, new Vector2(BaseBarWidth * frac, BaseBarHeight)), HealthColor(frac));
-    }
-
-    // Fog last-known enemy ghosts in the current view sector: a dim, low-alpha class glyph at the
-    // remembered position, wrapped in a faint hollow ring so it reads as a stale contact rather than
-    // a live enemy marker. On screen it sits at the remembered position; off screen (or behind the
-    // camera) it clamps to the viewport edge with a hollow arrow pointing the way to the last-known
-    // contact — the same edge treatment as live entities, but dimmed to read as memory (never a
-    // bracket or lead — a ghost isn't something to chase or lock). WorldRenderer.GhostContacts(sector)
-    // has already applied the radar-visible / live-row-nearby suppression, so whatever it returns is
-    // safe to draw straight.
+    // Fog last-known enemy ghosts in the current view sector, each drawn as a dimmed memory glyph
+    // (MarkerDraw.GhostMarker). WorldRenderer.GhostContacts(sector) has already applied the
+    // radar-visible / live-row-nearby suppression, so whatever it returns is safe to draw straight.
     private void DrawGhosts(Vector2 view)
     {
-        Camera3D cam = Cam;
-        Vector2 center = view * 0.5f;
-        var onScreen = new Rect2(Vector2.Zero, view).Grow(-EdgeMargin);
         foreach (var g in _world.Fog.GhostContacts(_world.ViewSector))
-        {
-            bool behind = cam.IsPositionBehind(g.Pos);
-            Vector2 sp = cam.UnprojectPosition(g.Pos);
-            // A point behind the camera unprojects mirrored about the center; flip it back so the
-            // edge marker pins to the correct side.
-            if (behind)
-                sp = center * 2f - sp;
-            Color c = new(TeamColor(g.Team), GhostAlpha);
-            Kind kind = KindOfClass(g.Cls);
-            string glyph = _defs.TryGetShipDef(g.Cls, out ShipClassDef def) ? def.Glyph : "";
-
-            if (!behind && onScreen.HasPoint(sp))
-            {
-                DrawClassGlyph(sp, kind, c, GlyphSize * 0.85f, glyph);
-                // Faint hollow ring: the "last-known contact" cue that sets a ghost apart from a live
-                // (but dim) friendly/base glyph.
-                DrawArc(sp, GlyphSize * 1.5f, 0f, Mathf.Tau, 16, new Color(TeamColor(g.Team), GhostAlpha * 0.7f), 1f, true);
-                continue;
-            }
-
-            // Off screen: clamp to the inset viewport edge, draw the dim class glyph there and an
-            // arrow pointing outward — the reduced alpha (GhostAlpha) keeps it reading as a
-            // remembered contact, not a live threat.
-            Vector2 edge = ClampToEdge(sp, view, out Vector2 dir);
-            DrawClassGlyph(edge - dir * (ArrowSize + 2f), kind, c, GlyphSize * 0.85f, glyph);
-            DrawArrow(edge, dir, c);
-        }
-    }
-
-    // A fog stale-memory base marker: a dim, desaturated hollow square with a small cross, so a
-    // destroyed-but-remembered station reads as wreckage rather than a live base (which draws a
-    // filled square). On-screen only — a wreck needs no chase arrow. Skipped if behind the camera.
-    private void DrawStaleBase(Vector2 view, Vector3 worldPos, byte team)
-    {
-        Camera3D cam = Cam;
-        if (cam.IsPositionBehind(worldPos))
-            return;
-        Vector2 sp = cam.UnprojectPosition(worldPos);
-        if (!new Rect2(Vector2.Zero, view).HasPoint(sp))
-            return;
-
-        // Desaturate the team colour toward the dim text token and drop the alpha — a faded memory.
-        Color c = new(TeamColor(team).Lerp(DesignTokens.TextDim, 0.5f), 0.5f);
-        float r = GlyphSize;
-        DrawRect(new Rect2(sp - new Vector2(r, r), new Vector2(r * 2f, r * 2f)), c, filled: false, width: 1.5f);
-        // Small cross through the centre: the "destroyed" cue.
-        DrawLine(sp + new Vector2(-r * 0.5f, -r * 0.5f), sp + new Vector2(r * 0.5f, r * 0.5f), c, 1f, true);
-        DrawLine(sp + new Vector2(-r * 0.5f, r * 0.5f), sp + new Vector2(r * 0.5f, -r * 0.5f), c, 1f, true);
+            _mk.GhostMarker(
+                Cam,
+                view,
+                g.Pos,
+                KindOfClass(g.Cls),
+                TeamColor(g.Team),
+                _defs.TryGetShipDef(g.Cls, out ShipClassDef def) ? def.Glyph : ""
+            );
     }
 
     // A brief "CONTACT LOST" note when an enemy just slipped out of the team's streamed set (fog
@@ -1534,11 +1231,7 @@ public partial class TargetMarkers : Control
         if (!_world.Fog.ContactLostActive)
             return;
         float pulse = 0.5f + 0.4f * Mathf.Sin(Time.GetTicksMsec() / 1000f * 4f);
-        Color c = new(DesignTokens.Warn, pulse);
-        Font font = UiFonts.Mono;
-        const string txt = "CONTACT LOST";
-        float w = font.GetStringSize(txt, HorizontalAlignment.Left, -1, 13).X;
-        DrawString(font, new Vector2(view.X * 0.5f - w * 0.5f, view.Y * 0.27f), txt, HorizontalAlignment.Left, -1, 13, c);
+        _mk.CenterBanner(view, 0.27f, "CONTACT LOST", 13, new Color(DesignTokens.Warn, pulse));
     }
 
     // Map a ship class byte (ghost contacts carry the raw class, not a RemoteShip) to its HUD glyph
@@ -1550,204 +1243,6 @@ public partial class TargetMarkers : Control
             ShipClass.Bomber => Kind.Bomber,
             _ => Kind.Fighter,
         };
-
-    // Green at full health, through yellow at half, to red when nearly destroyed.
-    private static Color HealthColor(float frac) =>
-        frac > 0.5f
-            ? new Color(Mathf.Lerp(0.9f, 0.15f, (frac - 0.5f) * 2f), 0.85f, 0.15f)
-            : new Color(0.9f, Mathf.Lerp(0.15f, 0.85f, frac * 2f), 0.15f);
-
-    // True when the font carries a glyph for every char of s (BMP codepoints — the authored hull
-    // symbols are all single BMP chars). Guards the text path in DrawClassGlyph so an authored symbol
-    // the mono font lacks (⬟/⬢) falls back to a drawn silhouette instead of rendering invisible tofu.
-    private static bool FontHasGlyph(Font font, string s)
-    {
-        foreach (char c in s)
-            if (!font.HasChar(c))
-                return false;
-        return true;
-    }
-
-    // A small symbol encoding the entity class, centered on p. Ship hulls render their authored
-    // glyph (ShipClassDef.Glyph, e.g. ▲/◆/⬢) as mono text so a new hull's marker is data-driven;
-    // the non-ship landmarks (base square, warp-gate rings) and any glyph-less hull fall back to
-    // the distinct drawn silhouettes so class still reads at a glance even tiny.
-    private void DrawClassGlyph(Vector2 p, Kind kind, Color color, float r, string glyph = "")
-    {
-        // Only take the text path when the mono font can actually render every char of the authored
-        // glyph — JetBrains Mono has no ⬟ (miner) or ⬢ (bomber), so those would draw as invisible tofu.
-        // When a glyph is unsupported (or empty), fall through to the drawn silhouette below so the
-        // class still reads. (Keeps the marker data-driven for hulls whose glyph the font DOES carry.)
-        if (glyph.Length > 0 && FontHasGlyph(UiFonts.Mono, glyph))
-        {
-            Font font = UiFonts.Mono;
-            int fs = Mathf.RoundToInt(r * 2.6f);
-            Vector2 sz = font.GetStringSize(glyph, HorizontalAlignment.Left, -1, fs);
-            // Center both axes: x off the measured width, y off the baseline (ascent/descent).
-            var pos = new Vector2(p.X - sz.X * 0.5f, p.Y + (font.GetAscent(fs) - font.GetDescent(fs)) * 0.5f);
-            DrawString(font, pos, glyph, HorizontalAlignment.Left, -1, fs, color);
-            return;
-        }
-        switch (kind)
-        {
-            case Kind.Base:
-                // Station: filled square with a punched-out center dot.
-                DrawRect(new Rect2(p - new Vector2(r, r), new Vector2(r * 2f, r * 2f)), color);
-                DrawCircle(p, r * 0.4f, new Color(0f, 0f, 0f, 0.85f));
-                break;
-            case Kind.Scout:
-                // Slim upward triangle.
-                _poly3[0] = p + new Vector2(0f, -r);
-                _poly3[1] = p + new Vector2(r * 0.8f, r * 0.7f);
-                _poly3[2] = p + new Vector2(-r * 0.8f, r * 0.7f);
-                DrawColoredPolygon(_poly3, color);
-                break;
-            case Kind.Fighter:
-                // Chevron / arrowhead (tip up, notched base).
-                _poly4[0] = p + new Vector2(0f, -r);
-                _poly4[1] = p + new Vector2(r, r * 0.7f);
-                _poly4[2] = p + new Vector2(0f, r * 0.25f);
-                _poly4[3] = p + new Vector2(-r, r * 0.7f);
-                DrawColoredPolygon(_poly4, color);
-                break;
-            case Kind.Bomber:
-                // Heavy hexagon.
-                for (int i = 0; i < 6; i++)
-                {
-                    float a = Mathf.Pi / 6f + i * Mathf.Tau / 6f;
-                    _poly6[i] = p + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r;
-                }
-                DrawColoredPolygon(_poly6, color);
-                break;
-            case Kind.Miner:
-                // Industrial ore hull: an upright filled pentagon (echoes the authored ⬟ glyph),
-                // distinct from the fighter chevron and bomber hexagon so a miner reads at a glance.
-                for (int i = 0; i < 5; i++)
-                {
-                    float a = -Mathf.Pi / 2f + i * Mathf.Tau / 5f;
-                    _poly5[i] = p + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r;
-                }
-                DrawColoredPolygon(_poly5, color);
-                break;
-            case Kind.Pod:
-                // Small circle.
-                DrawCircle(p, r * 0.85f, color);
-                break;
-            case Kind.Aleph:
-                // Warp gate: concentric hollow rings (a portal/vortex), distinct from the
-                // solid pod circle and never team-colored.
-                DrawArc(p, r, 0f, Mathf.Tau, 20, color, 1.6f, true);
-                DrawArc(p, r * 0.5f, 0f, Mathf.Tau, 16, color, 1.4f, true);
-                break;
-            case Kind.Probe:
-                // Recon probe: a hollow diamond (sensor beacon) with a bright center dot — distinct
-                // from the filled pod circle and the aleph's concentric rings. Drawn as four line
-                // segments off the reused _poly4 scratch so the glyph allocates nothing.
-                _poly4[0] = p + new Vector2(0f, -r);
-                _poly4[1] = p + new Vector2(r, 0f);
-                _poly4[2] = p + new Vector2(0f, r);
-                _poly4[3] = p + new Vector2(-r, 0f);
-                DrawLine(_poly4[0], _poly4[1], color, 1.5f, true);
-                DrawLine(_poly4[1], _poly4[2], color, 1.5f, true);
-                DrawLine(_poly4[2], _poly4[3], color, 1.5f, true);
-                DrawLine(_poly4[3], _poly4[0], color, 1.5f, true);
-                DrawCircle(p, r * 0.32f, color);
-                break;
-            case Kind.Mine:
-                // Deployed ordnance: a spiked hazard burst — a filled core with six radiating
-                // spikes off the reused _poly6 scratch. Distinct from the pod's plain circle, the
-                // probe's diamond, and the aleph's concentric rings.
-                for (int i = 0; i < 6; i++)
-                {
-                    float a = i * Mathf.Tau / 6f;
-                    _poly6[i] = p + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r;
-                    DrawLine(p, _poly6[i], color, 1.5f, true);
-                }
-                DrawCircle(p, r * 0.45f, color);
-                break;
-            case Kind.Asteroid:
-                // Navigation rock: a hollow ring with a small center dot — a neutral, non-threat
-                // marker distinct from the pod's filled circle and the aleph's concentric rings.
-                DrawArc(p, r, 0f, Mathf.Tau, 16, color, 1.5f, true);
-                DrawCircle(p, r * 0.3f, color);
-                break;
-        }
-    }
-
-    // A small distinctive vector icon for each of the four "special" resource classes, drawn beside a
-    // rock's HUD label so the valuable rocks read at a glance. Shapes are chosen to stay distinct from
-    // each other AND from the ship glyphs in DrawClassGlyph; commons (Regolith) draw nothing. Tinted
-    // to echo each rock's material family (RockGlyphColor). Reuses the preallocated _poly* scratch —
-    // allocates nothing per frame.
-    private void DrawRockGlyph(Vector2 center, byte rockClass, float r, Color color)
-    {
-        switch ((RockClass)rockClass)
-        {
-            case RockClass.Helium3:
-                // THE valuable one: a bright filled crystalline diamond (rotated, slightly narrow) with a
-                // tiny sparkle dot — solid, so it never reads as the probe's hollow diamond.
-                _poly4[0] = center + new Vector2(0f, -r);
-                _poly4[1] = center + new Vector2(r * 0.72f, 0f);
-                _poly4[2] = center + new Vector2(0f, r);
-                _poly4[3] = center + new Vector2(-r * 0.72f, 0f);
-                DrawColoredPolygon(_poly4, color);
-                DrawCircle(center + new Vector2(0f, -r * 0.28f), r * 0.22f, new Color(1f, 1f, 1f, 0.85f));
-                break;
-            case RockClass.Uranium:
-                // Radiation trefoil: three filled blades at 120° around a hot center dot — a hazard read,
-                // distinct from the scout's single upright triangle.
-                for (int i = 0; i < 3; i++)
-                {
-                    float a = -Mathf.Pi / 2f + i * Mathf.Tau / 3f;
-                    DrawCircle(center + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r * 0.68f, r * 0.42f, color);
-                }
-                DrawCircle(center, r * 0.3f, color);
-                break;
-            case RockClass.Silicon:
-                // Faceted crystal: a tall pointy-top hexagon (a standing gem), distinct from the bomber's
-                // flat regular hexagon by both proportion and its pale tint.
-                for (int i = 0; i < 6; i++)
-                {
-                    float a = -Mathf.Pi / 2f + i * Mathf.Tau / 6f;
-                    _poly6[i] = center + new Vector2(Mathf.Cos(a) * r * 0.68f, Mathf.Sin(a) * r);
-                }
-                DrawColoredPolygon(_poly6, color);
-                break;
-            case RockClass.Carbonaceous:
-                // Rubble pile: a lumpy blob — a main disc with two smaller overlapping lobes — distinct
-                // from the pod's clean single circle and the asteroid glyph's hollow ring.
-                DrawCircle(center, r * 0.72f, color);
-                DrawCircle(center + new Vector2(-r * 0.55f, r * 0.28f), r * 0.4f, color);
-                DrawCircle(center + new Vector2(r * 0.5f, -r * 0.35f), r * 0.34f, color);
-                break;
-        }
-    }
-
-    // Material-family tint for each special rock's HUD glyph so the icon echoes the 3D material look.
-    private static Color RockGlyphColor(byte cls) =>
-        (RockClass)cls switch
-        {
-            RockClass.Helium3 => new Color(0.45f, 0.85f, 0.95f), // bright cyan — the valuable one
-            RockClass.Uranium => new Color(0.95f, 0.45f, 0.25f), // orange-red — hazard
-            RockClass.Silicon => new Color(0.65f, 0.85f, 0.60f), // pale green
-            RockClass.Carbonaceous => new Color(0.55f, 0.68f, 0.90f), // cool blue
-            _ => DesignTokens.Text2,
-        };
-
-    // A rounded four-corner bracket reticle centered on p: four short arcs at the diagonal corners
-    // (with gaps at the cardinal directions, where the ticks/lead/tag sit). Drawn on a circle of
-    // radius h so the reticle is curved and concentric with the target's health arc — the rounded
-    // corners echo the gauge arcs instead of clashing with a square four-corner bracket.
-    private void DrawBracket(Vector2 p, float h, Color color, float width)
-    {
-        const float span = 26f * (Mathf.Pi / 180f); // half-angle each corner arc extends around its diagonal
-        // Godot angles: 0° = +X (right), 90° = down. The corners sit on the four diagonals.
-        for (int i = 0; i < 4; i++)
-        {
-            float mid = Mathf.Pi * 0.25f + i * Mathf.Pi * 0.5f; // 45°, 135°, 225°, 315°
-            DrawArc(p, h, mid - span, mid + span, 10, color, width, true);
-        }
-    }
 
     // The focused target's "▣ TARGET" tag above its marker and range below, in mono. Only
     // drawn when the focus is on screen; skipped when behind the camera or off-screen (the
@@ -1761,56 +1256,14 @@ public partial class TargetMarkers : Control
     // isn't the local ship's — a focus tag only draws for a target in ViewSector, and each sector is
     // an origin-centered frame, so subtracting the local ship's position across sectors (e.g. an
     // F3/commander view of another sector) yields a meaningless distance.
-    private void DrawFocusTag(Vector2 view, Vector3 worldPos, Color tint, PredictionController? local)
-    {
-        Camera3D cam = Cam;
-        if (cam.IsPositionBehind(worldPos))
-            return;
-        Vector2 sp = cam.UnprojectPosition(worldPos);
-        if (!new Rect2(Vector2.Zero, view).HasPoint(sp))
-            return;
-
-        Font font = UiFonts.Mono;
-        const string tag = "▣ TARGET";
-        float tagW = font.GetStringSize(tag, HorizontalAlignment.Left, -1, 11).X;
-        DrawString(font, sp + new Vector2(-tagW * 0.5f, -FocusHalf - 9f), tag, HorizontalAlignment.Left, -1, 11, tint);
-        if (local != null && _world.LocalSector == _world.ViewSector)
-        {
-            string info = $"{(worldPos - local.GlobalPosition).Length():0} u";
-            float infoW = font.GetStringSize(info, HorizontalAlignment.Left, -1, 10).X;
-            DrawString(
-                font,
-                sp + new Vector2(-infoW * 0.5f, FocusHalf + 17f),
-                info,
-                HorizontalAlignment.Left,
-                -1,
-                10,
-                DesignTokens.Text2
-            );
-        }
-    }
-
-    // A small role tag (e.g. "MINER") under a focused ship's bracket, in neutral data chrome.
-    private void DrawShipRoleTag(Vector2 view, Vector3 worldPos, string tag)
-    {
-        Camera3D cam = Cam;
-        if (cam.IsPositionBehind(worldPos))
-            return;
-        Vector2 sp = cam.UnprojectPosition(worldPos);
-        if (!new Rect2(Vector2.Zero, view).HasPoint(sp))
-            return;
-        Font font = UiFonts.Mono;
-        float w = font.GetStringSize(tag, HorizontalAlignment.Left, -1, 10).X;
-        DrawString(
-            font,
-            sp + new Vector2(-w * 0.5f, FocusHalf + 29f),
-            tag,
-            HorizontalAlignment.Left,
-            -1,
-            10,
-            DesignTokens.Data
+    private void DrawFocusTag(Vector2 view, Vector3 worldPos, Color tint, PredictionController? local) =>
+        _mk.FocusTag(
+            Cam,
+            view,
+            worldPos,
+            tint,
+            local != null && _world.LocalSector == _world.ViewSector ? local.GlobalPosition : null
         );
-    }
 
     // Resource class name for a rock class byte (mirrors Shared.RockClass). Only Helium-3 is
     // harvestable; Regolith are the common majority, the rest are rare cosmetic specials today
@@ -1855,38 +1308,11 @@ public partial class TargetMarkers : Control
         if (_world.Asteroids.GetAsteroid(rockId) is not { } rock)
             return;
         // Commons (Regolith) carry no caption even when focused — a "Regolith" readout is noise; the
-        // focus bracket alone marks the target. Only the valuable classes get the class/ore detail.
+        // focus bracket alone marks the target. Only the valuable classes get the class/ore detail
+        // (and, from MarkerDraw, the material-tinted glyph beside it that matches the near/F3 labels).
         if (!IsSpecialRock(rock.RockClass))
             return;
-        Camera3D cam = Cam;
-        if (cam.IsPositionBehind(worldPos))
-            return;
-        Vector2 sp = cam.UnprojectPosition(worldPos);
-        if (!new Rect2(Vector2.Zero, view).HasPoint(sp))
-            return;
-        string label = RockLabel(rock);
-        Font font = UiFonts.Mono;
-        float w = font.GetStringSize(label, HorizontalAlignment.Left, -1, 10).X;
-        DrawString(
-            font,
-            sp + new Vector2(-w * 0.5f, FocusHalf + 29f),
-            label,
-            HorizontalAlignment.Left,
-            -1,
-            10,
-            AsteroidFocusColor
-        );
-        // Echo the special-rock glyph beside the focused rock's label too, so it matches the near/F3 labels.
-        if (IsSpecialRock(rock.RockClass))
-        {
-            const float rg = 5.5f;
-            DrawRockGlyph(
-                sp + new Vector2(-w * 0.5f - rg - 4f, FocusHalf + 29f - 3f),
-                rock.RockClass,
-                rg,
-                RockGlyphColor(rock.RockClass)
-            );
-        }
+        _mk.RockDetail(Cam, view, worldPos, RockLabel(rock), rock.RockClass, AsteroidFocusColor);
     }
 
     // The navigation waypoint: a hollow cyan (chrome) diamond with a center dot at the dropped point,
@@ -1898,105 +1324,8 @@ public partial class TargetMarkers : Control
     {
         if (!Waypoint.Has || Waypoint.Sector != _world.ViewSector)
             return;
-
-        Camera3D cam = Cam;
-        Vector3 wp = Waypoint.Pos;
-        Vector2 center = view * 0.5f;
-        bool behind = cam.IsPositionBehind(wp);
-        Vector2 sp = cam.UnprojectPosition(wp);
-        if (behind)
-            sp = center * 2f - sp;
-
-        var onScreen = new Rect2(Vector2.Zero, view).Grow(-EdgeMargin);
-        if (!behind && onScreen.HasPoint(sp))
-        {
-            float r = GlyphSize * 1.15f;
-            UiDraw.HollowDiamondMarker(this, sp, r, WaypointColor, "NAV", UiFonts.Mono, 9);
-            return;
-        }
-
-        Vector2 edge = ClampToEdge(sp, view, out Vector2 dir);
-        DrawArrow(edge, dir, WaypointColor);
+        _mk.WaypointMarker(Cam, view, Waypoint.Pos);
     }
-
-    // A gunsight at p marking the firing line: a ring with four short spokes and a
-    // center dot, so it reads clearly against ships and the lead circle.
-    private void DrawAimReticle(Vector2 p)
-    {
-        DrawArc(p, AimRadius, 0f, Mathf.Tau, 24, AimColor, 1.5f, true);
-        float inner = AimRadius + 1f;
-        float outer = AimRadius + 5f;
-        DrawLine(p + new Vector2(-outer, 0f), p + new Vector2(-inner, 0f), AimColor, 1.5f, true);
-        DrawLine(p + new Vector2(outer, 0f), p + new Vector2(inner, 0f), AimColor, 1.5f, true);
-        DrawLine(p + new Vector2(0f, -outer), p + new Vector2(0f, -inner), AimColor, 1.5f, true);
-        DrawLine(p + new Vector2(0f, outer), p + new Vector2(0f, inner), AimColor, 1.5f, true);
-        DrawCircle(p, 1.5f, AimColor);
-    }
-
-    // The lead indicator for the focused target: a dashed connector from the target marker to
-    // the firing-solution point, then a ringed crosshair at the lead point with a "LEAD" tag —
-    // echoing the design's lead mark. Amber (FocusColor) so it reads as part of the focused
-    // target's chrome. `target` is the target's screen point (null if it's behind the camera,
-    // in which case the connector is skipped but the lead mark still draws).
-    private void DrawLeadIndicator(Vector2? target, Vector2 lp)
-    {
-        if (target is Vector2 tp)
-            DrawDashedLine(tp, lp, new Color(FocusColor, 0.55f), 1f, 5f, 4f);
-
-        // Soft glow (a faint wider ring — _Draw has no box-shadow) under the crisp ring.
-        DrawArc(lp, LeadRadius + 2f, 0f, Mathf.Tau, 28, new Color(FocusColor, 0.22f), 3f, true);
-        DrawArc(lp, LeadRadius, 0f, Mathf.Tau, 28, FocusColor, 1.5f, true);
-
-        // Crosshair through the centre, kept inside the ring (design's ±7 in a r≈11 ring).
-        float c = LeadRadius * 0.6f;
-        DrawLine(lp + new Vector2(-c, 0f), lp + new Vector2(c, 0f), FocusColor, 1f, true);
-        DrawLine(lp + new Vector2(0f, -c), lp + new Vector2(0f, c), FocusColor, 1f, true);
-
-        DrawString(
-            UiFonts.Mono,
-            lp + new Vector2(LeadRadius + 4f, 3f),
-            "LEAD",
-            HorizontalAlignment.Left,
-            -1,
-            9,
-            new Color(FocusColor, 0.85f)
-        );
-    }
-
-    // A dashed line from a to b (Godot's _Draw has no native dashed stroke): march the segment
-    // in `dash`-long strokes separated by `gap`, clipping the final stroke to the endpoint.
-    private void DrawDashedLine(Vector2 a, Vector2 b, Color color, float width, float dash, float gap)
-    {
-        Vector2 delta = b - a;
-        float len = delta.Length();
-        if (len < 0.01f)
-            return;
-        Vector2 dir = delta / len;
-        float step = dash + gap;
-        for (float t = 0f; t < len; t += step)
-        {
-            Vector2 s = a + dir * t;
-            Vector2 e = a + dir * Mathf.Min(t + dash, len);
-            DrawLine(s, e, color, width, true);
-        }
-    }
-
-    // Clamp an off-screen (or behind-camera) marker to the inset viewport edge: given the
-    // marker's projected screen point `sp` (already un-mirrored for behind-camera points via
-    // center*2 - sp) and the viewport size, return the point on the EdgeMargin-inset rectangle
-    // edge along the ray from center, and the outward unit direction along that ray. Shared by
-    // every edge indicator — live entities, the incoming-missile threat arrow, and fog ghosts —
-    // so they all pin to the same border. Thin wrapper over UiDraw.ClampToEdge (the canonical
-    // math, also used by SectorOverview's rock-order glyph) that keeps the `out dir` shape so
-    // callers here don't need to change.
-    private static Vector2 ClampToEdge(Vector2 sp, Vector2 view, out Vector2 dir)
-    {
-        (Vector2 edge, dir) = UiDraw.ClampToEdge(sp, view, EdgeMargin);
-        return edge;
-    }
-
-    // A filled triangle at p pointing along dir (unit). Thin wrapper over UiDraw.DrawEdgeArrow.
-    private void DrawArrow(Vector2 p, Vector2 dir, Color color) => UiDraw.DrawEdgeArrow(this, p, dir, ArrowSize, color);
 
     // Solve the constant-velocity intercept in the SHOOTER's frame and return the world
     // point the player must aim the nose at to hit. Everything is relative to the

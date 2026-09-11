@@ -10,7 +10,8 @@ public sealed class AttributeModifiers : Dictionary<GameAttribute, double>
 {
     public AttributeModifiers() { }
 
-    public AttributeModifiers(IDictionary<GameAttribute, double> values) : base(values) { }
+    public AttributeModifiers(IDictionary<GameAttribute, double> values)
+        : base(values) { }
 
     /// <summary>The multiplier for <paramref name="attribute"/>, or 1.0 if unspecified.</summary>
     public double Get(GameAttribute attribute) => TryGetValue(attribute, out var v) ? v : 1.0;

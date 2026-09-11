@@ -14,12 +14,12 @@ namespace SimServer.Content;
 // per-team OWNED sets (mutable clones) can be fed straight to BuildableResolver later.
 public sealed class FactionStart
 {
-    public int StartingCredits { get; }       // Faction.BonusMoney — credits a team starts a match with
-    public int IncomePerPaycheck { get; }      // Faction.IncomeMoney — flat credits added each paycheck
-    public TechSet BaseTechs { get; }          // seed for a team's OwnedTechs (cloned per team)
+    public int StartingCredits { get; } // Faction.BonusMoney — credits a team starts a match with
+    public int IncomePerPaycheck { get; } // Faction.IncomeMoney — flat credits added each paycheck
+    public TechSet BaseTechs { get; } // seed for a team's OwnedTechs (cloned per team)
     public CapabilitySet BaseCapabilities { get; } // seed for a team's OwnedCapabilities (cloned per team)
-    public string LifepodHullId { get; }       // reserved for Phase-5 spawn/eject wiring
-    public string InitialStationId { get; }    // reserved for Phase-5 wiring
+    public string LifepodHullId { get; } // reserved for Phase-5 spawn/eject wiring
+    public string InitialStationId { get; } // reserved for Phase-5 wiring
 
     // v41 faction identity + team-wide stat multipliers. FactionName streams for a "who am I" display;
     // BaseAttributes is the faction's GAS block (sorted by attr byte), the base of the sim's per-team

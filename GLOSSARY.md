@@ -22,9 +22,10 @@ Single `ulong` from which the whole static arena — base positions, asteroid fi
 Core deterministic physics system shared between server and client for ship movement, thrust, and rotation.
 - **Frequency:** Very common
 - **Key Files:** 
-  - `shared/FlightModel.cs` — deterministic physics (shared across server/client)
+  - `shared/FlightModel.cs` — deterministic physics (shared across server/client); also the canonical `Vec3.Dot/Normalize/NormalizeOrZero/NormalizeOr` and `MathUtil.Clamp1` helpers (single copies since 2026-09-09 — never re-add private duplicates, they must stay bit-identical)
   - `client/scripts/PredictionController.cs` — client-side input prediction and reconciliation
-  - `server/Sim/Simulation.cs` — authoritative server simulation loop (20 Hz tick)
+  - `server/Sim/Simulation.cs` — authoritative server simulation loop (20 Hz tick); partial family: `.Firing.cs` (TryFire/ResolveDueShots/base damage), `.Missiles.cs`, `.Collisions.cs`, `.Warp.cs`, `.Vision.cs`, `.Pig.cs`, `.Constructors.cs`, `.Mining.cs`, `.Orders.cs`, `.Research.cs`, `.Scoring.cs`, `.Mines.cs`, `.Chaff.cs`, `.Probes.cs`, `.Avoidance.cs`
+  - `client/scripts/GameNetClient.cs` — connection lifecycle, Send API, socket I/O; frame application lives in `client/scripts/net/FrameApplier.cs` (per-message handlers + streamed state) and `client/scripts/net/DefsApplier.cs` (MsgDefs → DefRegistry mirror)
 - **Related:** [[SimTick]], [[Held-Input Replay]]
 - **Notes:** Server is single source of truth; client predicts and reconciles against server snapshots
 
@@ -61,7 +62,8 @@ Distance-based visibility culling: server only streams entities within fixed dis
 Two-tier write discipline on the per-client outbound frame queue (bounded, `FullMode.Wait`). RELIABLE (`SendReliable`) is for one-shot frames with no repair path — Welcome, Defs, YouAre, ShipGone, chat, lobby roster, gone-events, rock deltas; a full queue parks them in the client's `PendingControl`, flushed FIFO next tick (delayed, never lost). LOSSY (`SendLossy`) is for self-healing streams — snapshots, change+keepalive frames, FX; a full queue just drops the write.
 - **Frequency:** Every outbound frame
 - **Key Files:**
-  - `server/Net/ClientHub.cs` — `SendReliable` / `FlushReliable` / `SendLossy`, `OutboundQueueDepth`
+  - `server/Net/OutboundChannel.cs` — `OutboundChannel` (one per client: `SendReliable` / `FlushReliable` / `SendLossy` / `TryWrite`, `QueueDepth`), `OutFrame`, `OutboundStats` (drop/park counters)
+  - `server/Net/ClientHub.cs` — holds one `OutboundChannel` per `Client` and picks the tier at every send site
 - **Related:** [[Snapshot]], [[AOI (Area of Interest)]]
 - **Notes:** NEVER use `DropOldest` or raw `TryWrite` for control frames — evicting a one-shot YouAre/ShipGone deadlocks the relaunch flow (client retries MsgSpawn forever; server drops each as "already flying"). Queue pressure is logged throttled (`OutboundQueuePressure`). The client additionally self-heals its local-ship binding from the lobby roster (`GameNetClient.ApplyLobbyState` adopt/ghost heal).
 
@@ -84,6 +86,7 @@ Server-side hands-off navigation for player ships (protocol v30), reusing the PI
   - `server/Net/Protocol.cs` — `MsgSetAutopilot=11` (client→server engage/disengage), `ShipFlagAutopilot=16` (echo bit in the ship-record flags byte)
   - `client/scripts/PredictionController.cs` — `SetAutopilot(bool)` follow-authority mode; `client/scripts/ShipController.cs` — T toggle / `EngageAutopilot` / manual-override handback / `ApEngagedLocal`; `client/scripts/SectorOverview.cs` — F3 pick + waypoint; `client/scripts/TargetMarkers.cs` — extended Tab, waypoint diamond, AUTOPILOT banner + disengage toast
   - `tests/AutopilotTest` — approach / standoff / stop+disengage / aleph / avoidance / manual-override / friendly-dock / target-loss
+  - `server/Content/core/world.yaml` — every maneuver knob is authored under `ai:` (`brake-margin`, `arrival-band-mult`, `dock-*`); `WorldLoader.ValidateAi` refuses boot on `dock-capture <= brake-margin`, `dock-outer-standoff <= dock-standoff`, an out-of-(0,1] throttle/facing-dot, or a non-positive roll-tol
 - **Related:** [[Flight Model]], [[PigBrain]], [[Client Prediction]], [[SimTick]]
 - **Notes:** Follow-authority (not client-replicated steering) because bit-identical target/fog/rock state client-side is impossible; input latency is irrelevant hands-off, only smoothness matters. The engaged flag broadcasts to all viewers (shared record scratch — accepted v1 leak). ~~Cross-sector routing is single-hop only~~ (multi-hop since Stage-4 mining: the `CrossSector` leg routes via `World.NextGateTo`). *Deferred: enemy-ghost tracking through fog; reuse for constructors.*
 
@@ -543,7 +546,7 @@ Server-driven content authoring: gameplay/balance values (hulls, weapons, techs,
 - **Notes:** Patchless runtime streaming; no client fallback (client holds authority until defs load)
 
 ### World Tuning Blocks
-Server-side sim tuning authored in the standalone `server/Content/core/world.yaml` (NOT part of the factions bundle manifest; loaded by `WorldLoader`, overridable via `SIM_WORLD`/`--world`) — `ai:` (PIG drone difficulty/behavior), `combat:` (collision damage + boundary hazard), `mechanics:` (gates/docking/pods/economy/match flow), `seeding:` (asteroid field/belt shapes + base placement), `mining:` (harvest/ore economy), `constructor:` (base-builder creep speeds/standoff/embed/dwell), `build:` (per-garrison build-queue parallel/queue limits), `scoring:` (per-pilot kill/loss point weights + the kill-credit window), plus root radar-signature knobs (`aleph-radar-signature`/`rock-radar-signature`, the `boost/shield/dust-signature-mult` fog multipliers, and the `signature-min/max-mult` rails). Every key optional; omitted keys keep stock values (the shared classes' field initializers). NEVER streamed — no protocol impact.
+Server-side sim tuning authored in the standalone `server/Content/core/world.yaml` (NOT part of the factions bundle manifest; loaded by `WorldLoader`, overridable via `SIM_WORLD`/`--world`) — `ai:` (PIG drone difficulty/behavior **plus the server-side navigation knobs**: `brake-margin`/`arrival-band-mult` shared by every approach leg, and the full autopilot docking maneuver — `dock-standoff`/`clearance`/`creep-throttle`/`hull-margin`/`los-slack`/`detour-step-rad`/`capture`/`outer-standoff`/`axis-slop`/`descent-margin`/`descent-max-throttle`/`capture-speed-sq`/`roll-gain`/`facing-dot`/`roll-tol`), `combat:` (collision damage + boundary hazard), `mechanics:` (gates/docking/pods/economy/match flow), `seeding:` (asteroid field/belt shapes + base placement), `mining:` (harvest/ore economy), `constructor:` (base-builder creep speeds/standoff/embed/dwell), `build:` (per-garrison build-queue parallel/queue limits), `scoring:` (per-pilot kill/loss point weights + the kill-credit window), plus root radar-signature knobs (`aleph-radar-signature`/`rock-radar-signature`, the `boost/shield/dust-signature-mult` fog multipliers, and the `signature-min/max-mult` rails). Every key optional; omitted keys keep stock values (the shared classes' field initializers). NEVER streamed — no protocol impact.
 - **Frequency:** Common (any sim-balance sweep)
 - **Key Files:**
   - `server/Content/core/world.yaml` — authored values (stock = documented defaults); standalone, not a manifest fragment

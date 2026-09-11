@@ -115,27 +115,54 @@ HashSet<(byte, ulong)> Run(Simulation sim, Action hold, int ticks)
 Simulation.TeamVision Vision(Simulation sim, byte team) => sim.VisionFor(team)!;
 
 // Parse the (base, rock, aleph) static counts out of a MsgWelcome frame, asserting count == body.
-(int s, int b, int r, int a) WelcomeCounts(byte[] frame)
+// `sectorIds`, when passed, collects the ids of the sector records the frame actually carried — the
+// sector-gating tests assert the SET the Welcome leaked, not just how many records rode along.
+(int s, int b, int r, int a) WelcomeCounts(byte[] frame, List<uint>? sectorIds = null)
 {
     using var ms = new MemoryStream(frame);
     using var br = new BinaryReader(ms);
-    br.ReadByte(); br.ReadByte(); br.ReadInt32(); br.ReadByte(); br.ReadUInt32(); br.ReadSingle();
-    int tl = br.ReadByte(); br.ReadBytes(tl);
+    br.ReadByte();
+    br.ReadByte();
+    br.ReadInt32();
+    br.ReadByte();
+    br.ReadUInt32();
+    br.ReadSingle();
+    int tl = br.ReadByte();
+    br.ReadBytes(tl);
     int ns = br.ReadUInt16();
     for (int i = 0; i < ns; i++)
     {
-        br.ReadUInt32(); br.ReadSingle(); br.ReadString(); // id, radius, name
-        if (br.ReadByte() != 0) br.ReadBytes(8); // map-pos: presence byte then x,y (2 floats)
+        uint sid = br.ReadUInt32();
+        sectorIds?.Add(sid);
+        br.ReadSingle();
+        br.ReadString(); // id, radius, name
+        if (br.ReadByte() != 0)
+            br.ReadBytes(8); // map-pos: presence byte then x,y (2 floats)
         // Per-sector environment (mirror Protocol.WriteSectorEnv): 3 presence bytes always present.
-        if (br.ReadByte() != 0) br.ReadBytes(40); // sun: godRays + dir(3) + color(3) + energy + ambient + size
-        if (br.ReadByte() != 0) { br.ReadBytes(28); if (br.ReadByte() != 0) br.ReadUInt32(); } // nebula: colorA+colorB+intensity (+seed)
-        if (br.ReadByte() != 0) { br.ReadBytes(16); int nc = br.ReadUInt16(); br.ReadBytes(nc * 20); } // dust: color(3) + opacity(1) + clouds
+        if (br.ReadByte() != 0)
+            br.ReadBytes(40); // sun: godRays + dir(3) + color(3) + energy + ambient + size
+        if (br.ReadByte() != 0)
+        {
+            br.ReadBytes(28);
+            if (br.ReadByte() != 0)
+                br.ReadUInt32();
+        } // nebula: colorA+colorB+intensity (+seed)
+        if (br.ReadByte() != 0)
+        {
+            br.ReadBytes(16);
+            int nc = br.ReadUInt16();
+            br.ReadBytes(nc * 20);
+        } // dust: color(3) + opacity(1) + clouds
     }
-    int nb = br.ReadUInt16(); br.ReadBytes(nb * 34); // base-static record: +1 byte baseTypeId (v37)
+    int nb = br.ReadUInt16();
+    br.ReadBytes(nb * 34); // base-static record: +1 byte baseTypeId (v37)
     // RockStatic v32: 41-byte prefix + mining block (u8 class + f32 currentRadius + u8 orePct + f32 oreCapacity) = 51.
-    long nr = br.ReadUInt32(); br.ReadBytes((int)nr * 51);
-    int na = br.ReadUInt16(); br.ReadBytes(na * 28);
-    if (ms.Position != frame.Length) throw new Exception("Welcome count != body");
+    long nr = br.ReadUInt32();
+    br.ReadBytes((int)nr * 51);
+    int na = br.ReadUInt16();
+    br.ReadBytes(na * 28);
+    if (ms.Position != frame.Length)
+        throw new Exception("Welcome count != body");
     return (ns, nb, (int)nr, na);
 }
 
@@ -153,14 +180,44 @@ Vec3 AtAngle(float dist, float angleDeg)
 // ================================================================================================
 {
     bool Close(float a, float b) => MathF.Abs(a - b) < 1e-4f;
-    var neutral = new SignatureKnobs(FireBoost: 2.5f, FireWindowTicks: 80f, BoostMult: 1f, ShieldMult: 1f, DustMult: 1f, MinMult: 0.1f, MaxMult: 8f);
-    SignatureInputs At(float bias = 0f, uint fire = 0, uint missile = 0, float ab = 0f, bool shield = false, float dust = 0f) =>
-        new(BaseSig: 2f, Bias: bias, Tick: 1000, LastFireTick: fire, LastMissileTick: missile, AbPower: ab, HasShield: shield, DustCoverage: dust);
+    var neutral = new SignatureKnobs(
+        FireBoost: 2.5f,
+        FireWindowTicks: 80f,
+        BoostMult: 1f,
+        ShieldMult: 1f,
+        DustMult: 1f,
+        MinMult: 0.1f,
+        MaxMult: 8f
+    );
+    SignatureInputs At(
+        float bias = 0f,
+        uint fire = 0,
+        uint missile = 0,
+        float ab = 0f,
+        bool shield = false,
+        float dust = 0f
+    ) =>
+        new(
+            BaseSig: 2f,
+            Bias: bias,
+            Tick: 1000,
+            LastFireTick: fire,
+            LastMissileTick: missile,
+            AbPower: ab,
+            HasShield: shield,
+            DustCoverage: dust
+        );
 
-    Check(Close(SignatureModel.Compute(At(), neutral), 2f),
-        "all-neutral knobs + bias 0 == base (the byte-identical guard)", "neutral pipeline did not return the base signature");
-    Check(Close(SignatureModel.Compute(At(bias: 0.5f), neutral), 2.5f),
-        "SigBias adds to the base signature", "SigBias was not additive");
+    Check(
+        Close(SignatureModel.Compute(At(), neutral), 2f),
+        "all-neutral knobs + bias 0 == base (the byte-identical guard)",
+        "neutral pipeline did not return the base signature"
+    );
+    Check(
+        Close(SignatureModel.Compute(At(bias: 0.5f), neutral), 2.5f),
+        "SigBias adds to the base signature",
+        "SigBias was not additive"
+    );
 
     // Fire term: full boost at age 0, linear decay inside the window, expired at the window end;
     // a missile launch boosts exactly like a gun shot (max of the two stamps).
@@ -168,23 +225,73 @@ Vec3 AtAngle(float dist, float angleDeg)
     float mid = SignatureModel.Compute(At(fire: 960), neutral); // age 40 of 80 → half-decayed
     Check(Close(fired, 2f * 2.5f), "a just-fired ship reads base × FireBoost", "fire boost at age 0 wrong");
     Check(Close(mid, 2f * 1.75f), "the fire boost decays linearly inside the window", "mid-window fire decay wrong");
-    Check(Close(SignatureModel.Compute(At(fire: 920), neutral), 2f), "at the window end the signature is back to base", "fire boost outlived its window");
-    Check(Close(SignatureModel.Compute(At(missile: 1000), neutral), fired), "a missile launch boosts like a gun shot", "missile stamp did not boost");
+    Check(
+        Close(SignatureModel.Compute(At(fire: 920), neutral), 2f),
+        "at the window end the signature is back to base",
+        "fire boost outlived its window"
+    );
+    Check(
+        Close(SignatureModel.Compute(At(missile: 1000), neutral), fired),
+        "a missile launch boosts like a gun shot",
+        "missile stamp did not boost"
+    );
 
     // The new terms, each isolated under live-style knobs.
-    var live = new SignatureKnobs(FireBoost: 2.5f, FireWindowTicks: 80f, BoostMult: 1.4f, ShieldMult: 1.15f, DustMult: 0.5f, MinMult: 0.1f, MaxMult: 8f);
-    Check(Close(SignatureModel.Compute(At(ab: 1f), live), 2f * 1.4f), "AbPower 1 applies the full BoostMult", "full-afterburner term wrong");
-    Check(Close(SignatureModel.Compute(At(ab: 0.5f), live), 2f * 1.2f), "the boost term ramps linearly with AbPower", "half-afterburner term wrong");
-    Check(Close(SignatureModel.Compute(At(shield: true), live), 2f * 1.15f), "an equipped shield applies ShieldMult", "shield term wrong");
-    Check(Close(SignatureModel.Compute(At(dust: 1f), live), 2f * 0.5f), "full dust coverage applies DustMult (quieter than base)", "dust term wrong");
-    Check(Close(SignatureModel.Compute(At(dust: 0.5f), live), 2f * 0.75f), "the dust term ramps linearly with coverage", "half-coverage dust term wrong");
+    var live = new SignatureKnobs(
+        FireBoost: 2.5f,
+        FireWindowTicks: 80f,
+        BoostMult: 1.4f,
+        ShieldMult: 1.15f,
+        DustMult: 0.5f,
+        MinMult: 0.1f,
+        MaxMult: 8f
+    );
+    Check(
+        Close(SignatureModel.Compute(At(ab: 1f), live), 2f * 1.4f),
+        "AbPower 1 applies the full BoostMult",
+        "full-afterburner term wrong"
+    );
+    Check(
+        Close(SignatureModel.Compute(At(ab: 0.5f), live), 2f * 1.2f),
+        "the boost term ramps linearly with AbPower",
+        "half-afterburner term wrong"
+    );
+    Check(
+        Close(SignatureModel.Compute(At(shield: true), live), 2f * 1.15f),
+        "an equipped shield applies ShieldMult",
+        "shield term wrong"
+    );
+    Check(
+        Close(SignatureModel.Compute(At(dust: 1f), live), 2f * 0.5f),
+        "full dust coverage applies DustMult (quieter than base)",
+        "dust term wrong"
+    );
+    Check(
+        Close(SignatureModel.Compute(At(dust: 0.5f), live), 2f * 0.75f),
+        "the dust term ramps linearly with coverage",
+        "half-coverage dust term wrong"
+    );
 
     // Clamp rails: extreme loud stacking caps at base × MaxMult; extreme quieting floors at × MinMult.
-    var rails = new SignatureKnobs(FireBoost: 10f, FireWindowTicks: 80f, BoostMult: 3f, ShieldMult: 2f, DustMult: 0.02f, MinMult: 0.5f, MaxMult: 4f);
-    Check(Close(SignatureModel.Compute(At(fire: 1000, ab: 1f, shield: true), rails), 2f * 4f),
-        "extreme loud stacking clamps at base × MaxMult", "the max clamp rail did not hold");
-    Check(Close(SignatureModel.Compute(At(dust: 1f), rails), 2f * 0.5f),
-        "extreme quieting clamps at base × MinMult", "the min clamp rail did not hold");
+    var rails = new SignatureKnobs(
+        FireBoost: 10f,
+        FireWindowTicks: 80f,
+        BoostMult: 3f,
+        ShieldMult: 2f,
+        DustMult: 0.02f,
+        MinMult: 0.5f,
+        MaxMult: 4f
+    );
+    Check(
+        Close(SignatureModel.Compute(At(fire: 1000, ab: 1f, shield: true), rails), 2f * 4f),
+        "extreme loud stacking clamps at base × MaxMult",
+        "the max clamp rail did not hold"
+    );
+    Check(
+        Close(SignatureModel.Compute(At(dust: 1f), rails), 2f * 0.5f),
+        "extreme quieting clamps at base × MinMult",
+        "the min clamp rail did not hold"
+    );
 }
 
 // ================================================================================================
@@ -194,9 +301,9 @@ Vec3 AtAngle(float dist, float angleDeg)
 {
     var sim = BootSim(1);
     var scout = Def(sim, FlightModel.ClassScout);
-    float coneLen = scout.VisionConeLength;   // 2400
+    float coneLen = scout.VisionConeLength; // 2400
     float coneAng = scout.VisionConeAngleDeg; // 30
-    float sphere = scout.VisionSphereRadius;  // 900
+    float sphere = scout.VisionSphereRadius; // 900
 
     var viewer = Join(sim, 1, 0, FlightModel.ClassScout);
     var target = Join(sim, 2, 1, FlightModel.ClassFighter);
@@ -206,14 +313,38 @@ Vec3 AtAngle(float dist, float angleDeg)
     bool InCone(float dist, float ang)
     {
         Park(viewer, EmptySector, new Vec3(0, 0, 0));
-        Run(sim, () => { Park(viewer, EmptySector, new Vec3(0, 0, 0)); Park(target, EmptySector, AtAngle(dist, ang)); }, Settle);
+        Run(
+            sim,
+            () =>
+            {
+                Park(viewer, EmptySector, new Vec3(0, 0, 0));
+                Park(target, EmptySector, AtAngle(dist, ang));
+            },
+            Settle
+        );
         return Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId);
     }
 
-    Check(InCone(beyondSphere, coneAng - 5f), $"target on-axis within cone length ({beyondSphere:F0} ≤ {coneLen}×{sig}) and inside the half-angle is detected", "cone failed to detect an in-length, in-angle target");
-    Check(!InCone(coneLen * sig + 300f, 0f), $"target past cone length ({coneLen}×{sig}) on-axis is NOT detected", "cone detected a target beyond its length");
-    Check(InCone(beyondSphere, coneAng - 3f), $"target just inside the {coneAng}° half-angle is detected", "cone missed a target just inside the half-angle");
-    Check(!InCone(beyondSphere, coneAng + 5f), $"target just outside the {coneAng}° half-angle is NOT detected", "cone detected a target outside its half-angle");
+    Check(
+        InCone(beyondSphere, coneAng - 5f),
+        $"target on-axis within cone length ({beyondSphere:F0} ≤ {coneLen}×{sig}) and inside the half-angle is detected",
+        "cone failed to detect an in-length, in-angle target"
+    );
+    Check(
+        !InCone(coneLen * sig + 300f, 0f),
+        $"target past cone length ({coneLen}×{sig}) on-axis is NOT detected",
+        "cone detected a target beyond its length"
+    );
+    Check(
+        InCone(beyondSphere, coneAng - 3f),
+        $"target just inside the {coneAng}° half-angle is detected",
+        "cone missed a target just inside the half-angle"
+    );
+    Check(
+        !InCone(beyondSphere, coneAng + 5f),
+        $"target just outside the {coneAng}° half-angle is NOT detected",
+        "cone detected a target outside its half-angle"
+    );
 }
 
 // ================================================================================================
@@ -228,16 +359,40 @@ Vec3 AtAngle(float dist, float angleDeg)
     float sphere = Def(sim, FlightModel.ClassFighter).VisionSphereRadius; // 450
 
     // Behind the viewer (−Z), well inside the sphere, clear LoS → omnidirectional detection.
-    Run(sim, () => { Park(viewer, EmptySector, new Vec3(0, 0, 0)); Park(target, EmptySector, new Vec3(0, 0, -sphere * 0.4f)); }, Settle);
-    Check(Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId), "the proximity sphere is omnidirectional (target behind the viewer, clear LoS, is detected)", "sphere missed a target behind the viewer");
+    Run(
+        sim,
+        () =>
+        {
+            Park(viewer, EmptySector, new Vec3(0, 0, 0));
+            Park(target, EmptySector, new Vec3(0, 0, -sphere * 0.4f));
+        },
+        Settle
+    );
+    Check(
+        Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId),
+        "the proximity sphere is omnidirectional (target behind the viewer, clear LoS, is detected)",
+        "sphere missed a target behind the viewer"
+    );
 
     // A rock straddling the line of sight casts a radar shadow — an in-sphere target is NOT detected.
     var sim2 = BootSim(22);
     sim2.World.AddRockForTest(EmptySector, new Vec3(0, 0, 200f), 120f);
     var v2 = Join(sim2, 1, 0, FlightModel.ClassFighter);
     var t2 = Join(sim2, 2, 1, FlightModel.ClassFighter);
-    Run(sim2, () => { Park(v2, EmptySector, new Vec3(0, 0, 0)); Park(t2, EmptySector, new Vec3(0, 0, sphere * 0.9f)); }, Settle);
-    Check(!Vision(sim2, 0).VisibleEnemyShips.Contains(t2.ShipId), "the proximity sphere is rock-occluded (a rock between viewer and target blocks the in-sphere radar return)", "a rock between viewer and target failed to occlude the sphere");
+    Run(
+        sim2,
+        () =>
+        {
+            Park(v2, EmptySector, new Vec3(0, 0, 0));
+            Park(t2, EmptySector, new Vec3(0, 0, sphere * 0.9f));
+        },
+        Settle
+    );
+    Check(
+        !Vision(sim2, 0).VisibleEnemyShips.Contains(t2.ShipId),
+        "the proximity sphere is rock-occluded (a rock between viewer and target blocks the in-sphere radar return)",
+        "a rock between viewer and target failed to occlude the sphere"
+    );
 
     // Same viewer/target/range with the rock moved off the line of sight → detected again (proves the
     // miss above is occlusion, not range).
@@ -245,8 +400,20 @@ Vec3 AtAngle(float dist, float angleDeg)
     sim3.World.AddRockForTest(EmptySector, new Vec3(400f, 0, 200f), 120f);
     var v3 = Join(sim3, 1, 0, FlightModel.ClassFighter);
     var t3 = Join(sim3, 2, 1, FlightModel.ClassFighter);
-    Run(sim3, () => { Park(v3, EmptySector, new Vec3(0, 0, 0)); Park(t3, EmptySector, new Vec3(0, 0, sphere * 0.9f)); }, Settle);
-    Check(Vision(sim3, 0).VisibleEnemyShips.Contains(t3.ShipId), "the same in-sphere target with the rock moved off-axis is detected (clear LoS)", "the sphere missed a target with an unobstructed line of sight");
+    Run(
+        sim3,
+        () =>
+        {
+            Park(v3, EmptySector, new Vec3(0, 0, 0));
+            Park(t3, EmptySector, new Vec3(0, 0, sphere * 0.9f));
+        },
+        Settle
+    );
+    Check(
+        Vision(sim3, 0).VisibleEnemyShips.Contains(t3.ShipId),
+        "the same in-sphere target with the rock moved off-axis is detected (clear LoS)",
+        "the sphere missed a target with an unobstructed line of sight"
+    );
 }
 
 // ================================================================================================
@@ -254,7 +421,9 @@ Vec3 AtAngle(float dist, float angleDeg)
 //    moved off-axis is detected (target beyond the sphere so only the cone applies).
 // ================================================================================================
 {
-    float coneLen, sphere, sig;
+    float coneLen,
+        sphere,
+        sig;
     {
         var probe = BootSim(3);
         coneLen = Def(probe, FlightModel.ClassScout).VisionConeLength;
@@ -269,12 +438,28 @@ Vec3 AtAngle(float dist, float angleDeg)
         sim.World.AddRockForTest(EmptySector, rockPos, 250f);
         var viewer = Join(sim, 1, 0, FlightModel.ClassScout);
         var target = Join(sim, 2, 1, FlightModel.ClassFighter);
-        Run(sim, () => { Park(viewer, EmptySector, new Vec3(0, 0, 0)); Park(target, EmptySector, new Vec3(0, 0, targetDist)); }, Settle);
+        Run(
+            sim,
+            () =>
+            {
+                Park(viewer, EmptySector, new Vec3(0, 0, 0));
+                Park(target, EmptySector, new Vec3(0, 0, targetDist));
+            },
+            Settle
+        );
         return Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId);
     }
 
-    Check(!DetectedWithRock(new Vec3(0, 0, targetDist * 0.5f)), "a rock on the line of sight occludes the cone (target NOT detected)", "cone saw through an occluding rock");
-    Check(DetectedWithRock(new Vec3(700, 0, targetDist * 0.5f)), "the same target with the rock moved off-axis is detected (clear LoS)", "cone missed a target with an unobstructed line of sight");
+    Check(
+        !DetectedWithRock(new Vec3(0, 0, targetDist * 0.5f)),
+        "a rock on the line of sight occludes the cone (target NOT detected)",
+        "cone saw through an occluding rock"
+    );
+    Check(
+        DetectedWithRock(new Vec3(700, 0, targetDist * 0.5f)),
+        "the same target with the rock moved off-axis is detected (clear LoS)",
+        "cone missed a target with an unobstructed line of sight"
+    );
 }
 
 // ================================================================================================
@@ -285,8 +470,8 @@ Vec3 AtAngle(float dist, float angleDeg)
 {
     var sim = BootSim(4);
     float sphere = Def(sim, FlightModel.ClassFighter).VisionSphereRadius; // 450
-    float bomberSig = EffSig(sim.Content, FlightModel.ClassBomber);       // 1.75 × shield-mult
-    float scoutSig = EffSig(sim.Content, FlightModel.ClassScout);         // 0.5 × shield-mult
+    float bomberSig = EffSig(sim.Content, FlightModel.ClassBomber); // 1.75 × shield-mult
+    float scoutSig = EffSig(sim.Content, FlightModel.ClassScout); // 0.5 × shield-mult
 
     var viewer = Join(sim, 1, 0, FlightModel.ClassFighter);
 
@@ -295,18 +480,42 @@ Vec3 AtAngle(float dist, float angleDeg)
         var s = BootSim(4);
         var v = Join(s, 1, 0, FlightModel.ClassFighter);
         var t = Join(s, 2, 1, targetCls);
-        Run(s, () => { Park(v, EmptySector, new Vec3(0, 0, 0)); Park(t, EmptySector, new Vec3(dist, 0, 0)); }, Settle); // +X = perpendicular to forward
+        Run(
+            s,
+            () =>
+            {
+                Park(v, EmptySector, new Vec3(0, 0, 0));
+                Park(t, EmptySector, new Vec3(dist, 0, 0));
+            },
+            Settle
+        ); // +X = perpendicular to forward
         return Vision(s, 0).VisibleEnemyShips.Contains(t.ShipId);
     }
 
     float midRange = 400f; // between scout boundary (450×0.5=225) and bomber boundary (450×1.75=787.5)
-    Check(DetectedAt(FlightModel.ClassBomber, midRange), $"a bomber (sig {bomberSig}) is detected at {midRange} (≤ {sphere}×{bomberSig})", "bomber not detected inside its signature-scaled sphere");
-    Check(!DetectedAt(FlightModel.ClassScout, midRange), $"a scout (sig {scoutSig}) at the SAME spot is NOT detected ({midRange} > {sphere}×{scoutSig})", "scout detected beyond its signature-scaled sphere");
+    Check(
+        DetectedAt(FlightModel.ClassBomber, midRange),
+        $"a bomber (sig {bomberSig}) is detected at {midRange} (≤ {sphere}×{bomberSig})",
+        "bomber not detected inside its signature-scaled sphere"
+    );
+    Check(
+        !DetectedAt(FlightModel.ClassScout, midRange),
+        $"a scout (sig {scoutSig}) at the SAME spot is NOT detected ({midRange} > {sphere}×{scoutSig})",
+        "scout detected beyond its signature-scaled sphere"
+    );
 
     // Exact boundary: scout is seen just inside 450×0.5 and unseen just outside.
     float scoutBoundary = sphere * scoutSig; // 225
-    Check(DetectedAt(FlightModel.ClassScout, scoutBoundary - 2f), $"scout just inside the ×sig boundary ({scoutBoundary:F0}) is detected", "scout not detected just inside the ×sig boundary");
-    Check(!DetectedAt(FlightModel.ClassScout, scoutBoundary + 2f), $"scout just outside the ×sig boundary ({scoutBoundary:F0}) is NOT detected", "scout detected just outside the ×sig boundary");
+    Check(
+        DetectedAt(FlightModel.ClassScout, scoutBoundary - 2f),
+        $"scout just inside the ×sig boundary ({scoutBoundary:F0}) is detected",
+        "scout not detected just inside the ×sig boundary"
+    );
+    Check(
+        !DetectedAt(FlightModel.ClassScout, scoutBoundary + 2f),
+        $"scout just outside the ×sig boundary ({scoutBoundary:F0}) is NOT detected",
+        "scout detected just outside the ×sig boundary"
+    );
 }
 
 // ================================================================================================
@@ -314,7 +523,9 @@ Vec3 AtAngle(float dist, float angleDeg)
 //    but NOT radar-detected. Leaving after radar contact ghosts; an eyeball-only glimpse leaves none.
 // ================================================================================================
 {
-    float sphere, eyeMult, sig;
+    float sphere,
+        eyeMult,
+        sig;
     {
         var probe = BootSim(5);
         sphere = Def(probe, FlightModel.ClassFighter).VisionSphereRadius;
@@ -329,11 +540,21 @@ Vec3 AtAngle(float dist, float angleDeg)
         var sim = BootSim(5);
         var v = Join(sim, 1, 0, FlightModel.ClassFighter);
         var t = Join(sim, 2, 1, FlightModel.ClassFighter);
-        Run(sim, () => { Park(v, EmptySector, new Vec3(0, 0, 0)); Park(t, EmptySector, new Vec3(bandDist, 0, 0)); }, Settle);
+        Run(
+            sim,
+            () =>
+            {
+                Park(v, EmptySector, new Vec3(0, 0, 0));
+                Park(t, EmptySector, new Vec3(bandDist, 0, 0));
+            },
+            Settle
+        );
         var tv = Vision(sim, 0);
-        Check(tv.EyeballShips.Contains(t.ShipId) && !tv.VisibleEnemyShips.Contains(t.ShipId),
+        Check(
+            tv.EyeballShips.Contains(t.ShipId) && !tv.VisibleEnemyShips.Contains(t.ShipId),
             $"an enemy in the eyeball band ({bandDist:F0}, between {sphere * sig:F0} and {sphere * eyeMult * sig:F0}) is streamed but NOT radar-detected",
-            "eyeball-band enemy was misclassified (radar vs eyeball)");
+            "eyeball-band enemy was misclassified (radar vs eyeball)"
+        );
     }
 
     // Eyeball occlusion — a rock on the line of sight hides an eyeball-band enemy ENTIRELY (a ship
@@ -343,20 +564,40 @@ Vec3 AtAngle(float dist, float angleDeg)
         sim.World.AddRockForTest(EmptySector, new Vec3(bandDist * 0.5f, 0, 0), 120f);
         var v = Join(sim, 1, 0, FlightModel.ClassFighter);
         var t = Join(sim, 2, 1, FlightModel.ClassFighter);
-        Run(sim, () => { Park(v, EmptySector, new Vec3(0, 0, 0)); Park(t, EmptySector, new Vec3(bandDist, 0, 0)); }, Settle);
+        Run(
+            sim,
+            () =>
+            {
+                Park(v, EmptySector, new Vec3(0, 0, 0));
+                Park(t, EmptySector, new Vec3(bandDist, 0, 0));
+            },
+            Settle
+        );
         var tv = Vision(sim, 0);
-        Check(!tv.EyeballShips.Contains(t.ShipId) && !tv.VisibleEnemyShips.Contains(t.ShipId),
+        Check(
+            !tv.EyeballShips.Contains(t.ShipId) && !tv.VisibleEnemyShips.Contains(t.ShipId),
             "a rock on the line of sight hides an eyeball-band enemy entirely (not streamed by radar OR eyeball)",
-            "an eyeball-band enemy behind a rock was still streamed");
+            "an eyeball-band enemy behind a rock was still streamed"
+        );
 
         var sim2 = BootSim(56);
         sim2.World.AddRockForTest(EmptySector, new Vec3(bandDist * 0.5f, 400f, 0), 120f);
         var v2 = Join(sim2, 1, 0, FlightModel.ClassFighter);
         var t2 = Join(sim2, 2, 1, FlightModel.ClassFighter);
-        Run(sim2, () => { Park(v2, EmptySector, new Vec3(0, 0, 0)); Park(t2, EmptySector, new Vec3(bandDist, 0, 0)); }, Settle);
-        Check(Vision(sim2, 0).EyeballShips.Contains(t2.ShipId),
+        Run(
+            sim2,
+            () =>
+            {
+                Park(v2, EmptySector, new Vec3(0, 0, 0));
+                Park(t2, EmptySector, new Vec3(bandDist, 0, 0));
+            },
+            Settle
+        );
+        Check(
+            Vision(sim2, 0).EyeballShips.Contains(t2.ShipId),
             "the same eyeball-band enemy with the rock moved off-axis is streamed again (clear LoS)",
-            "an eyeball-band enemy with clear LoS was not streamed");
+            "an eyeball-band enemy with clear LoS was not streamed"
+        );
     }
 
     // Radar → the VIEWER flies away (so the last-seen spot is no longer in vision) → ghost + lost.
@@ -365,14 +606,46 @@ Vec3 AtAngle(float dist, float angleDeg)
         var v = Join(sim, 1, 0, FlightModel.ClassFighter);
         var t = Join(sim, 2, 1, FlightModel.ClassFighter);
         Vec3 spot = new Vec3(sphere * sig * 0.5f, 0, 0);
-        Run(sim, () => { Park(v, EmptySector, new Vec3(0, 0, 0)); Park(t, EmptySector, spot); }, Settle);
-        Check(Vision(sim, 0).VisibleEnemyShips.Contains(t.ShipId), "enemy inside radar range is radar-detected (pre-condition for a ghost)", "enemy not radar-detected before leaving");
-        var lost = Run(sim, () => { Park(v, EmptySector, new Vec3(60000f, 0, 0)); Park(t, EmptySector, spot); }, Settle);
+        Run(
+            sim,
+            () =>
+            {
+                Park(v, EmptySector, new Vec3(0, 0, 0));
+                Park(t, EmptySector, spot);
+            },
+            Settle
+        );
+        Check(
+            Vision(sim, 0).VisibleEnemyShips.Contains(t.ShipId),
+            "enemy inside radar range is radar-detected (pre-condition for a ghost)",
+            "enemy not radar-detected before leaving"
+        );
+        var lost = Run(
+            sim,
+            () =>
+            {
+                Park(v, EmptySector, new Vec3(60000f, 0, 0));
+                Park(t, EmptySector, spot);
+            },
+            Settle
+        );
         var tv = Vision(sim, 0);
         bool ghosted = tv.Ghosts.TryGetValue(t.ShipId, out var g);
-        Check(ghosted && !tv.VisibleEnemyShips.Contains(t.ShipId) && !tv.EyeballShips.Contains(t.ShipId), "a ship leaving the streamed union after radar contact becomes a ghost", "radar-then-lost ship did not ghost");
-        Check(ghosted && (g.Pos - spot).Length() < 60f, $"the ghost sits at the last streamed position (~{spot.X:F0})", "the ghost was placed away from the last streamed position");
-        Check(lost.Contains(((byte)0, t.ShipId)), "leaving the streamed union emits a LostContactsThisStep entry", "no lost-contact was recorded on leaving the streamed union");
+        Check(
+            ghosted && !tv.VisibleEnemyShips.Contains(t.ShipId) && !tv.EyeballShips.Contains(t.ShipId),
+            "a ship leaving the streamed union after radar contact becomes a ghost",
+            "radar-then-lost ship did not ghost"
+        );
+        Check(
+            ghosted && (g.Pos - spot).Length() < 60f,
+            $"the ghost sits at the last streamed position (~{spot.X:F0})",
+            "the ghost was placed away from the last streamed position"
+        );
+        Check(
+            lost.Contains(((byte)0, t.ShipId)),
+            "leaving the streamed union emits a LostContactsThisStep entry",
+            "no lost-contact was recorded on leaving the streamed union"
+        );
     }
 
     // Eyeball-only (never radar) → leave → NO ghost (but still a lost-contact).
@@ -380,11 +653,35 @@ Vec3 AtAngle(float dist, float angleDeg)
         var sim = BootSim(555);
         var v = Join(sim, 1, 0, FlightModel.ClassFighter);
         var t = Join(sim, 2, 1, FlightModel.ClassFighter);
-        Run(sim, () => { Park(v, EmptySector, new Vec3(0, 0, 0)); Park(t, EmptySector, new Vec3(bandDist, 0, 0)); }, Settle);
-        Check(Vision(sim, 0).EyeballShips.Contains(t.ShipId) && !Vision(sim, 0).VisibleEnemyShips.Contains(t.ShipId), "enemy held in the eyeball band never gains radar (pre-condition)", "eyeball-only enemy unexpectedly radar-detected");
-        Run(sim, () => { Park(v, EmptySector, new Vec3(0, 0, 0)); Park(t, EmptySector, new Vec3(farDist, 0, 0)); }, Settle);
+        Run(
+            sim,
+            () =>
+            {
+                Park(v, EmptySector, new Vec3(0, 0, 0));
+                Park(t, EmptySector, new Vec3(bandDist, 0, 0));
+            },
+            Settle
+        );
+        Check(
+            Vision(sim, 0).EyeballShips.Contains(t.ShipId) && !Vision(sim, 0).VisibleEnemyShips.Contains(t.ShipId),
+            "enemy held in the eyeball band never gains radar (pre-condition)",
+            "eyeball-only enemy unexpectedly radar-detected"
+        );
+        Run(
+            sim,
+            () =>
+            {
+                Park(v, EmptySector, new Vec3(0, 0, 0));
+                Park(t, EmptySector, new Vec3(farDist, 0, 0));
+            },
+            Settle
+        );
         var tv = Vision(sim, 0);
-        Check(!tv.Ghosts.ContainsKey(t.ShipId), "an eyeball-only glimpse (never radar) leaves NO ghost on loss", "an eyeball-only contact left a ghost");
+        Check(
+            !tv.Ghosts.ContainsKey(t.ShipId),
+            "an eyeball-only glimpse (never radar) leaves NO ghost on loss",
+            "an eyeball-only contact left a ghost"
+        );
     }
 }
 
@@ -394,7 +691,7 @@ Vec3 AtAngle(float dist, float angleDeg)
 // ================================================================================================
 {
     var sim = BootSim(6);
-    var baseSite = sim.World.Bases[0];      // team 0 base in sector 0
+    var baseSite = sim.World.Bases[0]; // team 0 base in sector 0
     float baseSphere = sim.Content.Bases[0].VisionSphereRadius; // 1500
     float sig = EffSig(sim.Content, FlightModel.ClassFighter);
 
@@ -402,13 +699,21 @@ Vec3 AtAngle(float dist, float angleDeg)
     var enemy = Join(sim, 2, 1, FlightModel.ClassFighter);
     Vec3 nearBase = baseSite.Pos + new Vec3(baseSphere * sig * 0.5f, 0, 0);
     Run(sim, () => Park(enemy, baseSite.SectorId, nearBase), Settle);
-    Check(Vision(sim, 0).VisibleEnemyShips.Contains(enemy.ShipId), "a garrison base detects an enemy in its vision sphere with no ship viewer present", "base vision sphere failed to detect a nearby enemy");
+    Check(
+        Vision(sim, 0).VisibleEnemyShips.Contains(enemy.ShipId),
+        "a garrison base detects an enemy in its vision sphere with no ship viewer present",
+        "base vision sphere failed to detect a nearby enemy"
+    );
 
     // Destroy the base (directly zero its health — does NOT end the match, that only fires via
     // ApplyBaseDamage) → it stops contributing vision.
     sim.World.BaseHealth[0] = 0f;
     Run(sim, () => Park(enemy, baseSite.SectorId, nearBase), Settle);
-    Check(!Vision(sim, 0).VisibleEnemyShips.Contains(enemy.ShipId), "a destroyed base (health 0) stops seeing", "a destroyed base still provided vision");
+    Check(
+        !Vision(sim, 0).VisibleEnemyShips.Contains(enemy.ShipId),
+        "a destroyed base (health 0) stops seeing",
+        "a destroyed base still provided vision"
+    );
 }
 
 // ================================================================================================
@@ -422,10 +727,18 @@ Vec3 AtAngle(float dist, float angleDeg)
     Run(sim, () => Park(scout, EmptySector, new Vec3(0, 0, 0)), Settle);
     var tv = Vision(sim, 0);
     Check(tv.DiscoveredRocks.Contains(rock.Id), "a scouted rock is discovered", "scout failed to discover a nearby rock");
-    Check(tv.RevealLogRocks.Contains(rock.Id), "the newly-discovered rock is appended to the (append-only) reveal log", "the new discovery was not logged for reveal");
+    Check(
+        tv.RevealLogRocks.Contains(rock.Id),
+        "the newly-discovered rock is appended to the (append-only) reveal log",
+        "the new discovery was not logged for reveal"
+    );
 
     Run(sim, () => Park(scout, EmptySector, new Vec3(50000f, 0, 0)), Settle);
-    Check(Vision(sim, 0).DiscoveredRocks.Contains(rock.Id), "the rock stays discovered after the scout leaves (persistent fog memory)", "a discovered rock was forgotten after the scout left");
+    Check(
+        Vision(sim, 0).DiscoveredRocks.Contains(rock.Id),
+        "the rock stays discovered after the scout leaves (persistent fog memory)",
+        "a discovered rock was forgotten after the scout left"
+    );
 }
 
 // ================================================================================================
@@ -437,13 +750,16 @@ Vec3 AtAngle(float dist, float angleDeg)
 // ================================================================================================
 {
     var sim = BootSim(72);
-    var seen = sim.World.AddRockForTest(EmptySector, new Vec3(0, 0, 300f), 60f);   // scout discovers it
+    var seen = sim.World.AddRockForTest(EmptySector, new Vec3(0, 0, 300f), 60f); // scout discovers it
     var unseen = sim.World.AddRockForTest(EmptySector, new Vec3(80000f, 0, 0), 60f); // never in range
     var scout = Join(sim, 1, 0, FlightModel.ClassScout);
     Run(sim, () => Park(scout, EmptySector, new Vec3(0, 0, 0)), Settle);
     var tv = Vision(sim, 0);
-    Check(tv.DiscoveredRocks.Contains(seen.Id) && !tv.DiscoveredRocks.Contains(unseen.Id),
-        "pre-condition: the scout discovered the near rock but not the far one", "rock discovery pre-condition failed");
+    Check(
+        tv.DiscoveredRocks.Contains(seen.Id) && !tv.DiscoveredRocks.Contains(unseen.Id),
+        "pre-condition: the scout discovered the near rock but not the far one",
+        "rock discovery pre-condition failed"
+    );
 
     // Extract the ids from a set of MsgRockUpdate frames (count-prefixed 13-byte records).
     List<ulong> UpdateIds(List<byte[]> frames)
@@ -453,24 +769,39 @@ Vec3 AtAngle(float dist, float angleDeg)
         {
             using var ms = new MemoryStream(f);
             using var br = new BinaryReader(ms);
-            if (br.ReadByte() != Protocol.MsgRockUpdate) throw new Exception("wrong id on a rock-update frame");
+            if (br.ReadByte() != Protocol.MsgRockUpdate)
+                throw new Exception("wrong id on a rock-update frame");
             int n = br.ReadByte();
-            for (int i = 0; i < n; i++) { ids.Add(br.ReadUInt64()); br.ReadSingle(); br.ReadByte(); }
-            if (ms.Position != f.Length) throw new Exception("rock-update count != body");
+            for (int i = 0; i < n; i++)
+            {
+                ids.Add(br.ReadUInt64());
+                br.ReadSingle();
+                br.ReadByte();
+            }
+            if (ms.Position != f.Length)
+                throw new Exception("rock-update count != body");
         }
         return ids;
     }
 
     var changed = new List<ulong> { seen.Id, unseen.Id };
     var fogOn = UpdateIds(Protocol.BuildRockUpdatesFor(sim.World, tv, changed));
-    Check(fogOn.Contains(seen.Id) && !fogOn.Contains(unseen.Id),
+    Check(
+        fogOn.Contains(seen.Id) && !fogOn.Contains(unseen.Id),
         "fog-on rock-updates carry ONLY the team's discovered rock (an unscouted rock does not leak)",
-        "an undiscovered rock leaked into a fog-on client's rock-updates");
+        "an undiscovered rock leaked into a fog-on client's rock-updates"
+    );
     var fogOff = UpdateIds(Protocol.BuildRockUpdates(sim.World, changed));
-    Check(fogOff.Contains(seen.Id) && fogOff.Contains(unseen.Id),
-        "fog-off rock-updates broadcast every changed rock", "the fog-off broadcast dropped a changed rock");
-    Check(Protocol.BuildRockUpdatesFor(sim.World, null, changed).Count == 0,
-        "a NoTeam (null-vision) client receives no rock-updates", "a null-vision client got rock-updates");
+    Check(
+        fogOff.Contains(seen.Id) && fogOff.Contains(unseen.Id),
+        "fog-off rock-updates broadcast every changed rock",
+        "the fog-off broadcast dropped a changed rock"
+    );
+    Check(
+        Protocol.BuildRockUpdatesFor(sim.World, null, changed).Count == 0,
+        "a NoTeam (null-vision) client receives no rock-updates",
+        "a null-vision client got rock-updates"
+    );
 
     // Shared-helper guarantee: pull the discovered rock's 51-byte static record out of a fog-off
     // Welcome and a MsgReveal slice and assert byte-equality (both go through WriteRockStatic).
@@ -478,20 +809,46 @@ Vec3 AtAngle(float dist, float angleDeg)
     {
         using var ms = new MemoryStream(frame);
         using var br = new BinaryReader(ms);
-        br.ReadByte(); br.ReadByte(); br.ReadInt32(); br.ReadByte(); br.ReadUInt32(); br.ReadSingle();
-        int tl = br.ReadByte(); br.ReadBytes(tl);
+        br.ReadByte();
+        br.ReadByte();
+        br.ReadInt32();
+        br.ReadByte();
+        br.ReadUInt32();
+        br.ReadSingle();
+        int tl = br.ReadByte();
+        br.ReadBytes(tl);
         int ns = br.ReadUInt16();
         for (int i = 0; i < ns; i++)
         {
-            br.ReadUInt32(); br.ReadSingle(); br.ReadString();
-            if (br.ReadByte() != 0) br.ReadBytes(8);
-            if (br.ReadByte() != 0) br.ReadBytes(40);
-            if (br.ReadByte() != 0) { br.ReadBytes(28); if (br.ReadByte() != 0) br.ReadUInt32(); }
-            if (br.ReadByte() != 0) { br.ReadBytes(16); int nc = br.ReadUInt16(); br.ReadBytes(nc * 20); }
+            br.ReadUInt32();
+            br.ReadSingle();
+            br.ReadString();
+            if (br.ReadByte() != 0)
+                br.ReadBytes(8);
+            if (br.ReadByte() != 0)
+                br.ReadBytes(40);
+            if (br.ReadByte() != 0)
+            {
+                br.ReadBytes(28);
+                if (br.ReadByte() != 0)
+                    br.ReadUInt32();
+            }
+            if (br.ReadByte() != 0)
+            {
+                br.ReadBytes(16);
+                int nc = br.ReadUInt16();
+                br.ReadBytes(nc * 20);
+            }
         }
-        int nb = br.ReadUInt16(); br.ReadBytes(nb * 34); // base-static record: +1 byte baseTypeId (v37)
+        int nb = br.ReadUInt16();
+        br.ReadBytes(nb * 34); // base-static record: +1 byte baseTypeId (v37)
         long nr = br.ReadUInt32();
-        for (long i = 0; i < nr; i++) { var rec = br.ReadBytes(51); if (BitConverter.ToUInt64(rec, 0) == id) return rec; }
+        for (long i = 0; i < nr; i++)
+        {
+            var rec = br.ReadBytes(51);
+            if (BitConverter.ToUInt64(rec, 0) == id)
+                return rec;
+        }
         return null;
     }
     byte[]? RevealRock(byte[] frame, ulong id)
@@ -499,21 +856,30 @@ Vec3 AtAngle(float dist, float angleDeg)
         using var ms = new MemoryStream(frame);
         using var br = new BinaryReader(ms);
         br.ReadByte();
-        int nb = br.ReadByte(); br.ReadBytes(nb * 34); // base-static record: +1 byte baseTypeId (v37)
+        int nb = br.ReadByte();
+        br.ReadBytes(nb * 34); // base-static record: +1 byte baseTypeId (v37)
         int nr = br.ReadUInt16();
-        for (int i = 0; i < nr; i++) { var rec = br.ReadBytes(51); if (BitConverter.ToUInt64(rec, 0) == id) return rec; }
+        for (int i = 0; i < nr; i++)
+        {
+            var rec = br.ReadBytes(51);
+            if (BitConverter.ToUInt64(rec, 0) == id)
+                return rec;
+        }
         return null;
     }
 
     var rockIndex = new Dictionary<ulong, int>();
-    for (int i = 0; i < sim.World.Asteroids.Count; i++) rockIndex[sim.World.Asteroids[i].Id] = i;
+    for (int i = 0; i < sim.World.Asteroids.Count; i++)
+        rockIndex[sim.World.Asteroids[i].Id] = i;
     var welcome = Protocol.BuildWelcome(1, 0, sim.World, sim.Tick, Array.Empty<byte>(), fog: false, vision: null);
     var reveal = Protocol.BuildRevealSlice(sim.World, tv, rockIndex, 0, 0, 0, 0, out _, out _, out _, out _);
     var wRec = WelcomeRock(welcome, seen.Id);
     var rRec = reveal is null ? null : RevealRock(reveal, seen.Id);
-    Check(wRec is not null && rRec is not null && wRec.AsSpan().SequenceEqual(rRec),
+    Check(
+        wRec is not null && rRec is not null && wRec.AsSpan().SequenceEqual(rRec),
         "a discovered rock's static record is byte-identical in a fog-off Welcome and a MsgReveal slice (shared WriteRockStatic)",
-        "the Welcome and Reveal rock static records diverged");
+        "the Welcome and Reveal rock static records diverged"
+    );
 }
 
 // ================================================================================================
@@ -529,20 +895,36 @@ Vec3 AtAngle(float dist, float angleDeg)
 
     Run(sim, () => Park(scout, enemyBase.SectorId, nearEnemyBase), Settle);
     var tv = Vision(sim, 0);
-    Check(tv.DiscoveredBases.Contains(baseId), "team 0 scouts and discovers the enemy base", "enemy base not discovered by a scout in its sector");
+    Check(
+        tv.DiscoveredBases.Contains(baseId),
+        "team 0 scouts and discovers the enemy base",
+        "enemy base not discovered by a scout in its sector"
+    );
     float remembered = tv.LastKnownBaseHealth.GetValueOrDefault(baseId, -1f);
-    Check(remembered > 0f, $"LastKnownBaseHealth is recorded while in vision ({remembered:F0})", "no remembered base health while the base was in vision");
+    Check(
+        remembered > 0f,
+        $"LastKnownBaseHealth is recorded while in vision ({remembered:F0})",
+        "no remembered base health while the base was in vision"
+    );
 
     // Fly away, then damage the base while it is unseen.
     int baseIdx = 1;
     Run(sim, () => Park(scout, EmptySector, new Vec3(0, 0, 0)), Settle);
     sim.World.BaseHealth[baseIdx] = remembered * 0.5f;
     Run(sim, () => Park(scout, EmptySector, new Vec3(0, 0, 0)), Settle);
-    Check(Math.Abs(Vision(sim, 0).LastKnownBaseHealth[baseId] - remembered) < 1e-3f, "LastKnownBaseHealth is UNCHANGED while the base is damaged out of vision (stale memory)", "remembered base health changed while the base was unseen");
+    Check(
+        Math.Abs(Vision(sim, 0).LastKnownBaseHealth[baseId] - remembered) < 1e-3f,
+        "LastKnownBaseHealth is UNCHANGED while the base is damaged out of vision (stale memory)",
+        "remembered base health changed while the base was unseen"
+    );
 
     // Re-scout → refreshes to the true, lower value.
     Run(sim, () => Park(scout, enemyBase.SectorId, nearEnemyBase), Settle);
-    Check(Math.Abs(Vision(sim, 0).LastKnownBaseHealth[baseId] - remembered * 0.5f) < 1f, "re-scouting refreshes LastKnownBaseHealth to the true current value", "re-scout did not refresh the remembered base health");
+    Check(
+        Math.Abs(Vision(sim, 0).LastKnownBaseHealth[baseId] - remembered * 0.5f) < 1f,
+        "re-scouting refreshes LastKnownBaseHealth to the true current value",
+        "re-scout did not refresh the remembered base health"
+    );
 }
 
 // ================================================================================================
@@ -550,7 +932,8 @@ Vec3 AtAngle(float dist, float angleDeg)
 //    elsewhere (exactly one contact), dies-unseen persists until re-scout.
 // ================================================================================================
 {
-    float sphere, sig;
+    float sphere,
+        sig;
     {
         var probe = BootSim(9);
         sphere = Def(probe, FlightModel.ClassFighter).VisionSphereRadius;
@@ -558,8 +941,8 @@ Vec3 AtAngle(float dist, float angleDeg)
     }
     float radarDist = sphere * sig * 0.5f;
     Vec3 origin = new Vec3(0, 0, 0);
-    Vec3 spotS = new Vec3(radarDist, 0, 0);   // where the target is first spotted
-    Vec3 viewerFar = new Vec3(60000f, 0, 0);  // viewer flees so the last-seen spot leaves its vision
+    Vec3 spotS = new Vec3(radarDist, 0, 0); // where the target is first spotted
+    Vec3 viewerFar = new Vec3(60000f, 0, 0); // viewer flees so the last-seen spot leaves its vision
 
     // create → clear-on-rescout-empty. Establish radar, viewer flees (ghost persists), then the viewer
     // returns to the ghost spot with the target now moved far away → the empty re-scout clears it.
@@ -567,12 +950,44 @@ Vec3 AtAngle(float dist, float angleDeg)
         var sim = BootSim(9);
         var v = Join(sim, 1, 0, FlightModel.ClassFighter);
         var t = Join(sim, 2, 1, FlightModel.ClassFighter);
-        Run(sim, () => { Park(v, EmptySector, origin); Park(t, EmptySector, spotS); }, Settle); // radar
-        Run(sim, () => { Park(v, EmptySector, viewerFar); Park(t, EmptySector, spotS); }, Settle); // viewer flees → ghost at spotS
-        Check(Vision(sim, 0).Ghosts.ContainsKey(t.ShipId), "ghost created on loss of a radar contact", "no ghost created on contact loss");
+        Run(
+            sim,
+            () =>
+            {
+                Park(v, EmptySector, origin);
+                Park(t, EmptySector, spotS);
+            },
+            Settle
+        ); // radar
+        Run(
+            sim,
+            () =>
+            {
+                Park(v, EmptySector, viewerFar);
+                Park(t, EmptySector, spotS);
+            },
+            Settle
+        ); // viewer flees → ghost at spotS
+        Check(
+            Vision(sim, 0).Ghosts.ContainsKey(t.ShipId),
+            "ghost created on loss of a radar contact",
+            "no ghost created on contact loss"
+        );
         // Viewer returns to the ghost spot, target has moved far away → empty re-scout clears the ghost.
-        Run(sim, () => { Park(v, EmptySector, origin); Park(t, EmptySector, new Vec3(90000f, 0, 0)); }, Settle);
-        Check(!Vision(sim, 0).Ghosts.ContainsKey(t.ShipId), "the ghost is cleared when the team re-scouts its location empty", "a re-scouted-empty ghost was not cleared");
+        Run(
+            sim,
+            () =>
+            {
+                Park(v, EmptySector, origin);
+                Park(t, EmptySector, new Vec3(90000f, 0, 0));
+            },
+            Settle
+        );
+        Check(
+            !Vision(sim, 0).Ghosts.ContainsKey(t.ShipId),
+            "the ghost is cleared when the team re-scouts its location empty",
+            "a re-scouted-empty ghost was not cleared"
+        );
     }
 
     // replace-on-respot-elsewhere = exactly one contact (radar, no ghost).
@@ -580,13 +995,45 @@ Vec3 AtAngle(float dist, float angleDeg)
         var sim = BootSim(99);
         var v = Join(sim, 1, 0, FlightModel.ClassFighter);
         var t = Join(sim, 2, 1, FlightModel.ClassFighter);
-        Run(sim, () => { Park(v, EmptySector, origin); Park(t, EmptySector, spotS); }, Settle);
-        Run(sim, () => { Park(v, EmptySector, viewerFar); Park(t, EmptySector, spotS); }, Settle); // ghost at spotS
-        Check(Vision(sim, 0).Ghosts.ContainsKey(t.ShipId), "ghost exists before re-spotting (pre-condition)", "no ghost before re-spot");
+        Run(
+            sim,
+            () =>
+            {
+                Park(v, EmptySector, origin);
+                Park(t, EmptySector, spotS);
+            },
+            Settle
+        );
+        Run(
+            sim,
+            () =>
+            {
+                Park(v, EmptySector, viewerFar);
+                Park(t, EmptySector, spotS);
+            },
+            Settle
+        ); // ghost at spotS
+        Check(
+            Vision(sim, 0).Ghosts.ContainsKey(t.ShipId),
+            "ghost exists before re-spotting (pre-condition)",
+            "no ghost before re-spot"
+        );
         // Re-spot the SAME ship at a fresh, far location — radar re-detection removes the old ghost.
-        Run(sim, () => { Park(v, EmptySector, new Vec3(40000f, 0, 0)); Park(t, EmptySector, new Vec3(40000f + radarDist, 0, 0)); }, Settle);
+        Run(
+            sim,
+            () =>
+            {
+                Park(v, EmptySector, new Vec3(40000f, 0, 0));
+                Park(t, EmptySector, new Vec3(40000f + radarDist, 0, 0));
+            },
+            Settle
+        );
         var tv = Vision(sim, 0);
-        Check(tv.VisibleEnemyShips.Contains(t.ShipId) && !tv.Ghosts.ContainsKey(t.ShipId), "re-spotting the ship elsewhere replaces the ghost with a live radar contact (exactly one contact)", "re-spot left both a ghost and a live contact");
+        Check(
+            tv.VisibleEnemyShips.Contains(t.ShipId) && !tv.Ghosts.ContainsKey(t.ShipId),
+            "re-spotting the ship elsewhere replaces the ghost with a live radar contact (exactly one contact)",
+            "re-spot left both a ghost and a live contact"
+        );
     }
 
     // dies-unseen persists (a ghosted ship destroyed while unseen keeps its ghost until re-scout).
@@ -594,13 +1041,37 @@ Vec3 AtAngle(float dist, float angleDeg)
         var sim = BootSim(999);
         var v = Join(sim, 1, 0, FlightModel.ClassFighter);
         var t = Join(sim, 2, 1, FlightModel.ClassFighter);
-        Run(sim, () => { Park(v, EmptySector, origin); Park(t, EmptySector, spotS); }, Settle);
-        Run(sim, () => { Park(v, EmptySector, viewerFar); Park(t, EmptySector, spotS); }, Settle); // ghost at spotS
-        Check(Vision(sim, 0).Ghosts.ContainsKey(t.ShipId), "ghost exists before an unseen death (pre-condition)", "no ghost before unseen death");
+        Run(
+            sim,
+            () =>
+            {
+                Park(v, EmptySector, origin);
+                Park(t, EmptySector, spotS);
+            },
+            Settle
+        );
+        Run(
+            sim,
+            () =>
+            {
+                Park(v, EmptySector, viewerFar);
+                Park(t, EmptySector, spotS);
+            },
+            Settle
+        ); // ghost at spotS
+        Check(
+            Vision(sim, 0).Ghosts.ContainsKey(t.ShipId),
+            "ghost exists before an unseen death (pre-condition)",
+            "no ghost before unseen death"
+        );
         ulong deadId = t.ShipId;
         t.Health = -1f; // kill it while the viewer is far away (unseen death)
         Run(sim, () => Park(v, EmptySector, viewerFar), Settle);
-        Check(Vision(sim, 0).Ghosts.ContainsKey(deadId), "a ship destroyed while unseen keeps its (wrong-memory) ghost", "an unseen death cleared the ghost");
+        Check(
+            Vision(sim, 0).Ghosts.ContainsKey(deadId),
+            "a ship destroyed while unseen keeps its (wrong-memory) ghost",
+            "an unseen death cleared the ghost"
+        );
     }
 
     // witnessed death — a ship destroyed WHILE radar-visible leaves no ghost.
@@ -608,12 +1079,28 @@ Vec3 AtAngle(float dist, float angleDeg)
         var sim = BootSim(9009);
         var v = Join(sim, 1, 0, FlightModel.ClassFighter);
         var t = Join(sim, 2, 1, FlightModel.ClassFighter);
-        Run(sim, () => { Park(v, EmptySector, new Vec3(0, 0, 0)); Park(t, EmptySector, new Vec3(radarDist, 0, 0)); }, Settle);
-        Check(Vision(sim, 0).VisibleEnemyShips.Contains(t.ShipId), "target radar-visible before its death (pre-condition)", "target not radar-visible before death");
+        Run(
+            sim,
+            () =>
+            {
+                Park(v, EmptySector, new Vec3(0, 0, 0));
+                Park(t, EmptySector, new Vec3(radarDist, 0, 0));
+            },
+            Settle
+        );
+        Check(
+            Vision(sim, 0).VisibleEnemyShips.Contains(t.ShipId),
+            "target radar-visible before its death (pre-condition)",
+            "target not radar-visible before death"
+        );
         ulong deadId = t.ShipId;
         t.Health = -1f; // dies while still radar-visible
         Run(sim, () => Park(v, EmptySector, new Vec3(0, 0, 0)), Settle);
-        Check(!Vision(sim, 0).Ghosts.ContainsKey(deadId), "a witnessed death (radar-visible when it died) leaves NO ghost", "a witnessed death produced a ghost");
+        Check(
+            !Vision(sim, 0).Ghosts.ContainsKey(deadId),
+            "a witnessed death (radar-visible when it died) leaves NO ghost",
+            "a witnessed death produced a ghost"
+        );
     }
 }
 
@@ -623,41 +1110,99 @@ Vec3 AtAngle(float dist, float angleDeg)
 //     then firms into a live radar contact when it closes — no vanish-then-reappear gap.
 // ================================================================================================
 {
-    float sphere, sig, eyeMult;
+    float sphere,
+        sig,
+        eyeMult;
     {
         var probe = BootSim(96);
         sphere = Def(probe, FlightModel.ClassFighter).VisionSphereRadius;
         sig = EffSig(probe.Content, FlightModel.ClassFighter);
         eyeMult = probe.Content.World.FogEyeballMultiplier;
     }
-    float radarDist = sphere * sig * 0.5f;            // well inside the radar sphere
+    float radarDist = sphere * sig * 0.5f; // well inside the radar sphere
     float eyeDist = sphere * sig * (1f + eyeMult) * 0.5f; // mid eyeball band: > sphere, < sphere×eyeMult
     Vec3 origin = new Vec3(0, 0, 0);
-    Vec3 spotA = new Vec3(radarDist, 0, 0);  // first radar fix (also the ghost's frozen spot)
-    Vec3 spotB = new Vec3(eyeDist, 0, 0);    // later eyeball-only position, a DIFFERENT point than A
+    Vec3 spotA = new Vec3(radarDist, 0, 0); // first radar fix (also the ghost's frozen spot)
+    Vec3 spotB = new Vec3(eyeDist, 0, 0); // later eyeball-only position, a DIFFERENT point than A
     Vec3 viewerFar = new Vec3(60000f, 0, 0);
 
     var sim = BootSim(96);
     var v = Join(sim, 1, 0, FlightModel.ClassFighter);
     var t = Join(sim, 2, 1, FlightModel.ClassFighter);
-    Run(sim, () => { Park(v, EmptySector, origin); Park(t, EmptySector, spotA); }, Settle); // radar at A
-    Check(Vision(sim, 0).VisibleEnemyShips.Contains(t.ShipId), "target radar-detected at spot A (pre-condition)", "target not radar-detected at A");
-    Run(sim, () => { Park(v, EmptySector, viewerFar); Park(t, EmptySector, spotA); }, Settle); // flee → ghost at A
-    Check(Vision(sim, 0).Ghosts.ContainsKey(t.ShipId), "ghost created at A on contact loss (pre-condition)", "no ghost created at A");
+    Run(
+        sim,
+        () =>
+        {
+            Park(v, EmptySector, origin);
+            Park(t, EmptySector, spotA);
+        },
+        Settle
+    ); // radar at A
+    Check(
+        Vision(sim, 0).VisibleEnemyShips.Contains(t.ShipId),
+        "target radar-detected at spot A (pre-condition)",
+        "target not radar-detected at A"
+    );
+    Run(
+        sim,
+        () =>
+        {
+            Park(v, EmptySector, viewerFar);
+            Park(t, EmptySector, spotA);
+        },
+        Settle
+    ); // flee → ghost at A
+    Check(
+        Vision(sim, 0).Ghosts.ContainsKey(t.ShipId),
+        "ghost created at A on contact loss (pre-condition)",
+        "no ghost created at A"
+    );
 
     // Return the viewer while the target sits at B in the EYEBALL band (not radar). The old ghost spot
     // A is now inside the viewer's radar sphere — pre-fix that "empty re-scout" would delete the ghost.
-    Run(sim, () => { Park(v, EmptySector, origin); Park(t, EmptySector, spotB); }, Settle);
+    Run(
+        sim,
+        () =>
+        {
+            Park(v, EmptySector, origin);
+            Park(t, EmptySector, spotB);
+        },
+        Settle
+    );
     var tvE = Vision(sim, 0);
-    Check(tvE.EyeballShips.Contains(t.ShipId) && !tvE.VisibleEnemyShips.Contains(t.ShipId), "the target sits in the eyeball tier (streamed, not radar) at B", "target was not eyeball-only at B");
+    Check(
+        tvE.EyeballShips.Contains(t.ShipId) && !tvE.VisibleEnemyShips.Contains(t.ShipId),
+        "the target sits in the eyeball tier (streamed, not radar) at B",
+        "target was not eyeball-only at B"
+    );
     bool tracked = tvE.Ghosts.TryGetValue(t.ShipId, out var gE);
-    Check(tracked, "an eyeball glimpse KEEPS the ghost instead of scouting the stale spot empty", "the ghost was cleared while the ship was still visible (eyeball)");
-    Check(tracked && (gE.Pos - spotB).Length() < 60f, $"the ghost is soft-tracked to the ship's live eyeball pose (~{spotB.X:F0}), not left at A (~{spotA.X:F0})", "the eyeball-tracked ghost was not repositioned to the live pose");
+    Check(
+        tracked,
+        "an eyeball glimpse KEEPS the ghost instead of scouting the stale spot empty",
+        "the ghost was cleared while the ship was still visible (eyeball)"
+    );
+    Check(
+        tracked && (gE.Pos - spotB).Length() < 60f,
+        $"the ghost is soft-tracked to the ship's live eyeball pose (~{spotB.X:F0}), not left at A (~{spotA.X:F0})",
+        "the eyeball-tracked ghost was not repositioned to the live pose"
+    );
 
     // Closing to radar range firms the blip into a live contact (ghost gone, exactly one contact).
-    Run(sim, () => { Park(v, EmptySector, origin); Park(t, EmptySector, spotA); }, Settle);
+    Run(
+        sim,
+        () =>
+        {
+            Park(v, EmptySector, origin);
+            Park(t, EmptySector, spotA);
+        },
+        Settle
+    );
     var tvR = Vision(sim, 0);
-    Check(tvR.VisibleEnemyShips.Contains(t.ShipId) && !tvR.Ghosts.ContainsKey(t.ShipId), "the eyeball-tracked ghost firms into a live radar contact on close (no lingering ghost)", "closing to radar left both a ghost and a live contact");
+    Check(
+        tvR.VisibleEnemyShips.Contains(t.ShipId) && !tvR.Ghosts.ContainsKey(t.ShipId),
+        "the eyeball-tracked ghost firms into a live radar contact on close (no lingering ghost)",
+        "closing to radar left both a ghost and a live contact"
+    );
 }
 
 // ================================================================================================
@@ -665,7 +1210,8 @@ Vec3 AtAngle(float dist, float angleDeg)
 //     FogGhostTimeout, but persists up to that point.
 // ================================================================================================
 {
-    float sphere, sig;
+    float sphere,
+        sig;
     {
         var probe = BootSim(97);
         sphere = Def(probe, FlightModel.ClassFighter).VisionSphereRadius;
@@ -679,17 +1225,61 @@ Vec3 AtAngle(float dist, float angleDeg)
     var sim = BootSim(97);
     var v = Join(sim, 1, 0, FlightModel.ClassFighter);
     var t = Join(sim, 2, 1, FlightModel.ClassFighter);
-    Run(sim, () => { Park(v, EmptySector, origin); Park(t, EmptySector, spotS); }, Settle); // radar
-    Run(sim, () => { Park(v, EmptySector, viewerFar); Park(t, EmptySector, spotS); }, Settle); // flee → ghost
-    Check(Vision(sim, 0).Ghosts.ContainsKey(t.ShipId), "ghost created on contact loss (pre-condition for timeout)", "no ghost created before timeout test");
+    Run(
+        sim,
+        () =>
+        {
+            Park(v, EmptySector, origin);
+            Park(t, EmptySector, spotS);
+        },
+        Settle
+    ); // radar
+    Run(
+        sim,
+        () =>
+        {
+            Park(v, EmptySector, viewerFar);
+            Park(t, EmptySector, spotS);
+        },
+        Settle
+    ); // flee → ghost
+    Check(
+        Vision(sim, 0).Ghosts.ContainsKey(t.ShipId),
+        "ghost created on contact loss (pre-condition for timeout)",
+        "no ghost created before timeout test"
+    );
 
     int timeoutTicks = (int)MathF.Round(sim.Content.World.FogGhostTimeout * FlightModel.TickRate); // 120 s × 20 Hz = 2400
     // Hold the viewer away (no re-scout, no re-detect) well past ghost creation but before the timeout.
-    Run(sim, () => { Park(v, EmptySector, viewerFar); Park(t, EmptySector, spotS); }, timeoutTicks - 400);
-    Check(Vision(sim, 0).Ghosts.ContainsKey(t.ShipId), "a never-re-scouted ghost persists until FogGhostTimeout elapses", "a ghost expired before its timeout");
+    Run(
+        sim,
+        () =>
+        {
+            Park(v, EmptySector, viewerFar);
+            Park(t, EmptySector, spotS);
+        },
+        timeoutTicks - 400
+    );
+    Check(
+        Vision(sim, 0).Ghosts.ContainsKey(t.ShipId),
+        "a never-re-scouted ghost persists until FogGhostTimeout elapses",
+        "a ghost expired before its timeout"
+    );
     // Cross the timeout — the stale ghost self-expires even though the area was never re-scouted.
-    Run(sim, () => { Park(v, EmptySector, viewerFar); Park(t, EmptySector, spotS); }, 800);
-    Check(!Vision(sim, 0).Ghosts.ContainsKey(t.ShipId), "a lost-contact ghost self-expires after FogGhostTimeout", "a ghost outlived its FogGhostTimeout");
+    Run(
+        sim,
+        () =>
+        {
+            Park(v, EmptySector, viewerFar);
+            Park(t, EmptySector, spotS);
+        },
+        800
+    );
+    Check(
+        !Vision(sim, 0).Ghosts.ContainsKey(t.ShipId),
+        "a lost-contact ghost self-expires after FogGhostTimeout",
+        "a ghost outlived its FogGhostTimeout"
+    );
 }
 
 // ================================================================================================
@@ -763,10 +1353,18 @@ Vec3 AtAngle(float dist, float angleDeg)
 
     var a = Script(true);
     var b = Script(true);
-    Check(a.Count == b.Count && a.SequenceEqual(b), $"two sync sims produce bit-identical vision timelines ({a.Count} samples)", "sync vision timeline diverged between two runs");
+    Check(
+        a.Count == b.Count && a.SequenceEqual(b),
+        $"two sync sims produce bit-identical vision timelines ({a.Count} samples)",
+        "sync vision timeline diverged between two runs"
+    );
 
     var c = Script(false); // async worker thread
-    Check(a.Count == c.Count && a.SequenceEqual(c), $"the async (worker-thread) run reproduces the SAME timeline ({c.Count} samples)", "async vision timeline differed from sync (fixed-boundary apply not worker-speed independent)");
+    Check(
+        a.Count == c.Count && a.SequenceEqual(c),
+        $"the async (worker-thread) run reproduces the SAME timeline ({c.Count} samples)",
+        "async vision timeline differed from sync (fixed-boundary apply not worker-speed independent)"
+    );
 
     // The timeline must actually exercise radar + ghost states (guard against a vacuous all-empty pass).
     bool NonEmptyAfter(string s, string tag)
@@ -774,7 +1372,11 @@ Vec3 AtAngle(float dist, float angleDeg)
         int i = s.IndexOf(tag, StringComparison.Ordinal);
         return i >= 0 && char.IsDigit(s[i + tag.Length]);
     }
-    Check(a.Any(s => NonEmptyAfter(s, "|R:")) && a.Any(s => NonEmptyAfter(s, "|G:")), "the determinism script actually reached radar and ghost states", "the determinism script never populated radar/ghost state (vacuous)");
+    Check(
+        a.Any(s => NonEmptyAfter(s, "|R:")) && a.Any(s => NonEmptyAfter(s, "|G:")),
+        "the determinism script actually reached radar and ghost states",
+        "the determinism script never populated radar/ghost state (vacuous)"
+    );
 }
 
 // ================================================================================================
@@ -805,16 +1407,36 @@ Vec3 AtAngle(float dist, float angleDeg)
         sim.Step();
     }
     layer.HeldInput = new ShipInputState();
-    Check(sim.Probes.Count == probesBefore + 1, $"a held DropProbe deploys exactly one probe (cadence gate holds)", $"expected {probesBefore + 1} probe(s), found {sim.Probes.Count}");
-    Check(layer.ProbeAmmo == 0, "one deploy consumes exactly one probe-cargo unit", $"ProbeAmmo wrong ({layer.ProbeAmmo}, expected 0)");
+    Check(
+        sim.Probes.Count == probesBefore + 1,
+        $"a held DropProbe deploys exactly one probe (cadence gate holds)",
+        $"expected {probesBefore + 1} probe(s), found {sim.Probes.Count}"
+    );
+    Check(
+        layer.ProbeAmmo == 0,
+        "one deploy consumes exactly one probe-cargo unit",
+        $"ProbeAmmo wrong ({layer.ProbeAmmo}, expected 0)"
+    );
     var probe = sim.Probes[sim.Probes.Count - 1];
 
     // Fly the deploying ship far away — it is NOT itself a viewer of the enemy from here on, so any
     // detection can only come from the stationary probe. Put the enemy just inside the probe's
     // signature-scaled sight radius.
     Vec3 nearProbe = probe.Pos + new Vec3(probeW.ProbeSightRadius * sig * 0.5f, 0, 0);
-    var lost = Run(sim, () => { Park(layer, EmptySector, new Vec3(90000f, 0, 0)); Park(enemy, EmptySector, nearProbe); }, Settle);
-    Check(Vision(sim, 0).VisibleEnemyShips.Contains(enemy.ShipId), "a deployed probe detects an enemy in its sight radius with no ship viewer nearby", "probe failed to grant vision with the deploying ship far away");
+    var lost = Run(
+        sim,
+        () =>
+        {
+            Park(layer, EmptySector, new Vec3(90000f, 0, 0));
+            Park(enemy, EmptySector, nearProbe);
+        },
+        Settle
+    );
+    Check(
+        Vision(sim, 0).VisibleEnemyShips.Contains(enemy.ShipId),
+        "a deployed probe detects an enemy in its sight radius with no ship viewer nearby",
+        "probe failed to grant vision with the deploying ship far away"
+    );
 
     // Run to the probe's expiry with the enemy still parked in its (former) sight radius.
     uint expireAt = probe.ExpireAtTick;
@@ -824,9 +1446,25 @@ Vec3 AtAngle(float dist, float angleDeg)
         Park(enemy, EmptySector, nearProbe);
         sim.Step();
     }
-    Check(!sim.Probes.Any(p => p.ProbeId == probe.ProbeId), $"the probe despawns at/after its ExpireAtTick ({expireAt})", $"the probe did not expire by tick {sim.Tick} (expire {expireAt})");
-    Run(sim, () => { Park(layer, EmptySector, new Vec3(90000f, 0, 0)); Park(enemy, EmptySector, nearProbe); }, Settle);
-    Check(!Vision(sim, 0).VisibleEnemyShips.Contains(enemy.ShipId), "vision contribution stops once the granting probe expires", "the enemy stayed visible after the granting probe expired");
+    Check(
+        !sim.Probes.Any(p => p.ProbeId == probe.ProbeId),
+        $"the probe despawns at/after its ExpireAtTick ({expireAt})",
+        $"the probe did not expire by tick {sim.Tick} (expire {expireAt})"
+    );
+    Run(
+        sim,
+        () =>
+        {
+            Park(layer, EmptySector, new Vec3(90000f, 0, 0));
+            Park(enemy, EmptySector, nearProbe);
+        },
+        Settle
+    );
+    Check(
+        !Vision(sim, 0).VisibleEnemyShips.Contains(enemy.ShipId),
+        "vision contribution stops once the granting probe expires",
+        "the enemy stayed visible after the granting probe expired"
+    );
 }
 
 // ================================================================================================
@@ -845,13 +1483,19 @@ Vec3 AtAngle(float dist, float angleDeg)
     Check(sim.Probes.Count == 1, "a probe is live before the reseed (pre-condition)", "no probe deployed before the reseed");
 
     sim.ReturnToLobby();
-    Check(sim.Probes.Count == 0, "a match reseed (ReturnToLobby) clears every live probe", $"probes survived the reseed ({sim.Probes.Count} left)");
+    Check(
+        sim.Probes.Count == 0,
+        "a match reseed (ReturnToLobby) clears every live probe",
+        $"probes survived the reseed ({sim.Probes.Count} left)"
+    );
 
     // F7: a match clear emits a ProbeGone (reason 1 = silent cleanup) for every live probe, so the
     // client (which never drops probes on MsgProbes omission) doesn't keep phantom probes.
-    Check(sim.ProbeGoneThisStep.Any(g => g.reason == 1),
+    Check(
+        sim.ProbeGoneThisStep.Any(g => g.reason == 1),
         "ReturnToLobby emits a ProbeGone (reason 1) for the live probe so clients drop it (F7)",
-        "no ProbeGone was queued for the probe torn down at match clear");
+        "no ProbeGone was queued for the probe torn down at match clear"
+    );
 }
 
 // ================================================================================================
@@ -873,8 +1517,16 @@ Vec3 AtAngle(float dist, float angleDeg)
 
     Vec3 near = probe.Pos + new Vec3(probeW.ProbeSightRadius * 0.5f, 0, 0);
     Vec3 far = probe.Pos + new Vec3(probeW.ProbeSightRadius + 2000f, 0, 0);
-    Check(sim.IsPointVisibleToTeam(0, EmptySector, near), "IsPointVisibleToTeam sees a point under probe-only coverage (F6)", "a probe-covered point was reported not visible");
-    Check(!sim.IsPointVisibleToTeam(0, EmptySector, far), "a point beyond the probe sight radius is NOT visible", "a point outside the probe radius was reported visible");
+    Check(
+        sim.IsPointVisibleToTeam(0, EmptySector, near),
+        "IsPointVisibleToTeam sees a point under probe-only coverage (F6)",
+        "a probe-covered point was reported not visible"
+    );
+    Check(
+        !sim.IsPointVisibleToTeam(0, EmptySector, far),
+        "a point beyond the probe sight radius is NOT visible",
+        "a point outside the probe radius was reported visible"
+    );
 }
 
 // ================================================================================================
@@ -897,12 +1549,18 @@ Vec3 AtAngle(float dist, float angleDeg)
     var enemy = Join(sim, 2, 1, FlightModel.ClassFighter);
     float sphere = Def(sim, FlightModel.ClassFighter).VisionSphereRadius; // 450
     Run(sim, () => Park(enemy, EmptySector, probe.Pos + new Vec3(sphere * 0.5f, 0, 0)), Settle);
-    Check(sim.VisionFor(1)!.VisibleEnemyProbes.Contains(probe.ProbeId),
-        "an enemy within sensor range detects a deployed probe (it can see what it may shoot)", "an enemy in range did not see the probe");
+    Check(
+        sim.VisionFor(1)!.VisibleEnemyProbes.Contains(probe.ProbeId),
+        "an enemy within sensor range detects a deployed probe (it can see what it may shoot)",
+        "an enemy in range did not see the probe"
+    );
 
     Run(sim, () => Park(enemy, EmptySector, probe.Pos + new Vec3(90000f, 0, 0)), Settle);
-    Check(!sim.VisionFor(1)!.VisibleEnemyProbes.Contains(probe.ProbeId),
-        "the probe fogs out of an enemy's view once out of sensor range", "the probe stayed visible to a far enemy");
+    Check(
+        !sim.VisionFor(1)!.VisibleEnemyProbes.Contains(probe.ProbeId),
+        "the probe fogs out of an enemy's view once out of sensor range",
+        "the probe stayed visible to a far enemy"
+    );
 }
 
 // ================================================================================================
@@ -934,7 +1592,11 @@ Vec3 AtAngle(float dist, float angleDeg)
             gone = true;
     }
     Check(gone, "an enemy bolt destroys a deployed probe (gone reason 2)", "the enemy never destroyed the probe");
-    Check(!sim.Probes.Any(p => p.ProbeId == probe.ProbeId), "the destroyed probe is removed from the live set", "the probe survived in the live set after destruction");
+    Check(
+        !sim.Probes.Any(p => p.ProbeId == probe.ProbeId),
+        "the destroyed probe is removed from the live set",
+        "the probe survived in the live set after destruction"
+    );
 }
 
 // ================================================================================================
@@ -967,18 +1629,26 @@ Vec3 AtAngle(float dist, float angleDeg)
     if (preArm > 0)
     {
         Run(sim, () => Park(enemy, EmptySector, nearField), preArm);
-        Check(!Vision(sim, 1).VisibleEnemyMines.Contains(field.FieldId),
-            "a still-arming field is radar-silent (armed-only capture)", "the enemy radar-detected a field before it armed");
+        Check(
+            !Vision(sim, 1).VisibleEnemyMines.Contains(field.FieldId),
+            "a still-arming field is radar-silent (armed-only capture)",
+            "the enemy radar-detected a field before it armed"
+        );
     }
 
     Run(sim, () => Park(enemy, EmptySector, nearField), Settle);
-    Check(Vision(sim, 1).VisibleEnemyMines.Contains(field.FieldId),
+    Check(
+        Vision(sim, 1).VisibleEnemyMines.Contains(field.FieldId),
         $"an enemy within sphere×MineSignature ({sphere:F0}×{mineSig}) radar-detects an armed field without direct LOS gating",
-        "an enemy in sensor range did not detect the armed field");
+        "an enemy in sensor range did not detect the armed field"
+    );
 
     Run(sim, () => Park(enemy, EmptySector, field.Center + new Vec3(90000f, 0, 0)), Settle);
-    Check(!Vision(sim, 1).VisibleEnemyMines.Contains(field.FieldId),
-        "the field fogs back out of the enemy's radar once out of sensor range", "the field stayed visible to a far enemy");
+    Check(
+        !Vision(sim, 1).VisibleEnemyMines.Contains(field.FieldId),
+        "the field fogs back out of the enemy's radar once out of sensor range",
+        "the field stayed visible to a far enemy"
+    );
 
     // Rock occlusion: identical armed-and-in-range geometry, but a rock straddles the enemy→center
     // sightline — the field's radar return is shadowed (ClassifyTarget's shared occlusion scan).
@@ -996,8 +1666,11 @@ Vec3 AtAngle(float dist, float angleDeg)
     sim2.World.AddRockForTest(EmptySector, (field2.Center + near2) * 0.5f, 120f); // midpoint of the sightline
     var enemy2 = Join(sim2, 2, 1, FlightModel.ClassFighter);
     Run(sim2, () => Park(enemy2, EmptySector, near2), Settle);
-    Check(!Vision(sim2, 1).VisibleEnemyMines.Contains(field2.FieldId),
-        "a rock between the enemy and the armed field's center occludes its radar return", "the field was detected through a rock");
+    Check(
+        !Vision(sim2, 1).VisibleEnemyMines.Contains(field2.FieldId),
+        "a rock between the enemy and the armed field's center occludes its radar return",
+        "the field was detected through a rock"
+    );
 }
 
 // ================================================================================================
@@ -1011,26 +1684,47 @@ Vec3 AtAngle(float dist, float angleDeg)
     var exitRock = sim.World.AddRockForTest(g.DestSectorId, g.PartnerPos, 40f);
     var scout = Join(sim, 1, 0, FlightModel.ClassScout);
     var tv = Vision(sim, 0);
-    Check(!tv.RevealLogRocks.Contains(exitRock.Id) && !tv.DiscoveredRocks.Contains(exitRock.Id), "the exit-mouth rock is unknown before the warp (pre-condition)", "the exit rock was already known before warping");
+    Check(
+        !tv.RevealLogRocks.Contains(exitRock.Id) && !tv.DiscoveredRocks.Contains(exitRock.Id),
+        "the exit-mouth rock is unknown before the warp (pre-condition)",
+        "the exit rock was already known before warping"
+    );
 
     // Park the scout on the aleph so Pass A's TryWarp fires this step, then verify the arrival rock
     // was scouted synchronously (streamed via the reveal log the same tick).
     // A test-seam rock is unknown to RockOre, so RockClassOf defaults it to Carbonaceous — no seeded
     // rock in this unmapped world carries that class, making it a clean marker for the mask fold.
-    Check((sim.World.TeamStates[0].DiscoveredRockClasses & (1 << (byte)RockClass.Carbonaceous)) == 0,
-        "the marker rock class is undiscovered before the warp (pre-condition)", "carbonaceous bit already set before warping");
+    Check(
+        (sim.World.TeamStates[0].DiscoveredRockClasses & (1 << (byte)RockClass.Carbonaceous)) == 0,
+        "the marker rock class is undiscovered before the warp (pre-condition)",
+        "carbonaceous bit already set before warping"
+    );
     Park(scout, g.SectorId, g.Pos);
     sim.Step();
-    Check(scout.SectorId == g.DestSectorId, "the scout warped to the destination sector (pre-condition)", "the scout did not warp");
-    Check(Vision(sim, 0).RevealLogRocks.Contains(exitRock.Id), "warping scouts the arrival-point rocks the SAME tick (reveal log) (F8)", "the arrival rock was not revealed on warp");
-    Check((sim.World.TeamStates[0].DiscoveredRockClasses & (1 << (byte)RockClass.Carbonaceous)) != 0,
+    Check(
+        scout.SectorId == g.DestSectorId,
+        "the scout warped to the destination sector (pre-condition)",
+        "the scout did not warp"
+    );
+    Check(
+        Vision(sim, 0).RevealLogRocks.Contains(exitRock.Id),
+        "warping scouts the arrival-point rocks the SAME tick (reveal log) (F8)",
+        "the arrival rock was not revealed on warp"
+    );
+    Check(
+        (sim.World.TeamStates[0].DiscoveredRockClasses & (1 << (byte)RockClass.Carbonaceous)) != 0,
         "warp discovery folds the rock's class into TeamState.DiscoveredRockClasses the SAME tick (F8)",
-        $"warp did not set the class mask bit (mask {sim.World.TeamStates[0].DiscoveredRockClasses:x2})");
+        $"warp did not set the class mask bit (mask {sim.World.TeamStates[0].DiscoveredRockClasses:x2})"
+    );
 
     // Hold at the exit a couple of vision boundaries: the warp-staged rock is merged into the
     // persistent DiscoveredRocks (so a late joiner's Welcome and fog memory carry it).
     Run(sim, () => Park(scout, g.DestSectorId, g.PartnerPos), Settle);
-    Check(Vision(sim, 0).DiscoveredRocks.Contains(exitRock.Id), "the warp-revealed rock persists into DiscoveredRocks (F8)", "the warp-revealed rock was never persisted");
+    Check(
+        Vision(sim, 0).DiscoveredRocks.Contains(exitRock.Id),
+        "the warp-revealed rock persists into DiscoveredRocks (F8)",
+        "the warp-revealed rock was never persisted"
+    );
 }
 
 // ================================================================================================
@@ -1040,14 +1734,18 @@ Vec3 AtAngle(float dist, float angleDeg)
 {
     var sim = BootSim(88);
     Run(sim, () => { }, Settle);
-    Check(sim.World.TeamStates[0].DiscoveredRockClasses != 0,
+    Check(
+        sim.World.TeamStates[0].DiscoveredRockClasses != 0,
         "garrison vision seeds the discovered-rock-class mask within the first boundaries",
-        "class mask still 0 after settling — vision apply never folded a rock class");
+        "class mask still 0 after settling — vision apply never folded a rock class"
+    );
     sim.ReturnToLobby(); // match reset path — ResetVision clears fog memory including the class mask
-    sim.StartMatch();    // (StartMatch alone no-ops while Active; the lobby round-trip is the real cycle)
-    Check(sim.World.TeamStates[0].DiscoveredRockClasses == 0,
+    sim.StartMatch(); // (StartMatch alone no-ops while Active; the lobby round-trip is the real cycle)
+    Check(
+        sim.World.TeamStates[0].DiscoveredRockClasses == 0,
         "a match reset clears DiscoveredRockClasses under fog",
-        $"class mask survived the match reset ({sim.World.TeamStates[0].DiscoveredRockClasses:x2})");
+        $"class mask survived the match reset ({sim.World.TeamStates[0].DiscoveredRockClasses:x2})"
+    );
 }
 
 // ================================================================================================
@@ -1062,24 +1760,148 @@ Vec3 AtAngle(float dist, float angleDeg)
     Run(sim, () => Park(scout, EmptySector, new Vec3(0, 0, 0)), Settle);
     var tv0 = sim.VisionFor(0)!;
 
-    var full = WelcomeCounts(Protocol.BuildWelcome(1, 0, sim.World, sim.Tick, Array.Empty<byte>(), fog: false, vision: null));
-    Check(full.s == sim.World.Sectors.Count && full.b == sim.World.Bases.Count && full.r == sim.World.Asteroids.Count && full.a == sim.World.Alephs.Count,
-        "fog-off Welcome dumps the full world incl. all sectors (byte-compatible with pre-fog)", "fog-off Welcome did not carry the full world");
+    var full = WelcomeCounts(
+        Protocol.BuildWelcome(1, 0, sim.World, sim.Tick, Array.Empty<byte>(), fog: false, vision: null)
+    );
+    Check(
+        full.s == sim.World.Sectors.Count
+            && full.b == sim.World.Bases.Count
+            && full.r == sim.World.Asteroids.Count
+            && full.a == sim.World.Alephs.Count,
+        "fog-off Welcome dumps the full world incl. all sectors (byte-compatible with pre-fog)",
+        "fog-off Welcome did not carry the full world"
+    );
 
-    var noTeam = WelcomeCounts(Protocol.BuildWelcome(1, Protocol.NoTeam, sim.World, sim.Tick, Array.Empty<byte>(), fog: true, vision: null));
-    Check(noTeam.s == 0 && noTeam.b == 0 && noTeam.r == 0 && noTeam.a == 0,
+    var noTeam = WelcomeCounts(
+        Protocol.BuildWelcome(1, Protocol.NoTeam, sim.World, sim.Tick, Array.Empty<byte>(), fog: true, vision: null)
+    );
+    Check(
+        noTeam.s == 0 && noTeam.b == 0 && noTeam.r == 0 && noTeam.a == 0,
         "fog-on Welcome for a NoTeam join (null vision) contains ZERO statics AND zero sectors — the full-world leak is fixed (F1)",
-        $"a fog NoTeam Welcome leaked statics ({noTeam.s} sectors, {noTeam.b} bases, {noTeam.r} rocks, {noTeam.a} alephs)");
+        $"a fog NoTeam Welcome leaked statics ({noTeam.s} sectors, {noTeam.b} bases, {noTeam.r} rocks, {noTeam.a} alephs)"
+    );
 
-    var team = WelcomeCounts(Protocol.BuildWelcome(1, 0, sim.World, sim.Tick, Array.Empty<byte>(), fog: true, vision: tv0));
-    Check(team.b == tv0.DiscoveredBases.Count && team.r == tv0.DiscoveredRocks.Count && team.a == tv0.DiscoveredAlephs.Count,
+    var teamSectors = new List<uint>();
+    var team = WelcomeCounts(
+        Protocol.BuildWelcome(1, 0, sim.World, sim.Tick, Array.Empty<byte>(), fog: true, vision: tv0),
+        teamSectors
+    );
+    Check(
+        team.b == tv0.DiscoveredBases.Count && team.r == tv0.DiscoveredRocks.Count && team.a == tv0.DiscoveredAlephs.Count,
         $"fog-on team Welcome carries exactly the discovered set ({team.b}B/{team.r}R/{team.a}A)",
-        "fog-on team Welcome did not match the discovered set");
-    Check(tv0.DiscoveredRocks.Contains(rock.Id) && team.r >= 1, "the discovered set (and its Welcome) includes the scouted rock", "the scouted rock was missing from the team Welcome");
-    // Sector gating: without discovering the aleph to sector 1, team 0 knows only its home sector.
-    Check(team.s == tv0.DiscoveredSectors.Count && team.s >= 1 && team.s < sim.World.Sectors.Count,
-        $"fog-on team Welcome carries only discovered sectors ({team.s} of {sim.World.Sectors.Count}) — undiscovered sectors are hidden",
-        $"fog-on team Welcome leaked sectors ({team.s} sent, {tv0.DiscoveredSectors.Count} discovered, {sim.World.Sectors.Count} total)");
+        "fog-on team Welcome did not match the discovered set"
+    );
+    Check(
+        tv0.DiscoveredRocks.Contains(rock.Id) && team.r >= 1,
+        "the discovered set (and its Welcome) includes the scouted rock",
+        "the scouted rock was missing from the team Welcome"
+    );
+    // Sector gating, SET semantics: the Welcome carries the discovered sector IDS — no more, no fewer.
+    // (Count alone is not the test: on this default 2-sector arena the home garrison's own radar picks
+    // up the aleph standing in its sector within the first boundaries, and an aleph discovery reveals
+    // BOTH endpoints, so team 0 legitimately ends up knowing the whole map here. Section 15c is the
+    // hidden-sector proof, on a world big enough to have a sector that stays undiscovered.)
+    uint homeSector = sim.World.Bases.First(b => b.Team == 0).SectorId;
+    Check(
+        team.s == teamSectors.Count
+            && new HashSet<uint>(teamSectors).SetEquals(tv0.DiscoveredSectors)
+            && teamSectors.Contains(homeSector),
+        $"fog-on team Welcome carries exactly the discovered sector set ([{string.Join(",", teamSectors)}] of {sim.World.Sectors.Count}, home included)",
+        $"fog-on team Welcome sector set != discovered set (sent [{string.Join(",", teamSectors)}], discovered [{string.Join(",", tv0.DiscoveredSectors)}])"
+    );
+    Check(
+        teamSectors.All(id => sim.World.Sectors.Any(s => s.Id == id)) && !tv0.DiscoveredSectors.Contains(EmptySector),
+        "every sector the Welcome carries is a real world sector — parking in the sentinel test sector invents no discovery",
+        $"the Welcome/discovered set carried a non-world sector (sent [{string.Join(",", teamSectors)}])"
+    );
+}
+
+// ================================================================================================
+// 15c. Sector gating, hidden-sector proof: a 3-sector CHAIN (0 —aleph— 1 —aleph— 2) with team 0's
+//      garrison in sector 0 and team 1's in sector 2. Team 0 scouts its home aleph, so it knows
+//      {0,1} — sector 2 is two hops out, never discovered, and must NOT ride its Welcome.
+// ================================================================================================
+{
+    var content = ContentLoader.Load(stockPath, worldPath);
+    content.World.AsteroidDensity = 0f; // no rocks — nothing can occlude the scout→aleph sightline
+    content.World.Sectors = new List<WorldSectorConfig>
+    {
+        new()
+        {
+            Id = 0,
+            Garrison = new SectorGarrison { Team = 0 },
+        },
+        new() { Id = 1 }, // the middle sector: reachable from home, so it IS discovered with the aleph
+        new()
+        {
+            Id = 2,
+            Garrison = new SectorGarrison { Team = 1 },
+        }, // two hops out — must stay hidden
+    };
+    content.World.Links = new List<SectorLink> { new(0, 1), new(1, 2) }; // a CHAIN, not the default ring
+    var world = new World(153, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
+    var sim = new Simulation(world, content);
+    sim.PigsEnabled = false;
+    sim.MinersEnabled = false;
+    sim.AttributesEnabled = false;
+    sim.FogEnabled = true;
+    sim.VisionSynchronous = true;
+    sim.StartMatch();
+
+    var homeGate = sim.World.Alephs.First(g => g.SectorId == 0); // the sector-0 mouth of the 0↔1 link
+    var tv = Vision(sim, 0);
+    Check(
+        sim.World.Sectors.Count == 3 && !tv.DiscoveredSectors.Contains(2u),
+        "the 3-sector chain boots with sector 2 undiscovered (pre-condition)",
+        $"chain world wrong ({sim.World.Sectors.Count} sectors, discovered [{string.Join(",", tv.DiscoveredSectors)}])"
+    );
+
+    // Park the scout a few hundred units short of the mouth: inside its radar reach of the aleph,
+    // outside the warp trigger radius (18u) so it stays in sector 0 instead of falling through.
+    float mlen = homeGate.Pos.Length();
+    var spot = mlen > 1f ? homeGate.Pos * ((mlen - 300f) / mlen) : new Vec3(300f, 0f, 0f);
+    var scout = Join(sim, 1, 0, FlightModel.ClassScout);
+    Run(sim, () => Park(scout, 0u, spot), Settle);
+    var tv3 = Vision(sim, 0);
+    Check(
+        scout.SectorId == 0u && tv3.DiscoveredAlephs.Contains(homeGate.Id),
+        "the scout discovers the home aleph without warping (pre-condition)",
+        $"aleph discovery pre-condition failed (scout sector {scout.SectorId}, alephs [{string.Join(",", tv3.DiscoveredAlephs)}])"
+    );
+    Check(
+        tv3.DiscoveredSectors.SetEquals(new[] { 0u, 1u }),
+        "the aleph reveals home + its neighbour and NOTHING further along the chain",
+        $"discovered sectors wrong ([{string.Join(",", tv3.DiscoveredSectors)}], expected 0,1)"
+    );
+
+    var chainSectors = new List<uint>();
+    var chain = WelcomeCounts(
+        Protocol.BuildWelcome(1, 0, sim.World, sim.Tick, Array.Empty<byte>(), fog: true, vision: tv3),
+        chainSectors
+    );
+    Check(
+        chain.s == 2 && !chainSectors.Contains(2u) && new HashSet<uint>(chainSectors).SetEquals(tv3.DiscoveredSectors),
+        $"fog-on team Welcome hides the undiscovered sector (carries [{string.Join(",", chainSectors)}] of {sim.World.Sectors.Count})",
+        $"fog-on team Welcome leaked an undiscovered sector (sent [{string.Join(",", chainSectors)}], discovered [{string.Join(",", tv3.DiscoveredSectors)}])"
+    );
+    // The hidden sector's contents stay hidden with it: team 1's garrison lives in sector 2.
+    Check(
+        chain.b == tv3.DiscoveredBases.Count && !tv3.DiscoveredBases.Contains(sim.World.Bases.First(b => b.Team == 1).Id),
+        "the enemy garrison inside the hidden sector is absent from the Welcome too",
+        $"the hidden sector's base leaked ({chain.b} bases sent, {tv3.DiscoveredBases.Count} discovered)"
+    );
+
+    // Fog OFF over the SAME world still dumps every sector — the gating is fog-only (byte-compat guard).
+    var offSectors = new List<uint>();
+    var off = WelcomeCounts(
+        Protocol.BuildWelcome(1, 0, sim.World, sim.Tick, Array.Empty<byte>(), fog: false, vision: null),
+        offSectors
+    );
+    Check(
+        off.s == sim.World.Sectors.Count && offSectors.Contains(2u),
+        "fog-off over the same 3-sector world still carries every sector (fog-off path untouched)",
+        $"fog-off Welcome did not carry all sectors ([{string.Join(",", offSectors)}])"
+    );
 }
 
 // ================================================================================================
@@ -1090,30 +1912,41 @@ Vec3 AtAngle(float dist, float angleDeg)
     var sim = BootSim(1515);
     var g = sim.World.Alephs[0]; // aleph in team 0's home sector, leading to g.DestSectorId
     var tv = sim.VisionFor(0)!;
-    uint home = g.SectorId, dest = g.DestSectorId;
+    uint home = g.SectorId,
+        dest = g.DestSectorId;
 
-    Check(tv.DiscoveredSectors.Contains(home) && !tv.DiscoveredSectors.Contains(dest),
+    Check(
+        tv.DiscoveredSectors.Contains(home) && !tv.DiscoveredSectors.Contains(dest),
         "before scouting the aleph, the team knows its home sector but NOT the destination",
-        $"initial discovered sectors wrong (home={tv.DiscoveredSectors.Contains(home)}, dest={tv.DiscoveredSectors.Contains(dest)})");
+        $"initial discovered sectors wrong (home={tv.DiscoveredSectors.Contains(home)}, dest={tv.DiscoveredSectors.Contains(dest)})"
+    );
 
     // Park a scout on top of the aleph so it discovers it; hold a couple of vision boundaries so the
     // discovery applies (aleph → both endpoint sectors), then verify the destination is now known.
     var scout = Join(sim, 1, 0, FlightModel.ClassScout);
     Run(sim, () => Park(scout, home, g.Pos), Settle);
     var tv2 = sim.VisionFor(0)!;
-    Check(tv2.DiscoveredAlephs.Contains(g.Id), "the scout discovers the aleph (pre-condition)", "the aleph was not discovered");
-    Check(tv2.DiscoveredSectors.Contains(dest) && tv2.RevealLogSectors.Contains(dest),
+    Check(
+        tv2.DiscoveredAlephs.Contains(g.Id),
+        "the scout discovers the aleph (pre-condition)",
+        "the aleph was not discovered"
+    );
+    Check(
+        tv2.DiscoveredSectors.Contains(dest) && tv2.RevealLogSectors.Contains(dest),
         "discovering the aleph reveals the destination sector AND logs it for streaming",
-        "the destination sector was not revealed/logged after aleph discovery");
+        "the destination sector was not revealed/logged after aleph discovery"
+    );
 
     // A reveal slice from a fresh (zero) sector cursor must carry the destination sector record.
     var rockIndex = new Dictionary<ulong, int>();
-    for (int i = 0; i < sim.World.Asteroids.Count; i++) rockIndex[sim.World.Asteroids[i].Id] = i;
-    var rf = Protocol.BuildRevealSlice(sim.World, tv2, rockIndex, 0, 0, 0, 0,
-        out _, out _, out _, out int nextSector);
-    Check(rf is not null && nextSector == tv2.RevealLogSectors.Count && nextSector >= 1,
+    for (int i = 0; i < sim.World.Asteroids.Count; i++)
+        rockIndex[sim.World.Asteroids[i].Id] = i;
+    var rf = Protocol.BuildRevealSlice(sim.World, tv2, rockIndex, 0, 0, 0, 0, out _, out _, out _, out int nextSector);
+    Check(
+        rf is not null && nextSector == tv2.RevealLogSectors.Count && nextSector >= 1,
         "BuildRevealSlice emits the newly-revealed sector(s) and advances the sector cursor to the log end",
-        "the reveal slice did not carry the revealed sector / advance the cursor");
+        "the reveal slice did not carry the revealed sector / advance the cursor"
+    );
 }
 
 // ================================================================================================
@@ -1125,7 +1958,11 @@ Vec3 AtAngle(float dist, float angleDeg)
     var sim = BootSim(1516);
     float boost = sim.Content.World.FireSignatureBoost; // 2.5 stock
     float window = sim.Content.World.FireSignatureWindow; // 4.0 s stock
-    Check(boost > 1f && window > 0f, "fire-signature boost/window are authored positive (pre-condition)", "fire-signature knobs did not load positive");
+    Check(
+        boost > 1f && window > 0f,
+        "fire-signature boost/window are authored positive (pre-condition)",
+        "fire-signature knobs did not load positive"
+    );
 
     var viewer = Join(sim, 1, 0, FlightModel.ClassFighter);
     var target = Join(sim, 2, 1, FlightModel.ClassFighter);
@@ -1137,20 +1974,54 @@ Vec3 AtAngle(float dist, float angleDeg)
     float dist = sphere * (eyeMult + boost) / 2f;
     Vec3 behind = new Vec3(0, 0, -dist);
 
-    Run(sim, () => { Park(viewer, EmptySector, new Vec3(0, 0, 0)); Park(target, EmptySector, behind); }, Settle);
-    Check(!Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId),
-        "a ship beyond the resting detection range is NOT a contact at rest", "the resting ship was detected without firing");
+    Run(
+        sim,
+        () =>
+        {
+            Park(viewer, EmptySector, new Vec3(0, 0, 0));
+            Park(target, EmptySector, behind);
+        },
+        Settle
+    );
+    Check(
+        !Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId),
+        "a ship beyond the resting detection range is NOT a contact at rest",
+        "the resting ship was detected without firing"
+    );
 
     // Keep the target "just fired" every tick so the boost stays maxed while the 2 Hz apply catches up.
-    Run(sim, () => { Park(viewer, EmptySector, new Vec3(0, 0, 0)); Park(target, EmptySector, behind); target.LastFireTick = sim.Tick + 1; }, Settle);
-    Check(Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId),
-        "firing multiplies the ship's radar signature — it becomes a contact while shooting", "a firing ship at boosted range was not detected");
+    Run(
+        sim,
+        () =>
+        {
+            Park(viewer, EmptySector, new Vec3(0, 0, 0));
+            Park(target, EmptySector, behind);
+            target.LastFireTick = sim.Tick + 1;
+        },
+        Settle
+    );
+    Check(
+        Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId),
+        "firing multiplies the ship's radar signature — it becomes a contact while shooting",
+        "a firing ship at boosted range was not detected"
+    );
 
     // Stop firing and hold longer than the boost window: the signature decays and the contact fades.
     int decayTicks = (int)(window * FlightModel.TickRate) + Settle + 10;
-    Run(sim, () => { Park(viewer, EmptySector, new Vec3(0, 0, 0)); Park(target, EmptySector, behind); }, decayTicks);
-    Check(!Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId),
-        "after the fire-signature window elapses, the boosted contact fades back out", "the fire-boost contact never decayed");
+    Run(
+        sim,
+        () =>
+        {
+            Park(viewer, EmptySector, new Vec3(0, 0, 0));
+            Park(target, EmptySector, behind);
+        },
+        decayTicks
+    );
+    Check(
+        !Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId),
+        "after the fire-signature window elapses, the boosted contact fades back out",
+        "the fire-boost contact never decayed"
+    );
 }
 
 // ================================================================================================
@@ -1174,24 +2045,65 @@ Vec3 AtAngle(float dist, float angleDeg)
         using var ms = new MemoryStream(frame);
         using var br = new BinaryReader(ms);
         br.ReadByte(); // MsgReveal
-        int nb = br.ReadByte(); br.ReadBytes(nb * 34); // base-static record: +1 byte baseTypeId (v37)
-        int nr = br.ReadUInt16(); br.ReadBytes(nr * 51); // RockStatic v32: 41 + mining block (class + currentRadius + orePct + oreCapacity)
-        int na = br.ReadByte(); br.ReadBytes(na * 28);
-        int ns = br.ReadByte(); br.ReadBytes(ns * 8); // sector slice: u32 id + f32 radius
-        if (ms.Position != frame.Length) throw new Exception("Reveal count != body");
+        int nb = br.ReadByte();
+        br.ReadBytes(nb * 34); // base-static record: +1 byte baseTypeId (v37)
+        int nr = br.ReadUInt16();
+        br.ReadBytes(nr * 51); // RockStatic v32: 41 + mining block (class + currentRadius + orePct + oreCapacity)
+        int na = br.ReadByte();
+        br.ReadBytes(na * 28);
+        int ns = br.ReadByte();
+        br.ReadBytes(ns * 8); // sector slice: u32 id + f32 radius
+        if (ms.Position != frame.Length)
+            throw new Exception("Reveal count != body");
         return (nb, nr, na, ns);
     }
 
-    var f1 = Protocol.BuildRevealSlice(world, tv, rockIndex, 0, 0, 0, 0, out int nb1, out int nr1, out int na1, out int nsx1);
+    var f1 = Protocol.BuildRevealSlice(
+        world,
+        tv,
+        rockIndex,
+        0,
+        0,
+        0,
+        0,
+        out int nb1,
+        out int nr1,
+        out int na1,
+        out int nsx1
+    );
     var c1 = RevealCounts(f1!);
-    Check(c1.r == Protocol.RevealMaxRocks && nr1 == Protocol.RevealMaxRocks, $"the first reveal slice is capped at {Protocol.RevealMaxRocks} rocks (count == body)", "the first reveal slice was not capped / count != body");
+    Check(
+        c1.r == Protocol.RevealMaxRocks && nr1 == Protocol.RevealMaxRocks,
+        $"the first reveal slice is capped at {Protocol.RevealMaxRocks} rocks (count == body)",
+        "the first reveal slice was not capped / count != body"
+    );
 
-    var f2 = Protocol.BuildRevealSlice(world, tv, rockIndex, nb1, nr1, na1, nsx1, out int nb2, out int nr2, out int na2, out int nsx2);
+    var f2 = Protocol.BuildRevealSlice(
+        world,
+        tv,
+        rockIndex,
+        nb1,
+        nr1,
+        na1,
+        nsx1,
+        out int nb2,
+        out int nr2,
+        out int na2,
+        out int nsx2
+    );
     var c2 = RevealCounts(f2!);
-    Check(c2.r == total - Protocol.RevealMaxRocks && nr2 == total, $"the remainder ({total - Protocol.RevealMaxRocks}) streams in the next slice (cursor advances)", "the reveal remainder did not stream correctly");
+    Check(
+        c2.r == total - Protocol.RevealMaxRocks && nr2 == total,
+        $"the remainder ({total - Protocol.RevealMaxRocks}) streams in the next slice (cursor advances)",
+        "the reveal remainder did not stream correctly"
+    );
 
     var f3 = Protocol.BuildRevealSlice(world, tv, rockIndex, nb2, nr2, na2, nsx2, out _, out _, out _, out _);
-    Check(f3 is null, "once the cursor reaches the log end, BuildRevealSlice returns null (caught up)", "BuildRevealSlice kept emitting frames past the log end");
+    Check(
+        f3 is null,
+        "once the cursor reaches the log end, BuildRevealSlice returns null (caught up)",
+        "BuildRevealSlice kept emitting frames past the log end"
+    );
 }
 
 // ================================================================================================
@@ -1223,11 +2135,17 @@ Vec3 AtAngle(float dist, float angleDeg)
     }
     var sync1 = Script(true);
     var async1 = Script(false);
-    Check(sync1.Count == async1.Count && sync1.SequenceEqual(async1),
+    Check(
+        sync1.Count == async1.Count && sync1.SequenceEqual(async1),
         "captured base health makes the remembered-health timeline worker-speed independent across a mid-interval damage (F5)",
-        "sync and async remembered-health timelines diverged (a live World.BaseHealth read raced the mutation)");
+        "sync and async remembered-health timelines diverged (a live World.BaseHealth read raced the mutation)"
+    );
     var recorded = sync1.Where(h => h > 0f).ToList(); // early samples are -1 until the base is discovered
-    Check(recorded.Count >= 2 && recorded.Last() < recorded.First(), "the F5 script actually damaged an in-vision base (non-vacuous)", "the F5 base-damage script never recorded a falling remembered health");
+    Check(
+        recorded.Count >= 2 && recorded.Last() < recorded.First(),
+        "the F5 script actually damaged an in-vision base (non-vacuous)",
+        "the F5 base-damage script never recorded a falling remembered health"
+    );
 }
 
 // ================================================================================================
@@ -1238,9 +2156,14 @@ Vec3 AtAngle(float dist, float angleDeg)
 // ================================================================================================
 {
     var sim = BootSim(18);
-    var hub = new ClientHub(sim, new SimServer.Backend.OpenAuthenticator(),
-        new SimServer.Backend.InMemoryPlayerDirectory(), new SimServer.Backend.ReadyUpMatchmaker(false),
-        "Test Arena", System.Array.Empty<SimServer.Content.MapCatalogEntry>());
+    var hub = new ClientHub(
+        sim,
+        new SimServer.Backend.OpenAuthenticator(),
+        new SimServer.Backend.InMemoryPlayerDirectory(),
+        new SimServer.Backend.ReadyUpMatchmaker(false),
+        "Test Arena",
+        System.Array.Empty<SimServer.Content.MapCatalogEntry>()
+    );
 
     var ft = new FakeHubTransport();
     var cts = new CancellationTokenSource();
@@ -1267,20 +2190,30 @@ Vec3 AtAngle(float dist, float angleDeg)
     }
 
     var w1 = WaitWelcome(0);
-    Check(w1 is not null && WelcomeCounts(w1).b == 0 && WelcomeCounts(w1).r == 0 && WelcomeCounts(w1).a == 0,
+    Check(
+        w1 is not null && WelcomeCounts(w1).b == 0 && WelcomeCounts(w1).r == 0 && WelcomeCounts(w1).a == 0,
         "a fog-on NoTeam join receives a ZERO-static Welcome through the real ClientHub (no world leak) (F1)",
-        "the NoTeam join's Welcome leaked statics (or never arrived)");
+        "the NoTeam join's Welcome leaked statics (or never arrived)"
+    );
 
     // Pick team 0 → the hub re-Welcomes with team 0's discovered world (its garrison base(s)).
     ft.Feed(new byte[] { Protocol.MsgSetTeam, 0 });
     var w2 = WaitWelcome(1);
     var tv0 = sim.VisionFor(0)!;
-    Check(w2 is not null && WelcomeCounts(w2).b == tv0.DiscoveredBases.Count && WelcomeCounts(w2).b > 0,
+    Check(
+        w2 is not null && WelcomeCounts(w2).b == tv0.DiscoveredBases.Count && WelcomeCounts(w2).b > 0,
         "picking a team re-Welcomes the client with that team's discovered world (NoTeam -> team-pick flow) (F1)",
-        "the team-pick did not re-send a Welcome carrying the team's discovered bases");
+        "the team-pick did not re-send a Welcome carrying the team's discovered bases"
+    );
 
     cts.Cancel();
-    try { conn.Wait(2000); } catch { /* teardown */ }
+    try
+    {
+        conn.Wait(2000);
+    }
+    catch
+    { /* teardown */
+    }
 }
 
 // ================================================================================================
@@ -1293,10 +2226,21 @@ Vec3 AtAngle(float dist, float angleDeg)
 {
     var content = ContentLoader.Load(stockPath, worldPath);
     var world = new World(19, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
-    var sim = new Simulation(world, content) { PigsEnabled = false, MinersEnabled = false, FogEnabled = true, VisionSynchronous = false };
-    var hub = new ClientHub(sim, new SimServer.Backend.OpenAuthenticator(),
-        new SimServer.Backend.InMemoryPlayerDirectory(), new SimServer.Backend.ReadyUpMatchmaker(true),
-        "Test Arena", System.Array.Empty<SimServer.Content.MapCatalogEntry>());
+    var sim = new Simulation(world, content)
+    {
+        PigsEnabled = false,
+        MinersEnabled = false,
+        FogEnabled = true,
+        VisionSynchronous = false,
+    };
+    var hub = new ClientHub(
+        sim,
+        new SimServer.Backend.OpenAuthenticator(),
+        new SimServer.Backend.InMemoryPlayerDirectory(),
+        new SimServer.Backend.ReadyUpMatchmaker(true),
+        "Test Arena",
+        System.Array.Empty<SimServer.Content.MapCatalogEntry>()
+    );
     sim.ShouldStartMatch = hub.ShouldStartMatch;
     sim.OnReturnToLobby = hub.OnReturnToLobby;
 
@@ -1318,25 +2262,54 @@ Vec3 AtAngle(float dist, float angleDeg)
     {
         for (int i = 0; i < n && crash is null; i++)
         {
-            try { sim.Step(); hub.AfterStep(); }
-            catch (Exception e) { crash = e; }
+            try
+            {
+                sim.Step();
+                hub.AfterStep();
+            }
+            catch (Exception e)
+            {
+                crash = e;
+            }
             Thread.Sleep(2);
         }
     }
     Pump(20); // matchmaker auto-starts the match while in lobby
-    Check(crash is null && sim.IsActive, "the hub-driven match auto-starts fog-on without exceptions", $"the match did not start cleanly ({crash?.GetType().Name}: {crash?.Message})");
+    Check(
+        crash is null && sim.IsActive,
+        "the hub-driven match auto-starts fog-on without exceptions",
+        $"the match did not start cleanly ({crash?.GetType().Name}: {crash?.Message})"
+    );
 
     ft.Feed(new byte[] { Protocol.MsgSpawn, FlightModel.ClassScout, 0, 0, 0, 0, 0, 0, 0, 0 }); // v36: [4][cls][u64 launchBaseId=0]
     Thread.Sleep(50);
     Pump(300); // fly the async vision worker across ~30 boundaries with a live ship
 
-    Check(crash is null, "300 ticks of the real hub + async vision worker run fog-on with NO exception (autofly substitute)", $"an exception was thrown during the fog-on integration run: {crash}");
-    Check(ft.Sent.Any(f => f.Length > 0 && f[0] == Protocol.MsgYouAre), "the client received its spawned ship (MsgYouAre)", "the client never received a YouAre for its spawn");
-    Check(ft.Sent.Any(f => f.Length > 0 && f[0] == Protocol.MsgSnapshot), "the client received streaming snapshots under fog", "no snapshots reached the fog-on client");
+    Check(
+        crash is null,
+        "300 ticks of the real hub + async vision worker run fog-on with NO exception (autofly substitute)",
+        $"an exception was thrown during the fog-on integration run: {crash}"
+    );
+    Check(
+        ft.Sent.Any(f => f.Length > 0 && f[0] == Protocol.MsgYouAre),
+        "the client received its spawned ship (MsgYouAre)",
+        "the client never received a YouAre for its spawn"
+    );
+    Check(
+        ft.Sent.Any(f => f.Length > 0 && f[0] == Protocol.MsgSnapshot),
+        "the client received streaming snapshots under fog",
+        "no snapshots reached the fog-on client"
+    );
 
     cts.Cancel();
     sim.StopVision();
-    try { conn.Wait(2000); } catch { /* teardown */ }
+    try
+    {
+        conn.Wait(2000);
+    }
+    catch
+    { /* teardown */
+    }
 }
 
 // ================================================================================================
@@ -1368,13 +2341,25 @@ Vec3 AtAngle(float dist, float angleDeg)
     // Self-deploy must clear the deploying ship: let physics run (no Park) — no shove, no damage.
     float shipHp0 = layer.Health;
     Vec3 shipPos0 = layer.State.Pos;
-    for (int i = 0; i < 3; i++) sim.Step();
-    Check(layer.Health >= shipHp0 - 0.001f, "deploying a probe does not damage the deploying ship", $"ship lost {shipHp0 - layer.Health} HP on self-deploy");
-    Check((layer.State.Pos - shipPos0).Length() < 1f, "deploying a probe does not shove the deploying ship", $"ship moved {(layer.State.Pos - shipPos0).Length():0.0}u on self-deploy");
+    for (int i = 0; i < 3; i++)
+        sim.Step();
+    Check(
+        layer.Health >= shipHp0 - 0.001f,
+        "deploying a probe does not damage the deploying ship",
+        $"ship lost {shipHp0 - layer.Health} HP on self-deploy"
+    );
+    Check(
+        (layer.State.Pos - shipPos0).Length() < 1f,
+        "deploying a probe does not shove the deploying ship",
+        $"ship moved {(layer.State.Pos - shipPos0).Length():0.0}u on self-deploy"
+    );
 
     // Ram the probe head-on (+X side, moving −X) until the low-HP probe dies. Each contact must push
     // the ship out to the probe surface (no penetration) and dent both ship and probe.
-    bool noPenetration = false, shipHurt = false, probeHurt = false, destroyed = false;
+    bool noPenetration = false,
+        shipHurt = false,
+        probeHurt = false,
+        destroyed = false;
     for (int attempt = 0; attempt < 20 && !destroyed; attempt++)
     {
         layer.SectorId = probe.SectorId;
@@ -1384,20 +2369,35 @@ Vec3 AtAngle(float dist, float angleDeg)
         float probeBefore = probe.Health;
         sim.Step();
 
-        if ((layer.State.Pos - probe.Pos).Length() >= minD - 0.5f) noPenetration = true;
-        if (layer.Health < shipBefore - 0.001f) shipHurt = true;
+        if ((layer.State.Pos - probe.Pos).Length() >= minD - 0.5f)
+            noPenetration = true;
+        if (layer.Health < shipBefore - 0.001f)
+            shipHurt = true;
         bool alive = sim.Probes.Any(p => p.ProbeId == probe.ProbeId);
-        if (probe.Health < probeBefore - 0.001f) probeHurt = true;
+        if (probe.Health < probeBefore - 0.001f)
+            probeHurt = true;
         if (!alive)
         {
             destroyed = sim.ProbeGoneThisStep.Any(g => g.id == probe.ProbeId && g.reason == 2);
             break;
         }
     }
-    Check(noPenetration, "a rammed ship is pushed out to the probe surface (solid — no penetration)", "the ship penetrated the probe without a bounce");
-    Check(shipHurt, "ramming a probe damages the ship (collision damage, like a base)", "the ramming ship took no collision damage");
+    Check(
+        noPenetration,
+        "a rammed ship is pushed out to the probe surface (solid — no penetration)",
+        "the ship penetrated the probe without a bounce"
+    );
+    Check(
+        shipHurt,
+        "ramming a probe damages the ship (collision damage, like a base)",
+        "the ramming ship took no collision damage"
+    );
     Check(probeHurt, "ramming a probe damages the probe", "the rammed probe took no damage from the ram");
-    Check(destroyed, "enough ramming destroys the low-HP probe (gone reason 2, no base-damage system)", "the probe never died from ramming");
+    Check(
+        destroyed,
+        "enough ramming destroys the low-HP probe (gone reason 2, no base-damage system)",
+        "the probe never died from ramming"
+    );
 }
 
 // ---- Per-sector environment: map parse, dust-cloud seeding determinism, dust radar attenuation ----
@@ -1498,10 +2498,7 @@ Vec3 AtAngle(float dist, float angleDeg)
                 new()
                 {
                     Id = 0,
-                    Env = new SectorEnvironment
-                    {
-                        Dust = new SectorDust { Amount = 0.6f },
-                    },
+                    Env = new SectorEnvironment { Dust = new SectorDust { Amount = 0.6f } },
                 },
                 new() { Id = 1 },
             },
@@ -1520,7 +2517,11 @@ Vec3 AtAngle(float dist, float angleDeg)
                 && p.First.Pos.Z == p.Second.Pos.Z
                 && p.First.Radius == p.Second.Radius
             );
-    Check(cloudsMatch, "dust clouds are deterministic for a fixed world seed", "dust clouds differed across two same-seed Worlds");
+    Check(
+        cloudsMatch,
+        "dust clouds are deterministic for a fixed world seed",
+        "dust clouds differed across two same-seed Worlds"
+    );
 
     var noDust = new World(
         12345,
@@ -1528,7 +2529,11 @@ Vec3 AtAngle(float dist, float angleDeg)
         {
             SectorScale = 1f,
             AsteroidDensity = 1f,
-            Sectors = new List<WorldSectorConfig> { new() { Id = 0 }, new() { Id = 1 } },
+            Sectors = new List<WorldSectorConfig>
+            {
+                new() { Id = 0 },
+                new() { Id = 1 },
+            },
         },
         mh,
         content.Start,
@@ -1544,8 +2549,16 @@ Vec3 AtAngle(float dist, float angleDeg)
                 && p.First.Pos.Z == p.Second.Pos.Z
                 && p.First.Radius == p.Second.Radius
             );
-    Check(rocksUnchanged, "authoring dust leaves the asteroid field byte-identical (separate RNG stream)", "dust seeding perturbed the asteroid field");
-    Check(noDust.DustClouds.Count == 0, "a world with no dust config seeds zero dust clouds", "a no-dust world produced dust clouds");
+    Check(
+        rocksUnchanged,
+        "authoring dust leaves the asteroid field byte-identical (separate RNG stream)",
+        "dust seeding perturbed the asteroid field"
+    );
+    Check(
+        noDust.DustClouds.Count == 0,
+        "a world with no dust config seeds zero dust clouds",
+        "a no-dust world produced dust clouds"
+    );
 }
 
 // (seed) The whole static layout is seed-driven. Two Worlds built with the SAME seed are byte-identical
@@ -1565,12 +2578,12 @@ Vec3 AtAngle(float dist, float angleDeg)
         a.Bases.Count == b.Bases.Count
         && a.Asteroids.Count == b.Asteroids.Count
         && a.Alephs.Count == b.Alephs.Count
-        && a.Bases.Zip(b.Bases).All(p =>
-            p.First.Pos.X == p.Second.Pos.X && p.First.Pos.Y == p.Second.Pos.Y && p.First.Pos.Z == p.Second.Pos.Z)
-        && a.Asteroids.Zip(b.Asteroids).All(p =>
-            p.First.Pos.X == p.Second.Pos.X && p.First.Pos.Y == p.Second.Pos.Y && p.First.Pos.Z == p.Second.Pos.Z)
-        && a.Alephs.Zip(b.Alephs).All(p =>
-            p.First.Pos.X == p.Second.Pos.X && p.First.Pos.Y == p.Second.Pos.Y && p.First.Pos.Z == p.Second.Pos.Z);
+        && a.Bases.Zip(b.Bases)
+            .All(p => p.First.Pos.X == p.Second.Pos.X && p.First.Pos.Y == p.Second.Pos.Y && p.First.Pos.Z == p.Second.Pos.Z)
+        && a.Asteroids.Zip(b.Asteroids)
+            .All(p => p.First.Pos.X == p.Second.Pos.X && p.First.Pos.Y == p.Second.Pos.Y && p.First.Pos.Z == p.Second.Pos.Z)
+        && a.Alephs.Zip(b.Alephs)
+            .All(p => p.First.Pos.X == p.Second.Pos.X && p.First.Pos.Y == p.Second.Pos.Y && p.First.Pos.Z == p.Second.Pos.Z);
 
     var same1 = Build(777);
     var same2 = Build(777);
@@ -1615,9 +2628,13 @@ Vec3 AtAngle(float dist, float angleDeg)
             new()
             {
                 Id = 0,
-                Env = amount > 0f
-                    ? new SectorEnvironment { Dust = new SectorDust { Amount = amount, Opacity = opacity } }
-                    : null,
+                Env =
+                    amount > 0f
+                        ? new SectorEnvironment
+                        {
+                            Dust = new SectorDust { Amount = amount, Opacity = opacity },
+                        }
+                        : null,
             },
             new() { Id = 1 },
         };
@@ -1652,11 +2669,23 @@ Vec3 AtAngle(float dist, float angleDeg)
         return Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId);
     }
 
-    Check(RadarSeesAcrossDust(0f), "clear air: the enemy at 0.6× sphere range is on radar", "baseline radar detection failed (env-3 geometry is off)");
-    Check(!RadarSeesAcrossDust(0.9f), "thick dust on the sightline drops the enemy off radar (range attenuated)", "dust did NOT attenuate radar — the enemy was still detected through the cloud");
+    Check(
+        RadarSeesAcrossDust(0f),
+        "clear air: the enemy at 0.6× sphere range is on radar",
+        "baseline radar detection failed (env-3 geometry is off)"
+    );
+    Check(
+        !RadarSeesAcrossDust(0.9f),
+        "thick dust on the sightline drops the enemy off radar (range attenuated)",
+        "dust did NOT attenuate radar — the enemy was still detected through the cloud"
+    );
     // Opacity decouples radar impact from the VISUAL amount: the SAME thick dust with opacity 0 leaves
     // radar untouched (floor forced back to 1), so the enemy stays detected through the visually-dense cloud.
-    Check(RadarSeesAcrossDust(0.9f, 0f), "thick dust with opacity 0 does NOT attenuate radar (radar impact decoupled from visual amount)", "opacity 0 still cut radar range — the opacity knob is not scaling the vision floor");
+    Check(
+        RadarSeesAcrossDust(0.9f, 0f),
+        "thick dust with opacity 0 does NOT attenuate radar (radar impact decoupled from visual amount)",
+        "opacity 0 still cut radar range — the opacity knob is not scaling the vision floor"
+    );
 }
 
 // (env-4) A Welcome built from a world with a FULL environment (sun + nebula + dust clouds) round-trips
@@ -1675,8 +2704,20 @@ Vec3 AtAngle(float dist, float angleDeg)
                 Id = 0,
                 Env = new SectorEnvironment
                 {
-                    Sun = new SectorSun { Azimuth = 30f, Elevation = 15f, Color = new Vec3(1f, 0.8f, 0.6f), Energy = 1.3f, GodRays = 0.5f },
-                    Nebula = new SectorNebula { ColorA = new Vec3(0.4f, 0.2f, 0.6f), Intensity = 0.09f, Seed = 42u },
+                    Sun = new SectorSun
+                    {
+                        Azimuth = 30f,
+                        Elevation = 15f,
+                        Color = new Vec3(1f, 0.8f, 0.6f),
+                        Energy = 1.3f,
+                        GodRays = 0.5f,
+                    },
+                    Nebula = new SectorNebula
+                    {
+                        ColorA = new Vec3(0.4f, 0.2f, 0.6f),
+                        Intensity = 0.09f,
+                        Seed = 42u,
+                    },
                     Dust = new SectorDust { Amount = 0.6f, Color = new Vec3(0.4f, 0.4f, 0.5f) },
                 },
             },
@@ -1686,7 +2727,11 @@ Vec3 AtAngle(float dist, float angleDeg)
     var w = new World(9, cfg, content.Bases[0].MaxHealth, content.Start, content.Ships);
     byte[] frame = Protocol.BuildWelcome(1, 0, w, 0, Array.Empty<byte>(), fog: false);
     var (ns, _, _, _) = WelcomeCounts(frame); // throws if the appended env desyncs the frame length
-    Check(ns == 2 && w.DustClouds.Count > 0, "a full-environment Welcome (sun+nebula+dust) round-trips byte-exact", "the environment payload desynced the Welcome frame");
+    Check(
+        ns == 2 && w.DustClouds.Count > 0,
+        "a full-environment Welcome (sun+nebula+dust) round-trips byte-exact",
+        "the environment payload desynced the Welcome frame"
+    );
 }
 
 // ================================================================================================
@@ -1715,16 +2760,38 @@ Vec3 AtAngle(float dist, float angleDeg)
         float dist = sphere * eff * (1f + boostMult) / 2f;
         Vec3 spot = new Vec3(dist, 0, 0);
 
-        Run(sim, () => { Park(viewer, EmptySector, new Vec3(0, 0, 0)); Park(target, EmptySector, spot); }, Settle);
-        Check(!Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId),
-            "a COASTING ship beyond its at-rest reach is not a radar contact", "the coasting ship was already detected (boost geometry is off)");
+        Run(
+            sim,
+            () =>
+            {
+                Park(viewer, EmptySector, new Vec3(0, 0, 0));
+                Park(target, EmptySector, spot);
+            },
+            Settle
+        );
+        Check(
+            !Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId),
+            "a COASTING ship beyond its at-rest reach is not a radar contact",
+            "the coasting ship was already detected (boost geometry is off)"
+        );
 
         // Hold the afterburner: AbPower ramps to 1 (fuel is full from spawn), the capture reads it
         // live, and the boosted signature lands at the next applies.
         target.HeldInput = new ShipInputState { Boost = true };
-        Run(sim, () => { Park(viewer, EmptySector, new Vec3(0, 0, 0)); Park(target, EmptySector, spot); }, Settle);
-        Check(Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId),
-            "the SAME ship under full afterburner is picked up farther (boost-signature-mult)", "a boosting ship was not detected inside its boosted reach");
+        Run(
+            sim,
+            () =>
+            {
+                Park(viewer, EmptySector, new Vec3(0, 0, 0));
+                Park(target, EmptySector, spot);
+            },
+            Settle
+        );
+        Check(
+            Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId),
+            "the SAME ship under full afterburner is picked up farther (boost-signature-mult)",
+            "a boosting ship was not detected inside its boosted reach"
+        );
         target.HeldInput = new ShipInputState();
     }
 }
@@ -1733,7 +2800,10 @@ Vec3 AtAngle(float dist, float angleDeg)
 // (shield-fitted) fighter is detected; stripping the shield from the loaded def (capacity 0 =
 // nothing equipped) drops the same geometry off radar. Pool level is irrelevant by design.
 {
-    float shieldMult, sphere, effShielded, effBare;
+    float shieldMult,
+        sphere,
+        effShielded,
+        effBare;
     {
         var probe = BootSim(211);
         shieldMult = probe.Content.World.ShieldSignatureMult;
@@ -1741,7 +2811,9 @@ Vec3 AtAngle(float dist, float angleDeg)
         effShielded = EffSig(probe.Content, FlightModel.ClassFighter);
         var d = Def(probe, FlightModel.ClassFighter);
         effBare = SignatureModel.Compute(
-            new SignatureInputs(d.RadarSignature, d.SignatureBias, 0, 0, 0, 0f, false, 0f), Knobs(probe.Content));
+            new SignatureInputs(d.RadarSignature, d.SignatureBias, 0, 0, 0, 0f, false, 0f),
+            Knobs(probe.Content)
+        );
     }
     if (shieldMult <= 1.02f)
         Console.WriteLine("SKIP: shield-signature-mult is neutral — shield signature test skipped");
@@ -1761,14 +2833,28 @@ Vec3 AtAngle(float dist, float angleDeg)
             }
             var v = Join(sim, 1, 0, FlightModel.ClassFighter);
             var t = Join(sim, 2, 1, FlightModel.ClassFighter);
-            Run(sim, () => { Park(v, EmptySector, new Vec3(0, 0, 0)); Park(t, EmptySector, new Vec3(dist, 0, 0)); }, Settle);
+            Run(
+                sim,
+                () =>
+                {
+                    Park(v, EmptySector, new Vec3(0, 0, 0));
+                    Park(t, EmptySector, new Vec3(dist, 0, 0));
+                },
+                Settle
+            );
             return Vision(sim, 0).VisibleEnemyShips.Contains(t.ShipId);
         }
 
-        Check(DetectedAt(stripShield: false),
-            "a shield-EQUIPPED hull is detected between the bare and shielded reaches (shield-signature-mult)", "the shielded fighter was not detected inside its shielded reach");
-        Check(!DetectedAt(stripShield: true),
-            "the identical hull with the shield stripped is NOT detected at the same range", "the bare fighter was still detected — the shield term leaked");
+        Check(
+            DetectedAt(stripShield: false),
+            "a shield-EQUIPPED hull is detected between the bare and shielded reaches (shield-signature-mult)",
+            "the shielded fighter was not detected inside its shielded reach"
+        );
+        Check(
+            !DetectedAt(stripShield: true),
+            "the identical hull with the shield stripped is NOT detected at the same range",
+            "the bare fighter was still detected — the shield term leaked"
+        );
     }
 }
 
@@ -1784,14 +2870,22 @@ Vec3 AtAngle(float dist, float angleDeg)
         Console.WriteLine("SKIP: dust-signature-mult is neutral — dust signature test skipped");
     else
     {
-        const float amount = 0.9f, opacity = 1f;
+        const float amount = 0.9f,
+            opacity = 1f;
         c.World.AsteroidDensity = 0f; // no rocks — isolate dust from occlusion (env-3 idiom)
         c.World.SectorScale = 1f;
         foreach (var bd in c.Bases)
             bd.VisionSphereRadius = 0f; // silence base vision so only the two ships classify
         c.World.Sectors = new List<WorldSectorConfig>
         {
-            new() { Id = 0, Env = new SectorEnvironment { Dust = new SectorDust { Amount = amount, Opacity = opacity } } },
+            new()
+            {
+                Id = 0,
+                Env = new SectorEnvironment
+                {
+                    Dust = new SectorDust { Amount = amount, Opacity = opacity },
+                },
+            },
             new() { Id = 1 },
         };
         var w = new World(2100, c.World, c.Bases[0].MaxHealth, c.Start, c.Ships);
@@ -1816,13 +2910,31 @@ Vec3 AtAngle(float dist, float angleDeg)
         float floor = World.DustVisionFloor(amount, opacity);
         float s = 1f - 0.5f * (1f - floor);
         float dist = sphere * eff * s * (dustMult + 1f) / 2f; // between the two reaches, outside the cloud
-        Check(dist > cloudR, "the test range clears the cloud (geometry pre-condition)", $"dist {dist:F0} inside the cloud — retune the test geometry");
+        Check(
+            dist > cloudR,
+            "the test range clears the cloud (geometry pre-condition)",
+            $"dist {dist:F0} inside the cloud — retune the test geometry"
+        );
 
-        Run(sim, () => { Park(buried, 0, new Vec3(0, 0, 0)); Park(clear, 0, new Vec3(dist, 0, 0)); }, Settle);
-        Check(Vision(sim, 0).VisibleEnemyShips.Contains(clear.ShipId),
-            "the ship buried in the cloud still sees OUT to the clear-space ship", "the buried ship failed to see out of the cloud");
-        Check(!Vision(sim, 1).VisibleEnemyShips.Contains(buried.ShipId),
-            "at the SAME range along the SAME sightline, the ship buried in dust stays hidden (dust-signature-mult)", "the buried ship was detected — the dust signature term is not applying");
+        Run(
+            sim,
+            () =>
+            {
+                Park(buried, 0, new Vec3(0, 0, 0));
+                Park(clear, 0, new Vec3(dist, 0, 0));
+            },
+            Settle
+        );
+        Check(
+            Vision(sim, 0).VisibleEnemyShips.Contains(clear.ShipId),
+            "the ship buried in the cloud still sees OUT to the clear-space ship",
+            "the buried ship failed to see out of the cloud"
+        );
+        Check(
+            !Vision(sim, 1).VisibleEnemyShips.Contains(buried.ShipId),
+            "at the SAME range along the SAME sightline, the ship buried in dust stays hidden (dust-signature-mult)",
+            "the buried ship was detected — the dust signature term is not applying"
+        );
     }
 }
 
@@ -1837,14 +2949,36 @@ Vec3 AtAngle(float dist, float angleDeg)
     float dist = sphere * eff * 1.2f; // outside the at-rest radar reach, +X (out of cone)
     Vec3 spot = new Vec3(dist, 0, 0);
 
-    Run(sim, () => { Park(viewer, EmptySector, new Vec3(0, 0, 0)); Park(target, EmptySector, spot); }, Settle);
-    Check(!Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId),
-        "at stock bias the ship outside its at-rest reach is not a contact", "the pre-bias ship was already detected");
+    Run(
+        sim,
+        () =>
+        {
+            Park(viewer, EmptySector, new Vec3(0, 0, 0));
+            Park(target, EmptySector, spot);
+        },
+        Settle
+    );
+    Check(
+        !Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId),
+        "at stock bias the ship outside its at-rest reach is not a contact",
+        "the pre-bias ship was already detected"
+    );
 
     target.SigBias += Def(sim, FlightModel.ClassFighter).RadarSignature; // double the effective base, live
-    Run(sim, () => { Park(viewer, EmptySector, new Vec3(0, 0, 0)); Park(target, EmptySector, spot); }, Settle);
-    Check(Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId),
-        "raising the ship's SigBias at runtime pulls it onto radar (the live loadout/ability seam)", "the biased ship was not detected — SigBias is not reaching the capture");
+    Run(
+        sim,
+        () =>
+        {
+            Park(viewer, EmptySector, new Vec3(0, 0, 0));
+            Park(target, EmptySector, spot);
+        },
+        Settle
+    );
+    Check(
+        Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId),
+        "raising the ship's SigBias at runtime pulls it onto radar (the live loadout/ability seam)",
+        "the biased ship was not detected — SigBias is not reaching the capture"
+    );
 }
 
 Console.WriteLine(failures == 0 ? "\nALL FOG TESTS PASSED" : $"\n{failures} FOG TEST(S) FAILED");

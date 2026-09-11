@@ -10,5 +10,6 @@ public sealed class ValidationResult
     public bool IsValid => Errors.Count == 0;
 
     public void Error(string message) => Errors.Add(message);
+
     public void Warn(string message) => Warnings.Add(message);
 }

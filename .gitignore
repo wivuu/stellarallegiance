@@ -6,8 +6,10 @@
 build/
 pick-assets/
 
-# public-lobby web shell (WP0.3): downloaded Tailwind standalone CLI + its generated CSS
-tools/tailwind/
+# public-lobby web shell (WP0.3): downloaded Tailwind standalone CLI + its generated CSS.
+# Ignore the folder's CONTENTS (not the folder) so the README stays trackable.
+tools/tailwind/*
+!tools/tailwind/README.md
 public-lobby/wwwroot/app.css
 
 # sim server's persisted Game Server credential (WP2.1) — a bearer refresh token, never committed.
@@ -500,8 +502,15 @@ $RECYCLE.BIN/
 *.lnk
 
 # Vim temporary swap files
-*.swpreport-spool/
+*.swp
+
+# sim server's match-result spool (SIM_REPORT_SPOOL, default beside sim-cache/)
+report-spool/
 
 # Aspire AppHost local state (server sim-cache + lobby device-code credential)
 apphost/.local/
 .aspire/
+
+# Claude Code session plan files — local scratch, regenerated per session.
+# `.claude/settings.json` and `.claude/skills/**` stay tracked.
+.claude/plans/
