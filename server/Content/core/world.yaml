@@ -23,10 +23,10 @@
 # detection ranges, so retune with the fog tests in mind. Authoring every mult at 1.0 restores
 # the fire-boost-only behavior exactly.
 #
-# The ai/combat/mechanics/seeding blocks below are SERVER-SIDE sim tuning (never streamed): every
-# key is optional and an omitted key keeps its stock value (the values written here ARE stock —
-# they document the knobs and are safe to sweep without a client redeploy). Durations are seconds;
-# the sim converts to ticks at its own rate.
+# The ai/combat/mechanics/salvage/seeding blocks below are SERVER-SIDE sim tuning (never
+# streamed): every key is optional and an omitted key keeps its stock value (the values written
+# here ARE stock — they document the knobs and are safe to sweep without a client redeploy).
+# Durations are seconds; the sim converts to ticks at its own rate.
 id: 0
 sector-scale: 2.25
 # The single default sector radius (× sector-scale) for any map sector that omits `radius`. One
@@ -148,6 +148,25 @@ mechanics:
   probe-eject-clearance: 2   # u past (ship radius + probe hit radius); too small and you kick your own hull
   reconnect-grace-seconds: 5 # dropped ship held (simulated, vulnerable) for reconnect reclaim
   ended-to-lobby-seconds: 6  # after match end before the server returns to the lobby
+
+# Wreck salvage: a destroyed combat hull scatters what it still carried (each mounted gun, the
+# remaining missile magazine, each cargo kind) as physical items that drift, bounce off rocks and
+# stations, and are collected by any player hull with the mount/payload to take them — otherwise
+# they ricochet off harmlessly. Every item rolls drop-chance on its own, so a kill usually leaves a
+# partial loadout. Items live for the sortie only (docking re-equips from the hangar). Server-side
+# only: the sim owns the items and streams the resulting rows; the client never simulates them.
+salvage:
+  drop-chance: 0.5           # per ITEM (each gun, the magazine, each cargo kind rolls alone)
+  drop-from-drones: true     # PIG combat hulls drop too; false = player wrecks only
+  eject-speed: 30            # u/s added to the wreck velocity along a random unit vector
+  eject-speed-jitter: 10     # ± u/s spread on that speed, so the loot scatters
+  drag-per-second: 0.4       # velocity FRACTION kept per second (→ ~33 u scatter, at rest in ~3.5 s)
+  rest-speed: 1.0            # u/s below which an item parks and stops integrating
+  item-radius: 1.5           # u, the item's collision sphere vs asteroids/bases
+  pickup-radius: 3.0         # u, its contact sphere vs ships (must be >= item-radius)
+  restitution: 0.6           # bounciness off rocks/bases/ships that can't carry it
+  lifetime-seconds: 180      # an uncollected item expires (sortie-scale litter, not permanent)
+  max-items-per-sector: 64   # oldest expires first; keeps the per-sector frame's u8 count honest
 
 # Map seeding: ONE shared default set per asteroid shape (field = shallow disc, belt = flattened
 # ring), applied to any sector by its declared `asteroids` kind, plus team-base placement — counts

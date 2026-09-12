@@ -302,6 +302,13 @@ namespace StellarAllegiance.Shared
         // server gates and the HUD's RELOADING readout. Streamed after SucceededByWeaponId so every
         // block above stays byte-stable (v36).
         public uint ReloadTicks;
+
+        // Payload mass of ONE round this launcher fires, taken from its referenced missile
+        // expendable at projection (0 for a gun/dispenser — nothing to carry loose). Salvage stows a
+        // foreign rack's rounds as inert cargo and charges the hold RoundMass × count, so the mass a
+        // magazine represents has to be knowable without the expendable catalog. Server-side today;
+        // it starts streaming (appended LAST in the weapon record) in protocol 39 (salvage phase 3).
+        public float RoundMass;
     }
 
     // One entry in a hull's default consumable hold — an item id + a count. Mirrors the authored
@@ -331,6 +338,14 @@ namespace StellarAllegiance.Shared
         // (WeaponDef.ReloadTicks), since that is where its cadence already lives. Streamed after
         // FuelPerCharge (v36).
         public uint ReloadTicks;
+
+        // The GLB the client instances when this item is loose in space as dropped salvage
+        // (res://assets/parts/<ModelName>.glb) — mirrors WeaponDef.ModelName. A DISPENSER item takes
+        // its mesh from the dispenser's WeaponDef instead, so this field carries the pure-cargo kinds
+        // (the fuel pod) that own no launcher. Empty => the client shows a placeholder puff.
+        // Server-side today; it starts streaming (appended LAST in the cargo record) in protocol 39
+        // (salvage phase 3).
+        public string ModelName = "";
     }
 
     // One per base type.
@@ -734,7 +749,7 @@ namespace StellarAllegiance.Shared
         public float AlephRadarSignature = 1.4f;
         public float RockRadarSignature = 2f;
 
-        // Server-side sim tuning blocks (world.yaml `ai:` / `combat:` / `mechanics:` /
+        // Server-side sim tuning blocks (world.yaml `ai:` / `combat:` / `mechanics:` / `salvage:` /
         // `seeding:` / `mining:` / `constructor:`). NONE of these ride the wire — Protocol.BuildDefs
         // deliberately skips them (drones/damage/seeding/mining are server-authoritative; the client
         // only sees their results). The field initializers below ARE the stock values: projection only
@@ -742,6 +757,7 @@ namespace StellarAllegiance.Shared
         public WorldAiTuning Ai = new();
         public WorldCombatTuning Combat = new();
         public WorldMechanicsTuning Mechanics = new();
+        public WorldSalvageTuning Salvage = new();
         public WorldSeedingTuning Seeding = new();
         public WorldMiningTuning Mining = new();
         public WorldConstructorTuning Constructor = new();
@@ -890,6 +906,33 @@ namespace StellarAllegiance.Shared
         public float ProbeEjectClearance = 2f; // u past (ship radius + probe hit radius) — no self-kick
         public float ReconnectGraceSeconds = 5f; // dropped ship held for reconnect reclaim
         public float EndedToLobbySeconds = 6f; // after match end before returning to the lobby
+    }
+
+    // Wreck-salvage tuning (world.yaml `salvage:`): what a destroyed combat hull leaves behind, how
+    // the dropped items fly/settle, and how a passing ship collects them. Server-side only — items
+    // are server-authoritative entities (the client renders the streamed rows, it never simulates
+    // them), so like ai/combat/mechanics this block never rides the wire. The initializers below ARE
+    // the stock values, so an omitted block or field always means "stock".
+    public sealed class WorldSalvageTuning
+    {
+        public float DropChance = 0.5f; // per ITEM (each gun, the magazine, each cargo kind rolls alone)
+        public bool DropFromDrones = true; // PIG combat hulls drop too; off = player wrecks only
+
+        // Eject impulse added to the wreck's own velocity along a random unit vector, so a kill
+        // scatters its loot instead of stacking it on one point.
+        public float EjectSpeed = 30f; // u/s
+        public float EjectSpeedJitter = 10f; // ± u/s spread on that speed
+
+        public float DragPerSecond = 0.4f; // velocity FRACTION retained per second (→ ~33 u scatter, rest in ~3.5 s)
+        public float RestSpeed = 1.0f; // u/s below which an item parks (stops integrating)
+        public float ItemRadius = 1.5f; // u, the item's collision sphere vs rocks/bases
+        public float PickupRadius = 3.0f; // u, its contact sphere vs ships (>= ItemRadius)
+        public float Restitution = 0.6f; // bounciness off rocks/bases/ships
+        public float LifetimeSeconds = 180f; // sortie-scale litter: an uncollected item expires
+
+        // Per-sector item cap; the OLDEST item in a full sector expires to make room. Keeps a
+        // massacre from flooding one sector and keeps the frame's u8 count honest.
+        public int MaxItemsPerSector = 64;
     }
 
     // Map-seeding tuning (world.yaml `seeding:`): the ONE shared default set per asteroid shape

@@ -47,15 +47,67 @@ public static class Collide
         return true;
     }
 
+    // ---- Kinematic BODY kernels (pos/vel pair) ---------------------------
+    //
+    // The two ShipState overloads below are thin forwarders onto these. The split exists because a
+    // ship is not the only thing that bounces off the world: any plain (pos, vel) mover — a dropped
+    // salvage item, a future debris entity — must resolve with the SAME float ops a ship does.
+    //
+    // PARITY CONTRACT: the arithmetic here is the ship path's arithmetic, operand-for-operand. The
+    // client predicts bounces locally and the PIG goldens replay bit-exactly, so reordering,
+    // re-associating or "simplifying" any expression in these two bodies silently desyncs
+    // prediction and breaks the recorded goldens. CollisionTest / FlightModelTest / AutopilotTest
+    // are the guards. Change the body, and the ship changes with it — that is the point.
+
     // Damp + reflect inbound velocity along a world contact normal and push out of penetration.
     // Reports `vn` (inbound normal speed) so the server can apply collision damage. Kinematic.
-    public static void Bounce(ref ShipState s, Vec3 worldNormal, float worldPenetration, float restitution, out float vn)
+    public static void BounceBody(
+        ref Vec3 pos,
+        ref Vec3 vel,
+        Vec3 worldNormal,
+        float worldPenetration,
+        float restitution,
+        out float vn
+    )
     {
-        vn = Dot(s.Vel, worldNormal);
+        vn = Dot(vel, worldNormal);
         if (vn < 0f)
-            s.Vel -= worldNormal * ((1f + restitution) * vn);
-        s.Pos += worldNormal * worldPenetration;
+            vel -= worldNormal * ((1f + restitution) * vn);
+        pos += worldNormal * worldPenetration;
     }
+
+    // Sphere-vs-sphere static bounce for a plain mover: `radius` is the MOVING sphere, `cRadius` the
+    // static one. Snaps to the contact surface and reflects inbound velocity; reports `vn`.
+    public static bool ResolveStaticSphereBody(
+        ref Vec3 pos,
+        ref Vec3 vel,
+        float radius,
+        Vec3 center,
+        float cRadius,
+        float restitution,
+        out float vn
+    )
+    {
+        vn = 0f;
+        Vec3 d = pos - center;
+        float dist2 = d.LengthSquared();
+        float minD = cRadius + radius;
+        if (dist2 >= minD * minD)
+            return false;
+
+        float dist = (float)System.Math.Sqrt(dist2);
+        Vec3 n = dist > 1e-4f ? d * (1f / dist) : new Vec3(0f, 1f, 0f);
+        vn = Dot(vel, n);
+        if (vn < 0f)
+            vel -= n * ((1f + restitution) * vn);
+        pos = center + n * minD;
+        return true;
+    }
+
+    // Damp + reflect inbound velocity along a world contact normal and push out of penetration.
+    // Reports `vn` (inbound normal speed) so the server can apply collision damage. Kinematic.
+    public static void Bounce(ref ShipState s, Vec3 worldNormal, float worldPenetration, float restitution, out float vn) =>
+        BounceBody(ref s.Pos, ref s.Vel, worldNormal, worldPenetration, restitution, out vn);
 
     // Sphere-vs-sphere static bounce (a rock without a hull, or a base fallback). Snaps the ship to
     // the contact surface and reflects inbound velocity. Reports `vn` for server-side damage.
@@ -67,23 +119,7 @@ public static class Collide
         float radius,
         float restitution,
         out float vn
-    )
-    {
-        vn = 0f;
-        Vec3 d = s.Pos - center;
-        float dist2 = d.LengthSquared();
-        float minD = radius + shipRadius;
-        if (dist2 >= minD * minD)
-            return false;
-
-        float dist = (float)System.Math.Sqrt(dist2);
-        Vec3 n = dist > 1e-4f ? d * (1f / dist) : new Vec3(0f, 1f, 0f);
-        vn = Dot(s.Vel, n);
-        if (vn < 0f)
-            s.Vel -= n * ((1f + restitution) * vn);
-        s.Pos = center + n * minD;
-        return true;
-    }
+    ) => ResolveStaticSphereBody(ref s.Pos, ref s.Vel, shipRadius, center, radius, restitution, out vn);
 
     // Per-rock world rotation from the authored (RotX,RotY,RotZ). Godot Node3D.Rotation Euler is
     // YXZ order; the client applies it that way, so collision builds q = qY·qX·qZ to collide each

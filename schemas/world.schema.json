@@ -662,6 +662,93 @@
       "description": "Gate/docking/pod/economy/match-flow tuning (server-side only). Null -\u003E stock.",
       "additionalProperties": false
     },
+    "salvage": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "drop-chance": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Chance (0..1) each individual item survives the wreck \u2014 every gun, the magazine and each cargo kind rolls on its own."
+        },
+        "drop-from-drones": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Whether PIG (AI) combat hulls drop salvage too; false = player wrecks only."
+        },
+        "eject-speed": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Eject speed (u/s) added to the wreck\u0027s velocity along a random unit vector \u2014 must be positive."
+        },
+        "eject-speed-jitter": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Random \u00B1 spread (u/s) on the eject speed, so a kill scatters its loot."
+        },
+        "drag-per-second": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Velocity FRACTION an item retains per second \u2014 must be in (0, 1); lower parks it sooner."
+        },
+        "rest-speed": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Speed (u/s) below which a drifting item parks and stops integrating \u2014 must be positive."
+        },
+        "item-radius": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Item collision-sphere radius (world units) against asteroids and bases \u2014 must be positive."
+        },
+        "pickup-radius": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Item contact-sphere radius (world units) against ships \u2014 must be positive and at least item-radius."
+        },
+        "restitution": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Bounciness (0..1-ish) of an item off rocks, bases and ships that can\u0027t carry it."
+        },
+        "lifetime-seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Seconds an uncollected item survives before it expires \u2014 must be positive."
+        },
+        "max-items-per-sector": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Per-sector item cap (1..255); the oldest item in a full sector expires to make room."
+        }
+      },
+      "description": "Wreck-salvage drop/physics/pickup tuning (server-side only). Null -\u003E stock.",
+      "additionalProperties": false
+    },
     "seeding": {
       "type": [
         "object",

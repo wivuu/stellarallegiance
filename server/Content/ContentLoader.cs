@@ -1,6 +1,10 @@
+using System.Collections.Generic;
 using System.IO;
 using Allegiance.Factions.Serialization;
 using Allegiance.Factions.Validation;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using StellarAllegiance.Shared;
 
 namespace SimServer.Content;
 
@@ -25,6 +29,11 @@ namespace SimServer.Content;
 // tech tree tunes buyable gameplay/balance, world.yaml tunes the server's world defaults + sim.
 public static class ContentLoader
 {
+    // Assigned once at boot (Program.cs) after the host's ILoggerFactory exists, exactly like
+    // HardpointGeometryMerge.Logger — these static pipeline helpers have no instance to inject
+    // into. NullLogger keeps a pre-host content load (tests, --gen-schemas, tooling) a safe no-op.
+    internal static ILogger Logger { get; set; } = NullLogger.Instance;
+
     // Load a complete content bundle from its manifest path plus the standalone world tuning file.
     // Throws on a missing/malformed/invalid bundle or world file so the caller fails fast at boot
     // (FileNotFoundException / InvalidDataException).
@@ -47,6 +56,32 @@ public static class ContentLoader
         // Mutates the core's Hull/Station hardpoint lists before the (dumb) projection reads them.
         HardpointGeometryMerge.Apply(core);
 
-        return FactionsContentProjection.Project(core, WorldLoader.Load(worldPath));
+        var set = FactionsContentProjection.Project(core, WorldLoader.Load(worldPath));
+        WarnDroppablesWithoutModel(set);
+        return set;
+    }
+
+    // Wreck salvage draws each dropped item as its def's GLB; an empty model-name falls back to a
+    // placeholder puff, which looks like a bug rather than authoring the operator forgot. WARN, do
+    // not refuse: the item is still fully functional, and custom content shouldn't be unbootable
+    // over cosmetics. Droppable = what DropSalvage can actually emit — Bolt guns (Kind 0 items) and
+    // the launcher-less pure cargo, i.e. the fuel pods (FuelPerCharge > 0). A DISPENSER item's mesh
+    // comes from its WeaponDef (already authored for the deployed mine/chaff/probe), so cargo rows
+    // with no fuel value are deliberately not listed here.
+    private static void WarnDroppablesWithoutModel(ContentSet set)
+    {
+        var missing = new List<string>();
+        foreach (var w in set.Weapons)
+        {
+            if (w.Kind == WeaponKind.Bolt && string.IsNullOrEmpty(w.ModelName))
+                missing.Add($"weapon {w.WeaponId} '{w.Name}'");
+        }
+        foreach (var c in set.CargoItems)
+        {
+            if (c.FuelPerCharge > 0f && string.IsNullOrEmpty(c.ModelName))
+                missing.Add($"cargo {c.CargoId} '{c.Name}'");
+        }
+        if (missing.Count > 0)
+            Log.SalvageDefsWithoutModel(Logger, missing.Count, string.Join(", ", missing));
     }
 }

@@ -335,6 +335,9 @@ public static class FactionsContentProjection
             CanDamageBase = w.CanDamageBase,
             IsHealing = w.IsHealing,
             ShieldMult = (float)(w.ShieldDamageMultiplier ?? 1.0),
+            // The Allegiance part model a DROPPED gun is drawn as (assets/parts/<name>.glb). Guns
+            // have no in-flight mesh of their own — this is purely the salvage item's look.
+            ModelName = w.ModelName ?? "",
             // Client bolt-mesh dims come from the referenced projectile (0 = client default).
             BoltRadius = (float)proj.BoltRadius,
             BoltLength = (float)proj.BoltLength,
@@ -397,6 +400,11 @@ public static class FactionsContentProjection
             var def = Common();
             def.Kind = WeaponKind.Missile;
             def.ReloadTicks = LoadTicks(m.LoadTime); // rack: time to load the next round from the hold
+            // Payload mass of ONE round out of this rack, off the referenced missile's authored
+            // `mass`. Salvage stows a foreign rack's rounds as inert cargo priced at RoundMass ×
+            // count, so the rack has to carry what a single round weighs. Missile kind only — a
+            // mine/chaff/probe dispenser feeds from a cargo PACK whose mass is on its CargoItemDef.
+            def.RoundMass = (float)m.Mass;
             // Ballistics reused from the referenced missile.
             def.Damage = (float)m.Power;
             def.ProjectileSpeed = (float)m.InitialSpeed;
@@ -513,6 +521,10 @@ public static class FactionsContentProjection
             // Load time out of the hold. Only the fuel pod consumes it from the CARGO def (it has no
             // launcher); a dispenser's identical value rides its WeaponDef instead.
             ReloadTicks = LoadTicks(e.LoadTime),
+            // The GLB a DROPPED item of this kind is drawn as. Same split as ReloadTicks: only the
+            // launcher-less pure cargo (the fuel pod) is read from here — a dispenser's item takes
+            // its mesh from the dispenser WeaponDef, which already carries the deployed-mesh name.
+            ModelName = e.ModelName ?? "",
         };
 
     private static BaseDef ProjectBase(Factions.Station s, short successorBaseTypeId, IReadOnlySet<uint> rackWeaponIds) =>

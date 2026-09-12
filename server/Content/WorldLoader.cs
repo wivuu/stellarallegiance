@@ -121,6 +121,9 @@ public sealed class WorldDef
     /// <summary>Gate/docking/pod/economy/match-flow tuning (server-side only). Null -&gt; stock.</summary>
     public WorldMechanicsDef? Mechanics { get; set; }
 
+    /// <summary>Wreck-salvage drop/physics/pickup tuning (server-side only). Null -&gt; stock.</summary>
+    public WorldSalvageDef? Salvage { get; set; }
+
     /// <summary>Map-seeding shape tuning: asteroid fields/belts + base placement. Null -&gt; stock.</summary>
     public WorldSeedingDef? Seeding { get; set; }
 
@@ -395,6 +398,50 @@ public sealed class WorldMechanicsDef
 
     /// <summary>Seconds after match end before the server returns to the lobby.</summary>
     public double? EndedToLobbySeconds { get; set; }
+}
+
+/// <summary>
+/// Wreck-salvage tuning, authored under <c>salvage:</c> — what a destroyed combat hull leaves
+/// behind, how the dropped items fly and settle, and how a passing ship collects them. Optional
+/// fields fall back to stock values at projection (the shared <c>WorldSalvageTuning</c>
+/// initializers), so an omitted <c>salvage:</c> block means "all stock". Durations are authored in
+/// SECONDS. Cross-knob invariants are checked in <c>WorldLoader.ValidateSalvage</c> — a bad sweep
+/// refuses boot rather than producing items no ship can ever reach.
+/// </summary>
+public sealed class WorldSalvageDef
+{
+    /// <summary>Chance (0..1) each individual item survives the wreck — every gun, the magazine and each cargo kind rolls on its own.</summary>
+    public double? DropChance { get; set; }
+
+    /// <summary>Whether PIG (AI) combat hulls drop salvage too; false = player wrecks only.</summary>
+    public bool? DropFromDrones { get; set; }
+
+    /// <summary>Eject speed (u/s) added to the wreck's velocity along a random unit vector — must be positive.</summary>
+    public double? EjectSpeed { get; set; }
+
+    /// <summary>Random ± spread (u/s) on the eject speed, so a kill scatters its loot.</summary>
+    public double? EjectSpeedJitter { get; set; }
+
+    /// <summary>Velocity FRACTION an item retains per second — must be in (0, 1); lower parks it sooner.</summary>
+    public double? DragPerSecond { get; set; }
+
+    /// <summary>Speed (u/s) below which a drifting item parks and stops integrating — must be positive.</summary>
+    public double? RestSpeed { get; set; }
+
+    /// <summary>Item collision-sphere radius (world units) against asteroids and bases — must be positive.</summary>
+    public double? ItemRadius { get; set; }
+
+    /// <summary>Item contact-sphere radius (world units) against ships — must be positive and at least item-radius.</summary>
+    public double? PickupRadius { get; set; }
+
+    /// <summary>Bounciness (0..1-ish) of an item off rocks, bases and ships that can't carry it.</summary>
+    public double? Restitution { get; set; }
+
+    /// <summary>Seconds an uncollected item survives before it expires — must be positive.</summary>
+    public double? LifetimeSeconds { get; set; }
+
+    /// <summary>Per-sector item cap (1..255); the oldest item in a full sector expires to make room.</summary>
+    public int? MaxItemsPerSector { get; set; }
 }
 
 /// <summary>
@@ -780,6 +827,24 @@ public static class WorldLoader
             t.ReconnectGraceSeconds = F(me.ReconnectGraceSeconds, t.ReconnectGraceSeconds);
             t.EndedToLobbySeconds = F(me.EndedToLobbySeconds, t.EndedToLobbySeconds);
         }
+        if (w.Salvage is { } sv)
+        {
+            var t = cfg.Salvage;
+            t.DropChance = F(sv.DropChance, t.DropChance);
+            t.DropFromDrones = sv.DropFromDrones ?? t.DropFromDrones;
+            t.EjectSpeed = F(sv.EjectSpeed, t.EjectSpeed);
+            t.EjectSpeedJitter = F(sv.EjectSpeedJitter, t.EjectSpeedJitter);
+            t.DragPerSecond = F(sv.DragPerSecond, t.DragPerSecond);
+            t.RestSpeed = F(sv.RestSpeed, t.RestSpeed);
+            t.ItemRadius = F(sv.ItemRadius, t.ItemRadius);
+            t.PickupRadius = F(sv.PickupRadius, t.PickupRadius);
+            t.Restitution = F(sv.Restitution, t.Restitution);
+            t.LifetimeSeconds = F(sv.LifetimeSeconds, t.LifetimeSeconds);
+            t.MaxItemsPerSector = sv.MaxItemsPerSector ?? t.MaxItemsPerSector;
+        }
+        // Unconditional, like ValidateAi: the stock initializers satisfy every rule, so an omitted
+        // `salvage:` block costs nothing and a bad sweep still refuses boot.
+        ValidateSalvage(cfg.Salvage);
         if (w.Seeding is { } se)
         {
             var t = cfg.Seeding;
@@ -899,6 +964,47 @@ public static class WorldLoader
                 $"ai.dock-outer-standoff ({t.DockOuterStandoff}) MUST exceed ai.dock-standoff ({t.DockStandoff}): the "
                     + "outer axis-acquire point has to clear the padded base sphere that the standoff point may sit "
                     + "inside (a recessed door pocket), or the straight-in leg's line-of-sight test flaps on drift."
+            );
+    }
+
+    // Cross-knob invariants on the resolved `salvage:` tuning. Same fail-fast posture as ValidateAi:
+    // a bad sweep here doesn't misbehave visibly, it produces loot nobody can ever pick up (a pickup
+    // sphere smaller than the collision sphere means the item bounces off a hull it never touched
+    // "closely enough"), items that never park (drag >= 1) or never exist (chance out of range).
+    // Boot refuses with the offending YAML key named, never mid-match.
+    private static void ValidateSalvage(WorldSalvageTuning t)
+    {
+        void Positive(float v, string key)
+        {
+            if (!(v > 0f))
+                throw new InvalidDataException($"salvage.{key}: must be > 0 (got {v}).");
+        }
+
+        if (!(t.DropChance >= 0f) || t.DropChance > 1f)
+            throw new InvalidDataException($"salvage.drop-chance: must be in [0, 1] (got {t.DropChance}).");
+
+        Positive(t.EjectSpeed, "eject-speed");
+        Positive(t.ItemRadius, "item-radius");
+        Positive(t.PickupRadius, "pickup-radius");
+        Positive(t.LifetimeSeconds, "lifetime-seconds");
+        Positive(t.RestSpeed, "rest-speed");
+
+        // Drag is the fraction of velocity KEPT per second: 0 would freeze an item the tick it
+        // spawns (no scatter at all) and >= 1 would let it coast forever past the sector edge.
+        if (!(t.DragPerSecond > 0f) || t.DragPerSecond >= 1f)
+            throw new InvalidDataException($"salvage.drag-per-second: must be in (0, 1) (got {t.DragPerSecond}).");
+
+        if (t.PickupRadius < t.ItemRadius)
+            throw new InvalidDataException(
+                $"salvage.pickup-radius ({t.PickupRadius}) MUST be >= salvage.item-radius ({t.ItemRadius}): the pickup "
+                    + "sphere is what a ship's hull tests against, so a smaller one lets an item ricochet off a ship it "
+                    + "was never close enough to be collected by."
+            );
+
+        // The per-sector frame carries a u8 item count, so the cap has to stay addressable in a byte.
+        if (t.MaxItemsPerSector < 1 || t.MaxItemsPerSector > 255)
+            throw new InvalidDataException(
+                $"salvage.max-items-per-sector: must be in [1, 255] (got {t.MaxItemsPerSector})."
             );
     }
 
