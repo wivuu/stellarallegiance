@@ -13,6 +13,7 @@ using Godot;
 using SIPSorcery.Net;
 using StellarAllegiance.Net;
 using StellarAllegiance.Shared;
+using StellarAllegiance.Shared.Net;
 using StellarAllegiance.Ui;
 // Godot ships its own HttpClient; the signaling exchange uses the BCL one.
 using HttpClient = System.Net.Http.HttpClient;
@@ -363,43 +364,30 @@ public partial class GameNetClient : Node, INetClientHost
 
     public void SetJoinToken(string? token) => _joinToken = token ?? "";
 
-    // Hello (proto 38): secret + name + reconnect token + u16 join token. Sent automatically once
-    // the socket opens. The reconnect token (empty on a first connect) lets the server hand back a
-    // ship it's still holding for us; the join token (server/Net/HelloFrame.cs) proves who we are
-    // on a Verified listing — the server then takes our name from the token, not from _name.
+    // Hello: secret + name + reconnect token + join token, every field optional on the wire
+    // (shared/Net/Messages.cs HelloMessage). Sent automatically once the socket opens. The reconnect
+    // token (empty on a first connect) lets the server hand back a ship it's still holding for us;
+    // the join token proves who we are on a Verified listing — the server then takes our name from
+    // the token, not from _name.
     private void SendHello()
     {
-        var sec = System.Text.Encoding.UTF8.GetBytes(_secret);
-        var nm = System.Text.Encoding.UTF8.GetBytes(_name);
-        var tok = System.Text.Encoding.UTF8.GetBytes(_frames.ReconnectToken);
-        var join = System.Text.Encoding.UTF8.GetBytes(_joinToken);
-        var f = new byte[2 + sec.Length + 1 + nm.Length + 1 + tok.Length + 2 + join.Length];
-        int o = 0;
-        f[o++] = 1; // Hello
-        f[o++] = (byte)sec.Length;
-        sec.CopyTo(f, o);
-        o += sec.Length;
-        f[o++] = (byte)nm.Length;
-        nm.CopyTo(f, o);
-        o += nm.Length;
-        f[o++] = (byte)tok.Length;
-        tok.CopyTo(f, o);
-        o += tok.Length;
-        f[o++] = (byte)(join.Length & 0xFF);
-        f[o++] = (byte)(join.Length >> 8);
-        join.CopyTo(f, o);
+        var hello = new HelloMessage
+        {
+            Secret = _secret,
+            Name = _name,
+            ReconnectToken = _frames.ReconnectToken,
+            JoinToken = _joinToken,
+        };
         _joinToken = ""; // single use
-        _tx.Writer.TryWrite(f);
+        _tx.Writer.TryWrite(hello.ToBytes());
     }
 
     // Request to spawn the chosen class with a consumable hold + the hangar's weapon-slot
-    // overrides (honored server-side only while a match is Active). Wire: [4][cls]
-    // [u64 launchBaseId][nCargo][nCargo x (u32 cargoId, u8 count)][nMounts][nMounts x
-    // (u8 hpIndex, u32 weaponId)]. launchBaseId picks the hangar sidebar's launch base (0 =
-    // server default; the server validates friendly+alive and silently falls back). The mount
-    // tail carries ONLY overridden slots (weaponId u32.Max = leave the slot empty); the server
-    // validates (mountable kind, tech owned, payload fits) and falls back to the authored
-    // loadout — the accepted result echoes back on MsgShipLoadout.
+    // overrides (honored server-side only while a match is Active). launchBaseId picks the hangar
+    // sidebar's launch base (0 = server default; the server validates friendly+alive and silently
+    // falls back). The mount tail carries ONLY overridden slots (weaponId u32.Max = leave the slot
+    // empty); the server validates (mountable kind, tech owned, payload fits) and falls back to the
+    // authored loadout — the accepted result echoes back on MsgShipLoadout.
     public void RequestSpawn(
         byte shipClass,
         (uint cargoId, byte count)[]? cargo = null,
@@ -409,93 +397,55 @@ public partial class GameNetClient : Node, INetClientHost
     {
         cargo ??= Array.Empty<(uint, byte)>();
         mounts ??= Array.Empty<(byte, uint)>();
-        var f = new byte[11 + cargo.Length * 5 + 1 + mounts.Length * 5];
-        int o = 0;
-        f[o++] = 4; // MsgSpawn
-        f[o++] = shipClass;
-        BitConverter.TryWriteBytes(f.AsSpan(o), launchBaseId);
-        o += 8;
-        f[o++] = (byte)cargo.Length;
-        foreach (var (cargoId, count) in cargo)
+        var spawn = new SpawnMessage
         {
-            BitConverter.TryWriteBytes(f.AsSpan(o), cargoId);
-            o += 4;
-            f[o++] = count;
-        }
-        f[o++] = (byte)mounts.Length;
-        foreach (var (hpIndex, weaponId) in mounts)
-        {
-            f[o++] = hpIndex;
-            BitConverter.TryWriteBytes(f.AsSpan(o), weaponId);
-            o += 4;
-        }
-        _tx.Writer.TryWrite(f);
+            ShipClass = shipClass,
+            LaunchBaseId = launchBaseId,
+            Cargo = new CargoLoadDef[cargo.Length],
+            Mounts = new MountOverrideRecord[mounts.Length],
+        };
+        for (int i = 0; i < cargo.Length; i++)
+            spawn.Cargo[i] = new CargoLoadDef { CargoId = cargo[i].cargoId, Count = cargo[i].count };
+        for (int i = 0; i < mounts.Length; i++)
+            spawn.Mounts[i] = new MountOverrideRecord { HpIndex = mounts[i].hpIndex, WeaponId = mounts[i].weaponId };
+        _tx.Writer.TryWrite(spawn.ToBytes());
     }
 
-    // Commander research order (MsgResearch=13, v36): op 0 start-or-queue, 1 cancel-active,
-    // 2 cancel-on-deck. Server-side commander gate; feedback returns as system chat + the next
-    // MsgResearchState frame.
-    public void SendResearch(byte op, ulong baseId, ushort devIndex)
-    {
-        var f = new byte[12];
-        f[0] = 13; // MsgResearch
-        f[1] = op;
-        BitConverter.TryWriteBytes(f.AsSpan(2), baseId);
-        BitConverter.TryWriteBytes(f.AsSpan(10), devIndex);
-        _tx.Writer.TryWrite(f);
-    }
+    // Commander research order: op 0 start-or-queue, 1 cancel-active, 2 cancel-on-deck. Server-side
+    // commander gate; feedback returns as system chat + the next MsgResearchState frame.
+    public void SendResearch(byte op, ulong baseId, ushort devIndex) =>
+        _tx.Writer.TryWrite(
+            new ResearchMessage
+            {
+                Op = op,
+                BaseId = baseId,
+                DevIndex = devIndex,
+            }.ToBytes()
+        );
 
-    // Commander buys a constructor bound to a station type (v37): [14][u8 stationTypeId][u64 launchBaseId].
-    // launchBaseId 0 = the team's default garrison. The server validates + charges the station price.
-    public void SendBuildConstructor(byte stationTypeId, ulong launchBaseId)
-    {
-        var f = new byte[10];
-        f[0] = 14; // MsgBuildConstructor
-        f[1] = stationTypeId;
-        BitConverter.TryWriteBytes(f.AsSpan(2), launchBaseId);
-        _tx.Writer.TryWrite(f);
-    }
+    // Commander buys a constructor bound to a station type. launchBaseId 0 = the team's default
+    // garrison. The server validates + charges the station price.
+    public void SendBuildConstructor(byte stationTypeId, ulong launchBaseId) =>
+        _tx.Writer.TryWrite(
+            new BuildConstructorMessage { StationTypeId = stationTypeId, LaunchBaseId = launchBaseId }.ToBytes()
+        );
 
-    // Commander cancels a still-producing constructor (refund): [15][u64 constructorId] (v38).
-    public void SendCancelConstructor(ulong constructorId)
-    {
-        var f = new byte[9];
-        f[0] = 15; // MsgConstructorCancel
-        BitConverter.TryWriteBytes(f.AsSpan(1), constructorId);
-        _tx.Writer.TryWrite(f);
-    }
+    // Commander cancels a still-producing constructor (refund).
+    public void SendCancelConstructor(ulong constructorId) =>
+        _tx.Writer.TryWrite(new ConstructorCancelMessage { ConstructorId = constructorId }.ToBytes());
 
-    // Commander buys a mining drone: [16][u64 launchBaseId]. Replaces the old /buyminer chat command.
-    // launchBaseId = the docked garrison, so the miner joins that garrison's build pipeline (0 = team
-    // default). Team inferred server-side; the server validates cap/cost/phase/queue and charges the hull.
-    public void SendBuyMiner(ulong launchBaseId)
-    {
-        var f = new byte[9];
-        f[0] = 16; // MsgBuyMiner
-        BitConverter.TryWriteBytes(f.AsSpan(1), launchBaseId);
-        _tx.Writer.TryWrite(f);
-    }
+    // Commander buys a mining drone at the docked garrison, so the miner joins that garrison's build
+    // pipeline (0 = team default). Team inferred server-side; the server validates cap/cost/phase/queue
+    // and charges the hull.
+    public void SendBuyMiner(ulong launchBaseId) =>
+        _tx.Writer.TryWrite(new BuyMinerMessage { LaunchBaseId = launchBaseId }.ToBytes());
 
-    public void SetTeam(byte team)
-    {
-        _tx.Writer.TryWrite([5, team]); // MsgSetTeam
-    }
+    public void SetTeam(byte team) => _tx.Writer.TryWrite(new SetTeamMessage { Team = team }.ToBytes());
 
-    public void SetReady(bool ready)
-    {
-        _tx.Writer.TryWrite([6, (byte)(ready ? 1 : 0)]); // MsgSetReady
-    }
+    public void SetReady(bool ready) => _tx.Writer.TryWrite(new SetReadyMessage { Ready = ready }.ToBytes());
 
-    public void SendChat(string text, bool teamOnly)
-    {
-        var t = System.Text.Encoding.UTF8.GetBytes(text ?? "");
-        var f = new byte[4 + t.Length];
-        f[0] = 7; // MsgChat
-        f[1] = (byte)(teamOnly ? 1 : 0);
-        BitConverter.TryWriteBytes(f.AsSpan(2), (ushort)t.Length);
-        t.CopyTo(f, 4);
-        _tx.Writer.TryWrite(f);
-    }
+    public void SendChat(string text, bool teamOnly) =>
+        _tx.Writer.TryWrite(new ChatMessage { Scope = (byte)(teamOnly ? 1 : 0), Text = text ?? "" }.ToBytes());
 
     // Rename a team (0/1) you belong to. The server re-validates membership and uppercases/caps to
     // Wire.TeamNameMaxLength; we cap here too so the wire and the UI agree on what got sent.
@@ -504,43 +454,27 @@ public partial class GameNetClient : Node, INetClientHost
         var n = (name ?? "").Trim();
         if (n.Length > Wire.TeamNameMaxLength)
             n = n[..Wire.TeamNameMaxLength];
-        var t = System.Text.Encoding.UTF8.GetBytes(n);
-        var f = new byte[4 + t.Length];
-        f[0] = 9; // MsgSetTeamName
-        f[1] = team;
-        BitConverter.TryWriteBytes(f.AsSpan(2), (ushort)t.Length);
-        t.CopyTo(f, 4);
-        _tx.Writer.TryWrite(f);
+        _tx.Writer.TryWrite(new SetTeamNameMessage { Team = team, Name = n }.ToBytes());
     }
 
     // Host picks the next map (the server enforces host-only). mapName must match a catalog entry.
-    public void SetMap(string mapName)
-    {
-        var t = System.Text.Encoding.UTF8.GetBytes(mapName ?? "");
-        var f = new byte[3 + t.Length];
-        f[0] = 10; // MsgSetMap
-        BitConverter.TryWriteBytes(f.AsSpan(1), (ushort)t.Length);
-        t.CopyTo(f, 3);
-        _tx.Writer.TryWrite(f);
-    }
+    public void SetMap(string mapName) => _tx.Writer.TryWrite(new SetMapMessage { MapName = mapName ?? "" }.ToBytes());
 
     // Engage (mode=1) or disengage (mode=0) server-side autopilot toward a target. kind: 0 ship,
     // 1 base, 2 rock, 3 waypoint. id is the UNENCODED entity id (strip BaseLock/AsteroidFocus flags
     // before calling; 0 for a waypoint). sector/pos carry the waypoint's sector + world position
-    // (zeros for entity kinds). 27-byte little-endian frame (MsgSetAutopilot = 11).
-    public void SetAutopilot(byte mode, byte kind, ulong id, uint sector, Vector3 pos)
-    {
-        var f = new byte[27];
-        f[0] = 11; // MsgSetAutopilot
-        f[1] = mode;
-        f[2] = kind;
-        BitConverter.TryWriteBytes(f.AsSpan(3), id);
-        BitConverter.TryWriteBytes(f.AsSpan(11), sector);
-        BitConverter.TryWriteBytes(f.AsSpan(15), pos.X);
-        BitConverter.TryWriteBytes(f.AsSpan(19), pos.Y);
-        BitConverter.TryWriteBytes(f.AsSpan(23), pos.Z);
-        _tx.Writer.TryWrite(f);
-    }
+    // (zeros for entity kinds).
+    public void SetAutopilot(byte mode, byte kind, ulong id, uint sector, Vector3 pos) =>
+        _tx.Writer.TryWrite(
+            new SetAutopilotMessage
+            {
+                Mode = mode,
+                Kind = kind,
+                Id = id,
+                Sector = sector,
+                Pos = new Vec3(pos.X, pos.Y, pos.Z),
+            }.ToBytes()
+        );
 
     // Command a friendly ship (F3 map right-click). subject is the commanded ship's raw id;
     // targetKind: 0 ship, 1 base, 2 rock, 3 point, 4 sector (pos ignored — pigs hold just inside
@@ -548,51 +482,24 @@ public partial class GameNetClient : Node, INetClientHost
     // the UNENCODED entity id (strip BaseLock/AsteroidFocus flags before calling; 0 for a point).
     // The server infers the verb (attack vs go-to-idle) from the target's kind+team, gates AI
     // subjects on commander status, and turns human subjects into advisory chat directives.
-    // 34-byte little-endian frame (MsgOrder = 12).
-    public void SendOrder(ulong subjectShipId, byte targetKind, ulong targetId, uint sector, Vector3 pos)
-    {
-        var f = new byte[34];
-        f[0] = 12; // MsgOrder
-        BitConverter.TryWriteBytes(f.AsSpan(1), subjectShipId);
-        f[9] = targetKind;
-        BitConverter.TryWriteBytes(f.AsSpan(10), targetId);
-        BitConverter.TryWriteBytes(f.AsSpan(18), sector);
-        BitConverter.TryWriteBytes(f.AsSpan(22), pos.X);
-        BitConverter.TryWriteBytes(f.AsSpan(26), pos.Y);
-        BitConverter.TryWriteBytes(f.AsSpan(30), pos.Z);
-        _tx.Writer.TryWrite(f);
-    }
-
-    public void SendInput(uint tick, in ShipInputState input)
-    {
-        Span<byte> f = stackalloc byte[38];
-        f[0] = 2; // Input
-        BitConverter.TryWriteBytes(f[1..], tick);
-        BitConverter.TryWriteBytes(f[5..], input.Thrust);
-        BitConverter.TryWriteBytes(f[9..], input.StrafeX);
-        BitConverter.TryWriteBytes(f[13..], input.StrafeY);
-        BitConverter.TryWriteBytes(f[17..], input.Yaw);
-        BitConverter.TryWriteBytes(f[21..], input.Pitch);
-        BitConverter.TryWriteBytes(f[25..], input.Roll);
-        f[29] = (byte)(
-            (input.Firing ? 1 : 0)
-            | (input.Boost ? 2 : 0)
-            | (input.Firing2 ? 4 : 0)
-            | (input.DropChaff ? 8 : 0)
-            | (input.DropMine ? 16 : 0)
-            | (input.DropProbe ? 32 : 0)
+    public void SendOrder(ulong subjectShipId, byte targetKind, ulong targetId, uint sector, Vector3 pos) =>
+        _tx.Writer.TryWrite(
+            new OrderMessage
+            {
+                SubjectShipId = subjectShipId,
+                TargetKind = targetKind,
+                TargetId = targetId,
+                Sector = sector,
+                Pos = new Vec3(pos.X, pos.Y, pos.Z),
+            }.ToBytes()
         );
-        BitConverter.TryWriteBytes(f[30..], input.LockTargetId); // u64 Tab-target for server-authoritative missile lock
-        _tx.Writer.TryWrite(f.ToArray());
-    }
 
-    public void SendPing(uint nonce)
-    {
-        var f = new byte[5];
-        f[0] = 3; // Ping
-        BitConverter.TryWriteBytes(f.AsSpan(1), nonce);
-        _tx.Writer.TryWrite(f);
-    }
+    // Tick-stamped stick state (38 B). Sent on change by ShipController; the server replays the held
+    // input on ticks without one.
+    public void SendInput(uint tick, in ShipInputState input) =>
+        _tx.Writer.TryWrite(InputMessage.From(tick, input).ToBytes());
+
+    public void SendPing(uint nonce) => _tx.Writer.TryWrite(new PingMessage { Nonce = nonce }.ToBytes());
 
     // ---- Socket I/O (background) ------------------------------------------
 
