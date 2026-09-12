@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Stellar Allegiance">
+  <title>Stellar Allegiance</title>
+  <!-- macOS client app icon (project.godot application/config/icon.macos): the app_icon.svg artwork
+       (public-lobby/wwwroot/favicon.svg, keep it in sync) dressed as a raised macOS app icon, so it
+       matches other apps in the Dock and Cmd+Tab:
+       - Apple's icon grid: an 824px body inset 100px on the 1024px canvas, with continuous corners
+         (the UIBezierPath continuous-corner curve at radius 214, fit to macOS 26 system icons).
+       - The glass macOS gives its own icons, measured from system icons: a top-lit sheen, an edge
+         glow lit from the top-left and bottom-right, a thin bright rim, and a soft drop shadow.
+       Godot rasterizes this at its intrinsic size with ThorVG, which lets a blur spill past a
+       clip-path, so the blurred glow is cut to the body with a mask instead. -->
+  <defs>
+    <path id="body" d="M427.13 100H596.87C691.06 100 738.16 100 788.86 116.03C844.22 136.18 887.82 179.78 907.97 235.14C924 285.84 924 332.94 924 427.13V596.87C924 691.06 924 738.16 907.97 788.86C887.82 844.22 844.22 887.82 788.86 907.97C738.16 924 691.06 924 596.87 924H427.13C332.94 924 285.84 924 235.14 907.97C179.78 887.82 136.18 844.22 116.03 788.86C100 738.16 100 691.06 100 596.87V427.13C100 332.94 100 285.84 116.03 235.14C136.18 179.78 179.78 136.18 235.14 116.03C285.84 100 332.94 100 427.13 100Z"/>
+    <path id="glow-band" d="M431.89 91H592.11C690.27 91 739.35 91 792.18 107.71C849.86 128.7 895.3 174.14 916.29 231.82C933 284.65 933 333.73 933 431.89V592.11C933 690.27 933 739.35 916.29 792.18C895.3 849.86 849.86 895.3 792.18 916.29C739.35 933 690.27 933 592.11 933H431.89C333.73 933 284.65 933 231.82 916.29C174.14 895.3 128.7 849.86 107.71 792.18C91 739.35 91 690.27 91 592.11V431.89C91 333.73 91 284.65 107.71 231.82C128.7 174.14 174.14 128.7 231.82 107.71C284.65 91 333.73 91 431.89 91Z"/>
+    <filter id="shadow-blur" x="-0.2" y="-0.2" width="1.4" height="1.4"><feGaussianBlur stdDeviation="15.2"/></filter>
+    <filter id="glow-blur" x="-0.1" y="-0.1" width="1.2" height="1.2"><feGaussianBlur stdDeviation="6"/></filter>
+    <mask id="body-mask"><use href="#body" fill="#fff"/></mask>
+    <linearGradient id="sheen" x1="0" y1="100" x2="0" y2="924" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <!-- edge light along the top-left to bottom-right diagonal: bright at those corners, dim at the others -->
+    <linearGradient id="glow-diag" x1="100" y1="100" x2="924" y2="924" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.62"/>
+      <stop offset="0.25" stop-color="#fff" stop-opacity="0.3125"/>
+      <stop offset="0.5" stop-color="#fff" stop-opacity="0.045"/>
+      <stop offset="0.75" stop-color="#fff" stop-opacity="0.214"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0.4"/>
+    </linearGradient>
+    <!-- lifts the top and right edges above the left and bottom -->
+    <linearGradient id="glow-cross" x1="924" y1="100" x2="100" y2="924" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/>
+      <stop offset="0.25" stop-color="#fff" stop-opacity="0.09"/>
+      <stop offset="0.5" stop-color="#fff" stop-opacity="0"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <!-- drop shadow -->
+  <use href="#body" fill="#000" fill-opacity="0.25" transform="translate(0 8.4)" filter="url(#shadow-blur)"/>
+  <!-- void plate -->
+  <use href="#body" fill="#05070f"/>
+  <g transform="translate(100 100) scale(25.75)">
+    <!-- orbit ring, broken at the horizon -->
+    <path d="M8.97 23.8A10.5 10.5 0 1 1 23.03 23.8" fill="none" stroke="#37e0ff" stroke-width="1.7" stroke-linecap="round" opacity="0.9"/>
+    <!-- allegiance chevron; the void halo keeps the crossings crisp at 16px -->
+    <g fill="none" stroke-linejoin="miter" stroke-miterlimit="6">
+      <path d="M8.8 25.6 16 8l7.2 17.6" stroke="#05070f" stroke-width="5"/>
+      <path d="M8.8 25.6 16 8l7.2 17.6" stroke="#e6dccb" stroke-width="2.8"/>
+    </g>
+  </g>
+  <!-- glass: sheen, edge glow (a band ending 8.5px inside the edge, blurred), bright rim -->
+  <use href="#body" fill="url(#sheen)"/>
+  <g mask="url(#body-mask)">
+    <g filter="url(#glow-blur)">
+      <use href="#glow-band" fill="none" stroke="url(#glow-diag)" stroke-width="35"/>
+      <use href="#glow-band" fill="none" stroke="url(#glow-cross)" stroke-width="35"/>
+    </g>
+  </g>
+  <path d="M426.47 101.25H597.53C691.17 101.25 738 101.25 788.4 117.19C843.43 137.22 886.78 180.57 906.81 235.6C922.75 286 922.75 332.83 922.75 426.47V597.53C922.75 691.17 922.75 738 906.81 788.4C886.78 843.43 843.43 886.78 788.4 906.81C738 922.75 691.17 922.75 597.53 922.75H426.47C332.83 922.75 286 922.75 235.6 906.81C180.57 886.78 137.22 843.43 117.19 788.4C101.25 738 101.25 691.17 101.25 597.53V426.47C101.25 332.83 101.25 286 117.19 235.6C137.22 180.57 180.57 137.22 235.6 117.19C286 101.25 332.83 101.25 426.47 101.25Z" fill="none" stroke="#fff" stroke-opacity="0.16" stroke-width="2.5"/>
+</svg>

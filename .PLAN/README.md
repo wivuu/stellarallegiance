@@ -140,7 +140,6 @@ Not stage-bound — done when convenient or when a stage needs them.
 - ☐ **[S] Spatial audio polish** — finer mix tuning / more event coverage; the missing-sound audit is
   [`sfx-gaps.md`](sfx-gaps.md), the asset catalogue is [`audio-index.md`](../audio-index.md).
 - ☐ Look for opportunities to utilize native `Vector3` and SIMD for performance improvements.
-- ☐ Use the lobby favicon as the client app icon (instead of the Godot icon).
 - ☐ Work to establish a full control map; manual.
 
 ---

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 32 32" role="img" aria-label="Stellar Allegiance">
+  <title>Stellar Allegiance</title>
+  <!-- client app icon (project.godot application/config/icon; macOS overrides it with the raised,
+       grid-sized app_icon_macos.svg): public-lobby/wwwroot/favicon.svg with width/height added. Godot rasterizes
+       the icon at the SVG's intrinsic size, and the favicon's 32px would be blurry in the taskbar.
+       Keep the artwork in sync with the favicon. -->
+  <!-- void plate: keeps the mark legible on light and dark tab strips alike -->
+  <rect width="32" height="32" rx="7" fill="#05070f" />
+  <rect x="0.5" y="0.5" width="31" height="31" rx="6.5" fill="none" stroke="#16243a" />
+  <!-- orbit ring, broken at the horizon -->
+  <path d="M8.97 23.8A10.5 10.5 0 1 1 23.03 23.8" fill="none" stroke="#37e0ff"
+        stroke-width="1.7" stroke-linecap="round" opacity="0.9" />
+  <!-- allegiance chevron; the void halo keeps the crossings crisp at 16px -->
+  <g fill="none" stroke-linejoin="miter" stroke-miterlimit="6">
+    <path d="M8.8 25.6 16 8l7.2 17.6" stroke="#05070f" stroke-width="5" />
+    <path d="M8.8 25.6 16 8l7.2 17.6" stroke="#e6dccb" stroke-width="2.8" />
+  </g>
+</svg>
