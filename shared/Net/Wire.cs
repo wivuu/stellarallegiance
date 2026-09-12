@@ -11,7 +11,10 @@ public static class Wire
     // The layouts themselves are the attributed types in Messages.cs / Records.cs (+ the content
     // defs in ../Defs.cs); tools/wire-gen generates the codecs and tests/WireTest pins the goldens.
     // The per-version change log that used to live here is in git history (`git log -p -- shared/Net/Wire.cs`).
-    public const byte ProtocolVersion = 41; // 41: MsgLobbyState carries one row per team (name + commander); the team count is on the wire
+    // One bump per PR to master (a release), never per commit: master ships 38, and everything this
+    // branch adds over it — salvage streams, loadout hold tail, weapon/cargo def tails, cargo hold,
+    // MsgLobbyState team rows — is one step.
+    public const byte ProtocolVersion = 39;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

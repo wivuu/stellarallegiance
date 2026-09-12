@@ -1084,7 +1084,7 @@ In-game social state: player roster, team assignment, ready status, faction sele
   - `server/Net/LobbyRegistrar.cs` — multi-lobby registry
   - `client/scripts/Lobby.cs` — client-side lobby UI
 - **Related:** [[Team]], [[Faction]], [[Ready State]]
-- **Notes:** Server-hosted; no external DB; team/ready state replicated to all clients. Protocol 41: `MsgLobbyState` carries ONE row per team (`TeamRowRecord`: name + commander id) — the row count is the team count; the hub and `Lobby` read `TeamCount` (= `World.MaxSupportedTeams`) for every side gate, never a `0/1` literal, and the client exposes `TeamCount` / `TeamNameOf` / `CommanderIdOf`. Growing the sim past two teams needs no protocol change (the UI's two-column presentation is the remaining Stage-4 work).
+- **Notes:** Server-hosted; no external DB; team/ready state replicated to all clients. Protocol 39 (the salvage branch's one bump over master's 38): `MsgLobbyState` carries ONE row per team (`TeamRowRecord`: name + commander id) — the row count is the team count; the hub and `Lobby` read `TeamCount` (= `World.MaxSupportedTeams`) for every side gate, never a `0/1` literal, and the client exposes `TeamCount` / `TeamNameOf` / `CommanderIdOf`. Growing the sim past two teams needs no protocol change (the UI's two-column presentation is the remaining Stage-4 work).
 
 ### Team
 Player faction assignment: team 0 (Faction0, blue) or team 1 (Faction1, red).
