@@ -299,12 +299,9 @@ public partial struct LobbyStateMessage
     public byte Phase;
     public byte Winner;
     public LobbyRowRecord[] Players;
-    public string Team0Name;
-    public string Team1Name;
+    public TeamRowRecord[] Teams; // one per team (index = team byte): name + commander id; the count IS the team count
     public int HostId; // -1 when the server is empty
     public string SelectedMap;
-    public int Commander0; // -1 when the side is empty
-    public int Commander1;
 }
 
 [WireMessage(9)]

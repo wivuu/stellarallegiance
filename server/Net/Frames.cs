@@ -742,12 +742,9 @@ public static class Frames
         byte phase,
         byte winner,
         IReadOnlyList<LobbyEntry> entries,
-        string team0Name,
-        string team1Name,
+        IReadOnlyList<(string Name, int Commander)> teams,
         int hostId,
-        string selectedMap,
-        int commander0,
-        int commander1
+        string selectedMap
     )
     {
         var rows = new LobbyRowRecord[Math.Min(entries.Count, 255)];
@@ -764,17 +761,17 @@ public static class Frames
                 ShipId = e.ShipId,
             };
         }
+        var teamRows = new TeamRowRecord[Math.Min(teams.Count, 255)];
+        for (int i = 0; i < teamRows.Length; i++)
+            teamRows[i] = new TeamRowRecord { Name = teams[i].Name, Commander = teams[i].Commander };
         return new LobbyStateMessage
         {
             Phase = phase,
             Winner = winner,
             Players = rows,
-            Team0Name = team0Name,
-            Team1Name = team1Name,
+            Teams = teamRows,
             HostId = hostId,
             SelectedMap = selectedMap,
-            Commander0 = commander0,
-            Commander1 = commander1,
         };
     }
 

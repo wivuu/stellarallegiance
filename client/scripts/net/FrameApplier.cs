@@ -79,18 +79,26 @@ public sealed class FrameApplier
     // Lobby roster (from MsgLobbyState). Read by the Lobby overlay; LobbyChanged fires on update.
     public IReadOnlyList<LobbyPlayer> LobbyPlayers { get; private set; } = Array.Empty<LobbyPlayer>();
 
-    // Session-global lobby state, carried on the tail of MsgLobbyState. Team names default to the
-    // design's until the server streams the real ones; HostId is the server-designated host (first
-    // pilot on the server), -1 when unknown; SelectedMap is the current/"next" map name.
-    public string Team0Name { get; private set; } = "IRON COIL";
-    public string Team1Name { get; private set; } = "ASH SYNDICATE";
+    // Session-global lobby state, carried on MsgLobbyState. One row per team (index = team byte): the
+    // display name (the design's defaults until the server streams the real ones) and the commander's
+    // client id (-1 = side empty/unknown — the commander is the only pilot whose orders AI vessels
+    // execute; everyone else's are advisory). The team COUNT is whatever the server streams. HostId
+    // is the server-designated host (first pilot on the server), -1 when unknown; SelectedMap is the
+    // current/"next" map name.
+    public IReadOnlyList<TeamRowRecord> Teams { get; private set; } =
+        new[]
+        {
+            new TeamRowRecord { Name = "IRON COIL", Commander = -1 },
+            new TeamRowRecord { Name = "ASH SYNDICATE", Commander = -1 },
+        };
+    public int TeamCount => Teams.Count;
+
+    public string TeamNameOf(byte team) => team < Teams.Count ? Teams[team].Name : "";
+
+    public int CommanderIdOf(byte team) => team < Teams.Count ? Teams[team].Commander : -1;
+
     public int HostId { get; private set; } = -1;
     public string SelectedMap { get; private set; } = "";
-
-    // Per-team commanders (v34, MsgLobbyState tail). -1 = side empty/unknown. The commander is the
-    // only pilot whose orders AI vessels execute; everyone else's are advisory.
-    public int Commander0Id { get; private set; } = -1;
-    public int Commander1Id { get; private set; } = -1;
 
     // Available maps (from MsgMapList, sent once after Defs). Read by the Lobby sector pane + map
     // picker; MapListChanged fires when it arrives.
@@ -897,12 +905,9 @@ public sealed class FrameApplier
         var list = new List<LobbyPlayer>(m.Players.Length);
         foreach (var p in m.Players)
             list.Add(new LobbyPlayer(p.Id, p.Name, p.Team, p.Ready, p.HasShip, p.ShipId));
-        Team0Name = m.Team0Name;
-        Team1Name = m.Team1Name;
+        Teams = m.Teams;
         HostId = m.HostId;
         SelectedMap = m.SelectedMap;
-        Commander0Id = m.Commander0;
-        Commander1Id = m.Commander1;
         LobbyPlayers = list;
         // Push the fresh roster's ship -> name map into the renderer so nameplates resolve / refresh
         // (covers a ship snapshot that arrived before its roster row, and respawns under a new id).

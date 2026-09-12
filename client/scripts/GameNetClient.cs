@@ -60,23 +60,19 @@ public partial class GameNetClient : Node, INetClientHost
     // Session-global lobby state, carried on the tail of MsgLobbyState. Team names default to the
     // design's until the server streams the real ones; HostId is the server-designated host (first
     // pilot on the server), -1 when unknown; SelectedMap is the current/"next" map name.
-    public string Team0Name => _frames.Team0Name;
-    public string Team1Name => _frames.Team1Name;
+    public int TeamCount => _frames.TeamCount;
+
+    public string TeamNameOf(byte team) => _frames.TeamNameOf(team);
+
     public int HostId => _frames.HostId;
     public bool IsHost => HostId >= 0 && HostId == LocalClientId;
     public string SelectedMap => _frames.SelectedMap;
 
     // Per-team commanders (v34, MsgLobbyState tail). -1 = side empty/unknown. The commander is the
     // only pilot whose orders AI vessels execute; everyone else's are advisory.
-    public int Commander0Id => _frames.Commander0Id;
-    public int Commander1Id => _frames.Commander1Id;
+    public int CommanderIdOf(byte team) => _frames.CommanderIdOf(team);
 
-    public int CommanderIdOf(byte team) =>
-        team == 0 ? Commander0Id
-        : team == 1 ? Commander1Id
-        : -1;
-
-    public bool IsCommander => MyTeam is 0 or 1 && CommanderIdOf(MyTeam) == LocalClientId;
+    public bool IsCommander => MyTeam < TeamCount && CommanderIdOf(MyTeam) == LocalClientId;
 
     // Available maps (from MsgMapList, sent once after Defs). Read by the Lobby sector pane + map
     // picker; MapListChanged fires when it arrives.

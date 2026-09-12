@@ -19,6 +19,11 @@ namespace SimServer.Net;
 // the plan wants, approximated over TCP).
 public sealed partial class ClientHub
 {
+    // How many real sides this server runs. Every team loop/gate in the net layer reads this (never a
+    // literal 0/1), so the wire and the hub follow the sim when it grows past two; NoTeam stays the
+    // spectator sentinel above every real index.
+    private const int TeamCount = World.MaxSupportedTeams;
+
     // AOI is a distance LOD, not a fixed count: a same-sector ship streams at a cadence
     // chosen by its distance from the viewer — full rate (every tick) inside FullRateRadius,
     // every MidEveryTicks out to MidRateRadius, every CoarseEveryTicks beyond. A same-sector
@@ -274,7 +279,22 @@ public sealed partial class ClientHub
     // are atomic in .NET, and races here are benign (last rename wins; host recomputed from a lobby
     // snapshot), so no dedicated lock. Team-name defaults come from the design ("IRON COIL"/"ASH
     // SYNDICATE"), overwritten as pilots rename their side.
-    private readonly string[] _teamNames = { "IRON COIL", "ASH SYNDICATE" };
+    private readonly string[] _teamNames = DefaultTeamNames();
+
+    // The design's two side names, then a plain label for any further side.
+    private static string[] DefaultTeamNames()
+    {
+        var names = new string[TeamCount];
+        for (int i = 0; i < names.Length; i++)
+            names[i] = i switch
+            {
+                0 => "IRON COIL",
+                1 => "ASH SYNDICATE",
+                _ => $"TEAM {i + 1}",
+            };
+        return names;
+    }
+
     private int _hostId = -1; // first pilot on the server; -1 when empty.
     private string _selectedMap; // the current/"next" map name (advertised only — see MsgSetMap)
     private readonly IReadOnlyList<MapCatalogEntry> _mapCatalog; // available maps, built once at boot
@@ -430,17 +450,10 @@ public sealed partial class ClientHub
         var roster = _lobby.Snapshot(id => _sim.ShipIdOf(id), _players.PlayerIdOf);
         foreach (var e in roster)
             _pilotIdentity[e.Id] = new PilotIdentity(e.Name, e.Team, e.PlayerId);
-        var frame = Protocol.BuildLobbyState(
-            _sim.Phase,
-            _sim.Winner,
-            roster,
-            _teamNames[0],
-            _teamNames[1],
-            _hostId,
-            _selectedMap,
-            _lobby.CommanderOf(0),
-            _lobby.CommanderOf(1)
-        );
+        var teams = new (string Name, int Commander)[TeamCount];
+        for (byte t = 0; t < TeamCount; t++)
+            teams[t] = (_teamNames[t], _lobby.CommanderOf(t));
+        var frame = Protocol.BuildLobbyState(_sim.Phase, _sim.Winner, roster, teams, _hostId, _selectedMap);
         foreach (var c in _clients.Values)
             c.Out.SendReliable(OutFrame.Whole(frame));
     }
@@ -485,11 +498,9 @@ public sealed partial class ClientHub
                 rows.Add(Row(kv.Key, null));
         rows.Sort((a, b) => a.Id.CompareTo(b.Id));
 
-        var teams = new (byte Team, int Garrisons, int Outposts)[]
-        {
-            (0, _sim.GarrisonsDestroyed(0), _sim.OutpostsDestroyed(0)),
-            (1, _sim.GarrisonsDestroyed(1), _sim.OutpostsDestroyed(1)),
-        };
+        var teams = new (byte Team, int Garrisons, int Outposts)[TeamCount];
+        for (byte t = 0; t < TeamCount; t++)
+            teams[t] = (t, _sim.GarrisonsDestroyed(t), _sim.OutpostsDestroyed(t));
         var frame = Protocol.BuildMatchStats(rows, teams);
         _matchStatsFrame = frame;
         foreach (var c in _clients.Values)
@@ -764,7 +775,7 @@ public sealed partial class ClientHub
                     {
                         byte team = _lobby.TeamOf(client.Id);
                         // Can't deploy without a side — a NOAT pilot must pick BLUE/RED first.
-                        if (team != 0 && team != 1)
+                        if (team >= TeamCount)
                         {
                             SystemTo(client, "Pick a team before launching.");
                             break;
@@ -809,7 +820,7 @@ public sealed partial class ClientHub
                     if (!SetTeamNameMessage.TryParse(buffer.AsSpan(0, count), out var rename))
                         break;
                     byte team = rename.Team;
-                    if ((team == 0 || team == 1) && _lobby.LeaderOf(team) == client.Id)
+                    if (team < TeamCount && _lobby.LeaderOf(team) == client.Id)
                     {
                         string name = rename.Name.Trim().ToUpperInvariant();
                         if (name.Length > Wire.TeamNameMaxLength)
@@ -1094,7 +1105,7 @@ public sealed partial class ClientHub
     private byte? TeamOrWarn(Client client)
     {
         byte team = _lobby.TeamOf(client.Id);
-        if (team is 0 or 1)
+        if (team < TeamCount)
             return team;
         SystemTo(client, "Pick a team first.");
         return null;
@@ -1555,7 +1566,7 @@ public sealed partial class ClientHub
         {
             var cs = _sim.ChaffSpawnedThisStep;
             chaffVisByTeam = new();
-            for (byte t = 0; t <= 1; t++)
+            for (byte t = 0; t < TeamCount; t++)
             {
                 HashSet<int>? vis = null;
                 for (int i = 0; i < cs.Count; i++)
@@ -1652,7 +1663,7 @@ public sealed partial class ClientHub
             // Welcome for the restored team (F1's team-change hook). A normal spawn already matches,
             // so only a reclaim trips this.
             byte shipTeam = ships[si].Team;
-            if (shipTeam != client.Team && (shipTeam == 0 || shipTeam == 1))
+            if (shipTeam != client.Team && shipTeam < TeamCount)
             {
                 client.Team = shipTeam;
                 _lobby.SetTeam(client.Id, shipTeam);

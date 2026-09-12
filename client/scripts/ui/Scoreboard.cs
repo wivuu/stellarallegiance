@@ -234,13 +234,7 @@ public partial class Scoreboard : Control
 
     // ---- shared data helpers ------------------------------------------------
 
-    private string TeamName(int team) =>
-        team switch
-        {
-            0 => _net.Team0Name,
-            1 => _net.Team1Name,
-            _ => "ALL PILOTS",
-        };
+    private string TeamName(int team) => team >= 0 && team < _net.TeamCount ? _net.TeamNameOf((byte)team) : "ALL PILOTS";
 
     private static Color TeamColor(int team) => team is 0 or 1 ? DesignTokens.Faction(team) : DesignTokens.Text2;
 
