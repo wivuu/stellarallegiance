@@ -35,7 +35,7 @@ Server's authoritative 20 Hz simulation loop that drives all gameplay state upda
 - **Key Files:**
   - `server/Sim/Simulation.cs` — main loop tick handler
   - `server/Sim/Simulation.Pig.cs` — pig brain decision integration
-  - `server/Net/Protocol.cs` — snapshot quantization and transmission
+  - `shared/Net/Records.cs` (`ShipRecord`, 57 B) + `server/Net/Frames.cs` (`ShipRecordOf`) — the quantized snapshot record and its fill; `server/Net/Protocol.cs` is the byte facade the hub calls
 - **Related:** [[Flight Model]], [[PigBrain]]
 - **Notes:** Never blocks on network I/O; runs deterministically regardless of client connections
 
@@ -613,7 +613,7 @@ Server-driven content authoring: gameplay/balance values (hulls, weapons, techs,
   - `factions/src/Allegiance.Factions/` — content model classes and serialization
   - `server/Content/ContentLoader.cs` — boot-time loading
   - `shared/ContentValidator.cs` — YAML→defs consistency checks
-  - `server/Net/Protocol.cs` — Protocol.MsgDefs wire format
+  - `shared/Net/Messages.cs` (`DefsMessage`) + the `[WireRecord]` def classes in `shared/Defs.cs` — the MsgDefs wire format (generated codec)
   - `client/scripts/DefRegistry.cs` — client-side def subscription and caching
 - **Related:** [[Def]], [[Protocol.MsgDefs]], [[Tech Tree]], [[World Tuning Blocks]]
 - **Notes:** Patchless runtime streaming; no client fallback (client holds authority until defs load)
@@ -636,7 +636,7 @@ Compiled gameplay constant: hull stats, weapon stats, tech gating, prices, etc. 
 - **Key Files:**
   - `shared/Defs.cs` — core def table registry and subscriptions
   - `client/scripts/DefRegistry.cs` — client caching and subscription logic
-  - `server/Net/Protocol.cs` — MsgDefs serialization
+  - `server/Net/Frames.cs` (`Defs`) — MsgDefs fill; layout = `shared/Net/Messages.cs` `DefsMessage`
 - **Related:** [[YAML Content Pipeline]], [[Tech Tree]], [[Hull]], [[Weapon]]
 - **Notes:** Immutable after server boot; clients guard all gameplay until defs load
 
@@ -762,7 +762,7 @@ footer buys the drone (commander-only, rock-discovery + build-queue gated).
 Binary wire format with quantized/compressed snapshots, separate missile stride, WebRTC/WebSocket dual transport.
 - **Frequency:** Very common
 - **Key Files:**
-  - `server/Net/Protocol.cs` — message definitions and serialization
+  - `shared/Net/Messages.cs` / `Records.cs` — message definitions (generated codecs); `server/Net/Frames.cs` — fills; `server/Net/Protocol.cs` — byte facade (ids/sizes/`Build*`)
   - `client/scripts/GameNetClient.cs` — deserialization and state application
   - `shared/WireQuant.cs` — quantization (f16 compression)
 - **Related:** [[MsgSnapshot]], [[MsgMissiles]], [[WebRTC]]
@@ -772,7 +772,7 @@ Binary wire format with quantized/compressed snapshots, separate missile stride,
 Quantized world state: player positions, rotations, velocities, health, weapons state.
 - **Frequency:** Very common
 - **Key Files:**
-  - `server/Net/Protocol.cs` — MsgSnapshot structure and serialization
+  - `shared/Net/Messages.cs` (`SnapshotMessage`) + `Records.cs` (`ShipRecord`) — MsgSnapshot structure; `server/Net/ClientHub.cs` assembles the body from pre-serialized record slices
   - `client/scripts/GameNetClient.cs` — snapshot application and reconciliation
   - `server/Sim/Simulation.cs` — snapshot generation per SimTick
 - **Related:** [[Protocol]], [[WireQuant]], [[AOI]]
@@ -782,7 +782,7 @@ Quantized world state: player positions, rotations, velocities, health, weapons 
 Separate protocol message for active missiles; never packed into ship snapshots.
 - **Frequency:** Common
 - **Key Files:**
-  - `server/Net/Protocol.cs` — MsgMissiles structure
+  - `shared/Net/Messages.cs` (`MissilesMessage`) + `Records.cs` (`MissileRecord`) — MsgMissiles structure
   - `client/scripts/GameNetClient.cs` — missile state application
   - `server/Sim/Simulation.cs` — missile lifecycle updates
 - **Related:** [[Missile]], [[MsgSnapshot]], [[Protocol]]
@@ -863,7 +863,7 @@ Short-lived (60s), single-use ES256 JWT the public lobby issues to a signed-in p
 Handshake message from server to client: assigns player ID, initial ship, world state snapshot, reconnect token.
 - **Frequency:** Common
 - **Key Files:**
-  - `server/Net/Protocol.cs` — MsgWelcome structure
+  - `shared/Net/Messages.cs` (`WelcomeMessage`) + the `*Static` records in `Records.cs` — MsgWelcome structure; `server/Net/Frames.cs` (`Welcome`) — the fog-gated fill
   - `client/scripts/GameNetClient.cs` — welcome handler and world rebuild
   - `server/Net/ClientHub.cs` — welcome generation
 - **Related:** [[Reconnect Grace]], [[MsgSnapshot]]
