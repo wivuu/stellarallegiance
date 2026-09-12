@@ -35,6 +35,7 @@ using SimServer.Content;
 using SimServer.Net;
 using SimServer.Sim;
 using StellarAllegiance.Shared;
+using TestKit;
 
 // Coarse/mid cadences are read into ClientHub's static readonly fields on first access; pin them to the
 // stock defaults up front so the hub-level tests below can reason about "coarse vs non-coarse" ticks
@@ -217,7 +218,7 @@ Simulation.ShipSim JoinShip(Simulation sim, int clientId, byte team)
         sim.Step();
         if (enemy.Health != healthBefore)
             anyEarlyDamage = true;
-        if (sim.MineGoneThisStep.Any(g => g.fieldId == fieldId))
+        if (sim.Events.MineGone.Any(g => g.fieldId == fieldId))
             anyEarlyGone = true;
     }
     Check(
@@ -235,9 +236,9 @@ Simulation.ShipSim JoinShip(Simulation sim, int clientId, byte team)
         $"tick bookkeeping off (now {sim.Tick}, arm {field.ArmAtTick})"
     );
     Check(
-        enemy.Health < healthBefore && sim.MineGoneThisStep.Any(g => g.fieldId == fieldId && g.reason == 2),
+        enemy.Health < healthBefore && sim.Events.MineGone.Any(g => g.fieldId == fieldId && g.reason == 2),
         $"the first armed tick damages a moving enemy inside the field ({healthBefore} -> {enemy.Health}) and emits a reason-2 hit-FX ping",
-        $"armed field failed to hit a moving enemy (health {healthBefore} -> {enemy.Health}, ping={sim.MineGoneThisStep.Any(g => g.fieldId == fieldId && g.reason == 2)})"
+        $"armed field failed to hit a moving enemy (health {healthBefore} -> {enemy.Health}, ping={sim.Events.MineGone.Any(g => g.fieldId == fieldId && g.reason == 2)})"
     );
 }
 
@@ -309,7 +310,7 @@ Simulation.ShipSim JoinShip(Simulation sim, int clientId, byte team)
         {
             PlaceMoving(friendly, field2.Center, new Vec3(200f, 0f, 0f));
             sim2.Step();
-            if (sim2.MineGoneThisStep.Any(g => g.fieldId == field2Id))
+            if (sim2.Events.MineGone.Any(g => g.fieldId == field2Id))
                 friendlyPinged = true;
         }
         Check(
@@ -392,12 +393,12 @@ Simulation.ShipSim JoinShip(Simulation sim, int clientId, byte team)
     for (uint i = 0; i < field.ExpireAtTick + 10 && !removed; i++)
     {
         sim.Step();
-        if (sim.MineGoneThisStep.Any(g => g.fieldId == fieldId))
+        if (sim.Events.MineGone.Any(g => g.fieldId == fieldId))
             anyGone = true;
         if (FindField(sim, fieldId) is null)
         {
             removed = true;
-            changedOnRemoval = sim.MinefieldsChangedThisStep;
+            changedOnRemoval = sim.Events.MinefieldsChanged;
         }
     }
     Check(
@@ -412,8 +413,8 @@ Simulation.ShipSim JoinShip(Simulation sim, int clientId, byte team)
     );
     Check(
         changedOnRemoval,
-        "MinefieldsChangedThisStep fires on the expiry/removal tick",
-        "the removal tick did not raise MinefieldsChangedThisStep"
+        "Events.MinefieldsChanged fires on the expiry/removal tick",
+        "the removal tick did not raise Events.MinefieldsChanged"
     );
 }
 
@@ -562,11 +563,7 @@ ClientHub MakeHub(Simulation sim, bool autoStart) =>
 // Fresh-join Hello (v9): [MsgHello][secretLen 0][nameLen][name][tokenLen 0].
 void FeedHello(FakeHubTransport ft)
 {
-    var name = Encoding.UTF8.GetBytes("mine");
-    var hello = new List<byte> { Protocol.MsgHello, 0, (byte)name.Length };
-    hello.AddRange(name);
-    hello.Add(0);
-    ft.Feed(hello.ToArray());
+    ft.Feed(HubFrames.Hello("mine"));
 }
 
 // The latest MsgMinefields frame the server sent this client (FIFO enumeration of the transport).
@@ -623,7 +620,7 @@ uint ExpectedAnchor(Simulation sim, byte team)
 
     FeedHello(ft);
     System.Threading.Thread.Sleep(50);
-    ft.Feed(new byte[] { Protocol.MsgSetTeam, 0 });
+    ft.Feed(HubFrames.SetTeam(0));
     System.Threading.Thread.Sleep(50);
 
     void Pump(int n)
@@ -635,7 +632,7 @@ uint ExpectedAnchor(Simulation sim, byte team)
         }
     }
     Pump(20); // matchmaker auto-starts the match
-    ft.Feed(new byte[] { Protocol.MsgSpawn, FlightModel.ClassBomber, 0, 0, 0, 0, 0, 0, 0, 0 }); // v36: [4][cls][u64 launchBaseId=0]
+    ft.Feed(HubFrames.Spawn(FlightModel.ClassBomber));
     System.Threading.Thread.Sleep(50);
     Pump(5); // let the spawn resolve into a controlled ship
 
@@ -658,7 +655,7 @@ uint ExpectedAnchor(Simulation sim, byte team)
     ulong fieldId = sim.Minefields[0].FieldId;
 
     ft.Sent.Clear();
-    hub.AfterStep(); // MinefieldsChangedThisStep → a frame goes out
+    hub.AfterStep(); // Events.MinefieldsChanged → a frame goes out
     var f1 = WaitMinefields(ft);
     bool okHeader =
         f1 is not null
@@ -718,7 +715,7 @@ uint ExpectedAnchor(Simulation sim, byte team)
 
     FeedHello(ft);
     System.Threading.Thread.Sleep(50);
-    ft.Feed(new byte[] { Protocol.MsgSetTeam, 0 });
+    ft.Feed(HubFrames.SetTeam(0));
     System.Threading.Thread.Sleep(50);
 
     // The client is registered but NO AfterStep has run yet (LastMinefieldAnchor == uint.MaxValue).
@@ -758,7 +755,7 @@ uint ExpectedAnchor(Simulation sim, byte team)
 
     FeedHello(ft);
     System.Threading.Thread.Sleep(50);
-    ft.Feed(new byte[] { Protocol.MsgSetTeam, 0 });
+    ft.Feed(HubFrames.SetTeam(0));
     System.Threading.Thread.Sleep(50);
 
     void Pump(int n)
@@ -770,7 +767,7 @@ uint ExpectedAnchor(Simulation sim, byte team)
         }
     }
     Pump(20); // auto-start
-    ft.Feed(new byte[] { Protocol.MsgSpawn, FlightModel.ClassScout, 0, 0, 0, 0, 0, 0, 0, 0 }); // v36: [4][cls][u64 launchBaseId=0]
+    ft.Feed(HubFrames.Spawn(FlightModel.ClassScout));
     System.Threading.Thread.Sleep(50);
     Pump(5);
     var viewer = sim.Ships.First(s => s.OwnerClientId == 1);
@@ -838,33 +835,3 @@ Console.WriteLine(failures == 0 ? "\nALL MINE TESTS PASSED" : $"\n{failures} MIN
 return failures == 0 ? 0 : 1;
 
 // In-memory IClientTransport for the hub-level tests: feed client->server frames, capture server->client
-// (copied verbatim from tests/FogTest/Program.cs — the shared hub-harness pattern).
-sealed class FakeHubTransport : SimServer.Net.IClientTransport
-{
-    private readonly System.Collections.Concurrent.BlockingCollection<byte[]> _in = new();
-    public readonly System.Collections.Concurrent.ConcurrentQueue<byte[]> Sent = new();
-
-    public void Feed(byte[] frame) => _in.Add(frame);
-
-    public async ValueTask<int> ReceiveAsync(byte[] buffer, System.Threading.CancellationToken ct)
-    {
-        try
-        {
-            byte[] f = await Task.Run(() => _in.Take(ct), ct);
-            Array.Copy(f, buffer, f.Length);
-            return f.Length;
-        }
-        catch (OperationCanceledException)
-        {
-            return -1; // transport closed
-        }
-    }
-
-    public ValueTask SendAsync(ReadOnlyMemory<byte> data, System.Threading.CancellationToken ct)
-    {
-        Sent.Enqueue(data.ToArray());
-        return ValueTask.CompletedTask;
-    }
-
-    public ValueTask CloseAsync(string reason, System.Threading.CancellationToken ct) => ValueTask.CompletedTask;
-}

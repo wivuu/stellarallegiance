@@ -191,7 +191,7 @@ Simulation.MissileSim? FindMissile(Simulation sim, ulong id)
     for (uint i = 0; i < seeker.ProjectileLifeTicks + 5 && !impactSeen; i++)
     {
         sim.Step();
-        foreach (var g in sim.MissileGoneThisStep)
+        foreach (var g in sim.Events.MissileGone)
             if (g.id == missileId)
             {
                 impactSeen = true;
@@ -200,8 +200,8 @@ Simulation.MissileSim? FindMissile(Simulation sim, ulong id)
     }
     Check(
         impactSeen,
-        "missile resolves within its lifetime (MissileGoneThisStep fires)",
-        "missile never resolved (no MissileGoneThisStep entry) within ProjectileLifeTicks"
+        "missile resolves within its lifetime (Events.MissileGone fires)",
+        "missile never resolved (no Events.MissileGone entry) within ProjectileLifeTicks"
     );
     Check(
         impactReason == 1,
@@ -250,7 +250,7 @@ Simulation.MissileSim? FindMissile(Simulation sim, ulong id)
     for (uint i = 0; i < seeker.ProjectileLifeTicks + 5 && !expiredSeen; i++)
     {
         sim.Step();
-        foreach (var g in sim.MissileGoneThisStep)
+        foreach (var g in sim.Events.MissileGone)
         {
             if (g.id != missileId)
                 continue;
@@ -365,7 +365,7 @@ Simulation.MissileSim? FindMissile(Simulation sim, ulong id)
             positions.Add(mis.Pos);
             velocities.Add(mis.Vel);
         }
-        foreach (var g in sim.MissileGoneThisStep)
+        foreach (var g in sim.Events.MissileGone)
             if (g.id == missileId && g.reason == 1)
                 impactTick = sim.Tick;
     }
@@ -442,7 +442,7 @@ Simulation.MissileSim? FindMissile(Simulation sim, ulong id)
         var m = FindMissile(sim, dumbId);
         if (m is not null && (m.Vel.X != 0f || m.Vel.Y != 0f))
             veered = true;
-        foreach (var g in sim.MissileGoneThisStep)
+        foreach (var g in sim.Events.MissileGone)
             if (g.id == dumbId)
             {
                 if (g.reason == 1)
@@ -517,7 +517,7 @@ Simulation.MissileSim? FindMissile(Simulation sim, ulong id)
     for (uint i = 0; i < seeker.ProjectileLifeTicks + 5 && !impactSeen; i++)
     {
         sim.Step();
-        foreach (var g in sim.MissileGoneThisStep)
+        foreach (var g in sim.Events.MissileGone)
             if (g.id == missileId && g.reason == 1)
             {
                 impactSeen = true;
@@ -770,7 +770,7 @@ void PositionNoseOnBase(Simulation.ShipSim ship, Vec3 basePos, float standoff = 
     for (uint i = 0; i < seeker.ProjectileLifeTicks + 5 && !impactSeen; i++)
     {
         sim.Step();
-        foreach (var g in sim.MissileGoneThisStep)
+        foreach (var g in sim.Events.MissileGone)
             if (g.id == dumbId)
             {
                 impactSeen = true;
@@ -834,7 +834,7 @@ void PositionNoseOnBase(Simulation.ShipSim ship, Vec3 basePos, float standoff = 
     {
         foreach (var m in sim.Missiles)
             flight.Add((sim.Tick, m.MissileId, m.Pos, m.Vel));
-        foreach (var g in sim.MissileGoneThisStep)
+        foreach (var g in sim.Events.MissileGone)
             gone.Add((sim.Tick, g.id, g.reason));
     }
 
@@ -1035,7 +1035,7 @@ void LayChaffCloud(Simulation sim, Simulation.ShipSim ship, int count)
             decoyed = true;
             decoyId = m.DecoyChaffId;
         }
-        foreach (var g in sim.MissileGoneThisStep)
+        foreach (var g in sim.Events.MissileGone)
             if (g.id == missileId)
             {
                 goneSeen = true;
@@ -1133,7 +1133,7 @@ void LayChaffCloud(Simulation sim, Simulation.ShipSim ship, int count)
         var m = FindMissile(sim, torpId);
         if (m is not null && (m.TargetShipId != target.ShipId || m.DecoyChaffId != 0))
             everDecoyed = true;
-        foreach (var g in sim.MissileGoneThisStep)
+        foreach (var g in sim.Events.MissileGone)
             if (g.id == torpId)
             {
                 impactSeen = true;
@@ -1175,7 +1175,7 @@ void LayChaffCloud(Simulation sim, Simulation.ShipSim ship, int count)
     {
         target.HeldInput = new ShipInputState { DropChaff = true }; // held every tick (no client edge-detect)
         sim.Step();
-        if (sim.ChaffSpawnedThisStep.Count > 0)
+        if (sim.Events.ChaffSpawned.Count > 0)
             spawnTicks.Add(sim.Tick);
     }
 
@@ -1301,7 +1301,7 @@ void DockAtOwnBase(Simulation sim, Simulation.ShipSim ship)
             flight.Add((sim.Tick, m.Pos, m.Vel));
         foreach (var c in sim.Chaff)
             chaff.Add((sim.Tick, c.ChaffId, c.Pos));
-        foreach (var g in sim.MissileGoneThisStep)
+        foreach (var g in sim.Events.MissileGone)
         {
             gone.Add((sim.Tick, g.id, g.reason));
             if (g.id == missileId)
@@ -1420,7 +1420,7 @@ void DockAtOwnBase(Simulation sim, Simulation.ShipSim ship)
         var m = FindMissile(sim, missileId);
         if (m is not null && MathF.Abs(m.Vel.X) > 1e-3f)
             steered = true; // proves guidance is actually correcting heading (a dumbfire launch is NOT dead-straight)
-        foreach (var g in sim.MissileGoneThisStep)
+        foreach (var g in sim.Events.MissileGone)
             if (g.id == missileId)
             {
                 impactSeen = true;
@@ -1493,7 +1493,7 @@ void DockAtOwnBase(Simulation sim, Simulation.ShipSim ship)
     for (uint i = 0; i < dumbfire.ProjectileLifeTicks + 5 && !impactSeen; i++)
     {
         sim.Step();
-        foreach (var g in sim.MissileGoneThisStep)
+        foreach (var g in sim.Events.MissileGone)
             if (g.id == dumbId)
             {
                 impactSeen = true;

@@ -101,21 +101,10 @@ public sealed partial class Simulation
     // constructors treat them as taken.
     private readonly HashSet<ulong> _rocksWithBase = new();
 
-    // Team-scoped notices the hub relays as system chat.
-    public readonly List<(byte Team, string Text)> ConstructorNoticesThisStep = new();
-
-    // Set whenever a constructor's production/queue/order state changed this step, so the hub streams a
-    // fresh per-team MsgConstructorState (mirror of ResearchChangedThisStep). Cleared by the hub.
-    public bool ConstructorChangedThisStep;
-
     // The last tick BuildConstructorBuilds saw at least one active build. Lets it keep emitting a
     // 0-count frame for a short grace window after builds end, so the client (lossy stream) reliably
     // learns of the drop and fades the build sphere out (instead of it sticking on the finished base).
     public uint LastConstructorBuildTick;
-
-    // Base ids created this step (constructor completions). The hub broadcasts a one-base MsgReveal for
-    // these when fog is OFF (fog-on streams them through the per-team reveal log in RevealBaseToTeam).
-    public readonly List<ulong> BasesCreatedThisStep = new();
 
     // The (single) constructor hull: lowest ClassId whose def is a constructor chassis, or -1 when the
     // content has none (construction then never activates).
@@ -374,15 +363,15 @@ public sealed partial class Simulation
             c.State = ConstructorState.Producing;
             c.PhaseStartTick = tick;
             active[c.LaunchBaseId] = a + 1;
-            ConstructorChangedThisStep = true;
+            Events.ConstructorChanged = true;
             if (c.ProducesMiner)
-                TeamStateChangedThisStep = true; // miner producers ride the MsgTeamState "X / N" tail
+                Events.TeamStateChanged = true; // miner producers ride the MsgTeamState "X / N" tail
         }
     }
 
     private void TryBuyConstructor(byte team, byte stationType, ulong launchBaseId, uint tick)
     {
-        void Notice(string t) => ConstructorNoticesThisStep.Add((team, t));
+        void Notice(string t) => Events.ConstructorNotices.Add((team, t));
         if (!ConstructorsEnabled)
         {
             Notice("Construction is disabled on this server.");
@@ -452,7 +441,7 @@ public sealed partial class Simulation
         }
         // Charge the STATION price (the constructor is the delivery mechanism; the hull itself is free).
         ts.Credits -= station.Price;
-        TeamStateChangedThisStep = true;
+        Events.TeamStateChanged = true;
         NewConstructorSlot(team, stationType, gb.Id, tick);
         Notice(
             $"Constructor building {station.Name} purchased — order it to a {RockClassName(station.BuildRockClass)} asteroid."
@@ -476,7 +465,7 @@ public sealed partial class Simulation
             ProductionTicks = SecondsToTicks(_constructor.ProductionSeconds),
         };
         _constructors.Add(slot);
-        ConstructorChangedThisStep = true;
+        Events.ConstructorChanged = true;
     }
 
     // A MINER order enters the SAME per-garrison pipeline as a constructor (Simulation.Mining.TryBuyMiner
@@ -497,8 +486,8 @@ public sealed partial class Simulation
                 State = ConstructorState.Queued,
             }
         );
-        ConstructorChangedThisStep = true;
-        TeamStateChangedThisStep = true; // producing/queued miners count toward MinerCount → restream the "X / N" tail
+        Events.ConstructorChanged = true;
+        Events.TeamStateChanged = true; // producing/queued miners count toward MinerCount → restream the "X / N" tail
     }
 
     // Commander cancel of a not-yet-launched order (Queued or still Producing): refund the price and
@@ -522,12 +511,12 @@ public sealed partial class Simulation
             if (World.TeamStates.TryGetValue(team, out var ts))
             {
                 ts.Credits += refund;
-                TeamStateChangedThisStep = true;
+                Events.TeamStateChanged = true;
             }
             _constructors.RemoveAt(i);
-            ConstructorChangedThisStep = true;
+            Events.ConstructorChanged = true;
             string what = slot.ProducesMiner ? "Miner" : StationCatalogFor(slot.BuildStationTypeId)?.Name ?? "Constructor";
-            ConstructorNoticesThisStep.Add((team, $"{what} production cancelled — refunded."));
+            Events.ConstructorNotices.Add((team, $"{what} production cancelled — refunded."));
             return true;
         }
         return false;
@@ -581,9 +570,9 @@ public sealed partial class Simulation
         for (int i = 0; i < _constructors.Count; i++)
             if (ReferenceEquals(_constructors[i].Ship, s))
             {
-                ConstructorNoticesThisStep.Add((s.Team, "Constructor destroyed."));
+                Events.ConstructorNotices.Add((s.Team, "Constructor destroyed."));
                 _constructors.RemoveAt(i);
-                ConstructorChangedThisStep = true;
+                Events.ConstructorChanged = true;
                 break;
             }
     }
@@ -609,17 +598,17 @@ public sealed partial class Simulation
                     {
                         _constructors.RemoveAt(i);
                         NewMinerSlot(slot.Team, tick); // launches on the next brain tick like a seed miner
-                        ConstructorChangedThisStep = true;
-                        MinerNoticesThisStep.Add(
+                        Events.ConstructorChanged = true;
+                        Events.MinerNotices.Add(
                             (slot.Team, $"Miner ready ({MinerCount(slot.Team)}/{_mining.MaxMinersPerTeam}).")
                         );
                         continue;
                     }
                     SpawnConstructor(slot, tick);
                     slot.State = ConstructorState.Idle;
-                    ConstructorChangedThisStep = true;
+                    Events.ConstructorChanged = true;
                     StationCatalogDef? st = StationCatalogFor(slot.BuildStationTypeId);
-                    ConstructorNoticesThisStep.Add(
+                    Events.ConstructorNotices.Add(
                         (
                             slot.Team,
                             $"Constructor for {st?.Name ?? "a base"} launched — order it to a {RockClassName(st?.BuildRockClass ?? 255)} asteroid."
@@ -644,7 +633,7 @@ public sealed partial class Simulation
                     // its timer out (CompleteConstruction retires the drone if the rock vanished).
                     if (World.RockById(slot.TargetRockId) is null || _rocksWithBase.Contains(slot.TargetRockId))
                     {
-                        ConstructorNoticesThisStep.Add(
+                        Events.ConstructorNotices.Add(
                             (slot.Team, "Constructor's build site is gone — order it to another asteroid.")
                         );
                         slot.TargetRockId = 0;
@@ -652,7 +641,7 @@ public sealed partial class Simulation
                         // Idle holds HERE (see ConstructorExecute) — never a trek back to the garrison.
                         slot.MoveSector = s.SectorId;
                         slot.MovePos = s.State.Pos;
-                        ConstructorChangedThisStep = true;
+                        Events.ConstructorChanged = true;
                         break;
                     }
                     // Aligning is the only TIMED pre-build phase (the station's align-time-seconds);
@@ -666,7 +655,7 @@ public sealed partial class Simulation
                     {
                         slot.State = ConstructorState.Approaching;
                         slot.PhaseStartTick = tick;
-                        ConstructorChangedThisStep = true;
+                        Events.ConstructorChanged = true;
                     }
                     break;
                 }
@@ -706,10 +695,10 @@ public sealed partial class Simulation
         // upgrade devs are all `single` — but the path is here so `all` behaves as documented.)
         MaybePreUpgradeSpawnedBase(slot.Team, baseId, slot.BuildStationTypeId);
         RevealBaseToTeam(slot.Team, baseId);
-        BasesCreatedThisStep.Add(baseId);
-        BasesChangedThisStep = true;
+        Events.BasesCreated.Add(baseId);
+        Events.BasesChanged = true;
         StationCatalogDef? st = StationCatalogFor(slot.BuildStationTypeId);
-        ConstructorNoticesThisStep.Add((slot.Team, $"{st?.Name ?? "Base"} constructed."));
+        Events.ConstructorNotices.Add((slot.Team, $"{st?.Name ?? "Base"} constructed."));
         RetireConstructor(slot);
     }
 
@@ -734,7 +723,7 @@ public sealed partial class Simulation
             _order.Remove(s);
         }
         _constructors.Remove(slot);
-        ConstructorChangedThisStep = true;
+        Events.ConstructorChanged = true;
     }
 
     // ---- Steering (20 Hz, via InputFor). Synthesized inputs never fire. ----
@@ -916,7 +905,7 @@ public sealed partial class Simulation
                 {
                     slot.State = ConstructorState.Aligning;
                     slot.PhaseStartTick = tick;
-                    ConstructorChangedThisStep = true;
+                    Events.ConstructorChanged = true;
                 }
                 return input;
             }
@@ -955,7 +944,7 @@ public sealed partial class Simulation
                 {
                     slot.State = ConstructorState.Sinking;
                     slot.PhaseStartTick = tick;
-                    ConstructorChangedThisStep = true;
+                    Events.ConstructorChanged = true;
                 }
                 return Creep(rock.Pos, _constructor.ApproachSpeed, ConstructorEmbedShell(rockR));
             }
@@ -975,7 +964,7 @@ public sealed partial class Simulation
                 {
                     slot.State = ConstructorState.Building;
                     slot.PhaseStartTick = tick;
-                    ConstructorChangedThisStep = true;
+                    Events.ConstructorChanged = true;
                     // Claim the rock the moment the build sphere takes over, so nothing else builds here.
                     _rocksWithBase.Add(slot.TargetRockId);
                 }
@@ -1006,7 +995,7 @@ public sealed partial class Simulation
         Vec3 pos
     )
     {
-        void Notice(string t) => OrderNoticesThisStep.Add((cid, t));
+        void Notice(string t) => Events.OrderNotices.Add((cid, t));
 
         // Once the sphere phase has begun the drone is committed to that asteroid.
         if (slot.State is ConstructorState.Sinking or ConstructorState.Building)
@@ -1029,7 +1018,7 @@ public sealed partial class Simulation
                 slot.MovePos = pos;
                 slot.MoveFromEntry = false;
                 slot.State = ConstructorState.MoveTo;
-                ConstructorChangedThisStep = true;
+                Events.ConstructorChanged = true;
                 Notice($"Constructor moving to {World.SectorName(sector)}.");
                 return;
             }
@@ -1045,7 +1034,7 @@ public sealed partial class Simulation
                 slot.MovePos = default;
                 slot.MoveFromEntry = true;
                 slot.State = ConstructorState.MoveTo;
-                ConstructorChangedThisStep = true;
+                Events.ConstructorChanged = true;
                 Notice($"Constructor moving to {World.SectorName(sector)}.");
                 return;
             }
@@ -1081,7 +1070,7 @@ public sealed partial class Simulation
         }
         slot.TargetRockId = targetId;
         slot.State = ConstructorState.ToRock;
-        ConstructorChangedThisStep = true;
+        Events.ConstructorChanged = true;
         Notice($"Constructor dispatched to build on the {RockClassName((byte)World.RockClassOf(targetId))} asteroid.");
     }
 
@@ -1102,7 +1091,7 @@ public sealed partial class Simulation
                 slot.MoveSector = live.SectorId;
                 slot.MovePos = live.State.Pos;
             }
-            ConstructorChangedThisStep = true;
+            Events.ConstructorChanged = true;
         }
     }
 
@@ -1175,13 +1164,13 @@ public sealed partial class Simulation
         if (changed)
         {
             ResolveTeamUnlocks();
-            TeamStateChangedThisStep = true;
+            Events.TeamStateChanged = true;
         }
     }
 
     // Fog-on: push a newly-built base into its OWNING team's reveal log so it streams to that team's
     // clients immediately (per-client MsgReveal cursor). Enemies discover it via the normal vision scan.
-    // Fog-off: no per-team vision — the hub broadcasts a one-base MsgReveal from BasesCreatedThisStep.
+    // Fog-off: no per-team vision — the hub broadcasts a one-base MsgReveal from Events.BasesCreated.
     private void RevealBaseToTeam(byte team, ulong baseId)
     {
         if (!FogEnabled || VisionFor(team) is not { } tv)

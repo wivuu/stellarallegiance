@@ -201,7 +201,7 @@ public sealed partial class Simulation
             {
                 var cg = _shipGrid.TryGetValue(mis.SectorId, out var csg) ? csg : null;
                 ApplyBlast(mis.Team, mis.OwnerClientId, w, chaffDetonatePos, 0, cg, tick, mis.SectorId);
-                MissileGoneThisStep.Add((mis.MissileId, 1, mis.SectorId, chaffDetonatePos));
+                Events.MissileGone.Add((mis.MissileId, 1, mis.SectorId, chaffDetonatePos));
                 (remove ??= new()).Add(mis);
                 continue;
             }
@@ -350,7 +350,7 @@ public sealed partial class Simulation
                 else if (hitBase >= 0 && w.CanDamageBase)
                     ApplyBaseDamage(hitBase, w.Damage * w.DirectHitMult * md, tick, mis.OwnerClientId); // blast never touches the base
                 ApplyBlast(mis.Team, mis.OwnerClientId, w, hitPos, hitShip, shipGrid, tick, mis.SectorId);
-                MissileGoneThisStep.Add((mis.MissileId, 1, mis.SectorId, hitPos)); // impact
+                Events.MissileGone.Add((mis.MissileId, 1, mis.SectorId, hitPos)); // impact
                 (remove ??= new()).Add(mis);
                 continue;
             }
@@ -359,7 +359,7 @@ public sealed partial class Simulation
             mis.Pos = mp + vel * dt;
             if (tick >= mis.ExpireAtTick || mis.Pos.Length() > World.SectorRadius(mis.SectorId))
             {
-                MissileGoneThisStep.Add((mis.MissileId, 0, mis.SectorId, mis.Pos)); // expired
+                Events.MissileGone.Add((mis.MissileId, 0, mis.SectorId, mis.Pos)); // expired
                 (remove ??= new()).Add(mis);
             }
         }

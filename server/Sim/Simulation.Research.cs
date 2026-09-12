@@ -25,15 +25,6 @@ public partial class Simulation
 
     private readonly Queue<(int clientId, byte team, byte op, ulong baseId, ushort devIndex)> _researchQueue = new();
 
-    // Set when any base's research set changed this step (start/complete/cancel/promote) — the hub
-    // streams MsgResearchState on it (plus the coarse keepalive). Cleared at the top of Step.
-    public bool ResearchChangedThisStep { get; private set; }
-
-    // Issuer-only feedback (rejections/acks) + team-wide announcements, relayed by the hub as
-    // system chat after Step (MinerNotices/OrderNotices pattern). Cleared at the top of Step.
-    public readonly List<(int ClientId, string Text)> ResearchNoticesThisStep = new();
-    public readonly List<(byte Team, string Text)> ResearchTeamNoticesThisStep = new();
-
     // Thread-safe intake (socket thread); commander gating happens upstream at the hub
     // (ClientHub.CommanderOrWarn), the same pattern the miner and constructor buys use.
     public void EnqueueResearchOp(int clientId, byte team, byte op, ulong baseId, ushort devIndex)
@@ -69,7 +60,7 @@ public partial class Simulation
     {
         if (Phase != PhaseActive)
         {
-            ResearchNoticesThisStep.Add((cid, "Research requires an active match."));
+            Events.ResearchNotices.Add((cid, "Research requires an active match."));
             return;
         }
         if (devIndex >= Content.Developments.Count)
@@ -85,7 +76,7 @@ public partial class Simulation
             }
         if (baseIdx < 0 || World.Bases[baseIdx].Team != team || World.BaseHealth[baseIdx] <= 0f)
         {
-            ResearchNoticesThisStep.Add((cid, "That base can't run research."));
+            Events.ResearchNotices.Add((cid, "That base can't run research."));
             return;
         }
         var state = World.ResearchByBase[baseIdx];
@@ -105,7 +96,7 @@ public partial class Simulation
                     var st = World.ResearchByBase[i];
                     if (st.OnDeck == devIndex || st.Active.Exists(a => a.DevIndex == devIndex))
                     {
-                        ResearchNoticesThisStep.Add((cid, $"{dev.Name} is already in progress."));
+                        Events.ResearchNotices.Add((cid, $"{dev.Name} is already in progress."));
                         return;
                     }
                 }
@@ -126,7 +117,7 @@ public partial class Simulation
                     }
                 if (!offered)
                 {
-                    ResearchNoticesThisStep.Add((cid, $"{dev.Name} is not available to research."));
+                    Events.ResearchNotices.Add((cid, $"{dev.Name} is not available to research."));
                     return;
                 }
                 // Station-upgrade guard (v39): a single-scope upgrade dev must be researched AT a base of
@@ -140,7 +131,7 @@ public partial class Simulation
                     {
                         int fi = ups.FindIndex(_ => true);
                         string wantName = BaseDefForType(ups[fi].FromType)?.Name ?? "the correct base";
-                        ResearchNoticesThisStep.Add((cid, $"{dev.Name} must be researched at a {wantName}."));
+                        Events.ResearchNotices.Add((cid, $"{dev.Name} must be researched at a {wantName}."));
                         return;
                     }
                 }
@@ -155,13 +146,13 @@ public partial class Simulation
                     if (FamilyRoot(hostType) != want)
                     {
                         string wantName = BaseDefForType(want)?.Name ?? "the correct base";
-                        ResearchNoticesThisStep.Add((cid, $"{dev.Name} must be researched at a {wantName}."));
+                        Events.ResearchNotices.Add((cid, $"{dev.Name} must be researched at a {wantName}."));
                         return;
                     }
                 }
                 if (ts.Credits < dev.Price)
                 {
-                    ResearchNoticesThisStep.Add((cid, $"Not enough credits for {dev.Name} ({dev.Price:N0})."));
+                    Events.ResearchNotices.Add((cid, $"Not enough credits for {dev.Name} ({dev.Price:N0})."));
                     return;
                 }
                 string baseTypeName =
@@ -172,7 +163,7 @@ public partial class Simulation
                 {
                     ts.Credits -= dev.Price; // deduct at start (authoritative moment)
                     state.Active.Add((devIndex, tick, ResearchDurationTicks(dev)));
-                    ResearchTeamNoticesThisStep.Add(
+                    Events.ResearchTeamNotices.Add(
                         (team, $"Research started: {dev.Name} at {baseName} ({dev.BuildTimeSeconds}s).")
                     );
                 }
@@ -180,15 +171,15 @@ public partial class Simulation
                 {
                     ts.Credits -= dev.Price; // reservation — promotion can never fail on funds
                     state.OnDeck = devIndex;
-                    ResearchTeamNoticesThisStep.Add((team, $"Research queued on deck: {dev.Name} at {baseName}."));
+                    Events.ResearchTeamNotices.Add((team, $"Research queued on deck: {dev.Name} at {baseName}."));
                 }
                 else
                 {
-                    ResearchNoticesThisStep.Add((cid, $"{baseName} is fully occupied (all slots + on deck)."));
+                    Events.ResearchNotices.Add((cid, $"{baseName} is fully occupied (all slots + on deck)."));
                     return;
                 }
-                TeamStateChangedThisStep = true;
-                ResearchChangedThisStep = true;
+                Events.TeamStateChanged = true;
+                Events.ResearchChanged = true;
                 break;
             }
             case ResearchOpCancelActive:
@@ -198,10 +189,10 @@ public partial class Simulation
                     return;
                 state.Active.RemoveAt(at);
                 ts.Credits += dev.Price; // 100% refund
-                ResearchTeamNoticesThisStep.Add((team, $"Research cancelled: {dev.Name} (refunded {dev.Price:N0})."));
+                Events.ResearchTeamNotices.Add((team, $"Research cancelled: {dev.Name} (refunded {dev.Price:N0})."));
                 PromoteOnDeck(baseIdx, tick);
-                TeamStateChangedThisStep = true;
-                ResearchChangedThisStep = true;
+                Events.TeamStateChanged = true;
+                Events.ResearchChanged = true;
                 break;
             }
             case ResearchOpCancelQueued:
@@ -210,9 +201,9 @@ public partial class Simulation
                     return;
                 state.OnDeck = null;
                 ts.Credits += dev.Price; // 100% refund of the reservation
-                ResearchTeamNoticesThisStep.Add((team, $"On-deck research removed: {dev.Name} (refunded {dev.Price:N0})."));
-                TeamStateChangedThisStep = true;
-                ResearchChangedThisStep = true;
+                Events.ResearchTeamNotices.Add((team, $"On-deck research removed: {dev.Name} (refunded {dev.Price:N0})."));
+                Events.TeamStateChanged = true;
+                Events.ResearchChanged = true;
                 break;
             }
         }
@@ -237,8 +228,8 @@ public partial class Simulation
                 {
                     state.Active.Clear();
                     state.OnDeck = null;
-                    ResearchTeamNoticesThisStep.Add((team, "Base destroyed — research in progress was lost."));
-                    ResearchChangedThisStep = true;
+                    Events.ResearchTeamNotices.Add((team, "Base destroyed — research in progress was lost."));
+                    Events.ResearchChanged = true;
                 }
                 continue;
             }
@@ -250,7 +241,7 @@ public partial class Simulation
                     continue;
                 state.Active.RemoveAt(a);
                 CompleteResearch(team, i, devIdx);
-                ResearchChangedThisStep = true;
+                Events.ResearchChanged = true;
             }
 
             PromoteOnDeck(i, tick);
@@ -265,10 +256,10 @@ public partial class Simulation
         state.OnDeck = null;
         var dev = Content.Developments[queued];
         state.Active.Add((queued, tick, ResearchDurationTicks(dev)));
-        ResearchTeamNoticesThisStep.Add(
+        Events.ResearchTeamNotices.Add(
             (World.Bases[baseIdx].Team, $"On-deck research started: {dev.Name} ({dev.BuildTimeSeconds}s).")
         );
-        ResearchChangedThisStep = true;
+        Events.ResearchChanged = true;
     }
 
     // Grant a completed development's techs + capabilities to the team and re-resolve its unlock
@@ -285,8 +276,8 @@ public partial class Simulation
             ts.OwnedCapabilities.Add((Allegiance.Factions.Model.Capability)c);
         ResolveTeamUnlocks();
         RecomputeTeamAttributes(); // v41: a completed dev may carry team-wide stat multipliers
-        TeamStateChangedThisStep = true;
-        ResearchTeamNoticesThisStep.Add((team, $"RESEARCH COMPLETE: {dev.Name}."));
+        Events.TeamStateChanged = true;
+        Events.ResearchTeamNotices.Add((team, $"RESEARCH COMPLETE: {dev.Name}."));
 
         // Station upgrades (v39): if this dev's granted techs unlock a station successor tier, swap the
         // matching base(s) in place. single scope → only the hosting base; all → every live matching base.
@@ -469,10 +460,10 @@ public partial class Simulation
         World.BaseHealth[idx] = frac * newMax;
         // Grant the tier station's OWN granted techs/caps (the slice tiers grant none) + re-resolve.
         GrantStationUnlocks(team, toType);
-        BasesChangedThisStep = true;
+        Events.BasesChanged = true;
         RestreamUpgradedBase(team, site.Id);
         var st = StationCatalogFor(toType);
-        ResearchTeamNoticesThisStep.Add(
+        Events.ResearchTeamNotices.Add(
             (team, $"BASE UPGRADED: {st?.Name ?? "new tier"} ({World.SectorName(site.SectorId)}).")
         );
     }
@@ -480,7 +471,7 @@ public partial class Simulation
     // Push the upgraded base's full static (carrying the new BaseTypeId) to clients. Fog-on: re-append
     // to the owning team's reveal log unconditionally (the reveal-cursor re-streams it; enemies re-mesh
     // on their next fresh sighting — the slice tiers reuse the same mesh, so no visible enemy stale).
-    // Fog-off: BasesCreatedThisStep drives a broadcast one-base MsgReveal (InsertBase is idempotent).
+    // Fog-off: Events.BasesCreated drives a broadcast one-base MsgReveal (InsertBase is idempotent).
     private void RestreamUpgradedBase(byte team, ulong baseId)
     {
         if (FogEnabled && VisionFor(team) is { } tv)
@@ -497,7 +488,7 @@ public partial class Simulation
         }
         else
         {
-            BasesCreatedThisStep.Add(baseId);
+            Events.BasesCreated.Add(baseId);
         }
     }
 }

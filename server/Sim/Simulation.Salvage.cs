@@ -57,22 +57,6 @@ public sealed partial class Simulation
     private readonly List<SalvageSim> _salvage = new();
     public IReadOnlyList<SalvageSim> Salvage => _salvage;
 
-    // Items that left the world this step, drained by the hub into reliable MsgSalvageGone frames.
-    // Reason 0 expired, 1 match-teardown cleanup, 2 picked up (byShipId = the collector; 0 otherwise).
-    // The stream's reconcile-by-omission can't tell "picked up" from "expired", so pickup FX/toasts
-    // ride this list rather than the frame. Cleared at the top of Step (mirrors ProbeGoneThisStep).
-    public readonly List<(ulong id, byte reason, uint sector, Vec3 pos, ulong byShipId)> SalvageGoneThisStep = new();
-
-    // Which anchor sectors changed this step. PER-SECTOR (not a single bool) so a wreck in sector A
-    // doesn't re-stream sector B's frame every tick — a drift burst is ≤ MaxItemsPerSector records
-    // in ONE sector's frame. Cleared at the top of Step.
-    public readonly HashSet<uint> SalvageChangedSectorsThisStep = new();
-    public bool SalvageChangedThisStep => SalvageChangedSectorsThisStep.Count > 0;
-
-    // Per-PILOT system-chat lines raised by the pickup path ("Salvaged: …", "Can't carry …"),
-    // drained by the hub exactly like OrderNoticesThisStep. Cleared at the top of Step.
-    public readonly List<(int ClientId, string Text)> PilotNoticesThisStep = new();
-
     // (ship, item) pairs already told "can't carry this". A rejected item ricochets and may touch
     // the same hull again next tick; without this the pilot's chat would fill with one line per
     // tick of contact. Entries are pruned when the item goes and cleared at match teardown.
@@ -197,7 +181,7 @@ public sealed partial class Simulation
                 AtRest = false,
             }
         );
-        SalvageChangedSectorsThisStep.Add(dead.SectorId);
+        Events.SalvageChangedSectors.Add(dead.SectorId);
         Log.SalvageDropped(_log, dead.ShipId, dead.SectorId, kind, itemId, count);
     }
 
@@ -266,7 +250,7 @@ public sealed partial class Simulation
                     it.Vel = default;
                     it.AtRest = true;
                 }
-                SalvageChangedSectorsThisStep.Add(it.SectorId);
+                Events.SalvageChangedSectors.Add(it.SectorId);
                 BounceSalvageOffStatics(it, tick);
             }
 
@@ -426,7 +410,7 @@ public sealed partial class Simulation
                 Collide.BounceBody(ref it.Pos, ref rel, n, pen, _salvageCfg.Restitution, out _);
                 it.Vel = s.State.Vel + rel;
                 it.AtRest = false;
-                SalvageChangedSectorsThisStep.Add(it.SectorId);
+                Events.SalvageChangedSectors.Add(it.SectorId);
             }
         }
         return false;
@@ -438,8 +422,8 @@ public sealed partial class Simulation
     {
         var it = _salvage[index];
         _salvage.RemoveAt(index);
-        SalvageGoneThisStep.Add((it.Id, reason, it.SectorId, it.Pos, byShipId));
-        SalvageChangedSectorsThisStep.Add(it.SectorId);
+        Events.SalvageGone.Add((it.Id, reason, it.SectorId, it.Pos, byShipId));
+        Events.SalvageChangedSectors.Add(it.SectorId);
         if (_salvageRejectNotified.Count > 0)
             _salvageRejectNotified.RemoveWhere(k => k.item == it.Id);
     }
@@ -451,8 +435,8 @@ public sealed partial class Simulation
         for (int i = 0; i < _salvage.Count; i++)
         {
             var it = _salvage[i];
-            SalvageGoneThisStep.Add((it.Id, SalvageGoneCleanup, it.SectorId, it.Pos, 0));
-            SalvageChangedSectorsThisStep.Add(it.SectorId);
+            Events.SalvageGone.Add((it.Id, SalvageGoneCleanup, it.SectorId, it.Pos, 0));
+            Events.SalvageChangedSectors.Add(it.SectorId);
         }
         _salvage.Clear();
         _salvageRejectNotified.Clear();
@@ -535,8 +519,8 @@ public sealed partial class Simulation
         // loadout carries no override row, and a salvaged gun is exactly what makes one necessary.
         s.MountWeaponIds ??= EffectiveMountIds(s);
         s.MountWeaponIds[barrel] = w.WeaponId;
-        LoadoutsChangedThisStep = true;
-        PilotNoticesThisStep.Add((s.OwnerClientId, $"Salvaged: {w.Name}"));
+        Events.LoadoutsChanged = true;
+        Events.PilotNotices.Add((s.OwnerClientId, $"Salvaged: {w.Name}"));
         return true;
     }
 
@@ -562,7 +546,7 @@ public sealed partial class Simulation
         // Same rack: the rounds join the magazine. No payload cost — a magazine's mass is already
         // covered by the rack's own Mass, exactly as at spawn.
         s.MissileAmmo = (byte)Math.Min(255, s.MissileAmmo + it.Count);
-        PilotNoticesThisStep.Add((s.OwnerClientId, $"Salvaged: {SalvageName(it)} ×{it.Count}"));
+        Events.PilotNotices.Add((s.OwnerClientId, $"Salvaged: {SalvageName(it)} ×{it.Count}"));
         return true;
     }
 
@@ -596,7 +580,7 @@ public sealed partial class Simulation
                 s.FuelPodFuelPerCharge = perCharge;
                 s.FuelPodReloadTicks = _cargoReloadTicks.TryGetValue(cargoId, out uint rt) ? rt : 0u;
             }
-            PilotNoticesThisStep.Add((s.OwnerClientId, $"Salvaged: {SalvageName(it)} ×{it.Count}"));
+            Events.PilotNotices.Add((s.OwnerClientId, $"Salvaged: {SalvageName(it)} ×{it.Count}"));
             return true;
         }
 
@@ -642,7 +626,7 @@ public sealed partial class Simulation
             return false;
         }
 
-        PilotNoticesThisStep.Add((s.OwnerClientId, $"Salvaged: {SalvageName(it)} ×{it.Count}"));
+        Events.PilotNotices.Add((s.OwnerClientId, $"Salvaged: {SalvageName(it)} ×{it.Count}"));
         return true;
     }
 
@@ -668,8 +652,8 @@ public sealed partial class Simulation
                 if (hold[i].Kind != it.Kind || hold[i].ItemId != it.ItemId)
                     continue;
                 hold[i] = (it.Kind, it.ItemId, (byte)Math.Min(255, hold[i].Count + it.Count));
-                LoadoutsChangedThisStep = true; // the hold rides the loadout echo, so the owner sees it
-                PilotNoticesThisStep.Add((s.OwnerClientId, $"Stowed: {name} ×{it.Count} (inert — {reason})"));
+                Events.LoadoutsChanged = true; // the hold rides the loadout echo, so the owner sees it
+                Events.PilotNotices.Add((s.OwnerClientId, $"Stowed: {name} ×{it.Count} (inert — {reason})"));
                 return true;
             }
         }
@@ -682,9 +666,9 @@ public sealed partial class Simulation
         hold ??= s.Hold = new List<(byte Kind, uint ItemId, byte Count)>();
         byte count = it.Kind == SalvageKindPart ? (byte)1 : it.Count;
         hold.Add((it.Kind, it.ItemId, count));
-        LoadoutsChangedThisStep = true;
+        Events.LoadoutsChanged = true;
         string qty = it.Kind == SalvageKindPart ? "" : $" ×{it.Count}";
-        PilotNoticesThisStep.Add(
+        Events.PilotNotices.Add(
             (s.OwnerClientId, $"Stowed: {name}{qty} (inert — {reason}; hold {hold.Count}/{def.CargoCapacity})")
         );
         return true;
@@ -745,7 +729,7 @@ public sealed partial class Simulation
             return;
         if (!_salvageRejectNotified.Add((s.ShipId, it.Id)))
             return;
-        PilotNoticesThisStep.Add((s.OwnerClientId, $"Can't carry {SalvageName(it)}: {reason}"));
+        Events.PilotNotices.Add((s.OwnerClientId, $"Can't carry {SalvageName(it)}: {reason}"));
         Log.SalvageRejected(_log, s.ShipId, it.Id, reason);
     }
 

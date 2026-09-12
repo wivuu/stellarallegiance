@@ -18,6 +18,7 @@ using SimServer.Content;
 using SimServer.Net;
 using SimServer.Sim;
 using StellarAllegiance.Shared;
+using TestKit;
 
 int failures = 0;
 void Check(bool cond, string pass, string fail)
@@ -106,7 +107,7 @@ HashSet<(byte, ulong)> Run(Simulation sim, Action hold, int ticks)
     {
         hold();
         sim.Step();
-        foreach (var l in sim.LostContactsThisStep)
+        foreach (var l in sim.Events.LostContacts)
             lost.Add(l);
     }
     return lost;
@@ -643,7 +644,7 @@ Vec3 AtAngle(float dist, float angleDeg)
         );
         Check(
             lost.Contains(((byte)0, t.ShipId)),
-            "leaving the streamed union emits a LostContactsThisStep entry",
+            "leaving the streamed union emits a Events.LostContacts entry",
             "no lost-contact was recorded on leaving the streamed union"
         );
     }
@@ -1492,7 +1493,7 @@ Vec3 AtAngle(float dist, float angleDeg)
     // F7: a match clear emits a ProbeGone (reason 1 = silent cleanup) for every live probe, so the
     // client (which never drops probes on MsgProbes omission) doesn't keep phantom probes.
     Check(
-        sim.ProbeGoneThisStep.Any(g => g.reason == 1),
+        sim.Events.ProbeGone.Any(g => g.reason == 1),
         "ReturnToLobby emits a ProbeGone (reason 1) for the live probe so clients drop it (F7)",
         "no ProbeGone was queued for the probe torn down at match clear"
     );
@@ -1588,7 +1589,7 @@ Vec3 AtAngle(float dist, float angleDeg)
         Park(enemy, EmptySector, probe.Pos - new Vec3(0, 0, 120f)); // behind the probe, facing +Z straight at it
         enemy.HeldInput = new ShipInputState { Firing = true };
         sim.Step();
-        if (sim.ProbeGoneThisStep.Any(g => g.id == probe.ProbeId && g.reason == 2))
+        if (sim.Events.ProbeGone.Any(g => g.id == probe.ProbeId && g.reason == 2))
             gone = true;
     }
     Check(gone, "an enemy bolt destroys a deployed probe (gone reason 2)", "the enemy never destroyed the probe");
@@ -2170,11 +2171,7 @@ Vec3 AtAngle(float dist, float angleDeg)
     var conn = hub.HandleConnection(ft, cts.Token);
 
     // Hello v9: [MsgHello][secretLen 0][nameLen 5]['smoke'][tokenLen 0] (fresh join, no reconnect).
-    var name = Encoding.UTF8.GetBytes("smoke");
-    var hello = new List<byte> { Protocol.MsgHello, 0, (byte)name.Length };
-    hello.AddRange(name);
-    hello.Add(0);
-    ft.Feed(hello.ToArray());
+    ft.Feed(HubFrames.Hello("smoke"));
 
     byte[]? WaitWelcome(int afterCount)
     {
@@ -2197,7 +2194,7 @@ Vec3 AtAngle(float dist, float angleDeg)
     );
 
     // Pick team 0 → the hub re-Welcomes with team 0's discovered world (its garrison base(s)).
-    ft.Feed(new byte[] { Protocol.MsgSetTeam, 0 });
+    ft.Feed(HubFrames.SetTeam(0));
     var w2 = WaitWelcome(1);
     var tv0 = sim.VisionFor(0)!;
     Check(
@@ -2248,13 +2245,9 @@ Vec3 AtAngle(float dist, float angleDeg)
     var cts = new CancellationTokenSource();
     var conn = hub.HandleConnection(ft, cts.Token);
 
-    var name = Encoding.UTF8.GetBytes("smoke");
-    var hello = new List<byte> { Protocol.MsgHello, 0, (byte)name.Length };
-    hello.AddRange(name);
-    hello.Add(0);
-    ft.Feed(hello.ToArray());
+    ft.Feed(HubFrames.Hello("smoke"));
     Thread.Sleep(50);
-    ft.Feed(new byte[] { Protocol.MsgSetTeam, 0 });
+    ft.Feed(HubFrames.SetTeam(0));
     Thread.Sleep(50);
 
     Exception? crash = null;
@@ -2281,7 +2274,7 @@ Vec3 AtAngle(float dist, float angleDeg)
         $"the match did not start cleanly ({crash?.GetType().Name}: {crash?.Message})"
     );
 
-    ft.Feed(new byte[] { Protocol.MsgSpawn, FlightModel.ClassScout, 0, 0, 0, 0, 0, 0, 0, 0 }); // v36: [4][cls][u64 launchBaseId=0]
+    ft.Feed(HubFrames.Spawn(FlightModel.ClassScout));
     Thread.Sleep(50);
     Pump(300); // fly the async vision worker across ~30 boundaries with a live ship
 
@@ -2378,7 +2371,7 @@ Vec3 AtAngle(float dist, float angleDeg)
             probeHurt = true;
         if (!alive)
         {
-            destroyed = sim.ProbeGoneThisStep.Any(g => g.id == probe.ProbeId && g.reason == 2);
+            destroyed = sim.Events.ProbeGone.Any(g => g.id == probe.ProbeId && g.reason == 2);
             break;
         }
     }
@@ -2983,34 +2976,3 @@ Vec3 AtAngle(float dist, float angleDeg)
 
 Console.WriteLine(failures == 0 ? "\nALL FOG TESTS PASSED" : $"\n{failures} FOG TEST(S) FAILED");
 return failures == 0 ? 0 : 1;
-
-// In-memory IClientTransport for the hub-level test: feed client->server frames, capture server->client.
-sealed class FakeHubTransport : SimServer.Net.IClientTransport
-{
-    private readonly System.Collections.Concurrent.BlockingCollection<byte[]> _in = new();
-    public readonly System.Collections.Concurrent.ConcurrentQueue<byte[]> Sent = new();
-
-    public void Feed(byte[] frame) => _in.Add(frame);
-
-    public async ValueTask<int> ReceiveAsync(byte[] buffer, CancellationToken ct)
-    {
-        try
-        {
-            byte[] f = await Task.Run(() => _in.Take(ct), ct);
-            Array.Copy(f, buffer, f.Length);
-            return f.Length;
-        }
-        catch (OperationCanceledException)
-        {
-            return -1; // transport closed
-        }
-    }
-
-    public ValueTask SendAsync(ReadOnlyMemory<byte> data, CancellationToken ct)
-    {
-        Sent.Enqueue(data.ToArray());
-        return ValueTask.CompletedTask;
-    }
-
-    public ValueTask CloseAsync(string reason, CancellationToken ct) => ValueTask.CompletedTask;
-}
