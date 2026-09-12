@@ -3,9 +3,6 @@
 ---
 
 ## QUICKNOTES:
-- ✅ **[M]** Code cleanup and refactor — DONE 2026-09-09 on `post-38-cleanup` (repo-wide CSharpier, all 24
-  suites green via `scripts/run-tests.ps1`, shared Vec3 helpers, autopilot knobs in world.yaml `ai:`,
-  UI on DesignTokens, Simulation/ClientHub/GameNetClient/TargetMarkers splits). Follow-ups in Deep backlog.
 - Proceed to dropped salvage below
 - Look for opportunities to utilize native vector3 and SIMD for performance improvements
 ---
