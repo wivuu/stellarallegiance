@@ -5,6 +5,7 @@
 ## QUICKNOTES:
 - Look for opportunities to utilize native vector3 and SIMD for performance improvements
 - Use lobby favicon as client app icon (instead of godot icon)
+- Allow assigning lobby admin via UI, store roles in db (existing aspnet identity)
 ---
 
 ## Content philosophy (the through-line)
@@ -90,29 +91,7 @@ Stage-2 economy, no rework.
 The economic + RTS loop. Largely sequential; each item builds on Stage 2's money + gating and the
 Stage-1 YAML pipeline.
 
-- ☐ **[L]** Update plan to include multiple teams; each map only supports a certain number of teams, so this is a constraint that must be reflected in the plan. Plan should include a richer 'game lobby' (as opposed to server lobby) experience; allowing users to select or join teams before the match starts. First person on a perspective team (and not on NOAT/not on a team) can configure the number of teams (2-6 for now).
-- ☐ **[XL]** **Runtime asset streaming (client-patchless content)** — the client downloads meshes/textures/
-  audio it lacks from the game server into a temp cache, so a server can define an entire faction
-  (or new ship/weapon) that clients render **without installing a patch**. Defs already stream
-  (`MsgDefs`); this extends the same model to binary assets (transfer + cache + load-from-temp +
-  validation/eviction). A substantial sub-project — the enabler for fully server-authored factions.
-  - **On-join loading gate.** Asset transfer is an explicit **blocking phase behind a loading
-    screen**, completed *before* the 20 Hz state stream starts — so bulk bytes never compete with
-    realtime gameplay on the single reliable-ordered channel (WS or WebRTC alike), and no second
-    data channel / CDN is required. A bad or missing asset fails at the loading screen with a clear
-    error (the client has no compile-time fallback), never mid-match.
-  - **Content-hash manifest + resumable cache.** Server is authoritative over a hashed manifest
-    (`assetId → {sha256, size, optional httpUrl}`) streamed over the existing def path; the temp
-    cache is keyed by content hash so a rejoining client re-pulls only what changed. The optional
-    per-asset `httpUrl` lets a high-scale operator offload fanout to a bucket/CDN without making one
-    a requirement.
-  - **Client ships a seed cache (not a baked-in fallback).** The client bundles the stock-faction
-    assets at install, pre-populating the hash-keyed cache so a vanilla first-join downloads ~nothing.
-    This is *not* the forbidden "baked-in" pattern: bundled assets are only ever used when the
-    server manifest names their exact `sha256` — a different/updated server asset has a different
-    hash and streams normally. So the server stays authoritative over content (binary-asset analog
-    of the no-baked-tuning rule: defs are authority data with no fallback; assets are content-
-    addressed blobs validated against server-named hashes, safe to pre-ship).
+- ☐ **[L]** **Update plan to include multiple teams**; each map only supports a certain number of teams, so this is a constraint that must be reflected in the plan. Plan should include a richer 'game lobby' (as opposed to server lobby) experience; allowing users to select or join teams before the match starts. First person on a perspective team (and not on NOAT/not on a team) can configure the number of teams (2-6 for now).
 - ☐ **[L]** **Factions** — distinct factions with unique ship classes, tech trees, and visual styles for
   asymmetric play (a faction dimension on YAML defs). *Faction rules ride Stage 1; faction assets
   ride asset streaming above.*
@@ -186,6 +165,29 @@ Not stage-bound — done when convenient or when a stage needs them.
   - Use audio-index.md for reference
 
 ## Deep backlog
+
+- ☐ **[XL]** **Runtime asset streaming (client-patchless content)** — the client downloads meshes/textures/
+  audio it lacks from the game server into a temp cache, so a server can define an entire faction
+  (or new ship/weapon) that clients render **without installing a patch**. Defs already stream
+  (`MsgDefs`); this extends the same model to binary assets (transfer + cache + load-from-temp +
+  validation/eviction). A substantial sub-project — the enabler for fully server-authored factions.
+  - **On-join loading gate.** Asset transfer is an explicit **blocking phase behind a loading
+    screen**, completed *before* the 20 Hz state stream starts — so bulk bytes never compete with
+    realtime gameplay on the single reliable-ordered channel (WS or WebRTC alike), and no second
+    data channel / CDN is required. A bad or missing asset fails at the loading screen with a clear
+    error (the client has no compile-time fallback), never mid-match.
+  - **Content-hash manifest + resumable cache.** Server is authoritative over a hashed manifest
+    (`assetId → {sha256, size, optional httpUrl}`) streamed over the existing def path; the temp
+    cache is keyed by content hash so a rejoining client re-pulls only what changed. The optional
+    per-asset `httpUrl` lets a high-scale operator offload fanout to a bucket/CDN without making one
+    a requirement.
+  - **Client ships a seed cache (not a baked-in fallback).** The client bundles the stock-faction
+    assets at install, pre-populating the hash-keyed cache so a vanilla first-join downloads ~nothing.
+    This is *not* the forbidden "baked-in" pattern: bundled assets are only ever used when the
+    server manifest names their exact `sha256` — a different/updated server asset has a different
+    hash and streams normally. So the server stays authoritative over content (binary-asset analog
+    of the no-baked-tuning rule: defs are authority data with no fallback; assets are content-
+    addressed blobs validated against server-named hashes, safe to pre-ship).
 
 - ☐ **[S]** **Cleanup follow-ups (from the 2026-09-09 pass)** — design-token migration second group
   (`TechDetailPanel`, `RosterCells`, `CommandSidebar`, `DataFeedback`; ~130 raw literals remain client-wide,
