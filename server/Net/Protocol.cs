@@ -53,6 +53,12 @@ public static class Protocol
     // need to quantize) | u16 ticksLeft.
     public const int ProbeRecordSize = 8 + 1 + 4 + 2 + 12 + 2; // 29
 
+    // Fixed serialized size of one MsgSalvage record (see WriteSalvage). Layout: u64 id | u8 kind |
+    // u32 itemId | u8 count | u8 team | 3x i16 pos (sector-local quantized — an item DRIFTS, so it
+    // rides the same cheap encoding ships do, not the probe's full-precision f32) | 3x f16 vel (the
+    // client dead-reckons between frames) | u16 ticksLeft (for the expiry blink).
+    public const int SalvageRecordSize = 8 + 1 + 4 + 1 + 1 + 6 + 6 + 2; // 29
+
     // client -> server
     // Hello v9: u8 secretLen, secretBytes…, u8 nameLen, nameBytes…, u8 tokenLen, tokenBytes…
     // The secret is an optional shared-secret password (empty when the server runs open); the
@@ -111,8 +117,10 @@ public static class Protocol
     public const byte MsgConstructorBuilds = 25; // u8 count, count x (u64 shipId, u64 rockId, u8 phase (0 align, 1 sink, 2 build), f16 progress 0..1) — each constructor drone actively aligning/sinking/building on a rock, so the client drives the build-sphere VFX (v37). Broadcast; rendering gated by ship+rock visibility. See BuildConstructorBuilds.
     public const byte MsgConstructorState = 26; // u8 count, count x (u64 id, u8 stationTypeId, u8 state (0 producing/1 idle/2 to-rock/3 move/4 align/5 sink/6 build/8 queued), u32 startTick, u32 durationTicks, u64 targetId, bool producesMiner, u64 launchBaseId, u64 shipId) — PER-TEAM build roster for the Build tab: producing (start/duration → progress bar + cancel), queued (untimed, 0% — waiting for a build slot at launchBaseId), and launched drones (status). launchBaseId groups a garrison's build pipeline for the queue-full gray-out. shipId is the launched drone's ship id (0 while queued/producing), which maps a rendered ship to the station it carries (F3 map label). Progress derives client-side from startTick+duration (v38). On change + coarse keepalive. See BuildConstructorState.
     public const byte MsgRockGone = 27; // u8 count, count x u64 rockId — rocks fully despawned this step (a constructor's finished base consumed the asteroid). Broadcast, reliable; the client deletes its rock node + collision. See BuildRockGone.
-    public const byte MsgShipLoadout = 28; // u8 count, count x (u64 shipId, u8 nSlots, nSlots x u32 weaponId) — per-barrel EFFECTIVE weapon ids (hardpoint declaration order; u32.Max = emptied slot) for every ship flying a NON-authored loadout. Full table, reconcile-by-omission: a ship absent from the frame flies its authored class loadout. Broadcast, reliable, on change + coarse keepalive (empty frames still sent so stale entries prune). Doubles as the owner's authoritative echo. See BuildShipLoadouts.
+    public const byte MsgShipLoadout = 28; // u8 count, count x (u64 shipId, u8 nSlots, nSlots x u32 weaponId, u8 nStowed, nStowed x (u32 rackWeaponId, u8 count)) — per-barrel EFFECTIVE weapon ids (hardpoint declaration order; u32.Max = emptied slot) plus the ship's INERT stowed missile stacks (v39, salvage). A ship gets a row when it flies a non-authored loadout OR holds stowed rounds; the ids are always effective (a stow-only row writes the authored ids). Full table, reconcile-by-omission: a ship absent from the frame flies its authored class loadout with an empty hold. Broadcast, reliable, on change + coarse keepalive (empty frames still sent so stale entries prune). Doubles as the owner's authoritative echo. See BuildShipLoadouts.
     public const byte MsgMatchStats = 29; // u8 nPilots, n x (i32 clientId, str name, u8 team, u8 flags (bit0 = connected), u16 kills, u16 deaths, u16 ejects, i32 points), then u8 nTeams, n x (u8 team, u8 garrisonsDestroyed, u8 outpostsDestroyed) — the match scoreboard ledger (v37). Full table, keyed by client id, sorted by id; a pilot who LEFT stays on it with bit0 clear, which is why name+team ride the frame instead of being joined against the lobby roster (a disconnect drops both server-side). PTS is signed (a penalty weight can push a pilot negative); the TEAM score is NOT repeated here — it rides MsgTeamState. Broadcast, reliable, on change only. See BuildMatchStats.
+    public const byte MsgSalvage = 30; // u16 anchorSector, u8 count, count x SalvageRecord — the wreck items lying in the client's anchor sector (v39). Minefield cadence exactly: on a change in THAT sector, on the coarse keepalive, or on an anchor-sector change; an empty frame is how a removal propagates, so the client prunes by omission. Fog on: an item streams only while its point is visible to the team. See BuildSalvageFor.
+    public const byte MsgSalvageGone = 31; // u64 id, u8 reason (0 expired, 1 match cleanup, 2 picked up), u16 sector, 3x i16 pos, u64 byShipId — one item left the world (v39). RELIABLE broadcast (an unknown id no-ops client-side): reason 2 is the only authority for the pickup FX/toast, which the omission reconcile cannot distinguish from an expiry. byShipId is the collector (0 otherwise) — the owner's HUD banner keys on it. See BuildSalvageGone.
 
     public const byte FlagFiring = 1;
     public const byte FlagBoost = 2;
@@ -411,6 +419,66 @@ public static class Protocol
         return buf; // o == 18
     }
 
+    // Serialize one wreck-salvage item (exactly SalvageRecordSize bytes) into dst. Unlike a probe an
+    // item MOVES, so position is the cheap sector-local i16 quantization (WireQuant.PackPos) and the
+    // velocity rides as f16 so the client can dead-reckon between frames instead of stair-stepping at
+    // the stream cadence. `tick` is the current sim tick, used only to derive ticksLeft
+    // (ExpireAtTick - tick), which drives the client's pre-expiry blink. Layout: u64 id | u8 kind |
+    // u32 itemId | u8 count | u8 team | 3x i16 pos | 3x f16 vel | u16 ticksLeft.
+    public static void WriteSalvage(Span<byte> dst, Simulation.SalvageSim it, uint tick)
+    {
+        int o = 0;
+        BitConverter.TryWriteBytes(dst.Slice(o), it.Id);
+        o += 8;
+        dst[o++] = it.Kind;
+        BitConverter.TryWriteBytes(dst.Slice(o), it.ItemId);
+        o += 4;
+        dst[o++] = it.Count;
+        dst[o++] = it.Team;
+        BitConverter.TryWriteBytes(dst.Slice(o), WireQuant.PackPos(it.Pos.X));
+        o += 2;
+        BitConverter.TryWriteBytes(dst.Slice(o), WireQuant.PackPos(it.Pos.Y));
+        o += 2;
+        BitConverter.TryWriteBytes(dst.Slice(o), WireQuant.PackPos(it.Pos.Z));
+        o += 2;
+        BitConverter.TryWriteBytes(dst.Slice(o), WireQuant.PackHalf(it.Vel.X));
+        o += 2;
+        BitConverter.TryWriteBytes(dst.Slice(o), WireQuant.PackHalf(it.Vel.Y));
+        o += 2;
+        BitConverter.TryWriteBytes(dst.Slice(o), WireQuant.PackHalf(it.Vel.Z));
+        o += 2;
+        uint left = it.ExpireAtTick > tick ? it.ExpireAtTick - tick : 0u;
+        BitConverter.TryWriteBytes(dst.Slice(o), (ushort)Math.Min(left, ushort.MaxValue));
+        o += 2;
+        // o == SalvageRecordSize (29)
+    }
+
+    // A salvage item left the world (26 bytes: BuildProbeGone's 18 plus the u64 collector id).
+    // reason: 0 expired, 1 match cleanup, 2 picked up (byShipId = the ship that took it; 0 for the
+    // other reasons). Layout: [31][u64 id][u8 reason][u16 sector][3x i16 pos][u64 byShipId].
+    // Broadcast to every client (an unknown id no-ops client-side) because MsgSalvage reconciles by
+    // omission and cannot tell a pickup from an expiry — this frame is the pickup FX/toast authority.
+    public static byte[] BuildSalvageGone(ulong id, byte reason, uint sector, Vec3 pos, ulong byShipId)
+    {
+        var buf = new byte[26];
+        buf[0] = MsgSalvageGone;
+        int o = 1;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), id);
+        o += 8;
+        buf[o++] = reason;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), (ushort)sector);
+        o += 2;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), WireQuant.PackPos(pos.X));
+        o += 2;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), WireQuant.PackPos(pos.Y));
+        o += 2;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), WireQuant.PackPos(pos.Z));
+        o += 2;
+        BitConverter.TryWriteBytes(buf.AsSpan(o), byShipId);
+        o += 8;
+        return buf; // o == 26
+    }
+
     // One base static record (used by Welcome + MsgReveal — byte-identical output, load-bearing).
     // Layout: u64 id | u8 team | u32 sector | 3x f32 pos | f32 radius | f32 health.
     private static void WriteBaseStatic(BinaryWriter w, World world, in World.BaseSite b, float health)
@@ -555,37 +623,78 @@ public static class Protocol
     }
 
     // Per-ship weapon-mount table (MsgShipLoadout): one record per ship flying a NON-authored
-    // loadout — its EFFECTIVE per-barrel weapon ids in hardpoint declaration order (u32.Max =
-    // an emptied slot). Ships on the authored class loadout are OMITTED (clients derive their
+    // loadout OR holding salvaged, inert missile rounds (v39) — its EFFECTIVE per-barrel weapon ids
+    // in hardpoint declaration order (u32.Max = an emptied slot) followed by its stowed stacks.
+    // Ships on the authored class loadout with an empty hold are OMITTED (clients derive their
     // mounts from the streamed class def), which keeps the frame tiny and makes pruning free:
     // the client replaces its whole cache per frame. Always returns a frame (count may be 0) so
     // a stale entry prunes even when the last override ship leaves. Broadcast + reliable; the
-    // owner's copy doubles as the authoritative echo of what the server accepted at spawn.
+    // owner's copy doubles as the authoritative echo of what the server accepted at spawn and of
+    // every stack the salvage loop has since stowed for it.
     public static byte[] BuildShipLoadouts(Simulation sim)
     {
-        List<Simulation.ShipSim>? rows = null;
+        // The authored per-barrel ids for a class that carries no override array — the SAME rule
+        // Simulation.BuildMuzzles indexes ClassMuzzles by (Weapon-kind hardpoints, declaration
+        // order), so a stow-only row streams exactly what the client already derives from the class
+        // def. A local function (not a Func<> variable) so it is a direct call with no delegate
+        // allocation on a per-tick frame builder.
+        uint[] AuthoredIds(byte cls)
+        {
+            foreach (var d in sim.Content.Ships)
+            {
+                if (d.ClassId != cls)
+                    continue;
+                int n = 0;
+                foreach (var h in d.Hardpoints)
+                    if (h.Kind == HardpointKind.Weapon)
+                        n++;
+                var authored = new uint[n];
+                int i = 0;
+                foreach (var h in d.Hardpoints)
+                    if (h.Kind == HardpointKind.Weapon)
+                        authored[i++] = h.WeaponId;
+                return authored;
+            }
+            return System.Array.Empty<uint>();
+        }
+
+        // Resolve each row's effective ids ONCE (a stow-only row would otherwise rebuild its
+        // authored array in both the sizing and the write pass).
+        List<(Simulation.ShipSim s, uint[] ids, int nStowed)>? rows = null;
         foreach (var s in sim.Ships)
-            if (s.MountWeaponIds is not null && rows?.Count is null or < 255)
-                (rows ??= new()).Add(s);
+            if ((s.MountWeaponIds is not null || s.StowedMissiles is { Count: > 0 }) && rows?.Count is null or < 255)
+                (rows ??= new()).Add(
+                    (s, s.MountWeaponIds ?? AuthoredIds(s.Class), Math.Min(s.StowedMissiles?.Count ?? 0, 255))
+                );
+
         int size = 2;
         if (rows is not null)
-            foreach (var s in rows)
-                size += 8 + 1 + 4 * s.MountWeaponIds!.Length;
+            foreach (var (_, ids, nStowed) in rows)
+                size += 8 + 1 + 4 * ids.Length + 1 + 5 * nStowed;
         var buf = new byte[size];
         buf[0] = MsgShipLoadout;
         buf[1] = (byte)(rows?.Count ?? 0);
         int o = 2;
         if (rows is not null)
-            foreach (var s in rows)
+            foreach (var (s, ids, nStowed) in rows)
             {
                 BitConverter.TryWriteBytes(buf.AsSpan(o), s.ShipId);
                 o += 8;
-                var ids = s.MountWeaponIds!;
                 buf[o++] = (byte)ids.Length;
                 foreach (uint id in ids)
                 {
                     BitConverter.TryWriteBytes(buf.AsSpan(o), id);
                     o += 4;
+                }
+                // Stowed missile stacks (v39): inert salvaged rounds the hull can't fire. The owner's
+                // HUD lists them; every client needs them only so the row's length is self-describing.
+                buf[o++] = (byte)nStowed;
+                for (int i = 0; i < nStowed; i++)
+                {
+                    var (rackWeaponId, count) = s.StowedMissiles![i];
+                    BitConverter.TryWriteBytes(buf.AsSpan(o), rackWeaponId);
+                    o += 4;
+                    buf[o++] = count;
                 }
             }
         return buf;
@@ -1463,6 +1572,10 @@ public static class Protocol
             // client needs it for the HUD's RELOADING readout, which reads the same
             // FireCadence.LoadIntervalTicks rule the server gates on.
             w.Write(wp.ReloadTicks);
+            // Per-round payload mass (v39, salvage), streamed LAST (append-only). Reader mirrors.
+            // Only a missile-kind launcher carries one; the client needs it so a dropped magazine's
+            // HOLD cost reads the same there as the server charged when it stowed the stack.
+            w.Write(wp.RoundMass);
         }
     }
 
@@ -1479,6 +1592,10 @@ public static class Protocol
             WriteString(w, c.Description);
             w.Write(c.FuelPerCharge); // v35: 0 = not a fuel item
             w.Write(c.ReloadTicks); // 2026-07-24: ticks a charge takes to load out of the hold (0 = instant)
+            // Item GLB basename (v39, salvage), streamed LAST (append-only). Reader mirrors. A
+            // dropped cargo pack renders from this when no dispenser weapon claims the cargo id
+            // (the fuel pod); empty = the client falls back to the placeholder puff.
+            WriteString(w, c.ModelName);
         }
     }
 

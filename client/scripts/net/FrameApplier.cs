@@ -141,6 +141,18 @@ public sealed class FrameApplier
     // per-connection caches reset (reconnect / world rebuild / leave).
     private readonly Dictionary<ulong, Probe> _probeRows = [];
 
+    // Last-decoded salvage item per id (from MsgSalvage), for the client's ANCHOR SECTOR only.
+    // Maintained by ApplySalvage / ApplySalvageGone. Frames arrive every tick while items drift, so
+    // the reconcile scratch below is reused rather than reallocated per frame. Cleared wherever the
+    // other per-connection caches reset (reconnect / world rebuild / leave).
+    private readonly Dictionary<ulong, Salvage> _salvageRows = [];
+    private readonly HashSet<ulong> _salvageSeen = new();
+    private readonly List<ulong> _salvageReconcileScratch = new();
+
+    // Last logged salvage row count, so ApplySalvage can log only when the set actually changes
+    // size (a per-tick line would drown the log during a drift burst). -1 = nothing logged yet.
+    private int _lastSalvageLogCount = -1;
+
     // Read by the missile render/HUD agent: the live missile set + the local ship's authoritative
     // missile ammo / lock state (decoded straight from its snapshot ShipRecord, not predicted).
     public IReadOnlyDictionary<ulong, Missile> MissileRows => _missileRows;
@@ -183,15 +195,17 @@ public sealed class FrameApplier
 
     // ---- Connection-lifecycle resets (called by GameNetClient) ---------------------------------
 
-    // Clear all four per-entity render caches (ships, missiles, minefields, probes). Used by the
-    // full connection resets (BeginConnect/Abort/Disconnect/GiveUpShip). The ApplyWelcome
-    // reconnect path deliberately clears only three of these itself — see there.
+    // Clear all five per-entity render caches (ships, missiles, minefields, probes, salvage). Used by
+    // the full connection resets (BeginConnect/Abort/Disconnect/GiveUpShip). The ApplyWelcome
+    // reconnect path deliberately clears only four of these itself — see there.
     public void ClearEntityCaches()
     {
         _rows.Clear();
         _missileRows.Clear();
         _minefieldRows.Clear();
         _probeRows.Clear();
+        _salvageRows.Clear();
+        _lastSalvageLogCount = -1;
         _localMissileLoadTick = _localChaffLoadTick = _localMineLoadTick = _localProbeLoadTick = 0;
     }
 
@@ -347,6 +361,12 @@ public sealed class FrameApplier
             case 29:
                 ApplyMatchStats(r);
                 break;
+            case 30:
+                ApplySalvage(r);
+                break;
+            case 31:
+                ApplySalvageGone(r);
+                break;
         }
     }
 
@@ -380,14 +400,15 @@ public sealed class FrameApplier
     }
 
     // MsgShipLoadout: the full per-ship weapon-mount override table — effective per-barrel weapon
-    // ids (hardpoint declaration order; uint.MaxValue = emptied slot) for every ship flying a
-    // NON-authored loadout (reconcile-by-omission: a ship absent from the frame flies its
-    // authored class loadout). Decode and forward whole to WorldRenderer, which owns the
-    // render-side mirror (remote bolt mounts + own-ship prediction loadout).
+    // ids (hardpoint declaration order; uint.MaxValue = emptied slot) plus the ship's INERT stowed
+    // missile stacks (v39, salvage) for every ship flying a NON-authored loadout or holding stowed
+    // rounds (reconcile-by-omission: a ship absent from the frame flies its authored class loadout
+    // with an empty hold). Decode and forward whole to WorldRenderer, which owns the render-side
+    // mirror (remote bolt mounts + own-ship prediction loadout + the owner's HOLD readout).
     private void ApplyShipLoadout(BinaryReader r)
     {
         byte count = r.ReadByte();
-        var table = new List<(ulong shipId, uint[] ids)>(count);
+        var table = new List<(ulong shipId, uint[] ids, (uint rackId, byte count)[] stowed)>(count);
         for (int i = 0; i < count; i++)
         {
             ulong shipId = r.ReadUInt64();
@@ -395,7 +416,11 @@ public sealed class FrameApplier
             var ids = new uint[nSlots];
             for (int s = 0; s < nSlots; s++)
                 ids[s] = r.ReadUInt32();
-            table.Add((shipId, ids));
+            int nStowed = r.ReadByte();
+            var stowed = nStowed == 0 ? System.Array.Empty<(uint, byte)>() : new (uint rackId, byte count)[nStowed];
+            for (int s = 0; s < nStowed; s++)
+                stowed[s] = (r.ReadUInt32(), r.ReadByte());
+            table.Add((shipId, ids, stowed));
         }
         _world.Ships.NetShipLoadouts(table);
     }
@@ -645,6 +670,101 @@ public sealed class FrameApplier
         );
     }
 
+    // Wreck salvage lying in this client's anchor sector (mirrors Protocol.WriteSalvage). Same
+    // contract as MsgMinefields: items only ever stream for the client's OWN anchor sector, so every
+    // frame is the authoritative FULL visible set for that sector — (re)sent when that sector's items
+    // change, on the coarse keepalive, and whenever the anchor sector changes (a warp). The u16
+    // header names the frame's sector even at count 0, so an empty frame from a warp still purges.
+    // Any cached item the frame no longer lists is gone (collected, expired, fogged out, or left
+    // behind in the old sector): drop it with reason 255 = silent local reconcile, so the renderer
+    // just frees the node. A real pickup/expiry rides MsgSalvageGone, which carries the FX authority.
+    private void ApplySalvage(BinaryReader r)
+    {
+        ushort anchorSector = r.ReadUInt16();
+        byte count = r.ReadByte();
+        _salvageSeen.Clear();
+        for (int i = 0; i < count; i++)
+        {
+            ulong id = r.ReadUInt64();
+            byte kind = r.ReadByte();
+            uint itemId = r.ReadUInt32();
+            byte cnt = r.ReadByte();
+            byte team = r.ReadByte();
+            short px = r.ReadInt16(),
+                py = r.ReadInt16(),
+                pz = r.ReadInt16();
+            ushort vx = r.ReadUInt16(),
+                vy = r.ReadUInt16(),
+                vz = r.ReadUInt16();
+            ushort ticksLeft = r.ReadUInt16();
+
+            // A record carries no sector of its own: the frame's header sector IS every record's
+            // sector (items stream ONLY for the anchor). Reuse the cached row object when we already
+            // have this id, so a per-tick drift frame allocates nothing.
+            if (!_salvageRows.TryGetValue(id, out var row))
+                _salvageRows[id] = row = new Salvage { SalvageId = id };
+            row.Kind = kind;
+            row.ItemId = itemId;
+            row.Count = cnt;
+            row.Team = team;
+            row.SectorId = anchorSector;
+            row.PosX = WireQuant.UnpackPos(px);
+            row.PosY = WireQuant.UnpackPos(py);
+            row.PosZ = WireQuant.UnpackPos(pz);
+            row.VelX = WireQuant.UnpackHalf(vx);
+            row.VelY = WireQuant.UnpackHalf(vy);
+            row.VelZ = WireQuant.UnpackHalf(vz);
+            row.TicksLeft = ticksLeft;
+            _salvageSeen.Add(id);
+            _world.Salvage.NetUpsert(row);
+        }
+
+        // Prune every cached id the frame no longer lists (the reconcile above).
+        if (_salvageRows.Count != _salvageSeen.Count)
+        {
+            _salvageReconcileScratch.Clear();
+            foreach (var kv in _salvageRows)
+                if (!_salvageSeen.Contains(kv.Key))
+                    _salvageReconcileScratch.Add(kv.Key);
+            foreach (var id in _salvageReconcileScratch)
+            {
+                var g = _salvageRows[id];
+                _salvageRows.Remove(id);
+                _world.Salvage.NetGone(id, 255, g.SectorId, new Vec3(g.PosX, g.PosY, g.PosZ), 0);
+            }
+        }
+
+        // Smoke aid: one line whenever the visible item COUNT moves (a per-frame line would drown
+        // the log — this frame arrives every tick for the seconds a drift burst lasts).
+        if (_salvageRows.Count != _lastSalvageLogCount)
+        {
+            _lastSalvageLogCount = _salvageRows.Count;
+            Log.Print($"[GameNet] salvage rows={_salvageRows.Count}");
+        }
+    }
+
+    // One salvage item left the world (mirrors Protocol.BuildSalvageGone): reason 0 expired,
+    // 1 match cleanup, 2 picked up by `byShipId` (the renderer pops the collect FX and, when the
+    // collector is US, raises the pickup banner). Broadcast, so an unknown id is a harmless no-op.
+    private void ApplySalvageGone(BinaryReader r)
+    {
+        ulong id = r.ReadUInt64();
+        byte reason = r.ReadByte();
+        ushort sector = r.ReadUInt16();
+        short px = r.ReadInt16(),
+            py = r.ReadInt16(),
+            pz = r.ReadInt16();
+        ulong byShipId = r.ReadUInt64();
+        _salvageRows.Remove(id);
+        _world.Salvage.NetGone(
+            id,
+            reason,
+            sector,
+            new Vec3(WireQuant.UnpackPos(px), WireQuant.UnpackPos(py), WireQuant.UnpackPos(pz)),
+            byShipId
+        );
+    }
+
     // Deployed minefields for this client's anchor sector (mirrors Protocol.WriteMinefield). Minefields
     // only ever stream for the client's OWN anchor sector, so every frame is the authoritative FULL set
     // for that sector: it is (re)sent on change, coarse keepalive, AND whenever the anchor sector changes
@@ -862,6 +982,8 @@ public sealed class FrameApplier
             _missileRows.Clear(); // stale missiles from the pre-drop world must not linger
             _minefieldRows.Clear();
             _probeRows.Clear();
+            _salvageRows.Clear(); // the next anchor-sector frame re-streams whatever still lies there
+            _lastSalvageLogCount = -1;
         }
         _worldLoaded = true;
 

@@ -133,6 +133,13 @@ public sealed class ClientHub
         // Hello always send, so a fresh join gets its field set immediately instead of waiting up to a
         // full coarse interval. Advanced only on a successful enqueue (the reveal-cursor convention).
         public uint LastMinefieldAnchor = uint.MaxValue;
+
+        // Same contract for MsgSalvage (v39), which streams per anchor sector exactly like
+        // minefields: the sentinel forces the first frame after Hello, and a divergence from
+        // AnchorSector (a warp) forces a fresh one even on a plain, no-change tick — otherwise the
+        // new sector's wrecks never stream in and the old sector's never prune. Advanced only on a
+        // successful enqueue.
+        public uint LastSalvageAnchor = uint.MaxValue;
     }
 
     // Per-tick record scratch (sim thread only): every alive ship's quantized record is
@@ -1438,6 +1445,8 @@ public sealed class ClientHub
         public Dictionary<byte, byte[]>? ProbeFramesByTeam;
         public bool SendMinefields;
         public Dictionary<byte, HashSet<ulong>>? MineVisCache;
+        public List<byte[]>? SalvageGoneFrames;
+        public Dictionary<byte, HashSet<ulong>>? SalvageVisCache;
         public bool SendBases;
         public byte[]? BasesFrame;
         public Dictionary<byte, byte[]>? BaseFramesByTeam;
@@ -1503,6 +1512,13 @@ public sealed class ClientHub
         foreach (var (cid, msg) in _sim.ResearchNoticesThisStep)
             if (_clients.TryGetValue(cid, out var rc))
                 SystemTo(rc, msg);
+
+        // Wreck-salvage feedback (v39, same accumulate-in-Step contract): PER-PILOT system lines —
+        // "Salvaged: …" / "Stowed: …" on a pickup, "Can't carry …" once per (ship, item) when a
+        // full hull makes an item ricochet. Nobody but the collector needs to hear about it.
+        foreach (var (cid, msg) in _sim.PilotNoticesThisStep)
+            if (_clients.TryGetValue(cid, out var pc))
+                SystemTo(pc, msg);
 
         // Commander-order feedback (same accumulate-in-Step contract): issuer-only rejections/acks
         // as system lines, and team-wide GOLD directives (MsgChatRelay scope 2) once the sim has
@@ -1591,6 +1607,17 @@ public sealed class ClientHub
         // hazard must not AOI-pop, and the empty frame on removal must reach the client too.
         bool sendMinefields = _sim.MinefieldsChangedThisStep || coarse;
 
+        // Wreck salvage (v39): one reliable gone frame per item that left the world this step.
+        // BROADCAST like a probe-gone (an unknown id no-ops client-side) — reason 2 is the only
+        // authority for the pickup FX/toast, which MsgSalvage's reconcile-by-omission can't express.
+        List<byte[]>? salvageGoneFrames = null;
+        if (_sim.SalvageGoneThisStep.Count > 0)
+        {
+            salvageGoneFrames = new(_sim.SalvageGoneThisStep.Count);
+            foreach (var g in _sim.SalvageGoneThisStep)
+                salvageGoneFrames.Add(Protocol.BuildSalvageGone(g.id, g.reason, g.sector, g.pos, g.byShipId));
+        }
+
         // Stream base health when it changed (a hit landed / match ended) or on coarse ticks as a
         // keepalive for clients that joined between changes. Fog off: built once, shared to all. Fog
         // on: per-team (BuildBasesFor, discovered bases + last-known health), built lazily in the loop
@@ -1651,6 +1678,12 @@ public sealed class ClientHub
         // NoTeam client's team never keys the cache (MineVisFor returns null). Runs post-Step on the sim
         // thread inside the sequential pre-pass, so the TeamVision reads/point-visibility stay safe.
         Dictionary<byte, HashSet<ulong>>? mineVisCache = fog ? new() : null;
+
+        // Fog point-visibility for salvage items (v39): the same (item, team) precompute, lazily
+        // filled per team for the same reason — a salvage frame can be triggered by a single
+        // client's anchor-sector change on an otherwise quiet tick, so an eager "only when something
+        // changed" fill would hand that path a null set and hide every visible item.
+        Dictionary<byte, HashSet<ulong>>? salvageVisCache = fog ? new() : null;
 
         // Fog point-visibility for chaff pops (F10): same (target, team) precompute, still eager — a
         // chaff pop is a one-shot event tied to this exact tick, not a per-client anchor query.
@@ -1719,6 +1752,8 @@ public sealed class ClientHub
             ProbeFramesByTeam = probeFramesByTeam,
             SendMinefields = sendMinefields,
             MineVisCache = mineVisCache,
+            SalvageGoneFrames = salvageGoneFrames,
+            SalvageVisCache = salvageVisCache,
             SendBases = sendBases,
             BasesFrame = basesFrame,
             BaseFramesByTeam = baseFramesByTeam,
@@ -1766,6 +1801,34 @@ public sealed class ClientHub
         mineVisCache[team] = vis;
         return vis;
     }
+
+    // Fog point-visibility for wreck salvage (v39): computed once per (tick, team) into
+    // `salvageVisCache`, then reused for every client on that team and for both passes inside
+    // BuildSalvageFor. MineVisFor's shape MINUS the radar seed — an item is inert scrap with no
+    // signature of its own, so the ONLY way to see one is to be able to see the point it lies at
+    // (IsPointVisibleToTeam). No owner privilege either: the wreck's team gets no free look at its
+    // own debris. Fog off (or a NoTeam spectator's team byte) returns null = "everything visible";
+    // a real team with nothing in sight caches an EMPTY set, which hides every item.
+    private HashSet<ulong>? SalvageVisFor(Dictionary<byte, HashSet<ulong>>? salvageVisCache, bool fog, byte team)
+    {
+        if (!fog)
+            return null;
+        if (team > 1)
+            return EmptySalvageVis; // a NoTeam spectator has no vision at all under fog
+        if (salvageVisCache!.TryGetValue(team, out var cached))
+            return cached;
+        var items = _sim.Salvage;
+        var vis = new HashSet<ulong>();
+        for (int i = 0; i < items.Count; i++)
+            if (_sim.IsPointVisibleToTeam(team, items[i].SectorId, items[i].Pos))
+                vis.Add(items[i].Id);
+        salvageVisCache[team] = vis;
+        return vis;
+    }
+
+    // The "sees nothing" set handed to a NoTeam client under fog (shared + never mutated, so it
+    // costs no allocation per spectator per tick).
+    private static readonly HashSet<ulong> EmptySalvageVis = new();
 
     // One client's slice of AfterStep's pre-pass: resolve its controlled ship / anchor / team (the
     // ShipIdOf call needs the sim's queue lock, so this whole pass stays sequential/off the parallel
@@ -1999,6 +2062,14 @@ public sealed class ClientHub
             foreach (var f in frames.ProbeGoneFrames)
                 client.Out.SendReliable(OutFrame.Whole(f));
 
+        // Wreck salvage removals (v39): broadcast to everyone, RELIABLE. A reason-2 gone is the only
+        // thing that tells a client an item was COLLECTED rather than expired — MsgSalvage prunes by
+        // omission and cannot express the difference — and it carries the collector id the owner's
+        // pickup banner keys on. An id this client never had is a harmless no-op.
+        if (frames.SalvageGoneFrames is not null)
+            foreach (var f in frames.SalvageGoneFrames)
+                client.Out.SendReliable(OutFrame.Whole(f));
+
         if (frames.SendProbes)
         {
             byte[] BuildProbesFrame() => BuildProbesFor(client.Team);
@@ -2021,6 +2092,29 @@ public sealed class ClientHub
             )
         )
             client.LastMinefieldAnchor = client.AnchorSector;
+
+        // Wreck salvage for this client's anchor sector — the same three triggers as minefields, but
+        // the change test is PER SECTOR (SalvageChangedSectorsThisStep): items drift for seconds
+        // after a kill, and a global "something moved" flag would re-stream every other sector's
+        // frame every tick for the whole drift burst. An empty frame is still how a removal (or a
+        // warp away) propagates. Advance LastSalvageAnchor only on a successful enqueue.
+        bool wantSalvage =
+            coarse
+            || _sim.SalvageChangedSectorsThisStep.Contains(client.AnchorSector)
+            || client.AnchorSector != client.LastSalvageAnchor;
+        if (
+            wantSalvage
+            && client.Out.TryWrite(
+                OutFrame.Whole(
+                    BuildSalvageFor(
+                        client.AnchorSector,
+                        client.Team,
+                        SalvageVisFor(frames.SalvageVisCache, fog, client.Team)
+                    )
+                )
+            )
+        )
+            client.LastSalvageAnchor = client.AnchorSector;
 
         // Live rock shrink (mining). Fog off: the shared broadcast frames. Fog on: this team's
         // discovered-only frames, built once per team (lazily) — a NoTeam spectator's null vision
@@ -2328,6 +2422,39 @@ public sealed class ClientHub
             {
                 Protocol.WriteMinefield(buf.AsSpan(dst, Protocol.MinefieldRecordSize), fields[i]);
                 dst += Protocol.MinefieldRecordSize;
+            }
+        return buf;
+    }
+
+    // Build the MsgSalvage frame for one anchor sector: [30][u16 anchorSector][u8 count] + count x
+    // 29-B records (v39). BuildMinefieldsFor's contract exactly — always a frame (an empty one when
+    // the sector holds nothing) so a removal propagates, and the u16 header names the sector even at
+    // count 0 so the client can prune stale rows on an anchor change. `visible` is the precomputed
+    // set of item ids this team can see (SalvageVisFor); null = fog off, everything streams.
+    private byte[] BuildSalvageFor(uint sector, byte team, HashSet<ulong>? visible)
+    {
+        var items = _sim.Salvage;
+
+        // Local function (not a Func<> variable): a direct call in both passes, no delegate alloc.
+        bool Visible(Simulation.SalvageSim it) => visible is null || visible.Contains(it.Id);
+
+        int cnt = 0;
+        for (int i = 0; i < items.Count; i++)
+            if (items[i].SectorId == sector && Visible(items[i]))
+                cnt++;
+        cnt = Math.Min(cnt, 255); // the sector cap keeps this well under 255; clamp anyway (u8 count)
+        byte[] buf = new byte[4 + cnt * Protocol.SalvageRecordSize];
+        buf[0] = Protocol.MsgSalvage;
+        BitConverter.TryWriteBytes(buf.AsSpan(1), (ushort)sector);
+        buf[3] = (byte)cnt;
+        int dst = 4;
+        int written = 0;
+        for (int i = 0; i < items.Count && written < cnt; i++)
+            if (items[i].SectorId == sector && Visible(items[i]))
+            {
+                Protocol.WriteSalvage(buf.AsSpan(dst, Protocol.SalvageRecordSize), items[i], _sim.Tick);
+                dst += Protocol.SalvageRecordSize;
+                written++;
             }
         return buf;
     }

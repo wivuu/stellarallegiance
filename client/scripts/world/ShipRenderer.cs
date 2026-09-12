@@ -78,6 +78,11 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
     private readonly Dictionary<ulong, uint[]> _mountShadow = new();
     private static readonly List<ulong> _loadoutScratch = new(); // stale-key sweep, reused
 
+    // Salvaged INERT missile stacks per ship (v39), from the same MsgShipLoadout row. Only the LOCAL
+    // ship's copy is consumed (the owner's hold readout), but the mirror is kept per ship so the
+    // "did this row's stowed set change?" test is a plain compare against the previous frame.
+    private readonly Dictionary<ulong, (uint rackId, byte count)[]> _stowed = new();
+
     // Pilot nameplate per ship id (roster-sourced; snapshots carry no identity). PIG/pod ships with no
     // roster row simply aren't in the map -> no nameplate.
     private readonly Dictionary<ulong, string> _pilotNames = new();
@@ -312,21 +317,24 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
         _shield.Remove(row.ShipId);
         _mounts.Remove(row.ShipId); // immediate prune; the next MsgShipLoadout omits it anyway
         _mountShadow.Remove(row.ShipId);
+        _stowed.Remove(row.ShipId);
         DeleteShip(row, reason);
     }
 
     // Reconcile the loadout mirror to the streamed table (replace-whole, reconcile-by-omission). Only ships
     // whose ids ACTUALLY changed reset their cadence shadow / re-seed the local predictor (the frame also
     // arrives as a ~0.5s keepalive; resetting shadows on every keepalive would re-derive "all mounts
-    // eligible" mid-burst).
-    public void NetShipLoadouts(List<(ulong shipId, uint[] ids)> table)
+    // eligible" mid-burst). The v39 stowed tail rides the same row but is tracked SEPARATELY: a stack
+    // stowed mid-flight changes the hold, never the barrels, so it must not reset a cadence shadow.
+    public void NetShipLoadouts(List<(ulong shipId, uint[] ids, (uint rackId, byte count)[] stowed)> table)
     {
         _loadoutScratch.Clear();
         foreach (var id in _mounts.Keys)
             _loadoutScratch.Add(id);
-        foreach (var (shipId, ids) in table)
+        foreach (var (shipId, ids, stowed) in table)
         {
             _loadoutScratch.Remove(shipId);
+            PushStowed(shipId, stowed);
             if (_mounts.TryGetValue(shipId, out var old) && old.AsSpan().SequenceEqual(ids))
                 continue; // unchanged keepalive row
             _mounts[shipId] = ids;
@@ -338,9 +346,30 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
         {
             _mounts.Remove(shipId);
             _mountShadow.Remove(shipId);
+            PushStowed(shipId, System.Array.Empty<(uint, byte)>()); // omitted ⇒ the hold is empty too
             if (LocalShip is { } pc && pc.ShipId == shipId)
                 pc.SetLoadout(null);
         }
+    }
+
+    // Adopt one ship's stowed set, pushing it to the local predictor only when it actually moved
+    // (the frame is also a ~0.5 s keepalive). An empty set prunes the mirror entry, so a hull that
+    // dropped its hold stops carrying a stale row.
+    private void PushStowed(ulong shipId, (uint rackId, byte count)[] stowed)
+    {
+        bool had = _stowed.TryGetValue(shipId, out var old);
+        if (had && old.AsSpan().SequenceEqual(stowed))
+            return;
+        if (stowed.Length == 0)
+        {
+            if (!had)
+                return; // nothing cached and nothing carried: no change to push
+            _stowed.Remove(shipId);
+        }
+        else
+            _stowed[shipId] = stowed;
+        if (LocalShip is { } pc && pc.ShipId == shipId)
+            pc.SetStowed(stowed.Length == 0 ? null : stowed);
     }
 
     // Apply the latest roster to live ship nodes. Called whenever the roster lands — which may be a frame
@@ -576,6 +605,7 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
     {
         _nodes.Clear();
         _shield.Clear();
+        _stowed.Clear(); // a rebuilt world re-pushes every hold from the next MsgShipLoadout
         _pilotNames.Clear();
         LocalShip = null;
         _deathCamUntil = -1.0;

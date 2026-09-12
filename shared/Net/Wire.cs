@@ -128,7 +128,18 @@ public static class Wire
     // EJ >= D), and a pod that docks or is rescued is neither. Kill credit itself is server-side
     // only (world.yaml `scoring:`) — the client only ever sees these resolved counters. Writer
     // Protocol.BuildMatchStats <-> reader GameNetClient.ApplyMatchStats.
-    public const byte ProtocolVersion = 38; // 38: Hello gains a trailing u16 join-token field; MsgReject code 2
+    // (2026-09-12) wreck salvage: a destroyed combat hull scatters what it carried as physical items
+    // any hull can fly over and collect. NEW MsgSalvage=30 (server->client, per ANCHOR SECTOR on the
+    // minefield cadence: u16 anchorSector, u8 count, count x 29-B record (u64 id, u8 kind, u32
+    // itemId, u8 count, u8 team, 3x i16 sector-local pos, 3x f16 vel, u16 ticksLeft) —
+    // reconcile-by-omission, fog-filtered per team by point visibility) and NEW MsgSalvageGone=31
+    // (reliable broadcast, 26 B: u64 id, u8 reason, u16 sector, 3x i16 pos, u64 byShipId — the only
+    // way a client can tell a PICKUP from an expiry, and who collected it). MsgShipLoadout=28 rows
+    // append a stowed-missile tail (u8 nStowed, n x (u32 rackWeaponId, u8 count)) for the salvaged
+    // rounds a hull carries inert, and a ship now earns a row for that hold alone (its ids are the
+    // authored ones then). The weapon def record appends f32 RoundMass and the cargo def record a
+    // trailing ModelName string, both LAST (append-only). See server/Sim/Simulation.Salvage.cs.
+    public const byte ProtocolVersion = 39; // 39: salvage streams + loadout stowed tail + weapon/cargo def tails
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

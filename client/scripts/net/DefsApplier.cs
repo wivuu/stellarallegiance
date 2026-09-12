@@ -162,6 +162,9 @@ public sealed class DefsApplier
             // Load-from-hold time (2026-07-24), read LAST (mirror of BuildDefs). Feeds the HUD's
             // RELOADING readout through the same FireCadence.LoadIntervalTicks rule the sim gates on.
             ReloadTicks = r.ReadUInt32(),
+            // Per-round payload mass (v39, salvage), read LAST (mirror of BuildDefs). Non-zero only
+            // on a missile-kind launcher: what one loose round costs a hold that stows it.
+            RoundMass = r.ReadSingle(),
         };
 
     // One cargo item (mirror of Protocol.BuildDefs' cargo block, exact field order).
@@ -176,6 +179,9 @@ public sealed class DefsApplier
             Description = NetRead.ReadStr(r),
             FuelPerCharge = r.ReadSingle(), // v35: 0 = not a fuel item
             ReloadTicks = r.ReadUInt32(), // v36: ticks a charge takes to load out of the hold (0 = instant)
+            // Item GLB basename (v39, salvage), read LAST (mirror of BuildDefs). Used when a dropped
+            // pack has no dispenser weapon to borrow a mesh from (the fuel pod).
+            ModelName = NetRead.ReadStr(r),
         };
 
     // One base type (mirror of Protocol.BuildDefs' base block, exact field order).

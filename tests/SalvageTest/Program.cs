@@ -38,10 +38,16 @@
 //  10. Expiry + sector cap: a short lifetime expires the item; a cap of 2 expires the OLDEST first.
 //  11. Cleanup: ReturnToLobby emits reason 1 for every item and empties the list; the next match
 //      starts clean.
+//  12. Wire encode: WriteSalvage's 29-byte record and BuildSalvageGone's 26-byte frame hand-decode
+//      field for field, and a stow-only ship rides MsgShipLoadout with authored ids + the stack.
+//  13. Hub: the real ClientHub over an in-memory transport — the anchor-sector MsgSalvage frame, its
+//      prune-by-omission, the anchor-change trigger, the per-sector change set, the fog filter and
+//      the reliable pickup gone frame.
 //  14. Replay: two sims on the same rngSeed produce byte-identical item state for 200 ticks.
 
 using System.Text;
 using SimServer.Content;
+using SimServer.Net;
 using SimServer.Sim;
 using StellarAllegiance.Shared;
 
@@ -762,6 +768,445 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
     );
 }
 
+// ---- 12. Wire encode: the protocol-39 salvage records round-trip field for field -----------------
+{
+    // One synthetic item with values chosen to exercise every field (a mid-sector position, a
+    // signed velocity, a non-trivial id/count/team) and a tick 60 short of its expiry.
+    var item = new Simulation.SalvageSim
+    {
+        Id = 0x1122334455667788UL,
+        SectorId = 7,
+        Pos = new Vec3(123.5f, -60.25f, 4000f),
+        Vel = new Vec3(12.5f, -3.25f, 0.5f),
+        Kind = Simulation.SalvageKindMissiles,
+        ItemId = QuickfireRack1,
+        Count = 6,
+        Team = 1,
+        ExpireAtTick = 1000,
+        SpawnTick = 100,
+    };
+    var rec = new byte[Protocol.SalvageRecordSize];
+    Protocol.WriteSalvage(rec, item, tick: 940);
+
+    // Hand-decode at the documented offsets — the point of the test is that the LAYOUT is what the
+    // client reader assumes, so nothing here may go through a shared decode helper.
+    ulong id = BitConverter.ToUInt64(rec, 0);
+    byte kind = rec[8];
+    uint itemId = BitConverter.ToUInt32(rec, 9);
+    byte count = rec[13];
+    byte team = rec[14];
+    float px = WireQuant.UnpackPos(BitConverter.ToInt16(rec, 15));
+    float py = WireQuant.UnpackPos(BitConverter.ToInt16(rec, 17));
+    float pz = WireQuant.UnpackPos(BitConverter.ToInt16(rec, 19));
+    float vx = WireQuant.UnpackHalf(BitConverter.ToUInt16(rec, 21));
+    float vy = WireQuant.UnpackHalf(BitConverter.ToUInt16(rec, 23));
+    float vz = WireQuant.UnpackHalf(BitConverter.ToUInt16(rec, 25));
+    ushort ticksLeft = BitConverter.ToUInt16(rec, 27);
+
+    Check(
+        Protocol.SalvageRecordSize == 29
+            && id == item.Id
+            && kind == item.Kind
+            && itemId == item.ItemId
+            && count == item.Count
+            && team == item.Team
+            && ticksLeft == 60,
+        "WriteSalvage lays 29 bytes out as id|kind|itemId|count|team|pos|vel|ticksLeft",
+        $"record scalars wrong (size {Protocol.SalvageRecordSize}, id {id:X}, kind {kind}, item {itemId}, count {count}, team {team}, left {ticksLeft})"
+    );
+
+    // Position is the sector-local i16 quantization: one step is PosRange/32767 (~0.25 u), so a
+    // round-trip can never be further off than that.
+    const float PosStep = WireQuant.PosRange / 32767f;
+    Check(
+        MathF.Abs(px - item.Pos.X) <= PosStep
+            && MathF.Abs(py - item.Pos.Y) <= PosStep
+            && MathF.Abs(pz - item.Pos.Z) <= PosStep,
+        $"the packed position round-trips inside one quantization step ({PosStep:0.###} u)",
+        $"position drifted too far: ({px}, {py}, {pz}) vs ({item.Pos.X}, {item.Pos.Y}, {item.Pos.Z})"
+    );
+    // Velocity is f16: ~3 decimal digits, so scale the tolerance with the magnitude.
+    bool HalfOk(float got, float want) => MathF.Abs(got - want) <= 0.001f * (1f + MathF.Abs(want));
+    Check(
+        HalfOk(vx, item.Vel.X) && HalfOk(vy, item.Vel.Y) && HalfOk(vz, item.Vel.Z),
+        "the packed velocity round-trips inside f16 tolerance",
+        $"velocity drifted: ({vx}, {vy}, {vz}) vs ({item.Vel.X}, {item.Vel.Y}, {item.Vel.Z})"
+    );
+
+    // A lifetime longer than a u16 can hold clamps instead of wrapping (65535 ticks ≈ 55 min).
+    item.ExpireAtTick = 200000;
+    Protocol.WriteSalvage(rec, item, tick: 1);
+    Check(
+        BitConverter.ToUInt16(rec, 27) == ushort.MaxValue,
+        "a lifetime past 65535 ticks clamps ticksLeft instead of wrapping",
+        $"ticksLeft clamp wrong ({BitConverter.ToUInt16(rec, 27)})"
+    );
+}
+{
+    // MsgSalvageGone: 26 bytes — BuildProbeGone's 18 plus the u64 collector id.
+    var pos = new Vec3(-500.25f, 2f, 77.75f);
+    var gone = Protocol.BuildSalvageGone(0xFEEDFACECAFEBEEFUL, Simulation.SalvageGonePickedUp, 42, pos, 0xABCDEF0123UL);
+    const float PosStep = WireQuant.PosRange / 32767f;
+    Check(
+        gone.Length == 26
+            && gone[0] == Protocol.MsgSalvageGone
+            && BitConverter.ToUInt64(gone, 1) == 0xFEEDFACECAFEBEEFUL
+            && gone[9] == 2
+            && BitConverter.ToUInt16(gone, 10) == 42
+            && MathF.Abs(WireQuant.UnpackPos(BitConverter.ToInt16(gone, 12)) - pos.X) <= PosStep
+            && MathF.Abs(WireQuant.UnpackPos(BitConverter.ToInt16(gone, 14)) - pos.Y) <= PosStep
+            && MathF.Abs(WireQuant.UnpackPos(BitConverter.ToInt16(gone, 16)) - pos.Z) <= PosStep
+            && BitConverter.ToUInt64(gone, 18) == 0xABCDEF0123UL,
+        "BuildSalvageGone is 26 bytes and round-trips id/reason/sector/pos/byShipId",
+        $"gone frame wrong (len {gone.Length}, type {gone[0]}, reason {gone[9]}, sector {BitConverter.ToUInt16(gone, 10)}, by {BitConverter.ToUInt64(gone, 18):X})"
+    );
+}
+{
+    // MsgShipLoadout's v39 stowed tail, on the path that only exists because of salvage: a ship
+    // flying its AUTHORED loadout (MountWeaponIds null — no row before this feature) that stowed a
+    // foreign rack's rounds. The row must carry the authored per-barrel ids AND the stack.
+    var sim = BootSim(techs: ["bomber"]);
+    var bomber = Spawn(sim, 1, team: 0, cls: 2); // authored: gat | autocan | autocan | gat | SRM rack
+    bomber.MineAmmo = 0; // free the payload its authored 8-mine hold is using
+    Kill(sim, Spawn(sim, 2, team: 0, cls: ClassScout, mounts: [((byte)1, QuickfireRack1)]));
+    var rounds = sim.Salvage.Single(i => i.Kind == 2);
+    IsolateItem(sim, rounds);
+    rounds.Count = 2;
+    PressItemOnShip(sim, rounds, bomber, 2);
+    Check(
+        bomber.MountWeaponIds is null && bomber.StowedMissiles is [(QuickfireRack1, 2)],
+        "premise: an authored-loadout bomber stowed a foreign rack's rounds (no mount override)",
+        $"stow premise failed (mounts {(bomber.MountWeaponIds is null ? "authored" : "override")}, stowed {bomber.StowedMissiles?.Count})"
+    );
+
+    // Hand-parse the frame: [28][u8 rows] then rows x (u64 shipId, u8 nSlots, nSlots x u32, u8
+    // nStowed, nStowed x (u32 rackId, u8 count)).
+    byte[] frame = Protocol.BuildShipLoadouts(sim);
+    var ids = new List<uint>();
+    var stowed = new List<(uint rackId, byte count)>();
+    bool found = false;
+    {
+        int o = 2;
+        for (int row = 0; row < frame[1]; row++)
+        {
+            ulong shipId = BitConverter.ToUInt64(frame, o);
+            o += 8;
+            int nSlots = frame[o++];
+            var rowIds = new List<uint>();
+            for (int s = 0; s < nSlots; s++)
+            {
+                rowIds.Add(BitConverter.ToUInt32(frame, o));
+                o += 4;
+            }
+            int nStowed = frame[o++];
+            var rowStowed = new List<(uint, byte)>();
+            for (int s = 0; s < nStowed; s++)
+            {
+                rowStowed.Add((BitConverter.ToUInt32(frame, o), frame[o + 4]));
+                o += 5;
+            }
+            if (shipId != bomber.ShipId)
+                continue;
+            found = true;
+            ids.AddRange(rowIds);
+            stowed.AddRange(rowStowed);
+        }
+        Check(
+            o == frame.Length,
+            $"the loadout frame parses exactly ({frame.Length} bytes, {frame[1]} row(s)) — no slack, no overrun",
+            $"loadout frame length mismatch (parsed {o} of {frame.Length})"
+        );
+    }
+    Check(
+        found && ids is [GatGun1, 12u, 12u, GatGun1, 5u] && stowed is [(QuickfireRack1, 2)],
+        "a stow-only ship rides MsgShipLoadout with its AUTHORED ids plus the stowed stack",
+        $"loadout row wrong (found {found}, ids [{string.Join(",", ids)}], stowed [{string.Join(",", stowed.Select(s => $"{s.rackId}x{s.count}"))}])"
+    );
+}
+
+// ---- 13. Hub: the MsgSalvage anchor-sector stream, its fog filter and the pickup gone frame ------
+// Drives the REAL ClientHub over an in-memory transport (MineTest section 7 / FogTest #18-#19's
+// shared harness): joins via MsgHello and pumps the real sim-loop pair (sim.Step() + hub.AfterStep()).
+{
+    const int CoarseEvery = 10; // ClientHub.CoarseEveryTicks — the keepalive cadence these tests dodge
+
+    // A sim wired the way the real server drives it, with salvage forced on so a kill is a full dump.
+    Simulation BootHubSim(ulong seed, bool fog)
+    {
+        var content = ContentLoader.Load(stockPath, worldPath);
+        content.World.Salvage.DropChance = 1f;
+        var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
+        return new Simulation(world, content, rngSeed: 1)
+        {
+            PigsEnabled = false,
+            MinersEnabled = false,
+            ShieldsEnabled = false,
+            FogEnabled = fog,
+            VisionSynchronous = true,
+        };
+    }
+
+    ClientHub MakeHub(Simulation sim) =>
+        new ClientHub(
+            sim,
+            new SimServer.Backend.OpenAuthenticator(),
+            new SimServer.Backend.InMemoryPlayerDirectory(),
+            new SimServer.Backend.ReadyUpMatchmaker(true),
+            "Test Arena",
+            Array.Empty<MapCatalogEntry>()
+        );
+
+    // Fresh-join Hello (v9): [MsgHello][secretLen 0][nameLen][name][tokenLen 0].
+    void FeedHello(FakeHubTransport ft)
+    {
+        var name = Encoding.UTF8.GetBytes("salv");
+        var hello = new List<byte> { Protocol.MsgHello, 0, (byte)name.Length };
+        hello.AddRange(name);
+        hello.Add(0);
+        ft.Feed(hello.ToArray());
+    }
+
+    byte[]? LastSalvage(FakeHubTransport ft) =>
+        ft.Sent.Where(f => f.Length > 0 && f[0] == Protocol.MsgSalvage).LastOrDefault();
+
+    // AfterStep enqueues frames; the async SendLoop flushes them a moment later, so poll (bounded)
+    // for the frame the measured AfterStep produced instead of racing it.
+    byte[]? WaitSalvage(FakeHubTransport ft)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (LastSalvage(ft) is { } f)
+                return f;
+            Thread.Sleep(5);
+        }
+        return null;
+    }
+
+    // Frame header: [30][u16 anchorSector][u8 count] + count x 29-B records.
+    (ushort sector, int count) Header(byte[] f) => (BitConverter.ToUInt16(f, 1), f[3]);
+
+    bool FrameHas(byte[] f, ulong id)
+    {
+        for (int i = 0; i < f[3]; i++)
+            if (BitConverter.ToUInt64(f, 4 + i * Protocol.SalvageRecordSize) == id)
+                return true;
+        return false;
+    }
+
+    // Join + spawn a scout, returning the live pieces the scenarios drive.
+    (ClientHub hub, FakeHubTransport ft, CancellationTokenSource cts, Task conn, Simulation.ShipSim ship) Join(
+        Simulation sim
+    )
+    {
+        var hub = MakeHub(sim);
+        sim.ShouldStartMatch = hub.ShouldStartMatch;
+        sim.OnReturnToLobby = hub.OnReturnToLobby;
+        var ft = new FakeHubTransport();
+        var cts = new CancellationTokenSource();
+        var conn = hub.HandleConnection(ft, cts.Token);
+        FeedHello(ft);
+        Thread.Sleep(50);
+        ft.Feed(new byte[] { Protocol.MsgSetTeam, 0 });
+        Thread.Sleep(50);
+        for (int i = 0; i < 20; i++) // let the matchmaker auto-start
+        {
+            sim.Step();
+            hub.AfterStep();
+        }
+        ft.Feed(new byte[] { Protocol.MsgSpawn, ClassScout, 0, 0, 0, 0, 0, 0, 0, 0 }); // [4][cls][u64 launchBaseId=0]
+        Thread.Sleep(50);
+        for (int i = 0; i < 5; i++)
+        {
+            sim.Step();
+            hub.AfterStep();
+        }
+        return (hub, ft, cts, conn, sim.Ships.First(s => s.OwnerClientId == 1 && !s.IsPod));
+    }
+
+    void Teardown(CancellationTokenSource cts, Task conn)
+    {
+        cts.Cancel();
+        try
+        {
+            conn.Wait(2000);
+        }
+        catch
+        { /* teardown */
+        }
+    }
+
+    // Kill a bare enemy scout at `pos` in `sector` so EXACTLY ONE item (its nose gun) drops there.
+    // The transport is drained and cleared right before the KILLING step, so the last MsgSalvage
+    // frame in `ft.Sent` afterwards is the one that drop tick produced — no racing the send loop.
+    // The item comes back PARKED at `pos`: these scenarios test the stream, not the physics.
+    Simulation.SalvageSim DropOneItem(Simulation sim, ClientHub hub, FakeHubTransport ft, int cid, uint sector, Vec3 pos)
+    {
+        sim.EnqueueJoin(cid, 1, ClassScout, Array.Empty<(uint, byte)>(), 0, [((byte)1, NoWeapon)]);
+        sim.Step();
+        hub.AfterStep();
+        var victim = sim.Ships.First(s => s.OwnerClientId == cid && !s.IsPod);
+        victim.SectorId = sector;
+        victim.State.Pos = pos;
+        victim.State.Vel = new Vec3(0f, 0f, 0f);
+        victim.Health = 0f;
+        Thread.Sleep(60); // let the send loop flush everything queued before the measured tick
+        ft.Sent.Clear();
+        sim.Step();
+        hub.AfterStep();
+        var item = sim.Salvage.Last();
+        item.Pos = pos;
+        item.Vel = new Vec3(0f, 0f, 0f);
+        item.AtRest = true;
+        return item;
+    }
+
+    // ---- 13a. Drop in the anchor sector -> a header-A count-1 frame; the item prunes when it leaves --
+    {
+        var sim = BootHubSim(801, fog: false);
+        var (hub, ft, cts, conn, ship) = Join(sim);
+        uint sectorA = ship.SectorId;
+        var item = DropOneItem(sim, hub, ft, 2, sectorA, ship.State.Pos + new Vec3(0f, 0f, 60f));
+        var f1 = WaitSalvage(ft); // the frame the drop tick itself produced (see DropOneItem)
+        Check(
+            f1 is not null
+                && Header(f1).sector == (ushort)sectorA
+                && Header(f1).count == 1
+                && f1.Length == 4 + Protocol.SalvageRecordSize
+                && FrameHas(f1, item.Id),
+            $"hub: a drop in the anchor sector yields a MsgSalvage frame (header {sectorA}, count 1, correct record offset)",
+            $"the drop frame is wrong (frame={(f1 is null ? "none" : $"sector {Header(f1).sector}, count {Header(f1).count}, len {f1.Length}")})"
+        );
+
+        // The item leaves the sector: the next frame for A must list nothing, so the client prunes it
+        // by omission. (Nothing moves an item between sectors in the sim, so the change set never
+        // flags the sector it LEFT — the keepalive is what closes that gap; pump to one.)
+        item.SectorId = sectorA + 500;
+        Thread.Sleep(60);
+        ft.Sent.Clear();
+        do
+        {
+            sim.Step();
+            hub.AfterStep();
+        } while (sim.Tick % CoarseEvery != 0);
+        var f2 = WaitSalvage(ft);
+        Check(
+            f2 is not null && Header(f2).sector == (ushort)sectorA && Header(f2).count == 0,
+            "hub: an item that left the sector is omitted from the next frame (count 0 = prune)",
+            $"the prune frame is wrong (frame={(f2 is null ? "none" : $"sector {Header(f2).sector}, count {Header(f2).count}")})"
+        );
+
+        // ---- 13b. An anchor-sector change alone (a warp) forces a fresh frame on a plain tick ----
+        uint sectorB = EmptySector;
+        while ((sim.Tick + 1) % CoarseEvery == 0)
+        {
+            sim.Step();
+            hub.AfterStep();
+        }
+        ft.Sent.Clear();
+        ship.SectorId = sectorB;
+        sim.Step();
+        hub.AfterStep();
+        var f3 = WaitSalvage(ft);
+        Check(
+            sim.Tick % CoarseEvery != 0,
+            "hub: the warp frame was measured on a non-coarse tick (premise)",
+            $"the measured tick {sim.Tick} was coarse — the anchor-change trigger is not isolated"
+        );
+        Check(
+            f3 is not null && Header(f3).sector == (ushort)sectorB && Header(f3).count == 0,
+            "hub: an anchor-sector change emits an immediate frame for the new sector with no global change",
+            $"the anchor-change frame is wrong (frame={(f3 is null ? "none" : $"sector {Header(f3).sector}, count {Header(f3).count}")})"
+        );
+
+        // ---- 13c. A wreck DRIFTING in another sector doesn't re-send this client's anchor frame ----
+        // (the per-sector change set is the whole point: a drift burst is one sector's traffic).
+        item.SectorId = sectorA;
+        item.AtRest = false;
+        item.Vel = new Vec3(5f, 0f, 0f);
+        while ((sim.Tick + 1) % CoarseEvery == 0)
+        {
+            sim.Step();
+            hub.AfterStep();
+        }
+        ft.Sent.Clear();
+        sim.Step();
+        hub.AfterStep();
+        Thread.Sleep(120); // give the send loop a chance to flush anything it WOULD have sent
+        Check(
+            sim.Tick % CoarseEvery != 0 && LastSalvage(ft) is null,
+            "hub: an item drifting in ANOTHER sector sends this client (anchored elsewhere) nothing",
+            $"a foreign-sector drift leaked a frame (tick {sim.Tick}, frame={(LastSalvage(ft) is { } lf ? $"sector {Header(lf).sector}, count {Header(lf).count}" : "none")})"
+        );
+
+        Teardown(cts, conn);
+    }
+
+    // ---- 13d. Fog on: an item is streamed only while its point is visible to the team ----
+    {
+        var sim = BootHubSim(802, fog: true);
+        var (hub, ft, cts, conn, ship) = Join(sim);
+        uint sectorA = ship.SectorId;
+        var near = DropOneItem(sim, hub, ft, 2, sectorA, ship.State.Pos + new Vec3(0f, 0f, 40f));
+        // The second drop's own tick is the measured one: it carries BOTH items through the fog
+        // filter (the near one already parked beside the ship, the far one dropping 6000 u away).
+        var far = DropOneItem(sim, hub, ft, 3, sectorA, ship.State.Pos + new Vec3(6000f, 0f, 0f));
+        var f = WaitSalvage(ft);
+        Check(
+            f is not null && FrameHas(f, near.Id) && !FrameHas(f, far.Id),
+            "hub (fog): an item beside the own ship streams, one 6000 u away in the same sector does not",
+            $"fog filter wrong (frame={(f is null ? "none" : $"count {Header(f).count}, near {FrameHas(f, near.Id)}, far {FrameHas(f, far.Id)}")})"
+        );
+
+        Teardown(cts, conn);
+    }
+
+    // ---- 13e. A pickup emits exactly one reliable MsgSalvageGone reason 2 naming the collector ----
+    {
+        var sim = BootHubSim(803, fog: false);
+        var (hub, ft, cts, conn, ship) = Join(sim);
+        // A chaff pack (mass 1) fits the authored scout's 12-unit payload, so the hull takes it.
+        sim.EnqueueJoin(2, 1, ClassScout);
+        sim.Step();
+        hub.AfterStep();
+        var victim = sim.Ships.First(s => s.OwnerClientId == 2 && !s.IsPod);
+        victim.SectorId = ship.SectorId;
+        victim.State.Pos = ship.State.Pos + new Vec3(0f, 0f, 400f);
+        victim.Health = 0f;
+        sim.Step();
+        hub.AfterStep();
+        var pack = sim.Salvage.First(i => i.Kind == Simulation.SalvageKindCargo && i.ItemId == ChaffCargo);
+        foreach (var other in sim.Salvage)
+            if (!ReferenceEquals(other, pack))
+            {
+                other.Pos = new Vec3(30000f, 0f, 0f);
+                other.AtRest = true;
+            }
+        pack.SectorId = ship.SectorId;
+        pack.Pos = ship.State.Pos;
+        pack.Vel = new Vec3(0f, 0f, 0f);
+        pack.AtRest = false;
+        ulong packId = pack.Id;
+
+        Thread.Sleep(60); // drain the queue so only the pickup tick's frames are measured
+        ft.Sent.Clear();
+        sim.Step();
+        hub.AfterStep();
+        Thread.Sleep(120);
+        var gone = ft.Sent.Where(fr => fr.Length > 0 && fr[0] == Protocol.MsgSalvageGone).ToList();
+        Check(
+            gone.Count == 1
+                && BitConverter.ToUInt64(gone[0], 1) == packId
+                && gone[0][9] == Simulation.SalvageGonePickedUp
+                && BitConverter.ToUInt64(gone[0], 18) == ship.ShipId,
+            "hub: collecting an item broadcasts exactly one MsgSalvageGone reason 2 naming the collector",
+            $"pickup gone frames wrong ({gone.Count}: {string.Join(", ", gone.Select(g => $"id{BitConverter.ToUInt64(g, 1)} r{g[9]} by{BitConverter.ToUInt64(g, 18)}"))}; expected id{packId} by{ship.ShipId})"
+        );
+
+        Teardown(cts, conn);
+    }
+}
+
 // ---- 14. Two-sim replay: identical scripts on one rngSeed stay byte-identical --------------------
 {
     string RunReplay(int rngSeed)
@@ -797,3 +1242,35 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
 
 Console.WriteLine(failures == 0 ? "ALL SALVAGE TESTS PASSED" : $"{failures} SALVAGE TEST(S) FAILED");
 return failures == 0 ? 0 : 1;
+
+// In-memory IClientTransport for the hub-level tests: feed client->server frames, capture
+// server->client (copied verbatim from tests/MineTest — the shared hub-harness pattern).
+sealed class FakeHubTransport : SimServer.Net.IClientTransport
+{
+    private readonly System.Collections.Concurrent.BlockingCollection<byte[]> _in = new();
+    public readonly System.Collections.Concurrent.ConcurrentQueue<byte[]> Sent = new();
+
+    public void Feed(byte[] frame) => _in.Add(frame);
+
+    public async ValueTask<int> ReceiveAsync(byte[] buffer, CancellationToken ct)
+    {
+        try
+        {
+            byte[] f = await Task.Run(() => _in.Take(ct), ct);
+            Array.Copy(f, buffer, f.Length);
+            return f.Length;
+        }
+        catch (OperationCanceledException)
+        {
+            return -1; // transport closed
+        }
+    }
+
+    public ValueTask SendAsync(ReadOnlyMemory<byte> data, CancellationToken ct)
+    {
+        Sent.Enqueue(data.ToArray());
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask CloseAsync(string reason, CancellationToken ct) => ValueTask.CompletedTask;
+}
