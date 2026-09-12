@@ -2,7 +2,8 @@ using Microsoft.Extensions.Logging;
 
 namespace SimServer;
 
-// Sim-layer log messages: Simulation (1400–1409), World (1410–1419). See Log.Server.cs for the map.
+// Sim-layer log messages: Simulation (1400–1409), World (1410), salvage (1411–1414). See
+// Log.Server.cs for the map.
 internal static partial class Log
 {
     [LoggerMessage(EventId = 1401, Level = LogLevel.Information, Message = "match started")]
@@ -62,4 +63,42 @@ internal static partial class Log
 
     [LoggerMessage(EventId = 1410, Level = LogLevel.Information, Message = "rock hulls loaded: {Loaded}/{Total}")]
     public static partial void RockHullsLoaded(ILogger logger, int loaded, int total);
+
+    // ---- Wreck salvage (Simulation.Salvage.cs) ----
+    // Debug level: a busy match drops several items per kill, so these must not flood an
+    // Information-level server log — the drop smoke turns them on deliberately.
+    [LoggerMessage(
+        EventId = 1411,
+        Level = LogLevel.Debug,
+        Message = "[salvage] drop ship={ShipId} sector={Sector} kind={Kind} item={ItemId} count={Count}"
+    )]
+    public static partial void SalvageDropped(ILogger logger, ulong shipId, uint sector, byte kind, uint itemId, byte count);
+
+    [LoggerMessage(
+        EventId = 1412,
+        Level = LogLevel.Debug,
+        Message = "[salvage] pickup ship={ShipId} item={SalvageId} kind={Kind} def={ItemId} count={Count}"
+    )]
+    public static partial void SalvagePickedUp(
+        ILogger logger,
+        ulong shipId,
+        ulong salvageId,
+        byte kind,
+        uint itemId,
+        byte count
+    );
+
+    [LoggerMessage(
+        EventId = 1413,
+        Level = LogLevel.Debug,
+        Message = "[salvage] reject ship={ShipId} item={SalvageId}: {Reason}"
+    )]
+    public static partial void SalvageRejected(ILogger logger, ulong shipId, ulong salvageId, string reason);
+
+    [LoggerMessage(
+        EventId = 1414,
+        Level = LogLevel.Debug,
+        Message = "[salvage] sector {Sector} at cap {Cap} — expiring oldest item {SalvageId}"
+    )]
+    public static partial void SalvageSectorCap(ILogger logger, uint sector, ulong salvageId, int cap);
 }

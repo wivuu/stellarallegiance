@@ -253,6 +253,11 @@ public sealed partial class Simulation
         // derive WHICH mounts from the same shared rule, so these never go on the wire.
         public uint[]? MountLastFire;
 
+        // INERT salvaged missile stacks (Simulation.Salvage.cs): rounds picked up for a rack this
+        // hull doesn't fly. They cost payload, they re-drop on death, and they are lost on dock —
+        // but nothing can shoot them, so they never touch MissileAmmo. null = none (the common case).
+        public List<(uint RackWeaponId, byte Count)>? StowedMissiles;
+
         public ShipInputState HeldInput; // replayed on ticks with no exact-stamped input
         public bool Alive;
         public uint RespawnAtTick; // when !Alive
@@ -648,6 +653,12 @@ public sealed partial class Simulation
         _mech = content.World.Mechanics;
         _combat = content.World.Combat;
         _scoring = content.World.Scoring;
+        // Salvage: hold the tuning block by REFERENCE (a console suite mutates content.World.Salvage
+        // before constructing the sim), and precompute the per-tick forms the item loop needs —
+        // lifetime in ticks and the per-TICK velocity retention (the knob authors per-SECOND decay).
+        _salvageCfg = content.World.Salvage;
+        _salvageLifetimeTicks = (uint)MathF.Round(_salvageCfg.LifetimeSeconds * TickHz);
+        _salvageDragPerTick = MathF.Pow(_salvageCfg.DragPerSecond, FlightModel.Dt);
         PaycheckTicks = System.Math.Max(1u, (uint)MathF.Round(_mech.PaycheckSeconds * TickHz));
         DockRadiusFrac = _mech.DockRadiusFrac;
         LaunchSpeed = _mech.LaunchSpeed;
@@ -697,6 +708,10 @@ public sealed partial class Simulation
             if (c.FuelPerCharge > 0f)
                 _fuelPerCharge[c.CargoId] = c.FuelPerCharge; // fuel cargo — no dispenser WeaponDef
         }
+
+        // Salvage's reverse indexes (dispenser KIND -> tier-neutral cargo id, the fuel cargo id,
+        // cargo display names). Must run AFTER the two loops above, which it reads.
+        _fuelCargoId = InitSalvageIndexes(content);
 
         // PIG lead-prediction constants off the scout gun (all server weapons share these today).
         var pigShot = WeaponDefs[GameContent.ScoutWeaponId];
@@ -812,6 +827,9 @@ public sealed partial class Simulation
         MinefieldsChangedThisStep = false;
         ProbeGoneThisStep.Clear();
         ProbesChangedThisStep = false;
+        SalvageGoneThisStep.Clear();
+        SalvageChangedSectorsThisStep.Clear();
+        PilotNoticesThisStep.Clear();
         JustEnded = false;
         JustStarted = false;
         JustReset = false;
@@ -939,6 +957,11 @@ public sealed partial class Simulation
 
         // Recon probes: expire past their lifespan (passive — no per-tick effect otherwise).
         StepProbes(tick); // Simulation.Probes.cs
+
+        // Wreck salvage: expire, drift + bounce off rocks/bases/build shells, and resolve ship
+        // contact (pickup or ricochet). Before Pass C, so a collected item is gone by the time the
+        // ship-vs-ship pass runs; items dropped later THIS tick (ResolveDeath) first move next tick.
+        StepSalvage(tick); // Simulation.Salvage.cs
 
         // Pass C: ship-vs-ship collisions between ALL ships regardless of team (mass-weighted
         // impulse, module-identical), O(n²) over live ships — 200 ships = 20k pairs, trivial natively.
@@ -1382,6 +1405,10 @@ public sealed partial class Simulation
             ProbeGoneThisStep.Add((p.ProbeId, 1, p.Team, p.SectorId, p.Pos));
         _probes.Clear();
         ProbesChangedThisStep = true;
+        // Tear down dropped salvage the same way, and for the same reason: MsgSalvage reconciles by
+        // omission per SECTOR, so a client whose anchor sector never gets another frame would keep
+        // phantom items. ClearSalvage emits gone reason 1 (silent removal) for every live item.
+        ClearSalvage(); // Simulation.Salvage.cs
         foreach (var s in _order)
         {
             _ships.Remove(s.ShipId);
@@ -2585,6 +2612,12 @@ public sealed partial class Simulation
     {
         s.ApEngaged = false; // autopilot never survives the ship it was flying
         ScoreDeath(s, tick); // one scoring seam for every death form (Simulation.Scoring.cs)
+        // Wreck salvage: scatter what the hull still carried BEFORE the kind dispatch, so the escape
+        // pod MakePod builds from this same wreck inherits nothing. Combat hulls only (a pod/miner/
+        // constructor carries no loadout worth dropping), and only during a live match — teardown
+        // deaths must not litter the next one.
+        if (Phase == PhaseActive && !s.IsPod && s.Kind == ShipKind.Combat && (!s.IsPig || _salvageCfg.DropFromDrones))
+            DropSalvage(s, tick);
         if (s.IsMiner)
             KillMiner(s, tick); // slot dies with the drone — no pod, repurchase only
         else if (s.Kind == ShipKind.Constructor)

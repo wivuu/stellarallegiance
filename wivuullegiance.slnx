@@ -44,6 +44,7 @@
     <Project Path="tests/PublicLobbyTest/PublicLobbyTest.csproj" />
     <Project Path="tests/ReloadTest/ReloadTest.csproj" />
     <Project Path="tests/RescueTest/RescueTest.csproj" />
+    <Project Path="tests/SalvageTest/SalvageTest.csproj" />
     <Project Path="tests/ScoreboardTest/ScoreboardTest.csproj" />
     <Project Path="tests/ShieldTest/ShieldTest.csproj" />
     <Project Path="tests/StrategyTest/StrategyTest.csproj" />
