@@ -49,9 +49,13 @@
     <Project Path="tests/ShieldTest/ShieldTest.csproj" />
     <Project Path="tests/StrategyTest/StrategyTest.csproj" />
     <Project Path="tests/TeamStateStoreTest/TeamStateStoreTest.csproj" />
+    <Project Path="tests/WireTest/WireTest.csproj" />
   </Folder>
   <Folder Name="/tools/" />
   <Folder Name="/tools/simbot/">
     <Project Path="tools/simbot/SimBot.csproj" />
+  </Folder>
+  <Folder Name="/tools/wire-gen/">
+    <Project Path="tools/wire-gen/WireGen.csproj" />
   </Folder>
 </Solution>

@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Roslyn incremental source generator for the binary wire format (docs/adr/0003). Consumed
+       by shared/Shared.csproj as an ANALYZER reference (never at runtime): every type carrying
+       [WireMessage]/[WireRecord] gets Measure/Write/Read/TryParse generated from its field list, so
+       the server writer, the Godot client reader, the test suites and simbot share ONE layout with
+       no hand-mirrored codec. Generators must target netstandard2.0 and load into the compiler
+       process, hence the pinned Microsoft.CodeAnalysis version (a generator built against 4.x
+       runs unchanged on the newer Roslyn shipped with the .NET 10 SDK). -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <RootNamespace>WireGen</RootNamespace>
+    <NuGetAudit>false</NuGetAudit>
+    <NoWarn>$(NoWarn);RS2008</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4" PrivateAssets="all" />
+  </ItemGroup>
+</Project>
