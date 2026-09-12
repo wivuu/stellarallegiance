@@ -48,8 +48,8 @@ public sealed partial class Simulation
     // Per-team destruction tallies for the Team Summary's GARRISONS row, indexed by the DESTROYING
     // team. Team facts, not pilot facts: a base ground down by PIGs, or whose killing blow landed
     // outside the credit window, still counts here even though no pilot scored for it.
-    private readonly int[] _teamGarrisonsDestroyed = new int[2];
-    private readonly int[] _teamOutpostsDestroyed = new int[2];
+    private readonly int[] _teamGarrisonsDestroyed = new int[World.MaxSupportedTeams];
+    private readonly int[] _teamOutpostsDestroyed = new int[World.MaxSupportedTeams];
 
     public int GarrisonsDestroyed(byte team) => team < _teamGarrisonsDestroyed.Length ? _teamGarrisonsDestroyed[team] : 0;
 

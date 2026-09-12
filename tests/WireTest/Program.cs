@@ -1094,7 +1094,7 @@ Check(Protocol.BuildMinerTargets(sim) is null, "MinerTargets: null when nothing 
         new(3, "gamma", Wire.NoTeam, false, false, 0UL),
     };
     var lb = LobbyStateMessage.Parse(
-        Protocol.BuildLobbyState(1, 0, roster, "BLUE", "RED TEAM", 1, "Brimstone Gambit", 1, -1)
+        Protocol.BuildLobbyState(1, 0, roster, new[] { ("BLUE", 1), ("RED TEAM", -1) }, 1, "Brimstone Gambit")
     );
     Check(
         lb.Phase == 1
@@ -1105,12 +1105,13 @@ Check(Protocol.BuildMinerTargets(sim) is null, "MinerTargets: null when nothing 
             && lb.Players[0].HasShip
             && lb.Players[0].ShipId == 42
             && lb.Players[2].Team == Wire.NoTeam
-            && lb.Team0Name == "BLUE"
-            && lb.Team1Name == "RED TEAM"
+            && lb.Teams.Length == 2
+            && lb.Teams[0].Name == "BLUE"
+            && lb.Teams[0].Commander == 1
+            && lb.Teams[1].Name == "RED TEAM"
+            && lb.Teams[1].Commander == -1
             && lb.HostId == 1
-            && lb.SelectedMap == "Brimstone Gambit"
-            && lb.Commander0 == 1
-            && lb.Commander1 == -1,
+            && lb.SelectedMap == "Brimstone Gambit",
         "LobbyState: roster rows + session-global tail",
         "LobbyState fields"
     );
@@ -1548,7 +1549,7 @@ var synthSector = new SectorStatic
 };
 var synthWelcome = new WelcomeMessage
 {
-    Version = Wire.ProtocolVersion,
+    Version = 40, // a literal, not Wire.ProtocolVersion: the golden pins the LAYOUT, not the current version
     ClientId = 5,
     Team = 0,
     Tick = 99,
@@ -1865,7 +1866,14 @@ RoundTrip(
     v => v.ToBytes()
 );
 var synthLobby = Frames
-    .LobbyState(2, 1, new List<LobbyEntry> { new(1, "α", 0, true, true, 9UL) }, "A", "B", 1, "map", -1, 1)
+    .LobbyState(
+        2,
+        1,
+        new List<LobbyEntry> { new(1, "α", 0, true, true, 9UL) },
+        new[] { ("A", -1), ("B", 1), ("C", 7) },
+        1,
+        "map"
+    )
     .ToBytes();
 RoundTrip("LobbyState (synthetic)", synthLobby, b => LobbyStateMessage.Parse(b), v => v.ToBytes());
 var synthStats = Frames
@@ -2438,7 +2446,7 @@ static class Goldens
         ["Defs.sha"] = "788C0B6B5DB71F2F274DA8577072ABDA338AC8AF019BC3EB7751ECEA6C8AB799",
         ["TeamState.sha"] = "25235899FBC33C1A257D7B77EAEAE952505462B4646ECB87A97839F338E447AE",
         ["MapList.sha"] = "F769D835423E744FA13F3CDC7D3D9EC75F04237A3D22D015A5C95724EB7986E1",
-        ["LobbyState.sha"] = "C0E2E9F9840DDD4D6606C95CC55725377F53A6D68BCD517FF8843F27BF92103E",
+        ["LobbyState.sha"] = "4B0A27B18C1D18069B72B844B39215B352BFA8041C7EEA6285A0E88AA87ADA0B", // v41: team rows
         ["MatchStats.sha"] = "BE3A951973FEA7F5A5D911BA99AA79E2DB1E46A2DCD40A6E1B134C252DACC5EE",
         ["Contacts.sha"] = "4D8FBDF13AC8A886E7930233D5FDEA0833F3D0B7D9C572F56986BFD5D5DDB9B4",
         ["Minefields.sha"] = "D2373973B1AE71B791C4982E628ECB480C3082E506167F52E8242E3BAFFA9137",

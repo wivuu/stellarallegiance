@@ -334,6 +334,14 @@ public partial struct LobbyRowRecord
     public ulong ShipId; // controlled ship (0 = not flying)
 }
 
+// One team's lobby row (index = team byte): display name + the commander's client id (-1 = side empty).
+[WireRecord]
+public partial struct TeamRowRecord
+{
+    public string Name;
+    public int Commander;
+}
+
 // One pilot's scoreboard row.
 [WireRecord]
 public partial struct PilotStatsRecord

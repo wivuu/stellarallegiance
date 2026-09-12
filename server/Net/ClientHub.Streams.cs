@@ -275,7 +275,7 @@ public sealed partial class ClientHub
         // seed the set; direct LOS then unions in.
         private HashSet<ulong>? EnemyVisible(ClientHub hub, byte team)
         {
-            if (!hub._sim.FogEnabled || team > 1)
+            if (!hub._sim.FogEnabled || team >= TeamCount)
                 return null;
             if (_visByTeam.TryGetValue(team, out var cached))
                 return cached;
@@ -319,7 +319,7 @@ public sealed partial class ClientHub
         {
             if (!hub._sim.FogEnabled)
                 return null; // everything visible
-            if (team > 1)
+            if (team >= TeamCount)
                 return EmptyVis;
             if (_visByTeam.TryGetValue(team, out var cached))
                 return cached;
@@ -389,7 +389,7 @@ public sealed partial class ClientHub
                     key = (0, 0);
                     break;
                 case StreamScope.PerTeam:
-                    if (!s.SpectatorsToo && team > 1)
+                    if (!s.SpectatorsToo && team >= TeamCount)
                         continue;
                     key = (team, 0);
                     break;

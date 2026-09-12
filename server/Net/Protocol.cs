@@ -272,16 +272,10 @@ public static class Protocol
         byte phase,
         byte winner,
         IReadOnlyList<LobbyEntry> entries,
-        string team0Name,
-        string team1Name,
+        IReadOnlyList<(string Name, int Commander)> teams,
         int hostId,
-        string selectedMap,
-        int commander0,
-        int commander1
-    ) =>
-        Frames
-            .LobbyState(phase, winner, entries, team0Name, team1Name, hostId, selectedMap, commander0, commander1)
-            .ToBytes();
+        string selectedMap
+    ) => Frames.LobbyState(phase, winner, entries, teams, hostId, selectedMap).ToBytes();
 
     public static byte[] BuildMatchStats(
         IReadOnlyList<StatsEntry> pilots,
