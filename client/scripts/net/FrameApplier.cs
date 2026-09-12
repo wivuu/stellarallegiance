@@ -400,15 +400,16 @@ public sealed class FrameApplier
     }
 
     // MsgShipLoadout: the full per-ship weapon-mount override table — effective per-barrel weapon
-    // ids (hardpoint declaration order; uint.MaxValue = emptied slot) plus the ship's INERT stowed
-    // missile stacks (v39, salvage) for every ship flying a NON-authored loadout or holding stowed
-    // rounds (reconcile-by-omission: a ship absent from the frame flies its authored class loadout
-    // with an empty hold). Decode and forward whole to WorldRenderer, which owns the render-side
-    // mirror (remote bolt mounts + own-ship prediction loadout + the owner's HOLD readout).
+    // ids (hardpoint declaration order; uint.MaxValue = emptied slot) plus the ship's INERT cargo
+    // hold (v40, salvage: kind byte 0 part / 1 cargo / 2 missiles, item def id, count) for every
+    // ship flying a NON-authored loadout or carrying anything in its hold (reconcile-by-omission: a
+    // ship absent from the frame flies its authored class loadout with an empty hold). Decode and
+    // forward whole to WorldRenderer, which owns the render-side mirror (remote bolt mounts +
+    // own-ship prediction loadout + the owner's HOLD readout).
     private void ApplyShipLoadout(BinaryReader r)
     {
         byte count = r.ReadByte();
-        var table = new List<(ulong shipId, uint[] ids, (uint rackId, byte count)[] stowed)>(count);
+        var table = new List<(ulong shipId, uint[] ids, (byte kind, uint itemId, byte count)[] hold)>(count);
         for (int i = 0; i < count; i++)
         {
             ulong shipId = r.ReadUInt64();
@@ -416,11 +417,12 @@ public sealed class FrameApplier
             var ids = new uint[nSlots];
             for (int s = 0; s < nSlots; s++)
                 ids[s] = r.ReadUInt32();
-            int nStowed = r.ReadByte();
-            var stowed = nStowed == 0 ? System.Array.Empty<(uint, byte)>() : new (uint rackId, byte count)[nStowed];
-            for (int s = 0; s < nStowed; s++)
-                stowed[s] = (r.ReadUInt32(), r.ReadByte());
-            table.Add((shipId, ids, stowed));
+            int nHold = r.ReadByte();
+            var hold =
+                nHold == 0 ? System.Array.Empty<(byte, uint, byte)>() : new (byte kind, uint itemId, byte count)[nHold];
+            for (int s = 0; s < nHold; s++)
+                hold[s] = (r.ReadByte(), r.ReadUInt32(), r.ReadByte());
+            table.Add((shipId, ids, hold));
         }
         _world.Ships.NetShipLoadouts(table);
     }

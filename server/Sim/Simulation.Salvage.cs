@@ -8,8 +8,10 @@ namespace SimServer.Sim;
 // Wreck salvage (Allegiance's treasure loop). A destroyed combat hull scatters what it still
 // carried — every mounted gun, the remaining missile magazine, each stowed missile stack, each
 // cargo kind — as physical items that drift on the wreck's velocity, bounce off asteroids, bases
-// and build shells while they move, and are collected by any player-flown combat hull that has the
-// mount and the payload room to take them. A hull that can't carry an item makes it ricochet.
+// and build shells while they move, and are collected by any player-flown hull that can EQUIP them
+// (a free mount + payload room, the same rack, a dispenser/tank) or, failing that, has a free slot
+// in its cargo hold (ShipClassDef.CargoCapacity) to carry them inert. Only a hull that can neither
+// use nor hold an item makes it ricochet.
 //
 // The whole loop is SERVER-AUTHORITATIVE: the client never simulates an item (it renders the rows
 // the hub streams). Items never dock, never damage anything, never touch a ship's state, and never
@@ -122,7 +124,7 @@ public sealed partial class Simulation
     // BEFORE the kind dispatch, so the escape pod (built from the same wreck) inherits nothing.
     //
     // ROLL ORDER IS THE REPLAY CONTRACT: barrels in ClassMuzzles order, then the missile magazine,
-    // then each stowed stack, then chaff/mine/probe, then fuel. Each candidate is fully qualified
+    // then each hold slot, then chaff/mine/probe, then fuel. Each candidate is fully qualified
     // (exists, non-empty, right kind) BEFORE its roll, so a hull with no rack consumes no draw.
     private void DropSalvage(ShipSim dead, uint tick)
     {
@@ -145,11 +147,15 @@ public sealed partial class Simulation
         if (MissileMountFor(dead) is { } rack && dead.MissileAmmo > 0 && Roll())
             SpawnSalvage(dead, tick, SalvageKindMissiles, rack.w.WeaponId, dead.MissileAmmo);
 
-        // Inert stowed stacks (foreign-rack rounds collected earlier this sortie) re-drop as they came.
-        if (dead.StowedMissiles is { } stowed)
-            for (int i = 0; i < stowed.Count; i++)
-                if (stowed[i].Count > 0 && Roll())
-                    SpawnSalvage(dead, tick, SalvageKindMissiles, stowed[i].RackWeaponId, stowed[i].Count);
+        // The hold (salvage collected inert earlier this sortie) re-drops exactly as it came aboard:
+        // a stowed gun is a Part item again (Count 0 on the wire), a stack keeps its count.
+        if (dead.Hold is { } hold)
+            for (int i = 0; i < hold.Count; i++)
+            {
+                var (kind, itemId, count) = hold[i];
+                if ((kind == SalvageKindPart || count > 0) && Roll())
+                    SpawnSalvage(dead, tick, kind, itemId, kind == SalvageKindPart ? (byte)0 : count);
+            }
 
         DropCargo(dead.ChaffAmmo, WeaponKind.Chaff);
         DropCargo(dead.MineAmmo, WeaponKind.Mine);
@@ -454,38 +460,50 @@ public sealed partial class Simulation
 
     // ---- Pickup -----------------------------------------------------------
 
-    // Can this ship take this item, and if so, take it. THE pickup authority: every accept mutates
-    // the ship's live loadout exactly the way the spawn path would have seeded it, and every reject
-    // explains itself once to the pilot. Returns true only when the item was consumed.
+    // Can this ship take this item, and if so, take it. THE pickup authority. Two tiers, in order:
+    //   1. EQUIP — the item goes where the spawn path would have seeded it (a free compatible mount,
+    //      the magazine, the dispenser/tank hold), payload budget enforced exactly as ResolveLoadout.
+    //   2. HOLD — anything the equip tier refused is carried INERT in a cargo slot when the hull has
+    //      one free (ShipClassDef.CargoCapacity). Hold contents cost no payload and do nothing.
+    // Only when BOTH fail does the item ricochet, and the pilot is told once why. Returns true only
+    // when the item was consumed.
     private bool TryAcceptSalvage(ShipSim s, SalvageSim it)
     {
-        // Only a player-flown combat hull loots. Pods, miners, constructors and PIG drones bounce it
-        // off silently — there is no pilot to tell, and no hangar behind them to fold it into.
-        if (s.OwnerClientId < 0 || s.Kind != ShipKind.Combat || s.IsPig)
+        // Only a player-flown hull loots. Pods and PIG/drone hulls (miners, constructors, AI combat
+        // ships) bounce it off silently — there is no pilot to tell, and no hangar behind them.
+        if (s.OwnerClientId < 0 || s.IsPod || s.IsPig)
             return false;
         if (!ShipDefs.TryGetValue(s.Class, out var def))
             return false;
 
-        float used = PayloadUsed(s);
-        float cap = def.PayloadCapacity;
+        string? reason;
         bool took = it.Kind switch
         {
-            SalvageKindPart => AcceptSalvagePart(s, def, it, used, cap),
-            SalvageKindMissiles => AcceptSalvageMissiles(s, it, used, cap),
-            SalvageKindCargo => AcceptSalvageCargo(s, it, used, cap),
-            _ => false,
+            SalvageKindPart => EquipSalvagePart(s, def, it, out reason),
+            SalvageKindMissiles => EquipSalvageMissiles(s, it, out reason),
+            SalvageKindCargo => EquipSalvageCargo(s, def, it, out reason),
+            _ => Refuse(out reason),
         };
+        if (!took && reason is not null)
+            took = StowSalvage(s, def, it, reason);
         if (took)
             Log.SalvagePickedUp(_log, s.ShipId, it.Id, it.Kind, it.ItemId, it.Count);
         return took;
+
+        static bool Refuse(out string? reason)
+        {
+            reason = null; // an unknown kind/def: the wreck can't have carried it — silent no-op
+            return false;
+        }
     }
 
     // Kind 0 — a loose gun fits the FIRST empty, type-compatible weapon barrel. No tech gate (you
-    // salvaged it, you fly it) and no swapping: a full hull leaves it on the field.
-    private bool AcceptSalvagePart(ShipSim s, ShipClassDef def, SalvageSim it, float used, float cap)
+    // salvaged it, you fly it) and no swapping: a full hull sends it to the hold tier instead.
+    private bool EquipSalvagePart(ShipSim s, ShipClassDef def, SalvageSim it, out string? reason)
     {
+        reason = null;
         if (!WeaponDefs.TryGetValue(it.ItemId, out var w))
-            return false; // unknown def: the wreck can't have been carrying it — silent no-op
+            return false; // unknown def: silent no-op (reason null ⇒ no hold, no notice)
 
         // Barrel index = the count of Weapon hardpoints ahead of it, exactly how BuildMuzzles
         // numbers ClassMuzzles (and therefore how WeaponIdAt/MountWeaponIds index).
@@ -504,12 +522,12 @@ public sealed partial class Simulation
         }
         if (barrel < 0)
         {
-            NotifyReject(s, it, "no free mount");
+            reason = "no free mount";
             return false;
         }
-        if (used + w.Mass > cap)
+        if (PayloadUsed(s) + w.Mass > def.PayloadCapacity)
         {
-            NotifyReject(s, it, "payload full");
+            reason = "payload full";
             return false;
         }
 
@@ -524,71 +542,50 @@ public sealed partial class Simulation
 
     // Kind 2 — loose rounds. They are FIREABLE only out of the same rack that dropped them (tier
     // included), because MissileAmmo is one pool tied to the ship's first effective rack. Any other
-    // rack stows them as inert cargo: they cost payload, they show in the hold, they re-drop on
-    // death. A rackless hull has nowhere to put them at all.
-    private bool AcceptSalvageMissiles(ShipSim s, SalvageSim it, float used, float cap)
+    // rack — or no rack at all — hands them to the hold tier as an inert stack.
+    private bool EquipSalvageMissiles(ShipSim s, SalvageSim it, out string? reason)
     {
+        reason = null;
+        if (!WeaponDefs.ContainsKey(it.ItemId))
+            return false;
         if (MissileMountFor(s) is not { } rack)
         {
-            NotifyReject(s, it, "no missile rack");
+            reason = "no missile rack";
             return false;
         }
-        string name = SalvageName(it);
-
-        if (rack.w.WeaponId == it.ItemId)
+        if (rack.w.WeaponId != it.ItemId)
         {
-            // Same rack: the rounds join the magazine. No payload cost — a magazine's mass is
-            // already covered by the rack's own Mass, exactly as at spawn.
-            s.MissileAmmo = (byte)Math.Min(255, s.MissileAmmo + it.Count);
-            PilotNoticesThisStep.Add((s.OwnerClientId, $"Salvaged: {name} ×{it.Count}"));
-            return true;
-        }
-
-        float roundMass = WeaponDefs.TryGetValue(it.ItemId, out var rw) ? rw.RoundMass : 0f;
-        if (used + roundMass * it.Count > cap)
-        {
-            NotifyReject(s, it, "payload full");
+            reason = "wrong rack";
             return false;
         }
 
-        var stowed = s.StowedMissiles ??= new List<(uint RackWeaponId, byte Count)>();
-        bool merged = false;
-        for (int i = 0; i < stowed.Count; i++)
-        {
-            if (stowed[i].RackWeaponId != it.ItemId)
-                continue;
-            stowed[i] = (it.ItemId, (byte)Math.Min(255, stowed[i].Count + it.Count));
-            merged = true;
-            break;
-        }
-        if (!merged)
-            stowed.Add((it.ItemId, it.Count));
-        LoadoutsChangedThisStep = true; // the stow rides the loadout echo, so the owner can see it
-        PilotNoticesThisStep.Add((s.OwnerClientId, $"Stowed: {name} ×{it.Count} (inert — needs a {name} rack)"));
+        // Same rack: the rounds join the magazine. No payload cost — a magazine's mass is already
+        // covered by the rack's own Mass, exactly as at spawn.
+        s.MissileAmmo = (byte)Math.Min(255, s.MissileAmmo + it.Count);
+        PilotNoticesThisStep.Add((s.OwnerClientId, $"Salvaged: {SalvageName(it)} ×{it.Count}"));
         return true;
     }
 
     // Kind 1 — a dispenser or fuel pack. The effect mirrors SeedDispenserAmmo so a salvaged pack
     // behaves identically to one loaded in the hangar: charges accumulate, the kind's dispenser
     // weapon id is set only if the hull had none, and the tier is the team's researched successor.
-    private bool AcceptSalvageCargo(ShipSim s, SalvageSim it, float used, float cap)
+    private bool EquipSalvageCargo(ShipSim s, ShipClassDef def, SalvageSim it, out string? reason)
     {
+        reason = null;
         uint cargoId = it.ItemId;
-        byte packSize = _chargesPerPack.TryGetValue(cargoId, out var pk) ? pk : (byte)1;
-        int packs = (it.Count + packSize - 1) / packSize; // whole packs — the hold stocks packs, not charges
-        float packMass = _cargoMass.TryGetValue(cargoId, out var m) ? m : 0f;
+        float packCost = PackMass(cargoId, it.Count); // whole packs — the hold stocks packs, not charges
 
         if (_fuelPerCharge.TryGetValue(cargoId, out float perCharge))
         {
             // A fuel pod on a hull with no tank is dead cargo — the same rule ResolveLoadout enforces.
             if (StatsFor(s.Class, false).MaxFuel <= 0f)
             {
-                NotifyReject(s, it, "no fuel tank");
+                reason = "no fuel tank";
                 return false;
             }
-            if (used + packs * packMass > cap)
+            if (PayloadUsed(s) + packCost > def.PayloadCapacity)
             {
-                NotifyReject(s, it, "payload full");
+                reason = "payload full";
                 return false;
             }
             s.FuelPodAmmo = (byte)Math.Min(255, s.FuelPodAmmo + it.Count);
@@ -604,10 +601,15 @@ public sealed partial class Simulation
         }
 
         if (!_dispenserByCargo.TryGetValue(cargoId, out var w))
-            return false; // not dispenser cargo and not fuel — nothing consumes it
-        if (used + packs * packMass > cap)
         {
-            NotifyReject(s, it, "payload full");
+            // Not dispenser cargo and not fuel: nothing on this hull consumes it, but it is still a
+            // real authored item — the hold can carry it.
+            reason = _cargoNameById.ContainsKey(cargoId) ? "nothing uses it" : null;
+            return false;
+        }
+        if (PayloadUsed(s) + packCost > def.PayloadCapacity)
+        {
+            reason = "payload full";
             return false;
         }
 
@@ -635,15 +637,63 @@ public sealed partial class Simulation
                 s.ProbeWeaponId = w.WeaponId;
         }
         else
+        {
+            reason = "nothing uses it";
             return false;
+        }
 
         PilotNoticesThisStep.Add((s.OwnerClientId, $"Salvaged: {SalvageName(it)} ×{it.Count}"));
         return true;
     }
 
+    // The hold tier: carry an item the equip tier refused (for `reason`) INERT in a cargo slot.
+    // A consumable stack merges into a same-id stack already aboard without spending a slot (capped
+    // at 255 — the overflow is simply lost, the item is small litter); a gun is always its own slot.
+    // A hull with no hold hears the equip reason; one whose hold is full hears "hold full". Either
+    // way the item ricochets.
+    private bool StowSalvage(ShipSim s, ShipClassDef def, SalvageSim it, string reason)
+    {
+        if (def.CargoCapacity <= 0)
+        {
+            NotifyReject(s, it, reason);
+            return false;
+        }
+
+        var hold = s.Hold;
+        string name = SalvageName(it);
+        if (it.Kind != SalvageKindPart && hold is not null)
+        {
+            for (int i = 0; i < hold.Count; i++)
+            {
+                if (hold[i].Kind != it.Kind || hold[i].ItemId != it.ItemId)
+                    continue;
+                hold[i] = (it.Kind, it.ItemId, (byte)Math.Min(255, hold[i].Count + it.Count));
+                LoadoutsChangedThisStep = true; // the hold rides the loadout echo, so the owner sees it
+                PilotNoticesThisStep.Add((s.OwnerClientId, $"Stowed: {name} ×{it.Count} (inert — {reason})"));
+                return true;
+            }
+        }
+        if ((hold?.Count ?? 0) >= def.CargoCapacity)
+        {
+            NotifyReject(s, it, "hold full");
+            return false;
+        }
+
+        hold ??= s.Hold = new List<(byte Kind, uint ItemId, byte Count)>();
+        byte count = it.Kind == SalvageKindPart ? (byte)1 : it.Count;
+        hold.Add((it.Kind, it.ItemId, count));
+        LoadoutsChangedThisStep = true;
+        string qty = it.Kind == SalvageKindPart ? "" : $" ×{it.Count}";
+        PilotNoticesThisStep.Add(
+            (s.OwnerClientId, $"Stowed: {name}{qty} (inert — {reason}; hold {hold.Count}/{def.CargoCapacity})")
+        );
+        return true;
+    }
+
     // The LIVE twin of ResolveLoadout's spawn-time payload sum: mounted gun/rack mass + the whole
-    // packs each dispenser hold still represents + fuel packs + stowed rounds. Consumed charges free
-    // capacity, so a half-spent hold really can take salvage the full one couldn't.
+    // packs each dispenser hold still represents + fuel packs. Consumed charges free capacity, so a
+    // half-spent hold really can take salvage the full one couldn't. The cargo HOLD is deliberately
+    // absent: its slots are the budget for what it carries.
     private float PayloadUsed(ShipSim s)
     {
         float used = 0f;
@@ -661,11 +711,6 @@ public sealed partial class Simulation
         used += HoldMass(s.ProbeAmmo, WeaponKind.Probe);
         if (s.FuelPodAmmo > 0 && _fuelCargoId != 0)
             used += PackMass(_fuelCargoId, s.FuelPodAmmo);
-
-        if (s.StowedMissiles is { } stowed)
-            for (int i = 0; i < stowed.Count; i++)
-                if (WeaponDefs.TryGetValue(stowed[i].RackWeaponId, out var rw))
-                    used += rw.RoundMass * stowed[i].Count;
 
         return used;
 

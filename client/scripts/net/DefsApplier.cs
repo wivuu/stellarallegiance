@@ -100,6 +100,8 @@ public sealed class DefsApplier
         // Station-class launch/dock restriction (2026-07-21; mirror of BuildDefs — streamed LAST
         // in the ship block): u16 bitmask over StationClassId; 0 = unrestricted.
         d.LaunchClassMask = r.ReadUInt16();
+        // Cargo hold slots (v40; mirror of BuildDefs — streamed LAST): u8, 0 = no hold.
+        d.CargoCapacity = r.ReadByte();
         return d;
     }
 

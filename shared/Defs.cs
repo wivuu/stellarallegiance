@@ -182,6 +182,14 @@ namespace StellarAllegiance.Shared
         // friendly base like an enemy one, and docks only through the base's LARGEST door
         // (DockRules). Streamed LAST in the ship block.
         public ushort LaunchClassMask;
+
+        // Cargo hold (2026-09-12, salvage): how many LOOSE items this hull can carry inert — salvage
+        // it flew over but could not equip (a gun with no free mount, rounds for a rack it doesn't
+        // fly, a fuel pack with no tank, anything past the payload budget). One slot per part or per
+        // consumable stack; slot contents cost NO payload (they are not equipped). 0 = no hold
+        // (pod/miner/constructor): such a hull ricochets whatever it can't use. Streamed LAST in the
+        // ship block (u8) after LaunchClassMask, mirrored by DefsApplier.
+        public int CargoCapacity;
     }
 
     // How a weapon behaves when fired. A byte (wire-safe) and APPEND-ONLY, like HardpointKind.

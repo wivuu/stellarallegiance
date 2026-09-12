@@ -139,7 +139,13 @@ public static class Wire
     // rounds a hull carries inert, and a ship now earns a row for that hold alone (its ids are the
     // authored ones then). The weapon def record appends f32 RoundMass and the cargo def record a
     // trailing ModelName string, both LAST (append-only). See server/Sim/Simulation.Salvage.cs.
-    public const byte ProtocolVersion = 39; // 39: salvage streams + loadout stowed tail + weapon/cargo def tails
+    // (2026-09-12) cargo hold: hulls author `cargo-capacity` slots for loose salvage they can't
+    // equip (a gun with no free mount, foreign-rack rounds, a pack past the payload budget, a fuel
+    // pod with no tank) — any player hull with a free slot now collects ANY item. The MsgShipLoadout
+    // tail generalizes from stowed missiles to the whole hold: u8 nHold, n x (u8 kind, u32 itemId,
+    // u8 count) with kind = the salvage kind byte (0 part / 1 cargo / 2 missiles). The ship def
+    // block appends u8 CargoCapacity LAST (after LaunchClassMask). Hold contents cost no payload.
+    public const byte ProtocolVersion = 40; // 40: cargo hold — loadout hold tail (kind byte) + ship def CargoCapacity
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

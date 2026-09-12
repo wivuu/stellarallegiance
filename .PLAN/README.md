@@ -6,6 +6,11 @@
 - Look for opportunities to utilize native vector3 and SIMD for performance improvements
 - Use lobby favicon as client app icon (instead of godot icon)
 - Allow assigning lobby admin via UI, store roles in db (existing aspnet identity)
+- Work to establish full control map; manual
+  - in flight: Equip and dequip slots, manage inventory, etc
+  - Some equipped items should have a signature modifier (e.g. shields add to the ship's signature), can be dequipped
+  - Some equipped items can have special in-flight effects when activated (cloak)
+  - Ship 'energy' concept; cloak uses energy
 ---
 
 ## Content philosophy (the through-line)

@@ -323,31 +323,59 @@ item whose `Count` is the remaining rounds, never the rack), each stowed stack, 
 server-authoritative items that fly out on a random vector off the wreck's velocity, drag to rest,
 bounce off asteroids, bases, constructor build shells and ships that can't carry them, stay bound to
 their sector, never dock, expire after `lifetime-seconds`, and are capped per sector (oldest expires
-first). Any PLAYER combat hull — either team, no tech gate — collects by touch: a gun needs an empty
-type-compatible mount plus payload headroom; loose rounds join the magazine when the item's rack id
-equals the picker's first effective rack, otherwise they STOW as inert cargo (`ShipSim.StowedMissiles`,
-payload charged at `WeaponDef.RoundMass` × count, echoed on the `MsgShipLoadout` tail, shown as the
-WeaponsPanel `HOLD` row); cargo packs mirror `SeedDispenserAmmo`. Salvage lives for the sortie only —
-docking despawns the ship and the hangar re-equips from `LoadoutState`, so nothing is kept across a dock.
+first). Any PLAYER hull — either team, no tech gate — collects by touch, in two tiers. EQUIP first: a
+gun needs an empty type-compatible mount plus payload headroom; loose rounds join the magazine when
+the item's rack id equals the picker's first effective rack; cargo packs mirror `SeedDispenserAmmo`
+(fuel needs a tank). Whatever the equip tier refuses goes to the CARGO HOLD second
+(see [[Cargo hold (cargo-capacity)]]): a hull with a free slot carries ANY item inert — a gun with no mount, foreign-rack
+rounds, a pack past the payload budget — and only a hull that can neither use nor hold it makes it
+ricochet ("Can't carry …: hold full", or the equip reason when the hull has no hold at all). Salvage
+lives for the sortie only — docking despawns the ship and the hangar re-equips from `LoadoutState`,
+so nothing is kept across a dock.
 - **Frequency:** Domain-specific
 - **Key Files:**
-  - `server/Sim/Simulation.Salvage.cs` — `SalvageSim` + `DropSalvage`/`StepSalvage`/`TryAcceptSalvage`/`PayloadUsed`
+  - `server/Sim/Simulation.Salvage.cs` — `SalvageSim` + `DropSalvage`/`StepSalvage`/`TryAcceptSalvage` (`EquipSalvage*` → `StowSalvage`)/`PayloadUsed`
   - `shared/Collision/Collide.cs` — `BounceBody`/`ResolveStaticSphereBody`, the bit-identical kernels `Bounce`/`ResolveStaticSphere` now share
-  - `server/Net/Protocol.cs` — `MsgSalvage=30` (29-B records, per anchor sector) / `MsgSalvageGone=31`, plus the loadout stowed tail
+  - `server/Net/Protocol.cs` — `MsgSalvage=30` (29-B records, per anchor sector) / `MsgSalvageGone=31`, plus the loadout hold tail
   - `server/Net/ClientHub.cs` — `BuildSalvageFor`, `SalvageVisFor` (fog), `Client.LastSalvageAnchor` sentinel
   - `client/scripts/world/SalvageRenderer.cs` / `client/scripts/SalvageView.cs` — item views, dead-reckoned drift, pickup FX
   - `client/scripts/TargetMarkers.cs` — `DrawSalvagePass` crate glyph + labels + the `SALVAGED …` banner
-  - `client/scripts/WeaponsPanel.cs` — the `HOLD` row for stowed (inert) missile stacks
+  - `client/scripts/WeaponsPanel.cs` — the `HOLD n/cap` rows for the inert cargo hold
   - `client/assets/parts/` — IGC part meshes (`wep09`/`wep16`/`wep02`/`wep18` guns, `acs36` fuel pack)
   - `server/Content/core/world.yaml` — the `salvage:` tuning block
   - `tests/SalvageTest` — drops, physics, pickup/reject, wire + hub streaming
-- **Related:** [[Expendables]], [[Per-Ship Weapon Loadout (mount overrides)]], [[Minefield]], [[Fog of War (Team Vision)]]
-- **Notes:** Protocol 39. Streamed on a per-SECTOR change set (a wreck in sector A never re-streams sector
+- **Related:** [[Cargo hold (cargo-capacity)]], [[Expendables]], [[Per-Ship Weapon Loadout (mount overrides)]], [[Minefield]], [[Fog of War (Team Vision)]]
+- **Notes:** Protocol 39 (hold tail: 40). Streamed on a per-SECTOR change set (a wreck in sector A never re-streams sector
   B), reconciled by omission, with `MsgSalvageGone` reliable because reason 2 (picked up) is the only
   authority for the collect FX/banner. Fog is plain point visibility (`IsPointVisibleToTeam`) — no owner
   privilege, unlike probes/own minefields. `--salvage-test` drives a client onto the nearest item for a
   pickup smoke; PIGs are OFF by default, so a drop smoke needs `SIM_PIGS=1`.
 
+
+### Cargo hold (cargo-capacity)
+A hull's SLOT budget for loose salvage it cannot equip, authored per hull as `cargo-capacity` in
+`hulls.yaml` (stock: scout/lt-interceptor 2, enh/adv fighter 3, bomber 4, devastator 5; miner,
+constructor and pod 0 = no hold). Distinct from `payload-capacity` (the MASS budget of what is
+mounted/loaded): hold contents are inert — they cost no payload, nothing fires or loads them, they
+re-drop on death exactly as they came aboard (a stowed gun becomes a Part item again) and they are
+lost on dock. One entry per slot: a Part (gun) is one slot and never merges; a Missiles/Cargo stack
+merges into a same-id entry already aboard WITHOUT spending a slot (count capped at 255). Lives on
+`ShipSim.Hold` as `(Kind, ItemId, Count)` in the salvage kind encoding; streamed on the
+`MsgShipLoadout` tail (`u8 nHold`, `u8 kind | u32 itemId | u8 count`), and `ShipClassDef.CargoCapacity`
+rides the ship def block last (u8) so the HUD can show `HOLD n/cap`. IGC gives every hull the same
+fixed cargo bay; we author it per hull so bigger hulls scavenge more.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `factions/src/Allegiance.Factions/Model/Hull.cs` — `CargoCapacity` (+ `CoreValidator` 0..255 refusal)
+  - `server/Content/core/hulls.yaml` — the `cargo-capacity:` values
+  - `server/Sim/Simulation.Salvage.cs` — `StowSalvage` (the hold tier), the hold re-drop in `DropSalvage`
+  - `server/Sim/Simulation.cs` — `ShipSim.Hold`
+  - `client/scripts/WeaponsPanel.cs` / `client/scripts/PredictionController.cs` — `HOLD` rows / `Hold` mirror
+  - `client/scripts/ui/ShipLoadout.cs` — the hangar's `n SLOTS · HOLD c` caption
+  - `tests/SalvageTest` — scenario 15 + the hold variants of 7/8/9
+- **Related:** [[Salvage (dropped items)]], [[Per-Ship Weapon Loadout (mount overrides)]], [[Hull]]
+- **Notes:** Protocol 40. Pickups try EQUIP first and the hold second, so a usable pack still loads on
+  a hull whose hold is full. Test worlds pass `hold: 0` to `BootSim` to reproduce the no-hold rules.
 ### Reload (load-from-hold)
 The time it takes to pull the next charge out of the cargo hold. Authored per expendable as
 `load-time` (SECONDS, the core Allegiance field) in `expendables.yaml`, projected to ticks onto the
@@ -767,7 +795,7 @@ pickup from an expiry (reason 0) or match cleanup (reason 1); an unknown id no-o
 - **Related:** [[Salvage (dropped items)]], [[Minefield]], [[Fog of War (Team Vision)]], [[Protocol]]
 - **Notes:** Per-SECTOR change set — a wreck in sector A must not re-stream sector B every tick. Fog on,
   an item streams only while `IsPointVisibleToTeam` holds for its point (no owner privilege). `MsgShipLoadout`
-  (28) also grew a v39 tail (`u8 nStowed`, then `u32 rackWeaponId | u8 count`) so the owner sees inert stacks.
+  (28) also carries the hold tail (v40: `u8 nHold`, then `u8 kind | u32 itemId | u8 count`) so the owner sees inert cargo.
 
 ### MsgMatchStats
 The match scoreboard ledger (id 29, proto v37): `u8 nPilots`, then per pilot `i32 clientId | str name | u8 team | u8 flags (bit0 = connected) | u16 kills | u16 deaths | u16 ejects | i32 points`, then `u8 nTeams` × `u8 team | u8 garrisonsDestroyed | u8 outpostsDestroyed`. Full table keyed by client id (never reconcile-by-omission), broadcast RELIABLE and only when the ledger changes. Name+team ride the frame rather than being joined against the lobby roster because a disconnect drops both server-side and a leaver must stay on the board. PTS is signed (a penalty weight can push a pilot negative); a team's SCORE is deliberately absent — it is exactly Σ its pilots' points and already rides MsgTeamState.

@@ -28,13 +28,15 @@
 //   5. Asteroid bounce: an item fired at a test rock reverses and never enters its collision sphere.
 //   6. Base bounce (mapped world, real station GLB): an item flown into a garrison bounces, never
 //      enters a sub-hull, never docks, and leaves the base untouched.
-//   7. Gun pickup: a full hull ricochets it with exactly ONE chat line; a hull with an empty
-//      GUN-typed mount takes it (a missile-typed empty mount never accepts a gun).
-//   8. Missile pickup: same rack tops the magazine (capped at 255); a foreign rack STOWS (payload
-//      charged at round mass × count, over-capacity rejected); a rackless hull bounces; a stowed
-//      stack re-drops on death.
+//   7. Gun pickup: a hull with no hold ricochets it with exactly ONE chat line; a hull with an
+//      empty GUN-typed mount takes it (a missile-typed empty mount never accepts a gun); a hull
+//      with a hold but no mount STOWS it.
+//   8. Missile pickup: same rack tops the magazine (capped at 255); a foreign rack STOWS into the
+//      hold (no payload charge — a tight payload still stows); a rackless hull with no hold
+//      bounces, with a hold stows; a stowed stack re-drops on death.
 //   9. Cargo pickup: chaff keeps an existing dispenser id, a probe pack sets an unset one (tier-
-//      migrated when the tech is owned), fuel needs a tank, and a full payload rejects a 1-mass pack.
+//      migrated when the tech is owned), fuel needs a tank (else it stows), and a full payload
+//      rejects a 1-mass pack on a hold-less hull / stows it on a hull with a hold.
 //  10. Expiry + sector cap: a short lifetime expires the item; a cap of 2 expires the OLDEST first.
 //  11. Cleanup: ReturnToLobby emits reason 1 for every item and empties the list; the next match
 //      starts clean.
@@ -44,6 +46,9 @@
 //      prune-by-omission, the anchor-change trigger, the per-sector change set, the fog filter and
 //      the reliable pickup gone frame.
 //  14. Replay: two sims on the same rngSeed produce byte-identical item state for 200 ticks.
+//  15. Cargo hold (cargo-capacity): a stowed gun re-drops as a part, the hold fills to capacity
+//      then refuses once with 'hold full', a same-id consumable stack merges without a slot, and
+//      hold contents never touch PayloadUsed (a stowed item leaves the payload budget untouched).
 
 using System.Text;
 using SimServer.Content;
@@ -84,11 +89,23 @@ const uint FuelCargo = 5;
 // nothing but the ships under test moves (FuelPodTest's idiom). `tune` mutates the world.yaml
 // salvage block BEFORE the ctor, which caches the reference — drop-chance defaults to 1 so a kill
 // is a full inventory dump rather than a coin flip.
-Simulation BootSim(ulong seed = 1, int rngSeed = 1, Action<WorldSalvageTuning>? tune = null, string[]? techs = null)
+// `hold` overrides EVERY hull's cargo-capacity (null = the authored stock values: scout 2,
+// interceptor 2, bomber 4); 0 reproduces a world with no holds at all, where an item a hull can't
+// equip must ricochet.
+Simulation BootSim(
+    ulong seed = 1,
+    int rngSeed = 1,
+    Action<WorldSalvageTuning>? tune = null,
+    string[]? techs = null,
+    int? hold = null
+)
 {
     var content = ContentLoader.Load(stockPath, worldPath);
     foreach (var t in techs ?? Array.Empty<string>())
         content.Start.BaseTechs.Add(t);
+    if (hold is int h)
+        foreach (var sd in content.Ships)
+            sd.CargoCapacity = h;
     content.World.Salvage.DropChance = 1f;
     tune?.Invoke(content.World.Salvage);
     var world = new World(seed, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
@@ -332,7 +349,7 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
     var item = sim.Salvage.Single();
     var pod = sim.Ships.First(s => s.IsPod);
     Check(
-        pod.MountWeaponIds is null && pod.MissileAmmo == 0 && pod.ChaffAmmo == 0 && pod.StowedMissiles is null,
+        pod.MountWeaponIds is null && pod.MissileAmmo == 0 && pod.ChaffAmmo == 0 && pod.Hold is null,
         "the escape pod inherits no guns, magazine, hold or stow from the wreck",
         $"pod inherited a loadout (mounts {pod.MountWeaponIds?.Length}, mis {pod.MissileAmmo}, chaff {pod.ChaffAmmo})"
     );
@@ -466,7 +483,7 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
 
 // ---- 7. Gun pickup: full hull ricochets once, empty GUN mount accepts ---------------------------
 {
-    var sim = BootSim();
+    var sim = BootSim(hold: 0); // no cargo hold anywhere: an unmountable gun has to bounce
     // Receiver A flies the authored gun on hp0; its only empty mount (hp1) is MISSILE-typed.
     var full = Spawn(sim, 1, team: 0, cls: ClassScout, mounts: [((byte)1, NoWeapon)]);
     Kill(sim, SpawnBareScout(sim, 2));
@@ -499,6 +516,31 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
         reflected,
         "the refused item ricochets off the hull (closing velocity reverses)",
         "the refused item never reflected"
+    );
+}
+{
+    // The same hull with its STOCK hold (scout: 2 slots) takes the gun it can't mount as cargo.
+    var sim = BootSim();
+    var full = Spawn(sim, 1, team: 0, cls: ClassScout, mounts: [((byte)1, NoWeapon)]);
+    Kill(sim, SpawnBareScout(sim, 2));
+    var gun = sim.Salvage.Single(i => i.Kind == 0);
+    IsolateItem(sim, gun);
+
+    var notices = PressItemOnShip(sim, gun, full, 1);
+    Check(
+        !sim.Salvage.Contains(gun) && full.MountWeaponIds is [GatGun1, NoWeapon] && full.Hold is [(0, GatGun1, 1)],
+        "a gun with no free mount STOWS into the hold (one Part slot, mounts untouched)",
+        $"gun stow wrong (alive {sim.Salvage.Contains(gun)}, mounts [{string.Join(",", full.MountWeaponIds ?? [])}], hold {full.Hold?.Count})"
+    );
+    Check(
+        notices.Count == 1 && notices[0] == "Stowed: PW Gat Gun 1 (inert — no free mount; hold 1/2)",
+        "the pilot hears 'Stowed: … (inert — no free mount; hold 1/2)'",
+        $"stow notice wrong ({string.Join(" | ", notices)})"
+    );
+    Check(
+        sim.LoadoutsChangedThisStep && sim.SalvageGoneThisStep is [{ reason: 2 }],
+        "a stow raises the loadout echo and emits gone reason 2 like any pickup",
+        $"stow side effects wrong (loadouts {sim.LoadoutsChangedThisStep}, gone {sim.SalvageGoneThisStep.Count})"
     );
 }
 {
@@ -563,26 +605,37 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
     IsolateItem(sim, foreign);
     foreign.Count = 2; // quickfire round mass 3 ⇒ 6 of the 7 free payload units
 
-    float roundMass = sim.Content.Weapons.First(w => w.WeaponId == QuickfireRack1).RoundMass;
-    PressItemOnShip(sim, foreign, seeker, 2);
+    var stowNotices = PressItemOnShip(sim, foreign, seeker, 2);
     Check(
-        seeker.StowedMissiles is [(QuickfireRack1, 2)] && seeker.MissileAmmo == 6,
-        $"a foreign rack's rounds STOW inert (round mass {roundMass}) without touching the magazine",
-        $"stow wrong (stowed {seeker.StowedMissiles?.Count}, magazine {seeker.MissileAmmo})"
+        seeker.Hold is [(2, QuickfireRack1, 2)] && seeker.MissileAmmo == 6,
+        "a foreign rack's rounds STOW into the hold without touching the magazine",
+        $"stow wrong (hold {seeker.Hold?.Count}, magazine {seeker.MissileAmmo})"
+    );
+    Check(
+        stowNotices.Count == 1 && stowNotices[0].StartsWith("Stowed: ") && stowNotices[0].Contains("wrong rack"),
+        "the pilot hears 'Stowed: … (inert — wrong rack …)'",
+        $"stow notice wrong ({string.Join(" | ", stowNotices)})"
     );
 
-    // The stow is real payload: another 2-round stack (6 more units) no longer fits.
+    // The hold is NOT payload: a scout packed to 12/12 still stows a 9-unit stack.
     var sim2 = BootSim();
-    var tight = Spawn(sim2, 1, team: 0, cls: ClassScout, mounts: [((byte)1, SeekerRack1)]);
+    var tight = Spawn(
+        sim2,
+        1,
+        team: 0,
+        cls: ClassScout,
+        cargo: [(MineCargo, 4), (ChaffCargo, 1), (ProbeCargo, 1)],
+        mounts: [((byte)1, SeekerRack1)]
+    );
     Kill(sim2, Spawn(sim2, 2, team: 0, cls: ClassScout, mounts: [((byte)1, QuickfireRack1)]));
     var tooBig = sim2.Salvage.Single(i => i.Kind == 2);
     IsolateItem(sim2, tooBig);
-    tooBig.Count = 3; // 3 × 3 = 9 > 7 free
+    tooBig.Count = 3; // 3 × 3 = 9 round-mass units — would never have fit the payload
     var notices = PressItemOnShip(sim2, tooBig, tight, 5);
     Check(
-        tight.StowedMissiles is null && notices.Count(n => n.Contains("payload full")) == 1,
-        "a stack that overruns the payload budget is refused once with 'payload full'",
-        $"over-capacity stow wrong (stowed {tight.StowedMissiles?.Count}, notices {string.Join(" | ", notices)})"
+        tight.Hold is [(2, QuickfireRack1, 3)] && notices.Count(n => n.StartsWith("Stowed: ")) == 1,
+        "a full-payload hull still stows a foreign stack (hold slots cost no payload)",
+        $"full-payload stow wrong (hold {tight.Hold?.Count}, notices {string.Join(" | ", notices)})"
     );
 
     // A stowed stack re-drops on death exactly as it came aboard.
@@ -595,7 +648,7 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
     );
 }
 {
-    var sim = BootSim();
+    var sim = BootSim(hold: 0);
     var rackless = Spawn(sim, 1, team: 0, cls: ClassInterceptor, cargo: [(FuelCargo, 1)]);
     Kill(sim, Spawn(sim, 2, team: 0, cls: ClassScout, mounts: [((byte)1, SeekerRack1)]));
     var rounds = sim.Salvage.Single(i => i.Kind == 2);
@@ -604,8 +657,21 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
     var notices = PressItemOnShip(sim, rounds, rackless, 10);
     Check(
         sim.Salvage.Contains(rounds) && notices.Count(n => n.Contains("no missile rack")) == 1,
-        "a rackless hull bounces loose rounds with one 'no missile rack' line",
+        "a rackless hull with no hold bounces loose rounds with one 'no missile rack' line",
         $"rackless case wrong (alive {sim.Salvage.Contains(rounds)}, notices {string.Join(" | ", notices)})"
+    );
+
+    // With its stock hold the same interceptor carries them inert instead.
+    var sim2 = BootSim();
+    var holdful = Spawn(sim2, 1, team: 0, cls: ClassInterceptor, cargo: [(FuelCargo, 1)]);
+    Kill(sim2, Spawn(sim2, 2, team: 0, cls: ClassScout, mounts: [((byte)1, SeekerRack1)]));
+    var rounds2 = sim2.Salvage.Single(i => i.Kind == 2);
+    IsolateItem(sim2, rounds2);
+    var notices2 = PressItemOnShip(sim2, rounds2, holdful, 2);
+    Check(
+        holdful.Hold is [(2, SeekerRack1, 6)] && notices2.Count == 1 && notices2[0].Contains("no missile rack"),
+        "a rackless hull WITH a hold stows the rounds (reason 'no missile rack' in the notice)",
+        $"rackless stow wrong (hold {holdful.Hold?.Count}, notices {string.Join(" | ", notices2)})"
     );
 }
 
@@ -657,13 +723,36 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
     var fuel = sim.Salvage.First(i => i.Kind == 1 && i.ItemId == FuelCargo);
     IsolateItem(sim, fuel);
 
-    var rejected = PressItemOnShip(sim, fuel, scout, 4);
+    // Scout: no tank, but a 2-slot hold — the pack is carried inert, and the interceptor never
+    // sees it. Prove the bounce on a hold-less world below.
+    var stowed = PressItemOnShip(sim, fuel, scout, 2);
     Check(
-        sim.Salvage.Contains(fuel) && rejected.Count(n => n.Contains("no fuel tank")) == 1,
-        "a fuel pod bounces off a hull with no tank ('no fuel tank', said once)",
-        $"fuel-less case wrong (alive {sim.Salvage.Contains(fuel)}, notices {string.Join(" | ", rejected)})"
+        !sim.Salvage.Contains(fuel) && scout.Hold is [(1, FuelCargo, 2)] && scout.FuelPodAmmo == 0,
+        "a fuel pod on a tankless hull with a hold is STOWED (no tank is ever created)",
+        $"tankless stow wrong (alive {sim.Salvage.Contains(fuel)}, hold {scout.Hold?.Count}, pods {scout.FuelPodAmmo})"
+    );
+    Check(
+        stowed.Count == 1 && stowed[0].Contains("no fuel tank"),
+        "the stow notice names the reason ('no fuel tank')",
+        $"tankless notice wrong ({string.Join(" | ", stowed)})"
     );
 
+    var simNoHold = BootSim(hold: 0);
+    var scoutNoHold = Spawn(simNoHold, 1, team: 0, cls: ClassScout);
+    Kill(simNoHold, Spawn(simNoHold, 2, team: 0, cls: ClassInterceptor, cargo: [(FuelCargo, 2)]));
+    var fuelNoHold = simNoHold.Salvage.First(i => i.Kind == 1 && i.ItemId == FuelCargo);
+    IsolateItem(simNoHold, fuelNoHold);
+    var rejected = PressItemOnShip(simNoHold, fuelNoHold, scoutNoHold, 4);
+    Check(
+        simNoHold.Salvage.Contains(fuelNoHold) && rejected.Count(n => n.Contains("no fuel tank")) == 1,
+        "a fuel pod bounces off a hold-less hull with no tank ('no fuel tank', said once)",
+        $"fuel-less case wrong (alive {simNoHold.Salvage.Contains(fuelNoHold)}, notices {string.Join(" | ", rejected)})"
+    );
+
+    // A fresh pack for the interceptor (the first one is in the scout's hold now).
+    Kill(sim, Spawn(sim, 4, team: 0, cls: ClassInterceptor, cargo: [(FuelCargo, 2)]));
+    fuel = sim.Salvage.First(i => i.Kind == 1 && i.ItemId == FuelCargo);
+    IsolateItem(sim, fuel);
     PressItemOnShip(sim, fuel, inter, 2);
     Check(
         inter.FuelPodAmmo == 4 && !sim.Salvage.Contains(fuel),
@@ -673,7 +762,7 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
 }
 {
     // Payload boundary: 1 (gat) + 4 (rack) + 4 mine + 1 chaff + 2 probe = 12 of 12 — no room at all.
-    var sim = BootSim();
+    var sim = BootSim(hold: 0);
     var packed = Spawn(
         sim,
         1,
@@ -690,8 +779,29 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
     var notices = PressItemOnShip(sim, mine, packed, 5);
     Check(
         packed.MineAmmo == 4 && notices.Count(n => n.Contains("payload full")) == 1,
-        "a hull at exactly PayloadCapacity refuses even a 1-mass pack",
+        "a hold-less hull at exactly PayloadCapacity refuses even a 1-mass pack",
         $"payload boundary wrong (mine ammo {packed.MineAmmo}, notices {string.Join(" | ", notices)})"
+    );
+
+    // The same packed scout WITH its hold stows the pack instead of loading it.
+    var sim2 = BootSim();
+    var packed2 = Spawn(
+        sim2,
+        1,
+        team: 0,
+        cls: ClassScout,
+        cargo: [(MineCargo, 4), (ChaffCargo, 1), (ProbeCargo, 1)],
+        mounts: [((byte)1, SeekerRack1)]
+    );
+    Kill(sim2, Spawn(sim2, 2, team: 0, cls: ClassScout));
+    var mine2 = sim2.Salvage.First(i => i.Kind == 1 && i.ItemId == MineCargo);
+    IsolateItem(sim2, mine2);
+    mine2.Count = 1;
+    var notices2 = PressItemOnShip(sim2, mine2, packed2, 2);
+    Check(
+        packed2.MineAmmo == 4 && packed2.Hold is [(1, MineCargo, 1)] && notices2.Count(n => n.Contains("payload full")) == 1,
+        "a full-payload hull with a hold STOWS the pack (ammo untouched, 'payload full' named)",
+        $"payload-full stow wrong (mine ammo {packed2.MineAmmo}, hold {packed2.Hold?.Count}, notices {string.Join(" | ", notices2)})"
     );
 }
 
@@ -862,9 +972,9 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
     );
 }
 {
-    // MsgShipLoadout's v39 stowed tail, on the path that only exists because of salvage: a ship
+    // MsgShipLoadout's v40 hold tail, on the path that only exists because of salvage: a ship
     // flying its AUTHORED loadout (MountWeaponIds null — no row before this feature) that stowed a
-    // foreign rack's rounds. The row must carry the authored per-barrel ids AND the stack.
+    // foreign rack's rounds. The row must carry the authored per-barrel ids AND the hold entry.
     var sim = BootSim(techs: ["bomber"]);
     var bomber = Spawn(sim, 1, team: 0, cls: 2); // authored: gat | autocan | autocan | gat | SRM rack
     bomber.MineAmmo = 0; // free the payload its authored 8-mine hold is using
@@ -874,16 +984,16 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
     rounds.Count = 2;
     PressItemOnShip(sim, rounds, bomber, 2);
     Check(
-        bomber.MountWeaponIds is null && bomber.StowedMissiles is [(QuickfireRack1, 2)],
+        bomber.MountWeaponIds is null && bomber.Hold is [(2, QuickfireRack1, 2)],
         "premise: an authored-loadout bomber stowed a foreign rack's rounds (no mount override)",
-        $"stow premise failed (mounts {(bomber.MountWeaponIds is null ? "authored" : "override")}, stowed {bomber.StowedMissiles?.Count})"
+        $"stow premise failed (mounts {(bomber.MountWeaponIds is null ? "authored" : "override")}, hold {bomber.Hold?.Count})"
     );
 
     // Hand-parse the frame: [28][u8 rows] then rows x (u64 shipId, u8 nSlots, nSlots x u32, u8
-    // nStowed, nStowed x (u32 rackId, u8 count)).
+    // nHold, nHold x (u8 kind, u32 itemId, u8 count)).
     byte[] frame = Protocol.BuildShipLoadouts(sim);
     var ids = new List<uint>();
-    var stowed = new List<(uint rackId, byte count)>();
+    var stowed = new List<(byte kind, uint itemId, byte count)>();
     bool found = false;
     {
         int o = 2;
@@ -898,12 +1008,12 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
                 rowIds.Add(BitConverter.ToUInt32(frame, o));
                 o += 4;
             }
-            int nStowed = frame[o++];
-            var rowStowed = new List<(uint, byte)>();
-            for (int s = 0; s < nStowed; s++)
+            int nHold = frame[o++];
+            var rowStowed = new List<(byte, uint, byte)>();
+            for (int s = 0; s < nHold; s++)
             {
-                rowStowed.Add((BitConverter.ToUInt32(frame, o), frame[o + 4]));
-                o += 5;
+                rowStowed.Add((frame[o], BitConverter.ToUInt32(frame, o + 1), frame[o + 5]));
+                o += 6;
             }
             if (shipId != bomber.ShipId)
                 continue;
@@ -918,9 +1028,9 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
         );
     }
     Check(
-        found && ids is [GatGun1, 12u, 12u, GatGun1, 5u] && stowed is [(QuickfireRack1, 2)],
-        "a stow-only ship rides MsgShipLoadout with its AUTHORED ids plus the stowed stack",
-        $"loadout row wrong (found {found}, ids [{string.Join(",", ids)}], stowed [{string.Join(",", stowed.Select(s => $"{s.rackId}x{s.count}"))}])"
+        found && ids is [GatGun1, 12u, 12u, GatGun1, 5u] && stowed is [(2, QuickfireRack1, 2)],
+        "a hold-only ship rides MsgShipLoadout with its AUTHORED ids plus the hold entry (kind, id, count)",
+        $"loadout row wrong (found {found}, ids [{string.Join(",", ids)}], hold [{string.Join(",", stowed.Select(s => $"k{s.kind}:{s.itemId}x{s.count}"))}])"
     );
 }
 
@@ -1237,6 +1347,95 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
         one.Length > 0 && one == two,
         $"two sims on rngSeed 7 produce byte-identical item state for 200 ticks ({one.Length} chars of trace)",
         "the two replays diverged"
+    );
+}
+
+// ---- 15. Cargo hold: capacity, 'hold full', stack merge, part re-drop, payload-neutral ----------
+{
+    // Scout hold = 2 slots. Feed it three unmountable guns: two stow, the third bounces ONCE.
+    var sim = BootSim();
+    var scout = Spawn(sim, 1, team: 0, cls: ClassScout, mounts: [((byte)1, NoWeapon)]);
+    for (int cid = 2; cid <= 4; cid++)
+        Kill(sim, SpawnBareScout(sim, cid));
+    var guns = sim.Salvage.Where(i => i.Kind == 0).ToList();
+    Check(guns.Count == 3, "premise: three loose guns on the field", $"expected 3 guns, got {guns.Count}");
+
+    var all = new List<string>();
+    foreach (var g in guns)
+    {
+        IsolateItem(sim, g);
+        all.AddRange(PressItemOnShip(sim, g, scout, 3));
+    }
+    Check(
+        scout.Hold is [(0, GatGun1, 1), (0, GatGun1, 1)] && sim.Salvage.Count(i => i.Kind == 0) == 1,
+        "guns never merge: two fill the 2-slot hold one slot each, the third stays on the field",
+        $"hold fill wrong (hold {scout.Hold?.Count}, guns left {sim.Salvage.Count(i => i.Kind == 0)})"
+    );
+    Check(
+        all.Count(n => n.StartsWith("Stowed: ")) == 2 && all.Count(n => n == "Can't carry PW Gat Gun 1: hold full") == 1,
+        "two 'Stowed' lines, then exactly one 'Can't carry …: hold full'",
+        $"hold notices wrong: {string.Join(" | ", all)}"
+    );
+    Check(
+        all.Last(n => n.StartsWith("Stowed: ")).Contains("hold 2/2"),
+        "the last stow notice reports the hold as 2/2",
+        $"hold count in notice wrong: {all.Last(n => n.StartsWith("Stowed: "))}"
+    );
+
+    // Hold contents are NOT payload: the scout (1 of 12 used) still has full payload room, so a
+    // pack it CAN use loads normally alongside the two stowed guns.
+    Kill(sim, Spawn(sim, 5, team: 0, cls: ClassScout));
+    var chaff = sim.Salvage.First(i => i.Kind == 1 && i.ItemId == ChaffCargo);
+    IsolateItem(sim, chaff);
+    byte chaffBefore = scout.ChaffAmmo;
+    PressItemOnShip(sim, chaff, scout, 2);
+    Check(
+        scout.ChaffAmmo > chaffBefore && !sim.Salvage.Contains(chaff) && scout.Hold!.Count == 2,
+        "a usable pack still EQUIPS on a hull whose hold is full (hold ≠ payload)",
+        $"equip-with-full-hold wrong (chaff {chaffBefore}→{scout.ChaffAmmo}, alive {sim.Salvage.Contains(chaff)})"
+    );
+
+    // A stowed gun re-drops as a Part item (Count 0), so it can be salvaged again.
+    Kill(sim, scout);
+    var redropped = sim.Salvage.Where(i => i.SpawnTick == sim.Tick && i.Kind == 0).ToList();
+    Check(
+        redropped.Count == 3 && redropped.All(i => i.ItemId == GatGun1 && i.Count == 0),
+        "on death the mounted gun and both stowed guns re-drop as three Part items (Count 0)",
+        $"re-drop wrong: {string.Join(", ", redropped.Select(i => $"k{i.Kind} id{i.ItemId} x{i.Count}"))}"
+    );
+}
+{
+    // Consumable stacks MERGE into a same-id hold entry without spending a slot: two quickfire
+    // stacks onto a seeker scout land in ONE entry, capped at 255.
+    var sim = BootSim();
+    var seeker = Spawn(sim, 1, team: 0, cls: ClassScout, mounts: [((byte)1, SeekerRack1)]);
+    Kill(sim, Spawn(sim, 2, team: 0, cls: ClassScout, mounts: [((byte)1, QuickfireRack1)]));
+    Kill(sim, Spawn(sim, 3, team: 0, cls: ClassScout, mounts: [((byte)1, QuickfireRack1)]));
+    var stacks = sim.Salvage.Where(i => i.Kind == 2).ToList();
+    stacks[0].Count = 250;
+    stacks[1].Count = 10;
+    foreach (var st in stacks)
+    {
+        IsolateItem(sim, st);
+        PressItemOnShip(sim, st, seeker, 2);
+    }
+    Check(
+        seeker.Hold is [(2, QuickfireRack1, 255)] && sim.Salvage.Count(i => i.Kind == 2) == 0,
+        "same-rack foreign stacks merge into one hold slot (250 + 10 → 255 cap)",
+        $"merge wrong (hold [{string.Join(",", (seeker.Hold ?? []).Select(h => $"k{h.Kind}:{h.ItemId}x{h.Count}"))}])"
+    );
+
+    // With no hold at all the structural reason is what the pilot hears, not 'hold full'.
+    var sim0 = BootSim(hold: 0);
+    var s0 = Spawn(sim0, 1, team: 0, cls: ClassScout, mounts: [((byte)1, NoWeapon)]);
+    Kill(sim0, SpawnBareScout(sim0, 2));
+    var g0 = sim0.Salvage.Single(i => i.Kind == 0);
+    IsolateItem(sim0, g0);
+    var n0 = PressItemOnShip(sim0, g0, s0, 3);
+    Check(
+        s0.Hold is null && n0 is ["Can't carry PW Gat Gun 1: no free mount"],
+        "cargo-capacity 0: the equip reason is the rejection ('no free mount'), never 'hold full'",
+        $"no-hold notice wrong: {string.Join(" | ", n0)}"
     );
 }
 

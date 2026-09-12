@@ -253,10 +253,14 @@ public sealed partial class Simulation
         // derive WHICH mounts from the same shared rule, so these never go on the wire.
         public uint[]? MountLastFire;
 
-        // INERT salvaged missile stacks (Simulation.Salvage.cs): rounds picked up for a rack this
-        // hull doesn't fly. They cost payload, they re-drop on death, and they are lost on dock —
-        // but nothing can shoot them, so they never touch MissileAmmo. null = none (the common case).
-        public List<(uint RackWeaponId, byte Count)>? StowedMissiles;
+        // The cargo HOLD (Simulation.Salvage.cs): salvage this hull flew over but could not equip —
+        // a gun with no free mount, rounds for a rack it doesn't fly, a pack past the payload budget,
+        // a fuel pod with no tank. One entry per slot (ShipClassDef.CargoCapacity slots): a Part is
+        // one gun (Count 1, never merged), a Missiles/Cargo entry is one stack (same ItemId merges,
+        // capped at 255). Inert: costs NO payload, nothing fires or loads it, it re-drops on death
+        // and is lost on dock. Kind/ItemId follow the SalvageKind* wire encoding. null = empty (the
+        // common case).
+        public List<(byte Kind, uint ItemId, byte Count)>? Hold;
 
         public ShipInputState HeldInput; // replayed on ticks with no exact-stamped input
         public bool Alive;

@@ -266,6 +266,7 @@ public static class FactionsContentProjection
             // Stage-2 economy: build cost from the buildable's authored price (whole credits).
             Cost = h.Price,
             PayloadCapacity = (float)h.PayloadCapacity,
+            CargoCapacity = h.CargoCapacity,
             // Mining ore hold (0 = not a miner). Behavior-inert until the miner sim/wire WPs land.
             OreCapacity = (float)h.OreCapacity,
             // Miner production delay (seconds from order to launch; 0 = instant). Consumed by TryBuyMiner.

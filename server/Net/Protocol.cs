@@ -117,7 +117,7 @@ public static class Protocol
     public const byte MsgConstructorBuilds = 25; // u8 count, count x (u64 shipId, u64 rockId, u8 phase (0 align, 1 sink, 2 build), f16 progress 0..1) — each constructor drone actively aligning/sinking/building on a rock, so the client drives the build-sphere VFX (v37). Broadcast; rendering gated by ship+rock visibility. See BuildConstructorBuilds.
     public const byte MsgConstructorState = 26; // u8 count, count x (u64 id, u8 stationTypeId, u8 state (0 producing/1 idle/2 to-rock/3 move/4 align/5 sink/6 build/8 queued), u32 startTick, u32 durationTicks, u64 targetId, bool producesMiner, u64 launchBaseId, u64 shipId) — PER-TEAM build roster for the Build tab: producing (start/duration → progress bar + cancel), queued (untimed, 0% — waiting for a build slot at launchBaseId), and launched drones (status). launchBaseId groups a garrison's build pipeline for the queue-full gray-out. shipId is the launched drone's ship id (0 while queued/producing), which maps a rendered ship to the station it carries (F3 map label). Progress derives client-side from startTick+duration (v38). On change + coarse keepalive. See BuildConstructorState.
     public const byte MsgRockGone = 27; // u8 count, count x u64 rockId — rocks fully despawned this step (a constructor's finished base consumed the asteroid). Broadcast, reliable; the client deletes its rock node + collision. See BuildRockGone.
-    public const byte MsgShipLoadout = 28; // u8 count, count x (u64 shipId, u8 nSlots, nSlots x u32 weaponId, u8 nStowed, nStowed x (u32 rackWeaponId, u8 count)) — per-barrel EFFECTIVE weapon ids (hardpoint declaration order; u32.Max = emptied slot) plus the ship's INERT stowed missile stacks (v39, salvage). A ship gets a row when it flies a non-authored loadout OR holds stowed rounds; the ids are always effective (a stow-only row writes the authored ids). Full table, reconcile-by-omission: a ship absent from the frame flies its authored class loadout with an empty hold. Broadcast, reliable, on change + coarse keepalive (empty frames still sent so stale entries prune). Doubles as the owner's authoritative echo. See BuildShipLoadouts.
+    public const byte MsgShipLoadout = 28; // u8 count, count x (u64 shipId, u8 nSlots, nSlots x u32 weaponId, u8 nHold, nHold x (u8 kind, u32 itemId, u8 count)) — per-barrel EFFECTIVE weapon ids (hardpoint declaration order; u32.Max = emptied slot) plus the ship's INERT cargo hold (v40, salvage: kind = SalvageKind 0 part/1 cargo/2 missiles, itemId = weapon or cargo def id, count = 1 for a part). A ship gets a row when it flies a non-authored loadout OR carries anything in its hold; the ids are always effective (a hold-only row writes the authored ids). Full table, reconcile-by-omission: a ship absent from the frame flies its authored class loadout with an empty hold. Broadcast, reliable, on change + coarse keepalive (empty frames still sent so stale entries prune). Doubles as the owner's authoritative echo. See BuildShipLoadouts.
     public const byte MsgMatchStats = 29; // u8 nPilots, n x (i32 clientId, str name, u8 team, u8 flags (bit0 = connected), u16 kills, u16 deaths, u16 ejects, i32 points), then u8 nTeams, n x (u8 team, u8 garrisonsDestroyed, u8 outpostsDestroyed) — the match scoreboard ledger (v37). Full table, keyed by client id, sorted by id; a pilot who LEFT stays on it with bit0 clear, which is why name+team ride the frame instead of being joined against the lobby roster (a disconnect drops both server-side). PTS is signed (a penalty weight can push a pilot negative); the TEAM score is NOT repeated here — it rides MsgTeamState. Broadcast, reliable, on change only. See BuildMatchStats.
     public const byte MsgSalvage = 30; // u16 anchorSector, u8 count, count x SalvageRecord — the wreck items lying in the client's anchor sector (v39). Minefield cadence exactly: on a change in THAT sector, on the coarse keepalive, or on an anchor-sector change; an empty frame is how a removal propagates, so the client prunes by omission. Fog on: an item streams only while its point is visible to the team. See BuildSalvageFor.
     public const byte MsgSalvageGone = 31; // u64 id, u8 reason (0 expired, 1 match cleanup, 2 picked up), u16 sector, 3x i16 pos, u64 byShipId — one item left the world (v39). RELIABLE broadcast (an unknown id no-ops client-side): reason 2 is the only authority for the pickup FX/toast, which the omission reconcile cannot distinguish from an expiry. byShipId is the collector (0 otherwise) — the owner's HUD banner keys on it. See BuildSalvageGone.
@@ -658,25 +658,23 @@ public static class Protocol
             return System.Array.Empty<uint>();
         }
 
-        // Resolve each row's effective ids ONCE (a stow-only row would otherwise rebuild its
+        // Resolve each row's effective ids ONCE (a hold-only row would otherwise rebuild its
         // authored array in both the sizing and the write pass).
-        List<(Simulation.ShipSim s, uint[] ids, int nStowed)>? rows = null;
+        List<(Simulation.ShipSim s, uint[] ids, int nHold)>? rows = null;
         foreach (var s in sim.Ships)
-            if ((s.MountWeaponIds is not null || s.StowedMissiles is { Count: > 0 }) && rows?.Count is null or < 255)
-                (rows ??= new()).Add(
-                    (s, s.MountWeaponIds ?? AuthoredIds(s.Class), Math.Min(s.StowedMissiles?.Count ?? 0, 255))
-                );
+            if ((s.MountWeaponIds is not null || s.Hold is { Count: > 0 }) && rows?.Count is null or < 255)
+                (rows ??= new()).Add((s, s.MountWeaponIds ?? AuthoredIds(s.Class), Math.Min(s.Hold?.Count ?? 0, 255)));
 
         int size = 2;
         if (rows is not null)
-            foreach (var (_, ids, nStowed) in rows)
-                size += 8 + 1 + 4 * ids.Length + 1 + 5 * nStowed;
+            foreach (var (_, ids, nHold) in rows)
+                size += 8 + 1 + 4 * ids.Length + 1 + 6 * nHold;
         var buf = new byte[size];
         buf[0] = MsgShipLoadout;
         buf[1] = (byte)(rows?.Count ?? 0);
         int o = 2;
         if (rows is not null)
-            foreach (var (s, ids, nStowed) in rows)
+            foreach (var (s, ids, nHold) in rows)
             {
                 BitConverter.TryWriteBytes(buf.AsSpan(o), s.ShipId);
                 o += 8;
@@ -686,13 +684,14 @@ public static class Protocol
                     BitConverter.TryWriteBytes(buf.AsSpan(o), id);
                     o += 4;
                 }
-                // Stowed missile stacks (v39): inert salvaged rounds the hull can't fire. The owner's
-                // HUD lists them; every client needs them only so the row's length is self-describing.
-                buf[o++] = (byte)nStowed;
-                for (int i = 0; i < nStowed; i++)
+                // The cargo hold (v40): inert salvage the hull carries but can't use. The owner's
+                // HUD lists it; every client needs it only so the row's length is self-describing.
+                buf[o++] = (byte)nHold;
+                for (int i = 0; i < nHold; i++)
                 {
-                    var (rackWeaponId, count) = s.StowedMissiles![i];
-                    BitConverter.TryWriteBytes(buf.AsSpan(o), rackWeaponId);
+                    var (kind, itemId, count) = s.Hold![i];
+                    buf[o++] = kind;
+                    BitConverter.TryWriteBytes(buf.AsSpan(o), itemId);
                     o += 4;
                     buf[o++] = count;
                 }
@@ -1503,9 +1502,12 @@ public static class Protocol
             // Hull tech-gate (v43), streamed after IsConstructor (append-only). Display-only: lets
             // the hangar's locked hull card + Research UNLOCKS name the gate. Reader mirrors.
             WriteTechList(w, s.RequiredTechIdx);
-            // Station-class launch/dock restriction (2026-07-21), streamed LAST in the ship block
-            // (append-only): u16 bitmask over StationClassId; 0 = unrestricted. Reader mirrors.
+            // Station-class launch/dock restriction (2026-07-21), append-only: u16 bitmask over
+            // StationClassId; 0 = unrestricted. Reader mirrors.
             w.Write(s.LaunchClassMask);
+            // Cargo hold slots (v40, salvage), streamed LAST in the ship block: u8, 0 = no hold.
+            // Display-only on the client (the HUD's HOLD n/cap readout); the sim gates pickups.
+            w.Write((byte)Math.Clamp(s.CargoCapacity, 0, 255));
         }
     }
 
