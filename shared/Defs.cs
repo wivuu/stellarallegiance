@@ -19,6 +19,7 @@
 // =====================================================================
 
 using System.Collections.Generic;
+using StellarAllegiance.Shared.Net;
 
 namespace StellarAllegiance.Shared
 {
@@ -56,7 +57,8 @@ namespace StellarAllegiance.Shared
     // Off* is the local offset from the hull origin; Dir* is the local forward (e.g. +Z
     // muzzle, −Z nozzle in this codebase's +Z-forward convention). WeaponId is meaningful
     // only for Kind == Weapon.
-    public sealed class HardpointDef
+    [WireRecord]
+    public sealed partial class HardpointDef
     {
         // Sentinel WeaponId for an EMPTY weapon mount (exists on the hull, fires nothing,
         // assignable via loadout). Never resolves in WeaponDefs, so every TryGetValue-guarded
@@ -94,7 +96,8 @@ namespace StellarAllegiance.Shared
     // hulls are data-only additions. The flight block is the authoring schema from
     // ShipStats (the "nine knobs + afterburner"); both sides derive thrust/torques/drag
     // from these identical f32s.
-    public sealed class ShipClassDef
+    [WireRecord]
+    public sealed partial class ShipClassDef
     {
         public byte ClassId;
         public string Name = "";
@@ -155,19 +158,20 @@ namespace StellarAllegiance.Shared
         // default loadout's Part.Signature sum), in RadarSignature units (default 0 = neutral).
         // Server-side fog input only — Protocol.BuildDefs deliberately does NOT write it (the
         // client never reads signatures; FogEyeballMultiplier precedent).
+        [WireIgnore]
         public float SignatureBias;
 
         public int Cost; // credits to build this hull (Buildable.Price); default 0 = free
         public float PayloadCapacity; // payload budget: mounted weapon Mass + cargo hold; 0 = no hold
         public float OreCapacity; // mining ore hold (He3 units) a miner fills + offloads; 0 = not a miner. Streamed in Protocol.BuildDefs (after PayloadCapacity).
         public int OrderTimeSeconds; // miner production delay: seconds from ORDERING this hull to it launching (constructor-Producing analogue); 0 = instant. Streamed after OreCapacity.
-        public bool IsConstructor; // v37: a constructor drone chassis (builds bases). Server-only (NOT streamed — client uses ShipFlagConstructor); projected from HullAbility.IsBuilder.
-        public List<HardpointDef> Hardpoints = new();
         public uint FactionId; // reserved (per-team content); default 0
+        public List<HardpointDef> Hardpoints = new();
 
         // Default consumable hold this hull spawns with (authored order). The hangar seeds its
         // stepper counts from this; MsgSpawn rides the chosen counts back to the server.
         public List<CargoLoadDef> DefaultCargo = new();
+        public bool IsConstructor; // v37: a constructor drone chassis (builds bases); streamed so the hangar can hide the chassis. Projected from HullAbility.IsBuilder.
 
         // Techs (indices into the streamed tech catalog) a team must own before this hull may be
         // built — mirrors WeaponDef.RequiredTechIdx. Server-authoritative gating lives in
@@ -182,6 +186,15 @@ namespace StellarAllegiance.Shared
         // friendly base like an enemy one, and docks only through the base's LARGEST door
         // (DockRules). Streamed LAST in the ship block.
         public ushort LaunchClassMask;
+
+        // Cargo hold (2026-09-12, salvage): how many LOOSE items this hull can carry inert — salvage
+        // it flew over but could not equip (a gun with no free mount, rounds for a rack it doesn't
+        // fly, a fuel pack with no tank, anything past the payload budget). One slot per part or per
+        // consumable stack; slot contents cost NO payload (they are not equipped). 0 = no hold
+        // (pod/miner/constructor): such a hull ricochets whatever it can't use. Streamed LAST in the
+        // ship block (u8) after LaunchClassMask, mirrored by DefsApplier.
+        [Wire(WireEnc.U8)]
+        public int CargoCapacity;
     }
 
     // How a weapon behaves when fired. A byte (wire-safe) and APPEND-ONLY, like HardpointKind.
@@ -195,7 +208,8 @@ namespace StellarAllegiance.Shared
     }
 
     // One per weapon. WeaponId is referenced by a Weapon hardpoint's WeaponId.
-    public sealed class WeaponDef
+    [WireRecord]
+    public sealed partial class WeaponDef
     {
         public uint WeaponId;
         public string Name = "";
@@ -245,6 +259,7 @@ namespace StellarAllegiance.Shared
         // Radar signature of the deployed field (0 authored -> 1.0 at projection). SERVER-ONLY —
         // BuildDefs skips it (detection is server-authoritative; the client never reads signatures;
         // FogEyeballMultiplier / ProbeSignature precedent).
+        [WireIgnore]
         public float MineSignature; // mine: radar signature of the deployed field (0 authored -> 1.0 at projection)
         public uint CargoId; // dispenser: the cargo item (Chaff/Mine/Probe expendable) this launcher consumes
 
@@ -267,7 +282,10 @@ namespace StellarAllegiance.Shared
         // HitPoints/Signature are SERVER-ONLY (BuildDefs skips them, FogEyeballMultiplier
         // precedent); HitRadius/ModelSize are streamed LAST (after BoltLength) so every block
         // above stays byte-stable.
+        [WireIgnore]
         public float ProbeHitPoints; // health of the deployed probe; 0 = authored-invulnerable
+
+        [WireIgnore]
         public float ProbeSignature; // radar signature of the deployed probe (0 authored -> 1.0 at projection)
         public float ProbeHitRadius; // server hit-sphere radius for bolts/blasts vs the probe, u
         public float ProbeModelSize; // client visual normalization length, u (0 = client guard default)
@@ -302,11 +320,19 @@ namespace StellarAllegiance.Shared
         // server gates and the HUD's RELOADING readout. Streamed after SucceededByWeaponId so every
         // block above stays byte-stable (v36).
         public uint ReloadTicks;
+
+        // Payload mass of ONE round this launcher fires, taken from its referenced missile
+        // expendable at projection (0 for a gun/dispenser — nothing to carry loose). Salvage stows a
+        // foreign rack's rounds as inert cargo and charges the hold RoundMass × count, so the mass a
+        // magazine represents has to be knowable without the expendable catalog. Server-side today;
+        // it starts streaming (appended LAST in the weapon record) in protocol 39 (salvage phase 3).
+        public float RoundMass;
     }
 
     // One entry in a hull's default consumable hold — an item id + a count. Mirrors the authored
     // Hull.default-cargo list, streamed after each ship's hardpoints (Protocol.BuildDefs).
-    public struct CargoLoadDef
+    [WireRecord]
+    public partial struct CargoLoadDef
     {
         public uint CargoId;
         public byte Count;
@@ -316,7 +342,8 @@ namespace StellarAllegiance.Shared
     // CargoId is the stable wire id an authored expendable carries (Expendable.CargoId).
     // Dispenser items are consumed through the per-kind ammo bytes (SeedDispenserAmmo);
     // fuel items auto-consume when the tank empties mid-boost.
-    public sealed class CargoItemDef
+    [WireRecord]
+    public sealed partial class CargoItemDef
     {
         public uint CargoId;
         public string Name = "";
@@ -331,10 +358,19 @@ namespace StellarAllegiance.Shared
         // (WeaponDef.ReloadTicks), since that is where its cadence already lives. Streamed after
         // FuelPerCharge (v36).
         public uint ReloadTicks;
+
+        // The GLB the client instances when this item is loose in space as dropped salvage
+        // (res://assets/parts/<ModelName>.glb) — mirrors WeaponDef.ModelName. A DISPENSER item takes
+        // its mesh from the dispenser's WeaponDef instead, so this field carries the pure-cargo kinds
+        // (the fuel pod) that own no launcher. Empty => the client shows a placeholder puff.
+        // Server-side today; it starts streaming (appended LAST in the cargo record) in protocol 39
+        // (salvage phase 3).
+        public string ModelName = "";
     }
 
     // One per base type.
-    public sealed class BaseDef
+    [WireRecord]
+    public sealed partial class BaseDef
     {
         public byte BaseTypeId;
         public string Name = "";
@@ -414,10 +450,12 @@ namespace StellarAllegiance.Shared
     // One team-wide stat multiplier: (GameAttribute byte, multiplier). Mirrors the factions library's
     // GameAttribute enum id (append-only, wire byte) × its double multiplier carried as f32. Neutral at
     // 1.0; a faction's base-attributes and a development's attributes stream as sorted AttrMod[] arrays.
-    public readonly record struct AttrMod(byte Attr, float Mult);
+    [WireRecord]
+    public readonly partial record struct AttrMod(byte Attr, float Mult);
 
     // One research-tree tech node (a pure catalog identity techs/developments reference).
-    public sealed class TechDef
+    [WireRecord]
+    public sealed partial class TechDef
     {
         public string Id = ""; // stable authored id ("heavy-ordnance")
         public string Name = "";
@@ -425,7 +463,8 @@ namespace StellarAllegiance.Shared
     }
 
     // One researchable development (the research-tree PURCHASE: price + wall-clock time + grants).
-    public sealed class DevelopmentDef
+    [WireRecord]
+    public sealed partial class DevelopmentDef
     {
         public string Id = "";
         public string Name = "";
@@ -457,7 +496,8 @@ namespace StellarAllegiance.Shared
     // runtime base projection yet (BaseTypeId -1). The Build tab renders these; the Research tab
     // reads their grants for "what unlocks this" displays. Distinct from BaseDef (the runtime
     // sim/wire base model): a catalog entry is presentation + gating data only.
-    public sealed class StationCatalogDef
+    [WireRecord]
+    public sealed partial class StationCatalogDef
     {
         public string Id = "";
         public string Name = "";
@@ -734,7 +774,7 @@ namespace StellarAllegiance.Shared
         public float AlephRadarSignature = 1.4f;
         public float RockRadarSignature = 2f;
 
-        // Server-side sim tuning blocks (world.yaml `ai:` / `combat:` / `mechanics:` /
+        // Server-side sim tuning blocks (world.yaml `ai:` / `combat:` / `mechanics:` / `salvage:` /
         // `seeding:` / `mining:` / `constructor:`). NONE of these ride the wire — Protocol.BuildDefs
         // deliberately skips them (drones/damage/seeding/mining are server-authoritative; the client
         // only sees their results). The field initializers below ARE the stock values: projection only
@@ -742,6 +782,7 @@ namespace StellarAllegiance.Shared
         public WorldAiTuning Ai = new();
         public WorldCombatTuning Combat = new();
         public WorldMechanicsTuning Mechanics = new();
+        public WorldSalvageTuning Salvage = new();
         public WorldSeedingTuning Seeding = new();
         public WorldMiningTuning Mining = new();
         public WorldConstructorTuning Constructor = new();
@@ -890,6 +931,33 @@ namespace StellarAllegiance.Shared
         public float ProbeEjectClearance = 2f; // u past (ship radius + probe hit radius) — no self-kick
         public float ReconnectGraceSeconds = 5f; // dropped ship held for reconnect reclaim
         public float EndedToLobbySeconds = 6f; // after match end before returning to the lobby
+    }
+
+    // Wreck-salvage tuning (world.yaml `salvage:`): what a destroyed combat hull leaves behind, how
+    // the dropped items fly/settle, and how a passing ship collects them. Server-side only — items
+    // are server-authoritative entities (the client renders the streamed rows, it never simulates
+    // them), so like ai/combat/mechanics this block never rides the wire. The initializers below ARE
+    // the stock values, so an omitted block or field always means "stock".
+    public sealed class WorldSalvageTuning
+    {
+        public float DropChance = 0.5f; // per ITEM (each gun, the magazine, each cargo kind rolls alone)
+        public bool DropFromDrones = true; // PIG combat hulls drop too; off = player wrecks only
+
+        // Eject impulse added to the wreck's own velocity along a random unit vector, so a kill
+        // scatters its loot instead of stacking it on one point.
+        public float EjectSpeed = 30f; // u/s
+        public float EjectSpeedJitter = 10f; // ± u/s spread on that speed
+
+        public float DragPerSecond = 0.4f; // velocity FRACTION retained per second (→ ~33 u scatter, rest in ~3.5 s)
+        public float RestSpeed = 1.0f; // u/s below which an item parks (stops integrating)
+        public float ItemRadius = 1.5f; // u, the item's collision sphere vs rocks/bases
+        public float PickupRadius = 3.0f; // u, its contact sphere vs ships (>= ItemRadius)
+        public float Restitution = 0.6f; // bounciness off rocks/bases/ships
+        public float LifetimeSeconds = 180f; // sortie-scale litter: an uncollected item expires
+
+        // Per-sector item cap; the OLDEST item in a full sector expires to make room. Keeps a
+        // massacre from flooding one sector and keeps the frame's u8 count honest.
+        public int MaxItemsPerSector = 64;
     }
 
     // Map-seeding tuning (world.yaml `seeding:`): the ONE shared default set per asteroid shape

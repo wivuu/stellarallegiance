@@ -96,6 +96,7 @@ public partial class WorldRenderer
     public BoltRenderer Bolts => _bolts;
     public MissileRenderer Missiles => _missileRenderer;
     public ProbeRenderer Probes => _probeRenderer;
+    public SalvageRenderer Salvage => _salvageRenderer;
     public MinefieldRenderer Minefields => _minefield;
     public MiningBeamRenderer Mining => _mining;
 
@@ -104,6 +105,10 @@ public partial class WorldRenderer
     // bolts. Built in _Ready.
     private MissileRenderer _missileRenderer = null!;
     private ProbeRenderer _probeRenderer = null!;
+
+    // Wreck-salvage item visuals (MsgSalvage/MsgSalvageGone, v39). Same container + lifecycle as the
+    // two above: nodes under _projectiles, so the sector gate and the Reset sweep cover them.
+    private SalvageRenderer _salvageRenderer = null!;
 
     // Proximity-audio driver: latched asteroid hum/woosh + probe pings, fed each frame from _Process.
     private AsteroidAmbience _ambience = null!;
@@ -448,6 +453,13 @@ public partial class WorldRenderer
         );
         _missileRenderer = new MissileRenderer(_projectiles, _defs, _sectorView, this);
         _probeRenderer = new ProbeRenderer(_projectiles, _defs, _sectorView, _collisionWorld, this);
+        _salvageRenderer = new SalvageRenderer(
+            _projectiles,
+            _defs,
+            _sectorView,
+            this, // IEffectSink
+            _shipRenderer // IShipQuery — "was it MY ship that collected this?"
+        );
         _minefield = new MinefieldRenderer(chaff, minefields, _defs, _clock);
         _mining = new MiningBeamRenderer(_shipRenderer, _rocks);
         _fog = new FogStore(_shipRenderer, _player, _defs);
@@ -496,6 +508,9 @@ public partial class WorldRenderer
         if (newPhase == MatchPhase.Lobby && Phase != MatchPhase.Lobby)
         {
             _minefield?.Clear();
+            // Same reason for salvage: the finished match's wrecks must not litter the next one. The
+            // server emits a cleanup gone for each, but the phase edge is the client's own guard.
+            _salvageRenderer?.FreeAll();
             StellarAllegiance.Ui.LoadoutState.Shared.ResetAll();
         }
         _clock.Phase = newPhase;
@@ -545,6 +560,7 @@ public partial class WorldRenderer
         _shipRenderer.Reset(); // clears ship nodes + shield + loadout mirror + pilot names + death-cam
         _missileRenderer.Clear(); // nodes freed by the _projectiles QueueFree sweep above
         _probeRenderer.Clear(); // nodes freed by the _projectiles QueueFree sweep above
+        _salvageRenderer.Clear(); // ditto — the next anchor-sector frame re-streams what's still there
         _minefield.Clear(); // chaff/minefield container nodes aren't in the group sweep above
         _construction.Reset(); // BuildSphere/ConstructorDebris nodes freed by the _effects sweep above
         TeamState.ClearConstructorStates(); // roster drops on rebuild; economy/research dicts persist

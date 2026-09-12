@@ -99,6 +99,19 @@ public partial class PredictionController : Node3D
     // HUD's read seam (weapons panel, lead reticle, aim range, missile counter) so every local
     // readout reflects what THIS ship actually mounts, via DefRegistry's loadout-aware helpers.
     public uint[]? LoadoutIds => _loadoutIds;
+
+    // The cargo HOLD (v40): salvage this hull carries INERT — a gun it had no mount for, rounds for
+    // a rack it doesn't fly, a pack it had no room or use for. Kind = the salvage kind byte (0 part
+    // / 1 cargo / 2 missiles), ItemId = weapon or cargo def id, Count = 1 for a part. It costs no
+    // payload, nothing fires it, and it re-drops on death. Server-authoritative — pushed in by
+    // WorldRenderer from the MsgShipLoadout tail; nothing predicted reads it, only the owner's HUD
+    // hold readout. Empty (never null) so a caller can foreach it unguarded.
+    private (byte Kind, uint ItemId, byte Count)[]? _hold;
+
+    public void SetHold((byte Kind, uint ItemId, byte Count)[]? hold) => _hold = hold;
+
+    public IReadOnlyList<(byte Kind, uint ItemId, byte Count)> Hold =>
+        _hold ?? System.Array.Empty<(byte Kind, uint ItemId, byte Count)>();
     private uint _clientTick; // tick last passed to Step (HUD cooldown readout keys off it)
     private readonly List<PredictedShot> _shotsOut = new(); // reused per-Step fire output (0, 1, or twin bolts)
     private readonly List<Entry> _buffer = new();

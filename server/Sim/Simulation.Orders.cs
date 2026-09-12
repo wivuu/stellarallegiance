@@ -59,14 +59,6 @@ public sealed partial class Simulation
         Vec3 Pos
     )> _orderQueue = new();
 
-    // Issuer-only rejections/acks ("No radar contact…"), relayed by the hub as SystemTo lines.
-    public readonly List<(int ClientId, string Text)> OrderNoticesThisStep = new();
-
-    // Team-scoped gold directives ("Scout 3: attack Reaver"), relayed as MsgChatRelay scope 2 with
-    // Issuer as the sender name. Only emitted AFTER sim validation succeeds, so a fog-invalid
-    // order never announces.
-    public readonly List<(byte Team, string Issuer, string Text)> OrderDirectivesThisStep = new();
-
     // Resolves a client id to a pilot name for directive text (attack targets that are player
     // ships). Set once by the hub at boot; the directory is concurrent, safe to read here.
     public System.Func<int, string>? PlayerNameOf;
@@ -134,7 +126,7 @@ public sealed partial class Simulation
         Vec3 pos
     )
     {
-        void Notice(string text) => OrderNoticesThisStep.Add((cid, text));
+        void Notice(string text) => Events.OrderNotices.Add((cid, text));
 
         if (!_ships.TryGetValue(subject, out var ship) || !ship.Alive || ship.Team != team)
         {
@@ -216,8 +208,8 @@ public sealed partial class Simulation
         Vec3 pos
     )
     {
-        void Notice(string text) => OrderNoticesThisStep.Add((cid, text));
-        void Directive(string text) => OrderDirectivesThisStep.Add((team, issuer, text));
+        void Notice(string text) => Events.OrderNotices.Add((cid, text));
+        void Directive(string text) => Events.OrderDirectives.Add((team, issuer, text));
 
         string subjectName = DescribeAi(ship, null);
         switch (targetKind)
@@ -360,8 +352,8 @@ public sealed partial class Simulation
         Vec3 pos
     )
     {
-        void Notice(string text) => OrderNoticesThisStep.Add((cid, text));
-        void Directive(string text) => OrderDirectivesThisStep.Add((team, issuer, text));
+        void Notice(string text) => Events.OrderNotices.Add((cid, text));
+        void Directive(string text) => Events.OrderDirectives.Add((team, issuer, text));
 
         switch (targetKind)
         {
@@ -501,7 +493,7 @@ public sealed partial class Simulation
     private void AuthorizeMiningSector(byte team, uint sector)
     {
         if (World.TeamStates.TryGetValue(team, out var ts) && ts.AuthorizedMiningSectors.Add(sector))
-            MinerNoticesThisStep.Add((team, $"Miners authorized to mine {World.SectorName(sector)}."));
+            Events.MinerNotices.Add((team, $"Miners authorized to mine {World.SectorName(sector)}."));
         foreach (var m in _miners)
             if (m.Team == team)
                 m.Idle = false;

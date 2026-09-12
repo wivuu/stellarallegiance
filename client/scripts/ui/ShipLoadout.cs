@@ -698,7 +698,9 @@ public partial class ShipLoadout : Control
             _slotList.AddChild(row);
             _slotRows.Add((hpIndex, row));
         }
-        _slotCount.Text = $"{slots} SLOTS";
+        // "· HOLD n": the hull's cargo hold (inert salvage slots) — loadout-inert, so a plain caption.
+        int holdSlots = _defs.TryGetShipDef(classId, out ShipClassDef holdDef) ? holdDef.CargoCapacity : 0;
+        _slotCount.Text = holdSlots > 0 ? $"{slots} SLOTS · HOLD {holdSlots}" : $"{slots} SLOTS";
 
         RefreshPayload();
         RefreshArsenal();

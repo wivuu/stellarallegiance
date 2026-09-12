@@ -137,6 +137,16 @@ public record Hull : Buildable
     public double OreCapacity { get; set; }
 
     /// <summary>
+    /// Cargo hold: the number of loose salvaged items (one slot per part or per consumable stack)
+    /// this hull can carry INERT when it cannot equip them — a gun with no free mount, rounds for a
+    /// rack it doesn't fly, a pack past the payload budget. Hold contents cost no payload; they
+    /// re-drop on death and are lost on dock. 0 (default) = no hold, the hull ricochets what it can't
+    /// use. Independent of <see cref="PayloadCapacity"/>. Omit-when-default; projected onto
+    /// <c>ShipClassDef.CargoCapacity</c> (0–255).
+    /// </summary>
+    public int CargoCapacity { get; set; }
+
+    /// <summary>
     /// Production delay (seconds) between ORDERING this hull and it actually launching — the miner's
     /// analogue of a constructor's Producing phase. When a team buys a miner it is charged + counted
     /// immediately but does not fly until this many seconds elapse (0 = launches at once). Sits next

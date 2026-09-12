@@ -268,6 +268,10 @@
             "type": "number",
             "description": "Ore hold size (helium-3 units) for a mining hull: the harvest capacity a miner fills at a rock and offloads at a friendly base. 0 = not a miner (no ore hold). Independent of PayloadCapacity (weapons/cargo budget) \u2014 an ore hull is typically unarmed. Omit-when-default; projected onto ShipClassDef.OreCapacity."
           },
+          "cargo-capacity": {
+            "type": "integer",
+            "description": "Cargo hold: the number of loose salvaged items (one slot per part or per consumable stack) this hull can carry INERT when it cannot equip them \u2014 a gun with no free mount, rounds for a rack it doesn\u0027t fly, a pack past the payload budget. Hold contents cost no payload; they re-drop on death and are lost on dock. 0 (default) = no hold, the hull ricochets what it can\u0027t use. Independent of PayloadCapacity. Omit-when-default; projected onto ShipClassDef.CargoCapacity (0\u2013255)."
+          },
           "order-time-seconds": {
             "type": "integer",
             "description": "Production delay (seconds) between ORDERING this hull and it actually launching \u2014 the miner\u0027s analogue of a constructor\u0027s Producing phase. When a team buys a miner it is charged \u002B counted immediately but does not fly until this many seconds elapse (0 = launches at once). Sits next to Price as the other faction-tunable cost of a miner. Omit-when-default; projected onto ShipClassDef.OrderTimeSeconds."

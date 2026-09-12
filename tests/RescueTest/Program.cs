@@ -69,7 +69,7 @@ ulong victimId = victim.ShipId;
 sim.Step();
 
 Check(
-    sim.DeathsThisStep.Any(d => d.id == victimId && d.reason == Simulation.GoneDestroyed),
+    sim.Events.Deaths.Any(d => d.id == victimId && d.reason == Simulation.GoneDestroyed),
     "a destroyed combat hull is reported GoneDestroyed (client plays the blast)",
     "the destroyed hull's ShipGone did not carry GoneDestroyed"
 );
@@ -86,7 +86,7 @@ if (pod != null)
     sim.Step();
 
     Check(
-        sim.DeathsThisStep.Any(d => d.id == podId && d.reason == Simulation.GoneClean),
+        sim.Events.Deaths.Any(d => d.id == podId && d.reason == Simulation.GoneClean),
         "a rescued pod is reported GoneClean (client despawns it silently — no blast)",
         "the rescued pod's ShipGone did not carry GoneClean (it would play the death explosion)"
     );

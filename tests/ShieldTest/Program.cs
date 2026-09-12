@@ -147,7 +147,7 @@ void FireOneSeekerAndResolve(Simulation sim, Simulation.ShipSim attacker, Simula
     for (uint i = 0; i < seeker.ProjectileLifeTicks + 5; i++)
     {
         sim.Step();
-        if (sim.MissileGoneThisStep.Any(g => g.id == missileId))
+        if (sim.Events.MissileGone.Any(g => g.id == missileId))
             return;
     }
 }

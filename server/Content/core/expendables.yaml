@@ -494,3 +494,4 @@ fuels:
     charges-per-pack: 1   # one refill per pack
     glyph: "◒"            # geometric like the other cargo glyphs (◈ ◇ ◉) — HUD font has no emoji
     fuel-per-charge: 999  # >= every tank => full refill (clamped to max-fuel); lower for partials
+    model-name: acs36     # IGC "Fuel" pack — the GLB a dropped pod is drawn as (assets/parts/acs36.glb)

@@ -1328,13 +1328,7 @@ public partial class Lobby : Control
 
     // Team names are now streamed (server-held, editable via the roster header). Reads live from the
     // net client so a rename by any pilot shows everywhere; NOAT is the client-only pseudo-team.
-    private string TeamName(int team) =>
-        team switch
-        {
-            0 => _net.Team0Name,
-            1 => _net.Team1Name,
-            _ => "NOAT",
-        };
+    private string TeamName(int team) => team >= 0 && team < _net.TeamCount ? _net.TeamNameOf((byte)team) : "NOAT";
 
     private static Color TeamColor(int team) => IsNoat(team) ? DesignTokens.Text2 : DesignTokens.Faction(team);
 

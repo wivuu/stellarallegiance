@@ -48,8 +48,8 @@ public sealed partial class Simulation
     // Per-team destruction tallies for the Team Summary's GARRISONS row, indexed by the DESTROYING
     // team. Team facts, not pilot facts: a base ground down by PIGs, or whose killing blow landed
     // outside the credit window, still counts here even though no pilot scored for it.
-    private readonly int[] _teamGarrisonsDestroyed = new int[2];
-    private readonly int[] _teamOutpostsDestroyed = new int[2];
+    private readonly int[] _teamGarrisonsDestroyed = new int[World.MaxSupportedTeams];
+    private readonly int[] _teamOutpostsDestroyed = new int[World.MaxSupportedTeams];
 
     public int GarrisonsDestroyed(byte team) => team < _teamGarrisonsDestroyed.Length ? _teamGarrisonsDestroyed[team] : 0;
 
@@ -59,14 +59,6 @@ public sealed partial class Simulation
     // STABLE Id, never its index: World.Bases grows mid-match (constructors complete) and the whole
     // World is swapped at StartMatch.
     private readonly Dictionary<ulong, (int client, uint tick)> _baseLastHit = new();
-
-    // Set on any step the ledger moved, so the hub broadcasts a fresh MsgMatchStats instead of
-    // waiting on a cadence. Cleared at the top of Step alongside the other change flags.
-    public bool StatsChangedThisStep { get; private set; }
-
-    // Reconnect reclaims resolved this step (old client id -> new). Drained by the hub so its
-    // name/team memo drops the dead id in the same beat the ledger row moves. Cleared with the flag.
-    public readonly List<(int oldClientId, int newClientId)> ReclaimsThisStep = new();
 
     // Read LIVE off the tuning rather than cached in the ctor: the suites retune CreditWindowSeconds
     // on a booted sim to exercise expiry without stepping ten seconds of ticks.
@@ -105,9 +97,9 @@ public sealed partial class Simulation
         if (pts != 0 && World.TeamStates.TryGetValue(team, out var ts))
         {
             ts.Score += pts;
-            TeamStateChangedThisStep = true;
+            Events.TeamStateChanged = true;
         }
-        StatsChangedThisStep = true;
+        Events.StatsChanged = true;
     }
 
     // Whoever still holds kill credit on this ship, or -1. The stamp ages out on its own — it is
@@ -156,7 +148,7 @@ public sealed partial class Simulation
             {
                 AddPoints(ks, kt, _scoring.KillShip);
             }
-            StatsChangedThisStep = true;
+            Events.StatsChanged = true;
         }
 
         // Victim side. Only a HUMAN pilot's own hull counts against them: a PIG has no row at all,
@@ -177,7 +169,7 @@ public sealed partial class Simulation
             }
             // AddPoints is a no-op at weight 0 (stock ejection: 0), so flag the change here too —
             // the EJ counter moved even when the points didn't.
-            StatsChangedThisStep = true;
+            Events.StatsChanged = true;
         }
     }
 
@@ -195,7 +187,7 @@ public sealed partial class Simulation
             _teamGarrisonsDestroyed[taker]++;
         else
             _teamOutpostsDestroyed[taker]++;
-        StatsChangedThisStep = true;
+        Events.StatsChanged = true;
 
         // Points, unlike the tally, need a live stamp. Bases are only ever damaged by the enemy
         // (FireBolt/TryGetLockableBase both skip own-team bases), so the team check is belt-and-braces.
@@ -219,13 +211,13 @@ public sealed partial class Simulation
         _baseLastHit.Clear();
         Array.Clear(_teamGarrisonsDestroyed, 0, _teamGarrisonsDestroyed.Length);
         Array.Clear(_teamOutpostsDestroyed, 0, _teamOutpostsDestroyed.Length);
-        StatsChangedThisStep = true;
+        Events.StatsChanged = true;
     }
 
     // A reconnecting client reclaimed a held ship under a NEW client id: move the ledger row across
     // and re-point every attribution that still names the old id, so a torpedo or minefield laid
     // before the drop credits the pilot who comes back rather than minting a phantom row for an id
-    // no connection will ever answer to again. Announced through ReclaimsThisStep so the hub's
+    // no connection will ever answer to again. Announced through Events.Reclaims so the hub's
     // name/team memo drops the old id in the same beat.
     private void MigrateStats(int oldClientId, int newClientId)
     {
@@ -233,8 +225,8 @@ public sealed partial class Simulation
             return;
         if (_pilotStats.Remove(oldClientId, out var st))
             _pilotStats[newClientId] = st;
-        ReclaimsThisStep.Add((oldClientId, newClientId));
-        StatsChangedThisStep = true;
+        Events.Reclaims.Add((oldClientId, newClientId));
+        Events.StatsChanged = true;
 
         // Re-point live attribution. All five are small, bounded walks that run once per reclaim.
         foreach (var s in _order)

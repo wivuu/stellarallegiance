@@ -218,6 +218,10 @@ public sealed partial class Simulation
         return _stats.TryGetValue(defId, out var s) ? s : _stats[FlightModel.ClassScout];
     }
 
+    // Everything this step reported to the hub (one-shot events, change flags, notices) — see
+    // StepEvents.cs. Written during Step(), read by ClientHub.AfterStep(), cleared at the next Step().
+    public readonly StepEvents Events = new();
+
     public sealed class ShipSim
     {
         public ulong ShipId;
@@ -252,6 +256,15 @@ public sealed partial class Simulation
         // array in TryFire. LastFireTick stays the wire stamp "some gun fired this tick"; clients
         // derive WHICH mounts from the same shared rule, so these never go on the wire.
         public uint[]? MountLastFire;
+
+        // The cargo HOLD (Simulation.Salvage.cs): salvage this hull flew over but could not equip —
+        // a gun with no free mount, rounds for a rack it doesn't fly, a pack past the payload budget,
+        // a fuel pod with no tank. One entry per slot (ShipClassDef.CargoCapacity slots): a Part is
+        // one gun (Count 1, never merged), a Missiles/Cargo entry is one stack (same ItemId merges,
+        // capped at 255). Inert: costs NO payload, nothing fires or loads it, it re-drops on death
+        // and is lost on dock. Kind/ItemId follow the SalvageKind* wire encoding. null = empty (the
+        // common case).
+        public List<(byte Kind, uint ItemId, byte Count)>? Hold;
 
         public ShipInputState HeldInput; // replayed on ticks with no exact-stamped input
         public bool Alive;
@@ -406,26 +419,9 @@ public sealed partial class Simulation
     private readonly List<MissileSim> _missiles = new();
     public IReadOnlyList<MissileSim> Missiles => _missiles;
 
-    // Missiles that detonated / expired this step, drained by the hub into MsgMissileGone frames.
-    // Reason 0 = expired/coasted out, 1 = impact. Cleared at the top of Step (like DeathsThisStep).
-    public readonly List<(ulong id, byte reason, uint sector, Vec3 pos)> MissileGoneThisStep = new();
-
-    // Chaff puffs ejected this step, drained by the hub into one-shot MsgChaff broadcasts (D2 — the
-    // client animates + expires them locally, so there's no gone-message). Cleared at top of Step.
-    public readonly List<ChaffSim> ChaffSpawnedThisStep = new();
-
-    // Individual mines that popped this step (triggered/expired), drained by the hub into MsgMineGone
-    // frames for per-mine pop FX + aliveMask reconcile. Reason 0 = field expired, 1 = triggered.
-    // Cleared at top of Step.
-    public readonly List<(ulong fieldId, byte mineIndex, byte reason, uint sector, Vec3 pos)> MineGoneThisStep = new();
-
     // Live minefields (deployed by TryDeployMine, stepped in StepMines). The hub streams the client's
     // anchor-sector fields on change + coarse keepalive (a lethal static hazard must not AOI-pop).
     public IReadOnlyList<MineFieldSim> Minefields => _minefields;
-
-    // Set whenever a field was added/removed or its aliveMask changed this step, so the hub sends a
-    // fresh (possibly empty) frame promptly instead of only on the coarse cadence. Cleared at top of Step.
-    public bool MinefieldsChangedThisStep { get; private set; }
 
     // AttackerClientId rides the queued bolt so kill credit survives the flight time: the shooter may
     // have died, docked or reconnected by the tick the shot resolves, and the ledger is keyed by
@@ -527,10 +523,6 @@ public sealed partial class Simulation
     // Per-tick ship spatial grid for shot broad-phase (module ShipGridForSector).
     private readonly Dictionary<uint, Dictionary<(int, int, int), List<ShipSim>>> _shipGrid = new();
 
-    // Removals this step, drained by the hub to emit ShipGone events. Each carries a reason so the
-    // client renders a blast (GoneDestroyed) or a silent despawn (GoneClean = dock / pod rescue).
-    public readonly List<(ulong id, byte reason)> DeathsThisStep = new();
-
     // ShipGone reason codes (mirrored on the client in GameNetClient). Default 0 = a real death.
     public const byte GoneDestroyed = 0;
     public const byte GoneClean = 1;
@@ -591,20 +583,6 @@ public sealed partial class Simulation
     public bool JustStarted { get; private set; }
     public bool JustReset { get; private set; }
 
-    // Set whenever a base took damage this step (or the match ended), so the hub streams
-    // a fresh Bases frame instead of leaving clients on the Welcome-time values.
-    public bool BasesChangedThisStep { get; private set; }
-
-    // Set whenever per-team economy changed this step (paycheck accrued, economy (re)seeded), so
-    // the hub streams a fresh TeamState frame promptly instead of waiting on the coarse cadence.
-    public bool TeamStateChangedThisStep { get; private set; }
-
-    // Set whenever the MsgShipLoadout table changed this step (a ship with mount overrides spawned
-    // or left), so the hub streams a fresh frame promptly; the coarse keepalive heals late joiners.
-    // Ships flying the authored class loadout are OMITTED from the table (clients fall back to the
-    // class default), so authored-only spawns don't touch this.
-    public bool LoadoutsChangedThisStep { get; private set; }
-
     // Latches once a match has been touched (base damaged / ended); cleared when a match
     // (re)starts or returns to the lobby. IsIdle reads it so the empty-server reset knows
     // whether the sim still has a live/finished match to tear down.
@@ -648,6 +626,12 @@ public sealed partial class Simulation
         _mech = content.World.Mechanics;
         _combat = content.World.Combat;
         _scoring = content.World.Scoring;
+        // Salvage: hold the tuning block by REFERENCE (a console suite mutates content.World.Salvage
+        // before constructing the sim), and precompute the per-tick forms the item loop needs —
+        // lifetime in ticks and the per-TICK velocity retention (the knob authors per-SECOND decay).
+        _salvageCfg = content.World.Salvage;
+        _salvageLifetimeTicks = (uint)MathF.Round(_salvageCfg.LifetimeSeconds * TickHz);
+        _salvageDragPerTick = MathF.Pow(_salvageCfg.DragPerSecond, FlightModel.Dt);
         PaycheckTicks = System.Math.Max(1u, (uint)MathF.Round(_mech.PaycheckSeconds * TickHz));
         DockRadiusFrac = _mech.DockRadiusFrac;
         LaunchSpeed = _mech.LaunchSpeed;
@@ -697,6 +681,10 @@ public sealed partial class Simulation
             if (c.FuelPerCharge > 0f)
                 _fuelPerCharge[c.CargoId] = c.FuelPerCharge; // fuel cargo — no dispenser WeaponDef
         }
+
+        // Salvage's reverse indexes (dispenser KIND -> tier-neutral cargo id, the fuel cargo id,
+        // cargo display names). Must run AFTER the two loops above, which it reads.
+        _fuelCargoId = InitSalvageIndexes(content);
 
         // PIG lead-prediction constants off the scout gun (all server weapons share these today).
         var pigShot = WeaponDefs[GameContent.ScoutWeaponId];
@@ -802,37 +790,16 @@ public sealed partial class Simulation
         // Accumulate the prior step's completed deaths for the fog witnessed-death rule BEFORE the
         // drain list is cleared (consumed + reset at the next vision apply, Simulation.Vision.cs).
         if (FogEnabled)
-            foreach (var d in DeathsThisStep)
+            foreach (var d in Events.Deaths)
                 _visionDeaths.Add(d.id);
-        DeathsThisStep.Clear();
-        LostContactsThisStep.Clear();
-        MissileGoneThisStep.Clear();
-        ChaffSpawnedThisStep.Clear();
-        MineGoneThisStep.Clear();
-        MinefieldsChangedThisStep = false;
-        ProbeGoneThisStep.Clear();
-        ProbesChangedThisStep = false;
+        Events.Clear();
         JustEnded = false;
         JustStarted = false;
         JustReset = false;
-        BasesChangedThisStep = false;
-        TeamStateChangedThisStep = false;
-        LoadoutsChangedThisStep = false;
-        StatsChangedThisStep = false;
-        ReclaimsThisStep.Clear();
         // Live rock shrink deltas accumulate on World across a step; clear alongside the other
         // change flags so a later wire stream drains only this step's changed rocks (nothing yet).
         World.RocksChangedThisStep.Clear();
         World.RocksRemovedThisStep.Clear(); // rock despawns (constructor completions) drained by the hub
-        MinerNoticesThisStep.Clear();
-        ConstructorNoticesThisStep.Clear();
-        BasesCreatedThisStep.Clear();
-        OrderNoticesThisStep.Clear();
-        OrderDirectivesThisStep.Clear();
-        ResearchChangedThisStep = false;
-        ResearchNoticesThisStep.Clear();
-        ResearchTeamNoticesThisStep.Clear();
-        ConstructorChangedThisStep = false;
 
         DrainQueues(tick);
         ExpireHeldOrphans(tick);
@@ -939,6 +906,11 @@ public sealed partial class Simulation
 
         // Recon probes: expire past their lifespan (passive — no per-tick effect otherwise).
         StepProbes(tick); // Simulation.Probes.cs
+
+        // Wreck salvage: expire, drift + bounce off rocks/bases/build shells, and resolve ship
+        // contact (pickup or ricochet). Before Pass C, so a collected item is gone by the time the
+        // ship-vs-ship pass runs; items dropped later THIS tick (ResolveDeath) first move next tick.
+        StepSalvage(tick); // Simulation.Salvage.cs
 
         // Pass C: ship-vs-ship collisions between ALL ships regardless of team (mass-weighted
         // impulse, module-identical), O(n²) over live ships — 200 ships = 20k pairs, trivial natively.
@@ -1247,7 +1219,7 @@ public sealed partial class Simulation
             return;
         foreach (var team in World.TeamStates.Values)
             team.Credits += income;
-        TeamStateChangedThisStep = true;
+        Events.TeamStateChanged = true;
     }
 
     public void StartMatch()
@@ -1276,7 +1248,7 @@ public sealed partial class Simulation
         ResetMatchStats();
         RecomputeTeamAttributes();
         World.ResetMatchBases();
-        BasesChangedThisStep = true;
+        Events.BasesChanged = true;
         // Fresh research slate too. A map swap already brought a fresh World (fresh ResearchByBase),
         // but StartMatch may REUSE the world (BuildMatchWorld null / same map in tests) — clear
         // explicitly so a previous match's in-flight research never bleeds into the new one.
@@ -1285,12 +1257,12 @@ public sealed partial class Simulation
             rs.Active.Clear();
             rs.OnDeck = null;
         }
-        ResearchChangedThisStep = true;
+        Events.ResearchChanged = true;
         ResolveTeamUnlocks();
         SeedMinerSlots(Tick); // one free miner slot per team, on the fresh economy + world
         DespawnAllConstructors(); // constructors are bought, never seeded — clear any from a prior match
         ResetVision(); // clear/reseed per-team fog vision, drain any in-flight compute (Simulation.Vision.cs)
-        TeamStateChangedThisStep = true;
+        Events.TeamStateChanged = true;
         Log.MatchStarted(_log);
         // World may have just been swapped to a new map — let the hub re-Welcome every client onto it
         // and invalidate its world-derived caches. Runs on the sim thread; Welcome frames are queued
@@ -1367,25 +1339,29 @@ public sealed partial class Simulation
         DespawnAllMiners();
         // Tear down any in-flight missiles too (emit gone so live clients don't keep ghosts).
         foreach (var mis in _missiles)
-            MissileGoneThisStep.Add((mis.MissileId, 0, mis.SectorId, mis.Pos));
+            Events.MissileGone.Add((mis.MissileId, 0, mis.SectorId, mis.Pos));
         _missiles.Clear();
         // Tear down chaff + minefields too (a fresh match starts with none). Flag the change so the
         // hub streams an empty minefield frame and live clients drop any lingering field.
         _chaff.Clear();
         _minefields.Clear();
-        MinefieldsChangedThisStep = true;
+        Events.MinefieldsChanged = true;
         // Tear down probes too (match reseed clears them). MsgProbes has NO reconcile-by-omission (a
         // probe is only ever removed by an explicit MsgProbeGone — client ApplyProbes never drops on
         // absence), so emit a ProbeGone (reason 1 = cleanup/despawn, rendered as a silent removal — no
         // FX) for every live probe BEFORE clearing, or the client would keep phantom probes (F7).
         foreach (var p in _probes)
-            ProbeGoneThisStep.Add((p.ProbeId, 1, p.Team, p.SectorId, p.Pos));
+            Events.ProbeGone.Add((p.ProbeId, 1, p.Team, p.SectorId, p.Pos));
         _probes.Clear();
-        ProbesChangedThisStep = true;
+        Events.ProbesChanged = true;
+        // Tear down dropped salvage the same way, and for the same reason: MsgSalvage reconciles by
+        // omission per SECTOR, so a client whose anchor sector never gets another frame would keep
+        // phantom items. ClearSalvage emits gone reason 1 (silent removal) for every live item.
+        ClearSalvage(); // Simulation.Salvage.cs
         foreach (var s in _order)
         {
             _ships.Remove(s.ShipId);
-            DeathsThisStep.Add((s.ShipId, GoneDestroyed));
+            Events.Deaths.Add((s.ShipId, GoneDestroyed));
         }
         _order.Clear();
         _byClient.Clear();
@@ -1394,7 +1370,7 @@ public sealed partial class Simulation
         // so a reconnect mid-grace can't try to reclaim a ship that no longer exists.
         _heldOrphans.Clear();
         World.ResetMatchBases();
-        BasesChangedThisStep = true;
+        Events.BasesChanged = true;
         Phase = PhaseLobby;
         // Winner is deliberately NOT cleared here. It is match RESULT, not match state: the
         // post-match scoreboard stays up over the lobby (and F5 reopens it there), so the winning
@@ -1441,7 +1417,7 @@ public sealed partial class Simulation
         var (mountIds, hold) = ResolveLoadout(team, cls, mounts, cargo);
         s.MountWeaponIds = mountIds;
         if (mountIds is not null)
-            LoadoutsChangedThisStep = true; // MsgShipLoadout table gains a row this step
+            Events.LoadoutsChanged = true; // MsgShipLoadout table gains a row this step
 
         if (MissileMountFor(s) is (_, WeaponDef mw)) // full magazine at spawn (no rearm yet); an emptied rack seeds 0
             s.MissileAmmo = mw.MagazineSize;
@@ -1901,7 +1877,7 @@ public sealed partial class Simulation
         if (ts.Credits < cost)
             return SpawnDecision.TooPoor;
         ts.Credits -= cost;
-        TeamStateChangedThisStep = true;
+        Events.TeamStateChanged = true;
         return SpawnDecision.Allowed;
     }
 
@@ -2585,6 +2561,12 @@ public sealed partial class Simulation
     {
         s.ApEngaged = false; // autopilot never survives the ship it was flying
         ScoreDeath(s, tick); // one scoring seam for every death form (Simulation.Scoring.cs)
+        // Wreck salvage: scatter what the hull still carried BEFORE the kind dispatch, so the escape
+        // pod MakePod builds from this same wreck inherits nothing. Combat hulls only (a pod/miner/
+        // constructor carries no loadout worth dropping), and only during a live match — teardown
+        // deaths must not litter the next one.
+        if (Phase == PhaseActive && !s.IsPod && s.Kind == ShipKind.Combat && (!s.IsPig || _salvageCfg.DropFromDrones))
+            DropSalvage(s, tick);
         if (s.IsMiner)
             KillMiner(s, tick); // slot dies with the drone — no pod, repurchase only
         else if (s.Kind == ShipKind.Constructor)
@@ -2679,7 +2661,7 @@ public sealed partial class Simulation
         {
             ts.Credits += s.PaidCost;
             s.PaidCost = 0;
-            TeamStateChangedThisStep = true;
+            Events.TeamStateChanged = true;
         }
         // Clean exit (flew home / rescued) — the client despawns it silently, no death blast.
         s.GoneReason = GoneClean;
@@ -2701,14 +2683,14 @@ public sealed partial class Simulation
     }
 
     // Remove a ship from the world immediately (used at join-drain time, before the step's
-    // passes iterate _order). Emits a ShipGone via DeathsThisStep.
+    // passes iterate _order). Emits a ShipGone via Events.Deaths.
     private void RemoveShipNow(ShipSim s)
     {
         _ships.Remove(s.ShipId);
         _order.Remove(s);
-        DeathsThisStep.Add((s.ShipId, GoneDestroyed));
+        Events.Deaths.Add((s.ShipId, GoneDestroyed));
         if (s.MountWeaponIds is not null)
-            LoadoutsChangedThisStep = true; // MsgShipLoadout table shrinks — reconcile-by-omission
+            Events.LoadoutsChanged = true; // MsgShipLoadout table shrinks — reconcile-by-omission
     }
 
     // Reap held orphans whose reconnect window has elapsed: the player never came back, so the
@@ -2745,9 +2727,9 @@ public sealed partial class Simulation
             {
                 _ships.Remove(s.ShipId);
                 _order.Remove(s);
-                DeathsThisStep.Add((s.ShipId, s.GoneReason));
+                Events.Deaths.Add((s.ShipId, s.GoneReason));
                 if (s.MountWeaponIds is not null)
-                    LoadoutsChangedThisStep = true; // MsgShipLoadout table shrinks — reconcile-by-omission
+                    Events.LoadoutsChanged = true; // MsgShipLoadout table shrinks — reconcile-by-omission
             }
             _toRemove.Clear();
         }

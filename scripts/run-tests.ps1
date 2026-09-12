@@ -32,9 +32,12 @@ $TestsDir = Join-Path $RepoRoot 'tests'
 # Needs Docker (Testcontainers Postgres) — opt in with -IncludeDocker.
 $DockerSuites = @('PublicLobbyTest')
 
+# Class libraries the suites reference (no Main to run) — not suites.
+$HelperProjects = @('TestKit')
+
 # A suite is a tests/<Name>/ directory holding <Name>.csproj.
 $suites = Get-ChildItem $TestsDir -Directory | Sort-Object Name | Where-Object {
-    Test-Path (Join-Path $_.FullName "$($_.Name).csproj")
+    (Test-Path (Join-Path $_.FullName "$($_.Name).csproj")) -and ($HelperProjects -notcontains $_.Name)
 }
 
 if ($Filter) {

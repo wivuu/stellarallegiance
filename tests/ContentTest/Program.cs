@@ -386,6 +386,15 @@ Check(
     $"tier-2 dispenser cargo-id wrong (27:{stock.Weapons.First(w => w.WeaponId == 27).CargoId}, 29:{stock.Weapons.First(w => w.WeaponId == 29).CargoId}, 31:{stock.Weapons.First(w => w.WeaponId == 31).CargoId})"
 );
 
+// A gun's model-name is its SALVAGE part mesh (the GLB a dropped gun is drawn as) — the stock Gat
+// line authors wep09. Guns had no model-name before salvage, so this is the one weapon-mesh field a
+// Bolt kind legitimately carries; the stray-field guard below no longer covers it.
+Check(
+    scoutW.ModelName == "wep09",
+    "bolt gun projects its salvage part model (Gat line = wep09)",
+    $"scout gun model-name wrong (got '{scoutW.ModelName}', expected 'wep09')"
+);
+
 // A bolt gun leaves every missile field zero/empty (guards the projection's Bolt path).
 Check(
     scoutW.Kind == WeaponKind.Bolt
@@ -393,7 +402,6 @@ Check(
         && scoutW.LockTicks == 0
         && scoutW.LockRange == 0f
         && scoutW.MissileMaxSpeed == 0f
-        && scoutW.ModelName == ""
         && scoutW.TrailColor == 0u
         && scoutW.BlastPower == 0f
         && scoutW.BlastRadius == 0f

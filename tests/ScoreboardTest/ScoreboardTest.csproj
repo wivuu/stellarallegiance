@@ -11,6 +11,7 @@
          Main is never invoked. -->
     <ProjectReference Include="../../shared/Shared.csproj" />
     <ProjectReference Include="../../server/SimServer.csproj" />
+    <ProjectReference Include="../TestKit/TestKit.csproj" />
   </ItemGroup>
 
   <ItemGroup>

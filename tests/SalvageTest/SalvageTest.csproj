@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Same seam as FuelPodTest/LoadoutTest/ConstructorTest: SimServer brings Simulation/World/
+         ContentLoader/MapLoader (and, transitively, the stock maps + the base/ship GLBs the
+         mapped base-bounce scenario needs); the shared def records come with it. Its Main is
+         never invoked. -->
+    <ProjectReference Include="../../shared/Shared.csproj" />
+    <ProjectReference Include="../../server/SimServer.csproj" />
+    <ProjectReference Include="../TestKit/TestKit.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The stock bundle under test, copied next to the test binary (mirrors FuelPodTest). -->
+    <Content
+      Include="../../server/content/core/**/*.yaml"
+      Link="content/core/%(RecursiveDir)%(Filename)%(Extension)"
+      CopyToOutputDirectory="PreserveNewest"
+    />
+  </ItemGroup>
+</Project>

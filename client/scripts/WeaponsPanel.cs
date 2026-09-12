@@ -36,6 +36,7 @@ public partial class WeaponsPanel : Control
     private WorldRenderer _world = null!;
     private GameNetClient _net = null!;
     private DefRegistry _defs = null!;
+    private int _localHoldCount; // slots in use this draw, for the first HOLD row's n/cap label
 
     // Pulse phase for the LOCKED cues (mirrors the design's saPulse), advanced by real time.
     private double _t;
@@ -109,8 +110,18 @@ public partial class WeaponsPanel : Control
         WeaponDef? mineDisp = DispenserFor(cls, WeaponKind.Mine, _net.LocalMineAmmo);
         WeaponDef? probeDisp = DispenserFor(cls, WeaponKind.Probe, _net.LocalProbeAmmo);
 
+        // The cargo hold (v40): one HOLD row per inert salvaged item, and nothing at all when the
+        // hold is empty — the common case, which must cost the panel no height.
+        var hold = local.Hold;
+        _localHoldCount = hold.Count;
+
         int secCount =
-            _weapons.Count - 1 + (chaffDisp != null ? 1 : 0) + (mineDisp != null ? 1 : 0) + (probeDisp != null ? 1 : 0);
+            _weapons.Count
+            - 1
+            + (chaffDisp != null ? 1 : 0)
+            + (mineDisp != null ? 1 : 0)
+            + (probeDisp != null ? 1 : 0)
+            + hold.Count;
         float panelH =
             PadTop + HeaderH + GapAfterHeader + PrimaryH + (secCount > 0 ? RowGap + secCount * SecRowH : 0f) + PadBottom;
 
@@ -184,6 +195,60 @@ public partial class WeaponsPanel : Control
             DrawDispenserRow("G", probeDisp, _net.LocalProbeAmmo, _net.LocalProbeLoadTick, left, right, y, mono);
             y += SecRowH;
         }
+
+        // ---- Hold rows: salvage this hull carries but can't use (inert dead weight) ----
+        int holdCap = _defs.TryGetShipDef(cls, out var shipDef) ? shipDef.CargoCapacity : 0;
+        for (int i = 0; i < hold.Count; i++)
+        {
+            var (kind, itemId, count) = hold[i];
+            DrawHoldRow(kind, itemId, count, i == 0 ? holdCap : -1, left, right, y, mono);
+            y += SecRowH;
+        }
+    }
+
+    // One HOLD row: "HOLD  NAME ×N  INERT" (the first row's label also carries "n/cap"). Whatever
+    // the hull salvaged but couldn't equip rides along as cargo — a gun with no free mount, rounds
+    // for a rack it doesn't fly, a pack it had no room for. It re-drops on death, but no key fires
+    // it, so the row carries no hotkey hint, no pips and no cadence bar. Dim throughout (TextDim/
+    // Text2): it is inventory the pilot should notice, never a weapon they might reach for.
+    private void DrawHoldRow(
+        byte kind,
+        uint itemId,
+        byte count,
+        int capForLabel,
+        float left,
+        float right,
+        float y,
+        Font mono
+    )
+    {
+        float mid = y + SecRowH * 0.5f;
+        string label = capForLabel > 0 ? $"HOLD {Mathf.Min(_localHoldCount, capForLabel)}/{capForLabel}" : "HOLD";
+        DrawString(mono, new Vector2(left, mid + 4f), label, HorizontalAlignment.Left, -1, 9, DesignTokens.TextDim);
+
+        const string state = "INERT";
+        DrawStringRight(mono, new Vector2(right, mid + 4f), state, 10, DesignTokens.TextDim);
+
+        // The def names the item: the gun / the rack the rounds belong to / the cargo line. A def
+        // that hasn't streamed (or one retired from the catalog) still gets a readable row.
+        string name = kind switch
+        {
+            1 => _defs.GetCargoItem(itemId)?.Name is { Length: > 0 } cn ? cn : "Cargo",
+            2 => _defs.GetWeapon(itemId)?.Name is { Length: > 0 } rn ? rn : "Missiles",
+            _ => _defs.GetWeapon(itemId)?.Name is { Length: > 0 } wn ? wn : "Part",
+        };
+        string text = kind == 0 ? name : $"{name} ×{count}";
+        float nameX = left + (capForLabel > 0 ? MonoWidth(mono, label, 9) + 8f : 26f);
+        float clusterLeft = right - MonoWidth(mono, state, 10) - 10f;
+        DrawString(
+            UiFonts.Saira,
+            new Vector2(nameX, mid + 4f),
+            text.ToUpperInvariant(),
+            HorizontalAlignment.Left,
+            Mathf.Max(24f, clusterLeft - 8f - nameX),
+            12,
+            DesignTokens.Text2
+        );
     }
 
     // The chaff/mine dispenser WeaponDef the local ship carries, or null if it carries none of that

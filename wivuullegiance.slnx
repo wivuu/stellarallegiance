@@ -44,13 +44,19 @@
     <Project Path="tests/PublicLobbyTest/PublicLobbyTest.csproj" />
     <Project Path="tests/ReloadTest/ReloadTest.csproj" />
     <Project Path="tests/RescueTest/RescueTest.csproj" />
+    <Project Path="tests/SalvageTest/SalvageTest.csproj" />
     <Project Path="tests/ScoreboardTest/ScoreboardTest.csproj" />
     <Project Path="tests/ShieldTest/ShieldTest.csproj" />
     <Project Path="tests/StrategyTest/StrategyTest.csproj" />
     <Project Path="tests/TeamStateStoreTest/TeamStateStoreTest.csproj" />
+    <Project Path="tests/TestKit/TestKit.csproj" />
+    <Project Path="tests/WireTest/WireTest.csproj" />
   </Folder>
   <Folder Name="/tools/" />
   <Folder Name="/tools/simbot/">
     <Project Path="tools/simbot/SimBot.csproj" />
+  </Folder>
+  <Folder Name="/tools/wire-gen/">
+    <Project Path="tools/wire-gen/WireGen.csproj" />
   </Folder>
 </Solution>

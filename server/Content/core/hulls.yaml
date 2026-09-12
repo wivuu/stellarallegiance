@@ -14,6 +14,11 @@
 #
 #   payload-capacity = the hull's payload budget (mounted weapon mass + cargo hold). Every armed
 #   hull MUST author enough for its default hardpoint weapons — CoreValidator refuses to boot otherwise.
+#   cargo-capacity = hold SLOTS for loose salvage the hull can't equip (a gun with no free mount,
+#   rounds for a rack it doesn't fly, a fuel pack with no tank, anything past the payload budget):
+#   one slot per part or per consumable stack, inert, no payload cost, re-drops on death, lost on
+#   dock. 0/omitted = no hold — the hull ricochets what it can't use. IGC gives every hull the same
+#   fixed cargo bay; we author it per hull so bigger hulls scavenge more.
 #   Mount types: a Weapon hardpoint only accepts its own weapon CATEGORY in the hangar (and the
 #   server rejects anything else): a mount binding a gun is gun-typed, one binding a missile rack is
 #   missile-typed. A mesh HP_Weapon node that NO yaml entry binds or types is NON-MOUNTABLE — not a
@@ -65,6 +70,7 @@ hulls:
     radar-signature: 0.5   # small + quiet — must be approached closer before being seen
     price: 100
     payload-capacity: 12 # gat 1 + mine 3 + decoy 1 + probe 2 = 7 -> 5 free
+    cargo-capacity: 2     # hold slots for loose salvage (see header)
     required-capabilities: [base]
     # fig13 carries HP_Weapon_0 (nose) + HP_Weapon_1 (belly). Bind the nose to PW Gat Gun 1; type the
     # belly as an EMPTY missile-only mount (no weapon-id -> unarmed by default, but a pilot may fit a
@@ -112,6 +118,7 @@ hulls:
     radar-signature: 1.0
     price: 150
     payload-capacity: 12 # 2x mini-gun 2 + 2x decoy 2 + 2x fuel pod 2 = 6 -> 6 free
+    cargo-capacity: 2     # hold slots for loose salvage (see header)
     required-capabilities: [base]
     # wc_icint carries HP_Weapon_0 (center) + HP_Weapon_1/2 (symmetric wing tips). Mount the two wing
     # guns as the twin Mini-Gun pair; the center mount stays empty. Booster_0/1, Thruster_0, Light_0..4
@@ -159,6 +166,7 @@ hulls:
     radar-signature: 1.0   # baseline detectability
     price: 200
     payload-capacity: 20 # 3x gat 3 + 2x decoy 2 = 5 -> 15 free
+    cargo-capacity: 3     # hold slots for loose salvage (see header)
     required-capabilities: [base]
     required-techs: [supremacy-1]   # unbuildable until the team raises a Supremacy base
     # wc_icfig carries HP_Weapon_0/1 (nose pair) + HP_Weapon_2 (belly). The IGC Enh Fighter (ac_20.igc)
@@ -211,6 +219,7 @@ hulls:
     radar-signature: 1.0
     price: 300
     payload-capacity: 20 # 3x gat 3 + 2x decoy 2 = 5 -> 15 free
+    cargo-capacity: 3     # hold slots for loose salvage (see header)
     required-capabilities: [base]
     required-techs: [supremacy-adv]   # unbuildable until the Supremacy (Adv) base grants it
     # wc_icadv mirrors wc_icfig: HP_Weapon_0/1 (nose pair) + HP_Weapon_2 (belly). The IGC Adv Fighter
@@ -260,6 +269,7 @@ hulls:
     radar-signature: 1.75  # big and loud — seen from much further away than a scout
     price: 350
     payload-capacity: 20 # 2x gat + 2x autocan (4) + anti-base rack (4) = 8; + 8 mine + 1 decoy = 17 -> 3 free
+    cargo-capacity: 4     # hold slots for loose salvage (see header)
     required-capabilities: [base]
     required-techs: [bomber]
     # wc_icbmb carries HP_Weapon_0 (top-left) + HP_Weapon_1/2 (symmetric nose tips). The nose pair take
@@ -322,6 +332,7 @@ hulls:
     radar-signature: 3.5   # IGC sig 3.5 — a capital hull is seen from a very long way off
     price: 100           # IGC 4000 x0.875 (bomber anchor: IGC 400 -> our 350)
     payload-capacity: 12 # 4x autocan (4) + 8 mine = 12
+    cargo-capacity: 5     # hold slots for loose salvage (see header)
     required-capabilities: [base]
     required-techs: [shipyard-1]   # both granted by shipyard-1 for now (should be heavy-class, shipyard-dry later)
     launch-station-classes: [shipyard]  # capital hull: launches from / docks at Shipyard(3) + Shipyard Dry(6) only (both class: shipyard), largest door only

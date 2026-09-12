@@ -99,7 +99,7 @@ public sealed partial class Simulation
                 MinePos = pos,
             }
         );
-        MinefieldsChangedThisStep = true;
+        Events.MinefieldsChanged = true;
     }
 
     // Whether a field id is still live — used by the vision apply to prune a stale enemy-visibility
@@ -127,7 +127,7 @@ public sealed partial class Simulation
             {
                 _minefields.RemoveAt(fi);
                 fi--;
-                MinefieldsChangedThisStep = true;
+                Events.MinefieldsChanged = true;
                 continue;
             }
 
@@ -191,7 +191,7 @@ public sealed partial class Simulation
                 {
                     s.LastMineFxTick = tick;
                     Vec3 fxPos = NearestMinePos(field, s.State.Pos);
-                    MineGoneThisStep.Add((field.FieldId, 0, 2, field.SectorId, fxPos));
+                    Events.MineGone.Add((field.FieldId, 0, 2, field.SectorId, fxPos));
                 }
             }
         }

@@ -165,6 +165,7 @@ var log = loggerFactory.CreateLogger("SimServer");
 // before ContentLoader.Load (which merges GLB hardpoints and loads sim models) runs below.
 SimAssets.Logger = loggerFactory.CreateLogger("SimServer.Assets");
 HardpointGeometryMerge.Logger = loggerFactory.CreateLogger("SimServer.Content");
+ContentLoader.Logger = loggerFactory.CreateLogger("SimServer.Content");
 
 // Resolve content BEFORE the sim: load the YAML bundle, then validate. The client has no
 // compile-time fallback, so a malformed/incomplete def set must fail HERE (clear error, refuse to

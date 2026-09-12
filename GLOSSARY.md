@@ -35,7 +35,7 @@ Server's authoritative 20 Hz simulation loop that drives all gameplay state upda
 - **Key Files:**
   - `server/Sim/Simulation.cs` — main loop tick handler
   - `server/Sim/Simulation.Pig.cs` — pig brain decision integration
-  - `server/Net/Protocol.cs` — snapshot quantization and transmission
+  - `shared/Net/Records.cs` (`ShipRecord`, 57 B) + `server/Net/Frames.cs` (`ShipRecordOf`) — the quantized snapshot record and its fill; `server/Net/Protocol.cs` is the byte facade the hub calls
 - **Related:** [[Flight Model]], [[PigBrain]]
 - **Notes:** Never blocks on network I/O; runs deterministically regardless of client connections
 
@@ -66,6 +66,38 @@ Two-tier write discipline on the per-client outbound frame queue (bounded, `Full
   - `server/Net/ClientHub.cs` — holds one `OutboundChannel` per `Client` and picks the tier at every send site
 - **Related:** [[Snapshot]], [[AOI (Area of Interest)]]
 - **Notes:** NEVER use `DropOldest` or raw `TryWrite` for control frames — evicting a one-shot YouAre/ShipGone deadlocks the relaunch flow (client retries MsgSpawn forever; server drops each as "already flying"). Queue pressure is logged throttled (`OutboundQueuePressure`). The client additionally self-heals its local-ship binding from the lobby roster (`GameNetClient.ApplyLobbyState` adopt/ghost heal).
+
+### Step Events (`Simulation.Events`)
+The sim→hub seam for one step: `server/Sim/StepEvents.cs` holds every one-shot event that becomes a frame (deaths, missile/mine/probe/salvage gone, chaff pops, lost contacts, reclaims, new bases), every change flag that gates a low-rate stream (`MinefieldsChanged`, `ProbesChanged`, `BasesChanged`, `TeamStateChanged`, `LoadoutsChanged`, `StatsChanged`, `ResearchChanged`, `ConstructorChanged`, `SalvageChangedSectors`) and the team/pilot system-chat notices. The sim writes `Events.X` during `Step()`, `ClientHub.AfterStep()` reads `_sim.Events.X` on the same thread afterwards, and `Events.Clear()` resets it at the top of the next `Step()`. (The two rock sets stay on `World`.)
+- **Frequency:** Every tick
+- **Key Files:**
+  - `server/Sim/StepEvents.cs` — the object + `Clear()`; `server/Sim/Simulation.cs` — `Events` field, the clear at the top of `Step()`
+  - `server/Net/ClientHub.cs` / `ClientHub.Streams.cs` — the consumers (`PrepareBroadcastFrames`, `DrainStepNotices`, the streams' `Due` gates)
+  - `tests/TestKit` — `FakeHubTransport` + `HubFrames` for suites that drive the real hub
+- **Related:** [[Low-Rate Streams (`LowRateStream`)]], [[Reliable / Lossy Outbound Tiers]]
+- **Notes:** A new event kind = one field here + its producer + its consumer. Tuple element names are read by name downstream (`g.reason`, `g.byShipId`) — keep them.
+
+### Low-Rate Streams (`LowRateStream`)
+The hub's cadence-driven frames — bases, team state, loadouts, research, miner targets, constructor builds/roster, fog-off base reveal, rock despawn, fog contacts, probes, minefields, salvage — are each ONE declaration in `server/Net/ClientHub.Streams.cs`: a **scope** (`Global` / `PerTeam` / `AnchorSector`), a **tier** (`Reliable` / `Lossy` / `Cursor` = TryWrite-gated, per-client `LastAnchor` slot advanced only on a successful enqueue), a cadence gate (`Due`: the sim's `*ChangedThisStep` flag or the coarse keepalive) and a `Build`. `ClientHub.SendStreams` builds at most once per scope key per tick and sends on the tier; the per-client pass runs the EARLY streams, then the fog reveal slice, then the one-shot gone-events, then the LATE set streams (probes/minefields/salvage) — that order is load-bearing (a reliable gone-event is the FX authority and must precede the set frame that prunes the same id). Client side, `client/scripts/net/SetReconciler.cs` is the reconcile-by-omission bookkeeping the set streams share.
+- **Frequency:** Every tick (each stream fires on its own cadence)
+- **Key Files:**
+  - `server/Net/ClientHub.Streams.cs` — `LowRateStream`, the stream classes, `SendStreams`, the ordered `_earlyStreams` / `_lateStreams` registration
+  - `server/Net/ClientHub.cs` — `TickEvents` (the one-shot events), `PrepareBroadcastFrames`, `SendPerClientFrames` (the phase order)
+  - `client/scripts/net/SetReconciler.cs` + `FrameApplier.cs` — probes / minefields / salvage appliers
+- **Related:** [[Reliable / Lossy Outbound Tiers]], [[Wire Frames (source-generated codecs)]], [[AOI (Area of Interest)]]
+- **Notes:** A new streamed table = one class + one registration entry. Not streams (bespoke on purpose): the ship snapshot (AOI hot path), missiles (per-client AOI), the fog reveal slice (per-client cursor), rock-update deltas (chunked, on-change only), and the gone/death one-shots.
+
+### Wire Frames (source-generated codecs)
+Every frame and record on the wire is a partial C# type in `shared/Net/` (`Messages.cs`, `Records.cs`, plus the content-def classes in `shared/Defs.cs`) whose public fields, in declaration order, ARE the byte layout. The `tools/wire-gen` Roslyn source generator (an analyzer reference on `Shared.csproj`) emits `Measure` / `Write` / `Read` / `TryParse` and a compile-time `Size` for every `[WireMessage(id)]` / `[WireRecord]` type, so the server, the Godot client, the test suites and simbot compile ONE layout instead of hand-mirroring four. Field types pick the encoding; `[Wire(WireEnc.Pos|Half|Quat|Angle|U8|U16|U32|StrU8|Str7Bit)]`, `[WireCount]`, `[WireOptional]` and `[WireIgnore]` cover quantized, narrowed, optional-tail and count-prefixed fields.
+- **Frequency:** Every frame
+- **Key Files:**
+  - `shared/Net/WireAttributes.cs` — the attribute vocabulary + encoding table; `shared/Net/WireIO.cs` — `WireWriter` / `WireReader` span cursors (the reader never throws: hostile input fails `TryParse`)
+  - `shared/Net/Messages.cs` / `Records.cs` — every message (both directions) and embedded record; `shared/Net/ShipFlags` / `InputFlags`
+  - `server/Net/Frames.cs` — the server fill layer (sim/world/content → frame structs)
+  - `tools/wire-gen/WireGenerator.cs` — the generator; generated partials land under `shared/obj/.../generated/` for inspection
+  - `tests/WireTest` — legacy-writer equivalence, client-layout equivalence, round-trips, hostile input, pinned goldens (`--print-goldens` re-pins after an intended layout change)
+- **Related:** [[Snapshot]], [[Reliable / Lossy Outbound Tiers]], [[YAML Content Pipeline]]
+- **Notes:** Decision + alternatives in `docs/adr/0003-wire-format-source-generator.md`. A layout change = edit the field list, bump `Wire.ProtocolVersion`, re-pin the goldens. Generated bodies are straight-line little-endian span writes (no reflection/boxing/delegates) — zero runtime cost over the hand writers they replace. Optional trailing fields read as EMPTY ("" / empty collection) when absent.
 
 ### Compound Base Hull (COL_ parts)
 Per-part convex collision for a station: `COL_`-prefixed mesh nodes baked into the base GLB (`garrison.glb` — the shipping base; `Outpost.glb` is retained but unused) each become one sub-hull, replacing the single QuickHull shrink-wrap so ships bounce off the real superstructure and cannot fly into the hollow interior. Parts are GENERATED from the visual mesh volume (voxel solid-fill → marching cubes → CoACD convex decomposition) by `tools/collision-hull/bake.py --kind base --glb <glb>` — never hand-placed.
@@ -315,6 +347,67 @@ and drops a probe just ahead of the ship, granting its team an unoccluded vision
 - **Related:** [[Fog of War (Team Vision)]], [[Minefield]], [[Chaff]], [[Expendables]]
 - **Notes:** Proto v23: `WeaponKind.Probe` dispenser, ammo/cadence rides the same D6/D9 seam as chaff/mine
 
+### Salvage (dropped items)
+The Allegiance treasure loop. When a combat hull dies, every piece it still carried rolls
+`salvage.drop-chance` ON ITS OWN — each mounted gun, the missile magazine (dropped as ONE bare-missile
+item whose `Count` is the remaining rounds, never the rack), each stowed stack, and each cargo kind
+(chaff/mine/probe/fuel). PIG wrecks drop too, behind `drop-from-drones`. Survivors become
+server-authoritative items that fly out on a random vector off the wreck's velocity, drag to rest,
+bounce off asteroids, bases, constructor build shells and ships that can't carry them, stay bound to
+their sector, never dock, expire after `lifetime-seconds`, and are capped per sector (oldest expires
+first). Any PLAYER hull — either team, no tech gate — collects by touch, in two tiers. EQUIP first: a
+gun needs an empty type-compatible mount plus payload headroom; loose rounds join the magazine when
+the item's rack id equals the picker's first effective rack; cargo packs mirror `SeedDispenserAmmo`
+(fuel needs a tank). Whatever the equip tier refuses goes to the CARGO HOLD second
+(see [[Cargo hold (cargo-capacity)]]): a hull with a free slot carries ANY item inert — a gun with no mount, foreign-rack
+rounds, a pack past the payload budget — and only a hull that can neither use nor hold it makes it
+ricochet ("Can't carry …: hold full", or the equip reason when the hull has no hold at all). Salvage
+lives for the sortie only — docking despawns the ship and the hangar re-equips from `LoadoutState`,
+so nothing is kept across a dock.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `server/Sim/Simulation.Salvage.cs` — `SalvageSim` + `DropSalvage`/`StepSalvage`/`TryAcceptSalvage` (`EquipSalvage*` → `StowSalvage`)/`PayloadUsed`
+  - `shared/Collision/Collide.cs` — `BounceBody`/`ResolveStaticSphereBody`, the bit-identical kernels `Bounce`/`ResolveStaticSphere` now share
+  - `server/Net/Protocol.cs` — `MsgSalvage=30` (29-B records, per anchor sector) / `MsgSalvageGone=31`, plus the loadout hold tail
+  - `server/Net/ClientHub.cs` — `BuildSalvageFor`, `SalvageVisFor` (fog), `Client.LastSalvageAnchor` sentinel
+  - `client/scripts/world/SalvageRenderer.cs` / `client/scripts/SalvageView.cs` — item views, dead-reckoned drift, pickup FX
+  - `client/scripts/TargetMarkers.cs` — `DrawSalvagePass` crate glyph + labels + the `SALVAGED …` banner
+  - `client/scripts/WeaponsPanel.cs` — the `HOLD n/cap` rows for the inert cargo hold
+  - `client/assets/parts/` — IGC part meshes (`wep09`/`wep16`/`wep02`/`wep18` guns, `acs36` fuel pack)
+  - `server/Content/core/world.yaml` — the `salvage:` tuning block
+  - `tests/SalvageTest` — drops, physics, pickup/reject, wire + hub streaming
+- **Related:** [[Cargo hold (cargo-capacity)]], [[Expendables]], [[Per-Ship Weapon Loadout (mount overrides)]], [[Minefield]], [[Fog of War (Team Vision)]]
+- **Notes:** Protocol 39 (hold tail: 40). Streamed on a per-SECTOR change set (a wreck in sector A never re-streams sector
+  B), reconciled by omission, with `MsgSalvageGone` reliable because reason 2 (picked up) is the only
+  authority for the collect FX/banner. Fog is plain point visibility (`IsPointVisibleToTeam`) — no owner
+  privilege, unlike probes/own minefields. `--salvage-test` drives a client onto the nearest item for a
+  pickup smoke; PIGs are OFF by default, so a drop smoke needs `SIM_PIGS=1`.
+
+
+### Cargo hold (cargo-capacity)
+A hull's SLOT budget for loose salvage it cannot equip, authored per hull as `cargo-capacity` in
+`hulls.yaml` (stock: scout/lt-interceptor 2, enh/adv fighter 3, bomber 4, devastator 5; miner,
+constructor and pod 0 = no hold). Distinct from `payload-capacity` (the MASS budget of what is
+mounted/loaded): hold contents are inert — they cost no payload, nothing fires or loads them, they
+re-drop on death exactly as they came aboard (a stowed gun becomes a Part item again) and they are
+lost on dock. One entry per slot: a Part (gun) is one slot and never merges; a Missiles/Cargo stack
+merges into a same-id entry already aboard WITHOUT spending a slot (count capped at 255). Lives on
+`ShipSim.Hold` as `(Kind, ItemId, Count)` in the salvage kind encoding; streamed on the
+`MsgShipLoadout` tail (`u8 nHold`, `u8 kind | u32 itemId | u8 count`), and `ShipClassDef.CargoCapacity`
+rides the ship def block last (u8) so the HUD can show `HOLD n/cap`. IGC gives every hull the same
+fixed cargo bay; we author it per hull so bigger hulls scavenge more.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `factions/src/Allegiance.Factions/Model/Hull.cs` — `CargoCapacity` (+ `CoreValidator` 0..255 refusal)
+  - `server/Content/core/hulls.yaml` — the `cargo-capacity:` values
+  - `server/Sim/Simulation.Salvage.cs` — `StowSalvage` (the hold tier), the hold re-drop in `DropSalvage`
+  - `server/Sim/Simulation.cs` — `ShipSim.Hold`
+  - `client/scripts/WeaponsPanel.cs` / `client/scripts/PredictionController.cs` — `HOLD` rows / `Hold` mirror
+  - `client/scripts/ui/ShipLoadout.cs` — the hangar's `n SLOTS · HOLD c` caption
+  - `tests/SalvageTest` — scenario 15 + the hold variants of 7/8/9
+- **Related:** [[Salvage (dropped items)]], [[Per-Ship Weapon Loadout (mount overrides)]], [[Hull]]
+- **Notes:** Protocol 40. Pickups try EQUIP first and the hold second, so a usable pack still loads on
+  a hull whose hold is full. Test worlds pass `hold: 0` to `BootSim` to reproduce the no-hold rules.
 ### Reload (load-from-hold)
 The time it takes to pull the next charge out of the cargo hold. Authored per expendable as
 `load-time` (SECONDS, the core Allegiance field) in `expendables.yaml`, projected to ticks onto the
@@ -540,13 +633,13 @@ Server-driven content authoring: gameplay/balance values (hulls, weapons, techs,
   - `factions/src/Allegiance.Factions/` — content model classes and serialization
   - `server/Content/ContentLoader.cs` — boot-time loading
   - `shared/ContentValidator.cs` — YAML→defs consistency checks
-  - `server/Net/Protocol.cs` — Protocol.MsgDefs wire format
+  - `shared/Net/Messages.cs` (`DefsMessage`) + the `[WireRecord]` def classes in `shared/Defs.cs` — the MsgDefs wire format (generated codec)
   - `client/scripts/DefRegistry.cs` — client-side def subscription and caching
 - **Related:** [[Def]], [[Protocol.MsgDefs]], [[Tech Tree]], [[World Tuning Blocks]]
 - **Notes:** Patchless runtime streaming; no client fallback (client holds authority until defs load)
 
 ### World Tuning Blocks
-Server-side sim tuning authored in the standalone `server/Content/core/world.yaml` (NOT part of the factions bundle manifest; loaded by `WorldLoader`, overridable via `SIM_WORLD`/`--world`) — `ai:` (PIG drone difficulty/behavior **plus the server-side navigation knobs**: `brake-margin`/`arrival-band-mult` shared by every approach leg, and the full autopilot docking maneuver — `dock-standoff`/`clearance`/`creep-throttle`/`hull-margin`/`los-slack`/`detour-step-rad`/`capture`/`outer-standoff`/`axis-slop`/`descent-margin`/`descent-max-throttle`/`capture-speed-sq`/`roll-gain`/`facing-dot`/`roll-tol`), `combat:` (collision damage + boundary hazard), `mechanics:` (gates/docking/pods/economy/match flow), `seeding:` (asteroid field/belt shapes + base placement), `mining:` (harvest/ore economy), `constructor:` (base-builder creep speeds/standoff/embed/dwell), `build:` (per-garrison build-queue parallel/queue limits), `scoring:` (per-pilot kill/loss point weights + the kill-credit window), plus root radar-signature knobs (`aleph-radar-signature`/`rock-radar-signature`, the `boost/shield/dust-signature-mult` fog multipliers, and the `signature-min/max-mult` rails). Every key optional; omitted keys keep stock values (the shared classes' field initializers). NEVER streamed — no protocol impact.
+Server-side sim tuning authored in the standalone `server/Content/core/world.yaml` (NOT part of the factions bundle manifest; loaded by `WorldLoader`, overridable via `SIM_WORLD`/`--world`) — `ai:` (PIG drone difficulty/behavior **plus the server-side navigation knobs**: `brake-margin`/`arrival-band-mult` shared by every approach leg, and the full autopilot docking maneuver — `dock-standoff`/`clearance`/`creep-throttle`/`hull-margin`/`los-slack`/`detour-step-rad`/`capture`/`outer-standoff`/`axis-slop`/`descent-margin`/`descent-max-throttle`/`capture-speed-sq`/`roll-gain`/`facing-dot`/`roll-tol`), `combat:` (collision damage + boundary hazard), `mechanics:` (gates/docking/pods/economy/match flow), `seeding:` (asteroid field/belt shapes + base placement), `mining:` (harvest/ore economy), `constructor:` (base-builder creep speeds/standoff/embed/dwell), `build:` (per-garrison build-queue parallel/queue limits), `scoring:` (per-pilot kill/loss point weights + the kill-credit window), `salvage:` (wreck drop chance/drone opt-out, eject speed + drag/rest, item + pickup radii, restitution, lifetime, per-sector cap), plus root radar-signature knobs (`aleph-radar-signature`/`rock-radar-signature`, the `boost/shield/dust-signature-mult` fog multipliers, and the `signature-min/max-mult` rails). Every key optional; omitted keys keep stock values (the shared classes' field initializers). NEVER streamed — no protocol impact.
 - **Frequency:** Common (any sim-balance sweep)
 - **Key Files:**
   - `server/Content/core/world.yaml` — authored values (stock = documented defaults); standalone, not a manifest fragment
@@ -563,7 +656,7 @@ Compiled gameplay constant: hull stats, weapon stats, tech gating, prices, etc. 
 - **Key Files:**
   - `shared/Defs.cs` — core def table registry and subscriptions
   - `client/scripts/DefRegistry.cs` — client caching and subscription logic
-  - `server/Net/Protocol.cs` — MsgDefs serialization
+  - `server/Net/Frames.cs` (`Defs`) — MsgDefs fill; layout = `shared/Net/Messages.cs` `DefsMessage`
 - **Related:** [[YAML Content Pipeline]], [[Tech Tree]], [[Hull]], [[Weapon]]
 - **Notes:** Immutable after server boot; clients guard all gameplay until defs load
 
@@ -689,7 +782,7 @@ footer buys the drone (commander-only, rock-discovery + build-queue gated).
 Binary wire format with quantized/compressed snapshots, separate missile stride, WebRTC/WebSocket dual transport.
 - **Frequency:** Very common
 - **Key Files:**
-  - `server/Net/Protocol.cs` — message definitions and serialization
+  - `shared/Net/Messages.cs` / `Records.cs` — message definitions (generated codecs); `server/Net/Frames.cs` — fills; `server/Net/Protocol.cs` — byte facade (ids/sizes/`Build*`)
   - `client/scripts/GameNetClient.cs` — deserialization and state application
   - `shared/WireQuant.cs` — quantization (f16 compression)
 - **Related:** [[MsgSnapshot]], [[MsgMissiles]], [[WebRTC]]
@@ -699,7 +792,7 @@ Binary wire format with quantized/compressed snapshots, separate missile stride,
 Quantized world state: player positions, rotations, velocities, health, weapons state.
 - **Frequency:** Very common
 - **Key Files:**
-  - `server/Net/Protocol.cs` — MsgSnapshot structure and serialization
+  - `shared/Net/Messages.cs` (`SnapshotMessage`) + `Records.cs` (`ShipRecord`) — MsgSnapshot structure; `server/Net/ClientHub.cs` assembles the body from pre-serialized record slices
   - `client/scripts/GameNetClient.cs` — snapshot application and reconciliation
   - `server/Sim/Simulation.cs` — snapshot generation per SimTick
 - **Related:** [[Protocol]], [[WireQuant]], [[AOI]]
@@ -709,11 +802,32 @@ Quantized world state: player positions, rotations, velocities, health, weapons 
 Separate protocol message for active missiles; never packed into ship snapshots.
 - **Frequency:** Common
 - **Key Files:**
-  - `server/Net/Protocol.cs` — MsgMissiles structure
+  - `shared/Net/Messages.cs` (`MissilesMessage`) + `Records.cs` (`MissileRecord`) — MsgMissiles structure
   - `client/scripts/GameNetClient.cs` — missile state application
   - `server/Sim/Simulation.cs` — missile lifecycle updates
 - **Related:** [[Missile]], [[MsgSnapshot]], [[Protocol]]
 - **Notes:** Proto v15: separate stride prevents missile data bloat; missiles sent per-missile once per tick
+
+### MsgSalvage / MsgSalvageGone
+The wreck-salvage pair (ids 30 and 31, proto v39). `MsgSalvage` is `u16 anchorSector | u8 count |
+count × 29-B record` (`u64 id | u8 kind | u32 itemId | u8 count | u8 team | 3× i16 sector-local pos |
+3× f16 vel | u16 ticksLeft`) — the minefield cadence exactly: sent when THAT sector's change set fired,
+on the coarse keepalive, or when the client's anchor sector changes (`Client.LastSalvageAnchor`); the
+records are the whole truth for that sector, so the client prunes by omission and an empty frame is how
+a removal propagates. `MsgSalvageGone` (26 B: `u64 id | u8 reason | u16 sector | 3× i16 pos | u64
+byShipId`) is a RELIABLE broadcast because reason 2 (picked up, `byShipId` = the collector) is the only
+authority for the collect FX and the owner's `SALVAGED …` banner — the omission reconcile cannot tell a
+pickup from an expiry (reason 0) or match cleanup (reason 1); an unknown id no-ops.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `server/Net/Protocol.cs` — `MsgSalvage`/`MsgSalvageGone`, `SalvageRecordSize`, `WriteSalvage`, `BuildSalvageGone`
+  - `server/Net/ClientHub.cs` — `BuildSalvageFor`, `SalvageVisFor` (per-team fog cache), the anchor-gated send site
+  - `client/scripts/net/FrameApplier.cs` — `ApplySalvage` (upsert + prune-all) / `ApplySalvageGone`
+  - `tests/SalvageTest` — wire round-trip + the hub streaming/fog/prune cases
+- **Related:** [[Salvage (dropped items)]], [[Minefield]], [[Fog of War (Team Vision)]], [[Protocol]]
+- **Notes:** Per-SECTOR change set — a wreck in sector A must not re-stream sector B every tick. Fog on,
+  an item streams only while `IsPointVisibleToTeam` holds for its point (no owner privilege). `MsgShipLoadout`
+  (28) also carries the hold tail (v40: `u8 nHold`, then `u8 kind | u32 itemId | u8 count`) so the owner sees inert cargo.
 
 ### MsgMatchStats
 The match scoreboard ledger (id 29, proto v37): `u8 nPilots`, then per pilot `i32 clientId | str name | u8 team | u8 flags (bit0 = connected) | u16 kills | u16 deaths | u16 ejects | i32 points`, then `u8 nTeams` × `u8 team | u8 garrisonsDestroyed | u8 outpostsDestroyed`. Full table keyed by client id (never reconcile-by-omission), broadcast RELIABLE and only when the ledger changes. Name+team ride the frame rather than being joined against the lobby roster because a disconnect drops both server-side and a leaver must stay on the board. PTS is signed (a penalty weight can push a pilot negative); a team's SCORE is deliberately absent — it is exactly Σ its pilots' points and already rides MsgTeamState.
@@ -769,7 +883,7 @@ Short-lived (60s), single-use ES256 JWT the public lobby issues to a signed-in p
 Handshake message from server to client: assigns player ID, initial ship, world state snapshot, reconnect token.
 - **Frequency:** Common
 - **Key Files:**
-  - `server/Net/Protocol.cs` — MsgWelcome structure
+  - `shared/Net/Messages.cs` (`WelcomeMessage`) + the `*Static` records in `Records.cs` — MsgWelcome structure; `server/Net/Frames.cs` (`Welcome`) — the fog-gated fill
   - `client/scripts/GameNetClient.cs` — welcome handler and world rebuild
   - `server/Net/ClientHub.cs` — welcome generation
 - **Related:** [[Reconnect Grace]], [[MsgSnapshot]]
@@ -970,7 +1084,7 @@ In-game social state: player roster, team assignment, ready status, faction sele
   - `server/Net/LobbyRegistrar.cs` — multi-lobby registry
   - `client/scripts/Lobby.cs` — client-side lobby UI
 - **Related:** [[Team]], [[Faction]], [[Ready State]]
-- **Notes:** Server-hosted; no external DB; team/ready state replicated to all clients
+- **Notes:** Server-hosted; no external DB; team/ready state replicated to all clients. Protocol 39 (the salvage branch's one bump over master's 38): `MsgLobbyState` carries ONE row per team (`TeamRowRecord`: name + commander id) — the row count is the team count; the hub and `Lobby` read `TeamCount` (= `World.MaxSupportedTeams`) for every side gate, never a `0/1` literal, and the client exposes `TeamCount` / `TeamNameOf` / `CommanderIdOf`. Growing the sim past two teams needs no protocol change (the UI's two-column presentation is the remaining Stage-4 work).
 
 ### Team
 Player faction assignment: team 0 (Faction0, blue) or team 1 (Faction1, red).

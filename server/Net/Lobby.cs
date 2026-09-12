@@ -37,7 +37,17 @@ public sealed class Lobby
     // roster. Seeded to the first pilot to join the side; when the commander leaves the side it
     // falls to the next-lowest id (FixCommanderLocked). A dropped commander who reconnects gets a
     // fresh client id and simply lost rank — re-promotion is manual.
-    private readonly int[] _commander = { -1, -1 };
+    private readonly int[] _commander = FreshCommanders();
+
+    // Real sides are 0..TeamCount-1 (the sim's count); NoTeam is the spectator sentinel above them.
+    private const int TeamCount = SimServer.Sim.World.MaxSupportedTeams;
+
+    private static int[] FreshCommanders()
+    {
+        var c = new int[TeamCount];
+        Array.Fill(c, -1);
+        return c;
+    }
 
     public void Add(int clientId, string name)
     {
@@ -59,23 +69,21 @@ public sealed class Lobby
         lock (_lock)
         {
             _players.Remove(clientId);
-            FixCommanderLocked(0);
-            FixCommanderLocked(1);
+            FixAllCommandersLocked();
         }
     }
 
     public void SetTeam(int clientId, byte team)
     {
-        // Accept the two real sides plus NoTeam (a pilot standing back down to spectate); ignore
-        // any other value rather than clamping it onto a real side.
-        if (team != 0 && team != 1 && team != Protocol.NoTeam)
+        // Accept the real sides plus NoTeam (a pilot standing back down to spectate); ignore any
+        // other value rather than clamping it onto a real side.
+        if (team >= TeamCount && team != Protocol.NoTeam)
             return;
         lock (_lock)
         {
             if (_players.TryGetValue(clientId, out var r))
                 r.Team = team;
-            FixCommanderLocked(0);
-            FixCommanderLocked(1);
+            FixAllCommandersLocked();
         }
     }
 
@@ -111,7 +119,7 @@ public sealed class Lobby
     // miner buys (MsgBuyMiner) and mouse AI-vessel orders are gated on it (ClientHub).
     public int CommanderOf(byte team)
     {
-        if (team > 1)
+        if (team >= TeamCount)
             return -1;
         lock (_lock)
             return _commander[team];
@@ -121,7 +129,7 @@ public sealed class Lobby
     // Refuses a client that isn't currently on the team, so command can't be handed off-side.
     public bool SetCommander(byte team, int clientId)
     {
-        if (team > 1)
+        if (team >= TeamCount)
             return false;
         lock (_lock)
         {
@@ -130,6 +138,12 @@ public sealed class Lobby
             _commander[team] = clientId;
             return true;
         }
+    }
+
+    private void FixAllCommandersLocked()
+    {
+        for (byte t = 0; t < TeamCount; t++)
+            FixCommanderLocked(t);
     }
 
     // Re-derive a side's commander after any membership change: keep a still-valid manual

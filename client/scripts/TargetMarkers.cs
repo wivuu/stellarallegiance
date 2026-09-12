@@ -87,6 +87,17 @@ public partial class TargetMarkers : Control
     private double _apToastUntil; // wall-clock seconds until the disengage toast fully fades
     private const double ApToastSec = 2.0;
 
+    // Salvage pickup toast: the SalvageRenderer raises PickedUp(label) when the reliable gone frame
+    // says the LOCAL ship collected an item, and that one-shot event is the only authority for the
+    // banner (the stream can't distinguish "picked up" from "expired"). Latched here, faded in _Draw.
+    private double _salvageToastUntil;
+    private string _salvageToastText = "";
+    private const double SalvageToastSec = 2.5;
+
+    // The renderer this overlay's PickedUp handler is attached to (held so _ExitTree can detach from
+    // the exact instance it subscribed to, even if the world was rebuilt since).
+    private SalvageRenderer? _salvageSub;
+
     // The camera the indicators project through: the F3 overview camera while the sector
     // map is open (so every bracket / glyph / arrow reprojects onto the map), otherwise the
     // flight chase camera. Resolved per-access so it follows the F3 toggle live.
@@ -171,6 +182,14 @@ public partial class TargetMarkers : Control
     // a dim class/ore caption). Reused each frame so the pass allocates nothing.
     private readonly List<(float Dist, ulong Id, Vector3 Pos)> _nearRocks = new();
 
+    // Same idiom for the salvage caption pass (nearest few dropped items get their item name). Reused
+    // each frame; the label strings are resolved once per item by SalvageView, never built here.
+    private readonly List<(float Dist, Vector3 Pos, string Label)> _nearSalvage = new();
+
+    // In flight, only items within this range of the local ship earn a caption — a wreck field can
+    // scatter dozens and naming every one would bury the HUD. Matches the rock labels' outer clamp.
+    private const float SalvageLabelRange = 400f;
+
     // Distance-based flight-HUD marker cap: only the nearest N ship contacts draw while flying, so a
     // huge contact count (100+ ships) can't flood the HUD. Applies to the flight HUD only — the F3
     // tactical map (commander full-picture) stays uncapped — and the focused/locked target is always
@@ -193,9 +212,28 @@ public partial class TargetMarkers : Control
         _net = net;
         _defs = defs;
         _instance = this;
+        // The pickup banner's only trigger: the renderer raises this when the reliable gone frame
+        // names the local ship as the collector. Released in _ExitTree — the renderer outlives this
+        // overlay across a world rebuild, and invoking a handler on a freed Control would throw.
+        _salvageSub = world.Salvage;
+        _salvageSub.PickedUp += OnSalvagePickedUp;
         SetAnchorsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Ignore; // never eat clicks meant for the game
         UiFonts.EnsureLoaded(); // mono font for the focused-target tag, read directly (no Theme)
+    }
+
+    public override void _ExitTree()
+    {
+        if (_salvageSub is not null)
+            _salvageSub.PickedUp -= OnSalvagePickedUp;
+        _salvageSub = null;
+    }
+
+    // One collected item — latch the banner. Upper-cased here (once per pickup) rather than in _Draw.
+    private void OnSalvagePickedUp(string label)
+    {
+        _salvageToastText = label.ToUpperInvariant();
+        _salvageToastUntil = Time.GetTicksMsec() / 1000.0 + SalvageToastSec;
     }
 
     public override void _Process(double delta)
@@ -600,6 +638,7 @@ public partial class TargetMarkers : Control
         DrawAlephsPass(view);
         DrawProbesPass(view);
         DrawMinefieldsPass(view);
+        DrawSalvagePass(view);
 
         // Fog last-known ghost contacts (HUD glyph only, never a 3D mesh) + the brief "CONTACT LOST"
         // note when one just faded. Drawn before the local-ship gate so they still read pre-spawn /
@@ -624,6 +663,11 @@ public partial class TargetMarkers : Control
         // above still reproject onto the map in every state.
         if (local != null && !SectorOverview.Active)
             DrawFiringSolution(view, local, focusedShip);
+
+        // Pickup feedback, drawn last so the banner sits over every marker. Not gated on the own ship:
+        // the gone frame can land the same tick the collector dies, and a toast that vanished mid-fade
+        // would read as a bug.
+        DrawSalvageToast(view);
         PerfBuckets.Add(PerfBuckets.MkDraw, t0);
     }
 
@@ -847,6 +891,71 @@ public partial class TargetMarkers : Control
     {
         foreach (var (pos, team) in _world.Minefields.VisibleMinefields())
             _mk.Entity(Cam, view, pos, Kind.Mine, TeamColor(team), focused: false, friendly: true, hideOffScreen: true);
+    }
+
+    // Dropped salvage: a quiet crate glyph over every visible item (the stream is already anchor-sector
+    // and fog scoped, so whatever the renderer holds is exactly what the pilot may see), plus item-name
+    // captions on a few of them. In-view only (hideOffScreen) — a wreck can scatter a dozen pieces and
+    // edge arrows for all of them would ring the viewport. Colour is the Ok status token for EVERY
+    // item, regardless of whose wreck it came from: salvage is a reward, not a contact, and tinting it
+    // by the dead ship's team would read as a live enemy marker.
+    //
+    // Captions use the rock-label idiom: in flight the nearest few items within SalvageLabelRange of
+    // the local ship (or the camera pre-launch); in the F3 overview every item up to a cap, so the map
+    // reads what is lying around the sector. Both sort a reused scratch — no per-frame allocation.
+    private void DrawSalvagePass(Vector2 view)
+    {
+        const int F3MaxSalvageLabels = 14; // cap F3 captions so a heavy wreck field never floods the map
+        const int FlightSalvageLabels = 3; // in flight, only what you could actually turn toward
+
+        var items = _world.Salvage.Visible(); // shared scratch — consumed before anything else calls it
+        if (items.Count == 0)
+            return;
+
+        Camera3D cam = Cam;
+        bool f3 = SectorOverview.Active;
+        PredictionController? anchorShip = _world.Ships.LocalShip;
+        Vector3 anchor = !f3 && anchorShip != null ? anchorShip.GlobalPosition : cam.GlobalPosition;
+
+        _nearSalvage.Clear();
+        foreach (var (pos, _, label) in items)
+        {
+            _mk.Entity(cam, view, pos, Kind.Salvage, DesignTokens.Ok, focused: false, friendly: true, hideOffScreen: true);
+            float dist = (anchor - pos).Length();
+            if (f3 || dist <= SalvageLabelRange)
+                _nearSalvage.Add((dist, pos, label));
+        }
+
+        _nearSalvage.Sort(static (a, b) => a.Dist.CompareTo(b.Dist));
+        int shown = 0,
+            cap = f3 ? F3MaxSalvageLabels : FlightSalvageLabels;
+        foreach (var (_, pos, label) in _nearSalvage)
+        {
+            if (shown >= cap)
+                break;
+            if (label.Length == 0 || cam.IsPositionBehind(pos))
+                continue;
+            Vector2 sp = cam.UnprojectPosition(pos);
+            if (!new Rect2(Vector2.Zero, view).HasPoint(sp))
+                continue;
+            _mk.CenteredText(sp, MarkerDraw.GlyphSize + 12f, label, 10, DesignTokens.Text2);
+            shown++;
+        }
+    }
+
+    // "SALVAGED <ITEM>" under the autopilot banner's slot, fading over SalvageToastSec in the Ok status
+    // token (a collection is a gain, not chrome or a threat). Suppressed on the post-match scoreboard,
+    // which owns the screen once the match is decided. A rejected pickup gets no banner and no chime —
+    // the ricochet plus the server's system-chat line already say it.
+    private void DrawSalvageToast(Vector2 view)
+    {
+        if (_salvageToastText.Length == 0 || Scoreboard.PostMatchActive)
+            return;
+        double now = Time.GetTicksMsec() / 1000.0;
+        if (now >= _salvageToastUntil)
+            return;
+        float alpha = Mathf.Clamp((float)((_salvageToastUntil - now) / SalvageToastSec), 0f, 1f);
+        _mk.CenterBanner(view, 0.72f, $"SALVAGED  {_salvageToastText}", 14, new Color(DesignTokens.Ok, alpha));
     }
 
     // Friendly ships: a subtle team glyph, or — when Tab-focused — the same bright focus bracket as

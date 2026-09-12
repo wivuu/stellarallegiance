@@ -132,6 +132,27 @@ namespace StellarAllegiance.Net
         public ushort TicksLeft; // remaining lifespan at the time this frame was sent
     }
 
+    // One dropped wreck-salvage item, decoded from MsgSalvage (server/Net/Protocol.cs WriteSalvage).
+    // Streamed per ANCHOR SECTOR on the minefield cadence, so the frame is always the full visible
+    // set for that sector and anything missing from it is gone (see FrameApplier.ApplySalvage).
+    // Unlike a probe an item drifts, so it carries a velocity the view dead-reckons between frames.
+    public sealed class Salvage
+    {
+        public ulong SalvageId;
+        public byte Kind; // 0 part (gun WeaponDef), 1 cargo (CargoItemDef), 2 loose rounds (rack WeaponDef)
+        public uint ItemId; // WeaponDef id (kinds 0/2) or CargoItemDef id (kind 1) — selects mesh + label
+        public byte Count; // charges (kind 1) / rounds (kind 2); 0 for a part
+        public byte Team; // the WRECK's team — HUD tint only, both teams may collect
+        public uint SectorId;
+        public float PosX,
+            PosY,
+            PosZ;
+        public float VelX,
+            VelY,
+            VelZ;
+        public ushort TicksLeft; // remaining lifespan at the time this frame was sent (drives the expiry blink)
+    }
+
     // A team base (from Welcome + streamed health frames).
     public sealed class Base
     {

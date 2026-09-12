@@ -141,6 +141,10 @@ public static class CoreValidator
                 result.Error(
                     $"hull '{hull.Id}' authored default loadout payload {defaultPayload} exceeds payload-capacity {hull.PayloadCapacity}."
                 );
+            // The hold slot count rides the wire as a byte and indexes nothing: any value in 0..255
+            // is a legal authoring choice, anything else is a typo.
+            if (hull.CargoCapacity is < 0 or > 255)
+                result.Error($"hull '{hull.Id}' cargo-capacity {hull.CargoCapacity} must be within 0..255.");
         }
     }
 

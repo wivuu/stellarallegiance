@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using Godot;
 using StellarAllegiance.Net;
 using StellarAllegiance.Shared;
+using StellarAllegiance.Shared.Net;
 using StellarAllegiance.Ui;
 
 // The narrow seam the frame appliers use to reach the connection owner (GameNetClient) — the
@@ -28,31 +28,20 @@ public interface INetClientHost
     void RaisePong(uint nonce);
 }
 
-// Shared wire-string reader (u16 length + UTF-8 bytes), used by both appliers so a string decodes
-// identically on every frame path.
-internal static class NetRead
-{
-    internal static string ReadStr(BinaryReader r)
-    {
-        ushort len = r.ReadUInt16();
-        return System.Text.Encoding.UTF8.GetString(r.ReadBytes(len));
-    }
-}
-
 // FrameApplier — the client's FRAME APPLICATION layer, lifted whole out of GameNetClient (T6).
 //
 // GameNetClient still owns the connection: the socket/DataChannel I/O on its background tasks, the
 // connect-progress plumbing, the outbound Send API, and the main-thread drain loop in _Process. Every
 // decoded frame it drains is handed here, on the MAIN THREAD (Godot scene-tree access is not
-// thread-safe), and this class does the per-message-type decode: it mirrors the server's
-// server/Net/Protocol.cs writers byte-for-byte and feeds the WorldRenderer's collaborators, the
-// DefRegistry (via DefsApplier), and the lobby/HUD state the UI reads.
+// thread-safe), and this class does the per-message-type apply: each frame is parsed by the SHARED
+// generated codec (shared/Net/Messages.cs — the same layout the server compiles) and its fields are
+// handed to the WorldRenderer's collaborators, the DefRegistry (via DefsApplier), and the lobby/HUD
+// state the UI reads. Nothing here knows a byte offset.
 //
 // It also OWNS the state those handlers mutate — the per-entity decode caches (ships/missiles/
-// minefields/probes), the local ship's authoritative ammo + lock readouts, and the lobby roster /
+// minefields/probes/salvage), the local ship's authoritative ammo + lock readouts, and the lobby roster /
 // map catalog / team names. GameNetClient forwards its public properties here, so nothing else in
-// the client had to change; the resets the connection lifecycle needs come in through the narrow
-// ClearEntityCaches / ResetSession / GiveUpShip methods.
+// the client had to move.
 //
 // It reaches back to the connection owner through ONE narrow seam (INetClientHost): the connect-stage
 // notifications, the socket cancel a protocol mismatch needs, and the public events the UI subscribes
@@ -90,18 +79,26 @@ public sealed class FrameApplier
     // Lobby roster (from MsgLobbyState). Read by the Lobby overlay; LobbyChanged fires on update.
     public IReadOnlyList<LobbyPlayer> LobbyPlayers { get; private set; } = Array.Empty<LobbyPlayer>();
 
-    // Session-global lobby state, carried on the tail of MsgLobbyState. Team names default to the
-    // design's until the server streams the real ones; HostId is the server-designated host (first
-    // pilot on the server), -1 when unknown; SelectedMap is the current/"next" map name.
-    public string Team0Name { get; private set; } = "IRON COIL";
-    public string Team1Name { get; private set; } = "ASH SYNDICATE";
+    // Session-global lobby state, carried on MsgLobbyState. One row per team (index = team byte): the
+    // display name (the design's defaults until the server streams the real ones) and the commander's
+    // client id (-1 = side empty/unknown — the commander is the only pilot whose orders AI vessels
+    // execute; everyone else's are advisory). The team COUNT is whatever the server streams. HostId
+    // is the server-designated host (first pilot on the server), -1 when unknown; SelectedMap is the
+    // current/"next" map name.
+    public IReadOnlyList<TeamRowRecord> Teams { get; private set; } =
+        new[]
+        {
+            new TeamRowRecord { Name = "IRON COIL", Commander = -1 },
+            new TeamRowRecord { Name = "ASH SYNDICATE", Commander = -1 },
+        };
+    public int TeamCount => Teams.Count;
+
+    public string TeamNameOf(byte team) => team < Teams.Count ? Teams[team].Name : "";
+
+    public int CommanderIdOf(byte team) => team < Teams.Count ? Teams[team].Commander : -1;
+
     public int HostId { get; private set; } = -1;
     public string SelectedMap { get; private set; } = "";
-
-    // Per-team commanders (v34, MsgLobbyState tail). -1 = side empty/unknown. The commander is the
-    // only pilot whose orders AI vessels execute; everyone else's are advisory.
-    public int Commander0Id { get; private set; } = -1;
-    public int Commander1Id { get; private set; } = -1;
 
     // Available maps (from MsgMapList, sent once after Defs). Read by the Lobby sector pane + map
     // picker; MapListChanged fires when it arrives.
@@ -132,14 +129,18 @@ public sealed class FrameApplier
     // wherever _rows resets (reconnect / world rebuild / voluntary leave).
     private readonly Dictionary<ulong, Missile> _missileRows = [];
 
-    // Last-decoded minefield per fieldId (from MsgMinefields). Maintained by ApplyMinefields /
-    // ApplyMineGone. Cleared wherever _missileRows resets (reconnect / world rebuild / leave).
-    private readonly Dictionary<ulong, Minefield> _minefieldRows = [];
-
-    // Last-decoded recon probe per id (from MsgProbes). Maintained by ApplyProbes / ApplyProbeGone.
-    // Owner-team-only (v1), so this only ever holds OUR team's probes. Cleared wherever the other
+    // The three reconcile-by-omission set streams (the frame IS the complete visible set; anything
+    // absent from it is gone): last-decoded row per id + the prune bookkeeping, one SetReconciler each.
+    // Minefields: per anchor sector. Probes: the team's complete set across all sectors. Salvage: per
+    // anchor sector, arriving every tick while items drift. All cleared wherever the other
     // per-connection caches reset (reconnect / world rebuild / leave).
-    private readonly Dictionary<ulong, Probe> _probeRows = [];
+    private readonly SetReconciler<Minefield> _minefields = new();
+    private readonly SetReconciler<Probe> _probes = new();
+    private readonly SetReconciler<Salvage> _salvage = new();
+
+    // Last logged salvage row count, so ApplySalvage can log only when the set actually changes
+    // size (a per-tick line would drown the log during a drift burst). -1 = nothing logged yet.
+    private int _lastSalvageLogCount = -1;
 
     // Read by the missile render/HUD agent: the live missile set + the local ship's authoritative
     // missile ammo / lock state (decoded straight from its snapshot ShipRecord, not predicted).
@@ -183,15 +184,17 @@ public sealed class FrameApplier
 
     // ---- Connection-lifecycle resets (called by GameNetClient) ---------------------------------
 
-    // Clear all four per-entity render caches (ships, missiles, minefields, probes). Used by the
-    // full connection resets (BeginConnect/Abort/Disconnect/GiveUpShip). The ApplyWelcome
-    // reconnect path deliberately clears only three of these itself — see there.
+    // Clear all five per-entity render caches (ships, missiles, minefields, probes, salvage). Used by
+    // the full connection resets (BeginConnect/Abort/Disconnect/GiveUpShip). The ApplyWelcome
+    // reconnect path deliberately clears only four of these itself — see there.
     public void ClearEntityCaches()
     {
         _rows.Clear();
         _missileRows.Clear();
-        _minefieldRows.Clear();
-        _probeRows.Clear();
+        _minefields.Clear();
+        _probes.Clear();
+        _salvage.Clear();
+        _lastSalvageLogCount = -1;
         _localMissileLoadTick = _localChaffLoadTick = _localMineLoadTick = _localProbeLoadTick = 0;
     }
 
@@ -247,107 +250,184 @@ public sealed class FrameApplier
 
     // ---- Frame dispatch (main thread) ----------------------------------------------------------
 
+    // One whole frame per call. The leading byte is the message id (shared/Net/Messages.cs); each
+    // case parses with the generated codec, which throws WireFormatException on a malformed frame —
+    // the server is trusted, so a bad frame here is a bug, not an input to tolerate.
     public void Apply(byte[] f)
     {
-        using var r = new BinaryReader(new MemoryStream(f));
-        switch (r.ReadByte())
+        if (f.Length == 0)
+            return;
+        switch (f[0])
         {
-            case 1:
-                ApplyWelcome(r);
+            case WelcomeMessage.MsgId:
+                ApplyWelcome(WelcomeMessage.Parse(f));
                 break;
-            case 2:
-                LocalShipId = r.ReadUInt64();
-                _ghostShipDeadline = 0; // a fresh binding supersedes any armed ghost heal
-                // Make this YouAre authoritative about which node is local: forget any prior row
-                // and drop a stale remote node for the same id (possible on a reconnect reclaim
-                // where a snapshot raced ahead of the YouAre) so the next snapshot re-inserts it
-                // as the predicted local ship rather than leaving it an un-predicted remote.
-                _rows.Remove(LocalShipId);
-                _world.Ships.NetPromoteLocal(LocalShipId);
-                // A fresh hull launches with every slot loaded: drop the previous ship's spend ticks
-                // so a smaller hold on the new loadout can't read as a reload in progress.
-                _localMissileLoadTick = _localChaffLoadTick = _localMineLoadTick = _localProbeLoadTick = 0;
-                Log.Print($"[GameNet] assigned ship {LocalShipId}");
+            case YouAreMessage.MsgId:
+                ApplyYouAre(YouAreMessage.Parse(f).ShipId);
                 break;
-            case 3:
-                ApplySnapshot(r);
+            case SnapshotMessage.MsgId:
+                ApplySnapshot(f);
                 break;
-            case 4:
-                ApplyShipGone(r.ReadUInt64(), r.ReadByte());
+            case ShipGoneMessage.MsgId:
+            {
+                var m = ShipGoneMessage.Parse(f);
+                ApplyShipGone(m.ShipId, m.Reason);
                 break;
-            case 5:
-                ApplyBases(r);
+            }
+            case BasesMessage.MsgId:
+                foreach (var b in BasesMessage.Parse(f).Bases)
+                    _world.Bases.NetUpdateBaseHealth(b.BaseId, b.Health);
                 break;
-            case 6:
-                _host.RaisePong(r.ReadUInt32());
+            case PongMessage.MsgId:
+                _host.RaisePong(PongMessage.Parse(f).Nonce);
                 break;
-            case 7:
-                _defsApplier.Apply(r);
+            case DefsMessage.MsgId:
+                _defsApplier.Apply(DefsMessage.Parse(f));
                 break;
-            case 8:
-                ApplyLobbyState(r);
+            case LobbyStateMessage.MsgId:
+                ApplyLobbyState(LobbyStateMessage.Parse(f));
                 break;
-            case 9:
-                ApplyChat(r);
+            case ChatRelayMessage.MsgId:
+            {
+                var m = ChatRelayMessage.Parse(f);
+                _host.RaiseChat(new ChatLine(m.Scope, m.FromTeam, m.Name, m.Text));
                 break;
-            case 10:
-                ApplyTeamState(r);
+            }
+            case TeamStateMessage.MsgId:
+                ApplyTeamState(TeamStateMessage.Parse(f));
                 break;
-            case 11:
-                ApplyMissiles(r);
+            case MissilesMessage.MsgId:
+                ApplyMissiles(MissilesMessage.Parse(f));
                 break;
-            case 12:
-                ApplyMissileGone(r);
+            case MissileGoneMessage.MsgId:
+            {
+                var m = MissileGoneMessage.Parse(f);
+                _missileRows.Remove(m.Id);
+                _world.Missiles.NetGone(m.Id, m.Reason, m.Sector, m.Pos);
                 break;
-            case 13:
-                ApplyMinefields(r);
+            }
+            case MinefieldsMessage.MsgId:
+                ApplyMinefields(MinefieldsMessage.Parse(f));
                 break;
-            case 14:
-                ApplyMineGone(r);
+            case MineGoneMessage.MsgId:
+            {
+                var m = MineGoneMessage.Parse(f);
+                if (_minefields.TryGet(m.FieldId, out var mf))
+                    mf.AliveMask &= ~(1UL << m.MineIndex);
+                _world.Minefields.NetMineGone(m.FieldId, m.MineIndex, m.Reason, m.Sector, m.Pos);
                 break;
-            case 15:
-                ApplyChaff(r);
+            }
+            case ChaffMessage.MsgId:
+            {
+                // A one-shot chaff spawn: the renderer animates the puff and ages it out locally from
+                // the weapon's ProjectileLifeTicks — there is no gone-message.
+                var m = ChaffMessage.Parse(f);
+                _world.Minefields.NetSpawnChaff(m.Id, m.Team, m.Sector, m.Pos, m.Vel, m.WeaponId);
                 break;
-            case 16:
-                ApplyReveal(r);
+            }
+            case RevealMessage.MsgId:
+                ApplyReveal(RevealMessage.Parse(f));
                 break;
-            case 17:
-                ApplyContacts(r);
+            case ContactsMessage.MsgId:
+                ApplyContacts(ContactsMessage.Parse(f));
                 break;
-            case 18:
-                ApplyProbes(r);
+            case ProbesMessage.MsgId:
+                ApplyProbes(ProbesMessage.Parse(f));
                 break;
-            case 19:
-                ApplyProbeGone(r);
+            case ProbeGoneMessage.MsgId:
+            {
+                // reason 0 expired, 1 cleanup, 2 destroyed by enemy fire (renderer plays an explosion).
+                // Broadcast, so an unknown id is a harmless no-op.
+                var m = ProbeGoneMessage.Parse(f);
+                _probes.Remove(m.Id);
+                _world.Probes.NetGone(m.Id, m.Reason, m.Sector, m.Pos);
                 break;
-            case 20:
-                ApplyMapList(r);
+            }
+            case MapListMessage.MsgId:
+                ApplyMapList(MapListMessage.Parse(f));
                 break;
-            case 22:
-                ApplyRockUpdate(r);
+            case RockUpdateMessage.MsgId:
+                // Live rock shrink deltas — the renderer eases each rock's mesh + collision toward the
+                // new radius and refreshes its stored orePct. Fog on: server-filtered to discovered rocks.
+                foreach (var r in RockUpdateMessage.Parse(f).Rocks)
+                    _world.Asteroids.NetUpdateRock(r.RockId, r.CurrentRadius, r.OrePct);
                 break;
-            case 23:
-                ApplyMinerTargets(r);
+            case MinerTargetsMessage.MsgId:
+            {
+                // The exact rock each actively-mining miner is harvesting. Whole-set replace; the
+                // renderer only draws a beam for a ship+rock it can see, so an unknown id is harmless.
+                var m = MinerTargetsMessage.Parse(f);
+                var map = new Dictionary<ulong, ulong>(m.Targets.Length);
+                foreach (var t in m.Targets)
+                    map[t.ShipId] = t.RockId;
+                _world.Mining.NetUpdateMinerTargets(map);
                 break;
-            case 24:
-                ApplyResearchState(r);
+            }
+            case ResearchStateMessage.MsgId:
+                ApplyResearchState(ResearchStateMessage.Parse(f));
                 break;
-            case 25:
-                ApplyConstructorBuilds(r);
+            case ConstructorBuildsMessage.MsgId:
+            {
+                // Each constructor drone aligning/sinking/building on a rock, driving the build-sphere
+                // VFX. Whole-set replace each frame (a finished/cancelled build drops out).
+                var m = ConstructorBuildsMessage.Parse(f);
+                var list = new List<ConstructionRenderer.ConstructorBuild>(m.Builds.Length);
+                foreach (var b in m.Builds)
+                    list.Add(
+                        new ConstructionRenderer.ConstructorBuild
+                        {
+                            ShipId = b.ShipId,
+                            RockId = b.RockId,
+                            Phase = b.Phase,
+                            Progress = b.Progress,
+                        }
+                    );
+                _world.Construction.NetUpdateConstructorBuilds(list);
                 break;
-            case 26:
-                ApplyConstructorState(r);
+            }
+            case ConstructorStateMessage.MsgId:
+                ApplyConstructorState(ConstructorStateMessage.Parse(f));
                 break;
-            case 27:
-                ApplyRockGone(r);
+            case RockGoneMessage.MsgId:
+                // Rocks a finished constructor base consumed. Unknown ids (still fogged) are a no-op.
+                foreach (ulong id in RockGoneMessage.Parse(f).RockIds)
+                    _world.Asteroids.NetRemoveRock(id);
                 break;
-            case 28:
-                ApplyShipLoadout(r);
+            case ShipLoadoutMessage.MsgId:
+                ApplyShipLoadout(ShipLoadoutMessage.Parse(f));
                 break;
-            case 29:
-                ApplyMatchStats(r);
+            case MatchStatsMessage.MsgId:
+                ApplyMatchStats(MatchStatsMessage.Parse(f));
                 break;
+            case SalvageMessage.MsgId:
+                ApplySalvage(SalvageMessage.Parse(f));
+                break;
+            case SalvageGoneMessage.MsgId:
+            {
+                // reason 0 expired, 1 match cleanup, 2 picked up by ByShipId (the renderer pops the collect
+                // FX and, when the collector is US, raises the pickup banner). Unknown id = no-op.
+                var m = SalvageGoneMessage.Parse(f);
+                _salvage.Remove(m.Id);
+                _world.Salvage.NetGone(m.Id, m.Reason, m.Sector, m.Pos, m.ByShipId);
+                break;
+            }
         }
+    }
+
+    private void ApplyYouAre(ulong shipId)
+    {
+        LocalShipId = shipId;
+        _ghostShipDeadline = 0; // a fresh binding supersedes any armed ghost heal
+        // Make this YouAre authoritative about which node is local: forget any prior row
+        // and drop a stale remote node for the same id (possible on a reconnect reclaim
+        // where a snapshot raced ahead of the YouAre) so the next snapshot re-inserts it
+        // as the predicted local ship rather than leaving it an un-predicted remote.
+        _rows.Remove(LocalShipId);
+        _world.Ships.NetPromoteLocal(LocalShipId);
+        // A fresh hull launches with every slot loaded: drop the previous ship's spend ticks
+        // so a smaller hold on the new loadout can't read as a reload in progress.
+        _localMissileLoadTick = _localChaffLoadTick = _localMineLoadTick = _localProbeLoadTick = 0;
+        Log.Print($"[GameNet] assigned ship {LocalShipId}");
     }
 
     // MsgMatchStats: the whole match scoreboard ledger — one row per pilot who has flown this match
@@ -355,496 +435,262 @@ public sealed class FrameApplier
     // lobby roster) plus each side's garrison/outpost demolition tally. Full reconcile; decode straight
     // into the store's DTOs and forward whole to WorldRenderer, then fire the change event for the
     // Scoreboard overlay + the Lobby roster cells.
-    private void ApplyMatchStats(BinaryReader r)
+    private void ApplyMatchStats(MatchStatsMessage m)
     {
-        byte nPilots = r.ReadByte();
-        var pilots = new List<MatchStatsStore.PilotStat>(nPilots);
-        for (int i = 0; i < nPilots; i++)
-        {
-            int clientId = r.ReadInt32();
-            string name = NetRead.ReadStr(r);
-            byte team = r.ReadByte();
-            byte flags = r.ReadByte(); // bit0 = still connected (clear = "LEFT")
-            ushort kills = r.ReadUInt16();
-            ushort deaths = r.ReadUInt16();
-            ushort ejects = r.ReadUInt16();
-            int points = r.ReadInt32(); // signed — the death penalty can push a pilot negative
-            pilots.Add(new MatchStatsStore.PilotStat(clientId, name, team, (flags & 1) != 0, kills, deaths, ejects, points));
-        }
-        byte nTeams = r.ReadByte();
-        var teams = new List<MatchStatsStore.TeamTally>(nTeams);
-        for (int i = 0; i < nTeams; i++)
-            teams.Add(new MatchStatsStore.TeamTally(r.ReadByte(), r.ReadByte(), r.ReadByte()));
+        var pilots = new List<MatchStatsStore.PilotStat>(m.Pilots.Length);
+        foreach (var p in m.Pilots)
+            pilots.Add(
+                new MatchStatsStore.PilotStat(
+                    p.ClientId,
+                    p.Name,
+                    p.Team,
+                    p.Connected,
+                    (ushort)p.Kills,
+                    (ushort)p.Deaths,
+                    (ushort)p.Ejects,
+                    p.Points
+                )
+            );
+        var teams = new List<MatchStatsStore.TeamTally>(m.Teams.Length);
+        foreach (var t in m.Teams)
+            teams.Add(new MatchStatsStore.TeamTally(t.Team, (byte)t.Garrisons, (byte)t.Outposts));
         _world.NetApplyMatchStats(pilots, teams);
         _host.RaiseMatchStatsChanged();
     }
 
     // MsgShipLoadout: the full per-ship weapon-mount override table — effective per-barrel weapon
-    // ids (hardpoint declaration order; uint.MaxValue = emptied slot) for every ship flying a
-    // NON-authored loadout (reconcile-by-omission: a ship absent from the frame flies its
-    // authored class loadout). Decode and forward whole to WorldRenderer, which owns the
-    // render-side mirror (remote bolt mounts + own-ship prediction loadout).
-    private void ApplyShipLoadout(BinaryReader r)
+    // ids (hardpoint declaration order; uint.MaxValue = emptied slot) plus the ship's INERT cargo
+    // hold (salvage kind byte 0 part / 1 cargo / 2 missiles, item def id, count) for every ship
+    // flying a NON-authored loadout or carrying anything in its hold (reconcile-by-omission: a ship
+    // absent from the frame flies its authored class loadout with an empty hold). Forward whole to
+    // WorldRenderer, which owns the render-side mirror (remote bolt mounts + own-ship prediction
+    // loadout + the owner's HOLD readout).
+    private void ApplyShipLoadout(ShipLoadoutMessage m)
     {
-        byte count = r.ReadByte();
-        var table = new List<(ulong shipId, uint[] ids)>(count);
-        for (int i = 0; i < count; i++)
+        var table = new List<(ulong shipId, uint[] ids, (byte kind, uint itemId, byte count)[] hold)>(m.Ships.Length);
+        foreach (var s in m.Ships)
         {
-            ulong shipId = r.ReadUInt64();
-            int nSlots = r.ReadByte();
-            var ids = new uint[nSlots];
-            for (int s = 0; s < nSlots; s++)
-                ids[s] = r.ReadUInt32();
-            table.Add((shipId, ids));
+            var hold =
+                s.Hold.Length == 0
+                    ? Array.Empty<(byte, uint, byte)>()
+                    : new (byte kind, uint itemId, byte count)[s.Hold.Length];
+            for (int i = 0; i < s.Hold.Length; i++)
+                hold[i] = (s.Hold[i].Kind, s.Hold[i].ItemId, s.Hold[i].Count);
+            table.Add((s.ShipId, s.WeaponIds, hold));
         }
         _world.Ships.NetShipLoadouts(table);
     }
 
-    // MsgRockGone: rocks a finished constructor base consumed. Delete each rock outright (mesh node +
-    // client collision + caches). Unknown ids (a rock this client never had, e.g. still fogged) are a
-    // harmless no-op. The base that replaces the rock arrives via the normal reveal path.
-    private void ApplyRockGone(BinaryReader r)
-    {
-        byte count = r.ReadByte();
-        for (int i = 0; i < count; i++)
-            _world.Asteroids.NetRemoveRock(r.ReadUInt64());
-    }
-
-    // MsgConstructorBuilds (v37): each constructor drone aligning/sinking/building on a rock, driving the
-    // build-sphere VFX. Whole-set replace each frame (a finished/cancelled build drops out). Broadcast —
-    // the renderer only draws a sphere for a rock it can see.
-    private void ApplyConstructorBuilds(BinaryReader r)
-    {
-        byte count = r.ReadByte();
-        var list = new System.Collections.Generic.List<ConstructionRenderer.ConstructorBuild>(count);
-        for (int i = 0; i < count; i++)
-        {
-            ulong shipId = r.ReadUInt64();
-            ulong rockId = r.ReadUInt64();
-            byte phase = r.ReadByte();
-            float progress = StellarAllegiance.Shared.WireQuant.UnpackHalf(r.ReadUInt16());
-            list.Add(
-                new ConstructionRenderer.ConstructorBuild
-                {
-                    ShipId = shipId,
-                    RockId = rockId,
-                    Phase = phase,
-                    Progress = progress,
-                }
-            );
-        }
-        _world.Construction.NetUpdateConstructorBuilds(list);
-    }
-
-    // MsgConstructorState (v38): PER-TEAM constructor roster (producing + launched) for the Build tab.
+    // MsgConstructorState: PER-TEAM constructor roster (producing + launched) for the Build tab.
     // Whole-set replace each frame — a retired constructor drops out (reconcile by omission).
-    private void ApplyConstructorState(BinaryReader r)
+    private void ApplyConstructorState(ConstructorStateMessage m)
     {
-        byte count = r.ReadByte();
-        var list = new System.Collections.Generic.List<TeamStateStore.ConstructorStatus>(count);
-        for (int i = 0; i < count; i++)
-        {
-            ulong id = r.ReadUInt64();
-            byte stationType = r.ReadByte();
-            byte state = r.ReadByte();
-            uint startTick = r.ReadUInt32();
-            uint durationTicks = r.ReadUInt32();
-            ulong targetId = r.ReadUInt64();
-            bool producesMiner = r.ReadBoolean();
-            ulong launchBaseId = r.ReadUInt64();
-            ulong shipId = r.ReadUInt64(); // 0 until the drone launches
+        var list = new List<TeamStateStore.ConstructorStatus>(m.Constructors.Length);
+        foreach (var c in m.Constructors)
             list.Add(
                 new TeamStateStore.ConstructorStatus
                 {
-                    Id = id,
-                    ShipId = shipId,
-                    StationTypeId = stationType,
-                    State = state,
-                    StartTick = startTick,
-                    DurationTicks = durationTicks,
-                    TargetId = targetId,
-                    ProducesMiner = producesMiner,
-                    LaunchBaseId = launchBaseId,
+                    Id = c.Id,
+                    ShipId = c.ShipId,
+                    StationTypeId = c.StationTypeId,
+                    State = c.State,
+                    StartTick = c.StartTick,
+                    DurationTicks = c.DurationTicks,
+                    TargetId = c.TargetId,
+                    ProducesMiner = c.ProducesMiner,
+                    LaunchBaseId = c.LaunchBaseId,
                 }
             );
-        }
         _world.TeamState.ApplyConstructorState(list);
     }
 
-    // MsgMinerTargets: the exact rock each actively-mining miner is harvesting, so the mining beam aims
-    // at the real target instead of guessing the nearest He3 rock. Replaces the whole set each frame it
-    // arrives (a miner that stopped mining simply drops out of the broadcast). Broadcast — the renderer
-    // only draws a beam for a ship+rock it can actually see, so an unknown id is harmless.
-    private void ApplyMinerTargets(BinaryReader r)
+    // In-flight guided missiles. Each record upserts the local _missileRows cache and hands the decoded
+    // row to the renderer. AOI-filtered server-side, so a missile simply stops updating (and is aged
+    // out by its MsgMissileGone) when it leaves view.
+    private void ApplyMissiles(MissilesMessage m)
     {
-        byte count = r.ReadByte();
-        var map = new System.Collections.Generic.Dictionary<ulong, ulong>(count);
-        for (int i = 0; i < count; i++)
+        foreach (var rec in m.Missiles)
         {
-            ulong shipId = r.ReadUInt64();
-            ulong rockId = r.ReadUInt64();
-            map[shipId] = rockId;
-        }
-        _world.Mining.NetUpdateMinerTargets(map);
-    }
-
-    // MsgRockUpdate (mining): live rock shrink deltas — the renderer eases each rock's mesh + collision
-    // toward the new radius and refreshes its stored orePct (drives the DEPLETED readout). Fog on:
-    // only rocks this team has discovered arrive here (server-filtered).
-    private void ApplyRockUpdate(BinaryReader r)
-    {
-        byte count = r.ReadByte();
-        for (int i = 0; i < count; i++)
-        {
-            ulong id = r.ReadUInt64();
-            float radius = r.ReadSingle();
-            int orePct = r.ReadByte();
-            _world.Asteroids.NetUpdateRock(id, radius, orePct);
-        }
-    }
-
-    private void ApplyBases(BinaryReader r)
-    {
-        byte count = r.ReadByte();
-        for (int i = 0; i < count; i++)
-            _world.Bases.NetUpdateBaseHealth(r.ReadUInt64(), r.ReadSingle());
-    }
-
-    // In-flight guided missiles (mirrors Protocol.WriteMissile). Each record upserts the local
-    // _missileRows cache and hands the decoded row to the renderer. AOI-filtered server-side, so a
-    // missile simply stops updating (and is aged out by its MsgMissileGone) when it leaves view.
-    private void ApplyMissiles(BinaryReader r)
-    {
-        r.ReadUInt32(); // tick (missiles carry their own state; no per-record interp clock needed yet)
-        byte count = r.ReadByte();
-        for (int i = 0; i < count; i++)
-        {
-            ulong id = r.ReadUInt64();
-            uint weaponId = r.ReadUInt32();
-            byte team = r.ReadByte();
-            ushort sector = r.ReadUInt16();
-            short px = r.ReadInt16(),
-                py = r.ReadInt16(),
-                pz = r.ReadInt16();
-            ushort vx = r.ReadUInt16(),
-                vy = r.ReadUInt16(),
-                vz = r.ReadUInt16();
-            ulong targetId = r.ReadUInt64();
-
             var row = new Missile
             {
-                MissileId = id,
-                WeaponId = weaponId,
-                Team = team,
-                SectorId = sector,
-                PosX = WireQuant.UnpackPos(px),
-                PosY = WireQuant.UnpackPos(py),
-                PosZ = WireQuant.UnpackPos(pz),
-                VelX = WireQuant.UnpackHalf(vx),
-                VelY = WireQuant.UnpackHalf(vy),
-                VelZ = WireQuant.UnpackHalf(vz),
-                TargetShipId = targetId,
+                MissileId = rec.MissileId,
+                WeaponId = rec.WeaponId,
+                Team = rec.Team,
+                SectorId = rec.Sector,
+                PosX = rec.Pos.X,
+                PosY = rec.Pos.Y,
+                PosZ = rec.Pos.Z,
+                VelX = rec.Vel.X,
+                VelY = rec.Vel.Y,
+                VelZ = rec.Vel.Z,
+                TargetShipId = rec.TargetShipId,
             };
-            _missileRows[id] = row;
+            _missileRows[rec.MissileId] = row;
             _world.Missiles.NetUpsert(row);
         }
     }
 
-    // A missile detonated (reason 1) or expired/coasted out (reason 0): drop it from the cache and
-    // let the renderer play the FX at the reported position.
-    private void ApplyMissileGone(BinaryReader r)
+    // Recon probes visible to our team: our own probes always, plus any enemy probe we can currently
+    // radar-detect. The frame is the COMPLETE visible set across all sectors, so it reconciles by
+    // omission — an enemy probe that fogs out simply stops appearing (no gone-message), so any cached
+    // probe absent from this frame is dropped silently. An explicit MsgProbeGone still drives
+    // expiry/destruction FX when the server sends one.
+    private void ApplyProbes(ProbesMessage m)
     {
-        ulong id = r.ReadUInt64();
-        byte reason = r.ReadByte();
-        ushort sector = r.ReadUInt16();
-        short px = r.ReadInt16(),
-            py = r.ReadInt16(),
-            pz = r.ReadInt16();
-        _missileRows.Remove(id);
-        _world.Missiles.NetGone(
-            id,
-            reason,
-            sector,
-            new Vec3(WireQuant.UnpackPos(px), WireQuant.UnpackPos(py), WireQuant.UnpackPos(pz))
-        );
-    }
-
-    // Recon probes visible to our team (mirrors Protocol.WriteProbe): our own probes always, plus any
-    // enemy probe we can currently radar-detect. The frame is the COMPLETE visible set across all
-    // sectors, so it reconciles by omission — an enemy probe that fogs out simply stops appearing (no
-    // gone-message), so any cached probe absent from this frame is dropped silently. An explicit
-    // MsgProbeGone still drives expiry/destruction FX when the server sends one.
-    private void ApplyProbes(BinaryReader r)
-    {
-        byte count = r.ReadByte();
-        _probeSeen.Clear();
-        for (int i = 0; i < count; i++)
+        _probes.Begin();
+        foreach (var rec in m.Probes)
         {
-            ulong id = r.ReadUInt64();
-            byte team = r.ReadByte();
-            uint weaponId = r.ReadUInt32();
-            ushort sector = r.ReadUInt16();
-            float px = r.ReadSingle();
-            float py = r.ReadSingle();
-            float pz = r.ReadSingle();
-            ushort ticksLeft = r.ReadUInt16();
-
             var row = new Probe
             {
-                ProbeId = id,
-                Team = team,
-                WeaponId = weaponId,
-                SectorId = sector,
-                PosX = px,
-                PosY = py,
-                PosZ = pz,
-                TicksLeft = ticksLeft,
+                ProbeId = rec.ProbeId,
+                Team = rec.Team,
+                WeaponId = rec.WeaponId,
+                SectorId = rec.Sector,
+                PosX = rec.Pos.X,
+                PosY = rec.Pos.Y,
+                PosZ = rec.Pos.Z,
+                TicksLeft = rec.TicksLeft,
             };
-            _probeRows[id] = row;
-            _probeSeen.Add(id);
+            _probes.Rows[rec.ProbeId] = row;
+            _probes.Mark(rec.ProbeId);
             _world.Probes.NetUpsert(row);
         }
-
         // Prune any cached probe the frame no longer lists (fogged-out enemy probe). Reason 255 =
         // silent local reconcile — the renderer just frees the node, no FX.
-        if (_probeRows.Count != _probeSeen.Count)
+        foreach (var (id, g) in _probes.Prune())
+            _world.Probes.NetGone(id, 255, g.SectorId, new Vec3(g.PosX, g.PosY, g.PosZ));
+    }
+
+    // MsgSalvage: the wreck items lying in our ANCHOR SECTOR — the complete visible set for that
+    // sector, so it reconciles by omission. Sent on change, on the coarse keepalive, and whenever the
+    // anchor sector changes (a warp). The u16 anchor header IS every record's sector (items stream
+    // ONLY for the anchor). A cached item the frame no longer lists (expired, collected, or left
+    // behind in the old sector) drops with reason 255 = silent local reconcile, so the renderer just
+    // frees the node; the reliable MsgSalvageGone carries the FX authority.
+    private void ApplySalvage(SalvageMessage m)
+    {
+        _salvage.Begin();
+        foreach (var rec in m.Items)
         {
-            _probeReconcileScratch.Clear();
-            foreach (var kv in _probeRows)
-                if (!_probeSeen.Contains(kv.Key))
-                    _probeReconcileScratch.Add(kv.Key);
-            foreach (var id in _probeReconcileScratch)
-            {
-                var g = _probeRows[id];
-                _probeRows.Remove(id);
-                _world.Probes.NetGone(id, 255, g.SectorId, new Vec3(g.PosX, g.PosY, g.PosZ));
-            }
+            // Reuse the cached row object when we already have this id, so a per-tick drift frame
+            // allocates nothing.
+            if (!_salvage.TryGet(rec.Id, out var row))
+                _salvage.Rows[rec.Id] = row = new Salvage { SalvageId = rec.Id };
+            row.Kind = rec.Kind;
+            row.ItemId = rec.ItemId;
+            row.Count = rec.Count;
+            row.Team = rec.Team;
+            row.SectorId = m.AnchorSector;
+            row.PosX = rec.Pos.X;
+            row.PosY = rec.Pos.Y;
+            row.PosZ = rec.Pos.Z;
+            row.VelX = rec.Vel.X;
+            row.VelY = rec.Vel.Y;
+            row.VelZ = rec.Vel.Z;
+            row.TicksLeft = rec.TicksLeft;
+            _salvage.Mark(rec.Id);
+            _world.Salvage.NetUpsert(row);
+        }
+        // Prune every cached id the frame no longer lists (reason 255 = silent local reconcile).
+        foreach (var (id, g) in _salvage.Prune())
+            _world.Salvage.NetGone(id, 255, g.SectorId, new Vec3(g.PosX, g.PosY, g.PosZ), 0);
+
+        // Smoke aid: one line whenever the visible item COUNT moves (a per-frame line would drown
+        // the log — this frame arrives every tick for the seconds a drift burst lasts).
+        if (_salvage.Count != _lastSalvageLogCount)
+        {
+            _lastSalvageLogCount = _salvage.Count;
+            Log.Print($"[GameNet] salvage rows={_salvage.Count}");
         }
     }
 
-    private readonly HashSet<ulong> _probeSeen = new();
-    private readonly List<ulong> _probeReconcileScratch = new();
-
-    // A probe was removed (mirrors Protocol.BuildProbeGone): reason 0 expired, 1 cleanup, 2 destroyed
-    // by enemy fire (renderer plays an explosion). Drop it from the cache and hand the renderer the
-    // reported position + reason so it can decide FX. Broadcast, so an unknown id is a harmless no-op.
-    private void ApplyProbeGone(BinaryReader r)
+    // MsgMinefields: the complete field set for our anchor sector: (re)sent on change, on the coarse
+    // keepalive, AND whenever the anchor sector changes (a warp). Reconcile against the authoritative
+    // full set: any cached field the frame no longer lists has been removed (expired, cleared, or is
+    // in a sector we just warped out of) — drop it and tell the renderer to free its cloud, so mines
+    // never linger across a sector change. An empty frame purges everything not currently visible.
+    private void ApplyMinefields(MinefieldsMessage m)
     {
-        ulong id = r.ReadUInt64();
-        byte reason = r.ReadByte();
-        ushort sector = r.ReadUInt16();
-        short px = r.ReadInt16(),
-            py = r.ReadInt16(),
-            pz = r.ReadInt16();
-        _probeRows.Remove(id);
-        _world.Probes.NetGone(
-            id,
-            reason,
-            sector,
-            new Vec3(WireQuant.UnpackPos(px), WireQuant.UnpackPos(py), WireQuant.UnpackPos(pz))
-        );
-    }
-
-    // Deployed minefields for this client's anchor sector (mirrors Protocol.WriteMinefield). Minefields
-    // only ever stream for the client's OWN anchor sector, so every frame is the authoritative FULL set
-    // for that sector: it is (re)sent on change, coarse keepalive, AND whenever the anchor sector changes
-    // (a warp). The v35 u16 header names the frame's sector even when it carries zero records, so an
-    // empty frame from a warp still identifies which sector to purge. Any cached field the frame no
-    // longer lists has been removed (expired, cleared, or left behind in the old sector) — drop it and
-    // tell the renderer to free its cloud.
-    private void ApplyMinefields(BinaryReader r)
-    {
-        r.ReadUInt16(); // v35 anchor-sector header — read to advance the stream; prune-all needs no per-frame sector
-        byte count = r.ReadByte();
-        var seen = new HashSet<ulong>();
-        for (int i = 0; i < count; i++)
+        _minefields.Begin();
+        foreach (var rec in m.Fields)
         {
-            ulong fieldId = r.ReadUInt64();
-            uint weaponId = r.ReadUInt32();
-            byte team = r.ReadByte();
-            ushort sector = r.ReadUInt16();
-            short cx = r.ReadInt16(),
-                cy = r.ReadInt16(),
-                cz = r.ReadInt16();
-            uint seed = r.ReadUInt32();
-            uint armAt = r.ReadUInt32();
-            uint expireAt = r.ReadUInt32();
-            ulong aliveMask = r.ReadUInt64();
-
             var row = new Minefield
             {
-                FieldId = fieldId,
-                WeaponId = weaponId,
-                Team = team,
-                SectorId = sector,
-                CenterX = WireQuant.UnpackPos(cx),
-                CenterY = WireQuant.UnpackPos(cy),
-                CenterZ = WireQuant.UnpackPos(cz),
-                Seed = seed,
-                ArmAtTick = armAt,
-                ExpireAtTick = expireAt,
-                AliveMask = aliveMask,
+                FieldId = rec.FieldId,
+                WeaponId = rec.WeaponId,
+                Team = rec.Team,
+                SectorId = rec.Sector,
+                CenterX = rec.Center.X,
+                CenterY = rec.Center.Y,
+                CenterZ = rec.Center.Z,
+                Seed = rec.Seed,
+                ArmAtTick = rec.ArmAtTick,
+                ExpireAtTick = rec.ExpireAtTick,
+                AliveMask = rec.AliveMask,
             };
-            _minefieldRows[fieldId] = row;
-            seen.Add(fieldId);
+            _minefields.Rows[rec.FieldId] = row;
+            _minefields.Mark(rec.FieldId);
             _world.Minefields.NetUpsertMinefield(row);
         }
-
-        // Reconcile the cache against the authoritative full set: any cached field the frame no longer
-        // lists has been removed (expired, cleared, or is in a sector we just warped out of). Drop it and
-        // tell the renderer to free its cloud (NetMinefieldGone), so mines never linger across a sector
-        // change. An empty frame purges everything not currently visible — its u16 header made the frame
-        // self-describing even at count 0.
-        List<ulong>? gone = null;
-        foreach (var kv in _minefieldRows)
-            if (!seen.Contains(kv.Key))
-                (gone ??= new()).Add(kv.Key);
-        if (gone is not null)
-            foreach (var id in gone)
-            {
-                _minefieldRows.Remove(id);
-                _world.Minefields.NetMinefieldGone(id);
-            }
+        foreach (var (id, _) in _minefields.Prune())
+            _world.Minefields.NetMinefieldGone(id);
     }
 
-    // A single mine popped (mirrors Protocol.BuildMineGone): reconcile the field's aliveMask and let
-    // the renderer play the pop FX at the reported position.
-    private void ApplyMineGone(BinaryReader r)
+    // Per-team economy (credits/score) + owned techs/caps. Low-rate — the renderer holds the latest
+    // snapshot for the HUD and the chat slash-commands to read.
+    private void ApplyTeamState(TeamStateMessage m)
     {
-        ulong fieldId = r.ReadUInt64();
-        byte mineIndex = r.ReadByte();
-        byte reason = r.ReadByte();
-        ushort sector = r.ReadUInt16();
-        short px = r.ReadInt16(),
-            py = r.ReadInt16(),
-            pz = r.ReadInt16();
-        if (_minefieldRows.TryGetValue(fieldId, out var mf))
-            mf.AliveMask &= ~(1UL << mineIndex);
-        _world.Minefields.NetMineGone(
-            fieldId,
-            mineIndex,
-            reason,
-            sector,
-            new Vec3(WireQuant.UnpackPos(px), WireQuant.UnpackPos(py), WireQuant.UnpackPos(pz))
-        );
-    }
-
-    // A one-shot chaff spawn (mirrors Protocol.BuildChaff): the renderer animates the puff and ages
-    // it out locally from the weapon's ProjectileLifeTicks — there is no gone-message (D2).
-    private void ApplyChaff(BinaryReader r)
-    {
-        ulong id = r.ReadUInt64();
-        byte team = r.ReadByte();
-        ushort sector = r.ReadUInt16();
-        short px = r.ReadInt16(),
-            py = r.ReadInt16(),
-            pz = r.ReadInt16();
-        ushort vx = r.ReadUInt16(),
-            vy = r.ReadUInt16(),
-            vz = r.ReadUInt16();
-        uint weaponId = r.ReadUInt32();
-        _world.Minefields.NetSpawnChaff(
-            id,
-            team,
-            sector,
-            new Vec3(WireQuant.UnpackPos(px), WireQuant.UnpackPos(py), WireQuant.UnpackPos(pz)),
-            new Vec3(WireQuant.UnpackHalf(vx), WireQuant.UnpackHalf(vy), WireQuant.UnpackHalf(vz)),
-            weaponId
-        );
-    }
-
-    // Per-team economy (credits/score), mirrors Protocol.BuildTeamState. Low-rate — the renderer
-    // holds the latest snapshot for the HUD and the chat slash-commands to read.
-    private void ApplyTeamState(BinaryReader r)
-    {
-        byte count = r.ReadByte();
-        for (int i = 0; i < count; i++)
-        {
-            byte team = r.ReadByte();
-            int credits = r.ReadInt32();
-            int score = r.ReadInt32();
-            byte nUnlocked = r.ReadByte();
-            var unlocked = new byte[nUnlocked];
-            for (int j = 0; j < nUnlocked; j++)
-                unlocked[j] = r.ReadByte();
-            // Owned techs (catalog indices) + capabilities (v36; mirror of BuildTeamState).
-            ushort nTechs = r.ReadUInt16();
-            var ownedTechs = new ushort[nTechs];
-            for (int j = 0; j < nTechs; j++)
-                ownedTechs[j] = r.ReadUInt16();
-            byte nCaps = r.ReadByte();
-            var ownedCaps = new byte[nCaps];
-            for (int j = 0; j < nCaps; j++)
-                ownedCaps[j] = r.ReadByte();
-            // Discovered-rock-class bitmask (v42) — the rock-gated construction lock predictor.
-            byte rockClasses = r.ReadByte();
-            // Live miner count + per-team cap (miner tail) — the Build tab's "X / N" miner readout.
-            byte minerCount = r.ReadByte();
-            byte minerCap = r.ReadByte();
-            // Build-pipeline queue depth (build-pipeline tail) — the per-garrison order cap the Build
-            // tab grays out on. World-global scalar, same for every team.
-            byte buildQueueLimit = r.ReadByte();
+        foreach (var t in m.Teams)
             _world.TeamState.Apply(
                 new TeamStateStore.TeamStateSnapshot(
-                    team,
-                    credits,
-                    score,
-                    unlocked,
-                    ownedTechs,
-                    ownedCaps,
-                    rockClasses,
-                    minerCount,
-                    minerCap,
-                    buildQueueLimit
+                    t.Team,
+                    t.Credits,
+                    t.Score,
+                    t.UnlockedClasses,
+                    t.OwnedTechs,
+                    t.OwnedCaps,
+                    t.DiscoveredRockClasses,
+                    t.MinerCount,
+                    t.MinerCap,
+                    t.BuildQueueLimit
                 )
             );
-        }
     }
 
-    // MsgResearchState (v36): PER-TEAM research orders at our team's bases. Bases absent from the
-    // frame are idle — reconcile by omission (replace the whole map each frame).
-    private void ApplyResearchState(BinaryReader r)
+    // MsgResearchState: PER-TEAM research orders at our team's bases. Bases absent from the frame are
+    // idle — reconcile by omission (replace the whole map each frame).
+    private void ApplyResearchState(ResearchStateMessage m)
     {
-        byte nBases = r.ReadByte();
         var map = new Dictionary<ulong, TeamStateStore.BaseResearch>();
-        for (int i = 0; i < nBases; i++)
+        foreach (var b in m.Bases)
         {
-            ulong baseId = r.ReadUInt64();
-            byte nActive = r.ReadByte();
-            var active = new (ushort DevIndex, uint StartTick, uint DurationTicks)[nActive];
-            for (int a = 0; a < nActive; a++)
-                active[a] = (r.ReadUInt16(), r.ReadUInt32(), r.ReadUInt32());
-            ushort? onDeck = null;
-            if (r.ReadByte() != 0)
-                onDeck = r.ReadUInt16();
-            map[baseId] = new TeamStateStore.BaseResearch(active, onDeck);
+            var active = new (ushort DevIndex, uint StartTick, uint DurationTicks)[b.Active.Length];
+            for (int a = 0; a < active.Length; a++)
+                active[a] = (b.Active[a].DevIndex, b.Active[a].StartTick, b.Active[a].DurationTicks);
+            map[b.BaseId] = new TeamStateStore.BaseResearch(active, b.OnDeck);
         }
         _world.TeamState.ApplyResearch(map);
     }
 
-    private void ApplyWelcome(BinaryReader r)
+    private void ApplyWelcome(WelcomeMessage w)
     {
-        byte version = r.ReadByte();
-        if (version != GameNetClient.ProtocolVersion)
+        if (w.Version != GameNetClient.ProtocolVersion)
         {
             Log.Err(
-                $"[GameNet] protocol mismatch: server v{version}, client v{GameNetClient.ProtocolVersion}. "
+                $"[GameNet] protocol mismatch: server v{w.Version}, client v{GameNetClient.ProtocolVersion}. "
                     + "Restart the sim server with the current build."
             );
             _host.CancelSocket();
-            _host.NotifyFailed($"server protocol v{version} ≠ client v{GameNetClient.ProtocolVersion}");
+            _host.NotifyFailed($"server protocol v{w.Version} ≠ client v{GameNetClient.ProtocolVersion}");
             return;
         }
         _host.NotifyStage(ConnectionManager.ConnectStage.Sync); // authenticated — applying the world
-        LocalClientId = r.ReadInt32();
-        MyTeam = r.ReadByte();
-        r.ReadUInt32(); // tick
-        r.ReadSingle(); // dt
+        LocalClientId = w.ClientId;
+        MyTeam = w.Team;
 
         // Reconnect token: store it (each Welcome rotates it) so the next Hello can reclaim our
         // ship if this connection drops.
-        byte tokenLen = r.ReadByte();
-        ReconnectToken = Convert.ToHexString(r.ReadBytes(tokenLen));
+        ReconnectToken = Convert.ToHexString(w.ReconnectToken);
 
         // Reconnect: a Welcome arriving while a world is already rendered means we just
         // re-established the link. Tear the stale world down and rebuild from this authoritative
@@ -860,279 +706,208 @@ public sealed class FrameApplier
             // ClearEntityCaches() used by BeginConnect/Abort/Disconnect/GiveUpShip — ship rows
             // are reconciled by the spawn/update frames that follow this Welcome.
             _missileRows.Clear(); // stale missiles from the pre-drop world must not linger
-            _minefieldRows.Clear();
-            _probeRows.Clear();
+            _minefields.Clear();
+            _probes.Clear();
+            _salvage.Clear(); // the next anchor-sector frame re-streams whatever still lies there
+            _lastSalvageLogCount = -1;
         }
         _worldLoaded = true;
 
-        ushort sectors = r.ReadUInt16();
-        for (int i = 0; i < sectors; i++)
-            _world.NetAddSector(ReadSectorStatic(r));
-
-        ushort bases = r.ReadUInt16();
-        for (int i = 0; i < bases; i++)
-            _world.Bases.NetAdd(ReadBaseStatic(r));
-        uint asteroids = r.ReadUInt32();
-        for (int i = 0; i < asteroids; i++)
-            _world.Asteroids.NetAdd(ReadRockStatic(r));
-        ushort alephs = r.ReadUInt16();
-        for (int i = 0; i < alephs; i++)
-            _world.Alephs.NetAdd(ReadAlephStatic(r));
-        Log.Print($"[GameNet] world received — {sectors} sectors, {bases} bases, {asteroids} asteroids");
+        foreach (var s in w.Sectors)
+            _world.NetAddSector(SectorOf(s));
+        foreach (var b in w.Bases)
+            _world.Bases.NetAdd(BaseOf(b));
+        foreach (var a in w.Rocks)
+            _world.Asteroids.NetAdd(AsteroidOf(a));
+        foreach (var g in w.Alephs)
+            _world.Alephs.NetAdd(AlephOf(g));
+        Log.Print(
+            $"[GameNet] world received — {w.Sectors.Length} sectors, {w.Bases.Length} bases, {w.Rocks.Length} asteroids"
+        );
         _host.NotifyConnected();
         _host.RaiseConnected();
     }
 
-    // Shared per-record static decoders — mirror Protocol.WriteBaseStatic/WriteRockStatic/
-    // WriteAlephStatic byte-for-byte. Used by BOTH ApplyWelcome and ApplyReveal so the two paths
-    // can never drift (a fog reveal must decode a record identically to the initial world dump).
-    // One sector static (Welcome + MsgReveal): id | radius | name | environment. Mirrors the server's
-    // Protocol.WriteSectorStatic exactly; shared by both decode paths so they can never drift byte-wise.
-    private static Sector ReadSectorStatic(BinaryReader r)
-    {
-        var s = new Sector
+    // ---- Static → render-row conversions (Welcome + MsgReveal share these, so the two paths can
+    // never drift: a fog reveal decodes a record identically to the initial world dump) ----
+
+    private static Sector SectorOf(in SectorStatic s) =>
+        new()
         {
-            SectorId = r.ReadUInt32(),
-            Radius = r.ReadSingle(),
-            Name = r.ReadString(),
+            SectorId = s.Id,
+            Radius = s.Radius,
+            Name = s.Name,
+            HasMapPos = s.MapPos.HasValue,
+            MapPosX = s.MapPos?.X ?? 0f,
+            MapPosY = s.MapPos?.Y ?? 0f,
+            Env = EnvOf(s.Env),
         };
-        // 2D map-diagram position (mirror of Protocol.WriteSectorStatic): presence byte then x,y.
-        if (r.ReadByte() != 0)
-        {
-            s.HasMapPos = true;
-            s.MapPosX = r.ReadSingle();
-            s.MapPosY = r.ReadSingle();
-        }
-        s.Env = ReadSectorEnv(r);
-        return s;
-    }
 
-    // Mirror of Protocol.WriteSectorEnv. The three presence bytes are ALWAYS written (0 when absent),
-    // so we always read them. Returns null when the sector carries no environment at all (legacy).
-    private static SectorEnv? ReadSectorEnv(BinaryReader r)
+    // The wire carries three optional blocks with sentinel colors (any component < 0 = "client
+    // default"); the render DTO keeps explicit Has* flags. Null when the sector carries no
+    // environment at all (legacy backdrop).
+    private static SectorEnv? EnvOf(SectorEnvWire e)
     {
+        if (!e.Any)
+            return null;
         var env = new SectorEnv();
-        bool any = false;
-
-        if (r.ReadByte() != 0)
+        if (e.Sun is { } sun)
         {
-            any = true;
             env.HasSun = true;
-            env.GodRays = r.ReadSingle();
-            env.SunDirX = r.ReadSingle();
-            env.SunDirY = r.ReadSingle();
-            env.SunDirZ = r.ReadSingle();
-            float cr = r.ReadSingle(),
-                cg = r.ReadSingle(),
-                cb = r.ReadSingle();
-            env.HasSunColor = cr >= 0f;
-            env.SunColorR = cr;
-            env.SunColorG = cg;
-            env.SunColorB = cb;
-            env.SunEnergy = r.ReadSingle();
-            env.SunAmbient = r.ReadSingle();
-            env.SunSize = r.ReadSingle();
+            env.GodRays = sun.GodRays;
+            env.SunDirX = sun.Dir.X;
+            env.SunDirY = sun.Dir.Y;
+            env.SunDirZ = sun.Dir.Z;
+            env.HasSunColor = sun.Color.X >= 0f;
+            env.SunColorR = sun.Color.X;
+            env.SunColorG = sun.Color.Y;
+            env.SunColorB = sun.Color.Z;
+            env.SunEnergy = sun.Energy;
+            env.SunAmbient = sun.Ambient;
+            env.SunSize = sun.DiscSize;
         }
-
-        if (r.ReadByte() != 0)
+        if (e.Nebula is { } neb)
         {
-            any = true;
             env.HasNebula = true;
-            float ar = r.ReadSingle(),
-                ag = r.ReadSingle(),
-                ab = r.ReadSingle();
-            env.HasNebulaColorA = ar >= 0f;
-            env.NebulaColorAR = ar;
-            env.NebulaColorAG = ag;
-            env.NebulaColorAB = ab;
-            float br = r.ReadSingle(),
-                bg = r.ReadSingle(),
-                bb = r.ReadSingle();
-            env.HasNebulaColorB = br >= 0f;
-            env.NebulaColorBR = br;
-            env.NebulaColorBG = bg;
-            env.NebulaColorBB = bb;
-            env.NebulaIntensity = r.ReadSingle();
-            if (r.ReadByte() != 0)
-            {
-                env.HasNebulaSeed = true;
-                env.NebulaSeed = r.ReadUInt32();
-            }
+            env.HasNebulaColorA = neb.ColorA.X >= 0f;
+            env.NebulaColorAR = neb.ColorA.X;
+            env.NebulaColorAG = neb.ColorA.Y;
+            env.NebulaColorAB = neb.ColorA.Z;
+            env.HasNebulaColorB = neb.ColorB.X >= 0f;
+            env.NebulaColorBR = neb.ColorB.X;
+            env.NebulaColorBG = neb.ColorB.Y;
+            env.NebulaColorBB = neb.ColorB.Z;
+            env.NebulaIntensity = neb.Intensity;
+            env.HasNebulaSeed = neb.Seed.HasValue;
+            env.NebulaSeed = neb.Seed ?? 0u;
         }
-
-        if (r.ReadByte() != 0)
+        if (e.Dust is { } dust)
         {
-            any = true;
             env.HasDust = true;
-            float dr = r.ReadSingle(),
-                dg = r.ReadSingle(),
-                db = r.ReadSingle();
-            env.HasDustColor = dr >= 0f;
-            env.DustColorR = dr;
-            env.DustColorG = dg;
-            env.DustColorB = db;
-            env.DustOpacity = r.ReadSingle();
-            ushort n = r.ReadUInt16();
-            var clouds = new DustCloud[n];
-            for (int i = 0; i < n; i++)
+            env.HasDustColor = dust.Color.X >= 0f;
+            env.DustColorR = dust.Color.X;
+            env.DustColorG = dust.Color.Y;
+            env.DustColorB = dust.Color.Z;
+            env.DustOpacity = dust.Opacity;
+            var clouds = new DustCloud[dust.Clouds.Length];
+            for (int i = 0; i < clouds.Length; i++)
                 clouds[i] = new DustCloud
                 {
-                    PosX = r.ReadSingle(),
-                    PosY = r.ReadSingle(),
-                    PosZ = r.ReadSingle(),
-                    Radius = r.ReadSingle(),
-                    Density = r.ReadSingle(),
+                    PosX = dust.Clouds[i].Pos.X,
+                    PosY = dust.Clouds[i].Pos.Y,
+                    PosZ = dust.Clouds[i].Pos.Z,
+                    Radius = dust.Clouds[i].Radius,
+                    Density = dust.Clouds[i].Density,
                 };
             env.DustClouds = clouds;
         }
-
-        return any ? env : null;
+        return env;
     }
 
-    private static Base ReadBaseStatic(BinaryReader r)
-    {
-        var row = new Base
+    // Radius is not kept (the client renders from BaseDef by type).
+    private static Base BaseOf(in BaseStatic b) =>
+        new()
         {
-            BaseId = r.ReadUInt64(),
-            Team = r.ReadByte(),
-            SectorId = r.ReadUInt32(),
-            PosX = r.ReadSingle(),
-            PosY = r.ReadSingle(),
-            PosZ = r.ReadSingle(),
+            BaseId = b.Id,
+            Team = b.Team,
+            SectorId = b.Sector,
+            PosX = b.Pos.X,
+            PosY = b.Pos.Y,
+            PosZ = b.Pos.Z,
+            Health = b.Health,
+            BaseTypeId = b.BaseTypeId,
         };
-        r.ReadSingle(); // radius (client renders from BaseDef by type)
-        row.Health = r.ReadSingle();
-        row.BaseTypeId = r.ReadByte(); // v37: which base type (mesh/def)
-        return row;
-    }
 
-    private static Asteroid ReadRockStatic(BinaryReader r)
-    {
-        var row = new Asteroid
+    // A rock seen for the first time already carries its shrunk size, so the renderer/collision spawn
+    // it at CurrentRadius rather than the spawn Radius.
+    private static Asteroid AsteroidOf(in RockStatic a) =>
+        new()
         {
-            AsteroidId = r.ReadUInt64(),
-            SectorId = r.ReadUInt32(),
-            PosX = r.ReadSingle(),
-            PosY = r.ReadSingle(),
-            PosZ = r.ReadSingle(),
-            Radius = r.ReadSingle(),
+            AsteroidId = a.Id,
+            SectorId = a.Sector,
+            PosX = a.Pos.X,
+            PosY = a.Pos.Y,
+            PosZ = a.Pos.Z,
+            Radius = a.Radius,
+            Variant = AsteroidShapes.NameForIndex(a.Variant),
+            RotX = a.RotX,
+            RotY = a.RotY,
+            RotZ = a.RotZ,
+            RockClass = a.RockClass,
+            CurrentRadius = a.CurrentRadius,
+            OrePct = a.OrePct,
+            OreCapacity = a.OreCapacity,
         };
-        byte variant = r.ReadByte();
-        row.RotX = r.ReadSingle();
-        row.RotY = r.ReadSingle();
-        row.RotZ = r.ReadSingle();
-        row.Variant = AsteroidShapes.NameForIndex(variant);
-        // Mining block (mirror of Protocol.WriteRockStatic): class + the live (possibly mined-down)
-        // radius + ore fill. A rock seen for the first time already carries its shrunk size here, so
-        // the renderer/collision spawn it at CurrentRadius rather than the spawn Radius.
-        row.RockClass = r.ReadByte();
-        row.CurrentRadius = r.ReadSingle();
-        row.OrePct = r.ReadByte();
-        // OreCapacity is the LAST field of the rock static (Welcome + MsgReveal share this reader).
-        // ≤ 0 = no readout (non-He3 rock). Remaining ore = round(OrePct/100 × OreCapacity).
-        row.OreCapacity = r.ReadSingle();
-        return row;
-    }
 
-    private static Aleph ReadAlephStatic(BinaryReader r) =>
-        new Aleph
+    private static Aleph AlephOf(in AlephStatic g) =>
+        new()
         {
-            AlephId = r.ReadUInt64(),
-            SectorId = r.ReadUInt32(),
-            DestSectorId = r.ReadUInt32(),
-            PosX = r.ReadSingle(),
-            PosY = r.ReadSingle(),
-            PosZ = r.ReadSingle(),
+            AlephId = g.Id,
+            SectorId = g.Sector,
+            DestSectorId = g.DestSector,
+            PosX = g.Pos.X,
+            PosY = g.Pos.Y,
+            PosZ = g.Pos.Z,
         };
 
     // MsgReveal (fog): statics this team just scouted for the first time. Same record layout as
-    // Welcome (shared readers above). The renderer's Insert* paths are idempotent and also feed the
-    // Minimap source caches (_baseTeams via InsertBase, _alephLinks via InsertAleph), so revealing a
-    // base/aleph updates Bases.Teams/Alephs.Links the same way Welcome does — no extra refresh.
-    private void ApplyReveal(BinaryReader r)
+    // Welcome (shared conversions above). The renderer's Insert* paths are idempotent and also feed the
+    // Minimap source caches, so revealing a base/aleph updates Bases.Teams/Alephs.Links the same way
+    // Welcome does — no extra refresh.
+    private void ApplyReveal(RevealMessage r)
     {
         ulong perfT0 = Time.GetTicksUsec();
-        byte nBases = r.ReadByte();
-        for (int i = 0; i < nBases; i++)
-            _world.Bases.NetAdd(ReadBaseStatic(r));
-        ushort nRocks = r.ReadUInt16();
-        for (int i = 0; i < nRocks; i++)
-            _world.Asteroids.NetAdd(ReadRockStatic(r));
-        byte nAlephs = r.ReadByte();
-        for (int i = 0; i < nAlephs; i++)
-            _world.Alephs.NetAdd(ReadAlephStatic(r));
-        // Sectors this team just reached (via a discovered aleph or a warp) — appended after the
-        // aleph block. NetAddSector is an idempotent upsert, so re-revealing a known sector is safe.
-        byte nSectors = r.ReadByte();
-        for (int i = 0; i < nSectors; i++)
-            _world.NetAddSector(ReadSectorStatic(r));
+        foreach (var b in r.Bases)
+            _world.Bases.NetAdd(BaseOf(b));
+        foreach (var a in r.Rocks)
+            _world.Asteroids.NetAdd(AsteroidOf(a));
+        foreach (var g in r.Alephs)
+            _world.Alephs.NetAdd(AlephOf(g));
+        // Sectors this team just reached (via a discovered aleph or a warp). NetAddSector is an
+        // idempotent upsert, so re-revealing a known sector is safe.
+        foreach (var s in r.Sectors)
+            _world.NetAddSector(SectorOf(s));
         ulong perfMs = (Time.GetTicksUsec() - perfT0) / 1000;
         if (perfMs > 1)
-            Log.Print($"[perf] reveal: {nBases} bases, {nRocks} rocks, {nAlephs} alephs in {perfMs}ms");
+            Log.Print(
+                $"[perf] reveal: {r.Bases.Length} bases, {r.Rocks.Length} rocks, {r.Alephs.Length} alephs in {perfMs}ms"
+            );
     }
 
     // MsgContacts (fog): the team's full last-known enemy ghost set + its radar-detected id list,
     // both reconciled wholesale (the renderer replaces its stores each frame — no gone-message). A
     // ghost is a HUD/radar glyph only (never a 3D node); a streamed enemy whose id is absent from the
-    // radar list is eyeball-tier (mesh renders, but WP4 suppresses its marker). Yaw/pitch dequantized.
-    private void ApplyContacts(BinaryReader r)
+    // radar list is eyeball-tier (mesh renders, but WP4 suppresses its marker).
+    private void ApplyContacts(ContactsMessage m)
     {
-        byte nGhosts = r.ReadByte();
-        var ghosts = new List<FogStore.GhostContact>(nGhosts);
-        for (int i = 0; i < nGhosts; i++)
-        {
-            ulong id = r.ReadUInt64();
-            byte team = r.ReadByte();
-            byte cls = r.ReadByte();
-            ushort sector = r.ReadUInt16();
-            float px = r.ReadSingle();
-            float py = r.ReadSingle();
-            float pz = r.ReadSingle();
-            short yawQ = r.ReadInt16();
-            short pitchQ = r.ReadInt16();
+        var ghosts = new List<FogStore.GhostContact>(m.Ghosts.Length);
+        foreach (var g in m.Ghosts)
             ghosts.Add(
                 new FogStore.GhostContact
                 {
-                    ShipId = id,
-                    Team = team,
-                    Cls = cls,
-                    Sector = sector,
-                    Pos = new Vector3(px, py, pz),
-                    Yaw = yawQ / 32767f * Mathf.Pi,
-                    Pitch = pitchQ / 32767f * (Mathf.Pi / 2f),
+                    ShipId = g.ShipId,
+                    Team = g.Team,
+                    Cls = g.Cls,
+                    Sector = g.Sector,
+                    Pos = new Vector3(g.Pos.X, g.Pos.Y, g.Pos.Z),
+                    Yaw = g.Yaw,
+                    Pitch = g.Pitch,
                 }
             );
-        }
-        byte nRadar = r.ReadByte();
-        var radar = new List<ulong>(nRadar);
-        for (int i = 0; i < nRadar; i++)
-            radar.Add(r.ReadUInt64());
+        var radar = new List<ulong>(m.Radar.Length);
+        radar.AddRange(m.Radar);
         _world.Fog.NetSetContacts(ghosts, radar);
     }
 
-    private void ApplyLobbyState(BinaryReader r)
+    private void ApplyLobbyState(LobbyStateMessage m)
     {
-        r.ReadByte(); // phase (the snapshot clock drives WorldRenderer.Phase)
-        r.ReadByte(); // winner
-        byte count = r.ReadByte();
-        var list = new List<LobbyPlayer>(count);
-        for (int i = 0; i < count; i++)
-        {
-            int id = r.ReadInt32();
-            string name = NetRead.ReadStr(r);
-            byte team = r.ReadByte();
-            bool ready = r.ReadByte() != 0;
-            bool hasShip = r.ReadByte() != 0;
-            ulong shipId = r.ReadUInt64();
-            list.Add(new LobbyPlayer(id, name, team, ready, hasShip, shipId));
-        }
-        // Session-global state appended after the roster (see Protocol.BuildLobbyState).
-        Team0Name = NetRead.ReadStr(r);
-        Team1Name = NetRead.ReadStr(r);
-        HostId = r.ReadInt32();
-        SelectedMap = NetRead.ReadStr(r);
-        Commander0Id = r.ReadInt32();
-        Commander1Id = r.ReadInt32();
+        // Phase/winner ride the frame too, but the snapshot clock drives WorldRenderer.Phase.
+        var list = new List<LobbyPlayer>(m.Players.Length);
+        foreach (var p in m.Players)
+            list.Add(new LobbyPlayer(p.Id, p.Name, p.Team, p.Ready, p.HasShip, p.ShipId));
+        Teams = m.Teams;
+        HostId = m.HostId;
+        SelectedMap = m.SelectedMap;
         LobbyPlayers = list;
         // Push the fresh roster's ship -> name map into the renderer so nameplates resolve / refresh
         // (covers a ship snapshot that arrived before its roster row, and respawns under a new id).
@@ -1183,202 +958,143 @@ public sealed class FrameApplier
         _host.RaiseLobbyChanged();
     }
 
-    // The server's available-maps catalog (Protocol.BuildMapList) — decoded once, right after Defs.
-    // Each map's sector/base layout is turned straight into a thumbnail-ready SectorMapPreview.MapModel
-    // (mirrors ServerLobbyOverlay.ToMapModel; the lobby carries no gate dots).
-    private void ApplyMapList(BinaryReader r)
+    // The server's available-maps catalog — decoded once, right after Defs. Each map's sector/base
+    // layout is turned straight into a thumbnail-ready SectorMapPreview.MapModel (mirrors
+    // ServerLobbyOverlay.ToMapModel; the lobby carries no gate dots).
+    private void ApplyMapList(MapListMessage m)
     {
-        byte mapCount = r.ReadByte();
-        var maps = new List<MapInfo>(mapCount);
-        for (int i = 0; i < mapCount; i++)
+        var maps = new List<MapInfo>(m.Maps.Length);
+        foreach (var map in m.Maps)
         {
-            string name = NetRead.ReadStr(r);
-            string mode = NetRead.ReadStr(r);
-            string size = NetRead.ReadStr(r);
-            string sectorLabel = NetRead.ReadStr(r);
-            int garrisons = r.ReadByte();
-            byte sectorCount = r.ReadByte();
-            var sectors = new List<SectorMapPreview.SectorModel>(sectorCount);
-            for (int s = 0; s < sectorCount; s++)
+            var sectors = new List<SectorMapPreview.SectorModel>(map.Sectors.Length);
+            foreach (var s in map.Sectors)
             {
-                uint id = r.ReadUInt32();
-                float radius = r.ReadSingle();
-                string sname = NetRead.ReadStr(r);
-                // 2D map-diagram position (mirror of Protocol.BuildMapList): presence byte then x,y.
-                bool hasPos = r.ReadByte() != 0;
-                float mapX = 0f,
-                    mapY = 0f;
-                if (hasPos)
-                {
-                    mapX = r.ReadSingle();
-                    mapY = r.ReadSingle();
-                }
-                // Garrison markers carry only the owning team (mirror of Protocol.BuildMapList);
-                // the sector-local position is deliberately not on the wire.
-                byte baseCount = r.ReadByte();
-                var bases = new List<SectorMapPreview.BaseMark>(baseCount);
-                for (int b = 0; b < baseCount; b++)
-                    bases.Add(new SectorMapPreview.BaseMark(r.ReadByte()));
+                // Garrison markers carry only the owning team; the sector-local position is
+                // deliberately not on the wire.
+                var bases = new List<SectorMapPreview.BaseMark>(s.BaseTeams.Length);
+                foreach (byte team in s.BaseTeams)
+                    bases.Add(new SectorMapPreview.BaseMark(team));
                 sectors.Add(
                     new SectorMapPreview.SectorModel(
-                        id,
-                        radius,
+                        s.Id,
+                        s.Radius,
                         bases,
                         new List<Vector2>(),
-                        string.IsNullOrEmpty(sname) ? null : sname,
-                        mapX,
-                        mapY,
-                        hasPos
+                        string.IsNullOrEmpty(s.Name) ? null : s.Name,
+                        s.MapPos?.X ?? 0f,
+                        s.MapPos?.Y ?? 0f,
+                        s.MapPos.HasValue
                     )
                 );
             }
-            // Aleph gate topology (mirror of Protocol.BuildMapList): sector-id pairs the preview
-            // draws as lines between sector nodes.
-            byte linkCount = r.ReadByte();
-            var links = new List<(uint A, uint B)>(linkCount);
-            for (int l = 0; l < linkCount; l++)
-            {
-                uint la = r.ReadUInt32();
-                uint lb = r.ReadUInt32();
-                links.Add((la, lb));
-            }
-            maps.Add(new MapInfo(name, mode, size, sectorLabel, garrisons, new SectorMapPreview.MapModel(sectors, links)));
+            // Aleph gate topology: sector-id pairs the preview draws as lines between sector nodes.
+            var links = new List<(uint A, uint B)>(map.Links.Length);
+            foreach (var l in map.Links)
+                links.Add((l.A, l.B));
+            maps.Add(
+                new MapInfo(
+                    map.Name,
+                    map.Mode,
+                    map.SizeLabel,
+                    map.SectorLabel,
+                    map.GarrisonCount,
+                    new SectorMapPreview.MapModel(sectors, links)
+                )
+            );
         }
         Maps = maps;
         _host.RaiseMapListChanged();
     }
 
-    private void ApplyChat(BinaryReader r)
+    // The per-tick ship snapshot. Read straight off the frame with the shared reader (no per-frame
+    // record array): header, then one ShipRecord per streamed ship, each turned into the render row
+    // the renderer/prediction/interpolation stack keys off.
+    private void ApplySnapshot(byte[] f)
     {
-        byte scope = r.ReadByte();
-        byte fromTeam = r.ReadByte();
-        string name = NetRead.ReadStr(r);
-        string text = NetRead.ReadStr(r);
-        _host.RaiseChat(new ChatLine(scope, fromTeam, name, text));
-    }
-
-    private void ApplySnapshot(BinaryReader r)
-    {
-        uint tick = r.ReadUInt32();
-        byte phase = r.ReadByte();
-        byte winner = r.ReadByte();
+        var r = new WireReader(f);
+        r.U8(); // message id (dispatched on already)
+        uint tick = r.U32();
+        byte phase = r.U8();
+        byte winner = r.U8();
         _world.NetSetMatch(tick, phase, winner);
 
-        ushort count = r.ReadUInt16();
+        ushort count = r.U16();
         _seenThisSnapshot.Clear();
         for (int i = 0; i < count; i++)
         {
-            ulong id = r.ReadUInt64();
-            byte team = r.ReadByte();
-            byte cls = r.ReadByte();
-            byte flags = r.ReadByte();
-            ushort sector = r.ReadUInt16();
-            short px = r.ReadInt16(),
-                py = r.ReadInt16(),
-                pz = r.ReadInt16();
-            uint rot = r.ReadUInt32();
-            ushort vx = r.ReadUInt16(),
-                vy = r.ReadUInt16(),
-                vz = r.ReadUInt16();
-            ushort ax = r.ReadUInt16(),
-                ay = r.ReadUInt16(),
-                az = r.ReadUInt16();
-            ushort ab = r.ReadUInt16();
-            ushort fuel = r.ReadUInt16();
-            ushort hp = r.ReadUInt16();
-            ushort shield = r.ReadUInt16();
-            uint lastInput = r.ReadUInt32();
-            uint lastFire = r.ReadUInt32();
-            byte missileAmmo = r.ReadByte();
-            byte lockState = r.ReadByte();
-            byte chaffAmmo = r.ReadByte();
-            byte mineAmmo = r.ReadByte();
-            byte probeAmmo = r.ReadByte();
-            byte fuelPodAmmo = r.ReadByte();
-            // Being-locked threat from the flags byte (ShipFlagLockingMe=4, ShipFlagLockedMe=8).
-            byte threatLock = (byte)(
-                (flags & 8) != 0 ? 2
-                : (flags & 4) != 0 ? 1
-                : 0
-            );
+            var rec = ShipRecord.Read(ref r);
+            if (r.Failed)
+                throw new WireFormatException("SnapshotMessage");
 
-            _rows.TryGetValue(id, out var prev);
+            _rows.TryGetValue(rec.ShipId, out var prev);
             var row = new Ship
             {
-                ShipId = id,
-                Team = team,
-                Class = (ShipClass)cls,
-                IsPig = (flags & 1) != 0,
-                Autopilot = (flags & 16) != 0, // ShipFlagAutopilot — server is steering this ship
-                // Role bits are mutually exclusive; Combat (no bit) is the default. Order mirrors the
-                // server's WriteShip switch (ShipFlagConstructor=128, Miner=32, Pod=2).
-                Kind =
-                    (flags & 128) != 0 ? ShipKind.Constructor
-                    : (flags & 32) != 0 ? ShipKind.Miner
-                    : (flags & 2) != 0 ? ShipKind.Pod
-                    : ShipKind.Combat,
-                IsMining = (flags & 64) != 0, // ShipFlagMining — actively transferring ore (drives beam/roll VFX)
-
-                ChaffAmmo = chaffAmmo,
-                MineAmmo = mineAmmo,
-                ProbeAmmo = probeAmmo,
-                FuelPodAmmo = fuelPodAmmo,
-                ThreatLock = threatLock,
-                SectorId = sector,
+                ShipId = rec.ShipId,
+                Team = rec.Team,
+                Class = (ShipClass)rec.Class,
+                IsPig = rec.IsPig,
+                Autopilot = rec.Autopilot, // server is steering this ship
+                Kind = rec.Kind,
+                IsMining = rec.IsMining, // actively transferring ore (drives beam/roll VFX)
+                ChaffAmmo = rec.ChaffAmmo,
+                MineAmmo = rec.MineAmmo,
+                ProbeAmmo = rec.ProbeAmmo,
+                FuelPodAmmo = rec.FuelPodAmmo,
+                ThreatLock = rec.ThreatLock,
+                SectorId = rec.Sector,
+                PosX = rec.Pos.X,
+                PosY = rec.Pos.Y,
+                PosZ = rec.Pos.Z,
+                RotX = rec.Rot.X,
+                RotY = rec.Rot.Y,
+                RotZ = rec.Rot.Z,
+                RotW = rec.Rot.W,
+                VelX = rec.Vel.X,
+                VelY = rec.Vel.Y,
+                VelZ = rec.Vel.Z,
+                AngVelX = rec.AngVel.X,
+                AngVelY = rec.AngVel.Y,
+                AngVelZ = rec.AngVel.Z,
+                AbPower = rec.AbPower,
+                Fuel = rec.Fuel,
+                Health = rec.Health,
+                Shield = rec.Shield,
+                LastInputTick = rec.LastInputTick,
+                LastFireTick = rec.LastFireTick,
+                MissileAmmo = rec.MissileAmmo,
+                LockState = rec.LockState,
             };
-            row.PosX = WireQuant.UnpackPos(px);
-            row.PosY = WireQuant.UnpackPos(py);
-            row.PosZ = WireQuant.UnpackPos(pz);
-            WireQuant.UnpackQuat(rot, out float rx, out float ry, out float rz, out float rw);
-            row.RotX = rx;
-            row.RotY = ry;
-            row.RotZ = rz;
-            row.RotW = rw;
-            row.VelX = WireQuant.UnpackHalf(vx);
-            row.VelY = WireQuant.UnpackHalf(vy);
-            row.VelZ = WireQuant.UnpackHalf(vz);
-            row.AngVelX = WireQuant.UnpackHalf(ax);
-            row.AngVelY = WireQuant.UnpackHalf(ay);
-            row.AngVelZ = WireQuant.UnpackHalf(az);
-            row.AbPower = WireQuant.UnpackHalf(ab);
-            row.Fuel = WireQuant.UnpackHalf(fuel);
-            row.Health = WireQuant.UnpackHalf(hp);
-            row.Shield = WireQuant.UnpackHalf(shield);
-            row.LastInputTick = lastInput;
-            row.LastFireTick = lastFire;
-            row.MissileAmmo = missileAmmo;
-            row.LockState = lockState;
             // Surface the LOCAL ship's authoritative missile/chaff/mine ammo + lock/threat state for the HUD.
-            if (id == LocalShipId)
+            if (rec.ShipId == LocalShipId)
             {
                 // Reload clock: a DROP in one of these counts is the server spending that charge, so
                 // this snapshot's tick IS the sim's LastMissileTick/LastChaffTick/… — the local ship
                 // always rides the nearest AOI tier, so its record ships every tick. That makes the
                 // load window derivable without a single extra wire byte (same "derive, don't stream"
                 // trade as per-mount gun cadence). A RISE is a rearm (relaunch) — clear the clock.
-                StampLoadTick(ref _localMissileLoadTick, LocalMissileAmmo, missileAmmo, tick);
-                StampLoadTick(ref _localChaffLoadTick, LocalChaffAmmo, chaffAmmo, tick);
-                StampLoadTick(ref _localMineLoadTick, LocalMineAmmo, mineAmmo, tick);
-                StampLoadTick(ref _localProbeLoadTick, LocalProbeAmmo, probeAmmo, tick);
-                LocalMissileAmmo = missileAmmo;
-                LocalLockState = lockState;
-                LocalChaffAmmo = chaffAmmo;
-                LocalMineAmmo = mineAmmo;
-                LocalProbeAmmo = probeAmmo;
-                LocalFuelPodAmmo = fuelPodAmmo;
-                LocalThreatLock = threatLock;
+                StampLoadTick(ref _localMissileLoadTick, LocalMissileAmmo, rec.MissileAmmo, tick);
+                StampLoadTick(ref _localChaffLoadTick, LocalChaffAmmo, rec.ChaffAmmo, tick);
+                StampLoadTick(ref _localMineLoadTick, LocalMineAmmo, rec.MineAmmo, tick);
+                StampLoadTick(ref _localProbeLoadTick, LocalProbeAmmo, rec.ProbeAmmo, tick);
+                LocalMissileAmmo = rec.MissileAmmo;
+                LocalLockState = rec.LockState;
+                LocalChaffAmmo = rec.ChaffAmmo;
+                LocalMineAmmo = rec.MineAmmo;
+                LocalProbeAmmo = rec.ProbeAmmo;
+                LocalFuelPodAmmo = rec.FuelPodAmmo;
+                LocalThreatLock = rec.ThreatLock;
             }
             // Mass isn't on the wire: re-derive from the LOADED def (the same content the server
             // seeds from), so a YAML-overridden mass matches server authority. No compile-time
             // fallback — by the time ship snapshots arrive the MsgDefs frame has been applied.
             row.Mass = _defs.TryGetStats((byte)row.Class, row.IsPod, out var massStats) ? massStats.Mass : 0f;
 
-            _seenThisSnapshot.Add(id);
+            _seenThisSnapshot.Add(rec.ShipId);
             if (prev is null)
-                _world.Ships.NetInsertShip(row, id == LocalShipId);
+                _world.Ships.NetInsertShip(row, rec.ShipId == LocalShipId);
             else
                 _world.Ships.NetUpdateShip(prev, row);
-            _rows[id] = row;
+            _rows[rec.ShipId] = row;
         }
     }
 

@@ -39,6 +39,12 @@ public static class WireQuant
 
     public static float UnpackHalf(ushort h) => (float)BitConverter.Int16BitsToHalf((short)h);
 
+    // Angle in [-range, range] as a signed 16-bit fraction of range (fog ghost yaw/pitch). Clamped
+    // to +/-32767 so the two ends can never disagree on the sign of a boundary value.
+    public static short PackAngle(float a, float range) => (short)Math.Clamp(a / range * 32767f, -32767f, 32767f);
+
+    public static float UnpackAngle(short q, float range) => q / 32767f * range;
+
     // Smallest-three quaternion: drop the largest-magnitude component (reconstructed from
     // unit-norm on decode), store its index in the top 2 bits + the other three as 10-bit
     // codes over [-1/sqrt2, 1/sqrt2]. 32 bits total, ~0.0014 rad worst-case angular error.

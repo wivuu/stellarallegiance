@@ -284,7 +284,7 @@ public sealed partial class Simulation
         bool wasAlive = World.BaseHealth[baseIndex] > 0f;
         float hp = MathF.Max(0f, World.BaseHealth[baseIndex] - damage);
         World.BaseHealth[baseIndex] = hp;
-        BasesChangedThisStep = true;
+        Events.BasesChanged = true;
         _matchDirty = true;
         // Kill credit for structures, keyed by the base's STABLE Id (World.Bases grows mid-match and
         // the whole World is swapped at StartMatch, so an index is not a durable key).

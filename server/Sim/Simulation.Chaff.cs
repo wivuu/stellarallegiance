@@ -33,13 +33,13 @@ public sealed partial class Simulation
     }
 
     // Live chaff puffs (appended by TryDropChaff, stepped in StepChaff). One-shot broadcast on spawn
-    // (ChaffSpawnedThisStep); the client animates + expires them locally (D2 — no gone message).
+    // (Events.ChaffSpawned); the client animates + expires them locally (D2 — no gone message).
     private readonly List<ChaffSim> _chaff = new();
     public IReadOnlyList<ChaffSim> Chaff => _chaff;
 
     // Eject a chaff puff from this ship's dispenser (ammo + cadence gated by the shared cargo-charge
     // gate; eject-aft velocity from the world.yaml `mechanics:` knobs; lifespan from the chaff
-    // WeaponDef; appended to _chaff + ChaffSpawnedThisStep).
+    // WeaponDef; appended to _chaff + Events.ChaffSpawned).
     private void TryDropChaff(ShipSim ship, uint tick)
     {
         // Ammo + cadence/reload gate, shared with the other dispensers and the rack
@@ -64,7 +64,7 @@ public sealed partial class Simulation
             DecoyRadius = w.DecoyRadius,
         };
         _chaff.Add(puff);
-        ChaffSpawnedThisStep.Add(puff); // one-shot MsgChaff broadcast (D2)
+        Events.ChaffSpawned.Add(puff); // one-shot MsgChaff broadcast (D2)
     }
 
     // Advance every live chaff puff (drift + drag + expiry). Deterministic f32 only (no RNG/DateTime)

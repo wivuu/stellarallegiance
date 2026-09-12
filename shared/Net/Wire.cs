@@ -7,128 +7,14 @@ public static class Wire
 {
     // Wire-format version. Bump whenever a frame layout changes. The client checks this in the
     // Welcome handshake and refuses to play against a skewed server instead of misreading frames.
-    // v25: per-sector environment appended to every sector static (Welcome + MsgReveal) —
-    // sun/god-rays, nebula override, and the seeded dust-cloud list. See Protocol.WriteSectorEnv.
-    // v27: dust block carries an `opacity` float (after the color) — scales both the rendered puff
-    // alpha and the radar/vision attenuation, decoupled from the visual `amount`.
-    // v28: sun block carries an `ambient` float (after energy) — the sector's ambient/fill light energy.
-    // v29: sun block carries a `size` float (after ambient) — the visible disc's world-space quad width
-    // (-1 sentinel = client default). See Protocol.WriteSectorEnv / Sun.SetDiscSize.
-    // v30: MsgSetAutopilot=11 (client->server engage/disengage) + ShipFlagAutopilot=16 in the ship
-    // record flags byte (server-steered autopilot engaged). See server/Net/Protocol.cs.
-    // v31: mining — every RockStatic (Welcome + MsgReveal) appends u8 rockClass | f32 currentRadius |
-    // u8 orePct (live shrink carried on first sight); new MsgRockUpdate=22 streams live rock shrink
-    // deltas; ShipFlagMiner=32 in the ship flags byte; ShipClassDef.OreCapacity added to MsgDefs.
-    // v32: miner brain — RockStatic appends f32 OreCapacity as its LAST field (47->51 bytes);
-    // ShipFlagMining=64 in the ship flags byte (set while a miner is actively moving ore).
-    // v33: MsgMinerTargets=23 (u8 count, count x u64 shipId + u64 rockId) — the exact rock each active
-    // miner is harvesting, so the client mining beam aims at the real target instead of guessing.
-    // v34: commander — MsgOrder=12 (client->server: u64 subjectShipId, u8 targetKind, u64 targetId,
-    // u32 sector, 3x f32 pos); MsgChatRelay scope 2 = commander order directive (gold on the client);
-    // MsgLobbyState tail appends i32 commander0 + i32 commander1 after selectedMap.
-    // MsgMinefields=13 frame gains a u16 anchor-sector header BEFORE the u8 count
-    // ([13][u16 anchorSector][u8 count] + count x 41-B records). Per-record sector is unchanged. The
-    // header lets the client prune stale fields even from an empty (count==0) frame, and the server now
-    // also emits a frame whenever a client's anchor sector changes (warp) so mines never leak across
-    // sectors. See server/Net/ClientHub.BuildMinefieldsFor + client GameNetClient.ApplyMinefields.
-    // tech paths — MsgSpawn gains u64 launchBaseId after cls (0 = server default base);
-    // MsgDefs appends the tech catalog (u16-counted techs/developments/station-catalog) after the
-    // world config, plus BaseDef +u8 researchSlots (after hardpoints) and WeaponDef +TechList
-    // requiredTechs (after probeModelSize); MsgTeamState appends per-team owned tech indices +
-    // capability bytes after the unlocked-class list; NEW MsgResearch=13 (client->server commander
-    // research op: u8 op, u64 baseId, u16 devIndex) + NEW MsgResearchState=24 (server->client
-    // per-team per-base research orders, startTick+duration encoded). TechList = u8 n x u16 index
-    // into the streamed tech catalog. See Protocol.BuildDefs/BuildTeamState/BuildResearchStateFor.
-    // base building — BaseDef appends str ModelName + u8 winCondition + u8 buildRockClass (after
-    // researchSlots); StationCatalog appends u8 buildRockClass (after researchSlots); WriteBaseStatic
-    // appends u8 baseTypeId and streams the per-type radius (was the World.BaseRadius constant);
-    // NEW MsgBuildConstructor=14 (client->server commander: u8 stationTypeId, u64 launchBaseId) +
-    // NEW MsgConstructorBuilds=25 (server->client: u8 count, count x (u64 shipId, u64 rockId, u8 phase,
-    // f16 progress)); ShipFlagConstructor=128 now emitted (AI constructor drone). See
-    // Simulation.Constructors.cs / Protocol.BuildConstructorBuilds.
-    // constructor polish — a bought constructor now PRODUCES at the garrison before launching
-    // (timed, cancellable). NEW MsgConstructorState=26 (server->client per-team: u8 count, count x
-    // (u64 id, u8 stationTypeId, u8 state, u32 startTick, u32 durationTicks, u64 targetId)) drives the
-    // Build-tab progress/cancel + drone status; NEW MsgConstructorCancel=15 (client->server commander:
-    // u64 constructorId) refunds a producing constructor. Constructors now accept move orders (MsgOrder
-    // kinds point/sector). MsgConstructorBuilds=25 now emits a 0-count keepalive briefly after builds
-    // end (was null) so the client fades the build sphere. See Simulation.Constructors.cs.
-    // a finished constructor base CONSUMES its asteroid — NEW MsgRockGone=27 (server->client
-    // broadcast: u8 count, count x u64 rockId) tells clients to delete the despawned rock (node +
-    // collision) so nothing remains under the new base. See World.RemoveRock / Protocol.BuildRockGone.
-    // constructor build-sequence rework — StationCatalog record appends i32 alignTimeSeconds
-    // (after buildRockClass): the per-station constructor align dwell (stations.yaml
-    // align-time-seconds). MsgConstructorState `state` bytes renumbered: a new Approaching=5 state
-    // (standoff -> surface-contact creep) shifts Sinking to 6 and Building to 7; Sinking/Approaching
-    // now stream 0/0 start/duration (distance-gated, untimed). MsgConstructorBuilds phase semantics:
-    // phase 1 (sink) begins at surface CONTACT and its progress is the physical embed-depth fraction
-    // (was a timer), so the client's build sphere emerges only once the meshes intersect. See
-    // Simulation.Constructors.cs / world.yaml `constructor:`.
-    // per-ship weapon loadouts (still 38 — nothing released in between; server+client deploy
-    // together as usual): MsgSpawn appends an optional mount-override tail after the cargo block
-    // ([u8 nMounts] + nMounts x (u8 hpIndex, u32 weaponId); weaponId u32.Max = deliberately-empty
-    // slot, unlisted slots keep the authored default); NEW MsgShipLoadout=28 (server->client
-    // reliable full table, on change + coarse keepalive: u8 count, count x (u64 shipId, u8 nSlots,
-    // nSlots x u32 weaponId) — per-barrel EFFECTIVE weapon ids in hardpoint declaration order,
-    // reconcile-by-omission). Guns moved to per-mount cadence; the ship record is UNCHANGED —
-    // which mounts fired at LastFireTick is derived client-side via the shared FireCadence rule.
-    // (2026-07-16, tech-tree Phase 4): station upgrades + Devastator. BaseDef/StationCatalogDef
-    // append SuccessorBaseTypeId (i16, -1 = none); DevelopmentDef appends UpgradeScope (u8, 0 all /
-    // 1 single). Writer Protocol.BuildDefs ↔ reader GameNetClient.ApplyDefs mirror the new fields.
-    // (2026-07-17) rock-discovery construction gate: MsgTeamState appends u8 discoveredRockClasses
-    // per team (bitmask 1 << RockClass of asteroid classes the team's fog has revealed; 0xFF when
-    // fog is off) after the capability list — the Build tab's predictor for the new TryBuyConstructor
-    // rock gate. Writer Protocol.BuildTeamState ↔ reader GameNetClient.ApplyTeamState.
-    // (2026-07-18) tech-tree UI surfacing: ShipClassDef appends RequiredTechIdx (tech-list) at the
-    // tail of the ship block so the hangar's locked hull cards + the Research UNLOCKS list can name a
-    // hull's gate. WeaponDef appends ObsoletedByTechIdx (tech-list) + SucceededByWeaponId (u32,
-    // uint.MaxValue = none) after IsHealing so an upgraded weapon tier vanishes from the hangar and
-    // saved loadouts auto-migrate to the successor. Writer Protocol.BuildDefs ↔ reader
-    // GameNetClient.ApplyDefs mirror the new fields.
-    // (2026-07-18) hardpoint mount types: each MsgDefs hardpoint record appends a u8 Mount
-    // (WeaponMountKind: 0 any / 1 gun / 2 missile) after WeaponId — the mount-category
-    // restriction the hangar filter shows and ResolveLoadout enforces (a missile rack can't go
-    // on a gun mount or vice versa). Resolved at projection from hulls.yaml `mount:` (default:
-    // derived from the bound weapon; empty mounts unrestricted). Writer Protocol.WriteHardpoints
-    // ↔ reader GameNetClient.ReadHardpoints.
-    // (2026-07-18) fuel pods: the ship record appends u8 fuelPodAmmo after probeAmmo
-    // (ShipRecordSize 56 → 57) — reserve afterburner fuel auto-consumed when the tank empties
-    // mid-boost; the MsgDefs cargo-item block appends f32 FuelPerCharge after Description
-    // (0 = not a fuel item). Writer Protocol.WriteShip/BuildDefs ↔ reader GameNetClient mirror.
-    // (2026-07-21) launch-station-classes: ShipClassDef appends u16 LaunchClassMask (bitmask over
-    // StationClassId; 0 = unrestricted) at the tail of the ship block after RequiredTechIdx — a
-    // restricted hull launches from / docks at only bases of the listed station classes, through
-    // the base's largest door only (shared DockRules; server rejects illegal spawns pre-charge,
-    // client greys the card/LAUNCH). Writer Protocol.BuildDefs ↔ reader GameNetClient.ApplyDefs.
-    // (2026-07-24) constructor map labels: each MsgConstructorState row appends u64 shipId after
-    // launchBaseId — the LAUNCHED drone's ship id (0 while queued/producing). The row's `id` is a
-    // slot ordinal (what a cancel names), so it could never be matched against a rendered ship; the
-    // F3 map now resolves a constructor's station type through this id and captions it by the
-    // station it carries ("Shipyard Constructor") instead of a hardcoded "Outpost Constructor".
-    // Writer Protocol.BuildConstructorState ↔ reader GameNetClient.ApplyConstructorState.
-    // (2026-07-24) timed reload from cargo: MsgDefs appends u32 ReloadTicks to each weapon record
-    // (after SucceededByWeaponId) and to each cargo-item record (after FuelPerCharge) — the ticks a
-    // charge takes to LOAD out of the hold, projected from the expendable's authored `load-time`.
-    // A cargo-fed launcher/dispenser is usable again after
-    // FireCadence.LoadIntervalTicks(FireIntervalTicks, ReloadTicks); a fuel pod commits at the empty
-    // tank and fills it only when its load completes (the tank — and the afterburner — stay dead
-    // meanwhile). 0 = instant, i.e. the pre-v36 behavior. No ship-record growth: the HUD derives the
-    // local reload clock from the already-streamed ammo-byte edge. Writer Protocol.WriteWeaponDefs /
-    // WriteCargoDefs ↔ reader GameNetClient.ReadWeaponDef / ReadCargoItemDef.
-    // (2026-08-28) match scoreboard: NEW frame MsgMatchStats = 29 — u8 nPilots, n x (i32 clientId,
-    // str name, u8 team, u8 flags (bit0 = connected), u16 kills, u16 deaths, u16 ejects, i32
-    // points), then u8 nTeams, n x (u8 team, u8 garrisonsDestroyed, u8 outpostsDestroyed). Broadcast
-    // RELIABLY and only on change (the ledger moves a few times a match, not every tick); a send is
-    // a FULL REPLACE of the client's table. Name and team ride the frame instead of being joined
-    // against the lobby roster because a departed pilot loses both server-side, and the end-of-match
-    // board must still name them — bit0 clear is exactly the "LEFT" badge. Points is signed (a
-    // penalty weight legitimately pushes a pilot negative); a team's SCORE is NOT repeated here, it
-    // is exactly the sum of its pilots' points and already rides MsgTeamState. EJ and D are distinct
-    // Allegiance semantics: losing your COMBAT SHIP is an EJECTION, losing the POD is a DEATH (so
-    // EJ >= D), and a pod that docks or is rescued is neither. Kill credit itself is server-side
-    // only (world.yaml `scoring:`) — the client only ever sees these resolved counters. Writer
-    // Protocol.BuildMatchStats <-> reader GameNetClient.ApplyMatchStats.
-    public const byte ProtocolVersion = 38; // 38: Hello gains a trailing u16 join-token field; MsgReject code 2
+    //
+    // The layouts themselves are the attributed types in Messages.cs / Records.cs (+ the content
+    // defs in ../Defs.cs); tools/wire-gen generates the codecs and tests/WireTest pins the goldens.
+    // The per-version change log that used to live here is in git history (`git log -p -- shared/Net/Wire.cs`).
+    // One bump per PR to master (a release), never per commit: master ships 38, and everything this
+    // branch adds over it — salvage streams, loadout hold tail, weapon/cargo def tails, cargo hold,
+    // MsgLobbyState team rows — is one step.
+    public const byte ProtocolVersion = 39;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

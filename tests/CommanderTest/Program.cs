@@ -185,7 +185,7 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
         $"order not stored as expected (count {orders.Count})"
     );
     Check(
-        sim.OrderDirectivesThisStep.Any(d => d.Team == 0 && d.Text.Contains("attack")),
+        sim.Events.OrderDirectives.Any(d => d.Team == 0 && d.Text.Contains("attack")),
         "team directive announced the attack order",
         "no attack directive emitted"
     );
@@ -232,12 +232,12 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
     StepQuiet(sim, pig.ShipId);
     Check(sim.PigOrdersView().Count == 0, "fog-blind attack order stored nothing", "order stored despite no radar contact");
     Check(
-        sim.OrderNoticesThisStep.Any(nx => nx.ClientId == 1 && nx.Text.Contains("radar")),
+        sim.Events.OrderNotices.Any(nx => nx.ClientId == 1 && nx.Text.Contains("radar")),
         "issuer got the no-radar-contact rejection",
         "no rejection notice reached the issuer"
     );
     Check(
-        sim.OrderDirectivesThisStep.Count == 0,
+        sim.Events.OrderDirectives.Count == 0,
         "no team directive for a rejected order",
         "rejected order still announced"
     );
@@ -321,7 +321,7 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
     StepQuiet(sim, pig.ShipId);
     Check(sim.PigOrdersView().Count == 0, "explicit clear removed the order", "clear left the order in place");
     Check(
-        sim.OrderNoticesThisStep.Any(nx => nx.ClientId == 1 && nx.Text.Contains("autonomy")),
+        sim.Events.OrderNotices.Any(nx => nx.ClientId == 1 && nx.Text.Contains("autonomy")),
         "issuer told the drone was released to autonomy",
         "no release notice"
     );
@@ -396,7 +396,7 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
             "sector not authorized by the order"
         );
         Check(
-            sim.OrderDirectivesThisStep.Any(d => d.Team == 0 && d.Text.Contains("mine")),
+            sim.Events.OrderDirectives.Any(d => d.Team == 0 && d.Text.Contains("mine")),
             "team directive announced the mining order",
             "no mining directive emitted"
         );
@@ -594,7 +594,7 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
             var slot = sim.MinerSlotsView().First(m => m.Team == 0);
             var s = slot.Ship;
             reached |= s != null && s.SectorId == dest;
-            foreach (var (nteam, text) in sim.MinerNoticesThisStep)
+            foreach (var (nteam, text) in sim.Events.MinerNotices)
                 if (nteam == 0 && text.Contains("no eligible helium-3"))
                     resolved = true;
             if (slot.TargetRockId != 0)

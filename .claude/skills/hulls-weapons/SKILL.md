@@ -93,6 +93,13 @@ magazine ammo rides free inside its launcher). Fuel pods additionally require th
 the existing default cargo, or trim `default-cargo`**. Keep the inline `# math …` comment in sync —
 it's the reviewer's check.
 
+`cargo-capacity` (int, 0..255, default 0) is a SEPARATE budget: hold SLOTS for loose salvage the hull
+can't equip (a gun with no free mount, foreign-rack rounds, a pack past the payload budget, a fuel pod
+with no tank). One slot per part or per consumable stack; hold contents cost no payload, re-drop on
+death and are lost on dock. 0 = no hold — the hull ricochets what it can't use. Stock: scout/
+lt-interceptor 2, enh/adv fighter 3, bomber 4, devastator 5. Not validated against the loadout
+(nothing in it is equipped). GLOSSARY "Cargo hold (cargo-capacity)".
+
 ## Boot-time invariants that bite
 
 - **Win condition** (`shared/ContentValidator.cs` ~L330-348): at least one hull's *default* loadout must

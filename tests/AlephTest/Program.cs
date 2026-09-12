@@ -166,7 +166,7 @@ const int BurstTicks = 30;
         Park(target, new Vec3(0f, 0f, TgtRange));
         shooter.HeldInput = new ShipInputState(); // stop firing; let the one missile fly
         sim.Step();
-        foreach (var g in sim.MissileGoneThisStep)
+        foreach (var g in sim.Events.MissileGone)
             if (g.id == mid)
             {
                 impact = true;

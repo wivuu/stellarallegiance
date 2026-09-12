@@ -18,6 +18,10 @@
 # All gun masses are 1.0 (IGC). Tier 2/3 gate on the same-named research tech. can-damage-base stays
 # OFF for every gun — the bomber's anti-base torpedo (weapon-id 5, launchers.yaml) is the match-ender.
 #
+# model-name is the Allegiance part model each gun is drawn as when it is loose in space as dropped
+# salvage (ac_20.igc part records; the GLB lives at assets/parts/<name>.glb): Gat wep09, Mini-Gun
+# wep16, AutoCan wep02, Nanite wep18. A tier shares its line's model — the tiers are the same part.
+#
 # Tier succession: each non-top tier carries obsoleted-by-techs (the NEXT tier's tech — once owned the
 # hangar hides this tier) + successor-part-id (the next-tier weapon a saved loadout migrates to). So a
 # team that researches gat-2 no longer sees Gat Gun 1 in the arsenal, and any Gat-1 loadout re-arms to
@@ -32,6 +36,7 @@ weapons:
     fire-interval-ticks: 4
     projectile-life-ticks: 20
     projectile-id: gat-bolt-1
+    model-name: wep09
     required-capabilities: [base]
     obsoleted-by-techs: [gat-2]
     successor-part-id: gat-gun-2
@@ -43,6 +48,7 @@ weapons:
     fire-interval-ticks: 4
     projectile-life-ticks: 20
     projectile-id: gat-bolt-2
+    model-name: wep09
     required-capabilities: [base]
     required-techs: [gat-2]
     obsoleted-by-techs: [gat-3]
@@ -55,6 +61,7 @@ weapons:
     fire-interval-ticks: 4
     projectile-life-ticks: 20
     projectile-id: gat-bolt-3
+    model-name: wep09
     required-capabilities: [base]
     required-techs: [gat-3]
 
@@ -67,6 +74,7 @@ weapons:
     fire-interval-ticks: 3
     projectile-life-ticks: 16
     projectile-id: minigun-bolt-1
+    model-name: wep16
     required-capabilities: [base]
     obsoleted-by-techs: [minigun-2]
     successor-part-id: mini-gun-2
@@ -78,6 +86,7 @@ weapons:
     fire-interval-ticks: 3
     projectile-life-ticks: 16
     projectile-id: minigun-bolt-2
+    model-name: wep16
     required-capabilities: [base]
     required-techs: [minigun-2]
     obsoleted-by-techs: [minigun-3]
@@ -90,6 +99,7 @@ weapons:
     fire-interval-ticks: 3
     projectile-life-ticks: 16
     projectile-id: minigun-bolt-3
+    model-name: wep16
     required-capabilities: [base]
     required-techs: [minigun-3]
 
@@ -102,6 +112,7 @@ weapons:
     fire-interval-ticks: 3
     projectile-life-ticks: 20
     projectile-id: autocan-bolt-1
+    model-name: wep02
     shield-damage-multiplier: 0.5 # heavy AP round: hits hull hard, half-effective vs shields
     required-capabilities: [base]
     obsoleted-by-techs: [autocan-2]
@@ -114,6 +125,7 @@ weapons:
     fire-interval-ticks: 3
     projectile-life-ticks: 20
     projectile-id: autocan-bolt-2
+    model-name: wep02
     shield-damage-multiplier: 0.5 # heavy AP round: hits hull hard, half-effective vs shields
     required-capabilities: [base]
     required-techs: [autocan-2]
@@ -127,6 +139,7 @@ weapons:
     fire-interval-ticks: 3
     projectile-life-ticks: 20
     projectile-id: autocan-bolt-3
+    model-name: wep02
     shield-damage-multiplier: 0.5 # heavy AP round: hits hull hard, half-effective vs shields
     required-capabilities: [base]
     required-techs: [autocan-3]
@@ -143,6 +156,7 @@ weapons:
     fire-interval-ticks: 10
     projectile-life-ticks: 20
     projectile-id: nanite-bolt-1
+    model-name: wep18
     is-healing: true
     required-capabilities: [base]
     obsoleted-by-techs: [nanite-2]
@@ -155,6 +169,7 @@ weapons:
     fire-interval-ticks: 10
     projectile-life-ticks: 20
     projectile-id: nanite-bolt-2
+    model-name: wep18
     is-healing: true
     required-capabilities: [base]
     required-techs: [nanite-2]
@@ -168,6 +183,7 @@ weapons:
     fire-interval-ticks: 10
     projectile-life-ticks: 20
     projectile-id: nanite-bolt-3
+    model-name: wep18
     is-healing: true
     required-capabilities: [base]
     required-techs: [nanite-3]
