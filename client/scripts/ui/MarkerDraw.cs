@@ -64,7 +64,8 @@ internal sealed class MarkerDraw
     private static readonly Color WaypointColor = DesignTokens.TeamAccent;
 
     // The per-class symbol drawn at each marker. A pod overrides the hull class; Aleph is a
-    // world landmark (warp gate) rather than a ship/base; Probe is a deployed recon beacon.
+    // world landmark (warp gate) rather than a ship/base; Probe is a deployed recon beacon;
+    // Salvage is a dropped item waiting to be collected.
     public enum Kind
     {
         Base,
@@ -77,6 +78,7 @@ internal sealed class MarkerDraw
         Probe,
         Mine,
         Asteroid,
+        Salvage,
     }
 
     // The overlay every primitive draws onto (the TargetMarkers Control).
@@ -563,6 +565,25 @@ internal sealed class MarkerDraw
                 // marker distinct from the pod's filled circle and the aleph's concentric rings.
                 _ci.DrawArc(p, r, 0f, Mathf.Tau, 16, color, 1.5f, true);
                 _ci.DrawCircle(p, r * 0.3f, color);
+                break;
+            case Kind.Salvage:
+                // Dropped salvage: a hollow crate — a square outline with a small `+` inside, the
+                // universal "supply pickup" read. Deliberately unlike the mine's spiked burst and the
+                // probe's diamond, so something you want to fly INTO never reads as ordnance. Drawn as
+                // four line segments off the reused _poly4 scratch (no per-frame allocation) plus the
+                // two cross strokes; the caller's quiet/friendly style keeps it dim.
+                float crate = r * 0.85f;
+                _poly4[0] = p + new Vector2(-crate, -crate);
+                _poly4[1] = p + new Vector2(crate, -crate);
+                _poly4[2] = p + new Vector2(crate, crate);
+                _poly4[3] = p + new Vector2(-crate, crate);
+                _ci.DrawLine(_poly4[0], _poly4[1], color, 1.5f, true);
+                _ci.DrawLine(_poly4[1], _poly4[2], color, 1.5f, true);
+                _ci.DrawLine(_poly4[2], _poly4[3], color, 1.5f, true);
+                _ci.DrawLine(_poly4[3], _poly4[0], color, 1.5f, true);
+                float cross = crate * 0.5f;
+                _ci.DrawLine(p + new Vector2(-cross, 0f), p + new Vector2(cross, 0f), color, 1.5f, true);
+                _ci.DrawLine(p + new Vector2(0f, -cross), p + new Vector2(0f, cross), color, 1.5f, true);
                 break;
         }
     }

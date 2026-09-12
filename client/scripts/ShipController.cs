@@ -143,7 +143,13 @@ public partial class ShipController : Node
     private bool _warpTest; // --warp-test: mine-drop run, then manual-steer into the sector's aleph (warp smoke)
     private bool _ramTest; // --ram-test: autofly chases + rams the nearest remote ship (ram-prediction measurement harness)
     private bool _strafeTest; // --strafe-test: pure lateral strafe + continuous fire (bolt-smoothness measurement harness)
+    private bool _salvageTest; // --salvage-test: autofly until a wreck drops, then fly onto the nearest item (pickup smoke)
     private ulong _ramTargetId; // committed ram target (survives frame-to-frame so the rammer doesn't orbit a cluster)
+
+    // --salvage-test bookkeeping: the item label currently being chased and the step the chase was
+    // last logged on, so the harness prints when the target CHANGES without spamming every frame.
+    private string _salvageTargetLabel = "";
+    private int _salvageLogStep = int.MinValue;
 
     // Round-trip latency. STDB mode times each ApplyInput against its own reducer callback
     // (clientTick echoed back); native mode times an explicit Ping/Pong nonce (no reducer to
@@ -226,6 +232,15 @@ public partial class ShipController : Node
             {
                 _autoFly = true;
                 _strafeTest = true;
+            }
+            // Salvage pickup harness: fly the normal autofly weave until a wreck scatters items into
+            // view, then steer onto the nearest one so the server's pickup path (accept / stow /
+            // ricochet + the SALVAGED banner) actually fires in a headless smoke. Pair with --fighter,
+            // whose free payload and empty belly mount accept most of a Scout's drops.
+            if (a == "--salvage-test")
+            {
+                _autoFly = true;
+                _salvageTest = true;
             }
             // Render stress-test knobs (see StressRender / the --stress-fighters server harness).
             // --render-stats alone just shows the counters; --stress-fx=<mode> also strips ship fx
@@ -1070,6 +1085,46 @@ public partial class ShipController : Node
                 avoid: (_, dir) => dir
             );
             return steer;
+        }
+
+        // Salvage pickup harness: while nothing is lying around, fall through to the ordinary autofly
+        // weave (which fights, dies and generally gets wrecks made); once the renderer is showing items
+        // — it mirrors exactly the fog/sector-scoped stream, so anything in it is genuinely reachable —
+        // fly straight onto the nearest one. Same manual-AutoSteer shape as --warp-test: a NO-OP avoid
+        // delegate (obstacle avoidance would veer around the very thing we want to touch) and a modest
+        // throttle, because a Scout at full speed overshoots a 3 u pickup sphere between ticks.
+        if (_salvageTest && _world.Ships.LocalShip is { } svShip)
+        {
+            const float salvageThrust = 0.6f;
+            var items = _world.Salvage.Visible(); // shared scratch — consumed before anything else calls it
+            if (items.Count > 0)
+            {
+                Vector3 gp = svShip.GlobalPosition;
+                int best = 0;
+                for (int i = 1; i < items.Count; i++)
+                    if (gp.DistanceSquaredTo(items[i].Pos) < gp.DistanceSquaredTo(items[best].Pos))
+                        best = i;
+                var (target, _, label) = items[best];
+
+                // Log on a target CHANGE, and at most once every ~2 s while chasing the same piece, so a
+                // long approach leaves a readable trail instead of one line per frame.
+                if (label != _salvageTargetLabel || _stepsSinceSpawn - _salvageLogStep >= 40)
+                {
+                    _salvageTargetLabel = label;
+                    _salvageLogStep = _stepsSinceSpawn;
+                    Log.Print($"[salvage-test] target {label} dist={(target - gp).Length():0.0}u");
+                }
+
+                var sq = svShip.GlobalBasis.GetRotationQuaternion();
+                return AutoSteer.SteerToPoint(
+                    new Vec3(gp.X, gp.Y, gp.Z),
+                    new Quat(sq.X, sq.Y, sq.Z, sq.W),
+                    new Vec3(target.X, target.Y, target.Z),
+                    turnGain: 3f,
+                    thrustWhenFacing: salvageThrust,
+                    avoid: (_, dir) => dir
+                );
+            }
         }
 
         // Strafe-fire harness: burn straight for 8 s to get clear of the garrison (a pure-strafe ship

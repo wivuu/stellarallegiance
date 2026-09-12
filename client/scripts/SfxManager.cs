@@ -53,6 +53,7 @@ public partial class SfxManager : Node
         ContactEnemy,
         ContactNeutral,
         MiningLoop,
+        PickupPart,
     }
 
     private static readonly Dictionary<SfxId, string> Files = new()
@@ -85,6 +86,8 @@ public partial class SfxManager : Node
         { SfxId.ContactEnemy, "contact_enemy.ogg" },
         { SfxId.ContactNeutral, "contact_neutral.ogg" },
         { SfxId.MiningLoop, "mining_loop.ogg" },
+        // Salvage collected — Allegiance's own pickUpPart cue (the vacuum "hoover" swallow).
+        { SfxId.PickupPart, "pickup_part.ogg" },
     };
 
     // Streams that should play as seamless loops (engine bed, ambience).

@@ -68,8 +68,12 @@ public partial class AssetPreloader : Node
         var paths = new List<string>();
         var basePaths = GlbsIn("res://assets/bases");
         var shipPaths = GlbsIn("res://assets/ships");
+        // Salvage item meshes (guns, fuel packs): small GLBs, but a wreck drops several at once the
+        // instant a ship dies, so a cold first-sight load would hitch exactly during a firefight.
+        var partPaths = GlbsIn("res://assets/parts");
         paths.AddRange(basePaths);
         paths.AddRange(shipPaths);
+        paths.AddRange(partPaths);
         foreach (string v in AsteroidShapes.Variants)
             paths.Add($"res://assets/asteroids/{v}.glb");
 
@@ -81,9 +85,13 @@ public partial class AssetPreloader : Node
         // shared GlbReader/QuickHull are engine-free C#, safe off the main thread). Bases carry
         // the model pre-rotation so the path-keyed cache matches what CollisionWorld.BaseModel
         // would build itself — hull parity with the server is load-bearing.
+        // Salvage parts are excluded: nothing on the client ever collides with a dropped item (the
+        // server owns every item bounce and pickup), so building a convex hull for one would burn
+        // worker time and memory on a body no code path can query.
         var hulls = new List<(string Path, Quat Pre)>();
         foreach (string path in paths)
-            hulls.Add((path, basePaths.Contains(path) ? CollisionConfig.BaseModelRotation : default));
+            if (!partPaths.Contains(path))
+                hulls.Add((path, basePaths.Contains(path) ? CollisionConfig.BaseModelRotation : default));
         System.Threading.Tasks.Task.Run(() =>
         {
             foreach (var (path, pre) in hulls)

@@ -109,8 +109,17 @@ public partial class WeaponsPanel : Control
         WeaponDef? mineDisp = DispenserFor(cls, WeaponKind.Mine, _net.LocalMineAmmo);
         WeaponDef? probeDisp = DispenserFor(cls, WeaponKind.Probe, _net.LocalProbeAmmo);
 
+        // Salvaged missile stacks this hull can't fire (v39): one HOLD row each, and nothing at all
+        // when the hold is empty — the common case, which must cost the panel no height.
+        var stowed = local.Stowed;
+
         int secCount =
-            _weapons.Count - 1 + (chaffDisp != null ? 1 : 0) + (mineDisp != null ? 1 : 0) + (probeDisp != null ? 1 : 0);
+            _weapons.Count
+            - 1
+            + (chaffDisp != null ? 1 : 0)
+            + (mineDisp != null ? 1 : 0)
+            + (probeDisp != null ? 1 : 0)
+            + stowed.Count;
         float panelH =
             PadTop + HeaderH + GapAfterHeader + PrimaryH + (secCount > 0 ? RowGap + secCount * SecRowH : 0f) + PadBottom;
 
@@ -184,6 +193,41 @@ public partial class WeaponsPanel : Control
             DrawDispenserRow("G", probeDisp, _net.LocalProbeAmmo, _net.LocalProbeLoadTick, left, right, y, mono);
             y += SecRowH;
         }
+
+        // ---- Hold rows: salvaged rounds for a rack this hull doesn't fly (inert dead weight) ----
+        foreach (var (rackId, count) in stowed)
+        {
+            DrawStowedRow(rackId, count, left, right, y, mono);
+            y += SecRowH;
+        }
+    }
+
+    // One HOLD row: "HOLD  NAME ×N  INERT". Salvaged missile rounds whose rack this hull doesn't
+    // mount ride along as cargo — they cost payload and re-drop on death, but no key fires them, so
+    // the row carries no hotkey hint, no pips and no cadence bar. Dim throughout (TextDim/Text2):
+    // it is inventory the pilot should notice, never a weapon they might reach for.
+    private void DrawStowedRow(uint rackId, byte count, float left, float right, float y, Font mono)
+    {
+        float mid = y + SecRowH * 0.5f;
+        DrawString(mono, new Vector2(left, mid + 4f), "HOLD", HorizontalAlignment.Left, -1, 9, DesignTokens.TextDim);
+
+        const string state = "INERT";
+        DrawStringRight(mono, new Vector2(right, mid + 4f), state, 10, DesignTokens.TextDim);
+
+        // The rack the rounds belong to names them. A def that hasn't streamed (or a rack retired
+        // from the catalog) still gets a readable row rather than a blank one.
+        string name = _defs.GetWeapon(rackId)?.Name is { Length: > 0 } n ? n : "Missiles";
+        float nameX = left + 26f;
+        float clusterLeft = right - MonoWidth(mono, state, 10) - 10f;
+        DrawString(
+            UiFonts.Saira,
+            new Vector2(nameX, mid + 4f),
+            $"{name} ×{count}".ToUpperInvariant(),
+            HorizontalAlignment.Left,
+            Mathf.Max(24f, clusterLeft - 8f - nameX),
+            12,
+            DesignTokens.Text2
+        );
     }
 
     // The chaff/mine dispenser WeaponDef the local ship carries, or null if it carries none of that

@@ -78,7 +78,10 @@ public sealed class SalvageRenderer
             var puff = PickupFx(view!.Team);
             _fx.SpawnEffect(puff, p, sector); // parents it — CreateTween below needs it in the tree
             BeginPickupFx(puff);
-            // The PickupPart SFX call lands here in phase 4 (SfxManager gains the cue + the asset).
+            // Positional collect cue for EVERY client that was rendering the item (the `had` gate), not
+            // just the collector: a piece being swallowed nearby is worth hearing. Slightly under unity
+            // so a scramble over a wreck field doesn't drown the guns.
+            SfxManager.Instance?.PlayAt(SfxManager.SfxId.PickupPart, p, volumeDb: -3f);
             if (byShipId != 0 && _ships.LocalShip is { } pc && pc.ShipId == byShipId)
                 PickedUp?.Invoke(view.Label);
         }
