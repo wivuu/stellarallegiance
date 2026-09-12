@@ -1227,7 +1227,7 @@ Simulation.ShipSim MinerAt(Vec3 pos, uint sector, float ore = 0f) =>
 // Stream 6: miner AI — slot lifecycle, rock claims, the harvest→offload→relaunch loop, sector
 // authorization (+ cross-sector transit), purchase cap/charge, and death. These drive the FULL
 // sim step (StartMatch seeds each team's free miner; MinerBrainStep/MinerExecute do the rest) and
-// observe through MinerSlotsView / MinerNoticesThisStep / TeamStates. All fog-OFF (deterministic;
+// observe through MinerSlotsView / Events.MinerNotices / TeamStates. All fog-OFF (deterministic;
 // the fog gate itself is covered by RockEligible's discovered-only test below).
 // ============================================================================================
 
@@ -1255,7 +1255,7 @@ List<string> noticesSeen = new();
 void StepAndCollect(Simulation sim)
 {
     sim.Step();
-    foreach (var (_, text) in sim.MinerNoticesThisStep)
+    foreach (var (_, text) in sim.Events.MinerNotices)
         noticesSeen.Add(text);
 }
 

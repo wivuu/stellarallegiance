@@ -294,7 +294,7 @@ uint cCompleteTick = cStartTick + cDur;
 while (sim.Tick < cCompleteTick - 1)
     sim.Step(); // step up to (not including) the completing tick
 sim.Step(); // this tick completes the order
-bool cCompletedFlag = sim.TeamStateChangedThisStep;
+bool cCompletedFlag = sim.Events.TeamStateChanged;
 Check(
     world.TeamStates[team0].OwnedTechs.Contains("bomber"),
     "completing dev-bomber grants the bomber tech to the team",
@@ -307,8 +307,8 @@ Check(
 );
 Check(
     cCompletedFlag,
-    "TeamStateChangedThisStep is flagged on the completing step",
-    "the completing step did not flag TeamStateChangedThisStep"
+    "Events.TeamStateChanged is flagged on the completing step",
+    "the completing step did not flag Events.TeamStateChanged"
 );
 Check(
     research0.Active.Count == 0,
@@ -615,10 +615,10 @@ int supBaseIdx = worldU.Bases.FindIndex(b => b.Id == supBaseId);
 tsU.OwnedTechs.Add("supremacy-1"); // makes dev-upgrade-supremacy OFFERED (isolates the from-type guard)
 tsU.Credits = 5000;
 int kBefore = tsU.Credits;
-simU.ResearchNoticesThisStep.Clear();
+simU.Events.ResearchNotices.Clear();
 simU.EnqueueResearchOp(0, uTeam, Simulation.ResearchOpStart, uBaseId, 8); // dev-upgrade-supremacy AT the type-4 garrison (wrong)
 simU.Step();
-bool rejectedNotice = simU.ResearchNoticesThisStep.Exists(n => n.Text.Contains("must be researched at"));
+bool rejectedNotice = simU.Events.ResearchNotices.Exists(n => n.Text.Contains("must be researched at"));
 Check(
     worldU.ResearchByBase[supBaseIdx].Active.Count == 0
         && worldU.Bases[supBaseIdx].BaseTypeId == 2
@@ -653,11 +653,11 @@ Check(
 // must be REJECTED at the Garrison (type 4, family root 0) and ACCEPTED at the Supremacy (family root 2)
 // — the server mirror of the client's per-base RESEARCH canvas filter.
 tsU.Credits = 5000;
-simU.ResearchNoticesThisStep.Clear();
+simU.Events.ResearchNotices.Clear();
 int famBefore = tsU.Credits;
 simU.EnqueueResearchOp(0, uTeam, Simulation.ResearchOpStart, uBaseId, 5); // dev-autocan-2 at the garrison (wrong family)
 simU.Step();
-bool famRejected = simU.ResearchNoticesThisStep.Exists(n => n.Text.Contains("must be researched at"));
+bool famRejected = simU.Events.ResearchNotices.Exists(n => n.Text.Contains("must be researched at"));
 Check(
     !worldU.ResearchByBase[uBaseIdx].Active.Exists(a => a.DevIndex == 5)
         && famRejected

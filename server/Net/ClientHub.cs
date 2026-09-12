@@ -921,7 +921,7 @@ public sealed partial class ClientHub
                 {
                     // Commander buys a constructor bound to a station type. Commander-gated HERE (the
                     // commander-buy pattern); validated + applied on the sim thread. Results come back as
-                    // team-scoped ConstructorNoticesThisStep chat.
+                    // team-scoped Events.ConstructorNotices chat.
                     if (!BuildConstructorMessage.TryParse(buffer.AsSpan(0, count), out var build))
                         break;
                     if (CommanderOrWarn(client) is byte cmdTeam)
@@ -943,7 +943,7 @@ public sealed partial class ClientHub
                     // Commander buys a mining drone at the docked garrison (so the miner joins THAT
                     // garrison's build pipeline; 0 = default garrison). Commander-gated HERE;
                     // cap/cost/phase/queue/kill-switch validated on the sim thread (TryBuyMiner).
-                    // Results come back as team-scoped MinerNoticesThisStep chat.
+                    // Results come back as team-scoped Events.MinerNotices chat.
                     if (!BuyMinerMessage.TryParse(buffer.AsSpan(0, count), out var buy))
                         break;
                     if (CommanderOrWarn(client) is byte minerTeam)
@@ -965,7 +965,7 @@ public sealed partial class ClientHub
 
     // In-game slash commands (text starting with '/'). Consumed here, never relayed as chat.
     // /pigs toggles AI drone spawns. (Miner buying moved from /buyminer to the MsgBuyMiner Build-tab
-    // button — commander-gated, results come back as team-scoped MinerNoticesThisStep chat.)
+    // button — commander-gated, results come back as team-scoped Events.MinerNotices chat.)
     private void HandleCommand(Client client, string text)
     {
         var parts = text[1..].Split((char[]?)null, 2, StringSplitOptions.RemoveEmptyEntries);
@@ -1171,7 +1171,7 @@ public sealed partial class ClientHub
     // MsgOrder routing. Human subject → advisory chat directive (gold scope-2 when the issuer is
     // the commander, plain team chat otherwise) — the pilot keeps control, nothing reaches the
     // sim. AI subject → commander-only, enqueued for sim-thread validation; accept/reject answers
-    // come back through OrderNoticesThisStep / OrderDirectivesThisStep in AfterStep.
+    // come back through Events.OrderNotices / Events.OrderDirectives in AfterStep.
     private void HandleOrder(Client client, ulong subject, byte targetKind, ulong targetId, uint sector, Vec3 pos)
     {
         if (subject == 0 || TeamOrWarn(client) is not byte team)
@@ -1316,9 +1316,9 @@ public sealed partial class ClientHub
         // Scoreboard. Prune the name/team memo of any client id the sim just retired to a reconnect
         // BEFORE building a frame, so a reclaimed pilot never shows up twice (once live, once as a
         // ghost row flagged LEFT). Then broadcast only if the ledger actually moved this step.
-        foreach (var (oldCid, _) in _sim.ReclaimsThisStep)
+        foreach (var (oldCid, _) in _sim.Events.Reclaims)
             _pilotIdentity.TryRemove(oldCid, out _);
-        if (_sim.StatsChangedThisStep || _matchStatsResend)
+        if (_sim.Events.StatsChanged || _matchStatsResend)
         {
             _matchStatsResend = false;
             BroadcastMatchStats();
@@ -1409,7 +1409,7 @@ public sealed partial class ClientHub
             _lastPhase = _sim.Phase;
             BroadcastLobby();
             // The board is what the client auto-opens at Active->Ended, so it must be current at the
-            // transition itself — StatsChangedThisStep may well be false on the tick the phase flips.
+            // transition itself — Events.StatsChanged may well be false on the tick the phase flips.
             BroadcastMatchStats();
             // Fog: a match reseed (StartMatch -> Active, ReturnToLobby -> Lobby both run ResetVision,
             // which clears every team's discovered set + reveal log back to its own bases) leaves each
@@ -1430,35 +1430,35 @@ public sealed partial class ClientHub
     {
         // Mining notices ("Miner purchased", "offloaded ore: +N", ...): team-scoped system chat,
         // accumulated by the sim during Step and cleared at the top of the next one.
-        foreach (var (team, msg) in _sim.MinerNoticesThisStep)
+        foreach (var (team, msg) in _sim.Events.MinerNotices)
             SystemToTeam(team, msg);
 
         // Constructor / base-building notices (same team-scoped contract).
-        foreach (var (team, msg) in _sim.ConstructorNoticesThisStep)
+        foreach (var (team, msg) in _sim.Events.ConstructorNotices)
             SystemToTeam(team, msg);
 
         // Research notices (same accumulate-in-Step contract): team-wide announcements
         // (started/complete/cancelled) + issuer-only rejections.
-        foreach (var (team, msg) in _sim.ResearchTeamNoticesThisStep)
+        foreach (var (team, msg) in _sim.Events.ResearchTeamNotices)
             SystemToTeam(team, msg);
-        foreach (var (cid, msg) in _sim.ResearchNoticesThisStep)
+        foreach (var (cid, msg) in _sim.Events.ResearchNotices)
             if (_clients.TryGetValue(cid, out var rc))
                 SystemTo(rc, msg);
 
         // Wreck-salvage feedback (v39, same accumulate-in-Step contract): PER-PILOT system lines —
         // "Salvaged: …" / "Stowed: …" on a pickup, "Can't carry …" once per (ship, item) when a
         // full hull makes an item ricochet. Nobody but the collector needs to hear about it.
-        foreach (var (cid, msg) in _sim.PilotNoticesThisStep)
+        foreach (var (cid, msg) in _sim.Events.PilotNotices)
             if (_clients.TryGetValue(cid, out var pc))
                 SystemTo(pc, msg);
 
         // Commander-order feedback (same accumulate-in-Step contract): issuer-only rejections/acks
         // as system lines, and team-wide GOLD directives (MsgChatRelay scope 2) once the sim has
         // validated an order — so a fog-rejected order never announces to the team.
-        foreach (var (cid, msg) in _sim.OrderNoticesThisStep)
+        foreach (var (cid, msg) in _sim.Events.OrderNotices)
             if (_clients.TryGetValue(cid, out var oc))
                 SystemTo(oc, msg);
-        foreach (var (team, issuer, msg) in _sim.OrderDirectivesThisStep)
+        foreach (var (team, issuer, msg) in _sim.Events.OrderDirectives)
         {
             byte[] BuildDirectiveFrame() => Protocol.BuildChatRelay(2, team, issuer, msg);
             SendToTeam(team, BuildDirectiveFrame);
@@ -1473,12 +1473,12 @@ public sealed partial class ClientHub
         BeginStreamTick(coarse);
 
         byte[][]? goneFrames = null;
-        if (_sim.DeathsThisStep.Count > 0)
+        if (_sim.Events.Deaths.Count > 0)
         {
-            goneFrames = new byte[_sim.DeathsThisStep.Count][];
-            for (int i = 0; i < _sim.DeathsThisStep.Count; i++)
+            goneFrames = new byte[_sim.Events.Deaths.Count][];
+            for (int i = 0; i < _sim.Events.Deaths.Count; i++)
             {
-                var (id, reason) = _sim.DeathsThisStep[i];
+                var (id, reason) = _sim.Events.Deaths[i];
                 goneFrames[i] = Protocol.BuildShipGone(id, reason);
             }
         }
@@ -1486,12 +1486,12 @@ public sealed partial class ClientHub
         // Missile detonation / expiry FX — broadcast to every client (cheap, rare), next to the
         // ship-death drain. Missile in-flight records are AOI-filtered per client below instead.
         byte[][]? missileGoneFrames = null;
-        if (_sim.MissileGoneThisStep.Count > 0)
+        if (_sim.Events.MissileGone.Count > 0)
         {
-            missileGoneFrames = new byte[_sim.MissileGoneThisStep.Count][];
-            for (int i = 0; i < _sim.MissileGoneThisStep.Count; i++)
+            missileGoneFrames = new byte[_sim.Events.MissileGone.Count][];
+            for (int i = 0; i < _sim.Events.MissileGone.Count; i++)
             {
-                var g = _sim.MissileGoneThisStep[i];
+                var g = _sim.Events.MissileGone[i];
                 missileGoneFrames[i] = Protocol.BuildMissileGone(g.id, g.reason, g.sector, g.pos);
             }
         }
@@ -1503,19 +1503,19 @@ public sealed partial class ClientHub
 
         // Chaff spawns + mine pops — broadcast to every client (cheap, rare), like missile-gones.
         byte[][]? chaffFrames = null;
-        if (_sim.ChaffSpawnedThisStep.Count > 0)
+        if (_sim.Events.ChaffSpawned.Count > 0)
         {
-            chaffFrames = new byte[_sim.ChaffSpawnedThisStep.Count][];
-            for (int i = 0; i < _sim.ChaffSpawnedThisStep.Count; i++)
-                chaffFrames[i] = Protocol.BuildChaff(_sim.ChaffSpawnedThisStep[i]);
+            chaffFrames = new byte[_sim.Events.ChaffSpawned.Count][];
+            for (int i = 0; i < _sim.Events.ChaffSpawned.Count; i++)
+                chaffFrames[i] = Protocol.BuildChaff(_sim.Events.ChaffSpawned[i]);
         }
         byte[][]? mineGoneFrames = null;
-        if (_sim.MineGoneThisStep.Count > 0)
+        if (_sim.Events.MineGone.Count > 0)
         {
-            mineGoneFrames = new byte[_sim.MineGoneThisStep.Count][];
-            for (int i = 0; i < _sim.MineGoneThisStep.Count; i++)
+            mineGoneFrames = new byte[_sim.Events.MineGone.Count][];
+            for (int i = 0; i < _sim.Events.MineGone.Count; i++)
             {
-                var g = _sim.MineGoneThisStep[i];
+                var g = _sim.Events.MineGone[i];
                 mineGoneFrames[i] = Protocol.BuildMineGone(g.fieldId, g.mineIndex, g.reason, g.sector, g.pos);
             }
         }
@@ -1524,10 +1524,10 @@ public sealed partial class ClientHub
         // BROADCAST to every client (the owner AND the destroyer both want the outcome — reason 2
         // plays an explosion). A client that never had the probe no-ops the unknown id.
         List<byte[]>? probeGoneFrames = null;
-        if (_sim.ProbeGoneThisStep.Count > 0)
+        if (_sim.Events.ProbeGone.Count > 0)
         {
-            probeGoneFrames = new(_sim.ProbeGoneThisStep.Count);
-            foreach (var g in _sim.ProbeGoneThisStep)
+            probeGoneFrames = new(_sim.Events.ProbeGone.Count);
+            foreach (var g in _sim.Events.ProbeGone)
                 probeGoneFrames.Add(Protocol.BuildProbeGone(g.id, g.reason, g.sector, g.pos));
         }
 
@@ -1535,10 +1535,10 @@ public sealed partial class ClientHub
         // BROADCAST like a probe-gone (an unknown id no-ops client-side) — reason 2 is the only
         // authority for the pickup FX/toast, which MsgSalvage's reconcile-by-omission can't express.
         List<byte[]>? salvageGoneFrames = null;
-        if (_sim.SalvageGoneThisStep.Count > 0)
+        if (_sim.Events.SalvageGone.Count > 0)
         {
-            salvageGoneFrames = new(_sim.SalvageGoneThisStep.Count);
-            foreach (var g in _sim.SalvageGoneThisStep)
+            salvageGoneFrames = new(_sim.Events.SalvageGone.Count);
+            foreach (var g in _sim.Events.SalvageGone)
                 salvageGoneFrames.Add(Protocol.BuildSalvageGone(g.id, g.reason, g.sector, g.pos, g.byShipId));
         }
 
@@ -1548,10 +1548,10 @@ public sealed partial class ClientHub
         // quiet-fade ShipGone to THAT team's clients only (real deaths stay in goneFrames, broadcast).
         // Grouped by team here so the per-client loop just replays its team's list.
         Dictionary<byte, List<byte[]>>? lostByTeam = null;
-        if (fog && _sim.LostContactsThisStep.Count > 0)
+        if (fog && _sim.Events.LostContacts.Count > 0)
         {
             lostByTeam = new();
-            foreach (var (lt, sid) in _sim.LostContactsThisStep)
+            foreach (var (lt, sid) in _sim.Events.LostContacts)
             {
                 if (!lostByTeam.TryGetValue(lt, out var lst))
                     lostByTeam[lt] = lst = new();
@@ -1562,9 +1562,9 @@ public sealed partial class ClientHub
         // Fog point-visibility for chaff pops (F10): a per-(team, chaff-index) precompute, eager — a
         // chaff pop is a one-shot event tied to this exact tick, not a per-client anchor query.
         Dictionary<byte, HashSet<int>>? chaffVisByTeam = null;
-        if (fog && _sim.ChaffSpawnedThisStep.Count > 0)
+        if (fog && _sim.Events.ChaffSpawned.Count > 0)
         {
-            var cs = _sim.ChaffSpawnedThisStep;
+            var cs = _sim.Events.ChaffSpawned;
             chaffVisByTeam = new();
             for (byte t = 0; t < TeamCount; t++)
             {
@@ -1750,7 +1750,7 @@ public sealed partial class ClientHub
             {
                 if (fog)
                 {
-                    var c = _sim.ChaffSpawnedThisStep[ci];
+                    var c = _sim.Events.ChaffSpawned[ci];
                     // Enemy pops only when visible to this team at the spawn instant — using the
                     // per-(team, chaff-index) precompute above (F10), not a per-client recompute.
                     if (

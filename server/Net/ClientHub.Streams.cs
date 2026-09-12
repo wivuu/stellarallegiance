@@ -87,7 +87,7 @@ public sealed partial class ClientHub
         }
 
         public override bool Due(ClientHub hub, byte team, uint anchor, bool coarse) =>
-            hub._sim.BasesChangedThisStep || coarse;
+            hub._sim.Events.BasesChanged || coarse;
 
         public override byte[]? Build(ClientHub hub, byte team, uint anchor, bool coarse) =>
             Fog ? Protocol.BuildBasesFor(hub._sim.World, hub._sim.VisionFor(team)) : Protocol.BuildBases(hub._sim.World);
@@ -101,7 +101,7 @@ public sealed partial class ClientHub
         public override StreamTier Tier => StreamTier.Lossy;
 
         public override bool Due(ClientHub hub, byte team, uint anchor, bool coarse) =>
-            hub._sim.TeamStateChangedThisStep || coarse;
+            hub._sim.Events.TeamStateChanged || coarse;
 
         public override byte[]? Build(ClientHub hub, byte team, uint anchor, bool coarse) =>
             Protocol.BuildTeamState(hub._sim);
@@ -117,7 +117,7 @@ public sealed partial class ClientHub
         public override StreamTier Tier => StreamTier.Reliable;
 
         public override bool Due(ClientHub hub, byte team, uint anchor, bool coarse) =>
-            hub._sim.LoadoutsChangedThisStep || coarse;
+            hub._sim.Events.LoadoutsChanged || coarse;
 
         public override byte[]? Build(ClientHub hub, byte team, uint anchor, bool coarse) =>
             Protocol.BuildShipLoadouts(hub._sim);
@@ -132,7 +132,7 @@ public sealed partial class ClientHub
         public override bool SpectatorsToo => false;
 
         public override bool Due(ClientHub hub, byte team, uint anchor, bool coarse) =>
-            hub._sim.ResearchChangedThisStep || coarse;
+            hub._sim.Events.ResearchChanged || coarse;
 
         public override byte[]? Build(ClientHub hub, byte team, uint anchor, bool coarse) =>
             Protocol.BuildResearchStateFor(hub._sim.World, team);
@@ -174,7 +174,7 @@ public sealed partial class ClientHub
         public override bool SpectatorsToo => false;
 
         public override bool Due(ClientHub hub, byte team, uint anchor, bool coarse) =>
-            hub._sim.ConstructorChangedThisStep || coarse;
+            hub._sim.Events.ConstructorChanged || coarse;
 
         public override byte[]? Build(ClientHub hub, byte team, uint anchor, bool coarse) =>
             Protocol.BuildConstructorState(hub._sim, team);
@@ -190,10 +190,10 @@ public sealed partial class ClientHub
         public override StreamTier Tier => StreamTier.Reliable;
 
         public override bool Due(ClientHub hub, byte team, uint anchor, bool coarse) =>
-            !hub._sim.FogEnabled && hub._sim.BasesCreatedThisStep.Count > 0;
+            !hub._sim.FogEnabled && hub._sim.Events.BasesCreated.Count > 0;
 
         public override byte[]? Build(ClientHub hub, byte team, uint anchor, bool coarse) =>
-            Protocol.BuildBaseReveal(hub._sim.World, hub._sim.BasesCreatedThisStep);
+            Protocol.BuildBaseReveal(hub._sim.World, hub._sim.Events.BasesCreated);
     }
 
     // MsgRockGone: rocks a finished base consumed. Reliable broadcast, fog-agnostic (an unknown id is a
@@ -242,7 +242,7 @@ public sealed partial class ClientHub
         public override StreamTier Tier => StreamTier.Lossy;
 
         public override bool Due(ClientHub hub, byte team, uint anchor, bool coarse) =>
-            hub._sim.ProbesChangedThisStep || coarse;
+            hub._sim.Events.ProbesChanged || coarse;
 
         public override byte[]? Build(ClientHub hub, byte team, uint anchor, bool coarse) => hub.BuildProbesFor(team);
     }
@@ -265,7 +265,7 @@ public sealed partial class ClientHub
         }
 
         public override bool Due(ClientHub hub, byte team, uint anchor, bool coarse) =>
-            hub._sim.MinefieldsChangedThisStep || coarse;
+            hub._sim.Events.MinefieldsChanged || coarse;
 
         public override byte[]? Build(ClientHub hub, byte team, uint anchor, bool coarse) =>
             hub.BuildMinefieldsFor(anchor, team, EnemyVisible(hub, team));
@@ -310,7 +310,7 @@ public sealed partial class ClientHub
         }
 
         public override bool Due(ClientHub hub, byte team, uint anchor, bool coarse) =>
-            coarse || hub._sim.SalvageChangedSectorsThisStep.Contains(anchor);
+            coarse || hub._sim.Events.SalvageChangedSectors.Contains(anchor);
 
         public override byte[]? Build(ClientHub hub, byte team, uint anchor, bool coarse) =>
             hub.BuildSalvageFor(anchor, team, Visible(hub, team));

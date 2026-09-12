@@ -49,6 +49,7 @@
     <Project Path="tests/ShieldTest/ShieldTest.csproj" />
     <Project Path="tests/StrategyTest/StrategyTest.csproj" />
     <Project Path="tests/TeamStateStoreTest/TeamStateStoreTest.csproj" />
+    <Project Path="tests/TestKit/TestKit.csproj" />
     <Project Path="tests/WireTest/WireTest.csproj" />
   </Folder>
   <Folder Name="/tools/" />

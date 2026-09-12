@@ -19,6 +19,7 @@ using SimServer.Content;
 using SimServer.Net;
 using SimServer.Sim;
 using StellarAllegiance.Shared;
+using TestKit;
 
 int failures = 0;
 void Check(bool cond, string pass, string fail)
@@ -397,9 +398,9 @@ Simulation siegeSim;
         $"migrated counters wrong (K={moved.Kills}, PTS={moved.Points})"
     );
     Check(
-        sim.ReclaimsThisStep.Contains((Attacker, 9)),
-        "the reclaim was announced on ReclaimsThisStep for the hub's name/team memo",
-        $"ReclaimsThisStep missing the remap ([{string.Join(", ", sim.ReclaimsThisStep)}])"
+        sim.Events.Reclaims.Contains((Attacker, 9)),
+        "the reclaim was announced on Events.Reclaims for the hub's name/team memo",
+        $"Events.Reclaims missing the remap ([{string.Join(", ", sim.Events.Reclaims)}])"
     );
 }
 
@@ -419,21 +420,21 @@ Simulation siegeSim;
     );
 }
 
-// ---- 11. StatsChangedThisStep fires exactly on the steps the ledger moved -----------------------
+// ---- 11. Events.StatsChanged fires exactly on the steps the ledger moved -----------------------
 {
     var (sim, attacker, victim) = SetupDuel(seed: 11);
     victim.Health = 1f;
     ShootUntil(sim, attacker, victim, () => !sim.Ships.Contains(victim));
     Check(
-        sim.StatsChangedThisStep,
-        "the scoring step raised StatsChangedThisStep",
-        "the scoring step left StatsChangedThisStep clear"
+        sim.Events.StatsChanged,
+        "the scoring step raised Events.StatsChanged",
+        "the scoring step left Events.StatsChanged clear"
     );
     sim.Step();
     Check(
-        !sim.StatsChangedThisStep,
-        "a quiet step clears StatsChangedThisStep again (the hub only broadcasts on change)",
-        "StatsChangedThisStep stayed latched across a quiet step"
+        !sim.Events.StatsChanged,
+        "a quiet step clears Events.StatsChanged again (the hub only broadcasts on change)",
+        "Events.StatsChanged stayed latched across a quiet step"
     );
 }
 
@@ -475,15 +476,11 @@ Simulation siegeSim;
     _ = hub.HandleConnection(ft, cts.Token);
 
     // Fresh-join Hello (v9): [MsgHello][secretLen 0][nameLen][name][tokenLen 0].
-    var name = Encoding.UTF8.GetBytes("ace");
-    var hello = new List<byte> { Protocol.MsgHello, 0, (byte)name.Length };
-    hello.AddRange(name);
-    hello.Add(0);
-    ft.Feed(hello.ToArray());
+    ft.Feed(HubFrames.Hello("ace"));
     System.Threading.Thread.Sleep(50);
-    ft.Feed(new byte[] { Protocol.MsgSetTeam, 0 });
+    ft.Feed(HubFrames.SetTeam(0));
     System.Threading.Thread.Sleep(50);
-    ft.Feed(new byte[] { Protocol.MsgSetReady, 1 });
+    ft.Feed(HubFrames.SetReady(true));
     System.Threading.Thread.Sleep(50);
 
     void Pump(int n)
@@ -546,33 +543,3 @@ Console.WriteLine(failures == 0 ? "\nALL SCOREBOARD TESTS PASSED" : $"\n{failure
 return failures == 0 ? 0 : 1;
 
 // In-memory IClientTransport for the hub-level test: feed client->server frames, capture server->client
-// (copied verbatim from tests/FogTest/Program.cs — the shared hub-harness pattern).
-sealed class FakeHubTransport : SimServer.Net.IClientTransport
-{
-    private readonly System.Collections.Concurrent.BlockingCollection<byte[]> _in = new();
-    public readonly System.Collections.Concurrent.ConcurrentQueue<byte[]> Sent = new();
-
-    public void Feed(byte[] frame) => _in.Add(frame);
-
-    public async ValueTask<int> ReceiveAsync(byte[] buffer, System.Threading.CancellationToken ct)
-    {
-        try
-        {
-            byte[] f = await Task.Run(() => _in.Take(ct), ct);
-            Array.Copy(f, buffer, f.Length);
-            return f.Length;
-        }
-        catch (OperationCanceledException)
-        {
-            return -1; // transport closed
-        }
-    }
-
-    public ValueTask SendAsync(ReadOnlyMemory<byte> data, System.Threading.CancellationToken ct)
-    {
-        Sent.Enqueue(data.ToArray());
-        return ValueTask.CompletedTask;
-    }
-
-    public ValueTask CloseAsync(string reason, System.Threading.CancellationToken ct) => ValueTask.CompletedTask;
-}

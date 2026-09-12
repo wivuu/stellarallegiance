@@ -119,10 +119,6 @@ public sealed partial class Simulation
     // _qLock in DrainQueues.
     private readonly Queue<(byte Team, ulong LaunchBase)> _minerBuyQueue = new();
 
-    // Team-scoped one-liners the hub relays as system chat ("Miner destroyed", "at cap", ...).
-    // Cleared each step alongside the other *ThisStep state.
-    public readonly List<(byte Team, string Text)> MinerNoticesThisStep = new();
-
     // The (single) miner hull: lowest ClassId whose def authors ore-capacity > 0, or -1 when the
     // content bundle has none (mining then simply never activates). Resolved per call — the def set
     // is tiny and fixed after boot.
@@ -199,23 +195,23 @@ public sealed partial class Simulation
     {
         if (!MinersEnabled)
         {
-            MinerNoticesThisStep.Add((team, "Mining is disabled on this server."));
+            Events.MinerNotices.Add((team, "Mining is disabled on this server."));
             return;
         }
         if (Phase != PhaseActive)
         {
-            MinerNoticesThisStep.Add((team, "Miners can only be bought during a match."));
+            Events.MinerNotices.Add((team, "Miners can only be bought during a match."));
             return;
         }
         int cls = MinerClassId;
         if (cls < 0)
         {
-            MinerNoticesThisStep.Add((team, "This server's content has no miner hull."));
+            Events.MinerNotices.Add((team, "This server's content has no miner hull."));
             return;
         }
         if (MinerCount(team) >= _mining.MaxMinersPerTeam)
         {
-            MinerNoticesThisStep.Add((team, $"Miner cap reached ({_mining.MaxMinersPerTeam})."));
+            Events.MinerNotices.Add((team, $"Miner cap reached ({_mining.MaxMinersPerTeam})."));
             return;
         }
         // A TIMED order joins the docked garrison's build pipeline (shared with constructors), so it's
@@ -230,7 +226,7 @@ public sealed partial class Simulation
             launchBase = gb.Id;
             if (BuildPipelineCountForBase(gb.Id) >= World.Build.QueueLimit)
             {
-                MinerNoticesThisStep.Add((team, $"This garrison's build queue is full ({World.Build.QueueLimit})."));
+                Events.MinerNotices.Add((team, $"This garrison's build queue is full ({World.Build.QueueLimit})."));
                 return;
             }
         }
@@ -239,11 +235,11 @@ public sealed partial class Simulation
         switch (TryReserveSpawn(team, (byte)cls))
         {
             case SpawnDecision.Locked:
-                MinerNoticesThisStep.Add((team, "Miner is locked for your team."));
+                Events.MinerNotices.Add((team, "Miner is locked for your team."));
                 return;
             case SpawnDecision.TooPoor:
                 int cost = ShipDefs.TryGetValue((byte)cls, out var d) ? d.Cost : 0;
-                MinerNoticesThisStep.Add((team, $"Not enough credits for a miner ({cost})."));
+                Events.MinerNotices.Add((team, $"Not enough credits for a miner ({cost})."));
                 return;
         }
         // Order → launch production, routed through the SAME per-garrison pipeline as a constructor
@@ -253,12 +249,12 @@ public sealed partial class Simulation
         if (orderTicks == 0)
         {
             NewMinerSlot(team, tick);
-            MinerNoticesThisStep.Add((team, $"Miner purchased ({MinerCount(team)}/{_mining.MaxMinersPerTeam})."));
+            Events.MinerNotices.Add((team, $"Miner purchased ({MinerCount(team)}/{_mining.MaxMinersPerTeam})."));
         }
         else
         {
             NewMinerProductionSlot(team, tick, orderTicks, launchBase);
-            MinerNoticesThisStep.Add(
+            Events.MinerNotices.Add(
                 (team, $"Miner ordered — building {orderSec}s ({MinerCount(team)}/{_mining.MaxMinersPerTeam}).")
             );
         }
@@ -273,7 +269,7 @@ public sealed partial class Simulation
             LaunchAtTick = tick, // launches on the next brain tick if there's eligible work
         };
         _miners.Add(slot);
-        TeamStateChangedThisStep = true; // restream the MsgTeamState miner-count tail (Build tab "X / N")
+        Events.TeamStateChanged = true; // restream the MsgTeamState miner-count tail (Build tab "X / N")
         return slot;
     }
 
@@ -318,11 +314,11 @@ public sealed partial class Simulation
         for (int i = 0; i < _miners.Count; i++)
             if (ReferenceEquals(_miners[i].Ship, s))
             {
-                MinerNoticesThisStep.Add(
+                Events.MinerNotices.Add(
                     (s.Team, $"Miner destroyed ({MinerCount(s.Team) - 1}/{_mining.MaxMinersPerTeam} left).")
                 );
                 _miners.RemoveAt(i);
-                TeamStateChangedThisStep = true; // restream the miner-count tail so the card ticks down
+                Events.TeamStateChanged = true; // restream the miner-count tail so the card ticks down
                 break;
             }
     }
@@ -336,7 +332,7 @@ public sealed partial class Simulation
         if (pay > 0 && World.TeamStates.TryGetValue(s.Team, out var ts))
         {
             ts.Credits += pay;
-            TeamStateChangedThisStep = true;
+            Events.TeamStateChanged = true;
         }
         s.GoneReason = GoneClean; // silent despawn: it's inside the bay, not a wreck
         _toRemove.Add(s);
@@ -351,7 +347,7 @@ public sealed partial class Simulation
                 slot.LaunchAtTick = tick + (uint)MathF.Round(_mining.OffloadDelaySeconds * FlightModel.TickRate);
                 slot.Idle = false;
                 if (pay > 0)
-                    MinerNoticesThisStep.Add((s.Team, $"Miner offloaded ore: +{pay} credits."));
+                    Events.MinerNotices.Add((s.Team, $"Miner offloaded ore: +{pay} credits."));
                 break;
             }
     }
@@ -391,7 +387,7 @@ public sealed partial class Simulation
                 else if (!slot.Idle)
                 {
                     slot.Idle = true; // notice once; a new commander order or buy re-arms the announcement
-                    MinerNoticesThisStep.Add(
+                    Events.MinerNotices.Add(
                         (
                             slot.Team,
                             "Miner idle: no eligible helium-3 rock. Commander: order it to a sector to authorize mining."
@@ -415,7 +411,7 @@ public sealed partial class Simulation
                     // mining. Docking despawns the drone; the relaunch spawns at full health.
                     if (s.Health < _mining.RetreatHealthFrac * HullFor(s.Class))
                     {
-                        MinerNoticesThisStep.Add((slot.Team, "Miner damaged — returning to base."));
+                        Events.MinerNotices.Add((slot.Team, "Miner damaged — returning to base."));
                         GoHome(slot, s, remember: true);
                         break;
                     }
@@ -430,7 +426,7 @@ public sealed partial class Simulation
                         // Announce the drop + why BEFORE clearing the target — relays to team chat so
                         // manual verification shows every target switch and its cause.
                         string reason = RockIneligibleReason(slot.Team, slot.TargetRockId);
-                        MinerNoticesThisStep.Add(
+                        Events.MinerNotices.Add(
                             (slot.Team, $"Miner dropped rock {slot.TargetRockId} — {reason}; retargeting.")
                         );
                         slot.TargetRockId = 0;
@@ -475,7 +471,7 @@ public sealed partial class Simulation
         // Same retreat/offload guards as the mining legs.
         if (s.Health < _mining.RetreatHealthFrac * HullFor(s.Class))
         {
-            MinerNoticesThisStep.Add((slot.Team, "Miner damaged — returning to base."));
+            Events.MinerNotices.Add((slot.Team, "Miner damaged — returning to base."));
             GoHome(slot, s, remember: false);
             return;
         }
@@ -516,7 +512,7 @@ public sealed partial class Simulation
             }
             // Every rock in the sector is discovered and none is eligible: provably
             // dry. Give up loudly and fall back to autonomy.
-            MinerNoticesThisStep.Add(
+            Events.MinerNotices.Add(
                 (slot.Team, $"Miner found no eligible helium-3 in {World.SectorName(slot.ProspectSector)}.")
             );
             slot.ProspectSector = 0;

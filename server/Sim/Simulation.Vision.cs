@@ -66,12 +66,8 @@ public sealed partial class Simulation
     private readonly Dictionary<uint, float> _dustFloor = new();
     private bool _hasDust;
 
-    // Ships that left a team's STREAMED union (radar ∪ eyeball) this step, drained by the hub (WP3)
-    // into MsgShipGone reason=2 (quiet fade). Cleared at the top of Step, populated only at an apply.
-    public readonly List<(byte team, ulong shipId)> LostContactsThisStep = new();
-
     // Ship ids that died/despawned since the last vision apply (accumulated at the top of Step from
-    // DeathsThisStep, consumed + cleared at apply). Lets the apply distinguish a witnessed death
+    // Events.Deaths, consumed + cleared at apply). Lets the apply distinguish a witnessed death
     // (ship radar-visible when it died → no ghost, the reason-0 blast already covers it) from a ship
     // that merely flew out of the streamed set (→ ghost + lost-contact).
     private readonly HashSet<ulong> _visionDeaths = new();
@@ -366,7 +362,7 @@ public sealed partial class Simulation
         _visionPendingAsync = false;
         _visionResult = null;
         _visionDeaths.Clear();
-        LostContactsThisStep.Clear();
+        Events.LostContacts.Clear();
 
         foreach (var b in World.Bases)
             if (!_teamVisions.ContainsKey(b.Team))
@@ -408,7 +404,7 @@ public sealed partial class Simulation
         // bypass in TryBuyConstructor.
         foreach (var ts in World.TeamStates.Values)
             ts.DiscoveredRockClasses = FogEnabled ? (byte)0 : (byte)0xFF;
-        TeamStateChangedThisStep = true;
+        Events.TeamStateChanged = true;
 
         for (int i = 0; i < World.Bases.Count; i++)
         {
@@ -1057,7 +1053,7 @@ public sealed partial class Simulation
 
     // Enemy-probe visibility: keep only ids whose probe still exists, then swap. If the set
     // changed, flag a prompt probe resend so a probe fogging in/out reaches the client at the
-    // next hub tick instead of waiting for the coarse keepalive (ProbesChangedThisStep's
+    // next hub tick instead of waiting for the coarse keepalive (Events.ProbesChanged's
     // private setter is reachable here — same partial class as Simulation.Probes.cs).
     private void SwapProbeVisibility(TeamVision tv, TeamResult r)
     {
@@ -1066,7 +1062,7 @@ public sealed partial class Simulation
             if (ProbeExists(id))
                 newProbes.Add(id);
         if (!newProbes.SetEquals(tv.VisibleEnemyProbes))
-            ProbesChangedThisStep = true;
+            Events.ProbesChanged = true;
         tv.VisibleEnemyProbes = newProbes;
     }
 
@@ -1080,7 +1076,7 @@ public sealed partial class Simulation
             if (MinefieldExists(id))
                 newMines.Add(id);
         if (!newMines.SetEquals(tv.VisibleEnemyMines))
-            MinefieldsChangedThisStep = true;
+            Events.MinefieldsChanged = true;
         tv.VisibleEnemyMines = newMines;
     }
 
@@ -1200,7 +1196,7 @@ public sealed partial class Simulation
 
         // Alive but flew out of both radar and eyeball range: a lost contact. Ghost only if it was
         // radar-detected at least once this episode (a never-radar eyeball glimpse leaves no memory).
-        LostContactsThisStep.Add((team, id));
+        Events.LostContacts.Add((team, id));
         if (tv.RadarEpisode.Remove(id) && tv.StreamInfo.TryGetValue(id, out var gi))
         {
             gi.SinceTick = tick; // start the expiry clock at the moment contact was lost
@@ -1390,7 +1386,7 @@ public sealed partial class Simulation
         if ((ts.DiscoveredRockClasses & bit) != 0)
             return;
         ts.DiscoveredRockClasses |= bit;
-        TeamStateChangedThisStep = true;
+        Events.TeamStateChanged = true;
     }
 
     // Merge warp-discovered rocks into the persistent DiscoveredRocks set. Called at the vision boundary

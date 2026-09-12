@@ -55,6 +55,7 @@ using SimServer.Content;
 using SimServer.Net;
 using SimServer.Sim;
 using StellarAllegiance.Shared;
+using TestKit;
 
 int failures = 0;
 void Check(bool cond, string pass, string fail)
@@ -214,7 +215,7 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
             it.AtRest = false;
         }
         sim.Step();
-        foreach (var (_, text) in sim.PilotNoticesThisStep)
+        foreach (var (_, text) in sim.Events.PilotNotices)
             notices.Add(text);
     }
     return notices;
@@ -280,11 +281,11 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
         "item spawn fields wrong: " + string.Join(", ", items.Select(i => $"s{i.SectorId} e{i.ExpireAtTick} rest{i.AtRest}"))
     );
     Check(
-        sim.SalvageChangedSectorsThisStep.Contains(EmptySector)
-            && sim.SalvageChangedThisStep
-            && sim.SalvageGoneThisStep.Count == 0,
+        sim.Events.SalvageChangedSectors.Contains(EmptySector)
+            && sim.Events.SalvageChanged
+            && sim.Events.SalvageGone.Count == 0,
         "the drop flags its sector changed and emits no gone frame",
-        $"change flags wrong (sectors {sim.SalvageChangedSectorsThisStep.Count}, gone {sim.SalvageGoneThisStep.Count})"
+        $"change flags wrong (sectors {sim.Events.SalvageChangedSectors.Count}, gone {sim.Events.SalvageGone.Count})"
     );
     // The eject impulse is a real scatter, not a stack on one point.
     Check(
@@ -394,7 +395,7 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
     for (int t = 0; t < 50; t++)
     {
         sim.Step();
-        if ((item.Pos - resting).LengthSquared() > 0f || sim.SalvageChangedSectorsThisStep.Count != 0)
+        if ((item.Pos - resting).LengthSquared() > 0f || sim.Events.SalvageChangedSectors.Count != 0)
             quiet = false;
     }
     Check(quiet, "a parked item holds its position and stops flagging its sector", "a parked item kept moving or flagging");
@@ -538,9 +539,9 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
         $"stow notice wrong ({string.Join(" | ", notices)})"
     );
     Check(
-        sim.LoadoutsChangedThisStep && sim.SalvageGoneThisStep is [{ reason: 2 }],
+        sim.Events.LoadoutsChanged && sim.Events.SalvageGone is [{ reason: 2 }],
         "a stow raises the loadout echo and emits gone reason 2 like any pickup",
-        $"stow side effects wrong (loadouts {sim.LoadoutsChangedThisStep}, gone {sim.SalvageGoneThisStep.Count})"
+        $"stow side effects wrong (loadouts {sim.Events.LoadoutsChanged}, gone {sim.Events.SalvageGone.Count})"
     );
 }
 {
@@ -565,17 +566,17 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
         $"salvage notice wrong ({string.Join(" | ", notices)})"
     );
     Check(
-        sim.LoadoutsChangedThisStep,
-        "the pickup raises LoadoutsChangedThisStep so the loadout echo re-streams",
-        "LoadoutsChangedThisStep was not raised on the pickup tick"
+        sim.Events.LoadoutsChanged,
+        "the pickup raises Events.LoadoutsChanged so the loadout echo re-streams",
+        "Events.LoadoutsChanged was not raised on the pickup tick"
     );
     Check(
-        sim.SalvageGoneThisStep.Count == 1
-            && sim.SalvageGoneThisStep[0].reason == 2
-            && sim.SalvageGoneThisStep[0].byShipId == open.ShipId
-            && sim.SalvageChangedSectorsThisStep.Contains(EmptySector),
+        sim.Events.SalvageGone.Count == 1
+            && sim.Events.SalvageGone[0].reason == 2
+            && sim.Events.SalvageGone[0].byShipId == open.ShipId
+            && sim.Events.SalvageChangedSectors.Contains(EmptySector),
         "the pickup emits gone reason 2 carrying the collector's ship id and flags the sector",
-        "gone frame wrong: " + string.Join(", ", sim.SalvageGoneThisStep.Select(g => $"r{g.reason} by{g.byShipId}"))
+        "gone frame wrong: " + string.Join(", ", sim.Events.SalvageGone.Select(g => $"r{g.reason} by{g.byShipId}"))
     );
 }
 
@@ -825,11 +826,11 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
         $"expiry wrong (alive {sim.Salvage.Count}, ticks {aliveFor})"
     );
     Check(
-        sim.SalvageGoneThisStep.Count == 1
-            && sim.SalvageGoneThisStep[0] is (_, 0, _, _, 0)
-            && sim.SalvageGoneThisStep[0].id == id,
+        sim.Events.SalvageGone.Count == 1
+            && sim.Events.SalvageGone[0] is (_, 0, _, _, 0)
+            && sim.Events.SalvageGone[0].id == id,
         "expiry emits gone reason 0 with no collector",
-        "expiry gone frame wrong: " + string.Join(", ", sim.SalvageGoneThisStep.Select(g => $"r{g.reason} by{g.byShipId}"))
+        "expiry gone frame wrong: " + string.Join(", ", sim.Events.SalvageGone.Select(g => $"r{g.reason} by{g.byShipId}"))
     );
 }
 {
@@ -843,12 +844,12 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
         $"sector cap not enforced ({sim.Salvage.Count} items)"
     );
     Check(
-        sim.SalvageGoneThisStep.Count == 2
-            && sim.SalvageGoneThisStep.All(g => g.reason == 0)
+        sim.Events.SalvageGone.Count == 2
+            && sim.Events.SalvageGone.All(g => g.reason == 0)
             && sim.Salvage.All(i => i.Kind == 1),
         "the cap expires the OLDEST items first (reason 0) — the gun went, the last packs stayed",
         "cap eviction wrong: "
-            + string.Join(", ", sim.SalvageGoneThisStep.Select(g => $"r{g.reason}"))
+            + string.Join(", ", sim.Events.SalvageGone.Select(g => $"r{g.reason}"))
             + " kept "
             + string.Join(", ", sim.Salvage.Select(i => $"k{i.Kind} id{i.ItemId}"))
     );
@@ -861,14 +862,14 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
     int dropped = sim.Salvage.Count;
     sim.ReturnToLobby();
     Check(
-        dropped > 0 && sim.Salvage.Count == 0 && sim.SalvageGoneThisStep.Count == dropped,
+        dropped > 0 && sim.Salvage.Count == 0 && sim.Events.SalvageGone.Count == dropped,
         $"ReturnToLobby clears all {dropped} items",
-        $"teardown wrong (dropped {dropped}, left {sim.Salvage.Count}, gone {sim.SalvageGoneThisStep.Count})"
+        $"teardown wrong (dropped {dropped}, left {sim.Salvage.Count}, gone {sim.Events.SalvageGone.Count})"
     );
     Check(
-        sim.SalvageGoneThisStep.All(g => g.reason == 1 && g.byShipId == 0),
+        sim.Events.SalvageGone.All(g => g.reason == 1 && g.byShipId == 0),
         "teardown emits gone reason 1 (silent cleanup) for every item",
-        "teardown reasons wrong: " + string.Join(", ", sim.SalvageGoneThisStep.Select(g => g.reason))
+        "teardown reasons wrong: " + string.Join(", ", sim.Events.SalvageGone.Select(g => g.reason))
     );
     sim.StartMatch();
     Check(
@@ -1069,11 +1070,7 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
     // Fresh-join Hello (v9): [MsgHello][secretLen 0][nameLen][name][tokenLen 0].
     void FeedHello(FakeHubTransport ft)
     {
-        var name = Encoding.UTF8.GetBytes("salv");
-        var hello = new List<byte> { Protocol.MsgHello, 0, (byte)name.Length };
-        hello.AddRange(name);
-        hello.Add(0);
-        ft.Feed(hello.ToArray());
+        ft.Feed(HubFrames.Hello("salv"));
     }
 
     byte[]? LastSalvage(FakeHubTransport ft) =>
@@ -1117,14 +1114,14 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
         var conn = hub.HandleConnection(ft, cts.Token);
         FeedHello(ft);
         Thread.Sleep(50);
-        ft.Feed(new byte[] { Protocol.MsgSetTeam, 0 });
+        ft.Feed(HubFrames.SetTeam(0));
         Thread.Sleep(50);
         for (int i = 0; i < 20; i++) // let the matchmaker auto-start
         {
             sim.Step();
             hub.AfterStep();
         }
-        ft.Feed(new byte[] { Protocol.MsgSpawn, ClassScout, 0, 0, 0, 0, 0, 0, 0, 0 }); // [4][cls][u64 launchBaseId=0]
+        ft.Feed(HubFrames.Spawn(ClassScout));
         Thread.Sleep(50);
         for (int i = 0; i < 5; i++)
         {
@@ -1443,33 +1440,3 @@ Console.WriteLine(failures == 0 ? "ALL SALVAGE TESTS PASSED" : $"{failures} SALV
 return failures == 0 ? 0 : 1;
 
 // In-memory IClientTransport for the hub-level tests: feed client->server frames, capture
-// server->client (copied verbatim from tests/MineTest — the shared hub-harness pattern).
-sealed class FakeHubTransport : SimServer.Net.IClientTransport
-{
-    private readonly System.Collections.Concurrent.BlockingCollection<byte[]> _in = new();
-    public readonly System.Collections.Concurrent.ConcurrentQueue<byte[]> Sent = new();
-
-    public void Feed(byte[] frame) => _in.Add(frame);
-
-    public async ValueTask<int> ReceiveAsync(byte[] buffer, CancellationToken ct)
-    {
-        try
-        {
-            byte[] f = await Task.Run(() => _in.Take(ct), ct);
-            Array.Copy(f, buffer, f.Length);
-            return f.Length;
-        }
-        catch (OperationCanceledException)
-        {
-            return -1; // transport closed
-        }
-    }
-
-    public ValueTask SendAsync(ReadOnlyMemory<byte> data, CancellationToken ct)
-    {
-        Sent.Enqueue(data.ToArray());
-        return ValueTask.CompletedTask;
-    }
-
-    public ValueTask CloseAsync(string reason, CancellationToken ct) => ValueTask.CompletedTask;
-}

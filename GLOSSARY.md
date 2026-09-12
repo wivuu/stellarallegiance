@@ -67,6 +67,16 @@ Two-tier write discipline on the per-client outbound frame queue (bounded, `Full
 - **Related:** [[Snapshot]], [[AOI (Area of Interest)]]
 - **Notes:** NEVER use `DropOldest` or raw `TryWrite` for control frames — evicting a one-shot YouAre/ShipGone deadlocks the relaunch flow (client retries MsgSpawn forever; server drops each as "already flying"). Queue pressure is logged throttled (`OutboundQueuePressure`). The client additionally self-heals its local-ship binding from the lobby roster (`GameNetClient.ApplyLobbyState` adopt/ghost heal).
 
+### Step Events (`Simulation.Events`)
+The sim→hub seam for one step: `server/Sim/StepEvents.cs` holds every one-shot event that becomes a frame (deaths, missile/mine/probe/salvage gone, chaff pops, lost contacts, reclaims, new bases), every change flag that gates a low-rate stream (`MinefieldsChanged`, `ProbesChanged`, `BasesChanged`, `TeamStateChanged`, `LoadoutsChanged`, `StatsChanged`, `ResearchChanged`, `ConstructorChanged`, `SalvageChangedSectors`) and the team/pilot system-chat notices. The sim writes `Events.X` during `Step()`, `ClientHub.AfterStep()` reads `_sim.Events.X` on the same thread afterwards, and `Events.Clear()` resets it at the top of the next `Step()`. (The two rock sets stay on `World`.)
+- **Frequency:** Every tick
+- **Key Files:**
+  - `server/Sim/StepEvents.cs` — the object + `Clear()`; `server/Sim/Simulation.cs` — `Events` field, the clear at the top of `Step()`
+  - `server/Net/ClientHub.cs` / `ClientHub.Streams.cs` — the consumers (`PrepareBroadcastFrames`, `DrainStepNotices`, the streams' `Due` gates)
+  - `tests/TestKit` — `FakeHubTransport` + `HubFrames` for suites that drive the real hub
+- **Related:** [[Low-Rate Streams (`LowRateStream`)]], [[Reliable / Lossy Outbound Tiers]]
+- **Notes:** A new event kind = one field here + its producer + its consumer. Tuple element names are read by name downstream (`g.reason`, `g.byShipId`) — keep them.
+
 ### Low-Rate Streams (`LowRateStream`)
 The hub's cadence-driven frames — bases, team state, loadouts, research, miner targets, constructor builds/roster, fog-off base reveal, rock despawn, fog contacts, probes, minefields, salvage — are each ONE declaration in `server/Net/ClientHub.Streams.cs`: a **scope** (`Global` / `PerTeam` / `AnchorSector`), a **tier** (`Reliable` / `Lossy` / `Cursor` = TryWrite-gated, per-client `LastAnchor` slot advanced only on a successful enqueue), a cadence gate (`Due`: the sim's `*ChangedThisStep` flag or the coarse keepalive) and a `Build`. `ClientHub.SendStreams` builds at most once per scope key per tick and sends on the tier; the per-client pass runs the EARLY streams, then the fog reveal slice, then the one-shot gone-events, then the LATE set streams (probes/minefields/salvage) — that order is load-bearing (a reliable gone-event is the FX authority and must precede the set frame that prunes the same id). Client side, `client/scripts/net/SetReconciler.cs` is the reconcile-by-omission bookkeeping the set streams share.
 - **Frequency:** Every tick (each stream fires on its own cadence)

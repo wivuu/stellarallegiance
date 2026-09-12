@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Shared helpers for the console suites that drive the REAL ClientHub over an in-memory transport
+       (FogTest, MineTest, SalvageTest, ScoreboardTest, ...): the fake transport and the inbound frames a
+       test feeds it, built from the shared wire definitions. One copy instead of one per suite. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../shared/Shared.csproj" />
+    <ProjectReference Include="../../server/SimServer.csproj" />
+  </ItemGroup>
+</Project>

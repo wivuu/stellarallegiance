@@ -39,17 +39,6 @@ public sealed partial class Simulation
     private readonly List<ProbeSim> _probes = new();
     public IReadOnlyList<ProbeSim> Probes => _probes;
 
-    // Probes that expired/were cleared/were destroyed this step, drained by the hub into MsgProbeGone
-    // frames (broadcast to all clients now — the owner AND the destroyer both want the outcome).
-    // Reason 0 = expired past lifespan, 1 = match-clear cleanup/despawn (both silent removals), 2 =
-    // destroyed by enemy fire (client plays an explosion + impact FX). Cleared at the top of Step
-    // (mirrors MineGoneThisStep).
-    public readonly List<(ulong id, byte reason, byte team, uint sector, Vec3 pos)> ProbeGoneThisStep = new();
-
-    // Set whenever a probe was added/removed this step, so the hub sends a fresh (possibly empty)
-    // per-team frame promptly instead of only on the coarse cadence (mirrors MinefieldsChangedThisStep).
-    public bool ProbesChangedThisStep { get; private set; }
-
     // Deploy a stationary recon probe just ahead of the ship (ammo + cadence gated, mirroring
     // TryDropChaff/TryDeployMine's held-input debounce — the SERVER's cadence gate is the only
     // drop-input debounce; we never client-edge-detect). One deploy consumes ONE probe-cargo unit.
@@ -81,7 +70,7 @@ public sealed partial class Simulation
                 Health = w.ProbeHitPoints, // 0 = authored-invulnerable (no combat target this deploy)
             }
         );
-        ProbesChangedThisStep = true;
+        Events.ProbesChanged = true;
     }
 
     // Apply damage to a live probe (bolt or missile blast). At/below zero health the probe is removed
@@ -99,8 +88,8 @@ public sealed partial class Simulation
         if (idx < 0)
             return; // already removed this step (e.g. a second bolt resolving the same tick)
         _probes.RemoveAt(idx);
-        ProbeGoneThisStep.Add((p.ProbeId, 2, p.Team, p.SectorId, p.Pos));
-        ProbesChangedThisStep = true;
+        Events.ProbeGone.Add((p.ProbeId, 2, p.Team, p.SectorId, p.Pos));
+        Events.ProbesChanged = true;
     }
 
     // Find a live, damageable (Health > 0) probe by id — used by the shot/missile resolution passes to
@@ -134,8 +123,8 @@ public sealed partial class Simulation
                 continue;
             _probes.RemoveAt(i);
             i--;
-            ProbeGoneThisStep.Add((p.ProbeId, 0, p.Team, p.SectorId, p.Pos));
-            ProbesChangedThisStep = true;
+            Events.ProbeGone.Add((p.ProbeId, 0, p.Team, p.SectorId, p.Pos));
+            Events.ProbesChanged = true;
         }
     }
 }
