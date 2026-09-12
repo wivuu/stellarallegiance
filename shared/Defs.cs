@@ -19,6 +19,7 @@
 // =====================================================================
 
 using System.Collections.Generic;
+using StellarAllegiance.Shared.Net;
 
 namespace StellarAllegiance.Shared
 {
@@ -56,7 +57,8 @@ namespace StellarAllegiance.Shared
     // Off* is the local offset from the hull origin; Dir* is the local forward (e.g. +Z
     // muzzle, −Z nozzle in this codebase's +Z-forward convention). WeaponId is meaningful
     // only for Kind == Weapon.
-    public sealed class HardpointDef
+    [WireRecord]
+    public sealed partial class HardpointDef
     {
         // Sentinel WeaponId for an EMPTY weapon mount (exists on the hull, fires nothing,
         // assignable via loadout). Never resolves in WeaponDefs, so every TryGetValue-guarded
@@ -94,7 +96,8 @@ namespace StellarAllegiance.Shared
     // hulls are data-only additions. The flight block is the authoring schema from
     // ShipStats (the "nine knobs + afterburner"); both sides derive thrust/torques/drag
     // from these identical f32s.
-    public sealed class ShipClassDef
+    [WireRecord]
+    public sealed partial class ShipClassDef
     {
         public byte ClassId;
         public string Name = "";
@@ -155,19 +158,20 @@ namespace StellarAllegiance.Shared
         // default loadout's Part.Signature sum), in RadarSignature units (default 0 = neutral).
         // Server-side fog input only — Protocol.BuildDefs deliberately does NOT write it (the
         // client never reads signatures; FogEyeballMultiplier precedent).
+        [WireIgnore]
         public float SignatureBias;
 
         public int Cost; // credits to build this hull (Buildable.Price); default 0 = free
         public float PayloadCapacity; // payload budget: mounted weapon Mass + cargo hold; 0 = no hold
         public float OreCapacity; // mining ore hold (He3 units) a miner fills + offloads; 0 = not a miner. Streamed in Protocol.BuildDefs (after PayloadCapacity).
         public int OrderTimeSeconds; // miner production delay: seconds from ORDERING this hull to it launching (constructor-Producing analogue); 0 = instant. Streamed after OreCapacity.
-        public bool IsConstructor; // v37: a constructor drone chassis (builds bases). Server-only (NOT streamed — client uses ShipFlagConstructor); projected from HullAbility.IsBuilder.
-        public List<HardpointDef> Hardpoints = new();
         public uint FactionId; // reserved (per-team content); default 0
+        public List<HardpointDef> Hardpoints = new();
 
         // Default consumable hold this hull spawns with (authored order). The hangar seeds its
         // stepper counts from this; MsgSpawn rides the chosen counts back to the server.
         public List<CargoLoadDef> DefaultCargo = new();
+        public bool IsConstructor; // v37: a constructor drone chassis (builds bases); streamed so the hangar can hide the chassis. Projected from HullAbility.IsBuilder.
 
         // Techs (indices into the streamed tech catalog) a team must own before this hull may be
         // built — mirrors WeaponDef.RequiredTechIdx. Server-authoritative gating lives in
@@ -189,6 +193,7 @@ namespace StellarAllegiance.Shared
         // consumable stack; slot contents cost NO payload (they are not equipped). 0 = no hold
         // (pod/miner/constructor): such a hull ricochets whatever it can't use. Streamed LAST in the
         // ship block (u8) after LaunchClassMask, mirrored by DefsApplier.
+        [Wire(WireEnc.U8)]
         public int CargoCapacity;
     }
 
@@ -203,7 +208,8 @@ namespace StellarAllegiance.Shared
     }
 
     // One per weapon. WeaponId is referenced by a Weapon hardpoint's WeaponId.
-    public sealed class WeaponDef
+    [WireRecord]
+    public sealed partial class WeaponDef
     {
         public uint WeaponId;
         public string Name = "";
@@ -253,6 +259,7 @@ namespace StellarAllegiance.Shared
         // Radar signature of the deployed field (0 authored -> 1.0 at projection). SERVER-ONLY —
         // BuildDefs skips it (detection is server-authoritative; the client never reads signatures;
         // FogEyeballMultiplier / ProbeSignature precedent).
+        [WireIgnore]
         public float MineSignature; // mine: radar signature of the deployed field (0 authored -> 1.0 at projection)
         public uint CargoId; // dispenser: the cargo item (Chaff/Mine/Probe expendable) this launcher consumes
 
@@ -275,7 +282,10 @@ namespace StellarAllegiance.Shared
         // HitPoints/Signature are SERVER-ONLY (BuildDefs skips them, FogEyeballMultiplier
         // precedent); HitRadius/ModelSize are streamed LAST (after BoltLength) so every block
         // above stays byte-stable.
+        [WireIgnore]
         public float ProbeHitPoints; // health of the deployed probe; 0 = authored-invulnerable
+
+        [WireIgnore]
         public float ProbeSignature; // radar signature of the deployed probe (0 authored -> 1.0 at projection)
         public float ProbeHitRadius; // server hit-sphere radius for bolts/blasts vs the probe, u
         public float ProbeModelSize; // client visual normalization length, u (0 = client guard default)
@@ -321,7 +331,8 @@ namespace StellarAllegiance.Shared
 
     // One entry in a hull's default consumable hold — an item id + a count. Mirrors the authored
     // Hull.default-cargo list, streamed after each ship's hardpoints (Protocol.BuildDefs).
-    public struct CargoLoadDef
+    [WireRecord]
+    public partial struct CargoLoadDef
     {
         public uint CargoId;
         public byte Count;
@@ -331,7 +342,8 @@ namespace StellarAllegiance.Shared
     // CargoId is the stable wire id an authored expendable carries (Expendable.CargoId).
     // Dispenser items are consumed through the per-kind ammo bytes (SeedDispenserAmmo);
     // fuel items auto-consume when the tank empties mid-boost.
-    public sealed class CargoItemDef
+    [WireRecord]
+    public sealed partial class CargoItemDef
     {
         public uint CargoId;
         public string Name = "";
@@ -357,7 +369,8 @@ namespace StellarAllegiance.Shared
     }
 
     // One per base type.
-    public sealed class BaseDef
+    [WireRecord]
+    public sealed partial class BaseDef
     {
         public byte BaseTypeId;
         public string Name = "";
@@ -437,10 +450,12 @@ namespace StellarAllegiance.Shared
     // One team-wide stat multiplier: (GameAttribute byte, multiplier). Mirrors the factions library's
     // GameAttribute enum id (append-only, wire byte) × its double multiplier carried as f32. Neutral at
     // 1.0; a faction's base-attributes and a development's attributes stream as sorted AttrMod[] arrays.
-    public readonly record struct AttrMod(byte Attr, float Mult);
+    [WireRecord]
+    public readonly partial record struct AttrMod(byte Attr, float Mult);
 
     // One research-tree tech node (a pure catalog identity techs/developments reference).
-    public sealed class TechDef
+    [WireRecord]
+    public sealed partial class TechDef
     {
         public string Id = ""; // stable authored id ("heavy-ordnance")
         public string Name = "";
@@ -448,7 +463,8 @@ namespace StellarAllegiance.Shared
     }
 
     // One researchable development (the research-tree PURCHASE: price + wall-clock time + grants).
-    public sealed class DevelopmentDef
+    [WireRecord]
+    public sealed partial class DevelopmentDef
     {
         public string Id = "";
         public string Name = "";
@@ -480,7 +496,8 @@ namespace StellarAllegiance.Shared
     // runtime base projection yet (BaseTypeId -1). The Build tab renders these; the Research tab
     // reads their grants for "what unlocks this" displays. Distinct from BaseDef (the runtime
     // sim/wire base model): a catalog entry is presentation + gating data only.
-    public sealed class StationCatalogDef
+    [WireRecord]
+    public sealed partial class StationCatalogDef
     {
         public string Id = "";
         public string Name = "";

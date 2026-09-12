@@ -67,6 +67,18 @@ Two-tier write discipline on the per-client outbound frame queue (bounded, `Full
 - **Related:** [[Snapshot]], [[AOI (Area of Interest)]]
 - **Notes:** NEVER use `DropOldest` or raw `TryWrite` for control frames — evicting a one-shot YouAre/ShipGone deadlocks the relaunch flow (client retries MsgSpawn forever; server drops each as "already flying"). Queue pressure is logged throttled (`OutboundQueuePressure`). The client additionally self-heals its local-ship binding from the lobby roster (`GameNetClient.ApplyLobbyState` adopt/ghost heal).
 
+### Wire Frames (source-generated codecs)
+Every frame and record on the wire is a partial C# type in `shared/Net/` (`Messages.cs`, `Records.cs`, plus the content-def classes in `shared/Defs.cs`) whose public fields, in declaration order, ARE the byte layout. The `tools/wire-gen` Roslyn source generator (an analyzer reference on `Shared.csproj`) emits `Measure` / `Write` / `Read` / `TryParse` and a compile-time `Size` for every `[WireMessage(id)]` / `[WireRecord]` type, so the server, the Godot client, the test suites and simbot compile ONE layout instead of hand-mirroring four. Field types pick the encoding; `[Wire(WireEnc.Pos|Half|Quat|Angle|U8|U16|U32|StrU8|Str7Bit)]`, `[WireCount]`, `[WireOptional]` and `[WireIgnore]` cover quantized, narrowed, optional-tail and count-prefixed fields.
+- **Frequency:** Every frame
+- **Key Files:**
+  - `shared/Net/WireAttributes.cs` — the attribute vocabulary + encoding table; `shared/Net/WireIO.cs` — `WireWriter` / `WireReader` span cursors (the reader never throws: hostile input fails `TryParse`)
+  - `shared/Net/Messages.cs` / `Records.cs` — every message (both directions) and embedded record; `shared/Net/ShipFlags` / `InputFlags`
+  - `server/Net/Frames.cs` — the server fill layer (sim/world/content → frame structs)
+  - `tools/wire-gen/WireGenerator.cs` — the generator; generated partials land under `shared/obj/.../generated/` for inspection
+  - `tests/WireTest` — legacy-writer equivalence, client-layout equivalence, round-trips, hostile input, pinned goldens (`--print-goldens` re-pins after an intended layout change)
+- **Related:** [[Snapshot]], [[Reliable / Lossy Outbound Tiers]], [[YAML Content Pipeline]]
+- **Notes:** Decision + alternatives in `docs/adr/0003-wire-format-source-generator.md`. A layout change = edit the field list, bump `Wire.ProtocolVersion`, re-pin the goldens. Generated bodies are straight-line little-endian span writes (no reflection/boxing/delegates) — zero runtime cost over the hand writers they replace. Optional trailing fields read as EMPTY ("" / empty collection) when absent.
+
 ### Compound Base Hull (COL_ parts)
 Per-part convex collision for a station: `COL_`-prefixed mesh nodes baked into the base GLB (`garrison.glb` — the shipping base; `Outpost.glb` is retained but unused) each become one sub-hull, replacing the single QuickHull shrink-wrap so ships bounce off the real superstructure and cannot fly into the hollow interior. Parts are GENERATED from the visual mesh volume (voxel solid-fill → marching cubes → CoACD convex decomposition) by `tools/collision-hull/bake.py --kind base --glb <glb>` — never hand-placed.
 - **Frequency:** Domain-specific

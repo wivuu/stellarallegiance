@@ -10,9 +10,16 @@
     <!-- Folder is shared/ but the namespace is StellarAllegiance.Shared (used by
          every consumer); match RootNamespace so analyzers don't flag a mismatch. -->
     <RootNamespace>StellarAllegiance.Shared</RootNamespace>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     <!-- No RID here on purpose: this is portable managed IL. The consuming
          project (e.g. the wasi-wasm module) supplies the RID and recompiles. -->
   </PropertyGroup>
+  <ItemGroup>
+    <!-- The wire-format source generator (tools/wire-gen, docs/adr/0003): an ANALYZER reference, so it
+         runs inside the compiler and ships nothing at runtime. Generated partials are written under
+         obj/ (EmitCompilerGeneratedFiles) for inspection. -->
+    <ProjectReference Include="../tools/wire-gen/WireGen.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
   <ItemGroup>
     <!-- Net/WebRtcSdp.cs is SIPSorcery-dependent WebRTC source that the client and server compile
          in via <Compile Include Link>. This project stays dependency-free, so exclude that file
