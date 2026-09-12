@@ -56,6 +56,10 @@ public sealed class SalvageRenderer
         if (_views.TryGetValue(row.SalvageId, out var existing))
         {
             existing.OnAuthoritative(pos, vel, row.TicksLeft);
+            // Cheap no-op unless this view was built before its def streamed (a joining client can
+            // drain MsgSalvage ahead of MsgDefs): then the caption and mesh resolve here instead of
+            // staying on the generic "Salvage" puff for the item's whole life.
+            existing.RefreshDefs(_defs);
             return;
         }
         var view = new SalvageView { Name = $"Salvage_{row.SalvageId}" };

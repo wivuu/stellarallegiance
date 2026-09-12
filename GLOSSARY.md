@@ -315,6 +315,39 @@ and drops a probe just ahead of the ship, granting its team an unoccluded vision
 - **Related:** [[Fog of War (Team Vision)]], [[Minefield]], [[Chaff]], [[Expendables]]
 - **Notes:** Proto v23: `WeaponKind.Probe` dispenser, ammo/cadence rides the same D6/D9 seam as chaff/mine
 
+### Salvage (dropped items)
+The Allegiance treasure loop. When a combat hull dies, every piece it still carried rolls
+`salvage.drop-chance` ON ITS OWN — each mounted gun, the missile magazine (dropped as ONE bare-missile
+item whose `Count` is the remaining rounds, never the rack), each stowed stack, and each cargo kind
+(chaff/mine/probe/fuel). PIG wrecks drop too, behind `drop-from-drones`. Survivors become
+server-authoritative items that fly out on a random vector off the wreck's velocity, drag to rest,
+bounce off asteroids, bases, constructor build shells and ships that can't carry them, stay bound to
+their sector, never dock, expire after `lifetime-seconds`, and are capped per sector (oldest expires
+first). Any PLAYER combat hull — either team, no tech gate — collects by touch: a gun needs an empty
+type-compatible mount plus payload headroom; loose rounds join the magazine when the item's rack id
+equals the picker's first effective rack, otherwise they STOW as inert cargo (`ShipSim.StowedMissiles`,
+payload charged at `WeaponDef.RoundMass` × count, echoed on the `MsgShipLoadout` tail, shown as the
+WeaponsPanel `HOLD` row); cargo packs mirror `SeedDispenserAmmo`. Salvage lives for the sortie only —
+docking despawns the ship and the hangar re-equips from `LoadoutState`, so nothing is kept across a dock.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `server/Sim/Simulation.Salvage.cs` — `SalvageSim` + `DropSalvage`/`StepSalvage`/`TryAcceptSalvage`/`PayloadUsed`
+  - `shared/Collision/Collide.cs` — `BounceBody`/`ResolveStaticSphereBody`, the bit-identical kernels `Bounce`/`ResolveStaticSphere` now share
+  - `server/Net/Protocol.cs` — `MsgSalvage=30` (29-B records, per anchor sector) / `MsgSalvageGone=31`, plus the loadout stowed tail
+  - `server/Net/ClientHub.cs` — `BuildSalvageFor`, `SalvageVisFor` (fog), `Client.LastSalvageAnchor` sentinel
+  - `client/scripts/world/SalvageRenderer.cs` / `client/scripts/SalvageView.cs` — item views, dead-reckoned drift, pickup FX
+  - `client/scripts/TargetMarkers.cs` — `DrawSalvagePass` crate glyph + labels + the `SALVAGED …` banner
+  - `client/scripts/WeaponsPanel.cs` — the `HOLD` row for stowed (inert) missile stacks
+  - `client/assets/parts/` — IGC part meshes (`wep09`/`wep16`/`wep02`/`wep18` guns, `acs36` fuel pack)
+  - `server/Content/core/world.yaml` — the `salvage:` tuning block
+  - `tests/SalvageTest` — drops, physics, pickup/reject, wire + hub streaming
+- **Related:** [[Expendables]], [[Per-Ship Weapon Loadout (mount overrides)]], [[Minefield]], [[Fog of War (Team Vision)]]
+- **Notes:** Protocol 39. Streamed on a per-SECTOR change set (a wreck in sector A never re-streams sector
+  B), reconciled by omission, with `MsgSalvageGone` reliable because reason 2 (picked up) is the only
+  authority for the collect FX/banner. Fog is plain point visibility (`IsPointVisibleToTeam`) — no owner
+  privilege, unlike probes/own minefields. `--salvage-test` drives a client onto the nearest item for a
+  pickup smoke; PIGs are OFF by default, so a drop smoke needs `SIM_PIGS=1`.
+
 ### Reload (load-from-hold)
 The time it takes to pull the next charge out of the cargo hold. Authored per expendable as
 `load-time` (SECONDS, the core Allegiance field) in `expendables.yaml`, projected to ticks onto the
@@ -546,7 +579,7 @@ Server-driven content authoring: gameplay/balance values (hulls, weapons, techs,
 - **Notes:** Patchless runtime streaming; no client fallback (client holds authority until defs load)
 
 ### World Tuning Blocks
-Server-side sim tuning authored in the standalone `server/Content/core/world.yaml` (NOT part of the factions bundle manifest; loaded by `WorldLoader`, overridable via `SIM_WORLD`/`--world`) — `ai:` (PIG drone difficulty/behavior **plus the server-side navigation knobs**: `brake-margin`/`arrival-band-mult` shared by every approach leg, and the full autopilot docking maneuver — `dock-standoff`/`clearance`/`creep-throttle`/`hull-margin`/`los-slack`/`detour-step-rad`/`capture`/`outer-standoff`/`axis-slop`/`descent-margin`/`descent-max-throttle`/`capture-speed-sq`/`roll-gain`/`facing-dot`/`roll-tol`), `combat:` (collision damage + boundary hazard), `mechanics:` (gates/docking/pods/economy/match flow), `seeding:` (asteroid field/belt shapes + base placement), `mining:` (harvest/ore economy), `constructor:` (base-builder creep speeds/standoff/embed/dwell), `build:` (per-garrison build-queue parallel/queue limits), `scoring:` (per-pilot kill/loss point weights + the kill-credit window), plus root radar-signature knobs (`aleph-radar-signature`/`rock-radar-signature`, the `boost/shield/dust-signature-mult` fog multipliers, and the `signature-min/max-mult` rails). Every key optional; omitted keys keep stock values (the shared classes' field initializers). NEVER streamed — no protocol impact.
+Server-side sim tuning authored in the standalone `server/Content/core/world.yaml` (NOT part of the factions bundle manifest; loaded by `WorldLoader`, overridable via `SIM_WORLD`/`--world`) — `ai:` (PIG drone difficulty/behavior **plus the server-side navigation knobs**: `brake-margin`/`arrival-band-mult` shared by every approach leg, and the full autopilot docking maneuver — `dock-standoff`/`clearance`/`creep-throttle`/`hull-margin`/`los-slack`/`detour-step-rad`/`capture`/`outer-standoff`/`axis-slop`/`descent-margin`/`descent-max-throttle`/`capture-speed-sq`/`roll-gain`/`facing-dot`/`roll-tol`), `combat:` (collision damage + boundary hazard), `mechanics:` (gates/docking/pods/economy/match flow), `seeding:` (asteroid field/belt shapes + base placement), `mining:` (harvest/ore economy), `constructor:` (base-builder creep speeds/standoff/embed/dwell), `build:` (per-garrison build-queue parallel/queue limits), `scoring:` (per-pilot kill/loss point weights + the kill-credit window), `salvage:` (wreck drop chance/drone opt-out, eject speed + drag/rest, item + pickup radii, restitution, lifetime, per-sector cap), plus root radar-signature knobs (`aleph-radar-signature`/`rock-radar-signature`, the `boost/shield/dust-signature-mult` fog multipliers, and the `signature-min/max-mult` rails). Every key optional; omitted keys keep stock values (the shared classes' field initializers). NEVER streamed — no protocol impact.
 - **Frequency:** Common (any sim-balance sweep)
 - **Key Files:**
   - `server/Content/core/world.yaml` — authored values (stock = documented defaults); standalone, not a manifest fragment
@@ -714,6 +747,27 @@ Separate protocol message for active missiles; never packed into ship snapshots.
   - `server/Sim/Simulation.cs` — missile lifecycle updates
 - **Related:** [[Missile]], [[MsgSnapshot]], [[Protocol]]
 - **Notes:** Proto v15: separate stride prevents missile data bloat; missiles sent per-missile once per tick
+
+### MsgSalvage / MsgSalvageGone
+The wreck-salvage pair (ids 30 and 31, proto v39). `MsgSalvage` is `u16 anchorSector | u8 count |
+count × 29-B record` (`u64 id | u8 kind | u32 itemId | u8 count | u8 team | 3× i16 sector-local pos |
+3× f16 vel | u16 ticksLeft`) — the minefield cadence exactly: sent when THAT sector's change set fired,
+on the coarse keepalive, or when the client's anchor sector changes (`Client.LastSalvageAnchor`); the
+records are the whole truth for that sector, so the client prunes by omission and an empty frame is how
+a removal propagates. `MsgSalvageGone` (26 B: `u64 id | u8 reason | u16 sector | 3× i16 pos | u64
+byShipId`) is a RELIABLE broadcast because reason 2 (picked up, `byShipId` = the collector) is the only
+authority for the collect FX and the owner's `SALVAGED …` banner — the omission reconcile cannot tell a
+pickup from an expiry (reason 0) or match cleanup (reason 1); an unknown id no-ops.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `server/Net/Protocol.cs` — `MsgSalvage`/`MsgSalvageGone`, `SalvageRecordSize`, `WriteSalvage`, `BuildSalvageGone`
+  - `server/Net/ClientHub.cs` — `BuildSalvageFor`, `SalvageVisFor` (per-team fog cache), the anchor-gated send site
+  - `client/scripts/net/FrameApplier.cs` — `ApplySalvage` (upsert + prune-all) / `ApplySalvageGone`
+  - `tests/SalvageTest` — wire round-trip + the hub streaming/fog/prune cases
+- **Related:** [[Salvage (dropped items)]], [[Minefield]], [[Fog of War (Team Vision)]], [[Protocol]]
+- **Notes:** Per-SECTOR change set — a wreck in sector A must not re-stream sector B every tick. Fog on,
+  an item streams only while `IsPointVisibleToTeam` holds for its point (no owner privilege). `MsgShipLoadout`
+  (28) also grew a v39 tail (`u8 nStowed`, then `u32 rackWeaponId | u8 count`) so the owner sees inert stacks.
 
 ### MsgMatchStats
 The match scoreboard ledger (id 29, proto v37): `u8 nPilots`, then per pilot `i32 clientId | str name | u8 team | u8 flags (bit0 = connected) | u16 kills | u16 deaths | u16 ejects | i32 points`, then `u8 nTeams` × `u8 team | u8 garrisonsDestroyed | u8 outpostsDestroyed`. Full table keyed by client id (never reconcile-by-omission), broadcast RELIABLE and only when the ledger changes. Name+team ride the frame rather than being joined against the lobby roster because a disconnect drops both server-side and a leaver must stay on the board. PTS is signed (a penalty weight can push a pilot negative); a team's SCORE is deliberately absent — it is exactly Σ its pilots' points and already rides MsgTeamState.

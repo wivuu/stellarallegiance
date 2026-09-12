@@ -3,8 +3,8 @@
 ---
 
 ## QUICKNOTES:
-- Proceed to dropped salvage below
 - Look for opportunities to utilize native vector3 and SIMD for performance improvements
+- Use lobby favicon as client app icon (instead of godot icon)
 ---
 
 ## Content philosophy (the through-line)
@@ -65,6 +65,25 @@ Stage-2 economy, no rework.
 - ☐ Add different gun effects
   - i.e. minigun green, different looking bolt
   - ER nanite shoots glowing blue, thin, toruses
+- ✅ **[L]** **Ship salvage & pickups** (2026-09-12) — the Allegiance treasure loop, protocol 39. A dying
+  combat hull rolls `salvage.drop-chance` **per item** — each mounted gun, the missile magazine (dropped as
+  ONE bare-missile item whose count is the remaining rounds, never the rack), each stowed stack and each
+  cargo kind — and PIG wrecks drop too (`drop-from-drones`). Survivors are server-authoritative items
+  (`server/Sim/Simulation.Salvage.cs`): they fly out on a random vector off the wreck's velocity, drag to
+  rest, bounce off asteroids / bases / constructor build shells / ships that can't carry them, stay in
+  their sector, never dock, and expire on a per-sector cap + `lifetime-seconds`. Any player combat hull on
+  **either team** collects by touch (no tech gate): a gun needs an empty type-compatible mount plus payload,
+  loose rounds join the magazine of the SAME rack or else **stow** as inert cargo (HOLD row, re-drops on
+  death), cargo packs mirror the dispenser seeding. Streams per anchor sector (`MsgSalvage=30`, reconciled
+  by omission) with a reliable `MsgSalvageGone=31` carrying the collector so the pickup FX/banner has an
+  authority; fog is plain point visibility. Items render as the real IGC part meshes (`client/assets/parts/`),
+  with a crate HUD glyph + labels, a `SALVAGED …` banner, the `pickup_part` cue, and a `--salvage-test`
+  harness. Salvage is **not kept across a dock** (the hangar re-equips from `LoadoutState`). Tuning:
+  `salvage:` in `world.yaml`; suite: `tests/SalvageTest`.
+  - Follow-ups: hangar fold of salvaged guns into `LoadoutState` (keep-on-dock); partial stack pickup;
+    magazine cap + auto-reload from stowed same-rack stacks; PIG pickup; shootable items; salvage economy
+    (sell stowed rounds at dock); a `missile-pickup-match: rack|line` knob; promote the stow-only
+    authored-id derivation in `Protocol.BuildShipLoadouts` to a `Simulation` seam.
 
 ### Stage 4 — Strategy depth (Allegiance core)
 
@@ -193,10 +212,3 @@ Not stage-bound — done when convenient or when a stage needs them.
 - ☐ **[M]** **Fireteam support** — sub-teams of 2-6 players that can privately chat. Commanders can
   assign players to fireteams and issue orders to specific fireteams.
 - ☐ **[M]** **Mutinees** — A player can stage a mutiny on a team, all other players (except commander) can vote to depose the commander; if the vote passes, the mutineer becomes the new commander.
-- ☐ **[L]** **Ship salvage & pickups** — destroyed ships drop expendables (ammo / booster fuel / guns / missiles / mines)
-  to fly over and collect; ties into the Stage-2 economy.
-  - When a ship is destroyed, there should be a chance that it drops whatever expendable or weapon that was equipped/not consumed, flying out in a random direction until it comes to rest.
-  - Meshes for various dropped items should match GLB visual representation, or if none are available, pick an asset from the pick-assets folder. Ask me for each missing asset.
-  - The dropped item should be able to be picked up by a ship flying over it, if the ship has the capacity to carry it.
-  - If the ship does not have capacity, the item can bounce off harmlessly.
-  - If the item is in-motion, it should collision detect with asteroids and bases

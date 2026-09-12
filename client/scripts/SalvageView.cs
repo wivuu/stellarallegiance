@@ -48,9 +48,21 @@ public partial class SalvageView : Node3D
     // The WRECK's team — the HUD tint (and the pickup FX tint), never a pickup gate.
     public byte Team { get; private set; }
 
-    // One-line HUD name for this item ("PW Gat Gun 1", "Counter-missile ×8"), resolved once at
-    // Initialize from the streamed defs so the marker/banner passes never re-look-up per frame.
+    // One-line HUD name for this item ("PW Gat Gun 1", "Counter-missile ×8"), resolved from the
+    // streamed defs so the marker/banner passes never re-look-up per frame.
     public string Label { get; private set; } = "Salvage";
+
+    // What this item IS, kept so the label + mesh can be re-resolved once its def streams (see
+    // _defsPending). Never changes for the life of the view — the server never re-kinds an item.
+    private byte _kind;
+    private uint _itemId;
+    private byte _count;
+
+    // True while the item's def had NOT streamed when the view was built. A client joining a world
+    // that already holds salvage can drain the first MsgSalvage before MsgDefs (they ride different
+    // reliability tiers), which would otherwise strand the item on the placeholder puff and the
+    // generic "Salvage" caption for its whole life. RefreshDefs clears it on the next frame.
+    private bool _defsPending;
 
     // Dead-reckoned authoritative position (advanced by _vel each frame) + the last known velocity.
     // The node's own Position eases toward _targetPos.
@@ -89,6 +101,10 @@ public partial class SalvageView : Node3D
         _targetPos = pos;
         _vel = vel;
         _ticksLeft = ticksLeft;
+        _kind = kind;
+        _itemId = itemId;
+        _count = count;
+        _defsPending = !DefsKnown(kind, itemId, defs);
         Label = LabelFor(kind, itemId, count, defs);
 
         var (axis, speed) = Collide.RockSpin(id);
@@ -98,6 +114,26 @@ public partial class SalvageView : Node3D
         _hull = LoadHull(kind, itemId, team, defs);
         AddChild(_hull);
     }
+
+    // Re-resolve the caption and the mesh for an item that was built before its def streamed. Called
+    // from the renderer on every authoritative frame; a no-op once the def is in (the common case) and
+    // a no-op while it still isn't. An UNAUTHORED model (def present, ModelName empty) is NOT pending —
+    // that puff is the intended visual, not a race.
+    public void RefreshDefs(DefRegistry defs)
+    {
+        if (!_defsPending || !DefsKnown(_kind, _itemId, defs))
+            return;
+        _defsPending = false;
+        Label = LabelFor(_kind, _itemId, _count, defs);
+        _hull?.QueueFree();
+        _hull = LoadHull(_kind, _itemId, Team, defs);
+        AddChild(_hull);
+    }
+
+    // Has the def this item's caption/mesh reads streamed yet? Kind 1 is a cargo pack, everything else
+    // resolves through a WeaponDef (the gun itself, or the rack a loose missile stack belongs to).
+    private static bool DefsKnown(byte kind, uint itemId, DefRegistry defs) =>
+        kind == 1 ? defs.GetCargoItem(itemId) is not null : defs.GetWeapon(itemId) is not null;
 
     // Latest server truth for this item: reset the dead-reckoning baseline, velocity and lifespan.
     // Called on EVERY stream frame (the per-sector frame re-sends every item it holds), so it must
