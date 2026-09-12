@@ -14,5 +14,5 @@ fight spreads. Run the server with `--autostart` so the match goes live as the b
 Output is a console report covering both directions of the pipe: received snapshot bytes/rate and
 the freshest server tick seen.
 
-It hand-builds its frames rather than referencing `shared/Net/Wire.cs`, so a wire change may need
-a matching edit here.
+Frames come from the shared wire definitions (`shared/Net/Messages.cs`, generated codecs), so a
+wire change is a rebuild here, never a hand edit.

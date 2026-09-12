@@ -7,5 +7,11 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- The shared wire frames (shared/Net/Messages.cs): the bot speaks the exact layouts the
+         server and client compile, so a protocol change is a rebuild here, never a hand edit. -->
+    <ProjectReference Include="../../shared/Shared.csproj" />
+  </ItemGroup>
 </Project>

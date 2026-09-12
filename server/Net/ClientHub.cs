@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using SimServer.Content;
 using SimServer.Sim;
 using StellarAllegiance.Shared;
+using StellarAllegiance.Shared.Net;
 
 namespace SimServer.Net;
 
@@ -620,14 +621,23 @@ public sealed class ClientHub
             if (count < 1)
                 continue; // empty frame
 
+            // One whole frame per receive. Each case parses it with the shared generated codec
+            // (shared/Net/Messages.cs) — the same layout the client compiles. A truncated or malformed
+            // frame fails TryParse and is ignored, exactly the "not a protocol error" treatment the old
+            // per-case length guards gave.
             switch (buffer[0])
             {
                 case Protocol.MsgHello:
                 {
-                    // Proto 38 layout (server/Net/HelloFrame.cs): u8 secretLen, secret…, u8 nameLen,
-                    // name…, u8 tokenLen, reconnectToken…, u16 joinLen, joinToken…. No class/team here
-                    // — those are lobby actions.
-                    var hello = HelloFrame.Parse(buffer.AsSpan(0, count));
+                    if (!HelloMessage.TryParse(buffer.AsSpan(0, count), out var hello))
+                        break;
+                    // Every Hello field is optional (an older client sends a shorter frame). An oversized
+                    // join token can never be valid, so it reads as absent and the listing's rule below
+                    // decides what "no token" means for THIS server.
+                    string joinToken =
+                        System.Text.Encoding.UTF8.GetByteCount(hello.JoinToken) <= HelloMessage.MaxJoinTokenBytes
+                            ? hello.JoinToken
+                            : "";
 
                     // Tell the client WHY before closing. The WS close frame also carries the reason,
                     // but a WebRTC DataChannel close does not — this app-level frame is the only signal
@@ -637,7 +647,7 @@ public sealed class ClientHub
                     {
                         try
                         {
-                            await client.Transport.SendAsync(new byte[] { Protocol.MsgReject, code }, ct);
+                            await client.Transport.SendAsync(new RejectMessage { Code = code }.ToBytes(), ct);
                             // Let the frame actually transmit before we tear the channel down: the WebRTC
                             // transport's CloseAsync does an immediate pc.close() that would abort the
                             // SCTP association out from under the just-queued chunk. Cheap on this rare
@@ -666,13 +676,13 @@ public sealed class ClientHub
                     var identity = LobbyIdentity;
                     if (identity.IsVerified && identity.ListingId is { } listingId && identity.Verifier is { } verifier)
                     {
-                        if (hello.JoinToken.Length == 0)
+                        if (joinToken.Length == 0)
                         {
                             Log.RejectedJoinNoToken(_log, client.Id);
                             await RejectAndClose(2, "join token required");
                             return;
                         }
-                        var verdict = await verifier.VerifyAsync(hello.JoinToken, listingId, ct);
+                        var verdict = await verifier.VerifyAsync(joinToken, listingId, ct);
                         if (!verdict.IsValid)
                         {
                             Log.RejectedJoinBadToken(_log, client.Id, verdict.Failure?.ToString() ?? "invalid");
@@ -721,66 +731,32 @@ public sealed class ClientHub
                         _sim.EnqueueReclaim(client.Id, hello.ReconnectToken);
                     break;
                 }
-                case Protocol.MsgSpawn when count >= 10:
+                case Protocol.MsgSpawn:
                 {
-                    // Spawn the chosen class — honored only while a match is live. The team
-                    // comes from the lobby (authoritative), not the client. Layout:
-                    // [4][cls][u64 launchBaseId][nCargo][nCargo x (u32 cargoId, u8 count)]
-                    // [nMounts][nMounts x (u8 hpIndex, u32 weaponId)] — the mount tail is the
-                    // hangar's weapon-slot overrides (u32.Max = leave empty); it's optional, so
-                    // a frame ending after the cargo block parses as zero overrides.
+                    // Spawn the chosen class — honored only while a match is live. The team comes from
+                    // the lobby (authoritative), not the client. Both tails of the frame are optional
+                    // (SpawnMessage): a bare frame carries no cargo (hull default) and no mount
+                    // overrides (authored loadout); a torn tail parses as absent, not as an error.
                     // launchBaseId 0 = server default base; the sim validates friendly+alive+
                     // launch-capable+station-class (TryResolveLaunchSite) and REJECTS pre-charge a
                     // pick that can't serve the hull (wrong class / exitless); only an unrestricted
-                    // hull with a stale/dead pick falls back silently. A bare length-10 frame
-                    // carries no cargo (hull default).
-                    byte cls = buffer[1];
+                    // hull with a stale/dead pick falls back silently.
+                    if (!SpawnMessage.TryParse(buffer.AsSpan(0, count), out var spawn))
+                        break;
+                    byte cls = spawn.ShipClass;
                     // Def-driven class gate (was a hardcoded `cls > 2 -> scout` clamp): unknown
                     // hulls, the pod, and miner drones are dropped to scout; the lock/cost gate
                     // (TryReserveSpawn) still decides whether the spawn actually happens.
                     if (!_sim.IsPlayerSpawnableClass(cls))
                         cls = 0;
-                    ulong launchBaseId = BitConverter.ToUInt64(buffer, 2);
-                    (uint cargoId, byte count)[] cargo = System.Array.Empty<(uint, byte)>();
-                    (byte hpIndex, uint weaponId)[] mounts = System.Array.Empty<(byte, uint)>();
-                    if (count >= 11)
-                    {
-                        int nCargo = buffer[10];
-                        int o = 11;
-                        if (count >= o + nCargo * 5)
-                        {
-                            if (nCargo > 0)
-                            {
-                                cargo = new (uint, byte)[nCargo];
-                                for (int i = 0; i < nCargo; i++)
-                                {
-                                    uint cargoId = BitConverter.ToUInt32(buffer, o);
-                                    o += 4;
-                                    byte cnt = buffer[o];
-                                    o += 1;
-                                    cargo[i] = (cargoId, cnt);
-                                }
-                            }
-                            // Optional mount-override tail (bounds-checked like the cargo block;
-                            // a malformed tail is ignored, not a protocol error).
-                            if (count >= o + 1)
-                            {
-                                int nMounts = buffer[o++];
-                                if (nMounts > 0 && count >= o + nMounts * 5)
-                                {
-                                    mounts = new (byte, uint)[nMounts];
-                                    for (int i = 0; i < nMounts; i++)
-                                    {
-                                        byte hpIndex = buffer[o];
-                                        o += 1;
-                                        uint weaponId = BitConverter.ToUInt32(buffer, o);
-                                        o += 4;
-                                        mounts[i] = (hpIndex, weaponId);
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    // The sim distinguishes a NULL mount list from an EMPTY one (ResolveLoadout), and
+                    // the hub has always handed it a non-null array — keep that contract.
+                    var cargo = new (uint cargoId, byte count)[spawn.Cargo.Length];
+                    for (int i = 0; i < cargo.Length; i++)
+                        cargo[i] = (spawn.Cargo[i].CargoId, spawn.Cargo[i].Count);
+                    var mounts = new (byte hpIndex, uint weaponId)[spawn.Mounts.Length];
+                    for (int i = 0; i < mounts.Length; i++)
+                        mounts[i] = (spawn.Mounts[i].HpIndex, spawn.Mounts[i].WeaponId);
                     if (_sim.IsActive)
                     {
                         byte team = _lobby.TeamOf(client.Id);
@@ -791,13 +767,15 @@ public sealed class ClientHub
                             break;
                         }
                         client.Team = team;
-                        _sim.EnqueueJoin(client.Id, team, cls, cargo, launchBaseId, mounts);
+                        _sim.EnqueueJoin(client.Id, team, cls, cargo, spawn.LaunchBaseId, mounts);
                     }
                     break;
                 }
-                case Protocol.MsgSetTeam when count >= 2:
+                case Protocol.MsgSetTeam:
                 {
-                    _lobby.SetTeam(client.Id, buffer[1]);
+                    if (!SetTeamMessage.TryParse(buffer.AsSpan(0, count), out var setTeam))
+                        break;
+                    _lobby.SetTeam(client.Id, setTeam.Team);
                     // Keep the connection's team in sync with the lobby so chat scope (and any
                     // later spawn) reflect the pick immediately, not just at deploy time.
                     byte prevTeam = client.Team;
@@ -812,22 +790,25 @@ public sealed class ClientHub
                     BroadcastLobby();
                     break;
                 }
-                case Protocol.MsgSetReady when count >= 2:
+                case Protocol.MsgSetReady:
                 {
-                    _lobby.SetReady(client.Id, buffer[1] != 0);
+                    if (!SetReadyMessage.TryParse(buffer.AsSpan(0, count), out var setReady))
+                        break;
+                    _lobby.SetReady(client.Id, setReady.Ready);
                     BroadcastLobby();
                     break;
                 }
-                case Protocol.MsgSetTeamName when count >= 4:
+                case Protocol.MsgSetTeamName:
                 {
                     // Rename a team. Server-authoritative gate: a real side (0/1), renamed only by
                     // that side's LEADER — the earliest-joined pilot on it (the roster's top row).
                     // Uppercased + capped to Wire.TeamNameMaxLength to match the client.
-                    byte team = buffer[1];
-                    int len = BitConverter.ToUInt16(buffer, 2);
-                    if ((team == 0 || team == 1) && _lobby.LeaderOf(team) == client.Id && count >= 4 + len)
+                    if (!SetTeamNameMessage.TryParse(buffer.AsSpan(0, count), out var rename))
+                        break;
+                    byte team = rename.Team;
+                    if ((team == 0 || team == 1) && _lobby.LeaderOf(team) == client.Id)
                     {
-                        string name = System.Text.Encoding.UTF8.GetString(buffer, 4, len).Trim().ToUpperInvariant();
+                        string name = rename.Name.Trim().ToUpperInvariant();
                         if (name.Length > Wire.TeamNameMaxLength)
                             name = name[..Wire.TeamNameMaxLength];
                         if (name.Length > 0)
@@ -838,26 +819,24 @@ public sealed class ClientHub
                     }
                     break;
                 }
-                case Protocol.MsgSetMap when count >= 3:
+                case Protocol.MsgSetMap:
                 {
                     // Host-only (enforced here, not just client-side). Cheap path: advertise the chosen
                     // map as the selected/"next" map and rebroadcast; we do NOT rebuild the live World
                     // mid-lobby (that needs a World regen + re-Welcome of every client — the arena is
                     // built once at boot).
+                    if (!SetMapMessage.TryParse(buffer.AsSpan(0, count), out var setMap))
+                        break;
                     if (client.Id == _hostId)
                     {
-                        int len = BitConverter.ToUInt16(buffer, 1);
-                        if (count >= 3 + len)
+                        string want = setMap.MapName.Trim();
+                        var match = _mapCatalog.FirstOrDefault(m =>
+                            string.Equals(m.Name, want, StringComparison.OrdinalIgnoreCase)
+                        );
+                        if (match != null)
                         {
-                            string want = System.Text.Encoding.UTF8.GetString(buffer, 3, len).Trim();
-                            var match = _mapCatalog.FirstOrDefault(m =>
-                                string.Equals(m.Name, want, StringComparison.OrdinalIgnoreCase)
-                            );
-                            if (match != null)
-                            {
-                                _selectedMap = match.Name;
-                                BroadcastLobby();
-                            }
+                            _selectedMap = match.Name;
+                            BroadcastLobby();
                         }
                     }
                     break;
@@ -870,142 +849,100 @@ public sealed class ClientHub
                     client.Leaving = true;
                     break;
                 }
-                case Protocol.MsgChat when count >= 4:
+                case Protocol.MsgChat:
                 {
-                    byte scope = buffer[1];
-                    int len = BitConverter.ToUInt16(buffer, 2);
-                    if (count >= 4 + len)
+                    if (!ChatMessage.TryParse(buffer.AsSpan(0, count), out var chat))
+                        break;
+                    string text = chat.Text;
+                    if (text.StartsWith('/'))
                     {
-                        string text = System.Text.Encoding.UTF8.GetString(buffer, 4, len);
-                        if (text.StartsWith('/'))
-                        {
-                            HandleCommand(client, text);
-                            break;
-                        }
-                        byte fromTeam = _lobby.TeamOf(client.Id);
-                        var frame = Protocol.BuildChatRelay(scope, fromTeam, _players.NameOf(client.Id), text);
-                        foreach (var c in _clients.Values)
-                            if (scope == 0 || c.Team == fromTeam)
-                                c.Out.SendReliable(OutFrame.Whole(frame));
+                        HandleCommand(client, text);
+                        break;
                     }
+                    byte fromTeam = _lobby.TeamOf(client.Id);
+                    var frame = Protocol.BuildChatRelay(chat.Scope, fromTeam, _players.NameOf(client.Id), text);
+                    foreach (var c in _clients.Values)
+                        if (chat.Scope == 0 || c.Team == fromTeam)
+                            c.Out.SendReliable(OutFrame.Whole(frame));
                     break;
                 }
-                case Protocol.MsgInput when count >= 38:
+                case Protocol.MsgInput:
                 {
-                    uint tick = BitConverter.ToUInt32(buffer, 1);
-                    byte flags = buffer[29];
-                    var input = new ShipInputState
-                    {
-                        Thrust = BitConverter.ToSingle(buffer, 5),
-                        StrafeX = BitConverter.ToSingle(buffer, 9),
-                        StrafeY = BitConverter.ToSingle(buffer, 13),
-                        Yaw = BitConverter.ToSingle(buffer, 17),
-                        Pitch = BitConverter.ToSingle(buffer, 21),
-                        Roll = BitConverter.ToSingle(buffer, 25),
-                        Firing = (flags & Protocol.FlagFiring) != 0,
-                        Boost = (flags & Protocol.FlagBoost) != 0,
-                        Firing2 = (flags & Protocol.FlagFiring2) != 0,
-                        DropChaff = (flags & Protocol.FlagDropChaff) != 0,
-                        DropMine = (flags & Protocol.FlagDropMine) != 0,
-                        DropProbe = (flags & Protocol.FlagDropProbe) != 0,
-                        LockTargetId = BitConverter.ToUInt64(buffer, 30),
-                    };
-                    _sim.EnqueueInput(client.Id, tick, input);
+                    if (!InputMessage.TryParse(buffer.AsSpan(0, count), out var input))
+                        break;
+                    _sim.EnqueueInput(client.Id, input.Tick, input.ToInput());
                     break;
                 }
-                case Protocol.MsgSetAutopilot when count >= 27:
+                case Protocol.MsgSetAutopilot:
                 {
                     // Player autopilot engage/disengage. One-shot command (like MsgSetMap): decode + queue;
-                    // the sim thread validates ship ownership and applies it. 27-byte frame (see Protocol).
-                    byte mode = buffer[1];
-                    byte kind = buffer[2];
-                    ulong id = BitConverter.ToUInt64(buffer, 3);
-                    uint sector = BitConverter.ToUInt32(buffer, 11);
-                    var pos = new Vec3(
-                        BitConverter.ToSingle(buffer, 15),
-                        BitConverter.ToSingle(buffer, 19),
-                        BitConverter.ToSingle(buffer, 23)
-                    );
-                    _sim.EnqueueSetAutopilot(client.Id, mode, kind, id, sector, pos);
+                    // the sim thread validates ship ownership and applies it.
+                    if (!SetAutopilotMessage.TryParse(buffer.AsSpan(0, count), out var ap))
+                        break;
+                    _sim.EnqueueSetAutopilot(client.Id, ap.Mode, ap.Kind, ap.Id, ap.Sector, ap.Pos);
                     break;
                 }
-                case Protocol.MsgOrder when count >= 34:
+                case Protocol.MsgOrder:
                 {
                     // Command a friendly ship (F3 map right-click). Routed by subject: a human
                     // teammate's ship becomes an advisory chat directive; an AI vessel is
                     // commander-gated here and validated/executed on the sim thread.
-                    ulong subject = BitConverter.ToUInt64(buffer, 1);
-                    byte targetKind = buffer[9];
-                    ulong targetId = BitConverter.ToUInt64(buffer, 10);
-                    uint sector = BitConverter.ToUInt32(buffer, 18);
-                    var pos = new Vec3(
-                        BitConverter.ToSingle(buffer, 22),
-                        BitConverter.ToSingle(buffer, 26),
-                        BitConverter.ToSingle(buffer, 30)
-                    );
-                    HandleOrder(client, subject, targetKind, targetId, sector, pos);
+                    if (!OrderMessage.TryParse(buffer.AsSpan(0, count), out var order))
+                        break;
+                    HandleOrder(client, order.SubjectShipId, order.TargetKind, order.TargetId, order.Sector, order.Pos);
                     break;
                 }
-                case Protocol.MsgResearch when count >= 12:
+                case Protocol.MsgResearch:
                 {
-                    // Commander research order: [13][u8 op][u64 baseId][u16 devIndex] (v36).
-                    // Commander-gated HERE (the commander-buy pattern); validated + applied on the
-                    // sim thread (Simulation.Research). Results come back as system chat + the
-                    // next MsgResearchState frame.
+                    // Commander research order. Commander-gated HERE (the commander-buy pattern);
+                    // validated + applied on the sim thread (Simulation.Research). Results come back as
+                    // system chat + the next MsgResearchState frame.
+                    if (!ResearchMessage.TryParse(buffer.AsSpan(0, count), out var research))
+                        break;
                     if (CommanderOrWarn(client) is byte cmdTeam)
-                    {
-                        byte op = buffer[1];
-                        ulong baseId = BitConverter.ToUInt64(buffer, 2);
-                        ushort devIndex = BitConverter.ToUInt16(buffer, 10);
-                        _sim.EnqueueResearchOp(client.Id, cmdTeam, op, baseId, devIndex);
-                    }
+                        _sim.EnqueueResearchOp(client.Id, cmdTeam, research.Op, research.BaseId, research.DevIndex);
                     break;
                 }
-                case Protocol.MsgBuildConstructor when count >= 10:
+                case Protocol.MsgBuildConstructor:
                 {
-                    // Commander buys a constructor bound to a station type:
-                    // [14][u8 stationTypeId][u64 launchBaseId] (v37). Commander-gated HERE (the
+                    // Commander buys a constructor bound to a station type. Commander-gated HERE (the
                     // commander-buy pattern); validated + applied on the sim thread. Results come back as
                     // team-scoped ConstructorNoticesThisStep chat.
+                    if (!BuildConstructorMessage.TryParse(buffer.AsSpan(0, count), out var build))
+                        break;
                     if (CommanderOrWarn(client) is byte cmdTeam)
-                    {
-                        byte stationType = buffer[1];
-                        ulong launchBaseId = BitConverter.ToUInt64(buffer, 2);
-                        _sim.EnqueueConstructorBuy(cmdTeam, stationType, launchBaseId);
-                    }
+                        _sim.EnqueueConstructorBuy(cmdTeam, build.StationTypeId, build.LaunchBaseId);
                     break;
                 }
-                case Protocol.MsgConstructorCancel when count >= 9:
+                case Protocol.MsgConstructorCancel:
                 {
-                    // Commander cancels a still-producing constructor: [15][u64 constructorId] (v38).
-                    // Commander-gated HERE; refund applied on the sim thread.
+                    // Commander cancels a still-producing constructor. Commander-gated HERE; refund
+                    // applied on the sim thread.
+                    if (!ConstructorCancelMessage.TryParse(buffer.AsSpan(0, count), out var cancel))
+                        break;
                     if (CommanderOrWarn(client) is byte cancTeam)
-                    {
-                        ulong constructorId = BitConverter.ToUInt64(buffer, 1);
-                        _sim.EnqueueConstructorCancel(cancTeam, constructorId);
-                    }
+                        _sim.EnqueueConstructorCancel(cancTeam, cancel.ConstructorId);
                     break;
                 }
-                case Protocol.MsgBuyMiner when count >= 9:
+                case Protocol.MsgBuyMiner:
                 {
-                    // Commander buys a mining drone: [16][u64 launchBaseId] (the docked garrison, so the
-                    // miner joins THAT garrison's build pipeline; 0 = default garrison). Replaces the old
-                    // /buyminer chat command. Commander-gated HERE; cap/cost/phase/queue/kill-switch
-                    // validated on the sim thread (TryBuyMiner). Results come back as team-scoped
-                    // MinerNoticesThisStep chat.
+                    // Commander buys a mining drone at the docked garrison (so the miner joins THAT
+                    // garrison's build pipeline; 0 = default garrison). Commander-gated HERE;
+                    // cap/cost/phase/queue/kill-switch validated on the sim thread (TryBuyMiner).
+                    // Results come back as team-scoped MinerNoticesThisStep chat.
+                    if (!BuyMinerMessage.TryParse(buffer.AsSpan(0, count), out var buy))
+                        break;
                     if (CommanderOrWarn(client) is byte minerTeam)
-                    {
-                        ulong launchBaseId = BitConverter.ToUInt64(buffer, 1);
-                        _sim.EnqueueMinerBuy(minerTeam, launchBaseId);
-                    }
+                        _sim.EnqueueMinerBuy(minerTeam, buy.LaunchBaseId);
                     break;
                 }
-                case Protocol.MsgPing when count >= 1 + 4:
+                case Protocol.MsgPing:
                 {
                     // Bounce the nonce straight back through the outbound channel — the same
                     // queue snapshots use, so the measured RTT reflects real send-side latency.
-                    uint nonce = BitConverter.ToUInt32(buffer, 1);
-                    client.Out.SendLossy(OutFrame.Whole(Protocol.BuildPong(nonce)));
+                    if (!PingMessage.TryParse(buffer.AsSpan(0, count), out var ping))
+                        break;
+                    client.Out.SendLossy(OutFrame.Whole(Protocol.BuildPong(ping.Nonce)));
                     break;
                 }
             }
@@ -2496,8 +2433,8 @@ public sealed class ClientHub
         return buf;
     }
 
-    // Snapshot header: MsgSnapshot(1) + tick(4) + phase(1) + winner(1) + count(2).
-    private const int SnapshotHeader = 9;
+    // Snapshot header: MsgSnapshot(1) + tick(4) + phase(1) + winner(1) + count(2) — the shared SnapshotMessage layout.
+    private const int SnapshotHeader = SnapshotMessage.HeaderSize;
 
     // The all-ships snapshot shared by every client on an unpruned coarse tick. The body is
     // exactly the contiguous alive-record block SerializeRecords packed, so this is one header
