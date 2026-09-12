@@ -121,22 +121,14 @@ public sealed class FrameApplier
     // wherever _rows resets (reconnect / world rebuild / voluntary leave).
     private readonly Dictionary<ulong, Missile> _missileRows = [];
 
-    // Last-decoded minefield per fieldId (from MsgMinefields). Maintained by ApplyMinefields /
-    // ApplyMineGone. Cleared wherever _missileRows resets (reconnect / world rebuild / leave).
-    private readonly Dictionary<ulong, Minefield> _minefieldRows = [];
-
-    // Last-decoded recon probe per id (from MsgProbes). Maintained by ApplyProbes / ApplyProbeGone.
-    // Owner-team-only (v1), so this only ever holds OUR team's probes. Cleared wherever the other
+    // The three reconcile-by-omission set streams (the frame IS the complete visible set; anything
+    // absent from it is gone): last-decoded row per id + the prune bookkeeping, one SetReconciler each.
+    // Minefields: per anchor sector. Probes: the team's complete set across all sectors. Salvage: per
+    // anchor sector, arriving every tick while items drift. All cleared wherever the other
     // per-connection caches reset (reconnect / world rebuild / leave).
-    private readonly Dictionary<ulong, Probe> _probeRows = [];
-
-    // Last-decoded salvage item per id (from MsgSalvage), for the client's ANCHOR SECTOR only.
-    // Maintained by ApplySalvage / ApplySalvageGone. Frames arrive every tick while items drift, so
-    // the reconcile scratch below is reused rather than reallocated per frame. Cleared wherever the
-    // other per-connection caches reset (reconnect / world rebuild / leave).
-    private readonly Dictionary<ulong, Salvage> _salvageRows = [];
-    private readonly HashSet<ulong> _salvageSeen = new();
-    private readonly List<ulong> _salvageReconcileScratch = new();
+    private readonly SetReconciler<Minefield> _minefields = new();
+    private readonly SetReconciler<Probe> _probes = new();
+    private readonly SetReconciler<Salvage> _salvage = new();
 
     // Last logged salvage row count, so ApplySalvage can log only when the set actually changes
     // size (a per-tick line would drown the log during a drift burst). -1 = nothing logged yet.
@@ -191,9 +183,9 @@ public sealed class FrameApplier
     {
         _rows.Clear();
         _missileRows.Clear();
-        _minefieldRows.Clear();
-        _probeRows.Clear();
-        _salvageRows.Clear();
+        _minefields.Clear();
+        _probes.Clear();
+        _salvage.Clear();
         _lastSalvageLogCount = -1;
         _localMissileLoadTick = _localChaffLoadTick = _localMineLoadTick = _localProbeLoadTick = 0;
     }
@@ -312,7 +304,7 @@ public sealed class FrameApplier
             case MineGoneMessage.MsgId:
             {
                 var m = MineGoneMessage.Parse(f);
-                if (_minefieldRows.TryGetValue(m.FieldId, out var mf))
+                if (_minefields.TryGet(m.FieldId, out var mf))
                     mf.AliveMask &= ~(1UL << m.MineIndex);
                 _world.Minefields.NetMineGone(m.FieldId, m.MineIndex, m.Reason, m.Sector, m.Pos);
                 break;
@@ -339,7 +331,7 @@ public sealed class FrameApplier
                 // reason 0 expired, 1 cleanup, 2 destroyed by enemy fire (renderer plays an explosion).
                 // Broadcast, so an unknown id is a harmless no-op.
                 var m = ProbeGoneMessage.Parse(f);
-                _probeRows.Remove(m.Id);
+                _probes.Remove(m.Id);
                 _world.Probes.NetGone(m.Id, m.Reason, m.Sector, m.Pos);
                 break;
             }
@@ -407,7 +399,7 @@ public sealed class FrameApplier
                 // reason 0 expired, 1 match cleanup, 2 picked up by ByShipId (the renderer pops the collect
                 // FX and, when the collector is US, raises the pickup banner). Unknown id = no-op.
                 var m = SalvageGoneMessage.Parse(f);
-                _salvageRows.Remove(m.Id);
+                _salvage.Remove(m.Id);
                 _world.Salvage.NetGone(m.Id, m.Reason, m.Sector, m.Pos, m.ByShipId);
                 break;
             }
@@ -537,7 +529,7 @@ public sealed class FrameApplier
     // expiry/destruction FX when the server sends one.
     private void ApplyProbes(ProbesMessage m)
     {
-        _probeSeen.Clear();
+        _probes.Begin();
         foreach (var rec in m.Probes)
         {
             var row = new Probe
@@ -551,30 +543,15 @@ public sealed class FrameApplier
                 PosZ = rec.Pos.Z,
                 TicksLeft = rec.TicksLeft,
             };
-            _probeRows[rec.ProbeId] = row;
-            _probeSeen.Add(rec.ProbeId);
+            _probes.Rows[rec.ProbeId] = row;
+            _probes.Mark(rec.ProbeId);
             _world.Probes.NetUpsert(row);
         }
-
         // Prune any cached probe the frame no longer lists (fogged-out enemy probe). Reason 255 =
         // silent local reconcile — the renderer just frees the node, no FX.
-        if (_probeRows.Count != _probeSeen.Count)
-        {
-            _probeReconcileScratch.Clear();
-            foreach (var kv in _probeRows)
-                if (!_probeSeen.Contains(kv.Key))
-                    _probeReconcileScratch.Add(kv.Key);
-            foreach (var id in _probeReconcileScratch)
-            {
-                var g = _probeRows[id];
-                _probeRows.Remove(id);
-                _world.Probes.NetGone(id, 255, g.SectorId, new Vec3(g.PosX, g.PosY, g.PosZ));
-            }
-        }
+        foreach (var (id, g) in _probes.Prune())
+            _world.Probes.NetGone(id, 255, g.SectorId, new Vec3(g.PosX, g.PosY, g.PosZ));
     }
-
-    private readonly HashSet<ulong> _probeSeen = new();
-    private readonly List<ulong> _probeReconcileScratch = new();
 
     // MsgSalvage: the wreck items lying in our ANCHOR SECTOR — the complete visible set for that
     // sector, so it reconciles by omission. Sent on change, on the coarse keepalive, and whenever the
@@ -584,13 +561,13 @@ public sealed class FrameApplier
     // frees the node; the reliable MsgSalvageGone carries the FX authority.
     private void ApplySalvage(SalvageMessage m)
     {
-        _salvageSeen.Clear();
+        _salvage.Begin();
         foreach (var rec in m.Items)
         {
             // Reuse the cached row object when we already have this id, so a per-tick drift frame
             // allocates nothing.
-            if (!_salvageRows.TryGetValue(rec.Id, out var row))
-                _salvageRows[rec.Id] = row = new Salvage { SalvageId = rec.Id };
+            if (!_salvage.TryGet(rec.Id, out var row))
+                _salvage.Rows[rec.Id] = row = new Salvage { SalvageId = rec.Id };
             row.Kind = rec.Kind;
             row.ItemId = rec.ItemId;
             row.Count = rec.Count;
@@ -603,31 +580,19 @@ public sealed class FrameApplier
             row.VelY = rec.Vel.Y;
             row.VelZ = rec.Vel.Z;
             row.TicksLeft = rec.TicksLeft;
-            _salvageSeen.Add(rec.Id);
+            _salvage.Mark(rec.Id);
             _world.Salvage.NetUpsert(row);
         }
-
-        // Prune every cached id the frame no longer lists (the reconcile above).
-        if (_salvageRows.Count != _salvageSeen.Count)
-        {
-            _salvageReconcileScratch.Clear();
-            foreach (var kv in _salvageRows)
-                if (!_salvageSeen.Contains(kv.Key))
-                    _salvageReconcileScratch.Add(kv.Key);
-            foreach (var id in _salvageReconcileScratch)
-            {
-                var g = _salvageRows[id];
-                _salvageRows.Remove(id);
-                _world.Salvage.NetGone(id, 255, g.SectorId, new Vec3(g.PosX, g.PosY, g.PosZ), 0);
-            }
-        }
+        // Prune every cached id the frame no longer lists (reason 255 = silent local reconcile).
+        foreach (var (id, g) in _salvage.Prune())
+            _world.Salvage.NetGone(id, 255, g.SectorId, new Vec3(g.PosX, g.PosY, g.PosZ), 0);
 
         // Smoke aid: one line whenever the visible item COUNT moves (a per-frame line would drown
         // the log — this frame arrives every tick for the seconds a drift burst lasts).
-        if (_salvageRows.Count != _lastSalvageLogCount)
+        if (_salvage.Count != _lastSalvageLogCount)
         {
-            _lastSalvageLogCount = _salvageRows.Count;
-            Log.Print($"[GameNet] salvage rows={_salvageRows.Count}");
+            _lastSalvageLogCount = _salvage.Count;
+            Log.Print($"[GameNet] salvage rows={_salvage.Count}");
         }
     }
 
@@ -638,7 +603,7 @@ public sealed class FrameApplier
     // never linger across a sector change. An empty frame purges everything not currently visible.
     private void ApplyMinefields(MinefieldsMessage m)
     {
-        var seen = new HashSet<ulong>();
+        _minefields.Begin();
         foreach (var rec in m.Fields)
         {
             var row = new Minefield
@@ -655,20 +620,12 @@ public sealed class FrameApplier
                 ExpireAtTick = rec.ExpireAtTick,
                 AliveMask = rec.AliveMask,
             };
-            _minefieldRows[rec.FieldId] = row;
-            seen.Add(rec.FieldId);
+            _minefields.Rows[rec.FieldId] = row;
+            _minefields.Mark(rec.FieldId);
             _world.Minefields.NetUpsertMinefield(row);
         }
-        List<ulong>? gone = null;
-        foreach (var kv in _minefieldRows)
-            if (!seen.Contains(kv.Key))
-                (gone ??= new()).Add(kv.Key);
-        if (gone is not null)
-            foreach (var id in gone)
-            {
-                _minefieldRows.Remove(id);
-                _world.Minefields.NetMinefieldGone(id);
-            }
+        foreach (var (id, _) in _minefields.Prune())
+            _world.Minefields.NetMinefieldGone(id);
     }
 
     // Per-team economy (credits/score) + owned techs/caps. Low-rate — the renderer holds the latest
@@ -741,9 +698,9 @@ public sealed class FrameApplier
             // ClearEntityCaches() used by BeginConnect/Abort/Disconnect/GiveUpShip — ship rows
             // are reconciled by the spawn/update frames that follow this Welcome.
             _missileRows.Clear(); // stale missiles from the pre-drop world must not linger
-            _minefieldRows.Clear();
-            _probeRows.Clear();
-            _salvageRows.Clear(); // the next anchor-sector frame re-streams whatever still lies there
+            _minefields.Clear();
+            _probes.Clear();
+            _salvage.Clear(); // the next anchor-sector frame re-streams whatever still lies there
             _lastSalvageLogCount = -1;
         }
         _worldLoaded = true;

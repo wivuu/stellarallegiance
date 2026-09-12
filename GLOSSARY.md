@@ -67,6 +67,16 @@ Two-tier write discipline on the per-client outbound frame queue (bounded, `Full
 - **Related:** [[Snapshot]], [[AOI (Area of Interest)]]
 - **Notes:** NEVER use `DropOldest` or raw `TryWrite` for control frames — evicting a one-shot YouAre/ShipGone deadlocks the relaunch flow (client retries MsgSpawn forever; server drops each as "already flying"). Queue pressure is logged throttled (`OutboundQueuePressure`). The client additionally self-heals its local-ship binding from the lobby roster (`GameNetClient.ApplyLobbyState` adopt/ghost heal).
 
+### Low-Rate Streams (`LowRateStream`)
+The hub's cadence-driven frames — bases, team state, loadouts, research, miner targets, constructor builds/roster, fog-off base reveal, rock despawn, fog contacts, probes, minefields, salvage — are each ONE declaration in `server/Net/ClientHub.Streams.cs`: a **scope** (`Global` / `PerTeam` / `AnchorSector`), a **tier** (`Reliable` / `Lossy` / `Cursor` = TryWrite-gated, per-client `LastAnchor` slot advanced only on a successful enqueue), a cadence gate (`Due`: the sim's `*ChangedThisStep` flag or the coarse keepalive) and a `Build`. `ClientHub.SendStreams` builds at most once per scope key per tick and sends on the tier; the per-client pass runs the EARLY streams, then the fog reveal slice, then the one-shot gone-events, then the LATE set streams (probes/minefields/salvage) — that order is load-bearing (a reliable gone-event is the FX authority and must precede the set frame that prunes the same id). Client side, `client/scripts/net/SetReconciler.cs` is the reconcile-by-omission bookkeeping the set streams share.
+- **Frequency:** Every tick (each stream fires on its own cadence)
+- **Key Files:**
+  - `server/Net/ClientHub.Streams.cs` — `LowRateStream`, the stream classes, `SendStreams`, the ordered `_earlyStreams` / `_lateStreams` registration
+  - `server/Net/ClientHub.cs` — `TickEvents` (the one-shot events), `PrepareBroadcastFrames`, `SendPerClientFrames` (the phase order)
+  - `client/scripts/net/SetReconciler.cs` + `FrameApplier.cs` — probes / minefields / salvage appliers
+- **Related:** [[Reliable / Lossy Outbound Tiers]], [[Wire Frames (source-generated codecs)]], [[AOI (Area of Interest)]]
+- **Notes:** A new streamed table = one class + one registration entry. Not streams (bespoke on purpose): the ship snapshot (AOI hot path), missiles (per-client AOI), the fog reveal slice (per-client cursor), rock-update deltas (chunked, on-change only), and the gone/death one-shots.
+
 ### Wire Frames (source-generated codecs)
 Every frame and record on the wire is a partial C# type in `shared/Net/` (`Messages.cs`, `Records.cs`, plus the content-def classes in `shared/Defs.cs`) whose public fields, in declaration order, ARE the byte layout. The `tools/wire-gen` Roslyn source generator (an analyzer reference on `Shared.csproj`) emits `Measure` / `Write` / `Read` / `TryParse` and a compile-time `Size` for every `[WireMessage(id)]` / `[WireRecord]` type, so the server, the Godot client, the test suites and simbot compile ONE layout instead of hand-mirroring four. Field types pick the encoding; `[Wire(WireEnc.Pos|Half|Quat|Angle|U8|U16|U32|StrU8|Str7Bit)]`, `[WireCount]`, `[WireOptional]` and `[WireIgnore]` cover quantized, narrowed, optional-tail and count-prefixed fields.
 - **Frequency:** Every frame
