@@ -13,7 +13,7 @@
 # and framework symlinks (plain `zip` corrupts them).
 #
 # Testers still need to clear quarantine once on the downloaded zip:
-#   xattr -dr com.apple.quarantine stellarallegiance.app
+#   xattr -dr com.apple.quarantine "Stellar Allegiance.app"
 #
 # Usage: scripts/export-clients.ps1   (run from anywhere; needs godot-mono on PATH)
 $ErrorActionPreference = 'Stop'
@@ -63,7 +63,8 @@ try {
 # macOS-only). On Windows/Linux we skip it and still produce the Windows + Linux builds.
 if ($IsMacOS) {
     Write-Host "[export] macOS .app ..."
-    $App = "$Out/mac/stellarallegiance.app"
+    # The bundle's file name is what macOS shows in the Dock and Cmd+Tab (not CFBundleName).
+    $App = "$Out/mac/Stellar Allegiance.app"
     Remove-Item -Recurse -Force -LiteralPath $App -ErrorAction SilentlyContinue
     & $Godot --headless --path $Client --export-release "macOS" $App
 

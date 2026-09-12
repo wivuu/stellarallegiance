@@ -39,7 +39,7 @@ jobs:
             os: macos-latest
             preset: macOS
             platform: macos
-            output_path: build/mac/stellarallegiance.app
+            output_path: "build/mac/Stellar Allegiance.app" # the .app file name is what the Dock and Cmd+Tab show
           - name: Windows
             os: windows-latest
             preset: Windows Desktop
@@ -137,7 +137,7 @@ jobs:
       - name: Package macOS
         if: matrix.name == 'macOS'
         run: |
-          APP=build/mac/stellarallegiance.app
+          APP="build/mac/Stellar Allegiance.app"
           codesign --remove-signature "$APP" 2>/dev/null || true
           codesign --force --deep --sign - "$APP"
           codesign --verify --deep --strict "$APP" && echo "signature valid"
@@ -233,7 +233,7 @@ jobs:
             Pick your platform below. Unzip and run.
 
             - **macOS** — ad-hoc signed (not notarized). After unzipping, clear quarantine once:
-              `xattr -dr com.apple.quarantine stellarallegiance.app`, then launch.
+              `xattr -dr com.apple.quarantine "Stellar Allegiance.app"`, then launch.
             - **Windows / Linux** — keep the whole unzipped folder together (the executable needs
               its sibling `.pck` and `data_*` directory).
 
