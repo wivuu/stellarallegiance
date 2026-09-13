@@ -278,22 +278,19 @@ Check(TurretStations.AimDeltaRad(10f, 0f) == 0f, "a zero sensitivity moves the g
     var free = TurretLook.Seed(zenith);
     Check(!free.ClampToArc(zenith), "ClampToArc reports false (and changes nothing) inside the arc");
 
-    // WithForward: the CAMERA basis while the mount is still traversing — the look carried onto the
-    // gun's ACTUAL aim by the shortest rotation, so the up follows the gun instead of being rebuilt.
+    // The look basis IS the camera: a mouse turn changes it immediately and completely (no traverse
+    // in the camera path — the gun lags on its own, the view never does).
     var sight = TurretLook.Seed(zenith);
+    Vec3 before = sight.Z;
     sight.Yaw(0.6f);
     sight.Pitch(-0.4f);
+    Check(AngleBetween(before, sight.Z) > 0.5f, "a yaw+pitch moves the look's forward the full amount at once");
     float rate = 0f;
     Vec3 actual = TurretAim.Slew(TurretAim.Rest(zenith), sight.Z, ref rate, 2f, 6f, 0.05f);
-    var cam = sight.WithForward(actual);
-    Check(AngleBetween(cam.Z, actual) < 1e-4f, "WithForward's forward IS the gun's actual aim");
-    Check(Orthonormality(cam) < 1e-4f, "WithForward returns an orthonormal basis");
     Check(
-        AngleBetween(cam.Y, sight.Y) <= AngleBetween(sight.Z, actual) + 1e-3f,
-        "…and rolls the up no further than the aim moved"
+        AngleBetween(actual, sight.Z) > 0.1f,
+        "the gun's traversed aim still lags the look on the same frame (the reticle, not the camera, shows it)"
     );
-    var settled = sight.WithForward(sight.Z);
-    Check(AngleBetween(settled.Y, sight.Y) < 1e-4f, "once the gun catches up WithForward is the identity");
 }
 
 Console.WriteLine(failures == 0 ? "ALL PASS" : $"{failures} FAILURE(S)");

@@ -39,7 +39,7 @@
 //       MsgYouAre, and its anchor-scoped frames follow the captain's ship into another sector.
 //   14. The shared TurretAim rule itself (rest pose, arc clamp, gimbal round-trip, spread barrel)
 //       and the slice-2b TRAVERSE rule (TurretAim.Slew: no overshoot, the speed cap, settling on
-//       the target with rate 0, the slew-0 snap, a capital station's 90° taking >= 20 ticks).
+//       the target with rate 0, the slew-0 snap, a capital station's 90° taking >= 40 ticks).
 //   15. Aim/fire in the sim: held input is dropped while the captain is docked, a below-horizon aim
 //       is traversed toward and stored clamped, a held trigger fires on the station's OWN cadence
 //       (never touching the pilot's LastFireTick) and credits the GUNNER, an unmanned station never
@@ -919,9 +919,9 @@ Simulation.ShipSim Launch(Simulation sim, int cid, byte team, byte cls)
         );
     }
 
-    // A heavy capital station (the Devastator's authored 90°/s, 240°/s²) takes at least a full
-    // second of ticks to come round 90° — the traverse is the feature, so this is a floor, not a
-    // fit: 90° at 90°/s is 20 ticks of pure travel before any wind-up is counted.
+    // A heavy capital station (the Devastator's authored 45°/s, 120°/s²) takes at least two full
+    // seconds of ticks to come round 90° — the traverse is the feature, so this is a floor, not a
+    // fit: 90° at 45°/s is 40 ticks of pure travel before any wind-up is counted.
     {
         float rate = 0f;
         var cur = new Vec3(0f, 0f, 1f);
@@ -929,13 +929,13 @@ Simulation.ShipSim Launch(Simulation sim, int cid, byte team, byte cls)
         int ticks = 0;
         while (ticks < 400 && Angle(cur, to) > 1e-4f)
         {
-            cur = TurretAim.Slew(cur, to, ref rate, Rad(90.0), Rad(240.0), Dt);
+            cur = TurretAim.Slew(cur, to, ref rate, Rad(45.0), Rad(120.0), Dt);
             ticks++;
         }
         Check(
-            ticks >= 20,
-            $"a 90°/s capital station needs {ticks} ticks (>= 20) to traverse 90°",
-            $"a 90°/s station came round 90° in {ticks} ticks"
+            ticks >= 40,
+            $"a 45°/s capital station needs {ticks} ticks (>= 40) to traverse 90°",
+            $"a 45°/s station came round 90° in {ticks} ticks"
         );
     }
 }

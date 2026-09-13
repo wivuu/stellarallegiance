@@ -551,8 +551,8 @@ Check(
         && Math.Abs(h.TurretAccelRad - (float)(TurretAim.DefaultAccelDeg * Math.PI / 180.0)) < 1e-4f
     )
         && devastatorTurrets.All(h =>
-            Math.Abs(h.TurretSlewRad - (float)(90.0 * Math.PI / 180.0)) < 1e-4f
-            && Math.Abs(h.TurretAccelRad - (float)(240.0 * Math.PI / 180.0)) < 1e-4f
+            Math.Abs(h.TurretSlewRad - (float)(45.0 * Math.PI / 180.0)) < 1e-4f
+            && Math.Abs(h.TurretAccelRad - (float)(120.0 * Math.PI / 180.0)) < 1e-4f
         )
         && bomber
             .Hardpoints.Where(h => h.Kind != HardpointKind.Turret)

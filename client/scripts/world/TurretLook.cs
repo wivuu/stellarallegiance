@@ -20,6 +20,11 @@ using static StellarAllegiance.Shared.Vec3;
 // up stays continuous — rather than as a clamp on an angle, which is what used to make the horizon
 // jump at the edge.
 //
+// This basis IS the gun camera (user steer 2026-09-13: the turret cam is "a free-look camera,
+// constrained only by its position on the ship, the ship's orientation and its arc fence, but not
+// other physics of the turret"). The mount traverses toward its forward under TurretAim.Slew on its
+// own time; that lag is shown by the aim reticle trailing the view's centre, never by the camera.
+//
 // Axes are the columns of a right-handed basis in the hull's frame: Z = forward (the gunner's DESIRED
 // aim), Y = up, X = Y × Z. Note that the hull's forward is +Z, so X points to the viewer's LEFT — the
 // same convention CameraRig's FaceForward exists to undo — which is why the caller yaws by MINUS the
@@ -82,35 +87,6 @@ public sealed class TurretLook
             x = PerpendicularTo(Z); // up collapsed onto the aim (only reachable through float decay)
         X = Normalize(x);
         Y = Cross(Z, X);
-    }
-
-    // The CAMERA's basis while the mount is still traversing: this look basis carried onto the gun's
-    // ACTUAL aim by the SHORTEST rotation, so the view follows the gun that is really pointing without
-    // the up ever being re-derived (which is what a fresh projection would do, and what used to snap).
-    // Identity once the gun has caught up with the sight.
-    public TurretLook WithForward(Vec3 actual)
-    {
-        actual = Normalize(actual);
-        float d = System.Math.Clamp(Dot(Z, actual), -1f, 1f);
-        Vec3 axis = Cross(Z, actual);
-        bool degenerate = axis.LengthSquared() < 1e-10f;
-        if (degenerate && d > 0f)
-            return new TurretLook
-            {
-                X = X,
-                Y = Y,
-                Z = actual,
-            }; // already there
-        axis = degenerate ? X : Normalize(axis); // antiparallel ⇒ swing through the basis' own right
-        float ang = (float)System.Math.Acos(d);
-        var cam = new TurretLook
-        {
-            X = Rotate(X, axis, ang),
-            Y = Rotate(Y, axis, ang),
-            Z = actual,
-        };
-        cam.Orthonormalize();
-        return cam;
     }
 
     // Rodrigues: rotate `v` about the unit `axis` by `rad` (right-handed).

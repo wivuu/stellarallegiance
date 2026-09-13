@@ -7,11 +7,12 @@ namespace StellarAllegiance.Shared;
 // ship-local unit vector anywhere in the cone around it — a hemisphere plus a little depression
 // below the mount's horizon (user steer 2026-09-13: the bare hemisphere felt too restricted). Three
 // mirrors consume this and must never drift (same pattern as FireCadence):
-//   - server Simulation.TryFireTurrets   (authoritative: clamps the held aim, fires along it)
-//   - client TurretController             (the gunner: azimuth/elevation gimbal → aim, local bolts)
+//   - server Simulation.TryFireTurrets   (authoritative: clamps + traverses the held aim, fires along it)
+//   - client TurretController             (the gunner: free look → desired aim, same traverse, local bolts)
 //   - client ShipRenderer.ApplyTurrets    (remote turrets: rebuilds bolts along the streamed aim)
-// No slew-rate limit in this slice — bolts leave where the reticle points; if one is ever wanted it
-// belongs here so both peers apply the same one.
+// The traverse (Slew, below) is the ONLY physics a turret has, and it is the gun's, not the camera's:
+// the gunner's view is a free look that moves with the mouse; the traversed aim is where the bolts
+// leave and where the reticle is drawn.
 public static class TurretAim
 {
     // Firing arc half-angle around the zenith: a hemisphere plus 15° of depression below the
@@ -31,10 +32,11 @@ public static class TurretAim
     public const byte FlagFiring = 1;
 
     // Traverse defaults for a station that authors no `slew-deg` / `accel-deg` (projection fills
-    // HardpointDef.TurretSlewRad / TurretAccelRad from these): a nimble light mount that reaches
-    // full speed in a third of a second. A heavy capital station authors lower numbers.
-    public const double DefaultSlewDeg = 150.0;
-    public const double DefaultAccelDeg = 450.0;
+    // HardpointDef.TurretSlewRad / TurretAccelRad from these): a light mount that comes round 90° in
+    // about two seconds and reaches full speed in a third of one. The bomber flies these (user steer
+    // 2026-09-13: 150°/s was "too quick" for a bomber). A heavy capital station authors lower numbers.
+    public const double DefaultSlewDeg = 60.0;
+    public const double DefaultAccelDeg = 180.0;
 
     // Spread-seed "barrel" for a station: 0x80 | HardpointDef.Index — disjoint from the pilot's
     // barrel indices (< 128), so a turret volley never shares a scatter seed with a hull gun on the

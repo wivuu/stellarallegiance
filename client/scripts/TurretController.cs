@@ -18,10 +18,13 @@ using StellarAllegiance.Ui;
 // There ARE two aims (slice 2b): the mouse drags a DESIRED sight, and the mount TRAVERSES toward it
 // under its authored slew/accel (shared TurretAim.Slew, run here per frame and on the server per sim
 // tick from the same streamed HardpointDef numbers). The DESIRED aim is what goes on the wire — the
-// server derives the actual one itself — and the ACTUAL aim is what the gunner sees: the camera, the
-// barrel, the reticle and the predicted bolts all follow it, so a heavy gun visibly lags the sight.
-// There is only ONE mark on screen for it: the pilot's own aim reticle, drawn by TargetMarkers off
-// the same firing line (a gunner is a pilot who cannot steer, so they get the pilot's HUD).
+// server derives the actual one itself. The CAMERA is the desired look and nothing else: it moves
+// with the mouse, the ship and the arc fence, never with the gun (user steer 2026-09-13: a camera
+// that rode the traversing gun felt "clunky" — "constrained only by its position, the ship's
+// orientation and its arc fence, not other physics of the turret"). The ACTUAL aim is what the
+// barrel, the predicted bolts and the ONE reticle follow: the pilot's own aim reticle, drawn by
+// TargetMarkers off the firing line (a gunner is a pilot who cannot steer, so they get the pilot's
+// HUD), so a heavy gun reads as the reticle trailing the centre of the view until it catches up.
 //
 // Three mirrors of TurretAim must agree or the gunner shoots somewhere nobody else sees
 // (server TryFireTurrets / this / ShipRenderer.ApplyTurrets) — the arc/traverse maths therefore lives
@@ -57,10 +60,10 @@ public partial class TurretController : Node
     public static Vector3 DesiredAim { get; private set; } = Vector3.Forward;
     public static Vector3 Zenith { get; private set; } = Vector3.Up;
 
-    // The gun cam's full ship-local basis: Z = the ACTUAL aim, Y = the gunner's up, X = Y × Z. It is
-    // the free-look basis carried onto the traversing gun by the shortest rotation (TurretLook), so
-    // the horizon is one continuous thing all the way over the zenith — never a projection re-derived
-    // per frame, which is what used to spin the view at the pole.
+    // The gun cam's full ship-local basis: Z = the DESIRED look (the free look itself), Y = the
+    // gunner's up, X = Y × Z — the TurretLook basis verbatim, carried frame to frame so the horizon
+    // is one continuous thing all the way over the zenith, never a projection re-derived per frame
+    // (which is what used to spin the view at the pole). It does NOT follow the traversing gun.
     public static Basis CamBasis { get; private set; } = Basis.Identity;
 
     // The station's ship-local mount offset — where the gun cam sits and where the bolts leave.
@@ -224,9 +227,12 @@ public partial class TurretController : Node
         );
         Aim = ShipMath.ToGodot(actual);
 
-        // The camera rides the ACTUAL gun, not the sight: the look basis carried onto it by the
-        // shortest rotation, which leaves the up continuous while the mount catches up.
-        CamBasis = ToBasis(_look.WithForward(actual));
+        // The camera IS the free look — the mouse, the ship's pose and the arc fence are the only
+        // things that move it. It never waits for the mount: the gun's traverse shows up as the aim
+        // reticle (drawn on the ACTUAL aim) trailing the centre of the view, not as the view itself
+        // dragging behind the mouse (user steer 2026-09-13: a camera that rode the traversing gun
+        // felt "clunky"; the gun's physics must not be the camera's).
+        CamBasis = ToBasis(_look);
 
         // The gunner's own barrel follows the LIVE aim: ApplyTurrets deliberately ignores our seat's
         // echo, so this is the only thing that moves it.
