@@ -465,6 +465,23 @@ public partial struct CrewShipRecord
     public CrewSeatRecord[] Seats;
 }
 
+// One MANNED turret station's live state (25 bytes, v42 crews slice 2): where the gunner aims and
+// the last tick that gun fired. Aim is a SHIP-LOCAL unit vector (stable under the captain's turns),
+// already clamped to the station's arc by the server (TurretAim); LastFireTick is this station's
+// own stamp — a remote client rebuilds the turret's bolt from (aim, ship pose, gun) exactly as
+// BoltRenderer rebuilds a pilot's from ShipRecord.LastFireTick. Streamed per client in MsgTurrets
+// (AOI-filtered, lossy) only for manned seats; an omitted seat means "unmanned, at rest".
+[WireRecord]
+public partial struct TurretRecord
+{
+    public ulong ShipId;
+    public byte SeatIndex; // the station's HardpointDef.Index (the same index CrewSeatRecord speaks)
+    public float AimX,
+        AimY,
+        AimZ;
+    public uint LastFireTick; // 0 = never fired
+}
+
 // ---- World statics (Welcome + MsgReveal share these encodings — byte-identical, load-bearing) ----
 
 // One base (34 bytes).

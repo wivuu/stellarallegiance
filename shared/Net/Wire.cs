@@ -13,8 +13,8 @@ public static class Wire
     // The per-version change log that used to live here is in git history (`git log -p -- shared/Net/Wire.cs`).
     // One bump per PR to master (a release), never per commit: master ships 40; this branch's step is
     // hangar crews — crew-served turret stations (ShipLoadoutRecord.TurretWeaponIds) plus the
-    // HangarIntent / CrewSeat / Crew frames.
-    public const byte ProtocolVersion = 41;
+    // HangarIntent / CrewSeat / Crew frames (41), then turret aim + fire: TurretInput / Turrets (42).
+    public const byte ProtocolVersion = 42;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

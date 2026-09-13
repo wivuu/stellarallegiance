@@ -32,10 +32,11 @@ namespace StellarAllegiance.Shared
         MainEngine, // primary thruster nozzle (engine glow + team trail anchor)
         Booster, // afterburner / secondary nozzle
         Thruster, // maneuvering thruster (RCS-style; cosmetic for now)
-        Turret, // a CREW-SERVED gun station: WeaponId names the gun a riding gunner mans
+        Turret, // a CREW-SERVED gun station: WeaponId names the gun a riding gunner mans. Its Dir
 
-        // (aim/fire is a later slice). An UNAUTHORED mesh HP_Turret node stays a marker
-        // (NoWeapon + NonMountable) — a real station must be authored in hulls.yaml.
+        // is the station's ZENITH (outward normal); the gunner aims freely inside the hemisphere
+        // around it (TurretAim — the one shared arc rule). An UNAUTHORED mesh HP_Turret node stays
+        // a marker (NoWeapon + NonMountable) — a real station must be authored in hulls.yaml.
         Light, // a blinking nav light
         DockingEntrance, // where a ship docks in (marker only)
         DockingExit, // where a ship spawns back out (marker only)

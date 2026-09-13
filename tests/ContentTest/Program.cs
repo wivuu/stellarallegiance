@@ -528,6 +528,31 @@ Check(
     $"Devastator turret stations wrong ({string.Join(",", devastatorTurrets.Select(h => $"{h.Index}:{h.WeaponId}/{h.Mount}"))})"
 );
 
+// ---- Turret ZENITH (proto 42, aim + fire) ----------------------------------------------------
+// A station's Dir is its outward mount normal — the mesh HP_Turret nodes point +Z INTO the hull, so
+// the geometry merge negates them. Pinned by sign on every stock station so a re-export that flips
+// the convention fails here rather than as a turret firing through its own hull.
+static string DirOf(HardpointDef h) => $"{h.Index}:({h.DirX:0.00},{h.DirY:0.00},{h.DirZ:0.00})";
+Vec3Like Z(HardpointDef h) => new(h.DirX, h.DirY, h.DirZ);
+Check(
+    bomberTurrets.Count == 2
+        && Z(bomberTurrets[0]).Y > 0.9f // T1 dorsal: straight up
+        && Z(bomberTurrets[1]).Z < -0.9f // T2 tail: straight back
+        && bomberTurrets.All(h => Math.Abs(Z(h).Len() - 1f) < 1e-3f),
+    "bomber turret zeniths: T1 dorsal (+Y), T2 tail (−Z)",
+    $"bomber turret zeniths wrong ({string.Join(" ", bomberTurrets.Select(DirOf))})"
+);
+Check(
+    devastatorTurrets.Count == 4
+        && Z(devastatorTurrets[0]).Y > 0.9f // T1 dorsal
+        && Z(devastatorTurrets[1]).Y < -0.9f // T2 belly
+        && Z(devastatorTurrets[2]).X > 0.9f // T3 starboard
+        && Z(devastatorTurrets[3]).X < -0.9f // T4 port
+        && devastatorTurrets.All(h => Math.Abs(Z(h).Len() - 1f) < 1e-3f),
+    "Devastator turret zeniths: dorsal +Y, belly −Y, starboard +X, port −X",
+    $"Devastator turret zeniths wrong ({string.Join(" ", devastatorTurrets.Select(DirOf))})"
+);
+
 // An UNAUTHORED turret (a bare HP_Turret mesh node the geometry merge appends, or a hand-built def)
 // is a MARKER, not a station: NoWeapon on a NonMountable mount. It used to project weapon-id 0 =
 // PW Gat Gun 1 on an Any mount, which read as a free armed station on every base in the game.
@@ -1298,3 +1323,9 @@ Check(
 
 Console.WriteLine(failures == 0 ? "\nALL CONTENT TESTS PASSED" : $"\n{failures} CONTENT TEST(S) FAILED");
 return failures == 0 ? 0 : 1;
+
+// Tiny vector helper for the zenith checks (top-level-statement files declare types at the end).
+readonly record struct Vec3Like(float X, float Y, float Z)
+{
+    public float Len() => MathF.Sqrt(X * X + Y * Y + Z * Z);
+}

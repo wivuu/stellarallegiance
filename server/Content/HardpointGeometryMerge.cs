@@ -32,7 +32,9 @@ namespace SimServer.Content;
 //       carries no gun/missile distinction, so exposing an empty mount as assignable requires a
 //       YAML entry (`mount: any|gun|missile`, weapon-id omitted). An appended, unauthored TURRET
 //       node projects the same way (NoWeapon + NonMountable): a marker only, never a crew station —
-//       a real station is a `kind: turret` YAML entry binding a gun.
+//       a real station is a `kind: turret` YAML entry binding a gun. A turret's Dir is its ZENITH:
+//       mesh HP_Turret nodes point +Z into the hull, so the merge negates their forward (an
+//       authored dir-* on a turret entry is taken as the zenith as written).
 //
 //  YAML weapon entries keep their YAML order at the head of the list, so the barrel spread-seed
 //  indices (server Simulation / client DefRegistry.WeaponSlots) are unchanged; appended empty
@@ -165,7 +167,12 @@ public static class HardpointGeometryMerge
             }
             else if (hasNode)
             {
-                var d = NormalizeExact(node.Fwd);
+                // A TURRET station's Dir is its ZENITH (outward mount normal — the gunner's arc is the
+                // hemisphere around it, TurretAim). The mesh convention points an HP_Turret node's +Z
+                // INTO the hull (verified on every station of wc_icbmb + cap09: −Z is dorsal ↑ /
+                // belly ↓ / tail ← / flank ±X), so the node forward is negated here; an authored
+                // dir-* on a turret entry is the zenith verbatim and never passes through this branch.
+                var d = NormalizeExact(hp.Kind == Factions.RuntimeHardpointKind.Turret ? node.Fwd * -1f : node.Fwd);
                 hp.DirX = d.X;
                 hp.DirY = d.Y;
                 hp.DirZ = d.Z;
@@ -183,7 +190,8 @@ public static class HardpointGeometryMerge
         {
             var (kind, index) = kv.Key;
             var (pos, fwd) = kv.Value;
-            var d = NormalizeExact(fwd);
+            // Same zenith convention for an appended (unauthored, marker-only) turret node.
+            var d = NormalizeExact(kind == Factions.RuntimeHardpointKind.Turret ? fwd * -1f : fwd);
             hps.Add(
                 new Factions.Hardpoint
                 {

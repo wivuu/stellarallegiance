@@ -224,6 +224,22 @@ public partial struct CrewSeatMessage
     public byte SeatIndex;
 }
 
+// 18 bytes. A riding gunner's turret input (v42 crews slice 2): the ship-local aim direction and
+// the fire flag, sent at input rate while seated on a LAUNCHED ship. Held-input semantics — the
+// server keeps the latest per gunner and fires on its own cadence while Flags carries Firing; the
+// server clamps the aim into the station's arc (TurretAim), so a stale/forged aim can never fire
+// through the hull. Tick is the sender's prediction tick (diagnostics only — turret fire never joins
+// the deterministic flight step).
+[WireMessage(19)]
+public partial struct TurretInputMessage
+{
+    public uint Tick;
+    public float AimX,
+        AimY,
+        AimZ;
+    public byte Flags; // TurretAim.FlagFiring
+}
+
 // ---- server -> client -------------------------------------------------------------------------
 
 // The handshake: version + identity + reconnect token + the world statics this client may see
@@ -534,4 +550,16 @@ public partial struct SalvageGoneMessage
 public partial struct CrewMessage
 {
     public CrewShipRecord[] Ships;
+}
+
+// Live turret state for the crewed ships this client can see (v42 crews slice 2): every MANNED
+// station of every crewed ship in the client's sector within full-rate range of its AOI anchor, or
+// that the client rides. Sent lossy on the ticks a turret's aim or fire changed; a seat missing from
+// the frame keeps its last state client-side and resets to rest on the next MsgCrew that shows it
+// open. The gunner's own seat is included (the client ignores it — it predicts its own aim/bolts).
+[WireMessage(33)]
+public partial struct TurretsMessage
+{
+    public uint Tick;
+    public TurretRecord[] Turrets;
 }
