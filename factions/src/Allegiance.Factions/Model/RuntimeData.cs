@@ -72,6 +72,20 @@ public record Hardpoint
     /// opt a bound mount out of the restriction (<c>any</c>).
     /// </summary>
     public RuntimeMountKind? Mount { get; set; }
+
+    /// <summary>
+    /// <see cref="RuntimeHardpointKind.Turret"/> only: the station's traverse speed in degrees per
+    /// second (how fast the gun swings toward where the gunner is pulling it). Null = the runtime
+    /// default (a nimble light mount); author lower on a heavy capital station.
+    /// </summary>
+    public double? SlewDeg { get; set; }
+
+    /// <summary>
+    /// <see cref="RuntimeHardpointKind.Turret"/> only: the station's traverse acceleration in degrees
+    /// per second squared (how quickly it winds up to / down from <see cref="SlewDeg"/>). Null = the
+    /// runtime default.
+    /// </summary>
+    public double? AccelDeg { get; set; }
 }
 
 /// <summary>

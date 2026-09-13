@@ -466,8 +466,9 @@ public partial struct CrewShipRecord
 }
 
 // One MANNED turret station's live state (25 bytes, v42 crews slice 2): where the gunner aims and
-// the last tick that gun fired. Aim is a SHIP-LOCAL unit vector (stable under the captain's turns),
-// already clamped to the station's arc by the server (TurretAim); LastFireTick is this station's
+// the last tick that gun fired. Aim is the gun's ACTUAL ship-local unit vector (stable under the
+// captain's turns) — the traversed, arc-clamped aim the bolts leave on, not the gunner's requested
+// one (TurretAim.Slew / Clamp); LastFireTick is this station's
 // own stamp — a remote client rebuilds the turret's bolt from (aim, ship pose, gun) exactly as
 // BoltRenderer rebuilds a pilot's from ShipRecord.LastFireTick. Streamed per client in MsgTurrets
 // (AOI-filtered, lossy) only for manned seats; an omitted seat means "unmanned, at rest".

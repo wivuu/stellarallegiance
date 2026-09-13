@@ -415,6 +415,20 @@
                     null
                   ],
                   "description": "Which weapon category a pilot may assign to this Weapon mount (mount: gun|missile|any). Null = derive from the bound weapon: a gun stays a gun mount, a missile rack stays a missile mount, an EMPTY mount accepts either. Authored mainly to type an empty mount (the mesh HP_ node carries no gun/missile distinction) or to opt a bound mount out of the restriction (any)."
+                },
+                "slew-deg": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Turret only: the station\u0027s traverse speed in degrees per second (how fast the gun swings toward where the gunner is pulling it). Null = the runtime default (a nimble light mount); author lower on a heavy capital station."
+                },
+                "accel-deg": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Turret only: the station\u0027s traverse acceleration in degrees per second squared (how quickly it winds up to / down from SlewDeg). Null = the runtime default."
                 }
               },
               "description": "A mount point on a hull/station, in LOCAL space \u2014 mirrors the game\u0027s HardpointDef. Carries what a loader needs to attach a weapon muzzle, engine nozzle, light or docking marker without any hard-coded offset. Declaration order of RuntimeHardpointKind fixes the wire byte, so it is APPEND-ONLY.",

@@ -82,6 +82,14 @@ namespace StellarAllegiance.Shared
         public uint WeaponId; // Weapon + Turret hardpoints; NoWeapon = empty mount/marker; 0 otherwise
         public WeaponMountKind Mount; // Weapon + Turret hardpoints; which weapon category fits here
 
+        // Turret stations only (0 on every other kind): how fast the gun traverses toward the
+        // gunner's desired aim (rad/s) and how fast it winds up to that speed (rad/s²) — the
+        // "weight" of the mount. Authored per station in hulls.yaml (`slew-deg` / `accel-deg`,
+        // defaults in TurretAim) and streamed so the gunner's client slews its gun cam with the
+        // SAME rule the server fires by (TurretAim.Slew). Streamed LAST in the hardpoint record.
+        public float TurretSlewRad;
+        public float TurretAccelRad;
+
         // THE mount-compatibility rule, shared so the hangar UI (LoadoutState.Compatible) and the
         // server's ResolveLoadout accept exactly the same swaps: dispensers never mount on a
         // hardpoint (they ride cargo — D8), a NonMountable mount takes nothing at all (it isn't a

@@ -542,6 +542,24 @@ Check(
     "bomber turret zeniths: T1 dorsal (+Y), T2 tail (−Z)",
     $"bomber turret zeniths wrong ({string.Join(" ", bomberTurrets.Select(DirOf))})"
 );
+
+// Traverse tuning (aim + fire): the bomber leaves it unauthored (TurretAim defaults), the Devastator
+// authors a heavier mount; a non-turret hardpoint always streams 0.
+Check(
+    bomberTurrets.All(h =>
+        Math.Abs(h.TurretSlewRad - (float)(TurretAim.DefaultSlewDeg * Math.PI / 180.0)) < 1e-4f
+        && Math.Abs(h.TurretAccelRad - (float)(TurretAim.DefaultAccelDeg * Math.PI / 180.0)) < 1e-4f
+    )
+        && devastatorTurrets.All(h =>
+            Math.Abs(h.TurretSlewRad - (float)(90.0 * Math.PI / 180.0)) < 1e-4f
+            && Math.Abs(h.TurretAccelRad - (float)(240.0 * Math.PI / 180.0)) < 1e-4f
+        )
+        && bomber
+            .Hardpoints.Where(h => h.Kind != HardpointKind.Turret)
+            .All(h => h.TurretSlewRad == 0f && h.TurretAccelRad == 0f),
+    "turret traverse: bomber stations take the TurretAim defaults, Devastator authors 90°/s + 240°/s², other kinds stream 0",
+    $"turret traverse wrong (bomber {string.Join(",", bomberTurrets.Select(h => $"{h.TurretSlewRad:0.00}/{h.TurretAccelRad:0.00}"))}; devastator {string.Join(",", devastatorTurrets.Select(h => $"{h.TurretSlewRad:0.00}/{h.TurretAccelRad:0.00}"))})"
+);
 Check(
     devastatorTurrets.Count == 4
         && Z(devastatorTurrets[0]).Y > 0.9f // T1 dorsal

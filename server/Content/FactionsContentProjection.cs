@@ -597,5 +597,15 @@ public static class FactionsContentProjection
                 : h.WeaponId is not uint wid ? WeaponMountKind.NonMountable
                 : rackWeaponIds.Contains(wid) ? WeaponMountKind.Missile
                 : WeaponMountKind.Gun,
+            // Turret traverse (v42 slice 2): authored degrees -> radians, defaults from TurretAim;
+            // every other kind carries 0 (CoreValidator refuses the keys there).
+            TurretSlewRad =
+                h.Kind == Factions.RuntimeHardpointKind.Turret
+                    ? (float)((h.SlewDeg ?? TurretAim.DefaultSlewDeg) * Math.PI / 180.0)
+                    : 0f,
+            TurretAccelRad =
+                h.Kind == Factions.RuntimeHardpointKind.Turret
+                    ? (float)((h.AccelDeg ?? TurretAim.DefaultAccelDeg) * Math.PI / 180.0)
+                    : 0f,
         };
 }

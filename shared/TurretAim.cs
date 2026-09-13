@@ -30,6 +30,12 @@ public static class TurretAim
     // TurretInputMessage.Flags bits.
     public const byte FlagFiring = 1;
 
+    // Traverse defaults for a station that authors no `slew-deg` / `accel-deg` (projection fills
+    // HardpointDef.TurretSlewRad / TurretAccelRad from these): a nimble light mount that reaches
+    // full speed in a third of a second. A heavy capital station authors lower numbers.
+    public const double DefaultSlewDeg = 150.0;
+    public const double DefaultAccelDeg = 450.0;
+
     // Spread-seed "barrel" for a station: 0x80 | HardpointDef.Index — disjoint from the pilot's
     // barrel indices (< 128), so a turret volley never shares a scatter seed with a hull gun on the
     // same (ShipId, tick). Mirrored by every bolt rebuild.
@@ -113,6 +119,49 @@ public static class TurretAim
         float sa = (float)System.Math.Sin(azimuthRad);
         Vec3 horizon = z * ca + x * sa;
         return Normalize(horizon * ce + y * se);
+    }
+
+    // Traverse: swing the gun's CURRENT aim toward the gunner's DESIRED aim under a speed cap and a
+    // wind-up/wind-down acceleration, over `dt` seconds. `rate` is the mount's scalar traverse speed
+    // (rad/s), carried between calls; it ramps up by accel, is capped by slew, and is held below
+    // the speed that could still stop exactly on the target (v² ≤ 2·a·θ), so the gun settles on the
+    // desired aim without overshoot. Both peers run this — the server per sim tick, the gunner's
+    // client per frame — from the same streamed HardpointDef numbers, so the aim the bolts leave on
+    // is the aim the gunner watched the gun reach. A non-positive slew/accel (an unauthored test
+    // def) snaps straight to the desired aim.
+    public static Vec3 Slew(Vec3 current, Vec3 desired, ref float rate, float slewRad, float accelRad, float dt)
+    {
+        current = Normalize(current);
+        desired = Normalize(desired);
+        if (slewRad <= 0f || accelRad <= 0f || dt <= 0f)
+        {
+            rate = 0f;
+            return desired;
+        }
+        float cosT = System.Math.Clamp(Dot(current, desired), -1f, 1f);
+        float theta = (float)System.Math.Acos(cosT);
+        if (theta < 1e-4f)
+        {
+            rate = 0f;
+            return desired;
+        }
+        float stopCap = (float)System.Math.Sqrt(2f * accelRad * theta);
+        float target = System.Math.Min(slewRad, stopCap);
+        rate = System.Math.Min(rate + accelRad * dt, target);
+        float step = System.Math.Min(rate * dt, theta);
+        // Rotate `current` toward `desired` by `step` inside their shared plane. Antiparallel aims
+        // (no plane) pivot through the zenith-free fallback: any perpendicular will do, the arc clamp
+        // downstream keeps the result legal.
+        Vec3 axisDir = desired - current * cosT;
+        if (axisDir.LengthSquared() < 1e-10f)
+            axisDir =
+                System.Math.Abs(current.Y) < 0.9f
+                    ? Cross(current, new Vec3(0f, 1f, 0f))
+                    : Cross(current, new Vec3(1f, 0f, 0f));
+        axisDir = Normalize(axisDir);
+        float c = (float)System.Math.Cos(step);
+        float s = (float)System.Math.Sin(step);
+        return Normalize(current * c + axisDir * s);
     }
 
     // Ship-local aim → (azimuth, elevation) in the station frame — the inverse of FromGimbal for an
