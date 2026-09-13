@@ -469,6 +469,13 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
     // predicted LOCAL ship. No-op when missing or already the local ship (the normal first-spawn case).
     public void NetPromoteLocal(ulong shipId)
     {
+        // A YouAre names a hull that is ours — so the deferred pull-back to the home overview is moot,
+        // whatever armed it. This matters for the crew GUNNER's escape pod (v42 slice 2b): the captain
+        // dying ends the ride (SetRiding(0) arms the reset) and the server hands the gunner their own
+        // pod, but MsgCrew and YouAre are not ordered against each other. The pod's own InsertShip
+        // clears it too; doing it here as well closes the window either arrival order opens, so the
+        // view never blinks back to the home battlefield for a frame on the way into the pod.
+        _pendingHomeReset = false;
         if (LocalShip is not null && LocalShip.ShipId == shipId)
             return;
         if (_nodes.TryGetValue(shipId, out var node) && node is RemoteShip)

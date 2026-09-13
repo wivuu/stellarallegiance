@@ -471,16 +471,32 @@ public partial class UiShowcase : Control
         s.AddChild(gunner);
         gunner.SetMock("T2", "PW GAT GUN 1", "VEX", "⬟ BOMBER");
 
-        // The gunner's crosshair, in both states: Data while the aim is free inside the station's arc,
-        // Warn while it is pinned against the horizon (the captain's hull is in the way).
-        s.AddChild(UiKit.MakeLabel("// HUD — TURRET RETICLE · FREE / ARC EDGE", UiKit.TextStyle.Data, DesignTokens.TextDim));
+        // The gunner's crosshair, in every state it reads: settled and free inside the arc, pinned
+        // against the station's horizon (the captain's hull is in the way), on the focused target's
+        // firing solution, and mid-TRAVERSE — the square is the sight the mouse has dragged ahead, the
+        // ring is the gun still swinging onto it.
+        s.AddChild(
+            UiKit.MakeLabel(
+                "// HUD — TURRET RETICLE · FREE / ARC EDGE / ON SOLUTION / TRAVERSING",
+                UiKit.TextStyle.Data,
+                DesignTokens.TextDim
+            )
+        );
         var reticleRow = new HBoxContainer();
         reticleRow.AddThemeConstantOverride("separation", 24);
-        foreach (bool clamped in new[] { false, true })
+        foreach (
+            (bool clamped, bool onSolution, Vector2 desired) in new[]
+            {
+                (false, false, Vector2.Zero),
+                (true, false, Vector2.Zero),
+                (false, true, Vector2.Zero),
+                (false, false, new Vector2(26, -14)),
+            }
+        )
         {
             var reticle = new TurretReticle { CustomMinimumSize = new Vector2(120, 0) };
             reticleRow.AddChild(reticle);
-            reticle.SetMock(clamped);
+            reticle.SetMock(clamped, onSolution, desired);
         }
         s.AddChild(reticleRow);
 

@@ -402,23 +402,21 @@ public partial class CameraRig : Camera3D
         Vector3 zenith = (ship.Basis * TurretController.Zenith).Normalized();
         Vector3 mount = ship.Origin + ship.Basis * TurretController.Station;
 
-        // Aiming straight up the zenith leaves the "up" reference parallel to the view direction and
-        // the basis degenerate; lean it onto the hull's forward-on-the-view-plane instead so the roll
-        // eases through the pole rather than snapping.
-        Vector3 up = zenith - aim * zenith.Dot(aim);
-        if (up.LengthSquared() < 1e-4f)
-        {
-            Vector3 fwd = ship.Basis.Z;
-            up = fwd - aim * fwd.Dot(aim);
-            if (up.LengthSquared() < 1e-4f)
-                up = ship.Basis.Y;
-        }
-        up = up.Normalized();
+        // Roll reference: the ELEVATION TANGENT of the aim on the controller's tracked azimuth branch
+        // (TurretGimbal), not the zenith projected off the aim. The projection vanishes exactly at the
+        // zenith, and every fallback picked there is a different vector than the frame before — which
+        // is why the view used to snap as a gunner tracked something up over the mount. The tangent is
+        // unit length and perpendicular to the aim at every elevation, the pole included, so the same
+        // "up" carries all the way through. Ship-local (that is what the controller publishes), so it
+        // rotates into world space through the ridden hull's live pose like the aim does.
+        Vector3 up = (ship.Basis * TurretController.CamUp).Normalized();
+        if (up.LengthSquared() < 0.5f)
+            up = ship.Basis.Y; // a pose so degenerate the basis collapsed; any hull up beats a NaN
 
         // Pull back along the aim's HORIZON component, never the raw aim: at high elevation the raw
         // aim's pull-back would sink the eye through the mount's own hull (live-run finding, first
-        // gun-cam shot sat inside the bomber's back). At the pole itself there is no horizon component,
-        // so fall back to the station frame's rest azimuth — the same reference the up vector uses.
+        // gun-cam shot sat inside the bomber's back). At the pole itself there is no horizon component
+        // to take — but the up vector there IS minus the branch's horizon, so it stands in exactly.
         if (TurretFirstPerson)
         {
             Vector3 insideEye = mount + zenith * (GunInsideUp * scale);
@@ -429,12 +427,7 @@ public partial class CameraRig : Camera3D
         float dolly = scale * _zoom;
         Vector3 backAlong = aim - zenith * aim.Dot(zenith);
         if (backAlong.LengthSquared() < 1e-4f)
-        {
-            Vector3 fwd = ship.Basis.Z;
-            backAlong = fwd - zenith * fwd.Dot(zenith);
-            if (backAlong.LengthSquared() < 1e-4f)
-                backAlong = ship.Basis.Y - zenith * ship.Basis.Y.Dot(zenith);
-        }
+            backAlong = -up;
         backAlong = backAlong.Normalized();
         Vector3 eye = mount + zenith * (GunCamUp * dolly) - backAlong * (GunCamBack * dolly);
         // A Camera3D looks down its own −Z, so the basis is built with +Z opposite the aim — the same

@@ -16,6 +16,11 @@ using Kind = StellarAllegiance.Ui.MarkerDraw.Kind;
 // the same palette as the 3D ship/base materials. The symbol encodes the class —
 // base / scout / fighter / bomber / pod.
 //
+// A crew GUNNER gets the same overlay (v42 crews slice 2b): riding a captain's turret they have no
+// hull, but they do have a firing line, so the brackets, the Tab cycle and the lead circle all solve
+// from the STATION — muzzle at the mount, direction the turret's actual (traversed) aim, inherited
+// velocity the captain's. See ResolveShooter, which is the only place the two seats differ.
+//
 // Tab cycles the FOCUS through the enemies: it locks whatever enemy is nearest the aim
 // reticle (the real firing line, which the chase camera offsets away from screen center),
 // and re-pressing while already locked steps outward to the next nearest. The focused
@@ -112,6 +117,31 @@ public partial class TargetMarkers : Control
     // base id flagged with GameContent.BaseLockFlag (bit 63), or an asteroid id flagged with
     // GameContent.AsteroidFocusFlag (bit 62). Cleared to 0 whenever focus drops (no ship / target).
     public static ulong FocusedId { get; private set; }
+
+    // AIM ASSIST (v42 crews slice 2b): true while the focused target's lead point sits inside
+    // OnSolutionRad of the shooter's firing line — "a shot fired now connects". Published for the crew
+    // gunner's TurretReticle, whose ring goes Ok on it; the pilot already reads the same thing off the
+    // reticle sitting on the lead circle, so nothing in flight consumes it. Recomputed in _Draw
+    // (the lead solve lives there) and cleared whenever the overlay isn't drawing a solution at all.
+    public static bool OnSolution { get; private set; }
+
+    // How close the lead point has to sit to the gun's line to count. 1.5° is about the angular size
+    // of a fighter at gun range — tight enough that the cue means something, loose enough to reach
+    // while a heavy mount is still settling.
+    private const float OnSolutionRad = 0.0261799f;
+
+    // Everything DrawFiringSolution needs about whoever is shooting, so the pilot and the crew gunner
+    // share one solve. `Origin` is the hull's own point (range readouts, the Tab ranking anchor);
+    // `Muzzle` is where the shot actually leaves; `Fwd` the firing line (the nose for a pilot, the
+    // turret's ACTUAL aim for a gunner); `Velocity` what the shot inherits.
+    private readonly record struct Shooter(
+        Vector3 Origin,
+        Vector3 Muzzle,
+        Vector3 Fwd,
+        Vector3 Velocity,
+        WeaponDef? Gun,
+        float AimRange
+    );
 
     // Whether the current focus is a same-team (friendly) SHIP. All ships are now Tab-targetable (to
     // fly to / autopilot-follow a teammate), but a friendly ship must never reach the missile-lock
@@ -244,6 +274,8 @@ public partial class TargetMarkers : Control
         // the telescopic scope is up: brackets/reticle/lead project through the MAIN camera and
         // would sit wrong over the magnified image.
         Visible = !ZoomView.Active;
+        if (!Visible)
+            OnSolution = false; // _Draw is what computes it; a hidden overlay must not leave it latched
         HandleFocusCycle();
         FocusedId = _focused ?? 0; // publish for ShipController's missile-lock input
         // Flag a same-team ship focus so WireLockId strips it from the missile-lock slot (a friendly
@@ -268,14 +300,52 @@ public partial class TargetMarkers : Control
     // this is NOT screen center — Tab-targeting ranks enemies by closeness to THIS point so
     // "aim at it, press Tab" locks what's actually under your guns. Falls back to screen
     // center if the point is somehow behind the camera.
-    private Vector2 AimReticleScreenPoint(PredictionController local)
+    private Vector2 AimReticleScreenPoint(in Shooter sh)
     {
-        Vector3 fwd = local.GlobalTransform.Basis.Z.Normalized();
-        Vector3 pt = local.GlobalPosition + fwd * LocalAimRange(local);
+        Vector3 pt = sh.Origin + sh.Fwd * sh.AimRange;
         Camera3D cam = Cam;
         if (cam.IsPositionBehind(pt))
             return GetViewportRect().Size * 0.5f;
         return cam.UnprojectPosition(pt);
+    }
+
+    // Whoever this client is shooting with right now, or null when it is neither flying nor manning a
+    // gun (pre-launch, spectating, an unseated rider). Two sources, one shape:
+    //   • the PILOT — their own predicted hull, its first bolt slot, the nose as the firing line;
+    //   • the crew GUNNER — the ridden hull's live pose, the seat's station offset, and the turret's
+    //     ACTUAL (traversed) aim, so the brackets, the Tab cycle and the lead all read the gun that is
+    //     actually pointing rather than the sight the mouse has dragged ahead of it.
+    private Shooter? ResolveShooter()
+    {
+        if (_world.Ships.LocalShip is { } local)
+        {
+            Vector3 fwd = local.GlobalTransform.Basis.Z.Normalized();
+            if (ResolveLocalGun(local) is { hp: var hp, gun: var gun })
+                return new Shooter(
+                    local.GlobalPosition,
+                    local.GlobalPosition + local.GlobalTransform.Basis * new Vector3(hp.OffX, hp.OffY, hp.OffZ),
+                    fwd,
+                    local.Velocity,
+                    gun,
+                    LocalAimRange(local)
+                );
+            // No gun (a pod, an emptied hull, defs not streamed): still an aim line, just no solution.
+            return new Shooter(local.GlobalPosition, local.GlobalPosition, fwd, local.Velocity, null, DefaultAimRange);
+        }
+
+        if (!TurretController.Active || TurretController.Seat is not { } seat)
+            return null;
+        if (_world.Ships.RidingNode is not { } ridden)
+            return null;
+        Transform3D t = ridden.GlobalTransform;
+        return new Shooter(
+            t.Origin,
+            t.Origin + t.Basis * new Vector3(seat.Hp.OffX, seat.Hp.OffY, seat.Hp.OffZ),
+            (t.Basis * TurretController.Aim).Normalized(),
+            ShipRenderer.ShipVelocityOf(ridden),
+            seat.Gun,
+            TurretController.AimRange
+        );
     }
 
     // Tab focus through the enemies, ranked by distance from the aim reticle. The first
@@ -298,8 +368,10 @@ public partial class TargetMarkers : Control
         bool pressed = tab && !_tabHeld;
         _tabHeld = tab;
 
-        var local = _world.Ships.LocalShip;
-        if (local == null)
+        // The pilot's hull OR the crew gunner's station — a seated gunner cycles targets exactly like a
+        // pilot (the projection already runs through the main camera, which IS their gun cam), and the
+        // ranking point is their own firing line rather than the captain's nose.
+        if (ResolveShooter() is not { } shooter)
         {
             _focused = null;
             return;
@@ -339,7 +411,7 @@ public partial class TargetMarkers : Control
                 // nearest enemy every frame. FriendlyShips() uses a separate scratch from `enemies`.
                 stillValid = ContainsId(enemies, f) || IsFriendlyShipId(f);
             if (!stillValid)
-                _focused = NearestEnemy(enemies);
+                _focused = NearestEnemy(enemies, shooter.Origin);
         }
 
         if (!pressed)
@@ -352,7 +424,7 @@ public partial class TargetMarkers : Control
         // then outward, enemy ships before enemy bases before friendly bases before friendly ships
         // before rocks." Gated behind the press so the potentially large asteroid set is only
         // projected when actually cycling.
-        Vector2 aimPt = AimReticleScreenPoint(local);
+        Vector2 aimPt = AimReticleScreenPoint(shooter);
         Camera3D cam = Cam;
         _visible.Clear();
         foreach (var e in enemies)
@@ -509,14 +581,12 @@ public partial class TargetMarkers : Control
             local.IsPod ? null : local.LoadoutIds
         );
 
-    // The enemy closest to the local ship, or null if there are none. Used to pick a
+    // The enemy closest to the shooter, or null if there are none. Used to pick a
     // fresh focus when the current target dies — nearest is the most useful next threat.
-    private ulong? NearestEnemy(IReadOnlyList<RemoteShip> enemies)
+    private static ulong? NearestEnemy(IReadOnlyList<RemoteShip> enemies, Vector3 p)
     {
-        var local = _world.Ships.LocalShip;
-        if (local == null || enemies.Count == 0)
+        if (enemies.Count == 0)
             return null;
-        Vector3 p = local.GlobalPosition;
         ulong? best = null;
         float bestSq = float.MaxValue;
         foreach (var e in enemies)
@@ -622,13 +692,18 @@ public partial class TargetMarkers : Control
         // resolve its rect to the viewport, which would misplace the edge-clamped arrows.
         Vector2 view = GetViewportRect().Size;
 
+        // Who is shooting (a pilot's hull, a crew gunner's station, or nobody) — resolved once here and
+        // carried through every pass that needs a firing line or a point to measure ranges from.
+        Shooter? shooter = ResolveShooter();
+        Vector3? rangeFrom = shooter is { } s0 ? s0.Origin : null;
+
         var (focusedBasePos, focusedBaseTeam, focusedBaseEnemy) = ResolveFocusedBase();
 
         // Bases first (drawn under the ships), then the focused base/asteroid bright treatment,
         // then the ambient rock-class labels — all reproject through Cam so they draw in every
         // state (hangar, F3, in flight), before the local-ship gate below.
         DrawBasesPass(view, focusedBasePos);
-        DrawFocusedBaseAndAsteroid(view, focusedBasePos, focusedBaseTeam, focusedBaseEnemy);
+        DrawFocusedBaseAndAsteroid(view, focusedBasePos, focusedBaseTeam, focusedBaseEnemy, rangeFrom);
         DrawRockLabelsPass(view);
 
         // The navigation waypoint diamond (F3-dropped), drawn in the ship's-sector view whenever its
@@ -646,23 +721,29 @@ public partial class TargetMarkers : Control
         DrawGhosts(view);
         DrawContactLost(view);
 
-        // Own ship — null pre-launch / while spectating. The ship glyphs, brackets, and focus tags
-        // below reproject through Cam and DON'T need it, so they draw in EVERY state (hangar, F3, in
-        // flight); that's why a miner or teammate now shows on the F3 map and in the pre-launch peek,
-        // matching the in-flight HUD. Only the ship-centric combat readouts further down (aim reticle,
-        // lead, incoming banner) require a live own ship — they stay gated on `local != null` below.
-        var local = _world.Ships.LocalShip;
-
+        // The ship glyphs, brackets, and focus tags below reproject through Cam and need no own ship,
+        // so they draw in EVERY state (hangar, F3, in flight); that's why a miner or teammate shows on
+        // the F3 map and in the pre-launch peek, matching the in-flight HUD.
         var (focusedFriendly, focusedShip) = DrawShipsPass(view);
 
-        DrawFocusTagsPass(view, focusedShip, focusedFriendly, local);
+        DrawFocusTagsPass(view, focusedShip, focusedFriendly, rangeFrom);
 
-        // The ship firing-line reticule (aim reticle + lead crosshair) and the incoming-missile
-        // banner are ship-centric combat readouts, meaningless in the F3 orbit view (and impossible
-        // without an own ship) — skip them there and pre-launch. The entity brackets/glyphs/ghosts
-        // above still reproject onto the map in every state.
-        if (local != null && !SectorOverview.Active)
-            DrawFiringSolution(view, local, focusedShip);
+        // The firing-line reticule (aim reticle + lead crosshair) is meaningless in the F3 orbit view
+        // and impossible with nothing to shoot with — skip it there and pre-launch. A crew GUNNER has
+        // a shooter without a hull, so this is gated on the resolved shooter, not on the own ship.
+        if (!SectorOverview.Active && shooter is { } sh)
+            DrawFiringSolution(view, sh, focusedShip);
+        else
+            OnSolution = false;
+
+        // The missile / autopilot readouts are OWN-HULL state: a gunner carries no launcher, is never
+        // locked as a ship and never flies an autopilot, so these stay pilot-only.
+        if (_world.Ships.LocalShip != null && !SectorOverview.Active)
+        {
+            DrawIncomingWarning(view);
+            DrawLockWarning(view);
+            DrawAutopilotStatus(view);
+        }
 
         // Pickup feedback, drawn last so the banner sits over every marker. Not gated on the own ship:
         // the gone frame can land the same tick the collector dies, and a toast that vanished mid-fade
@@ -730,13 +811,14 @@ public partial class TargetMarkers : Control
         Vector2 view,
         Vector3? focusedBasePos,
         byte focusedBaseTeam,
-        bool focusedBaseEnemy
+        bool focusedBaseEnemy,
+        Vector3? rangeFrom
     )
     {
         if (focusedBasePos is Vector3 fp)
         {
             _mk.Entity(Cam, view, fp, Kind.Base, FocusTint(focusedBaseTeam), focused: true, friendly: false);
-            DrawFocusTag(view, fp, FocusTint(focusedBaseTeam), _world.Ships.LocalShip);
+            DrawFocusTag(view, fp, FocusTint(focusedBaseTeam), rangeFrom);
             // Lock arc ONLY for an enemy base the local hull can actually siege — never for a friendly
             // base (a dock destination), which focuses for navigation but can't be locked/damaged.
             if (focusedBaseEnemy && _world.Ships.LocalShip is { } ls && HasSiegeCapability(ls))
@@ -751,7 +833,7 @@ public partial class TargetMarkers : Control
                 {
                     Vector3 rp = node.GlobalPosition;
                     _mk.Entity(Cam, view, rp, Kind.Asteroid, AsteroidFocusColor, focused: true, friendly: false);
-                    DrawFocusTag(view, rp, AsteroidFocusColor, _world.Ships.LocalShip);
+                    DrawFocusTag(view, rp, AsteroidFocusColor, rangeFrom);
                     DrawRockDetail(view, rp, rockId);
                     break;
                 }
@@ -1099,16 +1181,11 @@ public partial class TargetMarkers : Control
     // A focused FRIENDLY ship gets the target tag + health arc + MINER role tag, but NEVER a lock
     // arc — a teammate is a fly-to / escort target, not a missile lock. (WireLockId already strips
     // a friendly focus from the wire lock slot.)
-    private void DrawFocusTagsPass(
-        Vector2 view,
-        RemoteShip? focusedShip,
-        RemoteShip? focusedFriendly,
-        PredictionController? local
-    )
+    private void DrawFocusTagsPass(Vector2 view, RemoteShip? focusedShip, RemoteShip? focusedFriendly, Vector3? rangeFrom)
     {
         if (focusedShip != null)
         {
-            DrawFocusTag(view, focusedShip, local);
+            DrawFocusTag(view, focusedShip, rangeFrom);
             DrawLockArc(focusedShip);
             DrawTargetHealthArc(view, focusedShip);
             // A non-combat drone reads as its role under its bracket so it's obvious at focus.
@@ -1120,7 +1197,7 @@ public partial class TargetMarkers : Control
 
         if (focusedFriendly != null)
         {
-            DrawFocusTag(view, focusedFriendly, local);
+            DrawFocusTag(view, focusedFriendly, rangeFrom);
             DrawTargetHealthArc(view, focusedFriendly);
             if (focusedFriendly.IsMiner)
                 _mk.RoleTag(Cam, view, focusedFriendly.GlobalPosition, "MINER");
@@ -1129,74 +1206,66 @@ public partial class TargetMarkers : Control
         }
     }
 
-    // The shot leaves the muzzle along the ship's forward (+Z) axis, not the camera's
-    // view axis — and the chase camera is offset above/behind the ship, so screen
-    // center is NOT where shots go. Draw an aim reticle on the real firing line so the
-    // player has something to line up on the lead circle. The gun is resolved once per
-    // frame from the SAME streamed WeaponDef row PredictionController fires from, so the
-    // muzzle position and lead solve always match the shots that actually get fired.
-    private void DrawFiringSolution(Vector2 view, PredictionController local, RemoteShip? focusedShip)
+    // The shot leaves the MUZZLE along the shooter's firing line, not the camera's view axis — the
+    // pilot's chase camera is offset above/behind the hull and the gunner's gun cam sits above and
+    // behind the mount, so in neither seat is screen center where shots go. Draw an aim reticle on the
+    // real firing line so the player has something to line up on the lead circle. The gun is resolved
+    // from the SAME streamed WeaponDef row the shot is fired from (PredictionController's slot for the
+    // pilot, the seat's station gun for the gunner), so the muzzle and the lead solve always match the
+    // shots that actually get fired.
+    private void DrawFiringSolution(Vector2 view, in Shooter sh, RemoteShip? focusedShip)
     {
-        Vector3 fwd = local.GlobalTransform.Basis.Z.Normalized();
-        var gunMount = ResolveLocalGun(local);
-        if (gunMount is { hp: var hp, gun: var gun })
+        OnSolution = false;
+        if (sh.Gun is not { } gun)
         {
-            Vector3 muzzle = local.GlobalTransform.Basis * new Vector3(hp.OffX, hp.OffY, hp.OffZ) + local.GlobalPosition;
+            // No gun (a pod, an unarmed hull, a station whose def hasn't streamed): the server won't
+            // fire either, so there's no lead solution — just a visual anchor on the firing line.
+            Vector3 anchor = sh.Muzzle + sh.Fwd * DefaultAimRange;
+            if (!Cam.IsPositionBehind(anchor))
+                _mk.AimReticle(Cam.UnprojectPosition(anchor));
+            return;
+        }
 
-            // Lead indicator for the focused target: TryLead returns the world point to aim
-            // the nose at (the target's position led by the RELATIVE velocity, so the shot's
-            // inherited ship velocity carries it onto the target). The aim reticle is ranged to
-            // match (gun.ProjectileSpeed·t), so overlaying the reticle on the lead circle is a
-            // hit; with no target it sits at the gun's effective range just to show the aim line.
-            float aimRange = LocalAimRange(local);
-            if (
-                focusedShip != null
-                && TryLead(
-                    muzzle,
-                    local.Velocity,
-                    focusedShip.GlobalPosition,
-                    focusedShip.Velocity,
-                    gun.ProjectileSpeed,
-                    gun.ProjectileLifeTicks * FlightModel.Dt,
-                    out Vector3 aimPoint,
-                    out float t
-                )
+        // Lead indicator for the focused target: TryLead returns the world point to aim the firing
+        // line at (the target's position led by the RELATIVE velocity, so the shot's inherited ship
+        // velocity carries it onto the target). The aim reticle is ranged to match
+        // (gun.ProjectileSpeed·t), so overlaying the reticle on the lead circle is a hit; with no
+        // target it sits at the gun's effective range just to show the aim line.
+        float aimRange = sh.AimRange;
+        if (
+            focusedShip != null
+            && TryLead(
+                sh.Muzzle,
+                sh.Velocity,
+                focusedShip.GlobalPosition,
+                focusedShip.Velocity,
+                gun.ProjectileSpeed,
+                gun.ProjectileLifeTicks * FlightModel.Dt,
+                out Vector3 aimPoint,
+                out float t
             )
-            {
-                aimRange = gun.ProjectileSpeed * t;
-                if (!Cam.IsPositionBehind(aimPoint))
-                {
-                    Vector2 lp = Cam.UnprojectPosition(aimPoint);
-                    Vector2? targetSp = Cam.IsPositionBehind(focusedShip.GlobalPosition)
-                        ? null
-                        : Cam.UnprojectPosition(focusedShip.GlobalPosition);
-                    _mk.LeadIndicator(targetSp, lp);
-                }
-            }
-
-            Vector3 reticlePoint = muzzle + fwd * aimRange;
-            if (!Cam.IsPositionBehind(reticlePoint))
-                _mk.AimReticle(Cam.UnprojectPosition(reticlePoint));
-        }
-        else
+        )
         {
-            // No gun (a pod, an unarmed hull, or the def hasn't streamed yet): the server
-            // won't fire either, so there's no lead solution to draw — just a visual anchor
-            // reticle on the firing line at the default range.
-            Vector3 reticlePoint = local.GlobalPosition + fwd * DefaultAimRange;
-            if (!Cam.IsPositionBehind(reticlePoint))
-                _mk.AimReticle(Cam.UnprojectPosition(reticlePoint));
+            aimRange = gun.ProjectileSpeed * t;
+            // AIM ASSIST: how far off the firing line the solution sits. A gunner can't feel a
+            // convergence the way a pilot feels their nose come round, so the turret reticle turns Ok
+            // on this — a cue, never an auto-aim: the bolts still leave along the gun's real aim.
+            Vector3 toLead = aimPoint - sh.Muzzle;
+            if (toLead.LengthSquared() > 1e-4f)
+                OnSolution = sh.Fwd.AngleTo(toLead.Normalized()) <= OnSolutionRad;
+            if (!Cam.IsPositionBehind(aimPoint))
+            {
+                Vector2 lp = Cam.UnprojectPosition(aimPoint);
+                Vector2? targetSp = Cam.IsPositionBehind(focusedShip.GlobalPosition)
+                    ? null
+                    : Cam.UnprojectPosition(focusedShip.GlobalPosition);
+                _mk.LeadIndicator(targetSp, lp);
+            }
         }
 
-        // Incoming-missile threat: a flashing banner + an edge arrow pointing at the nearest
-        // missile homing on us (drawn last so it sits over everything). State cached in _Process.
-        DrawIncomingWarning(view);
-
-        // Being-locked banner: amber while an enemy lock is progressing, red once it completes.
-        DrawLockWarning(view);
-
-        // Autopilot: engaged banner + brief disengage toast (cyan chrome).
-        DrawAutopilotStatus(view);
+        Vector3 reticlePoint = sh.Muzzle + sh.Fwd * aimRange;
+        if (!Cam.IsPositionBehind(reticlePoint))
+            _mk.AimReticle(Cam.UnprojectPosition(reticlePoint));
     }
 
     // Autopilot flight-HUD readout: a steady "◈ AUTOPILOT" chrome banner low-center while engaged, and
@@ -1356,23 +1425,18 @@ public partial class TargetMarkers : Control
     // The focused target's "▣ TARGET" tag above its marker and range below, in mono. Only
     // drawn when the focus is on screen; skipped when behind the camera or off-screen (the
     // edge arrow already points the way). Range is in world units, matching the HUD's u/s.
-    private void DrawFocusTag(Vector2 view, RemoteShip ship, PredictionController? local) =>
-        DrawFocusTag(view, ship.GlobalPosition, FocusTint(ship.Team), local);
+    private void DrawFocusTag(Vector2 view, RemoteShip ship, Vector3? rangeFrom) =>
+        DrawFocusTag(view, ship.GlobalPosition, FocusTint(ship.Team), rangeFrom);
 
     // Position-based overload so a focused BASE or ASTEROID (no RemoteShip) shares the same TARGET
-    // tag + range readout as a focused ship. `tint` colors the tag; the range line is skipped when
-    // there's no local ship to measure from (pre-spawn / spectating), and when the viewed sector
-    // isn't the local ship's — a focus tag only draws for a target in ViewSector, and each sector is
-    // an origin-centered frame, so subtracting the local ship's position across sectors (e.g. an
-    // F3/commander view of another sector) yields a meaningless distance.
-    private void DrawFocusTag(Vector2 view, Vector3 worldPos, Color tint, PredictionController? local) =>
-        _mk.FocusTag(
-            Cam,
-            view,
-            worldPos,
-            tint,
-            local != null && _world.LocalSector == _world.ViewSector ? local.GlobalPosition : null
-        );
+    // tag + range readout as a focused ship. `tint` colors the tag; `rangeFrom` is the shooter's own
+    // point (the pilot's hull, or the hull a crew gunner rides). The range line is skipped when there
+    // is nothing to measure from (pre-spawn / spectating), and when the viewed sector isn't the
+    // shooter's — a focus tag only draws for a target in ViewSector, and each sector is an
+    // origin-centered frame, so subtracting a position across sectors (e.g. an F3/commander view of
+    // another sector) yields a meaningless distance.
+    private void DrawFocusTag(Vector2 view, Vector3 worldPos, Color tint, Vector3? rangeFrom) =>
+        _mk.FocusTag(Cam, view, worldPos, tint, _world.LocalSector == _world.ViewSector ? rangeFrom : null);
 
     // Resource class name for a rock class byte (mirrors Shared.RockClass). Only Helium-3 is
     // harvestable; Regolith are the common majority, the rest are rare cosmetic specials today

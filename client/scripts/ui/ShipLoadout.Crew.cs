@@ -547,9 +547,12 @@ public partial class ShipLoadout
 
         _crewSeatId.Text = seatId;
         _crewSeatGun.Text = gun;
+        // DOCKED covers both "hasn't launched yet" and "has come back in": a dock now KEEPS the crew
+        // (v42 slice 2b — the record persists with ShipId 0 and every gunner still seated), so a
+        // returning captain drops their gunners back into exactly this view rather than dissolving it.
         _crewSeatStatus.Text = inFlight
             ? "◷ IN FLIGHT · captain is flying"
-            : "◷ STANDBY · captain launches, you take the gun";
+            : "◷ DOCKED · standby — captain launches, you take the gun";
 
         foreach (Node child in _crewManifest.GetChildren())
             child.QueueFree();
@@ -573,7 +576,7 @@ public partial class ShipLoadout
         _crewBarShip.Text = className;
         _crewBarCaptain.Text = captain;
         _crewBarSeat.Text = seatId;
-        _crewBarStatus.Text = inFlight ? "◷ IN FLIGHT · captain is flying" : "◷ STANDBY · captain launches";
+        _crewBarStatus.Text = inFlight ? "◷ IN FLIGHT · captain is flying" : "◷ DOCKED · standby";
     }
 
     // ---- seat actions --------------------------------------------------------
@@ -603,6 +606,21 @@ public partial class ShipLoadout
 
     // ---- hangar intent -------------------------------------------------------
 
+    // Whether we are a GUNNER rather than a captain right now — the same condition RefreshCrewViews
+    // drives `_crewMode` from, asked directly because the mode itself lags it by one repaint. A
+    // freshly-built hangar selects a hull (and would advertise it) in the _Process BEFORE the first
+    // crew refresh flips the mode, so a gunner whose captain just docked — the hangar re-opens with
+    // the seat still held (v42 slice 2b) — would advertise a hull of their own for one round trip and
+    // retract it a frame later. Gating the send on the seat, not on the painted mode, never sends it.
+    private bool Crewing =>
+        _crewMode
+        || (
+            _net != null
+            && _world != null
+            && _world.Ships.LocalShip == null
+            && _world.Crew.SeatOf(_net.LocalClientId) != null
+        );
+
     // Advertise (or retract) the hull we intend to launch so teammates can claim its stations. Only a
     // pilot who is actually picking a ship advertises: a browse-while-flying hangar (F4) must not
     // dissolve the crew of the ship we're flying.
@@ -610,12 +628,7 @@ public partial class ShipLoadout
     {
         if (_net == null || _world == null || !OpenedForSpawn || _world.Ships.LocalShip != null)
             return;
-        if (
-            retract
-            || _crewMode
-            || _classId is not byte classId
-            || _defs.GetHardpoints(classId) is not List<HardpointDef> hps
-        )
+        if (retract || Crewing || _classId is not byte classId || _defs.GetHardpoints(classId) is not List<HardpointDef> hps)
         {
             if (!_intentAdvertised)
                 return;

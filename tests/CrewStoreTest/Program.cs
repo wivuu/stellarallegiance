@@ -6,7 +6,9 @@
 // the docked-vs-flying flag, Clear, and the SeatId label — plus the v42 turret-aim seams the same
 // two files own: the ship-id index and manned-gun query MsgTurrets resolves through, the
 // station/seat-index -> slot mapping every turret consumer must agree on, and the mouse gain that
-// turns one sensitivity setting into gimbal radians.
+// turns one sensitivity setting into gimbal radians — plus TurretGimbal, the gun cam's roll
+// reference, whose whole reason to exist (an up vector that survives the pole) is a property no
+// screenshot can assert.
 
 using StellarAllegiance.Shared;
 
@@ -189,6 +191,75 @@ Check(Math.Abs(sweep - 400f * DefaultMouseSens * TurretStations.RadPerStickUnit)
 Check(Math.Abs(sweep - MathF.PI / 2f) < 0.05f, "a ~400 px sweep is ~90 degrees at the default sensitivity");
 Check(TurretStations.AimDeltaRad(-10f, DefaultMouseSens) < 0f, "AimDeltaRad keeps the sign of the motion");
 Check(TurretStations.AimDeltaRad(10f, 0f) == 0f, "a zero sensitivity moves the gimbal not at all");
+
+// ---- TurretGimbal: the gun cam's roll reference (v42 crews slice 2b) -------------------------------
+// The camera up must be perpendicular to the aim at EVERY elevation and must not flip as the aim
+// sweeps through the station's zenith — the pole is where the old zenith-projection reference
+// vanished and snapped. Both properties are pure maths on the shared station frame, so they are
+// checked here rather than by eye in a live run.
+{
+    var zenith = new Vec3(0f, 1f, 0f); // a dorsal station: zenith = ship +Y, frame Z = ship +Z
+    float AngleBetween(Vec3 a, Vec3 b) => MathF.Acos(Math.Clamp(Vec3.Dot(Vec3.Normalize(a), Vec3.Normalize(b)), -1f, 1f));
+
+    // Perpendicularity across the whole arc, on and off the azimuth branch.
+    float worstDot = 0f,
+        worstLen = 0f;
+    for (int ai = 0; ai < 16; ai++)
+    for (int ei = 0; ei <= 24; ei++)
+    {
+        float az = -MathF.PI + ai * (MathF.Tau / 16f);
+        float el = TurretAim.MinElevationRad + ei * (TurretAim.MaxElevationRad - TurretAim.MinElevationRad) / 24f;
+        Vec3 aim = TurretAim.FromGimbal(zenith, az, el);
+        Vec3 up = TurretGimbal.Up(zenith, aim, TurretGimbal.TrackAzimuth(zenith, aim, az));
+        worstDot = MathF.Max(worstDot, MathF.Abs(Vec3.Dot(up, aim)));
+        worstLen = MathF.Max(worstLen, MathF.Abs(up.LengthSquared() - 1f));
+    }
+    Check(worstDot < 1e-4f, "TurretGimbal.Up is perpendicular to the aim over the whole arc");
+    Check(worstLen < 1e-4f, "TurretGimbal.Up is a unit vector over the whole arc");
+
+    // At the zenith itself the up is exactly minus the branch horizon — a real vector where the
+    // zenith-off-aim projection has none at all.
+    Vec3 pole = TurretAim.FromGimbal(zenith, 0f, TurretAim.MaxElevationRad);
+    Vec3 poleUp = TurretGimbal.Up(zenith, pole, 0f);
+    Check(AngleBetween(poleUp, TurretGimbal.Horizon(zenith, 0f) * -1f) < 1e-3f, "at the pole the up is -horizon(az)");
+    Check(MathF.Abs(Vec3.Dot(poleUp, pole)) < 1e-4f, "the pole's up is still perpendicular to the aim");
+
+    // Sweep a great circle straight THROUGH the zenith (up the front, down the back) one small step at
+    // a time, tracking the azimuth exactly as the controller does. Every consecutive up must be a
+    // small rotation of the last — no flip anywhere, least of all at the pole.
+    float branch = 0f;
+    Vec3? prevUp = null;
+    float worstStep = 0f;
+    Vec3 beforePole = default,
+        afterPole = default;
+    const int Steps = 400;
+    for (int i = 0; i <= Steps; i++)
+    {
+        // t runs 45° -> 135° of elevation: the second half is PAST the pole, which ToGimbal reports as
+        // the opposite azimuth with a reflected elevation (the very fold that used to flip the view).
+        float t = (MathF.PI / 4f) + (MathF.PI / 2f) * i / Steps;
+        Vec3 aim = Vec3.Normalize(TurretGimbal.Horizon(zenith, 0f) * MathF.Cos(t) + zenith * MathF.Sin(t));
+        branch = TurretGimbal.TrackAzimuth(zenith, aim, branch);
+        Vec3 up = TurretGimbal.Up(zenith, aim, branch);
+        if (prevUp is Vec3 pu)
+            worstStep = MathF.Max(worstStep, AngleBetween(pu, up));
+        prevUp = up;
+        if (t < MathF.PI / 2f)
+            beforePole = up;
+        else if (afterPole.LengthSquared() == 0f)
+            afterPole = up;
+    }
+    Check(worstStep < 0.02f, "the gun-cam up never jumps as the aim sweeps through the zenith");
+    Check(AngleBetween(beforePole, afterPole) < 0.02f, "the up either side of the zenith is the same up (no flip)");
+    Check(branch == 0f, "the azimuth branch survives the crossing (never re-derived to the far side)");
+
+    // A normal sweep BELOW the pole does track the azimuth: the branch follows the aim so the horizon
+    // rolls with it, which is the whole point of not simply freezing the reference.
+    float low = TurretGimbal.TrackAzimuth(zenith, TurretAim.FromGimbal(zenith, 0.7f, 0.2f), 0.6f);
+    Check(MathF.Abs(low - 0.7f) < 1e-3f, "off the pole the azimuth tracks the aim");
+    float atPole = TurretGimbal.TrackAzimuth(zenith, zenith, 1.234f);
+    Check(atPole == 1.234f, "inside the pole band the azimuth is held, never re-read from noise");
+}
 
 Console.WriteLine(failures == 0 ? "ALL PASS" : $"{failures} FAILURE(S)");
 return failures == 0 ? 0 : 1;

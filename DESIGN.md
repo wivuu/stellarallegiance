@@ -72,9 +72,13 @@ subclasses** for anything needing custom `_Draw` or per-frame state.
 - **Game elements** — `LoadoutSlot`, `ContactChip`, `ResourceReadout`, `RadarFrame`, `GunnerStrip`
   (the top-centre HUD strip a crew gunner sees while riding a captain's turret station — built from
   `RosterCells`; `SetMock(…)` renders it standalone in the gallery).
-- **TurretReticle** — the crew gunner's centre-screen crosshair (ring + four ticks): `Data` while the
-  aim is free, `Warn` while `TurretController.Clamped` pins it against the station's arc edge. Shown
-  with the `GunnerStrip`; `SetMock(clamped)` renders both states in the gallery.
+- **TurretReticle** — the crew gunner's centre-screen crosshair. The ring + four ticks mark the gun's
+  ACTUAL aim: `Data` while the aim is free, `Ok` while the focused target's lead point is on the
+  firing line (`TargetMarkers.OnSolution`), `Warn` — which wins — while `TurretController.Clamped`
+  pins the aim against the station's arc edge. A second, smaller open square marks the DESIRED aim
+  (where the mouse has dragged the sight) and is dropped once the traversing gun catches up, so a
+  heavy mount visibly lags its sight. Shown with the `GunnerStrip`;
+  `SetMock(clamped, onSolution, desired)` renders every state in the gallery.
 - **TurretBarrelView** — the 3D gun at a MANNED turret station (`Node3D`, not a `Control`): a short
   barrel on a low mount, sized off the hull's model length and tinted with the faction colour
   (`DesignTokens.Faction`, never the cyan chrome accent), swung onto the gunner's live aim. An
