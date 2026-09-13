@@ -52,8 +52,11 @@ public sealed partial class Simulation
     // Crew-served TURRET fire (v42 crews slice 2) — the gunners' half of Pass A, run right after the
     // pilot's TryFire for every ship that flies a bound crew. Each manned station reads its gunner's
     // HELD input (Simulation.Crew.cs): the aim is clamped into the station's arc by the SHARED
-    // TurretAim rule (so a stale or forged aim can never fire through the hull), stored as the
-    // station's live aim, and — while Firing is held — fired on that station's OWN cadence.
+    // TurretAim rule (so a stale or forged aim can never fire through the hull), TRAVERSED toward by
+    // the shared TurretAim.Slew rule at the station's authored speed/acceleration, and — while
+    // Firing is held — fired on that station's OWN cadence, always along the aim the gun has ACTUALLY
+    // reached. The held aim is the gunner's DESIRE; TurretAim[slot] (and so TurretRecord.Aim) is
+    // where the barrel is, which is the whole point of the wire carrying the second one.
     //
     // Two invariants:
     //   - A turret bolt is credited to the GUNNER, not the captain (FireBolt's attackerClientId), so
@@ -63,27 +66,41 @@ public sealed partial class Simulation
     //     spread seed is TurretAim.SpreadBarrel (0x80 | hp index), disjoint from the pilot's barrels.
     private void TryFireTurrets(ShipSim s, uint tick)
     {
-        if (s.CrewSeats is not { } seats || s.TurretAim is not { } aims || s.TurretLastFire is not { } stamps)
+        if (
+            s.CrewSeats is not { } seats
+            || s.TurretAim is not { } aims
+            || s.TurretLastFire is not { } stamps
+            || s.TurretRate is not { } rates
+        )
             return;
         var stations = StationsOf(s.Class);
-        int n = Math.Min(seats.Length, Math.Min(stations.Length, Math.Min(aims.Length, stamps.Length)));
+        int n = Math.Min(
+            Math.Min(seats.Length, stations.Length),
+            Math.Min(Math.Min(aims.Length, stamps.Length), rates.Length)
+        );
         for (int slot = 0; slot < n; slot++)
         {
             int gunner = seats[slot];
             if (gunner < 0 || !_turretHeld.TryGetValue(gunner, out var held))
-                continue; // unmanned, or a gunner who has sent nothing yet: the station stays put
+            {
+                // Unmanned, or a gunner who has sent nothing yet: the gun HOLDS its current aim (a
+                // station never drifts on its own) and stops, so the next input winds up from rest.
+                rates[slot] = 0f;
+                continue;
+            }
 
             var st = stations[slot];
-            Vec3 aim = TurretAim.Clamp(st.Zenith, held.Aim);
+            Vec3 desired = TurretAim.Clamp(st.Zenith, held.Aim);
+            float rate = rates[slot];
+            Vec3 aim = TurretAim.Slew(aims[slot], desired, ref rate, st.Slew, st.Accel, FlightModel.Dt);
+            rates[slot] = rate;
             if (
                 MathF.Abs(aim.X - aims[slot].X) > TurretAimEpsilon
                 || MathF.Abs(aim.Y - aims[slot].Y) > TurretAimEpsilon
                 || MathF.Abs(aim.Z - aims[slot].Z) > TurretAimEpsilon
             )
-            {
-                aims[slot] = aim;
                 s.TurretDirty = true;
-            }
+            aims[slot] = aim;
             if (!held.Firing)
                 continue;
 

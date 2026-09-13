@@ -52,11 +52,20 @@ public sealed partial class Simulation
     }
 
     // One authored turret station: where it sits on the hull (the wire's seat index), what the mount
-    // accepts, the authored gun every reject falls back to, and its GEOMETRY — Off is the ship-local
+    // accepts, the authored gun every reject falls back to, its GEOMETRY — Off is the ship-local
     // muzzle offset a turret bolt leaves from, Zenith the station's outward mount normal (the
     // HardpointDef.Dir the geometry merge already flipped for a turret node), which is the axis the
-    // shared TurretAim arc is measured around.
-    private readonly record struct TurretStation(byte HpIndex, WeaponMountKind Mount, uint WeaponId, Vec3 Off, Vec3 Zenith);
+    // shared TurretAim arc is measured around — and its TRAVERSE (Slew = speed cap rad/s, Accel =
+    // wind-up rad/s², the streamed HardpointDef numbers the gunner's client runs the same rule on).
+    private readonly record struct TurretStation(
+        byte HpIndex,
+        WeaponMountKind Mount,
+        uint WeaponId,
+        Vec3 Off,
+        Vec3 Zenith,
+        float Slew,
+        float Accel
+    );
 
     // Per-class turret stations in hardpoint declaration order — the SAME order ClassTurretGuns /
     // AuthoredTurretIds / ShipSim.TurretWeaponIds / CrewShip.Seat*Ids use. Assigned in the ctor
@@ -81,7 +90,9 @@ public sealed partial class Simulation
                             h.Mount,
                             h.WeaponId,
                             new Vec3(h.OffX, h.OffY, h.OffZ),
-                            new Vec3(h.DirX, h.DirY, h.DirZ)
+                            new Vec3(h.DirX, h.DirY, h.DirZ),
+                            h.TurretSlewRad,
+                            h.TurretAccelRad
                         )
                     );
             if (rows is not null)
@@ -432,13 +443,16 @@ public sealed partial class Simulation
         Events.CrewChanged = true;
     }
 
-    // Put one station of a LAUNCHED ship back at rest and flag the ship for this tick's MsgTurrets.
-    // No-op for a crew still in the hangar (no ship, no aim arrays yet).
+    // Put one station of a LAUNCHED ship back at rest (aim AND traverse speed — a gun left mid-swing
+    // must not carry that momentum into the next gunner) and flag the ship for this tick's
+    // MsgTurrets. No-op for a crew still in the hangar (no ship, no aim arrays yet).
     private void RestTurret(ShipSim? ship, int slot)
     {
         if (ship?.TurretAim is not { } aims || slot < 0 || slot >= aims.Length)
             return;
         aims[slot] = TurretAim.Rest(TurretZenithOf(ship.Class, slot));
+        if (ship.TurretRate is { } rates && slot < rates.Length)
+            rates[slot] = 0f;
         ship.TurretDirty = true;
     }
 
@@ -459,10 +473,70 @@ public sealed partial class Simulation
             Dissolve(crew, gunnerNotice);
     }
 
-    // The ship a crew was flying left the world (docked, died, was removed): dock AND death both
-    // dissolve — everyone goes back to the hangar and the captain's intent is cleared. Keyed off
-    // ShipSim.Crew, never _byClient: a pod ejection has already swapped _byClient[captain] to the
-    // pod by the time this runs.
+    // The captain's hull was DESTROYED: every seated gunner punches out in their own escape pod at
+    // the wreck, exactly as the captain does (EjectPlayerPod, which calls this while the seats are
+    // still bound — ApplyStructural's release runs a beat later and would find nothing). The gunner
+    // loses no hull of their own, so NOTHING is scored here: their pod's own death scores the D the
+    // usual way, and the captain keeps the EJ for the ship they actually lost.
+    //
+    // Vacating the seat is part of the ejection — a gunner now flying a pod must not still be listed
+    // in a station — so the crew record this ship flies is already empty by the time the release
+    // dissolves it, and this notice is the one the gunner sees.
+    private void EjectCrewPods(ShipSim dead, uint tick)
+    {
+        if (dead.CrewSeats is not { } seats)
+            return;
+        for (int i = 0; i < seats.Length; i++)
+        {
+            int g = seats[i];
+            if (g == NoGunner)
+                continue;
+            // A seated gunner never owns a ship and is never mid-respawn: DrainCrewQueues refuses the
+            // claim in both states, and a gunner who sends MsgSpawn auto-vacates first. So the pod
+            // below can never displace a hull this client is already flying.
+            System.Diagnostics.Debug.Assert(
+                !_byClient.ContainsKey(g) && !_clientRespawn.ContainsKey(g),
+                "a seated gunner must own no ship and have no pending respawn"
+            );
+            var pod = MakePod(dead, tick);
+            pod.OwnerClientId = g;
+            _byClient[g] = pod; // the hub's YouAre flip hands the gunner their pod
+            _toAdd.Add(pod);
+            VacateSeat(g, "Ejected — your ride was destroyed.");
+        }
+    }
+
+    // The captain DOCKED a crewed hull (GoneClean): the ship goes away but the crew does NOT. The
+    // record stays under the captain's key with the same class, so it reads as joinable again
+    // (CrewShipRecord.ShipId back to 0) and the gunners keep their stations while the captain rearms
+    // — user rule 2026-09-13: "on dock the crew stays seated until a gunner leaves or the captain
+    // picks a hull without turrets". The captain's next intent decides: the SAME class keeps them
+    // (DrainCrewQueues' same-hull branch), a different class or a station-less hull dissolves.
+    //
+    // Only the LIVE ship state goes: the ship/record cross-links, and the held aim/fire of every
+    // gunner (nothing may keep firing a gun that is no longer in the world).
+    private void UnbindCrewOfShip(ShipSim s)
+    {
+        if (s.Crew is not { } crew)
+            return;
+        crew.Ship = null;
+        s.Crew = null;
+        s.CrewSeats = null;
+        foreach (int g in crew.SeatGunnerIds)
+        {
+            if (g == NoGunner)
+                continue;
+            _turretHeld.Remove(g);
+            Events.PilotNotices.Add((g, "Docked — standing by in your station."));
+        }
+        Events.CrewChanged = true; // the roster flips back from "in flight" to "joinable"
+    }
+
+    // The ship a crew was flying left the world for good (destroyed, the captain left, an orphan
+    // expired): the crew dissolves — everyone goes back to the hangar and the captain's intent is
+    // cleared. A DOCK takes UnbindCrewOfShip instead and keeps the seats. Keyed off ShipSim.Crew,
+    // never _byClient: a pod ejection has already swapped _byClient[captain] to the pod by the time
+    // this runs.
     private void ReleaseCrewOfShip(ShipSim s)
     {
         if (s.Crew is not { } crew)

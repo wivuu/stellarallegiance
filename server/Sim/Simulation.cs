@@ -309,6 +309,13 @@ public sealed partial class Simulation
         // TurretRecord along the streamed aim instead.
         public Vec3[]? TurretAim;
         public uint[]? TurretLastFire;
+
+        // TurretRate[slot] = that station's CURRENT scalar traverse speed (rad/s) — the state the
+        // shared TurretAim.Slew rule carries between ticks so a heavy mount winds up, runs at its
+        // authored speed cap and settles exactly on the gunner's desired aim instead of snapping to
+        // it. Allocated beside TurretAim; zeroed whenever the station stops being driven (vacated,
+        // unmanned, or a gunner holding nothing).
+        public float[]? TurretRate;
         public uint LastTurretFireTick;
 
         // "This ship's turret state changed this tick" — an aim that moved, a station that fired, a
@@ -1533,6 +1540,7 @@ public sealed partial class Simulation
         {
             s.TurretAim = new Vec3[stations];
             s.TurretLastFire = new uint[stations];
+            s.TurretRate = new float[stations]; // every station starts stopped
             for (int i = 0; i < stations; i++)
                 s.TurretAim[i] = TurretAim.Rest(TurretZenithOf(cls, i));
         }
@@ -2721,6 +2729,10 @@ public sealed partial class Simulation
         if (dead.OwnerClientId >= 0)
             _byClient[dead.OwnerClientId] = pod; // client now flies the pod
         _toAdd.Add(pod);
+        // The CREW punches out too — one pod each, at the same wreck, owned by the gunner. This must
+        // run here and not in ApplyStructural: the seats are still bound to this hull right now, and
+        // the release seam that unbinds them only runs once the removal is applied.
+        EjectCrewPods(dead, tick); // Simulation.Crew.cs
     }
 
     // Build an escape pod ShipSim at a wreck's pose, inheriting team/owner with a random
@@ -2857,9 +2869,15 @@ public sealed partial class Simulation
         {
             foreach (var s in _toRemove)
             {
-                // Dock, death (the wreck, before its pod is added), leave, orphan expiry — every
-                // way a crewed hull leaves the world funnels here, and all of them dissolve.
-                ReleaseCrewOfShip(s); // Simulation.Crew.cs
+                // Dock, death (the wreck, before its pod is added), leave, orphan expiry — every way
+                // a crewed hull leaves the world funnels here. A clean DOCK keeps the crew seated
+                // (the record goes back to "joinable" under the captain's key); every other exit
+                // dissolves it. The gunners' escape pods were already spawned by EjectPlayerPod,
+                // which also vacated their seats, so a death finds the stations empty here.
+                if (s.GoneReason == GoneClean && s.Crew is not null)
+                    UnbindCrewOfShip(s); // Simulation.Crew.cs
+                else
+                    ReleaseCrewOfShip(s); // Simulation.Crew.cs
                 _ships.Remove(s.ShipId);
                 _order.Remove(s);
                 Events.Deaths.Add((s.ShipId, s.GoneReason));
