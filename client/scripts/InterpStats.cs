@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using Godot;
 
 // =====================================================================
@@ -101,6 +103,7 @@ public static class InterpStats
     // Global (not per-tier) count of frames whose wall dt exceeded 25 ms this window — the render
     // hitch signal. Fed once per frame from the Hud via NoteFrame.
     private static int _hitchFrames;
+    private static readonly List<float> _frameDts = new(); // recent _Process deltas (DeltaSnap)
 
     // Fetch (creating on first use) the accumulator for a ship. Called from the interpolator only
     // when Enabled; the interpolator caches the returned reference, so this dictionary lookup runs
@@ -115,11 +118,37 @@ public static class InterpStats
         return r;
     }
 
-    // One frame elapsed (called once per frame from the Hud while Enabled): tally a render hitch.
+    // One frame elapsed (called once per frame from the Hud while Enabled): tally a render hitch, and
+    // keep the recent deltas so Report can say whether they are vsync-quantized. The remote-ship
+    // render timeline (MatchClock.RenderMs) advances by this delta and is only jitter-free when Godot's
+    // delta smoothing is active (vsync on): delta_snap near 100 % = smoothed, ~0 % = raw CPU intervals
+    // (tests/InterpTest '-raw' arms show the raw case gives no smoothing gain at all).
     public static void NoteFrame(double dtSeconds)
     {
         if (dtSeconds > 0.025)
             _hitchFrames++;
+        if (_frameDts.Count < SampleCap)
+            _frameDts.Add((float)dtSeconds);
+    }
+
+    // Fraction of recent frame deltas within ±0.25 ms of an integer multiple of the median delta,
+    // plus that median in ms. Raw wall-clock deltas on a loaded machine land far from the grid.
+    private static (float SnapPct, float MedianMs) DeltaSnap()
+    {
+        if (_frameDts.Count < 30)
+            return (float.NaN, float.NaN);
+        var sorted = _frameDts.OrderBy(x => x).ToList();
+        float median = sorted[sorted.Count / 2];
+        if (median <= 0f)
+            return (float.NaN, float.NaN);
+        int snapped = 0;
+        foreach (float dt in _frameDts)
+        {
+            float k = MathF.Round(dt / median);
+            if (k >= 1f && MathF.Abs(dt - k * median) < 0.00025f)
+                snapped++;
+        }
+        return (100f * snapped / _frameDts.Count, median * 1000f);
     }
 
     // Record one sep_at_hit sample (surface separation, units — may be negative if the rendered ships
@@ -255,6 +284,8 @@ public static class InterpStats
         var accMax = new float[3];
         var worstId = new ulong[3];
         var worstAcc = new float[3];
+        var (snapPct, medianMs) = DeltaSnap();
+        string snapText = float.IsNaN(snapPct) ? "n/a" : $"{snapPct:F0}% delta_med={medianMs:F2}ms";
         for (int t = 0; t < 3; t++)
         {
             _tGaps[t].Clear();
@@ -307,7 +338,7 @@ public static class InterpStats
                     + $"extrap_age_p95={Pct(_tExtrapAges[t], 0.95):F0} "
                     + $"err_p95={Pct(_tErrs[t], 0.95):F2} snaps={snaps[t]} "
                     + $"acc_p95={Pct(_tAccs[t], 0.95):F1} acc_max={accMax[t]:F1} "
-                    + $"hitch_frames={_hitchFrames} worst={worstId[t]}"
+                    + $"hitch_frames={_hitchFrames} delta_snap={snapText} worst={worstId[t]}"
             );
         }
 
@@ -319,5 +350,6 @@ public static class InterpStats
             kv.Value.Touched = false;
         }
         _hitchFrames = 0;
+        _frameDts.Clear();
     }
 }

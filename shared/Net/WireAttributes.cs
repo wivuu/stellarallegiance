@@ -56,6 +56,7 @@ public enum WireEnc : byte
     U32 = 7, // integer: clamped to a uint
     StrU8 = 8, // string: u8 length prefix (255 bytes max)
     Str7Bit = 9, // string: BinaryWriter/BinaryReader 7-bit-encoded length prefix
+    QuatFine = 10, // Quat: smallest-three u64, 20 bits per component (WireQuant.PackQuatFine)
 }
 
 [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property | AttributeTargets.Parameter, Inherited = false)]

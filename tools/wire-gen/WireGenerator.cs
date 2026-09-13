@@ -180,6 +180,7 @@ internal enum Enc
     U32,
     StrU8,
     Str7Bit,
+    QuatFine, // = WireEnc.QuatFine (10): smallest-three u64, 20 bits/component
 }
 
 internal enum Width
@@ -211,7 +212,7 @@ internal abstract class Ty
 
     public sealed class Quat : Ty
     {
-        public Enc Kind; // Default (4x f32) | Quat (smallest-three u32)
+        public Enc Kind; // Default (4x f32) | Quat (smallest-three u32) | QuatFine (smallest-three u64)
     }
 
     public sealed class Str : Ty
@@ -642,7 +643,7 @@ internal sealed class TypeModel
         }
         if (full == WireGenerator.QuatType)
         {
-            if (enc is Enc.Default or Enc.Quat)
+            if (enc is Enc.Default or Enc.Quat or Enc.QuatFine)
                 return new Ty.Quat { Kind = enc };
             error = "enc";
             return null;
@@ -734,7 +735,12 @@ internal sealed class Resolver
             case Ty.Vec3 v:
                 return v.Kind == Enc.Default ? 12 : 6;
             case Ty.Quat q:
-                return q.Kind == Enc.Default ? 16 : 4;
+                return q.Kind switch
+                {
+                    Enc.Default => 16,
+                    Enc.QuatFine => 8,
+                    _ => 4,
+                };
             case Ty.Enum e:
                 return Emitter.PrimSize(e.Underlying);
             case Ty.Narrow n:
@@ -1076,6 +1082,8 @@ internal static class Emitter
             case Ty.Quat qt:
                 if (qt.Kind == Enc.Quat)
                     Line(sb, ind, $"w.U32({Q}.PackQuat({v}.X, {v}.Y, {v}.Z, {v}.W));");
+                else if (qt.Kind == Enc.QuatFine)
+                    Line(sb, ind, $"w.U64({Q}.PackQuatFine({v}.X, {v}.Y, {v}.Z, {v}.W));");
                 else
                     foreach (var ax in new[] { "X", "Y", "Z", "W" })
                         Line(sb, ind, $"w.F32({v}.{ax});");
@@ -1192,14 +1200,11 @@ internal static class Emitter
                 break;
             }
             case Ty.Quat qt:
-                if (qt.Kind == Enc.Quat)
+                if (qt.Kind is Enc.Quat or Enc.QuatFine)
                 {
                     string n = "__q" + tmp++;
-                    Line(
-                        sb,
-                        ind,
-                        $"{Q}.UnpackQuat(r.U32(), out float {n}x, out float {n}y, out float {n}z, out float {n}w);"
-                    );
+                    string unpack = qt.Kind == Enc.Quat ? $"{Q}.UnpackQuat(r.U32()" : $"{Q}.UnpackQuatFine(r.U64()";
+                    Line(sb, ind, $"{unpack}, out float {n}x, out float {n}y, out float {n}z, out float {n}w);");
                     Line(sb, ind, $"{target} = new global::{WireGenerator.QuatType}({n}x, {n}y, {n}z, {n}w);");
                 }
                 else

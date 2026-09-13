@@ -484,7 +484,7 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
         _container.AddChild(rs);
         rs.AddChild(ShipModelLoader.Build(_defs, row.Class, row.IsPod, _shipMaterial(row.Team, row.IsPig)));
         ShipModelLoader.AttachEngineGlow(rs, _defs, row.Class, row.IsPod, row.Team);
-        rs.Initialize(row, _defs, _clock.ServerTick);
+        rs.Initialize(row, _defs, _clock);
         if (_pilotNames.TryGetValue(row.ShipId, out var pilot))
             rs.SetPilotName(pilot);
         _nodes[row.ShipId] = node;

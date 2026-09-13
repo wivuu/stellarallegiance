@@ -41,9 +41,9 @@ public static class InputFlags
     public const byte DropProbe = 32;
 }
 
-// One quantized ship snapshot record (57 bytes). Position is sector-local i16, rotation
-// smallest-three, rates/power/health f16 (WireQuant); the precision budget sits an order of
-// magnitude inside the client's reconcile tolerances.
+// One ship snapshot record (67 bytes). Position is raw f32 and rotation a 20-bit smallest-three
+// quaternion (exact enough to render a remote hull off directly — see the Pos comment below);
+// rates/power/health are f16 (WireQuant), whose budget only feeds interpolation tangents and HUD.
 [WireRecord]
 public partial struct ShipRecord
 {
@@ -53,10 +53,15 @@ public partial struct ShipRecord
     public byte Flags; // ShipFlags bits
     public ushort Sector;
 
-    [Wire(WireEnc.Pos)]
+    // Pose is carried at FULL precision: raw f32 position (the server's exact float) and a 20-bit
+    // smallest-three quaternion. The older sector-local i16 position (0.25 u step) and 10-bit quat
+    // (~0.17° step) were sized for the own-ship reconcile tolerances, but a REMOTE ship is rendered
+    // straight off these samples: each sample's rounding error becomes a per-segment velocity/turn-rate
+    // wobble at 20 Hz (~0.1 u/frame and ~0.05°/frame at 60 fps — tests/InterpTest 'quant' arm), plainly
+    // visible up close and unacceptable on a hull a camera rides. +10 bytes per record.
     public Vec3 Pos;
 
-    [Wire(WireEnc.Quat)]
+    [Wire(WireEnc.QuatFine)]
     public Quat Rot;
 
     [Wire(WireEnc.Half)]

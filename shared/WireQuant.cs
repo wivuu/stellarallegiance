@@ -91,6 +91,77 @@ public static class WireQuant
         return packed;
     }
 
+    // Fine smallest-three: the same layout at 20 bits per component in a u64 (2 index bits + 3×20
+    // = 62 bits). Step √2/2^20 ≈ 1.3e-6 per component, angular error ≈ 3e-6 rad (~0.0002°) — far
+    // below anything a rendered camera can show. The 10-bit u32 form above is ~0.003 rad (~0.17°),
+    // which is fine for a distant hull but a visible per-sample wobble on a ship the camera is
+    // attached to (see tests/InterpTest: yaw-in-place rotk). Ship rows use this; FX rows keep u32.
+    public static ulong PackQuatFine(float x, float y, float z, float w)
+    {
+        float n = MathF.Sqrt(x * x + y * y + z * z + w * w);
+        if (n < 1e-12f)
+        {
+            x = 0f;
+            y = 0f;
+            z = 0f;
+            w = 1f;
+            n = 1f;
+        }
+        float inv = 1f / n;
+        x *= inv;
+        y *= inv;
+        z *= inv;
+        w *= inv;
+
+        Span<float> c = stackalloc float[4] { x, y, z, w };
+        int max = 0;
+        for (int i = 1; i < 4; i++)
+            if (MathF.Abs(c[i]) > MathF.Abs(c[max]))
+                max = i;
+        if (c[max] < 0f)
+            for (int i = 0; i < 4; i++)
+                c[i] = -c[i];
+
+        const float Max = (1 << 20) - 1;
+        ulong packed = (ulong)max << 62;
+        int shift = 40;
+        for (int i = 0; i < 4; i++)
+        {
+            if (i == max)
+                continue;
+            float norm = c[i] * (1f / InvSqrt2); // -> [-1, 1]
+            long q = (long)MathF.Round((norm * 0.5f + 0.5f) * Max);
+            q = q < 0 ? 0 : (q > (long)Max ? (long)Max : q);
+            packed |= (ulong)q << shift;
+            shift -= 20;
+        }
+        return packed;
+    }
+
+    public static void UnpackQuatFine(ulong packed, out float x, out float y, out float z, out float w)
+    {
+        int max = (int)(packed >> 62);
+        const float Max = (1 << 20) - 1;
+        Span<float> c = stackalloc float[4];
+        int shift = 40;
+        float sumSq = 0f;
+        for (int i = 0; i < 4; i++)
+        {
+            if (i == max)
+                continue;
+            long q = (long)((packed >> shift) & 0xFFFFF);
+            float v = (q / Max * 2f - 1f) * InvSqrt2;
+            c[i] = v;
+            sumSq += v * v;
+            shift -= 20;
+        }
+        c[max] = MathF.Sqrt(MathF.Max(0f, 1f - sumSq));
+        x = c[0];
+        y = c[1];
+        z = c[2];
+        w = c[3];
+    }
+
     public static void UnpackQuat(uint packed, out float x, out float y, out float z, out float w)
     {
         int max = (int)(packed >> 30);
