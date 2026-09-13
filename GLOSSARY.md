@@ -916,14 +916,26 @@ Client-side extrapolation of ship state between server snapshots to reduce perce
 - **Notes:** Never blocks authority; server snapshot always wins. Remote poses lag by the interp delay, so a hard ship bump may still reconcile — the spring absorbs it; the win is never visibly interpenetrating another ship.
 
 ### MotionInterpolator
-Reusable snapshot-smoothing engine for any server-controlled streamed entity (remote ships today; missiles etc. can adopt it). Samples are stamped on the server-tick timeline, rendered behind an adaptive delay sized to each entity's smoothed inter-arrival gap (full-rate ships ~100 ms, coarse-AOI ~1.5× their gap): cubic HERMITE interpolation between samples using the wire velocities as tangents (degrades to linear at full-rate gaps), bounded velocity/angular-velocity dead-reckoning past the newest sample, and error-blend correction (a late authoritative sample glides in over ~100 ms instead of snapping; a teleport-sized error snaps). Server side, same-sector miners are exempted from the coarse AOI tier (`SIM_MINER_MIDRATE`, default on) so slow station-keeping drones refresh at mid cadence.
+Reusable snapshot-smoothing engine for any server-controlled streamed entity (remote ships today; missiles etc. can adopt it). Samples are stamped on the server-tick timeline and rendered behind an adaptive delay sized to each entity's smoothed inter-arrival gap (full-rate ships ~100 ms, coarse-AOI ~1.5× their gap): cubic HERMITE interpolation between samples using the RAW wire velocities as tangents (an EMA-smoothed tangent lagged the heading on turns and bent every 50 ms segment — a constant ~0.15 u/frame kink at 150 u/s), bounded velocity/angular-velocity dead-reckoning past the newest sample, and error-blend correction (a late authoritative sample glides in over ~100 ms instead of snapping; a teleport-sized error snaps). It owns NO clock: `Evaluate(serverNowMs)` takes the client-wide [[Render Timeline]] and subtracts this entity's delay. The remote-ship jerk that survived every earlier smoothing pass was the clock and the wire, not the curve — see [[Render Timeline]] and the `tests/InterpTest` table.
 - **Frequency:** Domain-specific
 - **Key Files:**
   - `client/scripts/MotionInterpolator.cs` — the engine (Tunables, Push/Evaluate/Reset)
   - `client/scripts/RemoteShip.cs` — the ship-flavored consumer (flags/HUD/glow stay local)
-  - `server/Net/ClientHub.cs` — AOI distance tiers + the miner mid-rate exemption
-- **Related:** [[Client Prediction]], [[AOI (Area of Interest)]], [[Miner (AI ore drone)]]
-- **Notes:** Wire velocity + LOCAL angular velocity (f16) already ride every ship record — no protocol change; rotation extrapolation right-composes yaw→pitch→roll like `FlightModel.Step`
+  - `tests/InterpTest/` — offline harness: real interpolator + real wire quantizers + modelled clocks; the `current` rows are regression-gated, the `baseline` rows are the frozen pre-2026-09 path
+  - `server/Net/ClientHub.cs` — AOI distance tiers + motion-based cadence promotion
+- **Related:** [[Render Timeline]], [[Client Prediction]], [[AOI (Area of Interest)]], [[MsgSnapshot]]
+- **Notes:** Wire velocity + LOCAL angular velocity (f16) ride every ship record; rotation extrapolation right-composes yaw→pitch→roll like `FlightModel.Step`. Ship records carry raw f32 position and a 20-bit smallest-three quaternion (`WireEnc.QuatFine`) because a remote hull renders straight off them: the old 0.25 u / 0.17° steps were a visible 20 Hz wobble up close.
+
+### Render Timeline
+The one playback clock every server-driven entity is rendered on (`MatchClock.RenderMs` / `ServerNowMs`). `RenderMs` advances once per frame by the frame delta Godot reports — under vsync with delta smoothing that is the display cadence, i.e. the instant the frame will be SHOWN — never by a raw `Time.GetTicksMsec()` read (integer ms, sampled whenever the CPU reaches a node: on a loaded machine that scheduling jitter rendered straight into remote ships as a per-frame kink of ~1.4 u at 150 u/s for 2 ms of jitter). `ServerNowMs` maps it onto the server tick axis through ONE offset observed per drained snapshot (`OnSnapshot(tick)` from `WorldRenderer.NetSetMatch`), seeded from the connect burst's freshest tick, converged fast during the first ~2 s (lobby) and thereafter rate-limited to ≤0.5 % so estimator motion can never be a step. The own ship already renders on the same delta-accumulated timeline (`ShipController` accumulator → `PredictionController.RenderAlpha`) and so do bolts (`ProjectileView._elapsed`), so the two-clocks split is gone. Relies on the frame delta being the presentation cadence, which Godot's delta smoothing (`application/run/delta_smoothing`, on by default) provides under vsync — `[interp-stats] delta_snap=NN%` reports whether that holds for a given run/display; with raw deltas the clock is exactly as jittery as the wall clock was (InterpTest `-raw` arms). Movie Maker mode (`--write-movie`/`--fixed-fps`) reports a fixed movie-time delta, so `WorldRenderer` feeds the clock measured wall time there instead.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `client/scripts/world/MatchClock.cs` — `RenderMs`, `ServerNowMs`, `Advance(delta, frame)`, `OnSnapshot(tick)`
+  - `client/scripts/WorldRenderer.cs` — `_Process` advances it first in tree order; `NetSetMatch` observes
+  - `client/scripts/RemoteShip.cs` — evaluates the interpolator at `ServerNowMs`
+  - `client/scripts/InterpStats.cs` — `delta_snap` / `delta_med` diagnostics
+- **Related:** [[MotionInterpolator]], [[Client Prediction]], [[SimTick]]
+- **Notes:** Rule (unchanged, now enforced by design): camera-relative render timelines never read `GetTicksMsec/Usec`.
 
 ### WorldRenderer
 Master 3D scene renderer: camera, world geometry, ships, projectiles, effects.

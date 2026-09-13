@@ -95,7 +95,7 @@ string mapsDir = Path.Combine(AppContext.BaseDirectory, "content", "maps");
 Console.WriteLine("---- 1. fixed sizes + message ids ----");
 var sizePins = new (string, int, int)[]
 {
-    ("ShipRecord", ShipRecord.Size, 57),
+    ("ShipRecord", ShipRecord.Size, 67),
     ("MissileRecord", MissileRecord.Size, 35),
     ("MinefieldRecord", MinefieldRecord.Size, 41),
     ("ContactRecord", ContactRecord.Size, 28),
@@ -297,7 +297,7 @@ Simulation.ShipSim MakeShip(
 var ships = new[]
 {
     MakeShip(0x1122334455667788UL, 0, 1, ShipKind.Combat, false, 0, false, false, new Vec3(100f, -250f, 3000f)),
-    MakeShip(2, 1, 255, ShipKind.Pod, true, 2, false, false, new Vec3(-9000f, 8191.9f, 0f)), // pos clamps at ±8192
+    MakeShip(2, 1, 255, ShipKind.Pod, true, 2, false, false, new Vec3(-9000f, 8191.9f, 0f)), // f32 pos: no clamp any more
     MakeShip(3, 0, 5, ShipKind.Miner, false, 1, true, true, new Vec3(0.13f, 0.12f, -0.13f)),
     MakeShip(4, 1, 6, ShipKind.Constructor, false, 0, true, false, new Vec3(4725f, 4725f, 4725f)),
 };
@@ -308,11 +308,6 @@ foreach (var s in ships)
     int wrote = rec.Write(buf);
     Check(wrote == ShipRecord.Size, "ShipRecord.Write returns Size", $"wrote {wrote}");
     var back = ShipRecord.Parse(buf);
-    var clampedPos = new Vec3(
-        Math.Clamp(s.State.Pos.X, -WireQuant.PosRange, WireQuant.PosRange),
-        Math.Clamp(s.State.Pos.Y, -WireQuant.PosRange, WireQuant.PosRange),
-        Math.Clamp(s.State.Pos.Z, -WireQuant.PosRange, WireQuant.PosRange)
-    );
     float rotDot =
         back.Rot.X * s.State.Rot.X + back.Rot.Y * s.State.Rot.Y + back.Rot.Z * s.State.Rot.Z + back.Rot.W * s.State.Rot.W;
     Check(
@@ -325,8 +320,10 @@ foreach (var s in ships)
             && back.ThreatLock == s.ThreatLockState
             && back.Autopilot == s.ApEngaged
             && back.IsMining == s.IsHarvesting
-            && NearV(back.Pos, clampedPos, 0.126f)
-            && MathF.Abs(rotDot) > 0.9999f
+            && back.Pos.X == s.State.Pos.X // raw f32: bit-exact
+            && back.Pos.Y == s.State.Pos.Y
+            && back.Pos.Z == s.State.Pos.Z
+            && MathF.Abs(rotDot) > 0.9999999f // 20-bit smallest-three: ~3e-6 rad
             && NearHalfV(back.Vel, s.State.Vel)
             && NearHalfV(back.AngVel, s.State.AngVel)
             && NearHalf(back.AbPower, s.State.AbPower)
@@ -341,8 +338,55 @@ foreach (var s in ships)
             && back.MineAmmo == s.MineAmmo
             && back.ProbeAmmo == s.ProbeAmmo
             && back.FuelPodAmmo == s.FuelPodAmmo,
-        $"ShipRecord ship {s.ShipId} ({s.Kind}, pig={s.IsPig}, threat={s.ThreatLockState}, ap={s.ApEngaged}) fills + parses (pos within 0.125 u, rot within 0.003 rad, f16 rates)",
+        $"ShipRecord ship {s.ShipId} ({s.Kind}, pig={s.IsPig}, threat={s.ThreatLockState}, ap={s.ApEngaged}) fills + parses (pos bit-exact f32, rot within ~1e-5 rad, f16 rates)",
         $"ShipRecord ship {s.ShipId}: a field did not survive the fill/parse"
+    );
+}
+
+// The 20-bit smallest-three quaternion (ShipRecord.Rot) must land within a few micro-radians of the
+// source for every dominant component and both signs — a remote hull is rendered straight off it.
+{
+    var rq = new Random(7);
+    float worstFine = 0f;
+    float worstCoarse = 0f;
+    for (int i = 0; i < 2000; i++)
+    {
+        float x = (float)(rq.NextDouble() * 2 - 1),
+            y = (float)(rq.NextDouble() * 2 - 1);
+        float z = (float)(rq.NextDouble() * 2 - 1),
+            w = (float)(rq.NextDouble() * 2 - 1);
+        float n = MathF.Sqrt(x * x + y * y + z * z + w * w);
+        if (n < 1e-3f)
+            continue;
+        x /= n;
+        y /= n;
+        z /= n;
+        w /= n;
+        WireQuant.UnpackQuatFine(WireQuant.PackQuatFine(x, y, z, w), out float fx, out float fy, out float fz, out float fw);
+        WireQuant.UnpackQuat(WireQuant.PackQuat(x, y, z, w), out float cx, out float cy, out float cz, out float cw);
+        // Angle of the delta rotation back·src⁻¹ via atan2(|xyz|, |w|): acos(dot) near 1 has a ~1e-3
+        // rad float floor and would measure noise, not the codec.
+        static float DeltaAngle(float ax, float ay, float az, float aw, float bx, float by, float bz, float bw)
+        {
+            // a · conj(b)
+            float dx = aw * -bx + ax * bw + ay * -bz - az * -by;
+            float dy = aw * -by - ax * -bz + ay * bw + az * -bx;
+            float dz = aw * -bz + ax * -by - ay * -bx + az * bw;
+            float dw = aw * bw - ax * -bx - ay * -by - az * -bz;
+            return 2f * MathF.Atan2(MathF.Sqrt(dx * dx + dy * dy + dz * dz), MathF.Abs(dw));
+        }
+        worstFine = MathF.Max(worstFine, DeltaAngle(fx, fy, fz, fw, x, y, z, w));
+        worstCoarse = MathF.Max(worstCoarse, DeltaAngle(cx, cy, cz, cw, x, y, z, w));
+    }
+    Check(
+        worstFine < 5e-5f,
+        $"PackQuatFine round-trip worst angle {worstFine:E2} rad (< 5e-5)",
+        $"PackQuatFine worst {worstFine:E2} rad"
+    );
+    Check(
+        worstCoarse < 4e-3f,
+        $"PackQuat (u32) round-trip worst angle {worstCoarse:E2} rad (< 4e-3, the FX-row budget)",
+        $"PackQuat worst {worstCoarse:E2} rad"
     );
 }
 
@@ -2436,13 +2480,13 @@ static class Goldens
     public static readonly Dictionary<string, string> Table = new()
     {
         ["ShipRecord.hex"] =
-            "88776655443322110001000700900118FCE02EDEAEA5E4404A80C2191400B8003D0040003A2A507855204A40E2010008E2010006AA03020104",
+            "887766554433221100010007000000C84200007AC300803B45767B0BDB5A2729C9404A80C2191400B8003D0040003A2A507855204A40E2010008E2010006AA03020104",
         ["MissileRecord.hex"] = "1807F6E5D4C3B2A103000000010C003EED84009D0FB05C00CD80459900000000000000",
         ["Input.hex"] = "02090300000000403F0000000000000000000080BF0000000000000000210807060504030201",
         ["Spawn.hex"] = "04030BB00000000000000102000000030101FFFFFFFF",
         ["Hello.hex"] = "010173016E017401006A",
         ["Welcome.sha"] = "7F14443FC9C31349AEB7EE1FAD7EC40374C31124D7580A03B1D32FC3A8F10C01",
-        ["Snapshot.sha"] = "843FFB3326D288885FA604E11BC0DAEB9CAE6D15A0B697A316FF0F42166C6E9F",
+        ["Snapshot.sha"] = "9B98F4552A954612681978B6D6BDA9B94B28B5F877F90AA700F041A383E99F6F",
         ["Defs.sha"] = "788C0B6B5DB71F2F274DA8577072ABDA338AC8AF019BC3EB7751ECEA6C8AB799",
         ["TeamState.sha"] = "25235899FBC33C1A257D7B77EAEAE952505462B4646ECB87A97839F338E447AE",
         ["MapList.sha"] = "F769D835423E744FA13F3CDC7D3D9EC75F04237A3D22D015A5C95724EB7986E1",

@@ -352,6 +352,10 @@ public partial class WorldRenderer
 
     public override void _Ready()
     {
+        foreach (var a in OS.GetCmdlineArgs())
+            if (a == "--fixed-fps" || a.StartsWith("--fixed-fps=") || a == "--write-movie" || a.StartsWith("--write-movie="))
+                _fixedFpsMode = true;
+
         _bases = new Node3D { Name = "Bases" };
         _asteroids = new Node3D { Name = "Asteroids" };
         _ships = new Node3D { Name = "Ships" };
@@ -499,6 +503,7 @@ public partial class WorldRenderer
     public void NetSetMatch(uint tick, byte phase, byte winner)
     {
         _clock.ServerTick = tick;
+        _clock.OnSnapshot(tick); // one render-clock→server-time observation per snapshot (MatchClock)
         var newPhase = (MatchPhase)phase;
         // On the transition back to the lobby (a match just ended), drop transient chaff/minefield
         // visuals so a stale hazard from the finished match doesn't linger into the next one, and wipe
@@ -746,10 +751,30 @@ public partial class WorldRenderer
     // IBoltSource — a remote ship's observed fire (ShipRenderer.UpdateShip). Forwards to BoltRenderer.
     public void SpawnBoltFor(Ship row) => _bolts.SpawnBoltFor(row);
 
+    // Movie Maker (--write-movie / --fixed-fps): Godot's _Process delta is a constant movie step, not
+    // real time. Detected once; the render timeline then advances by measured wall time instead.
+    private bool _fixedFpsMode;
+    private ulong _lastWallUsec;
+
+    private double WallDeltaSec()
+    {
+        ulong now = Time.GetTicksUsec();
+        double dt = _lastWallUsec == 0 ? 0.0 : (now - _lastWallUsec) / 1_000_000.0;
+        _lastWallUsec = now;
+        return dt;
+    }
+
     // Per-frame upkeep: bolt impacts/expiry, deferred camera resets, cosmetic spins.
     public override void _Process(double delta)
     {
         var worldT0 = PerfBuckets.Now();
+        // The render timeline every remote entity is evaluated on. WorldRenderer processes before its
+        // ship children (tree order), so this is the frame's first reader; Advance is idempotent per
+        // frame in case a later node beats it in some other tree. Movie Maker mode (--write-movie /
+        // --fixed-fps) reports a FIXED delta while the socket and the server keep running on wall time,
+        // so there the clock must advance by wall time or the server-offset estimator drifts and
+        // re-seeds every few hundred ms (freeze-and-jump in every recording).
+        _clock.Advance(_fixedFpsMode ? WallDeltaSec() : delta, Engine.GetProcessFrames());
         // Frame-spike breadcrumb: `delta` is the PREVIOUS frame's wall time, so a big value here means
         // the last frame stalled (dropped frames). The [perf] seam logs nearby attribute the cause.
         if (delta > 0.05 && _clock.ServerTick > 0)

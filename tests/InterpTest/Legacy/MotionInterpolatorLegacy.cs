@@ -1,3 +1,7 @@
+// FROZEN COPY of client/scripts/MotionInterpolator.cs as of the pre-render-clock design (git e5f45c1),
+// class renamed. It is the "baseline" row in the InterpTest table: per-entity wall-clock offset EMA,
+// integer-ms wall clock, EMA-smoothed Hermite tangents. Never edit; delete when the comparison is no
+// longer interesting.
 using System.Collections.Generic;
 using Godot;
 using StellarAllegiance.Shared;
@@ -10,23 +14,19 @@ using StellarAllegiance.Shared;
 //  - Samples live on the SERVER-TICK timeline (tick × MsPerTick), not client arrival time. The
 //    server emits on an exactly uniform cadence but packets arrive jittered; stamping by arrival
 //    makes interp segments uneven while the playback clock sweeps uniformly, so rendered speed
-//    wobbles. Tick-stamping keeps every segment uniform. The playback clock is NOT owned here:
-//    Evaluate takes the caller's estimate of server-time-now on the client-wide RENDER timeline
-//    (MatchClock.ServerNowMs — delta-accumulated, one offset estimator for every entity) and only
-//    subtracts this entity's adaptive delay. An earlier design kept a per-entity wall→server EMA
-//    fed with Time.GetTicksMsec(); the integer-ms, scheduling-jittered wall read and the per-ship
-//    ~5 s convergence were the dominant remote-ship jerk (tests/InterpTest).
+//    wobbles. Tick-stamping keeps every segment uniform; the playback clock rides a smoothed
+//    wall→server offset (filters arrival jitter, still tracks slow drift).
 //  - ADAPTIVE delay: coarse-AOI entities (beyond the server's full-rate radius, or cross-sector)
 //    arrive ~10× slower (~500 ms apart), so a fixed ~100 ms buffer can't bracket their gaps.
 //    Track each entity's smoothed inter-arrival gap and render ~1.5 gaps behind, clamped to
 //    [floor, cap]. Full-rate entities sit at the floor; coarse ones widen to span their gap.
 //  - CUBIC HERMITE between bracketing samples using the wire velocities as tangents, so a
 //    coarse entity's long segments follow the server's curved/braking path instead of a
-//    polyline with corner snaps. Tangents are the RAW wire velocities (TangentSmoothTauMs = 0
-//    by default): an EMA-smoothed tangent lags the true heading on a turn and bends every
-//    segment into a shallow S — a constant 0.15 u/frame kink at 150 u/s on a 1.5 rad/s turn in
-//    tests/InterpTest. The seam "re-bend" that smoothing once hid came from the 0.25 u wire
-//    position quantum, fixed at the source (ShipRecord.Pos is now raw f32).
+//    polyline with corner snaps. At full-rate 50 ms gaps the tangent terms are O(gap²) — it
+//    degrades to visually-identical linear interp, so fast dogfight motion is unchanged.
+//    Tangents are EMA-smoothed over ~TangentSmoothTauMs of server time (raw Vel is kept for
+//    dead-reckoning): the f16 wire velocity is coarse near zero, and unsmoothed it re-bends
+//    the curve at every segment seam on a slow ship watched up close.
 //  - VELOCITY-DECAY dead-reckoning past the newest sample, replacing hold-then-snap when a
 //    packet is late/dropped — the stutter that reads worst on slow station-keeping ships (a
 //    mining drone) next to the predicted own ship. Instead of dead-reckoning at constant wire
@@ -41,7 +41,7 @@ using StellarAllegiance.Shared;
 //    raw curve jumps. Instead of teleporting, the offset between the last rendered pose and the
 //    new curve is captured and exponentially decayed to zero, so the correction is a glide.
 //    A huge error (teleport/warp) snaps immediately.
-public sealed class MotionInterpolator
+public sealed class MotionInterpolatorLegacy
 {
     public struct Tunables
     {
@@ -49,6 +49,7 @@ public sealed class MotionInterpolator
         public double MaxDelayMs; // cap on the adaptive delay; < MaxSamples × gap
         public float GapDelayFactor; // render this many smoothed inter-arrival gaps behind
         public float GapEmaAlpha; // inter-arrival EMA responsiveness
+        public float ClockOffsetAlpha; // wall→server offset EMA (heavy jitter rejection)
 
         // Velocity-decay dead-reckoning past the newest sample (EvaluateRaw). The decay time
         // constant is τd = Clamp(GapFactor × _gapEma, MinMs, MaxMs): a coarse-cadence entity's
@@ -69,6 +70,7 @@ public sealed class MotionInterpolator
                 MaxDelayMs = 800.0,
                 GapDelayFactor = 1.5f,
                 GapEmaAlpha = 0.3f,
+                ClockOffsetAlpha = 0.05f,
                 // Velocity-decay horizon: τd = 1.5 × gap, clamped [250, 800] ms. At full/mid cadence
                 // (gap ≤ ~150 ms) τd pins to the 250 ms floor, so a rare full-rate extrapolation decays
                 // over the same short horizon the old 250 ms cap used — but smoothly, never freezing.
@@ -82,10 +84,12 @@ public sealed class MotionInterpolator
                 ExtrapDecayMaxMs = 800.0,
                 ErrorDecayRate = 10f, // ~100 ms correction glide
                 SnapDistance = 100f, // a teleport-sized error is not worth gliding across
-                // Raw tangents: smoothing lags the heading on a turn (see the header). The knob
-                // stays for experiments; an f16 velocity is a floating-point value and is FINER,
-                // not coarser, near zero — the old rationale was the position quantum, now gone.
-                TangentSmoothTauMs = 0.0,
+                // The f16 wire velocity is coarse near zero (a slow miner's tangent flicks
+                // direction sample to sample, visibly bending the curve at each segment seam
+                // up close). ~1.5 full-rate gaps of smoothing steadies the tangents; the
+                // time-constant form means a coarse-AOI entity's long gaps pass through
+                // near-raw (k → 1), keeping real curvature for the segments that need it.
+                TangentSmoothTauMs = 80.0,
             };
     }
 
@@ -103,13 +107,15 @@ public sealed class MotionInterpolator
     // Server-tick → server-time conversion: the sim integrates at a fixed dt, so a tick number
     // maps to an exact stamp on a jitter-free axis. Public so the ram-fix obstacle time-alignment
     // (ShipRenderer) converts a predicted server tick onto the SAME timeline the samples live on.
-    public const double MsPerTick = MatchClock.MsPerTick;
+    public const double MsPerTick = FlightModel.Dt * 1000.0;
     private const int MaxSamples = 16;
 
     private readonly Tunables _t;
     private readonly List<Sample> _samples = new(); // chronological by T
 
     private double _gapEma;
+    private double _clockOffset; // smoothed (wall ms − server ms)
+    private bool _haveClockOffset;
 
     // Error-correction state: offset between what we last rendered and the raw curve, decayed
     // toward zero/identity each Evaluate. _lastRenderT lets Push re-evaluate the NEW curve at the
@@ -120,7 +126,7 @@ public sealed class MotionInterpolator
     private Vector3 _lastOutPos;
     private Quaternion _lastOutRot = Quaternion.Identity;
     private bool _rendered;
-    private double _lastEvalMs; // caller's serverNowMs at the previous Evaluate (error-decay dt)
+    private double _lastEvalWallMs;
 
     // --- InterpStats (opt-in motion-fidelity instrumentation; see InterpStats.cs) ---
     // StatsId is stamped once by the consuming node (RemoteShip.ShipId) so this interpolator's
@@ -135,7 +141,7 @@ public sealed class MotionInterpolator
 
     private InterpStats.ShipRec Stats() => _statRec ??= InterpStats.Get(StatsId);
 
-    public MotionInterpolator(Tunables tunables)
+    public MotionInterpolatorLegacy(Tunables tunables)
     {
         _t = tunables;
         // Start exactly at the floor: floor = gap × factor ⇒ gap = floor / factor.
@@ -183,6 +189,7 @@ public sealed class MotionInterpolator
     public void Reset()
     {
         _samples.Clear();
+        _haveClockOffset = false;
         _gapEma = _t.FloorDelayMs / _t.GapDelayFactor;
         _posErr = Vector3.Zero;
         _rotErr = Quaternion.Identity;
@@ -194,13 +201,31 @@ public sealed class MotionInterpolator
     // Feed one authoritative sample. Returns false when rejected (stale/out-of-order — a reordered
     // or duplicate packet on an unreliable channel; the segment search assumes chronological T).
     // Pass hasVel=false for streams that carry no velocity — those samples interpolate linearly
-    // and extrapolate by finite difference. No arrival time is taken: the playback clock is the
-    // caller's (MatchClock observes the snapshot tick once for every entity in it).
-    public bool Push(uint serverTick, Vector3 pos, Quaternion rot, Vector3 vel, Vector3 angVelLocal, bool hasVel)
+    // and extrapolate by finite difference.
+    public bool Push(
+        uint serverTick,
+        Vector3 pos,
+        Quaternion rot,
+        Vector3 vel,
+        Vector3 angVelLocal,
+        bool hasVel,
+        double nowWallMs
+    )
     {
         double serverMs = serverTick * MsPerTick;
         if (_samples.Count > 0 && serverMs <= _samples[^1].T)
             return false;
+
+        // Smoothed wall→server offset so Evaluate can map wall time onto the server timeline
+        // without inheriting this packet's arrival jitter. Seed from the first sample.
+        double offset = nowWallMs - serverMs;
+        if (!_haveClockOffset)
+        {
+            _clockOffset = offset;
+            _haveClockOffset = true;
+        }
+        else
+            _clockOffset += (offset - _clockOffset) * _t.ClockOffsetAlpha;
 
         // Corrupt-sample guards: a non-finite position keeps the last good one; a non-finite
         // velocity demotes the sample to linear (no tangent, no dead-reckon from it).
@@ -213,10 +238,13 @@ public sealed class MotionInterpolator
             hasVel = false;
         }
 
-        // Hermite tangents are the RAW wire velocities by default (TangentSmoothTauMs = 0 — see the
-        // header: a lagged tangent bends every segment on a turn). The optional EMA below is kept as an
-        // experiment knob; its blend factor comes from the true server-time gap (k = 1 − e^(−gap/τ)).
-        // Raw Vel is always kept alongside for dead-reckoning and LatestVelocity.
+        // Hermite tangents ride an EMA of the wire velocity, not the raw f16 value: near zero
+        // speed the half-float is coarse, so a slow ship's raw tangent flicks direction every
+        // sample and visibly re-bends the curve at each segment seam when watched up close.
+        // The blend factor comes from the true server-time gap (k = 1 − e^(−gap/τ)), so a
+        // coarse-AOI entity's ~500 ms segments take their tangents near-raw — smoothing there
+        // would flatten real curvature. Raw Vel is kept alongside for dead-reckoning and
+        // LatestVelocity, which want the server's actual integrated state, not a lagged one.
         Vector3 tanVel = vel;
         if (hasVel && _t.TangentSmoothTauMs > 0.0 && _samples.Count > 0 && _samples[^1].HasVel)
         {
@@ -282,15 +310,13 @@ public sealed class MotionInterpolator
     }
 
     // Compute the smoothed pose for this frame. Call once per frame; only valid when HasSamples.
-    // serverNowMs = the caller's estimate of the server's current time on the render timeline
-    // (MatchClock.ServerNowMs); this entity renders its adaptive delay behind it.
-    public void Evaluate(double serverNowMs, out Vector3 pos, out Quaternion rot)
+    public void Evaluate(double nowWallMs, out Vector3 pos, out Quaternion rot)
     {
         // Adaptive: render ~GapDelayFactor smoothed gaps behind, clamped. The floor keeps nearby
         // full-rate entities crisp; the widened delay lets a coarse entity's two bracketing
         // samples straddle renderT so the curve bridges its ~500 ms gap instead of stalling.
         double delay = System.Math.Clamp(_gapEma * _t.GapDelayFactor, _t.FloorDelayMs, _t.MaxDelayMs);
-        double renderT = serverNowMs - delay;
+        double renderT = (nowWallMs - _clockOffset) - delay;
 
         EvaluateRaw(renderT, out var rawPos, out var rawRot);
 
@@ -302,7 +328,7 @@ public sealed class MotionInterpolator
         // full-rate ship keeps the snappy ErrorDecayRate glide and no ship glides longer than 300 ms.
         // Straight-line motion (the common cruise) lands with a near-zero offset regardless, so this
         // only softens the corrections that actually hurt — the post-multi-drop landings on movers.
-        float dt = _rendered ? (float)((serverNowMs - _lastEvalMs) / 1000.0) : 0f;
+        float dt = _rendered ? (float)((nowWallMs - _lastEvalWallMs) / 1000.0) : 0f;
         if (dt > 0f)
         {
             double glideMs = System.Math.Clamp(0.3 * _gapEma, 1000.0 / _t.ErrorDecayRate, 300.0);
@@ -321,7 +347,7 @@ public sealed class MotionInterpolator
         _lastRenderT = renderT;
         _lastOutPos = pos;
         _lastOutRot = rot;
-        _lastEvalMs = serverNowMs;
+        _lastEvalWallMs = nowWallMs;
         _rendered = true;
     }
 

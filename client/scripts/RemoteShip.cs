@@ -7,9 +7,11 @@ using StellarAllegiance.Shared;
 // adaptive delay via the shared MotionInterpolator: Hermite interpolation between
 // samples on the wire velocities, bounded velocity dead-reckoning past the newest
 // sample, and error-blend (no snap) when a late authoritative sample lands. All
-// timeline/smoothing mechanics (tick-stamped samples, adaptive gap-sized delay,
-// clock-offset EMA, corrupt-sample guards) live in MotionInterpolator — this node
-// is just the ship-flavored consumer (flags, HUD state, engine glow, mining roll).
+// smoothing mechanics (tick-stamped samples, adaptive gap-sized delay, corrupt-
+// sample guards) live in MotionInterpolator; the playback CLOCK is the client-wide
+// MatchClock render timeline (ServerNowMs — delta-accumulated, never a raw wall
+// read: see MatchClock). This node is just the ship-flavored consumer (flags, HUD
+// state, engine glow, mining roll).
 public partial class RemoteShip : Node3D
 {
     private readonly MotionInterpolator _interp = new(MotionInterpolator.Tunables.Default);
@@ -80,6 +82,7 @@ public partial class RemoteShip : Node3D
     public float MaxHealth => _defs != null && _defs.TryGetShipDef((byte)Class, out var d) ? d.MaxHull : 0f;
     public float MaxShield => _defs != null && _defs.TryGetShipDef((byte)Class, out var d) ? d.ShieldCapacity : 0f;
     private DefRegistry _defs = null!;
+    private MatchClock _clock = null!; // render timeline (ServerNowMs) + the snapshot tick samples are stamped with
 
     // Dynamic engine glow. A remote ship has no input to read, so its throttle is
     // approximated from forward speed as a fraction of the class max — fast forward
@@ -124,8 +127,9 @@ public partial class RemoteShip : Node3D
     public void SetPilotName(string name) =>
         Nameplate.SetText(ref _nameplate, ref _pilotName, name, Team, this, visibleWhenSet: true);
 
-    public void Initialize(Ship row, DefRegistry defs, uint serverTick)
+    public void Initialize(Ship row, DefRegistry defs, MatchClock clock)
     {
+        _clock = clock;
         ShipId = row.ShipId;
         Team = row.Team;
         Class = row.Class;
@@ -142,7 +146,7 @@ public partial class RemoteShip : Node3D
         }
         _burnCooldown = (float)GD.RandRange(1.0, 3.0); // stagger drones' first burst roll
         _interp.StatsId = row.ShipId; // fidelity-instrumentation bucket key (no-op unless InterpStats.Enabled)
-        Push(row, serverTick);
+        Push(row, clock.ServerTick);
     }
 
     public void OnAuthoritative(Ship row, uint serverTick) => Push(row, serverTick);
@@ -167,8 +171,7 @@ public partial class RemoteShip : Node3D
             new Quaternion(row.RotX, row.RotY, row.RotZ, row.RotW),
             new Vector3(row.VelX, row.VelY, row.VelZ),
             new Vector3(row.AngVelX, row.AngVelY, row.AngVelZ),
-            hasVel: true,
-            Time.GetTicksMsec()
+            hasVel: true
         );
         if (!accepted)
             return; // stale/out-of-order frame — per-tick state below would regress too
@@ -185,7 +188,7 @@ public partial class RemoteShip : Node3D
         {
             // First sample: render at it until a pair exists to interpolate, and seed the
             // velocity so it eases from the real value rather than ramping from zero.
-            _interp.Evaluate(Time.GetTicksMsec(), out var p, out var q);
+            _interp.Evaluate(_clock.ServerNowMs, out var p, out var q);
             Position = p;
             Quaternion = q;
             Velocity = _velTarget;
@@ -224,9 +227,11 @@ public partial class RemoteShip : Node3D
 
         // The shared interpolator owns the whole pose pipeline: adaptive delay, Hermite
         // interpolation on the wire velocities, bounded dead-reckoning, error-blend correction.
-        if (_interp.HasSamples)
+        // Evaluated on the client-wide render timeline (MatchClock.ServerNowMs), the same
+        // delta-accumulated clock the own ship and the bolts advance on.
+        if (_interp.HasSamples && _clock.HasServerTime)
         {
-            _interp.Evaluate(Time.GetTicksMsec(), out var p, out var q);
+            _interp.Evaluate(_clock.ServerNowMs, out var p, out var q);
             Position = p;
             Quaternion = q;
         }
