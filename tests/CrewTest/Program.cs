@@ -4,8 +4,9 @@
 // Boots the real Simulation from the live content bundle and drives the crew seams a MsgHangarIntent
 // / MsgCrewSeat feeds — a docked captain advertises a turret-capable hull, teammates claim its
 // crew-served stations, and they RIDE ALONG when it launches (no ship of their own; the hub anchors
-// their AOI on the captain). Aim/fire is the next slice; this suite owns the seat state, the turret
-// gun resolution, the release seams, and the ride-along anchoring.
+// their AOI on the captain) — and then AIM AND FIRE those stations (MsgTurretInput held input,
+// MsgTurrets stream). This suite owns the seat state, the turret gun resolution, the release seams,
+// the ride-along anchoring, and the slice-2 aim/fire rule.
 //
 // Content facts this suite leans on (server/Content/core — Iron Coalition roster):
 //   Bomber (cls 2, tech `bomber`): FIVE weapon hardpoints + TWO crew-served turret stations,
@@ -35,6 +36,13 @@
 //   12. Frame shapes: Frames.Crew rows/seats, and the crewed ship's MsgShipLoadout row.
 //   13. Hub level (TestKit): a riding gunner gets MsgCrew naming itself with a live ShipId, NEVER a
 //       MsgYouAre, and its anchor-scoped frames follow the captain's ship into another sector.
+//   14. The shared TurretAim rule itself (rest pose, arc clamp, gimbal round-trip, spread barrel).
+//   15. Aim/fire in the sim: held input is dropped while the captain is docked, a below-horizon aim
+//       is stored clamped, a held trigger fires on the station's OWN cadence (never touching the
+//       pilot's LastFireTick) and credits the GUNNER, an unmanned station never fires, vacating
+//       rests the station, Frames.Turrets carries only manned seats.
+//   16. Hub level: MsgTurrets reaches a same-sector watcher and the gunner itself, never a client
+//       anchored in another sector.
 
 using System.Linq;
 using SimServer.Content;
@@ -776,6 +784,434 @@ Simulation.ShipSim Launch(Simulation sim, int cid, byte team, byte cls)
         mineAfter.Count > mineBefore.Count && SectorOf(mineAfter[^1]) == EmptySector,
         "the gunner's anchor follows the captain's ship into another sector",
         $"the gunner's anchor stayed behind (sector {(mineAfter.Count > 0 ? SectorOf(mineAfter[^1]) : uint.MaxValue)})"
+    );
+
+    cts.Cancel();
+}
+
+// ---- 14. The shared TurretAim rule ---------------------------------------------------------------
+{
+    var up = new Vec3(0f, 1f, 0f);
+    var back = new Vec3(0f, 0f, -1f);
+    bool Near(Vec3 a, Vec3 b, float eps = 1e-4f) =>
+        MathF.Abs(a.X - b.X) < eps && MathF.Abs(a.Y - b.Y) < eps && MathF.Abs(a.Z - b.Z) < eps;
+
+    var restUp = TurretAim.Rest(up);
+    Check(
+        Near(restUp, Vec3.Normalize(new Vec3(0f, 1f, 1f))),
+        "TurretAim.Rest of a dorsal (+Y) station looks forward-up, 45 degrees off the horizon",
+        $"Rest(+Y) = {restUp.X},{restUp.Y},{restUp.Z}"
+    );
+    var restBack = TurretAim.Rest(back);
+    Check(
+        Near(restBack, back),
+        "TurretAim.Rest of a TAIL station (zenith parallel to +Z) looks straight down its zenith",
+        $"Rest(-Z) = {restBack.X},{restBack.Y},{restBack.Z}"
+    );
+    var inArc = Vec3.Normalize(new Vec3(0f, 1f, 1f));
+    Check(
+        Near(TurretAim.Clamp(up, inArc), inArc) && TurretAim.InArc(up, inArc),
+        "TurretAim.Clamp leaves an aim already inside the arc untouched",
+        "an in-arc aim was moved by the clamp"
+    );
+    var intoHull = TurretAim.Clamp(up, new Vec3(0f, -1f, 0f));
+    Check(
+        Near(intoHull, restUp),
+        "an aim straight into the hull has no azimuth to keep, so it lands on the rest pose",
+        $"Clamp(+Y, -Y) = {intoHull.X},{intoHull.Y},{intoHull.Z}"
+    );
+    var pinned = TurretAim.Clamp(up, Vec3.Normalize(new Vec3(1f, -1f, 0f)));
+    Check(
+        Near(pinned, new Vec3(1f, 0f, 0f)),
+        "an aim below the horizon is pinned TO the horizon, keeping the azimuth the gunner pushed",
+        $"Clamp(+Y, (1,-1,0)) = {pinned.X},{pinned.Y},{pinned.Z}"
+    );
+    Check(
+        Near(TurretAim.FromGimbal(up, 0f, 0f), new Vec3(0f, 0f, 1f)),
+        "FromGimbal(+Y, azimuth 0, elevation 0) is the ship's forward on the station's horizon",
+        "FromGimbal's azimuth-0 horizon direction is not +Z"
+    );
+    Check(
+        Near(TurretAim.FromGimbal(up, 0f, TurretAim.ArcHalfAngleRad), up),
+        "FromGimbal at full elevation points straight up the zenith",
+        "FromGimbal at the arc edge is not the zenith"
+    );
+    var (az, el) = TurretAim.ToGimbal(up, TurretAim.FromGimbal(up, 0.7f, 0.4f));
+    Check(
+        MathF.Abs(az - 0.7f) < 1e-4f && MathF.Abs(el - 0.4f) < 1e-4f,
+        "ToGimbal round-trips FromGimbal (the gunner's controller can seed itself from an aim)",
+        $"ToGimbal(FromGimbal(0.7, 0.4)) = {az}, {el}"
+    );
+    Check(
+        TurretAim.SpreadBarrel(1) == 0x81,
+        "TurretAim.SpreadBarrel tags a station's spread seed with the 0x80 turret bit",
+        $"SpreadBarrel(1) = 0x{TurretAim.SpreadBarrel(1):X2}, expected 0x81"
+    );
+}
+
+// ---- 15. Aim + fire in the sim -------------------------------------------------------------------
+
+// Park a ship stock-still in the empty sector, facing +Z, so ship-local == world for its turrets.
+void Park(Simulation.ShipSim s, Vec3 pos)
+{
+    s.SectorId = EmptySector;
+    s.State.Pos = pos;
+    s.State.Vel = default;
+    s.State.Rot = Quat.Identity;
+    s.State.AngVel = default;
+}
+
+// One MsgTurretInput from a gunner: the aim is SHIP-LOCAL and the server holds it until the next.
+void TurretIn(Simulation sim, int gunner, Vec3 aim, bool firing) =>
+    sim.EnqueueTurretInput(gunner, sim.Tick, aim, firing ? TurretAim.FlagFiring : (byte)0);
+
+// Captain 1 advertises a bomber, gunner 2 takes station slot 0, the captain launches.
+(Simulation sim, Simulation.ShipSim ship) CrewedLaunch(ulong seed)
+{
+    var sim = BootSim(seed);
+    Intent(sim, 1, 0, Bomber);
+    Seat(sim, 2, 0, 1, 1, 0);
+    var ship = Launch(sim, 1, 0, Bomber);
+    Park(ship, new Vec3(0f, 0f, 0f));
+    return (sim, ship);
+}
+
+{
+    // A turret input sent while the captain is still in the hangar is dropped on the floor: the
+    // gunner has to re-send once the ship is airborne, so a stale pre-launch trigger never fires.
+    var sim = BootSim(15);
+    Intent(sim, 1, 0, Bomber);
+    Seat(sim, 2, 0, 1, 1, 0);
+    var zenith = sim.TurretZenithOf(Bomber, 0);
+    TurretIn(sim, 2, zenith, firing: true);
+    sim.Step(); // drained while the captain is docked -> nothing held
+    var ship = Launch(sim, 1, 0, Bomber);
+    for (int i = 0; i < 10; i++)
+    {
+        Park(ship, new Vec3(0f, 0f, 0f));
+        sim.Step();
+    }
+    Check(
+        ship.LastTurretFireTick == 0 && ship.TurretLastFire![0] == 0,
+        "a turret input sent before the captain launched is dropped (the station never fires)",
+        $"a pre-launch input still fired the station (LastTurretFireTick={ship.LastTurretFireTick})"
+    );
+    Check(
+        ship.TurretAim is { Length: 2 } && ship.TurretLastFire is { Length: 2 },
+        "a launched bomber carries one aim + fire stamp per authored station",
+        "the launched bomber has no per-station turret state"
+    );
+
+    // Re-sent after launch, the SAME input now takes hold.
+    TurretIn(sim, 2, zenith, firing: true);
+    Park(ship, new Vec3(0f, 0f, 0f));
+    sim.Step();
+    Check(
+        ship.LastTurretFireTick == sim.Tick && ship.TurretLastFire![0] == sim.Tick,
+        "re-sent after launch, the held input fires the station on the very next step",
+        $"the post-launch input did not fire (LastTurretFireTick={ship.LastTurretFireTick}, tick={sim.Tick})"
+    );
+    Check(
+        ship.LastFireTick == 0,
+        "a turret shot NEVER stamps the pilot's LastFireTick (the client must not rebuild a hull bolt)",
+        $"turret fire leaked into LastFireTick ({ship.LastFireTick})"
+    );
+}
+
+{
+    // An aim below the station's horizon is stored CLAMPED — the gunner keeps the azimuth they
+    // pushed toward, the elevation is pinned at the horizon, and nothing ever fires into the hull.
+    var (sim, ship) = CrewedLaunch(16);
+    var zenith = Vec3.Normalize(sim.TurretZenithOf(Bomber, 0));
+    var horizon = TurretAim.Frame(zenith).Z; // azimuth 0 on the station's horizon
+    var below = Vec3.Normalize(horizon - zenith); // 45 degrees UNDER the horizon
+    TurretIn(sim, 2, below, firing: false);
+    Park(ship, new Vec3(0f, 0f, 0f));
+    sim.Step();
+    var stored = ship.TurretAim![0];
+    Check(
+        TurretAim.InArc(zenith, stored) && MathF.Abs(Vec3.Dot(zenith, stored)) < 1e-3f,
+        "a held aim below the horizon is stored clamped to the horizon, inside the arc",
+        $"the stored aim is outside the arc (dot={Vec3.Dot(zenith, stored)})"
+    );
+    Check(
+        sim.Events.TurretUpdates.Contains(ship),
+        "an aim that moved puts the ship in this step's TurretUpdates",
+        "the moved aim raised no turret update"
+    );
+    Check(
+        ship.LastTurretFireTick == 0,
+        "an aim-only input (no Firing flag) fires nothing",
+        "an aim-only input fired the station"
+    );
+}
+
+{
+    // The whole fire path: cadence, credit, and the unmanned station that stays silent.
+    var (sim, ship) = CrewedLaunch(17);
+    uint interval = sim.Content.Weapons.First(w => w.WeaponId == GatGun1).FireIntervalTicks;
+    var aim = Vec3.Normalize(sim.TurretZenithOf(Bomber, 0));
+    var muzzle = sim.TurretOffsetOf(Bomber, 0);
+
+    // An enemy 40u along the station's world aim, in the same (empty) sector.
+    sim.EnqueueJoin(3, 1, Scout);
+    sim.Step();
+    var enemy = sim.Ships.First(x => x.OwnerClientId == 3 && !x.IsPod);
+    var enemyPos = muzzle + aim * 40f;
+
+    // The gunner alone holds the trigger here — the captain's guns stay cold so the kill-credit
+    // check below can only be reading the TURRET's bolt.
+    TurretIn(sim, 2, aim, firing: true);
+    var stamps = new List<uint>();
+    for (int i = 0; i < 60; i++)
+    {
+        Park(ship, new Vec3(0f, 0f, 0f));
+        Park(enemy, enemyPos);
+        sim.Step();
+        if (stamps.Count == 0 || stamps[^1] != ship.TurretLastFire![0])
+            stamps.Add(ship.TurretLastFire![0]);
+    }
+    bool cadenceOk = stamps.Count > 2;
+    for (int i = 1; i < stamps.Count && cadenceOk; i++)
+        cadenceOk = stamps[i] - stamps[i - 1] >= interval;
+    Check(
+        cadenceOk,
+        $"a held trigger fires the station on its OWN cadence ({interval} ticks between stamps)",
+        $"the station's fire stamps broke cadence: {string.Join(",", stamps)}"
+    );
+    Check(
+        enemy.LastHitByClient == 2,
+        "a turret bolt is credited to the GUNNER who fired it, not to the captain",
+        $"the turret bolt was credited to client {enemy.LastHitByClient}, expected the gunner (2)"
+    );
+    Check(
+        ship.LastFireTick == 0,
+        "the captain's own LastFireTick is still untouched after a burst of turret fire",
+        $"turret fire leaked into the pilot's stamp ({ship.LastFireTick})"
+    );
+
+    // Now the captain holds their OWN trigger: their guns stamp LastFireTick, and the bomber's
+    // second (UNMANNED) station still never fires — a station answers only to its gunner.
+    for (int i = 0; i < 20; i++)
+    {
+        Park(ship, new Vec3(0f, 0f, 0f));
+        ship.HeldInput = new ShipInputState { Firing = true };
+        sim.Step();
+    }
+    ship.HeldInput = default;
+    Check(
+        ship.TurretLastFire![1] == 0,
+        "the bomber's UNMANNED second station never fires, even while the captain holds fire",
+        $"an unmanned station fired (stamp {ship.TurretLastFire![1]})"
+    );
+    Check(
+        ship.LastFireTick != 0 && ship.LastTurretFireTick != 0,
+        "premise: the pilot's guns and the turret keep SEPARATE fire stamps, both now set",
+        "the pilot and turret fire stamps are not independent"
+    );
+
+    // Frame shape: only the MANNED station is on the wire, under its hardpoint index.
+    var rows = Frames.Turrets(sim, ship);
+    Check(
+        rows.Length == 1
+            && rows[0].ShipId == ship.ShipId
+            && rows[0].SeatIndex == sim.TurretStationIndex(Bomber, 0)
+            && rows[0].LastFireTick == ship.TurretLastFire![0],
+        "Frames.Turrets streams the MANNED station only, under its hardpoint seat index",
+        $"Frames.Turrets returned {rows.Length} row(s) for a ship with one manned station"
+    );
+
+    // Giving the seat up swings the station back to rest and tells the watchers.
+    Seat(sim, 2, 0, 0, 1, 0);
+    Check(
+        Vec3.Dot(ship.TurretAim![0], TurretAim.Rest(sim.TurretZenithOf(Bomber, 0))) > 0.9999f,
+        "vacating a station puts its aim back at the rest pose",
+        "a vacated station kept the gunner's last aim"
+    );
+    Check(
+        sim.Events.TurretUpdates.Contains(ship),
+        "...and raises a turret update so the watchers see it drop back",
+        "the vacate raised no turret update"
+    );
+    Check(
+        Frames.Turrets(sim, ship).Length == 0,
+        "an unmanned ship streams no turret records at all",
+        "an unmanned station is still on the wire"
+    );
+
+    uint after = ship.TurretLastFire![0];
+    for (int i = 0; i < 20; i++)
+    {
+        Park(ship, new Vec3(0f, 0f, 0f));
+        sim.Step();
+    }
+    Check(
+        ship.TurretLastFire![0] == after,
+        "the vacated gunner's held input is dropped with the seat (the station stops firing)",
+        "a vacated station kept firing on the old held input"
+    );
+}
+
+{
+    // A hull with no stations is never part of the stream.
+    var sim = BootSim(18);
+    var scout = Launch(sim, 1, 0, Scout);
+    bool any = false;
+    for (int i = 0; i < 10; i++)
+    {
+        Park(scout, new Vec3(0f, 0f, 0f));
+        scout.HeldInput = new ShipInputState { Firing = true };
+        sim.Step();
+        any |= sim.Events.TurretUpdates.Count > 0;
+    }
+    scout.HeldInput = default;
+    Check(
+        !any && scout.TurretAim is null,
+        "a hull with no turret stations never allocates turret state or raises a turret update",
+        "a station-less hull produced turret updates"
+    );
+}
+
+// ---- 16. Hub level: the MsgTurrets stream --------------------------------------------------------
+{
+    var content = ContentLoader.Load(stockPath, worldPath);
+    content.Start.BaseTechs.Add("supremacy-1");
+    content.Start.BaseTechs.Add("bomber");
+    var world = new World(16, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
+    var sim = new Simulation(world, content)
+    {
+        PigsEnabled = false,
+        MinersEnabled = false,
+        FogEnabled = false,
+    };
+    var hub = new ClientHub(
+        sim,
+        new SimServer.Backend.OpenAuthenticator(),
+        new SimServer.Backend.InMemoryPlayerDirectory(),
+        new SimServer.Backend.ReadyUpMatchmaker(autoStart: false),
+        "Test Arena",
+        Array.Empty<MapCatalogEntry>()
+    );
+    sim.ShouldStartMatch = hub.ShouldStartMatch;
+    sim.OnReturnToLobby = hub.OnReturnToLobby;
+    sim.OnMatchStart = hub.OnMatchStart;
+
+    var capT = new FakeHubTransport();
+    var gunT = new FakeHubTransport();
+    var farT = new FakeHubTransport(); // a teammate who will fly off to another sector
+    var cts = new System.Threading.CancellationTokenSource();
+    foreach (var t in new[] { capT, gunT, farT })
+    {
+        _ = hub.HandleConnection(t, cts.Token);
+        System.Threading.Thread.Sleep(50);
+    }
+
+    void Pump(int n)
+    {
+        for (int i = 0; i < n; i++)
+        {
+            sim.Step();
+            hub.AfterStep();
+        }
+        System.Threading.Thread.Sleep(60);
+    }
+    void Feed(FakeHubTransport t, byte[] frame)
+    {
+        t.Feed(frame);
+        System.Threading.Thread.Sleep(50);
+    }
+
+    Feed(capT, HubFrames.Hello("vex"));
+    Feed(gunT, HubFrames.Hello("nova"));
+    Feed(farT, HubFrames.Hello("rook"));
+    foreach (var t in new[] { capT, gunT, farT })
+    {
+        Feed(t, HubFrames.SetTeam(0));
+        Feed(t, HubFrames.SetReady(true));
+    }
+    Pump(20);
+    foreach (var ts in sim.World.TeamStates.Values)
+        ts.Credits += 100000;
+
+    int IdOf(FakeHubTransport t) => WelcomeMessage.TryParse(t.SentOf(Protocol.MsgWelcome)[0], out var w) ? w.ClientId : -1;
+    int capId = IdOf(capT);
+    int gunId = IdOf(gunT);
+    int farId = IdOf(farT);
+
+    Feed(capT, HubFrames.HangarIntent(Bomber));
+    Pump(10);
+    Feed(gunT, HubFrames.CrewSeat(1, capId, 0));
+    Pump(10);
+    Feed(capT, HubFrames.Spawn(Bomber));
+    Feed(farT, HubFrames.Spawn(Scout));
+    Pump(20);
+
+    var captainShip = sim.Ships.FirstOrDefault(s => s.OwnerClientId == capId && !s.IsPod);
+    var farShip = sim.Ships.FirstOrDefault(s => s.OwnerClientId == farId && !s.IsPod);
+    Check(
+        captainShip is { Crew: not null } && farShip is not null && gunId >= 0,
+        "premise: the captain launched a crewed bomber and the third pilot launched its own hull",
+        "the hub setup for the turret stream failed"
+    );
+    // The third pilot flies off to ANOTHER sector, so the AOI must never hand it these turrets.
+    // Its frames are counted from AFTER the move (while it was still at the shared base it was a
+    // legitimate watcher, and the launch's rest-pose frame reached it).
+    farShip!.SectorId = EmptySector;
+    farShip.State.Pos = new Vec3(0f, 0f, 0f);
+    Pump(5);
+    int farBefore = farT.SentOf(Protocol.MsgTurrets).Count;
+
+    var aim = Vec3.Normalize(sim.TurretZenithOf(Bomber, 0));
+    Feed(gunT, HubFrames.TurretInput(sim.Tick, aim, TurretAim.FlagFiring));
+    for (int i = 0; i < 6; i++)
+    {
+        farShip.SectorId = EmptySector;
+        Pump(10);
+    }
+
+    TurretRecord? SeatRow(FakeHubTransport t, int nth)
+    {
+        var frames = t.SentOf(Protocol.MsgTurrets);
+        if (frames.Count < nth)
+            return null;
+        if (!TurretsMessage.TryParse(frames[nth - 1], out var m))
+            return null;
+        foreach (var r in m.Turrets)
+            if (r.ShipId == captainShip!.ShipId && r.SeatIndex == sim.TurretStationIndex(Bomber, 0))
+                return r;
+        return null;
+    }
+
+    var capFrames = capT.SentOf(Protocol.MsgTurrets);
+    Check(
+        capFrames.Count > 1 && SeatRow(capT, 1) is not null,
+        "a same-sector client receives the crewed ship's MsgTurrets records for the manned seat",
+        $"the captain's client saw {capFrames.Count} MsgTurrets frame(s) with no matching seat row"
+    );
+    var first = SeatRow(capT, 1);
+    var lastRow = SeatRow(capT, capFrames.Count);
+    Check(
+        first is { } f && lastRow is { } l && l.LastFireTick > f.LastFireTick,
+        "the streamed seat's LastFireTick advances while the gunner holds the trigger",
+        "the streamed seat's fire stamp never advanced"
+    );
+    Check(
+        lastRow is { } la
+            && MathF.Abs(la.AimX - aim.X) < 1e-3f
+            && MathF.Abs(la.AimY - aim.Y) < 1e-3f
+            && MathF.Abs(la.AimZ - aim.Z) < 1e-3f,
+        "the streamed aim is the gunner's ship-local direction, as the server clamped it",
+        "the streamed aim is not the gunner's aim"
+    );
+    Check(
+        gunT.SentOf(Protocol.MsgTurrets).Count > 0,
+        "the riding gunner receives its own ride's turret frames (it ignores its own seat)",
+        "the riding gunner got no turret frames at all"
+    );
+    Check(
+        farT.SentOf(Protocol.MsgTurrets).Count == farBefore,
+        "a client anchored in another sector receives no turret frames",
+        $"a far-away client got {farT.SentOf(Protocol.MsgTurrets).Count - farBefore} turret frame(s) after warping out"
     );
 
     cts.Cancel();

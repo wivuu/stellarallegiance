@@ -553,7 +553,9 @@ public sealed partial class Simulation
                     def.RadarSignature,
                     s.SigBias,
                     tick,
-                    s.LastFireTick,
+                    // A crew-served turret firing lights the ship up on radar exactly as the
+                    // pilot's own guns do (v42) — whichever stamp is newer wins.
+                    Math.Max(s.LastFireTick, s.LastTurretFireTick),
                     s.LastMissileTick,
                     s.State.AbPower,
                     ShieldsEnabled && ShieldCapacityFor(s) > 0f,

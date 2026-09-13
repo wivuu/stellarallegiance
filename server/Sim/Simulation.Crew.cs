@@ -7,7 +7,9 @@ namespace SimServer.Sim;
 // A docked captain advertises the hull they intend to launch (MsgHangarIntent); teammates with no
 // ship claim one of its turret stations (MsgCrewSeat) and RIDE ALONG when it launches — the gunner
 // keeps no ship of their own, the hub anchors their AOI on the captain's ship, and the whole roster
-// streams per team as MsgCrew. Aim/fire is the NEXT slice; this partial owns the seat state only.
+// streams per team as MsgCrew. Once airborne a gunner AIMS AND FIRES their station: MsgTurretInput
+// is HELD per gunner here (DrainTurretInputs), Simulation.Firing.TryFireTurrets clamps it into the
+// station's arc and fires on the station's own cadence, and the result streams as MsgTurrets.
 //
 // The five rules that shape everything here:
 //   - Boarding is DOCKED-ONLY. A crew record's Ship is null while the captain is in the hangar and
@@ -50,8 +52,11 @@ public sealed partial class Simulation
     }
 
     // One authored turret station: where it sits on the hull (the wire's seat index), what the mount
-    // accepts, and the authored gun every reject falls back to.
-    private readonly record struct TurretStation(byte HpIndex, WeaponMountKind Mount, uint WeaponId);
+    // accepts, the authored gun every reject falls back to, and its GEOMETRY — Off is the ship-local
+    // muzzle offset a turret bolt leaves from, Zenith the station's outward mount normal (the
+    // HardpointDef.Dir the geometry merge already flipped for a turret node), which is the axis the
+    // shared TurretAim arc is measured around.
+    private readonly record struct TurretStation(byte HpIndex, WeaponMountKind Mount, uint WeaponId, Vec3 Off, Vec3 Zenith);
 
     // Per-class turret stations in hardpoint declaration order — the SAME order ClassTurretGuns /
     // AuthoredTurretIds / ShipSim.TurretWeaponIds / CrewShip.Seat*Ids use. Assigned in the ctor
@@ -70,7 +75,15 @@ public sealed partial class Simulation
             List<TurretStation>? rows = null;
             foreach (var h in d.Hardpoints)
                 if (h.Kind == HardpointKind.Turret && h.Mount == WeaponMountKind.Gun)
-                    (rows ??= new()).Add(new TurretStation(h.Index, h.Mount, h.WeaponId));
+                    (rows ??= new()).Add(
+                        new TurretStation(
+                            h.Index,
+                            h.Mount,
+                            h.WeaponId,
+                            new Vec3(h.OffX, h.OffY, h.OffZ),
+                            new Vec3(h.DirX, h.DirY, h.DirZ)
+                        )
+                    );
             if (rows is not null)
                 table[d.ClassId] = rows.ToArray();
         }
@@ -100,6 +113,23 @@ public sealed partial class Simulation
         return slot >= 0 && slot < st.Length ? st[slot].HpIndex : (byte)0;
     }
 
+    // A station's ZENITH (ship-local outward mount normal) — the axis the shared TurretAim arc is
+    // measured around, and the rest pose's seed. Exposed so a test (and any future aim consumer)
+    // can ask the same question the fire path does; a slot out of range answers +Y.
+    public Vec3 TurretZenithOf(byte cls, int slot)
+    {
+        var st = StationsOf(cls);
+        return slot >= 0 && slot < st.Length ? st[slot].Zenith : new Vec3(0f, 1f, 0f);
+    }
+
+    // A station's ship-local MUZZLE OFFSET — where its bolts leave the hull. Same contract as
+    // TurretZenithOf; a slot out of range answers the hull origin.
+    public Vec3 TurretOffsetOf(byte cls, int slot)
+    {
+        var st = StationsOf(cls);
+        return slot >= 0 && slot < st.Length ? st[slot].Off : default;
+    }
+
     // ---- crew state -------------------------------------------------------------------------
 
     // Captain client id -> their crew record. A client is a captain XOR a gunner, never both.
@@ -115,6 +145,18 @@ public sealed partial class Simulation
     private readonly Queue<(int clientId, byte team, byte mode, int captainId, byte seatIndex)> _seatQueue = new();
     private readonly Queue<int> _crewClearQueue = new();
 
+    // ---- turret HELD input (v42 crews slice 2) ----------------------------------------------
+    //
+    // A gunner's aim/fire is HELD, exactly like a pilot's ShipInputState: the latest MsgTurretInput
+    // per gunner stays in force until the next one arrives (or the seat is given up), and the server
+    // fires on its OWN cadence while Firing is held — the client never edge-detects a shot. Keyed by
+    // GUNNER client id, not by seat, so a gunner who moves stations carries nothing stale with them.
+    // Sim-thread state: written only by DrainTurretInputs, read only by TryFireTurrets.
+    private readonly Dictionary<int, (uint Tick, Vec3 Aim, bool Firing)> _turretHeld = new();
+
+    // Socket-thread intake for the above, drained under _qLock at the end of DrainCrewQueues.
+    private readonly Queue<(int clientId, uint tick, Vec3 aim, byte flags)> _turretInputQueue = new();
+
     // A docked captain advertises (or, with cls 0xFF, retracts) the hull teammates may crew. `picks`
     // is the FULL per-station pick list keyed by the station's hardpoint index — never a delta.
     public void EnqueueHangarIntent(int clientId, byte team, byte cls, (byte hpIndex, uint weaponId)[]? picks)
@@ -128,6 +170,14 @@ public sealed partial class Simulation
     {
         lock (_qLock)
             _seatQueue.Enqueue((clientId, team, mode, captainId, seatIndex));
+    }
+
+    // A riding gunner's turret aim + fire flag (TurretAim.FlagFiring). The aim is SHIP-LOCAL and
+    // untrusted — it is clamped into the station's arc on the sim thread, never here.
+    public void EnqueueTurretInput(int clientId, uint tick, Vec3 aim, byte flags)
+    {
+        lock (_qLock)
+            _turretInputQueue.Enqueue((clientId, tick, aim, flags));
     }
 
     // "This client has no crew involvement any more" — the hub queues it on a team change.
@@ -336,6 +386,26 @@ public sealed partial class Simulation
             _seatOf[cid] = crew;
             Events.CrewChanged = true;
         }
+
+        // Turret inputs LAST: a claim made this tick is already in _seatOf, so the gunner's first
+        // aim lands on the seat they just took rather than being dropped a tick early.
+        DrainTurretInputs();
+    }
+
+    // Fold this tick's turret inputs into the held state — latest per gunner wins (the queue is
+    // drained in order, so a later frame simply overwrites an earlier one). An input is KEPT only
+    // while the sender holds a seat on a LAUNCHED ship: a gunner whose captain is still in the
+    // hangar, or who isn't seated at all, is dropped silently (no notice, no log — this is an
+    // input-rate stream, and a client that keeps sending while docked is normal, not an error).
+    private void DrainTurretInputs()
+    {
+        while (_turretInputQueue.Count > 0)
+        {
+            var (cid, tick, aim, flags) = _turretInputQueue.Dequeue();
+            if (!_seatOf.TryGetValue(cid, out var crew) || crew.Ship is null)
+                continue;
+            _turretHeld[cid] = (tick, aim, (flags & TurretAim.FlagFiring) != 0);
+        }
     }
 
     // A hull class id no client can advertise — MsgHangarIntent's "retract" sentinel.
@@ -349,12 +419,27 @@ public sealed partial class Simulation
     {
         if (!_seatOf.Remove(gunner, out var crew))
             return;
+        // The held aim/fire goes with the seat — nothing may keep firing for a gunner who left.
+        _turretHeld.Remove(gunner);
         for (int i = 0; i < crew.SeatGunnerIds.Length; i++)
             if (crew.SeatGunnerIds[i] == gunner)
+            {
                 crew.SeatGunnerIds[i] = NoGunner;
+                RestTurret(crew.Ship, i); // a station left mid-flight swings back to its rest pose
+            }
         if (notice is not null)
             Events.PilotNotices.Add((gunner, notice));
         Events.CrewChanged = true;
+    }
+
+    // Put one station of a LAUNCHED ship back at rest and flag the ship for this tick's MsgTurrets.
+    // No-op for a crew still in the hangar (no ship, no aim arrays yet).
+    private void RestTurret(ShipSim? ship, int slot)
+    {
+        if (ship?.TurretAim is not { } aims || slot < 0 || slot >= aims.Length)
+            return;
+        aims[slot] = TurretAim.Rest(TurretZenithOf(ship.Class, slot));
+        ship.TurretDirty = true;
     }
 
     // Everything this client is part of: the crew they captain (dissolved, its gunners freed) AND
@@ -392,7 +477,8 @@ public sealed partial class Simulation
     // The record itself has already been removed from _crewByCaptain by the caller.
     private void Dissolve(CrewShip crew, string? gunnerNotice)
     {
-        if (crew.Ship is { } ship)
+        var ship = crew.Ship; // kept past the unbind below so the stations can be put back at rest
+        if (ship is not null)
         {
             ship.Crew = null;
             ship.CrewSeats = null;
@@ -405,6 +491,8 @@ public sealed partial class Simulation
                 continue;
             crew.SeatGunnerIds[i] = NoGunner;
             _seatOf.Remove(g);
+            _turretHeld.Remove(g);
+            RestTurret(ship, i);
             if (gunnerNotice is not null)
                 Events.PilotNotices.Add((g, gunnerNotice));
         }
@@ -414,6 +502,7 @@ public sealed partial class Simulation
     // Match teardown / restart: no crew survives a phase flip (the ships don't either).
     public void ClearAllCrew()
     {
+        _turretHeld.Clear(); // no held aim/fire survives a match start / return to lobby either
         if (_crewByCaptain.Count == 0 && _seatOf.Count == 0)
             return;
         foreach (var crew in _crewByCaptain.Values)

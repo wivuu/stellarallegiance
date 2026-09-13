@@ -936,6 +936,21 @@ public sealed partial class ClientHub
                     _sim.EnqueueCrewSeat(client.Id, seatTeam, seat.Mode, seat.CaptainId, seat.SeatIndex);
                     break;
                 }
+                case Protocol.MsgTurretInput:
+                {
+                    // A riding gunner's held aim + fire flag, at input rate. Decode + queue only:
+                    // the sim thread owns every rule (is this client still seated, has the captain
+                    // launched, is the aim inside the station's arc). Same team gate as MsgCrewSeat,
+                    // silent — this is a stream, not a command, so a stale frame just drops.
+                    if (!TurretInputMessage.TryParse(buffer.AsSpan(0, count), out var ti))
+                        break;
+                    byte turretTeam = _lobby.TeamOf(client.Id);
+                    if (turretTeam >= TeamCount)
+                        break;
+                    client.Team = turretTeam;
+                    _sim.EnqueueTurretInput(client.Id, ti.Tick, new Vec3(ti.AimX, ti.AimY, ti.AimZ), ti.Flags);
+                    break;
+                }
                 case Protocol.MsgOrder:
                 {
                     // Command a friendly ship (F3 map right-click). Routed by subject: a human
@@ -1433,6 +1448,10 @@ public sealed partial class ClientHub
         public byte[][]? MineGoneFrames;
         public List<byte[]>? ProbeGoneFrames;
         public List<byte[]>? SalvageGoneFrames;
+
+        // Crew turrets: this tick's changed ships, each with its MANNED records built ONCE (the
+        // per-client pass only picks which of them are in view). Null when nothing changed.
+        public List<(Simulation.ShipSim ship, TurretRecord[] rows)>? TurretUpdates;
         public Dictionary<byte, List<byte[]>>? LostByTeam;
         public bool SendRocks;
         public List<ulong>? ChangedRockList;
@@ -1582,6 +1601,18 @@ public sealed partial class ClientHub
                 salvageGoneFrames.Add(Protocol.BuildSalvageGone(g.id, g.reason, g.sector, g.pos, g.byShipId));
         }
 
+        // Crew turrets (v42): build each changed ship's MANNED records ONCE per tick — the
+        // per-client pass below only decides which ships are in view, never re-serializes them.
+        // A ship whose last gunner just left produces no records; its seat going back to rest is
+        // the roster frame's job (MsgCrew), so it is dropped here rather than sent as an empty set.
+        List<(Simulation.ShipSim ship, TurretRecord[] rows)>? turretUpdates = null;
+        foreach (var ts in _sim.Events.TurretUpdates)
+        {
+            var rows = Frames.Turrets(_sim, ts);
+            if (rows.Length > 0)
+                (turretUpdates ??= new()).Add((ts, rows));
+        }
+
         bool fog = _sim.FogEnabled;
 
         // Lost contacts (fog): a ship that left a team's streamed union this vision apply → a reason-2
@@ -1641,6 +1672,7 @@ public sealed partial class ClientHub
             MineGoneFrames = mineGoneFrames,
             ProbeGoneFrames = probeGoneFrames,
             SalvageGoneFrames = salvageGoneFrames,
+            TurretUpdates = turretUpdates,
             LostByTeam = lostByTeam,
             SendRocks = sendRocks,
             ChangedRockList = changedRockList,
@@ -1875,6 +1907,17 @@ public sealed partial class ClientHub
             byte[]? missileFrame = BuildMissilesFor(client, ev.Missiles, tick);
             if (missileFrame is not null)
                 client.Out.SendLossy(OutFrame.Whole(missileFrame));
+        }
+
+        // Crew turrets this client can see: the same AOI rule as the missiles above (its anchor
+        // sector, within full-rate range), plus the ship it is RIDING at any range — a gunner's own
+        // seat is in the frame too (the client ignores it; it predicts its own aim and bolts).
+        // LOSSY: a dropped frame is superseded by the next change, and the aim is continuous.
+        if (ev.TurretUpdates is not null)
+        {
+            byte[]? turretFrame = BuildTurretsFor(client, riding, ev.TurretUpdates, tick);
+            if (turretFrame is not null)
+                client.Out.SendLossy(OutFrame.Whole(turretFrame));
         }
 
         return rosterDirty;
@@ -2116,6 +2159,36 @@ public sealed partial class ClientHub
             dst += Protocol.MissileRecordSize;
         }
         return buf;
+    }
+
+    // Build one client's MsgTurrets frame from this tick's pre-built per-ship records, or null when
+    // none of the changed ships are in view. `riding` is the ship a shipless gunner is strapped to
+    // (0 otherwise) — it always sees its own ride's turrets, however far the anchor pass placed it.
+    // The record count is a u8 on the wire, so the frame is capped at 255 records (a ship that loses
+    // the race simply streams on the next tick one of its turrets changes).
+    private byte[]? BuildTurretsFor(
+        Client client,
+        ulong riding,
+        List<(Simulation.ShipSim ship, TurretRecord[] rows)> updates,
+        uint tick
+    )
+    {
+        Vec3 myPos = client.AnchorPos;
+        uint mySector = client.AnchorSector;
+        List<TurretRecord>? rows = null;
+        foreach (var (ship, recs) in updates)
+        {
+            bool inView =
+                (ship.SectorId == mySector && (ship.State.Pos - myPos).LengthSquared() <= FullRateRadiusSq)
+                || (riding != 0 && riding == ship.ShipId);
+            if (!inView)
+                continue;
+            rows ??= new();
+            if (rows.Count + recs.Length > 255)
+                break;
+            rows.AddRange(recs);
+        }
+        return rows is null || rows.Count == 0 ? null : Protocol.BuildTurrets(tick, rows.ToArray());
     }
 
     // Build the MsgMinefields frame for one anchor sector: [13][u16 anchorSector][u8 count] + count x
