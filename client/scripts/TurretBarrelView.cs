@@ -18,7 +18,7 @@ public partial class TurretBarrelView : Node3D
     // Barrel length as a fraction of the hull's "size unit" (model length over the baseline fighter
     // length) — a Devastator's stations read at capital scale, a bomber's stay small.
     private const float LengthPerUnit = 0.35f;
-    private const float RadiusRatio = 0.12f; // barrel radius, as a fraction of its length
+    private const float RadiusRatio = 0.075f; // barrel radius, as a fraction of its length (user steer: slimmer than the first cut)
     private const float BaseHeightRatio = 0.35f;
     private const float BaseRadiusRatio = 0.32f;
 

@@ -821,10 +821,16 @@ Simulation.ShipSim Launch(Simulation sim, int cid, byte team, byte cls)
         $"Clamp(+Y, -Y) = {intoHull.X},{intoHull.Y},{intoHull.Z}"
     );
     var pinned = TurretAim.Clamp(up, Vec3.Normalize(new Vec3(1f, -1f, 0f)));
+    var edge = new Vec3(MathF.Cos(-TurretAim.MinElevationRad), MathF.Sin(TurretAim.MinElevationRad), 0f); // 15° under +X
     Check(
-        Near(pinned, new Vec3(1f, 0f, 0f)),
-        "an aim below the horizon is pinned TO the horizon, keeping the azimuth the gunner pushed",
+        Near(pinned, edge) && TurretAim.InArc(up, pinned),
+        "an aim past the arc floor is pinned TO the floor (15° under the horizon), keeping the azimuth the gunner pushed",
         $"Clamp(+Y, (1,-1,0)) = {pinned.X},{pinned.Y},{pinned.Z}"
+    );
+    Check(
+        TurretAim.InArc(up, new Vec3(0f, 0f, 1f)) && !TurretAim.InArc(up, Vec3.Normalize(new Vec3(1f, -0.5f, 0f))),
+        "the arc is a hemisphere plus 15° of depression (the horizon is in, 26° under it is out)",
+        "arc membership does not match the 105° half-angle"
     );
     Check(
         Near(TurretAim.FromGimbal(up, 0f, 0f), new Vec3(0f, 0f, 1f)),
@@ -832,7 +838,7 @@ Simulation.ShipSim Launch(Simulation sim, int cid, byte team, byte cls)
         "FromGimbal's azimuth-0 horizon direction is not +Z"
     );
     Check(
-        Near(TurretAim.FromGimbal(up, 0f, TurretAim.ArcHalfAngleRad), up),
+        Near(TurretAim.FromGimbal(up, 0f, TurretAim.MaxElevationRad), up),
         "FromGimbal at full elevation points straight up the zenith",
         "FromGimbal at the arc edge is not the zenith"
     );
@@ -919,8 +925,8 @@ void TurretIn(Simulation sim, int gunner, Vec3 aim, bool firing) =>
 }
 
 {
-    // An aim below the station's horizon is stored CLAMPED — the gunner keeps the azimuth they
-    // pushed toward, the elevation is pinned at the horizon, and nothing ever fires into the hull.
+    // An aim past the station's arc floor is stored CLAMPED — the gunner keeps the azimuth they
+    // pushed toward, the elevation is pinned at the floor, and nothing ever fires into the hull.
     var (sim, ship) = CrewedLaunch(16);
     var zenith = Vec3.Normalize(sim.TurretZenithOf(Bomber, 0));
     var horizon = TurretAim.Frame(zenith).Z; // azimuth 0 on the station's horizon
@@ -930,8 +936,9 @@ void TurretIn(Simulation sim, int gunner, Vec3 aim, bool firing) =>
     sim.Step();
     var stored = ship.TurretAim![0];
     Check(
-        TurretAim.InArc(zenith, stored) && MathF.Abs(Vec3.Dot(zenith, stored)) < 1e-3f,
-        "a held aim below the horizon is stored clamped to the horizon, inside the arc",
+        TurretAim.InArc(zenith, stored)
+            && MathF.Abs(Vec3.Dot(zenith, stored) - MathF.Cos(TurretAim.ArcHalfAngleRad)) < 1e-3f,
+        "a held aim 45° under the horizon is stored clamped to the arc floor, inside the arc",
         $"the stored aim is outside the arc (dot={Vec3.Dot(zenith, stored)})"
     );
     Check(

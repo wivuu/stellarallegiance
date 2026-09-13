@@ -161,6 +161,9 @@ public partial class TurretController : Node
         // The gunner's own barrel follows the LIVE gimbal: ApplyTurrets deliberately ignores our
         // seat's echo, so this is the only thing that moves it.
         _world.Ships.SetLocalTurretAim(shipId, hp.Index, Aim);
+        // Inside the turret the ridden hull is hidden (you are in the gun, not above the deck); the F3
+        // overview un-hides it the same way it does the pilot's own hull.
+        _world.Ships.SetRiddenHullHidden(CameraRig.TurretFirstPerson && !SectorOverview.Active);
 
         StepSend(shipId, hp, gun, delta);
     }
@@ -209,6 +212,7 @@ public partial class TurretController : Node
         if (!_seated)
             return;
         _seated = false;
+        _world.Ships.SetRiddenHullHidden(false);
         Active = false;
         Clamped = false;
         _firing = false;
@@ -246,7 +250,7 @@ public partial class TurretController : Node
             && !Scoreboard.PostMatchActive;
         if (DemoDrive)
         {
-            m += new Vector2(4f, -1.2f); // a slow sweep right and up, every frame
+            m += new Vector2(4f, 0.6f); // a slow sweep right and DOWN (to the arc floor), every frame
             _firing = true;
             look = true;
         }
@@ -263,10 +267,10 @@ public partial class TurretController : Node
 
         // Keep the azimuth in (−π, π] so a long sweep can't grind away float precision.
         _azimuth = Mathf.Wrap(_azimuth, -Mathf.Pi, Mathf.Pi);
-        // The hemisphere IS the arc (TurretAim.ArcHalfAngleRad): below the horizon is the captain's
+        // The arc floor (TurretAim.MinElevationRad, a little under the horizon) is the captain's
         // hull. Flag the low edge so the reticle warns; the zenith end is a pole, not a limit.
-        Clamped = _elevation < 0f;
-        _elevation = Mathf.Clamp(_elevation, 0f, TurretAim.ArcHalfAngleRad);
+        Clamped = _elevation < TurretAim.MinElevationRad;
+        _elevation = Mathf.Clamp(_elevation, TurretAim.MinElevationRad, TurretAim.MaxElevationRad);
     }
 
     // The 20 Hz half: send the held aim/trigger on change (or on the keepalive) and predict our own

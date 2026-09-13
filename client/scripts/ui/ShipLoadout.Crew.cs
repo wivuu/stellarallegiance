@@ -948,6 +948,10 @@ public partial class ShipLoadout
         Shot(5.5, "g4-riding-later", false);
         SceneTreeTimer s5 = tree.CreateTimer(5.6);
         s5.Timeout += () => Say("g4");
+        // Wind the wheel in past the tightest gun cam: the gunner sits INSIDE the turret for g5.
+        SceneTreeTimer inside = tree.CreateTimer(6.5);
+        inside.Timeout += () =>
+            Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = MouseButton.WheelDown, Pressed = true });
         Shot(9.0, "g5-firing", false);
         SceneTreeTimer s6 = tree.CreateTimer(9.1);
         s6.Timeout += () =>

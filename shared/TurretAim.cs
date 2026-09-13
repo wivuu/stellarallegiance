@@ -4,8 +4,9 @@ namespace StellarAllegiance.Shared;
 
 // Crew-served turret aiming — THE single arc/rest rule for a turret station (v42 crews slice 2).
 // A station's HardpointDef.Dir is its ZENITH (the outward normal of the mount); the gunner aims a
-// ship-local unit vector anywhere in the hemisphere around it. Three mirrors consume this and must
-// never drift (same pattern as FireCadence):
+// ship-local unit vector anywhere in the cone around it — a hemisphere plus a little depression
+// below the mount's horizon (user steer 2026-09-13: the bare hemisphere felt too restricted). Three
+// mirrors consume this and must never drift (same pattern as FireCadence):
 //   - server Simulation.TryFireTurrets   (authoritative: clamps the held aim, fires along it)
 //   - client TurretController             (the gunner: azimuth/elevation gimbal → aim, local bolts)
 //   - client ShipRenderer.ApplyTurrets    (remote turrets: rebuilds bolts along the streamed aim)
@@ -13,9 +14,18 @@ namespace StellarAllegiance.Shared;
 // belongs here so both peers apply the same one.
 public static class TurretAim
 {
-    // Firing arc half-angle around the zenith: a full hemisphere. The hull sits below the station's
-    // horizon, so the arc edge is the horizon itself.
-    public const float ArcHalfAngleRad = 1.5707963267948966f;
+    // Firing arc half-angle around the zenith: a hemisphere plus 15° of depression below the
+    // station's horizon (105° total). The hull sits below the horizon, so the extra depression is
+    // what lets a dorsal gun rake something alongside the hull without the mount's own deck
+    // occluding it — deeper than this and the bolt ray starts inside the hull on the stock models.
+    public const float ArcHalfAngleRad = 1.8325957145940461f; // 105°
+
+    // Gimbal elevation limits: the horizon is 0, the zenith is +90°, and the arc's depression is the
+    // (negative) floor. Every mirror clamps to exactly these two.
+    public const float MaxElevationRad = 1.5707963267948966f;
+    public const float MinElevationRad = MaxElevationRad - ArcHalfAngleRad; // −15°
+    private const float CosArc = -0.25881904510252074f; // cos(105°)
+    private const float SinArc = 0.96592582628906829f; // sin(105°)
 
     // TurretInputMessage.Flags bits.
     public const byte FlagFiring = 1;
@@ -25,8 +35,8 @@ public static class TurretAim
     // same (ShipId, tick). Mirrored by every bolt rebuild.
     public static byte SpreadBarrel(byte hpIndex) => (byte)(0x80 | (hpIndex & 0x7F));
 
-    // Is a (unit) aim inside the arc? Inclusive at the horizon.
-    public static bool InArc(Vec3 zenith, Vec3 aim) => Dot(zenith, aim) >= -1e-6f;
+    // Is a (unit) aim inside the arc? Inclusive at the edge.
+    public static bool InArc(Vec3 zenith, Vec3 aim) => Dot(zenith, aim) >= CosArc - 1e-6f;
 
     // Rest pose for an unmanned / freshly manned station: 45° up from the ship's forward (+Z)
     // projected onto the station's horizon plane — a dorsal turret rests looking forward-up, a belly
@@ -42,7 +52,7 @@ public static class TurretAim
         return Normalize(zenith + Normalize(onPlane));
     }
 
-    // Clamp an aim into the arc: an aim below the horizon is swung up to the horizon in the plane it
+    // Clamp an aim into the arc: an aim past the arc edge is swung up to the edge in the plane it
     // shares with the zenith (the direction the gunner pushed toward survives; only the elevation is
     // pinned). A zero / non-finite aim, or one pointing straight down the zenith (no plane), lands on
     // the rest pose. Always returns a unit vector.
@@ -56,12 +66,13 @@ public static class TurretAim
             return Rest(zenith);
         aim = aim * (1f / (float)System.Math.Sqrt(len2));
         float d = Dot(zenith, aim);
-        if (d >= 0f)
+        if (d >= CosArc)
             return aim;
         Vec3 onPlane = aim - zenith * d;
         if (onPlane.LengthSquared() < 1e-6f)
             return Rest(zenith); // straight into the hull: no azimuth to keep
-        return Normalize(onPlane);
+        // The arc edge in this azimuth: CosArc up the zenith, SinArc out along the horizon direction.
+        return Normalize(zenith * CosArc + Normalize(onPlane) * SinArc);
     }
 
     // Station frame for a gimbal: Y = zenith, Z = the rest azimuth on the horizon (forward⊥, or an
@@ -87,14 +98,15 @@ public static class TurretAim
 
     // Gimbal → ship-local aim. azimuthRad turns about the zenith (0 = the frame's Z, positive toward
     // −X i.e. "mouse right" in the usual convention is handled by the caller); elevationRad in
-    // [0, π/2] lifts from the horizon to the zenith. The result is always inside the arc.
+    // [MinElevationRad, MaxElevationRad] lifts from the arc floor through the horizon (0) to the
+    // zenith. The result is always inside the arc.
     public static Vec3 FromGimbal(Vec3 zenith, float azimuthRad, float elevationRad)
     {
         var (x, y, z) = Frame(zenith);
-        if (elevationRad < 0f)
-            elevationRad = 0f;
-        else if (elevationRad > ArcHalfAngleRad)
-            elevationRad = ArcHalfAngleRad;
+        if (elevationRad < MinElevationRad)
+            elevationRad = MinElevationRad;
+        else if (elevationRad > MaxElevationRad)
+            elevationRad = MaxElevationRad;
         float ce = (float)System.Math.Cos(elevationRad);
         float se = (float)System.Math.Sin(elevationRad);
         float ca = (float)System.Math.Cos(azimuthRad);
@@ -111,6 +123,6 @@ public static class TurretAim
         aim = Normalize(aim);
         float e = (float)System.Math.Asin(System.Math.Clamp(Dot(aim, y), -1f, 1f));
         float a = (float)System.Math.Atan2(Dot(aim, x), Dot(aim, z));
-        return (a, e < 0f ? 0f : e);
+        return (a, e < MinElevationRad ? MinElevationRad : e);
     }
 }

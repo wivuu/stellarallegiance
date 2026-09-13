@@ -167,6 +167,7 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
             return;
         bool wasRiding = _ridingShipId != 0;
         _ridingShipId = shipId;
+        SetRiddenHullHidden(false); // a new (or no) ride always starts with the hull drawn
         if (shipId != 0)
         {
             _deathCamUntil = -1.0; // taking a seat supersedes a death-cam hold
@@ -518,6 +519,30 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
     // hardpoint gun is only the fallback for a ship whose crew record we haven't seen.
     private CrewStore? _crew;
     private int _localClientId = -1;
+
+    // The ridden hull's model container while the gunner sits INSIDE their turret (CameraRig.
+    // TurretFirstPerson): one Visible flip on "ShipModel" hides the hull, its cosmetics and the barrel
+    // views (the same seam the pilot's cockpit uses on their own hull). Restored on every exit path —
+    // view change, ride end, node loss — so a hull never stays invisible for the next rider.
+    private Node3D? _hiddenRideModel;
+
+    public void SetRiddenHullHidden(bool hide)
+    {
+        Node3D? model = hide ? RidingNode?.GetNodeOrNull<Node3D>("ShipModel") : null;
+        if (ReferenceEquals(model, _hiddenRideModel))
+            return;
+        if (_hiddenRideModel is { } old && GodotObject.IsInstanceValid(old))
+        {
+            old.Visible = true;
+            (old.GetParent() as RemoteShip)?.SetNameplateHidden(false);
+        }
+        _hiddenRideModel = model;
+        if (model is not null)
+        {
+            model.Visible = false;
+            (model.GetParent() as RemoteShip)?.SetNameplateHidden(true);
+        }
+    }
 
     // MsgCrew landed: seats opened/closed, so re-derive the barrel views and forget the state of any
     // seat the roster now shows OPEN (a stale aim would leave a ghost barrel tracking nothing).
@@ -901,6 +926,7 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
         _lastRow.Clear();
         _turrets.Clear(); // re-seeded by the next MsgCrew + MsgTurrets
         _turretBarrels.Clear(); // the views went with the freed ship nodes
+        _hiddenRideModel = null; // went with its node
         _stationsByClass.Clear(); // a rebuilt world re-streams the defs the cache was derived from
         LocalShip = null;
         _deathCamUntil = -1.0;

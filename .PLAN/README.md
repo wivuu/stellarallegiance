@@ -81,7 +81,8 @@ YAML, so it lands in the existing seams without rework.
     [`GLOSSARY.md` → *Crew / Turret Station*](../GLOSSARY.md); suites `tests/CrewTest`,
     `tests/CrewStoreTest`.
   - ✅ **Slice 2 — aim + fire** (2026-09-13, protocol 42, branch `crews`): the gunner aims freely
-    inside a hemisphere around the station's zenith (mouse gimbal, gun cam at the hardpoint,
+    inside a 105° cone around the station's zenith (mouse gimbal, gun cam at the hardpoint with an
+    inside-the-turret zoom that hides the ridden hull,
     centre reticle that warns at the arc edge), fires on LMB/`fire_primary`; the server clamps the
     held aim, fires the station's gun on its own cadence and credits hits to the GUNNER; every
     client in range sees the aim (procedural barrel) and the bolts via `MsgTurrets`. Shared rule:
