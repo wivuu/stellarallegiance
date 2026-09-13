@@ -299,13 +299,19 @@ public partial struct HoldItemRecord
     public byte Count;
 }
 
-// One ship's effective loadout: per-barrel weapon ids in hardpoint declaration order + hold.
+// One ship's effective loadout: per-barrel weapon ids in hardpoint declaration order + hold +
+// the crew-served turret guns.
 [WireRecord]
 public partial struct ShipLoadoutRecord
 {
     public ulong ShipId;
     public uint[] WeaponIds; // uint.MaxValue = emptied slot
     public HoldItemRecord[] Hold;
+
+    // The gun at each crew-served TURRET STATION, in hardpoint declaration order (empty = the hull
+    // has no stations). REQUIRED, not [WireOptional]: an optional tail reads "absent" as
+    // "nothing left in the reader", which inside an array element would swallow the rows after it.
+    public uint[] TurretWeaponIds;
 }
 
 // One team's low-rate economy / research state.
@@ -431,6 +437,29 @@ public partial struct MountOverrideRecord
 {
     public byte HpIndex;
     public uint WeaponId; // uint.MaxValue = leave the slot empty
+}
+
+// One crew-served TURRET STATION on a captain's ship (9 bytes): which gun it mounts and who mans
+// it. SeatIndex is the station's ordinal in hardpoint declaration order (the client labels it
+// "T{SeatIndex+1}"), NOT the HardpointDef.Index.
+[WireRecord]
+public partial struct CrewSeatRecord
+{
+    public byte SeatIndex;
+    public uint WeaponId; // the gun this station fires (never NoWeapon — every station binds a gun)
+    public int GunnerId; // the seated pilot's client id; -1 = open
+}
+
+// One crewable ship in the team's crew roster: the captain, the hull they intend to fly (or are
+// flying), and every station. ShipId is 0 while the captain is still in the hangar and becomes the
+// live ship id at launch — that is also the "can still be joined" flag (boarding is docked-only).
+[WireRecord]
+public partial struct CrewShipRecord
+{
+    public int CaptainId;
+    public byte ClassId;
+    public ulong ShipId; // 0 = docked (joinable); non-zero = in flight
+    public CrewSeatRecord[] Seats;
 }
 
 // ---- World statics (Welcome + MsgReveal share these encodings — byte-identical, load-bearing) ----

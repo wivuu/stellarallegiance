@@ -626,9 +626,10 @@ public static class Frames
         return rows is null ? null : new MinerTargetsMessage { Targets = rows.ToArray() };
     }
 
-    // Per-ship loadout table: one row per ship flying a NON-authored loadout or holding anything —
-    // effective per-barrel ids (a hold-only row streams the authored ids) + the inert hold. Always a
-    // frame (count may be 0) so a stale entry prunes when the last override ship leaves.
+    // Per-ship loadout table: one row per ship flying a NON-authored loadout (barrels OR crew-served
+    // turret stations) or holding anything — effective per-barrel ids + the turret-station guns (a
+    // row that only differs in one of them streams the authored values for the rest) + the inert
+    // hold. Always a frame (count may be 0) so a stale entry prunes when the last override ship leaves.
     public static ShipLoadoutMessage ShipLoadouts(Simulation sim)
     {
         // The authored per-barrel ids for a class with no override array — the SAME rule
@@ -658,7 +659,7 @@ public static class Frames
         {
             if (rows.Count >= 255)
                 break;
-            if (s.MountWeaponIds is null && s.Hold is not { Count: > 0 })
+            if (s.MountWeaponIds is null && s.TurretWeaponIds is null && s.Hold is not { Count: > 0 })
                 continue;
             int nHold = Math.Min(s.Hold?.Count ?? 0, 255);
             var hold = new HoldItemRecord[nHold];
@@ -678,6 +679,7 @@ public static class Frames
                     ShipId = s.ShipId,
                     WeaponIds = s.MountWeaponIds ?? AuthoredIds(s.Class),
                     Hold = hold,
+                    TurretWeaponIds = s.TurretWeaponIds ?? sim.AuthoredTurretIds(s.Class),
                 }
             );
         }

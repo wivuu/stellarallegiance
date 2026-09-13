@@ -20,7 +20,9 @@ namespace SimServer.Content;
 //  Radius*2 / LongestAxis for stations — the same scale World.LoadShipHull/LoadBase bake) and:
 //
 //    1. Each YAML hardpoint entry BINDS + OVERRIDES, keyed by (kind, index): it supplies weapon-id
-//       (weapons) and — when its off-*/dir-* are authored — overrides the mesh node's pos/dir.
+//       (weapons AND crew-served turret stations — a `kind: turret` entry binds HP_Turret_N and
+//       names the gun a riding gunner mans) and — when its off-*/dir-* are authored — overrides
+//       the mesh node's pos/dir.
 //       Unauthored geometry falls back to the matching mesh node; an entry with neither authored
 //       geometry nor a mesh node is a boot error (named by id+kind+index).
 //    2. Every mesh node NOT claimed by a YAML entry is APPENDED (deterministic order: kind byte,
@@ -28,7 +30,9 @@ namespace SimServer.Content;
 //       at projection) and, having no authored `mount:`, project to WeaponMountKind.NonMountable —
 //       NOT a loadout slot: hidden in the hangar, rejected by ResolveLoadout. The mesh HP_ node
 //       carries no gun/missile distinction, so exposing an empty mount as assignable requires a
-//       YAML entry (`mount: any|gun|missile`, weapon-id omitted).
+//       YAML entry (`mount: any|gun|missile`, weapon-id omitted). An appended, unauthored TURRET
+//       node projects the same way (NoWeapon + NonMountable): a marker only, never a crew station —
+//       a real station is a `kind: turret` YAML entry binding a gun.
 //
 //  YAML weapon entries keep their YAML order at the head of the list, so the barrel spread-seed
 //  indices (server Simulation / client DefRegistry.WeaponSlots) are unchanged; appended empty

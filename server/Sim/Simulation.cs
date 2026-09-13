@@ -70,6 +70,36 @@ public sealed partial class Simulation
     // its ammo. A hull with no missile hardpoint has an empty array.
     private readonly Muzzle[][] ClassMissileMounts;
 
+    // Per-class AUTHORED turret-station guns, indexed by ClassId, in hardpoint declaration order —
+    // the station order every crew seat index and ShipSim.TurretWeaponIds array uses. Only a BOUND
+    // station counts (Kind == Turret && Mount == Gun); an appended, unauthored HP_Turret mesh node
+    // projects NoWeapon + NonMountable and is a marker, not a seat. A hull with no stations gets
+    // an empty array (shared, never mutated — hand it out, don't write through it).
+    private readonly uint[][] ClassTurretGuns;
+
+    private static uint[][] BuildTurretGuns(IReadOnlyList<ShipClassDef> defs, int length)
+    {
+        var table = new uint[length][];
+        for (int i = 0; i < table.Length; i++)
+            table[i] = System.Array.Empty<uint>();
+        foreach (var d in defs)
+        {
+            if (d.ClassId >= table.Length)
+                continue;
+            List<uint>? guns = null;
+            foreach (var h in d.Hardpoints)
+                if (h.Kind == HardpointKind.Turret && h.Mount == WeaponMountKind.Gun)
+                    (guns ??= new()).Add(h.WeaponId);
+            if (guns is not null)
+                table[d.ClassId] = guns.ToArray();
+        }
+        return table;
+    }
+
+    // The authored turret guns for a class — what a ship flying its default stations streams.
+    public uint[] AuthoredTurretIds(byte cls) =>
+        cls < ClassTurretGuns.Length ? ClassTurretGuns[cls] : System.Array.Empty<uint>();
+
     private static Muzzle[][] BuildMuzzles(IReadOnlyList<ShipClassDef> defs)
     {
         int max = 0;
@@ -251,6 +281,13 @@ public sealed partial class Simulation
         // (PIGs/pods/miners always null). Geometry always comes from ClassMuzzles — an override
         // swaps WHAT a mount fires, never WHERE it sits. Read through WeaponIdAt.
         public uint[]? MountWeaponIds;
+
+        // TurretWeaponIds[station] = the EFFECTIVE gun at that crew-served TURRET station, in
+        // hardpoint declaration order (the same order AuthoredTurretIds/ClassTurretStations use);
+        // null = the class's authored stations, which is every ship with no captain swap (PIGs/
+        // pods/miners always null). A station is manned by a riding gunner, not the pilot, and
+        // costs no payload budget.
+        public uint[]? TurretWeaponIds;
 
         // Per-mount gun cadence gates (FireCadence.MountFires), lazily sized to the class muzzle
         // array in TryFire. LastFireTick stays the wire stamp "some gun fired this tick"; clients
@@ -656,6 +693,7 @@ public sealed partial class Simulation
                     mis.Add(m);
             ClassMissileMounts[c] = mis.ToArray();
         }
+        ClassTurretGuns = BuildTurretGuns(content.Ships, ClassMuzzles.Length);
         _stats = new Dictionary<byte, ShipStats>(content.Ships.Count);
         foreach (var d in content.Ships)
             _stats[d.ClassId] = ShipStats.FromDef(d); // same path the client takes → identical flight

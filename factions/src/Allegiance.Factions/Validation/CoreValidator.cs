@@ -101,6 +101,26 @@ public static class CoreValidator
             double defaultPayload = 0;
             foreach (var hp in hull.Hardpoints)
             {
+                // A TURRET is a crew-served gun station: a gunner rides along and mans it, so it
+                // must bind a real GUN (never a rack/dispenser) and its mount type is always gun —
+                // authoring `mount:` on one is a mistake, not an override. Deliberately NOT added
+                // to defaultPayload: a crew station is not hold cargo and costs no payload budget.
+                if (hp.Kind == RuntimeHardpointKind.Turret)
+                {
+                    if (hp.WeaponId is not uint turretWid)
+                        result.Error(
+                            $"hull '{hull.Id}' turret index {hp.Index} authors no weapon-id — a crew-served turret station must name the gun it mounts."
+                        );
+                    else if (!gunWeaponIds.Contains(turretWid))
+                        result.Error(
+                            $"hull '{hull.Id}' turret index {hp.Index} binds weapon-id {turretWid}, which is not a gun — a turret station mounts guns only."
+                        );
+                    if (hp.Mount is not null)
+                        result.Error(
+                            $"hull '{hull.Id}' turret index {hp.Index} authors mount: {hp.Mount} — a turret station is always a gun mount; drop the `mount:` key."
+                        );
+                    continue;
+                }
                 if (hp.Kind != RuntimeHardpointKind.Weapon)
                     continue;
                 if (hp.WeaponId is not uint hpWid)

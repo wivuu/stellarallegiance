@@ -570,16 +570,29 @@ public static class FactionsContentProjection
             DirX = (float)(h.DirX ?? 0),
             DirY = (float)(h.DirY ?? 0),
             DirZ = (float)(h.DirZ ?? 0),
-            // Null WeaponId = an authored/appended EMPTY weapon mount (non-weapon kinds ignore it).
-            WeaponId = h.WeaponId ?? (h.Kind == Factions.RuntimeHardpointKind.Weapon ? HardpointDef.NoWeapon : 0u),
+            // Null WeaponId = an authored/appended EMPTY weapon mount, or an UNAUTHORED mesh
+            // HP_Turret node (a marker, not a station). Other kinds ignore it.
+            WeaponId =
+                h.WeaponId
+                ?? (
+                    h.Kind is Factions.RuntimeHardpointKind.Weapon or Factions.RuntimeHardpointKind.Turret
+                        ? HardpointDef.NoWeapon
+                        : 0u
+                ),
             // Mount type: authored `mount:` wins; else derive from the bound weapon (rack ->
             // missile mount, gun -> gun mount); an UNAUTHORED empty mount (a mesh HP_Weapon node
             // hulls.yaml never bound or typed) is NonMountable — not a loadout slot, hidden in the
             // hangar. Author `mount:` to expose an empty mount. Streamed, so the hangar filters
-            // with the SAME resolved value the server's ResolveLoadout enforces. (Non-weapon kinds
-            // carry Any as an inert placeholder — nothing reads their Mount.)
+            // with the SAME resolved value the server's ResolveLoadout enforces. A TURRET is a
+            // crew-served gun station: an authored one is always a Gun mount (CoreValidator
+            // refuses a rack there and refuses an authored `mount:`), an appended mesh node with
+            // no YAML entry stays NonMountable — a marker, never an armed station. (Every other
+            // kind carries Any as an inert placeholder — nothing reads their Mount.)
             Mount =
                 h.Mount is Factions.RuntimeMountKind m ? (WeaponMountKind)(byte)m
+                : h.Kind == Factions.RuntimeHardpointKind.Turret
+                    ? h.WeaponId is null ? WeaponMountKind.NonMountable
+                        : WeaponMountKind.Gun
                 : h.Kind != Factions.RuntimeHardpointKind.Weapon ? WeaponMountKind.Any
                 : h.WeaponId is not uint wid ? WeaponMountKind.NonMountable
                 : rackWeaponIds.Contains(wid) ? WeaponMountKind.Missile

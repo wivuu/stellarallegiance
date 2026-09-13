@@ -493,8 +493,8 @@ Check(
 
 // Bomber (wc_icbmb): 5 armed weapon mounts — Gat 1 (mesh HP_Weapon_0), two AutoCan 1 (mesh
 // HP_Weapon_1/2 nose pair), a second Gat 1 (authored index 3, mirror of node 0), and the anti-base
-// torpedo rack (authored index 4, weapon-id 5). Guns at the low indices, rack last. wc_icbmb carries
-// 2 turret nodes (HP_Turret_0/1) that append.
+// torpedo rack (authored index 4, weapon-id 5). Guns at the low indices, rack last. wc_icbmb's
+// 2 turret nodes (HP_Turret_0/1) are BOUND as crew-served stations (PW Gat Gun 1 apiece).
 Check(
     bomber.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon) == 5
         && bomber.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon && h.WeaponId != HardpointDef.NoWeapon) == 5
@@ -507,8 +507,79 @@ Check(
         && bomber.Hardpoints[2].OffX < 0f
         && bomber.Hardpoints[3].OffX > 0f
         && bomber.Hardpoints.Count(h => h.Kind == HardpointKind.Turret) == 2,
-    "merged bomber hardpoints (5 armed mounts: Gat + 2 AutoCan + Gat + torpedo rack; 2 turrets append)",
+    "merged bomber hardpoints (5 armed mounts: Gat + 2 AutoCan + Gat + torpedo rack; 2 turret stations)",
     $"bomber merged hardpoints wrong (weapons {bomber.Hardpoints.Count(h => h.Kind == HardpointKind.Weapon)}, ids [{string.Join(",", bomber.Hardpoints.Where(h => h.Kind == HardpointKind.Weapon).Select(h => h.WeaponId))}])"
+);
+
+// ---- Crew-served TURRET STATIONS (proto 41) -----------------------------------------------
+// An authored `kind: turret` entry binds its HP_Turret_N mesh node and projects an ARMED station:
+// the named gun on a Gun mount (the hangar filter + the server's turret-gun gate read that Mount).
+// The gun does NOT count against payload-capacity — a crew station is not hold cargo.
+var bomberTurrets = bomber.Hardpoints.Where(h => h.Kind == HardpointKind.Turret).ToList();
+Check(
+    bomberTurrets.Count == 2 && bomberTurrets.All(h => h.WeaponId == 0 && h.Mount == WeaponMountKind.Gun),
+    "bomber authors 2 crew turret stations (PW Gat Gun 1, Gun mount)",
+    $"bomber turret stations wrong ({string.Join(",", bomberTurrets.Select(h => $"{h.Index}:{h.WeaponId}/{h.Mount}"))})"
+);
+var devastatorTurrets = devastatorDef.Hardpoints.Where(h => h.Kind == HardpointKind.Turret).ToList();
+Check(
+    devastatorTurrets.Count == 4 && devastatorTurrets.All(h => h.WeaponId == 12 && h.Mount == WeaponMountKind.Gun),
+    "Devastator authors 4 crew turret stations (PW AutoCan 1, Gun mount)",
+    $"Devastator turret stations wrong ({string.Join(",", devastatorTurrets.Select(h => $"{h.Index}:{h.WeaponId}/{h.Mount}"))})"
+);
+
+// An UNAUTHORED turret (a bare HP_Turret mesh node the geometry merge appends, or a hand-built def)
+// is a MARKER, not a station: NoWeapon on a NonMountable mount. It used to project weapon-id 0 =
+// PW Gat Gun 1 on an Any mount, which read as a free armed station on every base in the game.
+// Synthetic, since every stock turret entry now binds a gun.
+var bareTurretCore = new Factions.Core
+{
+    Hulls =
+    {
+        new Factions.Hull
+        {
+            Id = "bare-turret",
+            Name = "BareTurret",
+            ClassId = 51,
+            Hardpoints =
+            {
+                new Factions.Hardpoint
+                {
+                    Kind = Factions.RuntimeHardpointKind.Turret,
+                    Index = 0,
+                    DirZ = 1,
+                },
+            },
+        },
+    },
+    Stations =
+    {
+        new Factions.Station
+        {
+            Id = "bare-turret-base",
+            Name = "BareTurretBase",
+            BaseTypeId = 51,
+        },
+    },
+    Factions =
+    {
+        new Factions.Faction
+        {
+            Id = "f",
+            Name = "F",
+            LifepodHullId = "bare-turret",
+            InitialStationId = "bare-turret-base",
+        },
+    },
+};
+var bareTurret = FactionsContentProjection
+    .Project(bareTurretCore, new WorldConfig())
+    .Ships.First(s => s.ClassId == 51)
+    .Hardpoints.Single(h => h.Kind == HardpointKind.Turret);
+Check(
+    bareTurret.WeaponId == HardpointDef.NoWeapon && bareTurret.Mount == WeaponMountKind.NonMountable,
+    "an unauthored turret node projects a marker (NoWeapon + NonMountable), not an armed station",
+    $"unauthored turret wrong (weapon {bareTurret.WeaponId}, mount {bareTurret.Mount})"
 );
 var garrison = stock.Bases.First();
 Check(
@@ -523,6 +594,10 @@ Check(
 Check(
     garrison.Hardpoints.Count == 60
         && garrison.Hardpoints.Count(h => h.Kind == HardpointKind.Turret) == 4
+        // stations.yaml binds none of them, so all 4 stay markers — not armed crew stations
+        && garrison
+            .Hardpoints.Where(h => h.Kind == HardpointKind.Turret)
+            .All(h => h.WeaponId == HardpointDef.NoWeapon && h.Mount == WeaponMountKind.NonMountable)
         && garrison.Hardpoints.Count(h => h.Kind == HardpointKind.Light) == 44
         && garrison.Hardpoints.Count(h => h.Kind == HardpointKind.DockingEntrance) == 10
         && garrison.Hardpoints.Count(h => h.Kind == HardpointKind.DockingExit) == 2,
@@ -1111,6 +1186,71 @@ Check(
     !emptyMountErrors.Any(e => e.Contains("NoWeapon") || e.Contains(HardpointDef.NoWeapon.ToString())),
     "validator accepts an empty weapon mount (NoWeapon sentinel)",
     $"validator wrongly flagged an empty (NoWeapon) mount: {string.Join("; ", emptyMountErrors)}"
+);
+
+// Crew-served TURRET stations ride the same WeaponId/Mount fields under a stricter rule: a bound
+// station is a gun (Bolt) on a Gun mount, an unbound one must stay the NoWeapon/NonMountable marker.
+var turretRack = new WeaponDef
+{
+    WeaponId = 73,
+    Name = "Rack",
+    Kind = WeaponKind.Missile,
+};
+ShipClassDef TurretShip(byte classId, uint weaponId, WeaponMountKind mount) =>
+    new()
+    {
+        ClassId = classId,
+        Name = $"Turret{classId}",
+        MaxHull = 50f,
+        Hardpoints = new()
+        {
+            new HardpointDef
+            {
+                Kind = HardpointKind.Turret,
+                Index = 0,
+                WeaponId = weaponId,
+                Mount = mount,
+                DirZ = 1f,
+            },
+            new HardpointDef
+            {
+                Kind = HardpointKind.Turret,
+                Index = 1,
+                WeaponId = HardpointDef.NoWeapon,
+                Mount = WeaponMountKind.NonMountable,
+                DirZ = 1f,
+            },
+        },
+    };
+var okTurretErrors = ContentValidator.Validate(
+    new[] { TurretShip(73, 70, WeaponMountKind.Gun) },
+    new[] { oneWeapon, turretRack },
+    new[] { okBase }
+);
+Check(
+    !okTurretErrors.Any(e => e.Contains("turret")),
+    "validator accepts a gun-bound turret station alongside an unbound turret marker",
+    $"validator wrongly flagged a legal turret station: {string.Join("; ", okTurretErrors)}"
+);
+var mountableMarkerErrors = ContentValidator.Validate(
+    new[] { TurretShip(74, HardpointDef.NoWeapon, WeaponMountKind.Gun) },
+    new[] { oneWeapon, turretRack },
+    new[] { okBase }
+);
+Check(
+    mountableMarkerErrors.Any(e => e.Contains("marker, not a station")),
+    "validator flags an unbound turret that is not NonMountable",
+    "validator missed an unbound turret on a mountable mount"
+);
+var rackTurretErrors = ContentValidator.Validate(
+    new[] { TurretShip(75, 73, WeaponMountKind.Gun) },
+    new[] { oneWeapon, turretRack },
+    new[] { okBase }
+);
+Check(
+    rackTurretErrors.Any(e => e.Contains("crew-served turret station mounts a gun")),
+    "validator flags a turret station binding a missile rack",
+    "validator missed a missile rack on a turret station"
 );
 var dupHpShip = new ShipClassDef
 {

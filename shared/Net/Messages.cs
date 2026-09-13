@@ -201,6 +201,29 @@ public partial struct BuyMinerMessage
     public ulong LaunchBaseId; // 0 = team default garrison
 }
 
+// A docked captain advertises the hull they intend to launch, so teammates can claim one of its
+// crew-served turret stations before it flies. Turrets is the FULL pick list (one entry per
+// station, HpIndex = the station's hardpoint index), never a delta — the server re-resolves every
+// pick against the team's tech and falls back to the authored gun per station. ClassId 0xFF
+// retracts the intent and dissolves the crew.
+[WireMessage(17)]
+public partial struct HangarIntentMessage
+{
+    public byte ClassId; // 0xFF = clear
+    public MountOverrideRecord[] Turrets;
+}
+
+// 7 bytes. Claim (Mode 1) or give up (Mode 0) a turret station on a teammate's docked ship. A join
+// while already seated is a MOVE (the server vacates the old seat first); on Mode 0 the captain +
+// seat fields are ignored.
+[WireMessage(18)]
+public partial struct CrewSeatMessage
+{
+    public byte Mode; // 0 leave, 1 join/move
+    public int CaptainId;
+    public byte SeatIndex;
+}
+
 // ---- server -> client -------------------------------------------------------------------------
 
 // The handshake: version + identity + reconnect token + the world statics this client may see
@@ -503,4 +526,12 @@ public partial struct SalvageGoneMessage
     public Vec3 Pos;
 
     public ulong ByShipId;
+}
+
+// PER-TEAM crew roster: every captain who advertised a crewable hull (docked) or is flying one,
+// with all of its turret stations. A full reconcile — an omitted captain has no crew any more.
+[WireMessage(32)]
+public partial struct CrewMessage
+{
+    public CrewShipRecord[] Ships;
 }
