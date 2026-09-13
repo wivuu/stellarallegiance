@@ -321,7 +321,9 @@ public partial class ShipController : Node
     // call happens in _Process once the connection is live (with retry).
     public void RequestSpawn(ShipClass cls)
     {
-        if (_world.Ships.LocalShip == null)
+        // Riding a teammate's turret station is a deliberate no-ship state: launching would vacate the
+        // seat server-side, so the hangar must be left through LEAVE CREW, never a stray spawn.
+        if (_world.Ships.LocalShip == null && !_world.Ships.Riding)
             _spawnRequest = cls;
     }
 
@@ -522,7 +524,10 @@ public partial class ShipController : Node
 
     private void TickSpawn(bool connected, bool hasShip, double delta)
     {
-        if (!hasShip && !Chat.Capturing && !ShipLoadout.Active)
+        // Riding counts as "not shipless" for every spawn seam: the 1/2/3 hull hotkeys are dead while
+        // crewing (they'd launch the gunner out of their seat) and a queued request never fires.
+        bool riding = _world.Ships.Riding;
+        if (!hasShip && !riding && !Chat.Capturing && !ShipLoadout.Active)
         {
             if (Input.IsPhysicalKeyPressed(Key.Key1))
                 _spawnRequest = ShipClass.Scout;
@@ -551,7 +556,7 @@ public partial class ShipController : Node
             if (!ApEngagedLocal)
                 TargetMarkers.DismissWaypointIfReached(_world.LocalSector, _world.Ships.LocalShip!.GlobalPosition);
         }
-        else if (connected && !_spawnPending && _spawnRequest is { } cls)
+        else if (connected && !riding && !_spawnPending && _spawnRequest is { } cls)
         {
             // Stage-2 buy pre-check: don't spam a request the latest snapshot says will fail (locked
             // hull / can't afford / a launch base that can't serve the hull). The server stays

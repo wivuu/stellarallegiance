@@ -296,7 +296,9 @@ public partial class Chat : Control
         if (_inputRow.Visible)
             _inputRow.Position = new Vector2((vp.X - _inputRow.Size.X) * 0.5f, vp.Y * 0.72f);
 
-        bool keepVisible = _inputRow.Visible || _world.Ships.LocalShip == null;
+        // Pinned open whenever there's no flight to watch — but riding a teammate's turret IS flight
+        // (the gunner is looking at the live sector), so the log fades there like it does in a cockpit.
+        bool keepVisible = _inputRow.Visible || (_world.Ships.LocalShip == null && !_world.Ships.Riding);
         float target;
         if (keepVisible || _sinceLastMsg < FadeDelay)
             target = 1f;

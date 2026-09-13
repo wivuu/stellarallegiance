@@ -399,6 +399,9 @@ public sealed class FrameApplier
             case MatchStatsMessage.MsgId:
                 ApplyMatchStats(MatchStatsMessage.Parse(f));
                 break;
+            case CrewMessage.MsgId:
+                ApplyCrew(CrewMessage.Parse(f));
+                break;
             case SalvageMessage.MsgId:
                 ApplySalvage(SalvageMessage.Parse(f));
                 break;
@@ -427,7 +430,30 @@ public sealed class FrameApplier
         // A fresh hull launches with every slot loaded: drop the previous ship's spend ticks
         // so a smaller hold on the new loadout can't read as a reload in progress.
         _localMissileLoadTick = _localChaffLoadTick = _localMineLoadTick = _localProbeLoadTick = 0;
+        // Our own hull ends any ride-along: the server vacates a spawning gunner's seat, so the crew
+        // frame will confirm it — but a YouAre is the earliest, most authoritative "you're flying now".
+        _world.Ships.SetRiding(0);
         Log.Print($"[GameNet] assigned ship {LocalShipId}");
+    }
+
+    // MsgCrew: our team's FULL crew roster — every captain advertising (or flying) a crewable hull with
+    // all of its turret stations. Reconcile-by-omission; decode into the store's records and re-derive
+    // whether WE are riding a captain's ship (seated + shipless ⇒ the camera and the sector view follow
+    // that hull).
+    private void ApplyCrew(CrewMessage m)
+    {
+        var list = new List<CrewStore.CrewShip>(m.Ships.Length);
+        foreach (var s in m.Ships)
+        {
+            var seats = new CrewStore.CrewSeat[s.Seats.Length];
+            for (int i = 0; i < s.Seats.Length; i++)
+                seats[i] = new CrewStore.CrewSeat(s.Seats[i].SeatIndex, s.Seats[i].WeaponId, s.Seats[i].GunnerId);
+            list.Add(new CrewStore.CrewShip(s.CaptainId, s.ClassId, s.ShipId, seats));
+        }
+        _world.Crew.Apply(list);
+        _world.Ships.SetRiding(
+            _world.Ships.LocalShip == null && _world.Crew.SeatOf(LocalClientId) is { } seat ? seat.ShipId : 0
+        );
     }
 
     // MsgMatchStats: the whole match scoreboard ledger — one row per pilot who has flown this match

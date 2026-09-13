@@ -115,13 +115,20 @@ public partial class CameraRig : Camera3D
         // ship: no view-mode changes while a full-screen overlay owns the screen (F3 overview reads
         // the wheel itself; chat/menus capture keys).
         bool inputFree = InputGate.FlightInputFree;
-        if (!inputFree || _world.Ships.LocalShip == null)
+        // A crew gunner riding the captain's hull has no ship of their own but IS "in flight": the wheel
+        // still dollies their chase shot (see HandleWheel's riding branch).
+        bool riding = _world.Ships.Riding;
+        if (!inputFree || (_world.Ships.LocalShip == null && !riding))
             return;
 
         // toggle_view flips modes WITHOUT touching _zoom, so toggling round-trips to the prior
         // framing. Rebindable via the InputMap (InputBindings), so it accepts a key or a pad button.
         if (@event.IsActionPressed("toggle_view"))
         {
+            // Ignored while riding — a gunner has no cockpit to sit in, so the chase framing is the
+            // only view. (Left unhandled so nothing else is starved of the key.)
+            if (riding)
+                return;
             SetDesiredMode(!_fpDesired);
             GetViewport().SetInputAsHandled();
             return;
@@ -130,10 +137,10 @@ public partial class CameraRig : Camera3D
         switch (@event)
         {
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelDown }:
-                HandleWheel(down: true);
+                HandleWheel(down: true, riding);
                 break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelUp }:
-                HandleWheel(down: false);
+                HandleWheel(down: false, riding);
                 break;
         }
     }
@@ -141,8 +148,15 @@ public partial class CameraRig : Camera3D
     // WheelDown narrows the shot; WheelUp widens it. The two ends of the zoom range hand off to the
     // view mode: winding IN past the closest chase shot dives into the cockpit, winding OUT of the
     // cockpit pulls back to the tightest chase framing.
-    private void HandleWheel(bool down)
+    private void HandleWheel(bool down, bool riding)
     {
+        // Riding a teammate's turret station: the wheel is a PURE dolly over the whole range — it never
+        // hands off to first person at the near end, because the gunner has no cockpit of their own.
+        if (riding)
+        {
+            _zoom = down ? Mathf.Max(MinZoom, _zoom / ZoomStep) : Mathf.Min(MaxZoom, _zoom * ZoomStep);
+            return;
+        }
         if (down) // narrower
         {
             if (_fpDesired)
@@ -182,6 +196,24 @@ public partial class CameraRig : Camera3D
         if (ship == null)
         {
             FirstPersonActive = false; // no ship ⇒ never "in the cockpit" (hull-hide seam reads this)
+            // RIDE-ALONG (v41 crews): seated on a teammate's turret station — chase THEIR hull with the
+            // normal third-person framing, scaled by the ridden model's length so a 75 u capital keeps
+            // the camera well outside its own geometry (the baseline offset frames a 4.5 u fighter). The
+            // node's pose is already MatchClock-interpolated by RemoteShip, so this borrows that
+            // timeline rather than starting one. Checked BEFORE the death-cam: taking a seat supersedes
+            // any lingering hold.
+            if (_world.Ships.RidingNode is { } ridden)
+            {
+                _ship = null; // our own next spawn must re-resolve its cockpit against a fresh node
+                float len = ResolveModelExtents(ridden).Length;
+                float scale = Mathf.Max(1f, len / ShipModelLoader.DefaultModelLength);
+                Transform3D rt = ridden.GlobalTransform;
+                GlobalTransform = new Transform3D(
+                    rt.Basis * FaceForward,
+                    rt.Origin + rt.Basis * (ChaseOffset * scale * _zoom)
+                );
+                return;
+            }
             // Just died: hold the last chase framing on the death point for a beat so the player
             // sees their own blast up close (see WorldRenderer death-cam) before the view pulls back
             // to the wide overview. The death cam always frames the wreck from OUTSIDE (third person).

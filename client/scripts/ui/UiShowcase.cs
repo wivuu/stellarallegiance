@@ -464,6 +464,13 @@ public partial class UiShowcase : Control
             cardRow.AddChild(card);
         s.AddChild(cardRow);
 
+        // HUD crew-gunner strip (ride-along): shown top-centre in game while you man a teammate's
+        // turret station. Rendered here from SetMock so the gallery needs no live world.
+        s.AddChild(UiKit.MakeLabel("// HUD — CREW GUNNER STRIP", UiKit.TextStyle.Data, DesignTokens.TextDim));
+        var gunner = new GunnerStrip();
+        s.AddChild(gunner);
+        gunner.SetMock("T2", "PW GAT GUN 1", "VEX", "⬟ BOMBER");
+
         // Docked-screen CommandSidebar: live map + selectable YOUR BASES rows (active / selected /
         // destroyed). Mock data lives only here — the component itself bakes none.
         s.AddChild(UiKit.MakeLabel("// DOCKED SCREEN — COMMAND SIDEBAR", UiKit.TextStyle.Data, DesignTokens.TextDim));

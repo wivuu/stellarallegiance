@@ -114,6 +114,23 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
     // CameraRig (chase target), and Hud.
     public PredictionController? LocalShip { get; private set; }
 
+    // RIDE-ALONG (v41 crews): the captain's ship we are crewing a turret station on, 0 = not riding.
+    // Driven from the crew stream (FrameApplier.ApplyCrew → SetRiding). A seated gunner has no ship of
+    // their own, so the client borrows the captain's: the camera chases that node and the VIEW follows
+    // it across sectors through the same IWarpDriver seam our own ship uses (EnterSector on the way in,
+    // BeginWarp on a sector change, so the gunner gets the warp flash too).
+    private ulong _ridingShipId;
+
+    public ulong RidingShipId => _ridingShipId;
+
+    // Riding is strictly a NO-SHIP state: the moment we launch our own hull it stops (the server also
+    // vacates the seat), so every gate can read this single flag.
+    public bool Riding => LocalShip == null && _ridingShipId != 0;
+
+    // The ridden ship's live node, or null while the crew frame is ahead of its first snapshot (or
+    // once it despawns). CameraRig chases its MatchClock-interpolated transform — no new timeline.
+    public Node3D? RidingNode => _ridingShipId != 0 && _nodes.TryGetValue(_ridingShipId, out var n) ? n : null;
+
     // ShipGone reason codes (mirror server Simulation.GoneDestroyed/GoneClean). A clean removal is a
     // voluntary dock or a pod rescue; lost-contact (2) is fog information loss — both despawn without a
     // blast. Duration of the fog lost-contact mesh fade — brief, so the ship visibly slips out of sight.
@@ -131,9 +148,41 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
 
     // Death-cam home-reset handshake: the coordinator's _Process pulls the view back to the home overview
     // once the hold expires (deferred from DeleteShip so the death sector stays visible), then clears it.
-    public bool NeedsHomeReset => _pendingHomeReset && LocalShip == null && !DeathCamActive;
+    public bool NeedsHomeReset => _pendingHomeReset && LocalShip == null && !DeathCamActive && _ridingShipId == 0;
 
     public void ClearPendingHomeReset() => _pendingHomeReset = false;
+
+    // Start (shipId != 0) or end (0) riding a captain's turret station. Entering mid-match is the same
+    // view move a spawn makes — abandon any deferred warp and settle into the ridden ship's sector with
+    // no flash — because the gunner didn't travel, their viewpoint was reassigned. Ending while still
+    // shipless arms the deferred pull-back to the home overview, exactly like losing a pod.
+    public void SetRiding(ulong shipId)
+    {
+        if (_ridingShipId == shipId)
+            return;
+        bool wasRiding = _ridingShipId != 0;
+        _ridingShipId = shipId;
+        if (shipId != 0)
+        {
+            _deathCamUntil = -1.0; // taking a seat supersedes a death-cam hold
+            _pendingHomeReset = false;
+            // The crew frame can land BEFORE the captain's first snapshot; InsertShip re-runs this.
+            if (_nodes.TryGetValue(shipId, out var node) && !SectorView.InSector(node, _sectors.LocalSector))
+                EnterRiddenSector(SectorView.SectorOf(node, _sectors.LocalSector));
+            return;
+        }
+        if (wasRiding && LocalShip == null)
+            _pendingHomeReset = _sectors.LocalSector != _warp.HomeSector;
+    }
+
+    // Follow the ridden ship into `sector` without a warp flash — the spawn seam (AbandonWarp +
+    // EnterSector), not BeginWarp: nothing moved, the viewpoint was (re)assigned.
+    private void EnterRiddenSector(uint sector)
+    {
+        _warp.AbandonWarp();
+        _warp.EnterSector(sector);
+        Log.Print($"[WorldRenderer] riding ship {_ridingShipId} → sector {sector}");
+    }
 
     // ---- HUD queries ----------------------------------------------------------------------------
 
@@ -466,6 +515,7 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
                 pc.SetPilotName(localPilot);
             LocalShip = pc;
             _player.LocalTeam = row.Team;
+            _ridingShipId = 0; // our own hull supersedes any ride (the server vacated the seat too)
             // Respawn cancels any in-flight death-cam: the camera follows the new ship at once.
             _deathCamUntil = -1.0;
             _pendingHomeReset = false;
@@ -489,6 +539,10 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
             rs.SetPilotName(pilot);
         _nodes[row.ShipId] = node;
         _sectors.SetNodeSector(node, row.SectorId);
+        // The crew frame that seated us can precede the captain's first snapshot, so the ride's sector
+        // follow lands HERE on that ordering (SetRiding found no node to read a sector off).
+        if (_ridingShipId == row.ShipId && LocalShip == null && row.SectorId != _sectors.LocalSector)
+            EnterRiddenSector(row.SectorId);
         ulong perfMs = (Time.GetTicksUsec() - perfT0) / 1000;
         if (perfMs > 2)
             Log.Print($"[perf] remote ship {row.ShipId} (class {row.Class}) insert {perfMs}ms");
@@ -521,8 +575,15 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
                 // locally (no Projectile rows are replicated).
                 if (newRow.LastFireTick != oldRow.LastFireTick && newRow.LastFireTick != 0 && !newRow.IsPod)
                     _bolts.SpawnBoltFor(newRow);
+                // A sector change on the ship we're RIDING is our warp too: reuse the local ship's
+                // cover→swap→reveal pipeline so the gunner gets the same flash + deferred repaint.
+                // Tested before SetNodeSector so the compare is against the still-current local sector.
+                bool ridingWarp =
+                    _ridingShipId == newRow.ShipId && LocalShip == null && newRow.SectorId != _sectors.LocalSector;
                 rs.OnAuthoritative(newRow, _clock.ServerTick);
                 _sectors.SetNodeSector(rs, newRow.SectorId); // a remote ship may have warped in/out
+                if (ridingWarp)
+                    _warp.BeginWarp(newRow.SectorId);
                 break;
         }
     }
@@ -596,6 +657,12 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
                 _pendingHomeReset = _sectors.LocalSector != _warp.HomeSector;
             }
         }
+        // The ship we were riding just went away (the captain docked, died, or left) — the crew record
+        // is dissolved server-side and the next MsgCrew confirms it, but end the ride now so the camera
+        // doesn't chase a freed node for a frame. Runs AFTER the blast so the explosion still spawns in
+        // the (still local) ridden sector.
+        if (_ridingShipId == row.ShipId)
+            SetRiding(0);
         node.QueueFree();
     }
 
@@ -610,5 +677,6 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
         LocalShip = null;
         _deathCamUntil = -1.0;
         _pendingHomeReset = false;
+        _ridingShipId = 0; // the rebuilt world re-seats us from the next MsgCrew
     }
 }

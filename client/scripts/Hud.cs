@@ -138,6 +138,12 @@ public partial class Hud : CanvasLayer
         AddChild(weapons);
         weapons.Init(_world, _net, _defs);
 
+        // Crew gunner strip, top-centre: shown only while riding a captain's turret station (the
+        // pilot has no hull of their own then, so the weapons/system readouts above stay blank).
+        var gunner = new GunnerStrip { Name = "GunnerStrip" };
+        AddChild(gunner);
+        gunner.Init(_world, _net, _defs);
+
         // Telescopic zoom scope (+/−): a circular PiP magnifier that replaces the centre gauges
         // while open. Added after the combat overlays so it draws above them, under the text/menu.
         var zoom = new ZoomView { Name = "ZoomView" };
@@ -442,8 +448,11 @@ public partial class Hud : CanvasLayer
         // (LAUNCH to leave). The death-cam guard holds the hangar back for the blast beat (dock has
         // no death-cam, so it opens immediately). Once the ship exists — or the match leaves Active
         // — the spawn hangar closes itself and the lobby overlay takes over.
+        // A crew gunner riding the captain's hull is deliberately shipless: the spawn hangar must NOT
+        // reclaim the screen while they're out there. The else-branch below then frees the hangar the
+        // moment the captain launches, and this same rule re-opens it when the ride ends.
         bool hangarUp = _hangar != null && IsInstanceValid(_hangar);
-        if (inMatch && !flying && DeployRequested && !_world.Ships.DeathCamActive)
+        if (inMatch && !flying && !_world.Ships.Riding && DeployRequested && !_world.Ships.DeathCamActive)
         {
             if (hangarUp)
                 _hangar!.OpenedForSpawn = true;

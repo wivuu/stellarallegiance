@@ -69,7 +69,9 @@ subclasses** for anything needing custom `_Draw` or per-frame state.
   `StatReadout`, `DataTable`, `ToastHost`.
 - **Connect feedback** — `LinkRadar` (rotating dashed radar ring with centred link %),
   `ProgressSweepBar` (continuous fill + sweeping highlight while indeterminate).
-- **Game elements** — `LoadoutSlot`, `ContactChip`, `ResourceReadout`, `RadarFrame`.
+- **Game elements** — `LoadoutSlot`, `ContactChip`, `ResourceReadout`, `RadarFrame`, `GunnerStrip`
+  (the top-centre HUD strip a crew gunner sees while riding a captain's turret station — built from
+  `RosterCells`; `SetMock(…)` renders it standalone in the gallery).
 - **Roster primitives** (`RosterCells`) — the small builders every pilot-roster surface composes:
   `Mono`/`Lbl` cells, `Cell` (proportional column width), `Badge`, `Diamond`, `RowPanel`
   (hairline row, faction tint + 2px bar for "me"), `HeaderPanel` (4% accent wash), `TabStyle`,

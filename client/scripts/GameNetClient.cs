@@ -472,6 +472,33 @@ public partial class GameNetClient : Node, INetClientHost
             }.ToBytes()
         );
 
+    // Advertise (or retract) the hull this DOCKED captain intends to launch, so teammates can claim one
+    // of its crew-served turret stations before it flies (v41 crews). classId 0xFF clears the intent and
+    // dissolves the crew. `picks` is the FULL station list — one entry per authored turret hardpoint,
+    // never a delta — where hpIndex is that station's HardpointDef.Index (NOT the T-number seat ordinal
+    // MsgCrew reports) and weaponId the gun the captain assigned. The server re-resolves every pick
+    // against the team's tech and falls back to the authored gun per station.
+    public void SendHangarIntent(byte classId, (byte hpIndex, uint weaponId)[] picks)
+    {
+        var turrets = new MountOverrideRecord[picks?.Length ?? 0];
+        for (int i = 0; i < turrets.Length; i++)
+            turrets[i] = new MountOverrideRecord { HpIndex = picks![i].hpIndex, WeaponId = picks[i].weaponId };
+        _tx.Writer.TryWrite(new HangarIntentMessage { ClassId = classId, Turrets = turrets }.ToBytes());
+    }
+
+    // Claim (mode 1) or give up (mode 0) a turret station on a teammate's DOCKED ship. A join while
+    // already seated is a MOVE — the server vacates the old seat first. On mode 0 the captain + seat
+    // arguments are ignored (the server knows which seat we hold), so pass 0/0.
+    public void SendCrewSeat(byte mode, int captainId, byte seatIndex) =>
+        _tx.Writer.TryWrite(
+            new CrewSeatMessage
+            {
+                Mode = mode,
+                CaptainId = captainId,
+                SeatIndex = seatIndex,
+            }.ToBytes()
+        );
+
     // Command a friendly ship (F3 map right-click). subject is the commanded ship's raw id;
     // targetKind: 0 ship, 1 base, 2 rock, 3 point, 4 sector (pos ignored — pigs hold just inside
     // the entry aleph, miners prospect-patrol), 255 clear (release to autonomy). targetId is

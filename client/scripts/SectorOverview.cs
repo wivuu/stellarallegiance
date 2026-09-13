@@ -1129,7 +1129,9 @@ public partial class SectorOverview : Node3D
     // (but no escape menu — that's guarded at the call site), and no other overlay owning the cursor.
     // The F3 map (!Active) and EscapeMenu are excluded by the _Input call site.
     private bool FlightCommandContext =>
-        _world.Ships.LocalShip != null
+        // Riding a teammate's turret counts as being in flight: the gunner watches the same sector from
+        // the same chase camera, so the cursor-free select/command gestures work for them too.
+        (_world.Ships.LocalShip != null || _world.Ships.Riding)
         && Input.MouseMode == Input.MouseModeEnum.Visible
         && !Chat.Capturing
         && !ShipLoadout.Active

@@ -274,6 +274,11 @@ public partial class WorldRenderer
     // MsgConstructorState), extracted into its own store. Constructed in _Ready once _defs is resolved.
     public TeamStateStore TeamState { get; private set; } = null!;
 
+    // Our team's CREW roster (MsgCrew, v41): the captains advertising a crewable hull + who mans each
+    // of its turret stations. No dependencies (pure POCO), so unlike TeamState it exists from
+    // construction; cleared on a world rebuild and when the match falls back to the lobby.
+    public CrewStore Crew { get; } = new();
+
     // The match scoreboard ledger (MsgMatchStats): per-pilot K/D/EJ/PTS + the per-team garrison tally.
     // Read by the Scoreboard overlay and the Lobby roster cells. No dependencies, so unlike TeamState it
     // exists from construction; it deliberately survives a match ending (cleared only by Reset).
@@ -341,6 +346,11 @@ public partial class WorldRenderer
     private void RehomePreLaunch()
     {
         if (_shipRenderer.LocalShip != null)
+            return;
+        // Riding a teammate's turret: the RIDDEN ship owns _localSector (ShipRenderer follows it into
+        // its sector and warps with it), exactly as our own ship would while flying. Re-homing here
+        // would yank the gunner's view back to their garrison on the next roster frame.
+        if (_shipRenderer.Riding)
             return;
         uint home = HomeSector;
         if (home == _localSector)
@@ -517,6 +527,9 @@ public partial class WorldRenderer
             // server emits a cleanup gone for each, but the phase edge is the client's own guard.
             _salvageRenderer?.FreeAll();
             StellarAllegiance.Ui.LoadoutState.Shared.ResetAll();
+            // Crews are per-match too: the server dissolves every record on the return to the lobby,
+            // so drop the mirror now rather than showing a stale CREWED SHIPS list in the next hangar.
+            Crew.Clear();
         }
         _clock.Phase = newPhase;
         _clock.Winner = winner == 255 ? (byte?)null : winner;
@@ -569,6 +582,7 @@ public partial class WorldRenderer
         _minefield.Clear(); // chaff/minefield container nodes aren't in the group sweep above
         _construction.Reset(); // BuildSphere/ConstructorDebris nodes freed by the _effects sweep above
         TeamState.ClearConstructorStates(); // roster drops on rebuild; economy/research dicts persist
+        Crew.Clear(); // ditto for the crew roster — the next MsgCrew re-streams it whole
         MatchStats.Clear(); // the scoreboard ledger is per-session; the server re-sends it after Welcome
         _collision.Reset();
         _aleph.Reset();
