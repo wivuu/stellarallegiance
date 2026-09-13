@@ -4,6 +4,10 @@ The live roadmap: what is shipped (one line each, with a pointer to the real doc
 (by stage), and the deep backlog. Finished work is condensed here, not narrated — the code,
 [`GLOSSARY.md`](../GLOSSARY.md) and the per-feature docs are the authority for how things work.
 
+**Next to incorporate into the plan**
+- Distribution e.g. https://github.com/velopack/velopack
+  - https://github.com/velopack/velopack/tree/develop/samples/CSharpUnityMono
+
 **What else lives in `.PLAN/`**
 
 | Path | What it is |
