@@ -28,8 +28,6 @@ public partial class ShipLoadout
 {
     // Crew-view sizes that sit off the DesignTokens type scale, named for their row.
     private const int CrewTagSize = 10; // manifest / station by-line
-    private const int CrewNoteSize = 12; // the arsenal's turret note paragraph
-    private const int TurretDetailBadge = 44; // ◣ tile in the arsenal's station detail
 
     // ---- state ---------------------------------------------------------------
 
@@ -255,9 +253,16 @@ public partial class ShipLoadout
             SendHangarIntent();
             return;
         }
-        // Back in our own hangar: restore our hull in the preview and re-advertise it.
+        // Back in our own hangar (left the crew, or the ride ended). The crewing view painted the
+        // centre column with the CAPTAIN's ship — header, name, CAPTAIN by-line and the preview — so
+        // re-SELECT our own hull rather than only re-showing it: that repaints every one of those and
+        // re-advertises us in one call. Without it the column keeps reading "CREWING · ASSAULT /
+        // BOMBER / CAPTAIN VEX" over our own stats.
         if (_classId is byte cls)
-            _preview.ShowShip(_defs, cls);
+        {
+            SelectShip(cls);
+            return;
+        }
         RefreshLoadoutViews();
         SendHangarIntent();
     }
@@ -401,62 +406,18 @@ public partial class ShipLoadout
         }
         _arsenalFrame.Visible = true;
 
+        // A station reads exactly like a weapon slot (user steer 2026-09-13: the right column was too
+        // busy) — the standard cyan frame, a header naming the seat + who mans it, then the gun list.
+        // Manned/gunner detail lives on the station row and the 3D marker; joining lives in the sidebar.
         byte team = Team;
         (bool manned, string by) = SeatOccupancy(classId, hpIndex);
-        Color accent = manned ? DesignTokens.Ok : DesignTokens.Text2;
-        StyleArsenalFrame(accent, manned ? 0.08f : 0.05f, manned ? DesignTokens.Ok : DesignTokens.BorderLo);
+        StyleArsenalFrame(DesignTokens.TeamAccentBase, 0.08f);
 
         _arsenalTitle.Text = $"[{CrewStore.SeatId(hpIndex)}]  TURRET STATION · {(manned ? "MANNED" : "OPEN")}";
         _arsenalFit.Text = manned ? $"◆ {by}" : "OPEN";
         _arsenalFit.AddThemeColorOverride("font_color", manned ? DesignTokens.Ok : DesignTokens.Text2);
 
         uint current = MigrateTier(_state.AssignedTurretWeapon(classId, station), team);
-        WeaponDef? currentDef = _defs.GetWeapon(current);
-
-        // ---- detail block: badge + gun + status, the note, and the crew caption ----
-        var detail = new VBoxContainer();
-        detail.AddThemeConstantOverride("separation", 10);
-        _arsenalRows.AddChild(detail);
-
-        var headRow = new HBoxContainer();
-        headRow.AddThemeConstantOverride("separation", 12);
-        detail.AddChild(headRow);
-        headRow.AddChild(StationBadge("◣", TurretDetailBadge, 22, accent, manned));
-        var headCol = new VBoxContainer
-        {
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            SizeFlagsVertical = SizeFlags.ShrinkCenter,
-        };
-        headCol.AddThemeConstantOverride("separation", 3);
-        var gunName = UiKit.MakeLabel(currentDef?.Name.ToUpperInvariant() ?? "—", UiKit.TextStyle.Body);
-        gunName.AddThemeFontOverride("font", UiFonts.SairaSemi);
-        gunName.AddThemeFontSizeOverride("font_size", DesignTokens.BodySize + 1);
-        var status = UiKit.MakeLabel(manned ? $"MANNED · {by}" : "OPEN · unmanned", UiKit.TextStyle.Data, accent);
-        status.AddThemeFontSizeOverride("font_size", CrewTagSize);
-        headCol.AddChild(gunName);
-        headCol.AddChild(status);
-        headRow.AddChild(headCol);
-
-        var note = UiKit.MakeLabel(
-            manned ? $"{by} is manning this gun." : "No gunner yet — a teammate can take this station from their hangar.",
-            UiKit.TextStyle.Body,
-            DesignTokens.Data
-        );
-        note.AddThemeFontSizeOverride("font_size", CrewNoteSize);
-        note.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        detail.AddChild(note);
-
-        var caption = UiKit.MakeLabel(
-            "◆ Crew-manned — a gunner steers this turret in flight while you fly the ship.",
-            UiKit.TextStyle.Data,
-            DesignTokens.TextDim
-        );
-        caption.AddThemeFontSizeOverride("font_size", CrewTagSize);
-        caption.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        detail.AddChild(caption);
-
-        var assign = UiKit.MakeLabel("ASSIGN WEAPON", UiKit.TextStyle.Label, DesignTokens.TextDim);
-        detail.AddChild(assign);
 
         // ---- the guns this station accepts ----
         foreach (WeaponDef w in _defs.AllWeapons())
@@ -477,12 +438,12 @@ public partial class ShipLoadout
         }
     }
 
-    // Retint the arsenal frame — cyan for a weapon hardpoint, the station's own colour for a turret.
-    private void StyleArsenalFrame(Color border, float tintAlpha, Color? tint = null)
+    // (Re)paint the arsenal frame's stylebox — weapon slots and turret stations share the cyan frame.
+    private void StyleArsenalFrame(Color border, float tintAlpha)
     {
         var sb = new StyleBoxFlat
         {
-            BgColor = new Color(tint ?? border, tintAlpha),
+            BgColor = new Color(border, tintAlpha),
             BorderColor = border,
             AntiAliasing = false,
         };
@@ -490,32 +451,6 @@ public partial class ShipLoadout
         sb.SetBorderWidthAll(1);
         sb.SetContentMarginAll(12);
         _arsenalFrame.AddThemeStyleboxOverride("panel", sb);
-    }
-
-    // A ◣ station tile: solid + tinted when manned, dashed-hairline when open.
-    private static Control StationBadge(string glyph, int size, int fontSize, Color color, bool solid)
-    {
-        var tile = new Label
-        {
-            Text = glyph,
-            CustomMinimumSize = new Vector2(size, size),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            SizeFlagsVertical = SizeFlags.ShrinkCenter,
-        };
-        tile.AddThemeFontOverride("font", UiFonts.Mono);
-        tile.AddThemeFontSizeOverride("font_size", fontSize);
-        tile.AddThemeColorOverride("font_color", solid ? color : DesignTokens.TextDim);
-        var sb = new StyleBoxFlat
-        {
-            BgColor = solid ? new Color(color, 0.06f) : new Color(DesignTokens.BorderLo, 0.05f),
-            BorderColor = solid ? color : new Color(DesignTokens.BorderHi, 0.3f),
-            AntiAliasing = false,
-        };
-        sb.SetCornerRadiusAll(0);
-        sb.SetBorderWidthAll(1);
-        tile.AddThemeStyleboxOverride("normal", sb);
-        return tile;
     }
 
     // ---- crew roster repaint -------------------------------------------------
@@ -566,9 +501,16 @@ public partial class ShipLoadout
         _sidebar.SetCrewData(ships, mySeat is CrewStore.MySeat ms ? (ms.CaptainId, ms.SeatIndex) : null);
 
         if (_crewMode && mySeat is CrewStore.MySeat seated)
+        {
             RefreshCrewColumn(seated);
-        else
-            RefreshTurretStations();
+            return;
+        }
+        RefreshTurretStations();
+        // The open station panel names its gunner ("[T1] TURRET STATION · MANNED · ◆ VEX"), so it has
+        // to follow the roster too — without this it keeps reading OPEN · unmanned under a row that
+        // already flipped to MANNED.
+        if (_selectedTurret != null)
+            RefreshArsenal();
     }
 
     // Paint the whole CREWING view for the seat we hold.
@@ -703,6 +645,301 @@ public partial class ShipLoadout
 
     private string ClassNameOf(byte classId) =>
         _defs.TryGetShipDef(classId, out ShipClassDef d) ? d.Name.ToUpperInvariant() : $"CLASS {classId}";
+
+    // =====================================================================
+    //  --crew-demo=captain:<dir> / --crew-demo=gunner:<dir> — the TWO-CLIENT crew harness.
+    //
+    //  The single-client --hangar-demo can't prove a crew: a seat needs a second pilot. These two
+    //  roles are the halves of one scripted run against a shared server (same team via AUTOFLY_TEAM,
+    //  both raising deploy intent through ShipController's demo path). The captain researches the
+    //  bomber, assigns a turret gun and launches once a seat is manned; the gunner waits for the
+    //  advertisement, claims T1 from the CREWED SHIPS list and rides along. Every step drives the
+    //  REAL widgets through Input.ParseInputEvent, exactly like RunDemo, and each side snapshots its
+    //  own directory. Wait steps re-enter themselves until a server frame satisfies them, so the two
+    //  processes need no clock coupling — only a timeout that snaps the stall before quitting.
+    // =====================================================================
+
+    private enum CrewDemoRole
+    {
+        None,
+        Captain,
+        Gunner,
+    }
+
+    private CrewDemoRole _crewDemoRole;
+    private double _crewDemoHold; // seconds spent re-entering the current wait step
+    private bool _rideShotsScheduled;
+
+    private const byte DemoBomberClass = (byte)ShipClass.Bomber;
+
+    private void ParseCrewDemoArg(string spec)
+    {
+        int colon = spec.IndexOf(':');
+        if (colon <= 0)
+        {
+            GD.PrintErr($"CREW_DEMO: expected --crew-demo=captain|gunner:<dir>, got '{spec}'");
+            return;
+        }
+        string role = spec[..colon];
+        _demoDir = spec[(colon + 1)..];
+        _crewDemoRole = role switch
+        {
+            "captain" => CrewDemoRole.Captain,
+            "gunner" => CrewDemoRole.Gunner,
+            _ => CrewDemoRole.None,
+        };
+        if (_crewDemoRole == CrewDemoRole.None)
+            GD.PrintErr($"CREW_DEMO: unknown role '{role}' (expected captain|gunner)");
+    }
+
+    private void RunCrewDemo(double delta)
+    {
+        _demoWait -= delta;
+        if (_demoWait > 0 || _classId == null)
+            return;
+        _demoWait = 0.8;
+        if (_crewDemoRole == CrewDemoRole.Captain)
+            RunCaptainDemo();
+        else
+            RunGunnerDemo();
+    }
+
+    // Hold the current step until `ready`, re-entering it every 0.4 s. Returns true once satisfied;
+    // on timeout it snaps the stall and quits so a two-process run can never hang a window.
+    private bool CrewWaitFor(bool ready, double limitSeconds, string timeoutShot)
+    {
+        if (ready)
+        {
+            _crewDemoHold = 0;
+            return true;
+        }
+        _demoStep--; // stay on this step
+        _demoWait = 0.4;
+        _crewDemoHold += 0.4;
+        if (_crewDemoHold > limitSeconds)
+        {
+            GD.PrintErr($"CREW_DEMO: timed out waiting ({timeoutShot})");
+            Snap(timeoutShot);
+            GetTree().Quit();
+        }
+        return false;
+    }
+
+    // ---- captain ------------------------------------------------------------
+
+    private void RunCaptainDemo()
+    {
+        switch (_demoStep++)
+        {
+            // Research the bomber — the only hull in the stock tree with turret stations that a solo
+            // team can unlock (we are the commander, so AUTHORIZE is ours to click).
+            case 0:
+                ClickTab("RESEARCH");
+                break;
+            case 1:
+                ClickResearchNode();
+                break;
+            case 2:
+                ClickAuthorize();
+                _demoWait = 1.5;
+                break;
+            case 3:
+                CrewWaitFor(BomberUnlocked(), 90, "c9-timeout");
+                break;
+            case 4:
+                ClickTab("HANGAR");
+                break;
+            case 5:
+                ClickShipCardOfClass(DemoBomberClass);
+                break;
+            // The captain's hull now shows ▶ TURRET STATIONS (0/2 MANNED) under its hardpoints, with a
+            // diamond marker per station on the preview.
+            case 6:
+                Snap("c1-turret-stations");
+                break;
+            case 7:
+                ClickTurretRow(0);
+                break;
+            // The bomber's right column is taller than the screen, so the station arsenal opens below
+            // the fold — scroll it into view before shooting it (and before clicking a row: an
+            // off-screen global rect would swallow the synthetic click).
+            case 8:
+                ScrollRightColumnTo(_arsenalFrame);
+                break;
+            case 9:
+                Snap("c2-turret-arsenal");
+                break;
+            case 10:
+                ClickArsenalAssignRow(1); // second gun the station accepts (PW Mini-Gun 1)
+                break;
+            case 11:
+                Snap("c3-assigned");
+                break;
+            // Now wait for the gunner client to claim a seat — the whole point of the run.
+            case 12:
+                CrewWaitFor(MannedSeatCount() > 0, 120, "c9-timeout");
+                break;
+            case 13:
+                ScrollRightColumnTo(_turretSection);
+                break;
+            case 14:
+                Snap("c4-station-manned");
+                break;
+            case 15:
+                _demoLaunched = true;
+                ClickAt(_launch.GetGlobalRect().GetCenter());
+                break;
+            // Only reached if the spawn never landed — the ship spawning closes this screen and
+            // DemoAfterLaunch takes the final shot instead.
+            case 16:
+                Snap("c8-launch-stuck");
+                GetTree().Quit();
+                break;
+        }
+    }
+
+    private bool BomberUnlocked() =>
+        _world.TeamState.CheckSpawnGate(Team, DemoBomberClass) != TeamStateStore.SpawnGate.Locked;
+
+    private int MannedSeatCount() =>
+        _world.Crew.ShipOf(_net.LocalClientId) is CrewStore.CrewShip s ? CrewStore.MannedCount(s) : 0;
+
+    private void ClickShipCardOfClass(byte classId)
+    {
+        foreach ((byte id, ShipCard card) in _shipCards)
+            if (id == classId && card.Visible)
+            {
+                ClickAt(card.GetGlobalRect().GetCenter());
+                return;
+            }
+        GD.PrintErr($"CREW_DEMO: no visible ship card for class {classId}");
+    }
+
+    private void ClickTurretRow(int idx)
+    {
+        if (idx < 0 || idx >= _turretRows.Count)
+        {
+            GD.PrintErr($"CREW_DEMO: no turret station row {idx} ({_turretRows.Count} present)");
+            return;
+        }
+        ClickAt(_turretRows[idx].row.GetGlobalRect().GetCenter());
+    }
+
+    // Scroll the right column so `target`'s top sits at the top of its ScrollContainer. Positions
+    // settle on the next layout pass, so this is always its own demo step.
+    private static void ScrollRightColumnTo(Control target)
+    {
+        Node? n = target;
+        while (n != null && n is not ScrollContainer)
+            n = n.GetParent();
+        if (n is not ScrollContainer sc)
+        {
+            GD.PrintErr("CREW_DEMO: no ScrollContainer above the scroll target");
+            return;
+        }
+        sc.ScrollVertical += (int)(target.GetGlobalRect().Position.Y - sc.GetGlobalRect().Position.Y);
+    }
+
+    // Click the Nth ASSIGN row in the open station arsenal.
+    private void ClickArsenalAssignRow(int idx)
+    {
+        var rows = new List<LoadoutSlot>();
+        foreach (Node child in _arsenalRows.GetChildren())
+            if (child is LoadoutSlot slot)
+                rows.Add(slot);
+        if (idx < 0 || idx >= rows.Count)
+        {
+            GD.PrintErr($"CREW_DEMO: no arsenal assign row {idx} ({rows.Count} present)");
+            return;
+        }
+        ClickAt(rows[idx].GetGlobalRect().GetCenter());
+    }
+
+    // ---- gunner -------------------------------------------------------------
+
+    private void RunGunnerDemo()
+    {
+        switch (_demoStep++)
+        {
+            case 0:
+                CrewWaitFor(OpenSeatOffered(), 90, "g9-timeout");
+                break;
+            case 1:
+                Snap("g1-crewed-ships");
+                // A beat before claiming: the captain advertises the hull as soon as they select it,
+                // so without this the join can land BEFORE they finish assigning the station's gun and
+                // the crewing view opens on the authored default.
+                _demoWait = 3.0;
+                break;
+            case 2:
+                ClickFirstJoin();
+                break;
+            case 3:
+                CrewWaitFor(_crewMode && _world.Crew.SeatOf(_net.LocalClientId) != null, 30, "g9-timeout");
+                break;
+            case 4:
+                Snap("g2-crewing-view");
+                break;
+            // The captain launches → the seat binds to a live ship → ShipRenderer starts riding and the
+            // Hud frees this screen. The ride-along shots are taken from the surviving tree in
+            // DemoAfterRideStart (this node is gone by then).
+            case 5:
+                CrewWaitFor(_world.Ships.Riding, 90, "g9-timeout");
+                break;
+            case 6:
+                Snap("g8-ride-stuck");
+                GetTree().Quit();
+                break;
+        }
+    }
+
+    // A teammate is advertising a docked crewable hull with at least one open station.
+    private bool OpenSeatOffered()
+    {
+        int me = _net.LocalClientId;
+        foreach (CrewStore.CrewShip s in _world.Crew.Ships)
+        {
+            if (s.CaptainId == me || !s.Docked)
+                continue;
+            foreach (CrewStore.CrewSeat seat in s.Seats)
+                if (seat.IsOpen)
+                    return true;
+        }
+        return false;
+    }
+
+    private void ClickFirstJoin()
+    {
+        if (_sidebar.DemoFirstJoinCenter() is Vector2 c)
+            ClickAt(c);
+        else
+            GD.PrintErr("CREW_DEMO: no ＋ JOIN button in the CREWED SHIPS list");
+    }
+
+    // The gunner's hangar closed itself because the ride started: capture the flight view (camera
+    // chasing the captain's hull + the GunnerStrip) from the surviving tree, twice, then quit.
+    private void DemoAfterRideStart()
+    {
+        if (_crewDemoRole != CrewDemoRole.Gunner || _demoDir is not string dir || _rideShotsScheduled)
+            return;
+        if (_world == null || !_world.Ships.Riding)
+            return;
+        _rideShotsScheduled = true;
+        SceneTree tree = GetTree();
+        void Shot(double after, string name, bool quit)
+        {
+            SceneTreeTimer t = tree.CreateTimer(after);
+            t.Timeout += () =>
+            {
+                tree.Root.GetTexture().GetImage().SavePng($"{dir}/{name}.png");
+                GD.Print($"HANGAR_DEMO_SHOT:{name}");
+                if (quit)
+                    tree.Quit();
+            };
+        }
+        Shot(1.5, "g3-riding", false);
+        Shot(5.5, "g4-riding-later", true);
+    }
 }
 
 // One row of the captain's ▶ TURRET STATIONS list: the ◣ station tile, the seat id + MANNED/OPEN

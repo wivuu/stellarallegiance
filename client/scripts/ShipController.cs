@@ -136,8 +136,9 @@ public partial class ShipController : Node
 
     private bool _autoFly;
     private bool _autoJoined; // autofly QuickJoins (team + ready) once on connect
-    private bool _hangarDemo; // --hangar-demo: QuickJoin only; the hangar harness drives spawning
+    private bool _hangarDemo; // --hangar-demo / --crew-demo: QuickJoin only; the hangar harness drives spawning
     private double _hangarDemoElapsed; // failsafe clock — quit if the demo never completes
+    private double _hangarDemoLimit = 90; // --crew-demo waits on a SECOND client, so it gets longer
     private bool _selfTestDone; // autofly fires one divergence injection
     private bool _combatTest; // --combat-test: fly straight + fire (head-on damage check)
     private bool _warpTest; // --warp-test: mine-drop run, then manual-steer into the sector's aleph (warp smoke)
@@ -287,8 +288,17 @@ public partial class ShipController : Node
         // (team + ready) so the match starts and the mandatory spawn hangar opens. It is a
         // UI-harness flag (after `--`, GetCmdlineUserArgs) like --ui-shot — see ShipLoadout.
         foreach (var a in OS.GetCmdlineUserArgs())
+        {
             if (a.StartsWith("--hangar-demo="))
                 _hangarDemo = true;
+            // --crew-demo=captain|gunner:<dir> needs the same QuickJoin + deploy intent; its two
+            // clients wait on each other, so the failsafe clock has to cover both halves of the run.
+            if (a.StartsWith("--crew-demo="))
+            {
+                _hangarDemo = true;
+                _hangarDemoLimit = 240;
+            }
+        }
         // Headless runs are otherwise uncapped: _Process spins as fast as possible,
         // flooding ApplyInput and racing the prediction far ahead of the 20 Hz
         // server, which inflates the prediction lead. Cap to a realistic display
@@ -514,7 +524,7 @@ public partial class ShipController : Node
                 GetNodeOrNull<Hud>("../Hud")?.RequestDeploy();
             }
             _hangarDemoElapsed += delta;
-            if (_hangarDemoElapsed > 90)
+            if (_hangarDemoElapsed > _hangarDemoLimit)
             {
                 GD.Print("HANGAR_DEMO_TIMEOUT: quitting (demo never completed)");
                 GetTree().Quit();

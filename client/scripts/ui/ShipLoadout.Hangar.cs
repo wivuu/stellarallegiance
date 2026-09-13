@@ -619,7 +619,17 @@ public partial class ShipLoadout
         {
             tree.Root.GetTexture().GetImage().SavePng($"{dir}/16-after-launch.png");
             GD.Print("HANGAR_DEMO_SHOT:16-after-launch");
-            tree.Quit();
+            if (_crewDemoRole != CrewDemoRole.Captain)
+            {
+                tree.Quit();
+                return;
+            }
+            // The crew harness's GUNNER shoots the ride-along after this launch. A captain that quit
+            // here would leave the lobby roster (and the ship behind in reconnect grace), so every
+            // gunner-side callsign would fall back to the raw client id. Stay connected until the
+            // other client has taken its shots.
+            SceneTreeTimer hold = tree.CreateTimer(10.0);
+            hold.Timeout += () => tree.Quit();
         };
     }
 

@@ -431,6 +431,26 @@ public partial class CommandSidebar : Control
         return true;
     }
 
+    // ---- demo hook (used by the --crew-demo harness) ------------------------
+    // Screen centre of the first "＋ JOIN" button in the CREWED SHIPS list, so the gunner harness can
+    // claim a seat through the real button (BuildTab.DemoFirstCardCenter idiom). Null while the list
+    // is empty or every seat is taken / the ship is already flying.
+    public Vector2? DemoFirstJoinCenter()
+    {
+        static ChamferButton? Find(Node node)
+        {
+            foreach (Node child in node.GetChildren())
+            {
+                if (child is ChamferButton cb && cb.Text.Contains("JOIN", StringComparison.Ordinal))
+                    return cb;
+                if (Find(child) is ChamferButton found)
+                    return found;
+            }
+            return null;
+        }
+        return _crewBox != null && Find(_crewBox) is ChamferButton b ? b.GetGlobalRect().GetCenter() : null;
+    }
+
     // One teammate's crewable ship: the hull header (glyph tile, name, CLASS · CAPT, manned count)
     // over one row per turret station. Rebuilt whole on every roster change — it's a handful of
     // controls and the seat state it paints is entirely server-owned.

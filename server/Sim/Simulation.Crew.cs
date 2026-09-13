@@ -224,10 +224,13 @@ public sealed partial class Simulation
             if (Phase != PhaseActive)
                 continue;
             // Retraction, an unspawnable hull, or a hull with no stations: the client has nothing to
-            // advertise, so whatever it had before is dissolved.
+            // advertise, so the crew it CAPTAINS is dissolved. A seat this client MANS is untouched —
+            // intent is the captain channel, and a pilot who just claimed a station retracts their own
+            // advertisement on the way into the crewing view (ShipLoadout.SetCrewMode) and when the
+            // hangar closes behind a launching captain. Only MsgCrewSeat mode 0 frees a seat.
             if (cls == NoCrewClass || !IsPlayerSpawnableClass(cls) || StationsOf(cls).Length == 0)
             {
-                ClearCrewOf(cid);
+                DissolveCrewCaptainedBy(cid);
                 continue;
             }
             if (_byClient.ContainsKey(cid))
@@ -358,9 +361,17 @@ public sealed partial class Simulation
     // the seat they hold. The one call a leave / team change / stale-class launch makes.
     public void ClearCrewOf(int clientId, string? gunnerNotice = "The crew you were on was dissolved.")
     {
+        DissolveCrewCaptainedBy(clientId, gunnerNotice);
+        VacateSeat(clientId, null);
+    }
+
+    // Half of ClearCrewOf: dissolve the crew this client CAPTAINS (its gunners freed), leaving any
+    // seat they themselves man alone. The hangar-intent retraction is the only caller that wants
+    // this half — see DrainCrewQueues.
+    private void DissolveCrewCaptainedBy(int clientId, string? gunnerNotice = "The crew you were on was dissolved.")
+    {
         if (_crewByCaptain.Remove(clientId, out var crew))
             Dissolve(crew, gunnerNotice);
-        VacateSeat(clientId, null);
     }
 
     // The ship a crew was flying left the world (docked, died, was removed): dock AND death both

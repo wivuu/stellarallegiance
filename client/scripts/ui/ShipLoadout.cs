@@ -157,6 +157,7 @@ public partial class ShipLoadout : Control
         if (_intentAdvertised && _world != null && _world.Ships.LocalShip == null)
             SendHangarIntent(retract: true);
         DemoAfterLaunch();
+        DemoAfterRideStart();
     }
 
     public override void _Ready()
@@ -169,8 +170,13 @@ public partial class ShipLoadout : Control
         MouseFilter = MouseFilterEnum.Stop; // nothing leaks to the game view below
 
         foreach (string a in OS.GetCmdlineUserArgs())
+        {
             if (a.StartsWith("--hangar-demo="))
                 _demoDir = a["--hangar-demo=".Length..];
+            // --crew-demo=captain:<dir> / --crew-demo=gunner:<dir> — the two-client crew harness.
+            if (a.StartsWith("--crew-demo="))
+                ParseCrewDemoArg(a["--crew-demo=".Length..]);
+        }
 
         var bg = new ColorRect { Color = DesignTokens.Void };
         bg.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
@@ -467,7 +473,9 @@ public partial class ShipLoadout : Control
         if (_defs == null)
             return;
 
-        if (_demoDir != null)
+        if (_crewDemoRole != CrewDemoRole.None)
+            RunCrewDemo(delta);
+        else if (_demoDir != null)
             RunDemo(delta);
 
         // Build (or rebuild) the ship card strip once the streamed defs land / change.

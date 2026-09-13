@@ -179,6 +179,21 @@ Simulation.ShipSim Launch(Simulation sim, int cid, byte team, byte cls)
     Intent(sim, 1, 0, NoCrew);
     Check(CrewOf(sim, 1) is null, "ClassId 0xFF retracts the advertisement", "the retraction left the crew record");
 
+    // A retraction is about the hull you'd FLY, never the station you MAN: the client retracts its own
+    // advertisement the moment it enters the crewing view (and again when the hangar closes behind a
+    // launching captain), so a retraction that freed the sender's seat would eject every gunner the
+    // instant they sat down.
+    Intent(sim, 1, 0, Bomber);
+    Seat(sim, 2, 0, 1, 1, 0);
+    Intent(sim, 2, 0, NoCrew);
+    Check(
+        SeatsOf(sim, 2).SequenceEqual(new[] { (1, 0) }),
+        "a gunner's own hangar retraction leaves the seat they man alone",
+        "retracting a hangar pick vacated the sender's turret station"
+    );
+    Seat(sim, 2, 0, 0, 1, 0);
+    Intent(sim, 1, 0, NoCrew);
+
     Intent(sim, 1, 0, Scout);
     Check(
         CrewOf(sim, 1) is null,
