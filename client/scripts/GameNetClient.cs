@@ -499,6 +499,22 @@ public partial class GameNetClient : Node, INetClientHost
             }.ToBytes()
         );
 
+    // A riding gunner's turret aim + trigger (v42 crews slice 2). `aimShipLocal` is a SHIP-LOCAL unit
+    // vector — stable while the captain manoeuvres — which the server clamps into the station's arc,
+    // so nothing here has to be pre-validated. HELD input, latest wins: sent on change plus a slow
+    // keepalive by TurretController, exactly like the pilot's stick (SendInput).
+    public void SendTurretInput(uint tick, Vector3 aimShipLocal, bool firing) =>
+        _tx.Writer.TryWrite(
+            new TurretInputMessage
+            {
+                Tick = tick,
+                AimX = aimShipLocal.X,
+                AimY = aimShipLocal.Y,
+                AimZ = aimShipLocal.Z,
+                Flags = firing ? TurretAim.FlagFiring : (byte)0,
+            }.ToBytes()
+        );
+
     // Command a friendly ship (F3 map right-click). subject is the commanded ship's raw id;
     // targetKind: 0 ship, 1 base, 2 rock, 3 point, 4 sector (pos ignored — pigs hold just inside
     // the entry aleph, miners prospect-patrol), 255 clear (release to autonomy). targetId is

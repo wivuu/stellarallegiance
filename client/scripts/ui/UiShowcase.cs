@@ -471,6 +471,19 @@ public partial class UiShowcase : Control
         s.AddChild(gunner);
         gunner.SetMock("T2", "PW GAT GUN 1", "VEX", "⬟ BOMBER");
 
+        // The gunner's crosshair, in both states: Data while the aim is free inside the station's arc,
+        // Warn while it is pinned against the horizon (the captain's hull is in the way).
+        s.AddChild(UiKit.MakeLabel("// HUD — TURRET RETICLE · FREE / ARC EDGE", UiKit.TextStyle.Data, DesignTokens.TextDim));
+        var reticleRow = new HBoxContainer();
+        reticleRow.AddThemeConstantOverride("separation", 24);
+        foreach (bool clamped in new[] { false, true })
+        {
+            var reticle = new TurretReticle { CustomMinimumSize = new Vector2(120, 0) };
+            reticleRow.AddChild(reticle);
+            reticle.SetMock(clamped);
+        }
+        s.AddChild(reticleRow);
+
         // Crew-served turret stations: the captain's ▶ TURRET STATIONS rows (manned+selected / open)
         // beside a gunner's ▶ TURRET MANIFEST rows (someone else / YOU / OPEN).
         s.AddChild(

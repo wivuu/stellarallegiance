@@ -9,9 +9,10 @@ namespace StellarAllegiance.Ui;
 // roster and the Scoreboard; mouse-transparent like every other HUD overlay, and hidden whenever a
 // full-screen surface (F3 map, hangar) owns the screen.
 //
-// Aiming and firing the turret is the NEXT slice — the strip says so out loud rather than implying
-// controls that don't exist yet. Wired up by the Hud alongside the other overlays; the UiShowcase
-// renders it from SetMock so the gallery needs no live world.
+// Its last cell is the control legend for the seat (v42 crews slice 2: the gunner aims with the
+// mouse and fires with LMB) — the TurretReticle at screen centre is the other half of that story.
+// Wired up by the Hud alongside the other overlays; the UiShowcase renders it from SetMock so the
+// gallery needs no live world.
 public partial class GunnerStrip : Control
 {
     private const int TopMargin = 52; // clear of the ViewModeIndicator chip at y≈28
@@ -100,7 +101,7 @@ public partial class GunnerStrip : Control
         _row.AddChild(RosterCells.Mono($"CAPTAIN {captain}", DesignTokens.Data));
         _row.AddChild(RosterCells.Mono(hull, DesignTokens.Text2));
         _row.AddChild(RosterCells.Hairline(vertical: true));
-        _row.AddChild(RosterCells.Mono("TURRET CONTROLS · NEXT SLICE", DesignTokens.TextDim));
+        _row.AddChild(RosterCells.Mono("AIM · MOUSE   FIRE · LMB", DesignTokens.TextDim));
     }
 
     public override void _Process(double delta)

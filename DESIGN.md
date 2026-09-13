@@ -72,6 +72,13 @@ subclasses** for anything needing custom `_Draw` or per-frame state.
 - **Game elements** — `LoadoutSlot`, `ContactChip`, `ResourceReadout`, `RadarFrame`, `GunnerStrip`
   (the top-centre HUD strip a crew gunner sees while riding a captain's turret station — built from
   `RosterCells`; `SetMock(…)` renders it standalone in the gallery).
+- **TurretReticle** — the crew gunner's centre-screen crosshair (ring + four ticks): `Data` while the
+  aim is free, `Warn` while `TurretController.Clamped` pins it against the station's arc edge. Shown
+  with the `GunnerStrip`; `SetMock(clamped)` renders both states in the gallery.
+- **TurretBarrelView** — the 3D gun at a MANNED turret station (`Node3D`, not a `Control`): a short
+  barrel on a low mount, sized off the hull's model length and tinted with the faction colour
+  (`DesignTokens.Faction`, never the cyan chrome accent), swung onto the gunner's live aim. An
+  unmanned station shows nothing at all.
 - **Crew / turret stations** — `TurretStationRow` (a captain's ▶ TURRET STATIONS row: ◣ tile,
   seat id + MANNED/OPEN, gun, gunner — selectable into the arsenal frame), `CrewManifestRow`
   (a gunner's read-only ▶ TURRET MANIFEST row: ◆ pip tile, seat id + gun, YOU / name / OPEN), and

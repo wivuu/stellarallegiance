@@ -136,6 +136,60 @@ public sealed class BoltRenderer
         }
     }
 
+    // A crew-served TURRET station on `row` fired at `fireTick` (v42 crews slice 2): rebuild that one
+    // bolt the way SpawnBoltFor rebuilds a pilot's, but along the gunner's streamed ship-local AIM
+    // instead of the hardpoint's authored Dir (which for a turret is only the station's zenith). The
+    // spread seed's "barrel" is TurretAim.SpreadBarrel(hp.Index) — disjoint from the pilot's barrel
+    // indices, so a turret volley never shares a scatter seed with a hull gun on the same tick. There
+    // is no cadence shadow to replay: MsgTurrets carries this station's OWN LastFireTick, so one
+    // observed advance is exactly one shot.
+    public void SpawnTurretBolt(Ship row, HardpointDef hp, WeaponDef weapon, Vec3 aimShipLocal, uint fireTick)
+    {
+        var state = ShipMath.StateFromRow(row);
+        // Same catch-up rewind SpawnBoltFor does: the row's position is at LastInputTick while the
+        // shot left at fireTick, so walk the ship back along its path to the muzzle it fired from.
+        uint ticksPast = row.LastInputTick > fireTick ? System.Math.Min(row.LastInputTick - fireTick, 8u) : 0u;
+        Vec3 firePos = state.Pos - state.Vel * (ticksPast * FlightModel.Dt);
+
+        Vec3 fwd = state.Rot.Rotate(aimShipLocal);
+        Vec3 shotDir = FlightModel.SpreadDirection(
+            fwd,
+            weapon.SpreadRad,
+            row.ShipId,
+            fireTick,
+            TurretAim.SpreadBarrel(hp.Index)
+        );
+        Vec3 mp = firePos + state.Rot.Rotate(new Vec3(hp.OffX, hp.OffY, hp.OffZ));
+        Vec3 mv = shotDir * weapon.ProjectileSpeed + state.Vel;
+
+        AddBolt(
+            ShipMath.ToGodot(mp),
+            ShipMath.ToGodot(mv),
+            ShipMath.ToGodot(shotDir),
+            row.SectorId,
+            weapon.ProjectileLifeTicks * FlightModel.Dt,
+            row.ShipId,
+            ShotMaskLeadSec(),
+            weapon.BoltRadius,
+            weapon.BoltLength,
+            weapon.IsHealing
+        );
+    }
+
+    // The LOCAL gunner's own turret prediction produced a shot (TurretController). Like SpawnLocalBolt
+    // — no masking lead, the shot is already now-correct — but the owner is the CAPTAIN'S ship we ride,
+    // so the tracer never sparks on the hull it left.
+    public void SpawnLocalTurretBolt(
+        Vector3 pos,
+        Vector3 vel,
+        Vector3 aimDir,
+        float lifeSec,
+        float boltRadius,
+        float boltLength,
+        bool isHeal,
+        ulong ownerShipId
+    ) => AddBolt(pos, vel, aimDir, _sectors.LocalSector, lifeSec, ownerShipId, 0f, boltRadius, boltLength, isHeal);
+
     // The LOCAL ship's fire prediction produced a shot this tick (ShipController). Same rendering as a
     // remote bolt, no masking lead (prediction is already now-correct).
     public void SpawnLocalBolt(

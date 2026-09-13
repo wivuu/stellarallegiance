@@ -765,6 +765,10 @@ public partial class WorldRenderer
     // IBoltSource — a remote ship's observed fire (ShipRenderer.UpdateShip). Forwards to BoltRenderer.
     public void SpawnBoltFor(Ship row) => _bolts.SpawnBoltFor(row);
 
+    // IBoltSource — one crew-served turret station's observed fire (ShipRenderer.ApplyTurrets).
+    public void SpawnTurretBolt(Ship row, HardpointDef hp, WeaponDef weapon, Vec3 aimShipLocal, uint fireTick) =>
+        _bolts.SpawnTurretBolt(row, hp, weapon, aimShipLocal, fireTick);
+
     // Movie Maker (--write-movie / --fixed-fps): Godot's _Process delta is a constant movie step, not
     // real time. Detected once; the render timeline then advances by measured wall time instead.
     private bool _fixedFpsMode;

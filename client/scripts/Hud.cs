@@ -144,6 +144,12 @@ public partial class Hud : CanvasLayer
         AddChild(gunner);
         gunner.Init(_world, _net, _defs);
 
+        // The gunner's crosshair, centre screen: the pilot's aim reticle + system ring are blank while
+        // riding, so this is the only mark on where the turret's bolts go.
+        var turretReticle = new TurretReticle { Name = "TurretReticle" };
+        AddChild(turretReticle);
+        turretReticle.Init();
+
         // Telescopic zoom scope (+/−): a circular PiP magnifier that replaces the centre gauges
         // while open. Added after the combat overlays so it draws above them, under the text/menu.
         var zoom = new ZoomView { Name = "ZoomView" };

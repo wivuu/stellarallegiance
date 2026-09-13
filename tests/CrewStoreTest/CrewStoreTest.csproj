@@ -7,9 +7,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Link the client's pure-POCO crew store directly. CrewStore depends only on the BCL — NOT on
-         Godot and not on any client seam — so this suite exercises the real production reconcile /
-         version / lookup logic headlessly. Same idiom as tests/TeamStateStoreTest. -->
+    <!-- TurretStations reads the shared HardpointDef/TurretAim types (and nothing Godot). -->
+    <ProjectReference Include="../../shared/Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Link the client's pure-POCO crew sources directly. CrewStore and TurretStations depend only
+         on the BCL + the shared def records — NOT on Godot and not on any client seam — so this suite
+         exercises the real production reconcile / version / lookup / seat-mapping logic headlessly.
+         Same idiom as tests/TeamStateStoreTest. -->
     <Compile Include="../../client/scripts/world/CrewStore.cs" Link="CrewStore.cs" />
+    <Compile Include="../../client/scripts/world/TurretStations.cs" Link="TurretStations.cs" />
   </ItemGroup>
 </Project>

@@ -114,6 +114,16 @@ public partial class ShipController : Node
         _stickPitch; // persistent self-centering virtual-stick deflection (-1..1)
     private bool _hasShip; // mirrors _world.Ships.LocalShip != null, set each _Process for _Input's capture gate
 
+    // A crew GUNNER riding a teammate's turret station has no hull but IS in flight: the cursor
+    // capture, the Esc two-step and the click-to-recapture must behave exactly as they do for a pilot
+    // (TurretController reads the captured cursor for its gimbal). Mirrors _world.Ships.Riding each
+    // _Process for the same reason _hasShip is cached — _Input runs between frames.
+    private bool _riding;
+
+    // Either seat: flight input sampling still gates on the local ship alone (ReadInput is never
+    // called while riding), but everything about the CURSOR is shared.
+    private bool InFlightSeat => _hasShip || _riding;
+
     // Headless verification: `--autofly` auto-spawns a Scout and flies a fixed
     // input so the full ApplyInput -> SimTick -> reconcile loop can be checked
     // without a human at the keyboard.
@@ -453,10 +463,11 @@ public partial class ShipController : Node
         bool connected = _cm.State == ConnectionManager.ConnState.Connected;
         bool hasShip = _world.Ships.LocalShip != null;
         _hasShip = hasShip; // cached for _Input's capture gate (event-driven, runs between frames)
+        _riding = _world.Ships.Riding; // …and so is the gunner's seat, which shares that gate
 
         TickAutoFlyBootstrap(connected, hasShip, delta);
 
-        HandleMouseCapture(hasShip);
+        HandleMouseCapture(InFlightSeat);
 
         TickSpawn(connected, hasShip, delta);
 
@@ -841,7 +852,7 @@ public partial class ShipController : Node
 
         if (
             _autoFly
-            || !_hasShip
+            || !InFlightSeat
             || Chat.Capturing
             || SectorOverview.Active
             || ShipLoadout.Active
@@ -894,8 +905,9 @@ public partial class ShipController : Node
         _mouseDelta = Vector2.Zero; // drop any motion from the recapture gesture
     }
 
-    // Release the cursor for the spawn menu (dead / not yet spawned). The flying-state
-    // capture/release lives in _Input; this only handles the no-ship menu case each frame.
+    // Release the cursor for the spawn menu (dead / not yet spawned, and not riding a turret station
+    // either). The in-flight capture/release lives in _Input; this only handles the no-seat menu case
+    // each frame.
     private void HandleMouseCapture(bool flying)
     {
         if (

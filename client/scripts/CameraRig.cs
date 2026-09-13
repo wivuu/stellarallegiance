@@ -208,6 +208,16 @@ public partial class CameraRig : Camera3D
                 float len = ResolveModelExtents(ridden).Length;
                 float scale = Mathf.Max(1f, len / ShipModelLoader.DefaultModelLength);
                 Transform3D rt = ridden.GlobalTransform;
+                // GUN CAM (v42 crews slice 2): once the gunner actually holds a station, the view stops
+                // being a chase of someone else's hull and becomes the turret's own — parked just above
+                // and behind the mount, looking straight down the aim, so the reticle at screen centre
+                // IS where the bolts go. The slice-1 chase stays as the fallback for a rider with no
+                // resolved station (a one-frame race, or a seat whose def hasn't streamed yet).
+                if (TurretController.Active)
+                {
+                    GlobalTransform = GunCamPose(rt, scale);
+                    return;
+                }
                 GlobalTransform = new Transform3D(
                     rt.Basis * FaceForward,
                     rt.Origin + rt.Basis * (ChaseOffset * scale * _zoom)
@@ -336,6 +346,44 @@ public partial class CameraRig : Camera3D
         if (shipModel?.FindChild("HP_Cockpit_0", recursive: true, owned: false) is Node3D cockpit)
             return ship.GlobalTransform.AffineInverse() * cockpit.GlobalTransform.Origin;
         return CockpitFallback;
+    }
+
+    // Gun-cam framing knobs (multiplied by the hull's size scale and the wheel dolly), in the
+    // station's own frame: lifted along the ZENITH so the barrel and the hull below it stay in shot,
+    // pulled BACK along the aim so the muzzle sits in the lower third rather than in the viewer's eye.
+    private const float GunCamUp = 0.6f;
+    private const float GunCamBack = 2.5f;
+
+    // The turret's eye: over the gunner's own mount, looking down their aim with the station's zenith
+    // as up. Aim and zenith arrive ship-local from TurretController (that is what the wire speaks), so
+    // they are rotated into world space through the ridden hull's live pose — the camera then inherits
+    // the captain's manoeuvres for free, exactly as a seat welded to the hull would.
+    private Transform3D GunCamPose(Transform3D ship, float scale)
+    {
+        Vector3 aim = (ship.Basis * TurretController.Aim).Normalized();
+        Vector3 zenith = (ship.Basis * TurretController.Zenith).Normalized();
+        Vector3 mount = ship.Origin + ship.Basis * TurretController.Station;
+
+        // Aiming straight up the zenith leaves the "up" reference parallel to the view direction and
+        // the basis degenerate; lean it onto the hull's forward-on-the-view-plane instead so the roll
+        // eases through the pole rather than snapping.
+        Vector3 up = zenith - aim * zenith.Dot(aim);
+        if (up.LengthSquared() < 1e-4f)
+        {
+            Vector3 fwd = ship.Basis.Z;
+            up = fwd - aim * fwd.Dot(aim);
+            if (up.LengthSquared() < 1e-4f)
+                up = ship.Basis.Y;
+        }
+        up = up.Normalized();
+
+        float dolly = scale * _zoom;
+        Vector3 eye = mount + zenith * (GunCamUp * dolly) - aim * (GunCamBack * dolly);
+        // A Camera3D looks down its own −Z, so the basis is built with +Z opposite the aim — the same
+        // reason the chase shot multiplies the ship basis by FaceForward. X = Y × Z keeps it
+        // right-handed (a mirrored basis would flip the whole view left-to-right).
+        Vector3 back = -aim;
+        return new Transform3D(new Basis(up.Cross(back), up, back), eye);
     }
 
     // Model length/width for the launch-cam framing, off the "ShipModel" child's meta (stashed by

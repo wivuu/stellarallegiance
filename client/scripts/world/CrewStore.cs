@@ -38,6 +38,10 @@ public sealed class CrewStore
     private readonly Dictionary<int, CrewShip> _byCaptain = new();
     private readonly Dictionary<int, MySeat> _byGunner = new();
 
+    // Launched crews only (ShipId != 0). MsgTurrets and the snapshot rows speak SHIP ids, not captain
+    // ids, so the turret seams would otherwise have to re-walk the roster per record per frame.
+    private readonly Dictionary<ulong, CrewShip> _byShipId = new();
+
     // Order-independent signature of the applied roster (the `_baseSig` idiom): the stream is also a
     // coarse keepalive, so Version — and every repaint gated on it — must only move on a REAL change.
     // Ships are folded commutatively (XOR + sum) because the server builds the frame from a dictionary
@@ -71,9 +75,12 @@ public sealed class CrewStore
         _ships.AddRange(ships);
         _byCaptain.Clear();
         _byGunner.Clear();
+        _byShipId.Clear();
         foreach (var s in _ships)
         {
             _byCaptain[s.CaptainId] = s;
+            if (s.ShipId != 0)
+                _byShipId[s.ShipId] = s;
             foreach (var seat in s.Seats)
                 if (!seat.IsOpen)
                     _byGunner[seat.GunnerId] = new MySeat(s.CaptainId, s.ClassId, s.ShipId, seat.SeatIndex, seat.WeaponId);
@@ -96,6 +103,7 @@ public sealed class CrewStore
         _ships.Clear();
         _byCaptain.Clear();
         _byGunner.Clear();
+        _byShipId.Clear();
         _sigX = _sigSum = 0;
         Version++;
     }
@@ -105,6 +113,22 @@ public sealed class CrewStore
 
     // The crew record this captain advertised, or null when they have none.
     public CrewShip? ShipOf(int captainId) => _byCaptain.TryGetValue(captainId, out var s) ? s : null;
+
+    // The crew record flying as this LIVE ship id, or null when the ship carries no crew (or its
+    // captain is still docked — a docked record has no ship id to match). The turret seams key off
+    // this: MsgTurrets and the snapshot rows both speak ship ids.
+    public CrewShip? ShipByShipId(ulong shipId) => shipId != 0 && _byShipId.TryGetValue(shipId, out var s) ? s : null;
+
+    // The gun station `seatIndex` mounts on this live ship, or null when the seat is open/unknown.
+    // Server-owned: a crewed ship's turret fires what the CAPTAIN assigned, never the authored gun,
+    // so this is the first thing every bolt rebuild asks.
+    public static uint? MannedGunAt(in CrewShip ship, byte seatIndex)
+    {
+        foreach (var seat in ship.Seats)
+            if (seat.SeatIndex == seatIndex)
+                return seat.IsOpen ? null : seat.WeaponId;
+        return null;
+    }
 
     // True when this pilot is a captain with a live crew record (so the hangar shows them TURRET
     // STATIONS rather than the CREWED SHIPS join list).

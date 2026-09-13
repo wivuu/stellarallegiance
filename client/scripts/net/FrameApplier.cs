@@ -402,6 +402,9 @@ public sealed class FrameApplier
             case CrewMessage.MsgId:
                 ApplyCrew(CrewMessage.Parse(f));
                 break;
+            case TurretsMessage.MsgId:
+                _world.Ships.ApplyTurrets(TurretsMessage.Parse(f));
+                break;
             case SalvageMessage.MsgId:
                 ApplySalvage(SalvageMessage.Parse(f));
                 break;
@@ -451,6 +454,9 @@ public sealed class FrameApplier
             list.Add(new CrewStore.CrewShip(s.CaptainId, s.ClassId, s.ShipId, seats));
         }
         _world.Crew.Apply(list);
+        // The roster is what opens and closes seats, so it is also what raises and drops turret
+        // barrels and forgets a vacated station's last aim (v42 crews slice 2).
+        _world.Ships.OnCrewChanged(_world.Crew, LocalClientId);
         _world.Ships.SetRiding(
             _world.Ships.LocalShip == null && _world.Crew.SeatOf(LocalClientId) is { } seat ? seat.ShipId : 0
         );

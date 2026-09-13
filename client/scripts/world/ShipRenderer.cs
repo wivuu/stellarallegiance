@@ -87,6 +87,11 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
     // roster row simply aren't in the map -> no nameplate.
     private readonly Dictionary<ulong, string> _pilotNames = new();
 
+    // Newest authoritative snapshot row per ship. The decoder mints a fresh (never mutated) Ship per
+    // record, so holding the reference costs nothing — and a turret's bolt rebuild needs the ship's
+    // authoritative pose/velocity/sector at its own fire tick, which MsgTurrets does not carry.
+    private readonly Dictionary<ulong, Ship> _lastRow = new();
+
     // Set by NetPromoteLocal ONLY when a reconnect reclaims an already-mid-flight ship (that inner
     // re-insert skips the launch cinematic).
     private ulong? _reclaimedShipId;
@@ -352,12 +357,15 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
     public void NetInsertShip(Ship row, bool local)
     {
         _shield[row.ShipId] = row.Shield;
+        _lastRow[row.ShipId] = row;
         InsertShip(row, local);
+        RebuildTurretBarrels(); // the crew frame may have landed before this hull's first snapshot
     }
 
     public void NetUpdateShip(Ship oldRow, Ship newRow)
     {
         _shield[newRow.ShipId] = newRow.Shield;
+        _lastRow[newRow.ShipId] = newRow;
         UpdateShip(oldRow, newRow);
     }
 
@@ -367,6 +375,9 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
         _mounts.Remove(row.ShipId); // immediate prune; the next MsgShipLoadout omits it anyway
         _mountShadow.Remove(row.ShipId);
         _hold.Remove(row.ShipId);
+        _lastRow.Remove(row.ShipId);
+        _turrets.Remove(row.ShipId);
+        _turretBarrels.Remove(row.ShipId); // the views are children of the node DeleteShip frees
         DeleteShip(row, reason);
     }
 
@@ -467,6 +478,200 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
             _nodes.Remove(shipId);
             _forgetCollidingShip(shipId);
             node.QueueFree();
+        }
+    }
+
+    // ---- Crew-served turrets (v42 crews slice 2) ------------------------------------------------
+
+    // One MANNED station's last known state. Indexed by STATION SLOT (TurretStations order), which is
+    // NOT the wire's SeatIndex — the frame carries HardpointDef.Index and TurretStations.SlotOf maps
+    // it, so a hull that ever authors its turret indices out of order still lands on the right slot.
+    private struct TurretState
+    {
+        public Vec3 Aim;
+        public uint LastFireTick;
+        public bool Manned;
+    }
+
+    private readonly Dictionary<ulong, TurretState[]> _turrets = new();
+    private readonly Dictionary<ulong, TurretBarrelView?[]> _turretBarrels = new();
+
+    // The crew roster + our own client id, handed over on every MsgCrew (ShipRenderer is built before
+    // the connection exists, so this can't be a ctor dependency). The roster is authoritative for
+    // WHICH gun each station mounts — a captain re-assigns them in the hangar, so the authored
+    // hardpoint gun is only the fallback for a ship whose crew record we haven't seen.
+    private CrewStore? _crew;
+    private int _localClientId = -1;
+
+    // MsgCrew landed: seats opened/closed, so re-derive the barrel views and forget the state of any
+    // seat the roster now shows OPEN (a stale aim would leave a ghost barrel tracking nothing).
+    public void OnCrewChanged(CrewStore crew, int localClientId)
+    {
+        _crew = crew;
+        _localClientId = localClientId;
+        foreach (var (shipId, state) in _turrets)
+        {
+            var stations = StationsFor(shipId);
+            if (crew.ShipByShipId(shipId) is not { } ship)
+            {
+                System.Array.Clear(state);
+                continue;
+            }
+            for (int slot = 0; slot < state.Length && slot < stations.Count; slot++)
+                if (CrewStore.MannedGunAt(ship, stations[slot].Index) is null)
+                    state[slot] = default;
+        }
+        RebuildTurretBarrels();
+    }
+
+    // MsgTurrets: live aim + fire for every manned station this client can see. A seat missing from the
+    // frame simply keeps its last state (the stream is lossy and on-change); OnCrewChanged is what
+    // drops a seat, on the MsgCrew that shows it open.
+    public void ApplyTurrets(StellarAllegiance.Shared.Net.TurretsMessage m)
+    {
+        foreach (var rec in m.Turrets)
+        {
+            if (!_lastRow.TryGetValue(rec.ShipId, out var row))
+                continue; // the turret frame outran this hull's first snapshot; the next one lands it
+            // Our OWN seat is predicted locally (aim and bolts both) — adopting the server's echo
+            // would snap the reticle back a round trip and double every shot.
+            if (IsLocalSeat(rec.ShipId, rec.SeatIndex))
+                continue;
+
+            var stations = StationsFor(rec.ShipId);
+            int slot = TurretStations.SlotOf(stations, rec.SeatIndex);
+            if (slot < 0)
+                continue;
+            if (!_turrets.TryGetValue(rec.ShipId, out var state) || state.Length != stations.Count)
+                _turrets[rec.ShipId] = state = new TurretState[stations.Count];
+
+            uint wasFire = state[slot].Manned ? state[slot].LastFireTick : 0u;
+            state[slot].Aim = new Vec3(rec.AimX, rec.AimY, rec.AimZ);
+            state[slot].LastFireTick = rec.LastFireTick;
+            state[slot].Manned = true;
+
+            // This station's OWN fire stamp advanced ⇒ exactly one shot left it since we last looked.
+            // (A pod carries no crew; the guard mirrors the pilot-bolt path.)
+            if (
+                rec.LastFireTick != wasFire
+                && rec.LastFireTick != 0
+                && !row.IsPod
+                && TurretGun(row, stations[slot]) is { } w
+            )
+                _bolts.SpawnTurretBolt(row, stations[slot], w, state[slot].Aim, rec.LastFireTick);
+
+            EnsureBarrel(rec.ShipId, row, stations, slot)?.SetAim(ShipMath.ToGodot(state[slot].Aim));
+        }
+    }
+
+    // The LOCAL gunner's own aim, pushed every frame by TurretController — their barrel follows the
+    // live gimbal rather than the server echo they deliberately ignore.
+    public void SetLocalTurretAim(ulong shipId, byte seatIndex, Vector3 aim)
+    {
+        if (!_lastRow.TryGetValue(shipId, out var row))
+            return;
+        var stations = StationsFor(shipId);
+        int slot = TurretStations.SlotOf(stations, seatIndex);
+        if (slot >= 0)
+            EnsureBarrel(shipId, row, stations, slot)?.SetAim(aim);
+    }
+
+    // Is (ship, seat) the station WE man? Only ever true for one seat at a time.
+    private bool IsLocalSeat(ulong shipId, byte seatIndex) =>
+        _localClientId >= 0
+        && _crew?.SeatOf(_localClientId) is { } mine
+        && mine.ShipId == shipId
+        && mine.SeatIndex == seatIndex;
+
+    // A hull's station list, cached per class: the local gunner's barrel asks for it every frame, and
+    // the answer only changes when the def stream is rebuilt (Reset drops the cache). A class whose def
+    // hasn't arrived yet is NOT cached — the miss must resolve once it does.
+    private readonly Dictionary<byte, List<HardpointDef>> _stationsByClass = new();
+    private static readonly List<HardpointDef> _noStations = new();
+
+    private List<HardpointDef> StationsFor(ulong shipId)
+    {
+        if (!_lastRow.TryGetValue(shipId, out var row))
+            return _noStations;
+        byte cls = (byte)row.Class;
+        if (_stationsByClass.TryGetValue(cls, out var cached))
+            return cached;
+        if (_defs.GetHardpoints(cls) is not { } hps)
+            return _noStations;
+        return _stationsByClass[cls] = TurretStations.Of(hps);
+    }
+
+    // The gun a station actually fires: the captain's assignment from the crew roster (authoritative —
+    // it is what the server bound at launch), else the authored hardpoint gun. Null when neither
+    // resolves to a bolt weapon, in which case there is no bolt to rebuild.
+    private WeaponDef? TurretGun(Ship row, HardpointDef hp)
+    {
+        uint id =
+            (_crew?.ShipByShipId(row.ShipId) is { } ship ? CrewStore.MannedGunAt(ship, hp.Index) : null) ?? hp.WeaponId;
+        var w = _defs.GetWeapon(id);
+        return w is { Kind: WeaponKind.Bolt } ? w : null;
+    }
+
+    // Re-derive every crewed ship's barrel views from the roster: one per MANNED station, nothing at an
+    // open one. Idempotent and cheap (a handful of crewed ships), so it runs on each MsgCrew and on a
+    // fresh ship insert rather than being driven from a per-frame pass.
+    private void RebuildTurretBarrels()
+    {
+        if (_crew is null)
+            return;
+        foreach (var ship in _crew.Ships)
+        {
+            if (ship.ShipId == 0 || !_lastRow.TryGetValue(ship.ShipId, out var row))
+                continue;
+            var stations = StationsFor(ship.ShipId);
+            for (int slot = 0; slot < stations.Count; slot++)
+            {
+                if (CrewStore.MannedGunAt(ship, stations[slot].Index) is not null)
+                    EnsureBarrel(ship.ShipId, row, stations, slot);
+                else
+                    DropBarrel(ship.ShipId, slot);
+            }
+        }
+        // Crews that vanished from the roster entirely (captain docked/left): their ships may still be
+        // in view, so the barrels have to come down explicitly.
+        foreach (var (shipId, views) in _turretBarrels)
+            if (_crew.ShipByShipId(shipId) is null)
+                for (int slot = 0; slot < views.Length; slot++)
+                    DropBarrel(shipId, slot);
+    }
+
+    private TurretBarrelView? EnsureBarrel(ulong shipId, Ship row, List<HardpointDef> stations, int slot)
+    {
+        if (slot < 0 || slot >= stations.Count)
+            return null;
+        if (!_turretBarrels.TryGetValue(shipId, out var views) || views.Length != stations.Count)
+            _turretBarrels[shipId] = views = new TurretBarrelView?[stations.Count];
+        if (views[slot] is { } live && Godot.GodotObject.IsInstanceValid(live))
+            return live;
+        if (!_nodes.TryGetValue(shipId, out var node) || node.GetNodeOrNull<Node3D>("ShipModel") is not { } model)
+            return null;
+
+        var hp = stations[slot];
+        var view = TurretBarrelView.Create(
+            new Vector3(hp.OffX, hp.OffY, hp.OffZ),
+            new Vector3(hp.DirX, hp.DirY, hp.DirZ),
+            model.GetMeta("ModelLength", 0f).AsSingle(),
+            row.Team
+        );
+        model.AddChild(view);
+        views[slot] = view;
+        return view;
+    }
+
+    private void DropBarrel(ulong shipId, int slot)
+    {
+        if (!_turretBarrels.TryGetValue(shipId, out var views) || slot >= views.Length)
+            return;
+        if (views[slot] is { } view)
+        {
+            if (Godot.GodotObject.IsInstanceValid(view))
+                view.QueueFree();
+            views[slot] = null;
         }
     }
 
@@ -674,6 +879,10 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
         _shield.Clear();
         _hold.Clear(); // a rebuilt world re-pushes every hold from the next MsgShipLoadout
         _pilotNames.Clear();
+        _lastRow.Clear();
+        _turrets.Clear(); // re-seeded by the next MsgCrew + MsgTurrets
+        _turretBarrels.Clear(); // the views went with the freed ship nodes
+        _stationsByClass.Clear(); // a rebuilt world re-streams the defs the cache was derived from
         LocalShip = null;
         _deathCamUntil = -1.0;
         _pendingHomeReset = false;
