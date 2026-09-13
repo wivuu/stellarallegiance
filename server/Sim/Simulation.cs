@@ -297,6 +297,25 @@ public sealed partial class Simulation
         public int[]? CrewSeats;
         public CrewShip? Crew;
 
+        // ---- Crew-served turret aim + fire (v42 crews slice 2; Simulation.Firing.TryFireTurrets) ----
+        // TurretAim[slot] = that station's CURRENT ship-local aim (a unit vector already clamped into
+        // the station's arc by the shared TurretAim rule); TurretLastFire[slot] = its OWN cadence
+        // stamp, which is also the per-seat stamp MsgTurrets carries. Both are sized to the class's
+        // station count at spawn for EVERY hull that authors stations — crewed or not, since a PIG
+        // bomber simply never has a gunner holding fire — and seeded to TurretAim.Rest(zenith).
+        // LastTurretFireTick is the ship-wide "a station fired this tick" stamp radar signature and
+        // PIG aggro read BESIDE LastFireTick. A turret NEVER touches LastFireTick / MountLastFire:
+        // those drive the client's PILOT-bolt rebuild, and a turret bolt is rebuilt from its own
+        // TurretRecord along the streamed aim instead.
+        public Vec3[]? TurretAim;
+        public uint[]? TurretLastFire;
+        public uint LastTurretFireTick;
+
+        // "This ship's turret state changed this tick" — an aim that moved, a station that fired, a
+        // seat that went back to rest. Collected into StepEvents.TurretUpdates (and cleared) at the
+        // end of Step, where it becomes this tick's MsgTurrets frames.
+        public bool TurretDirty;
+
         // Per-mount gun cadence gates (FireCadence.MountFires), lazily sized to the class muzzle
         // array in TryFire. LastFireTick stays the wire stamp "some gun fired this tick"; clients
         // derive WHICH mounts from the same shared rule, so these never go on the wire.
@@ -928,6 +947,9 @@ public sealed partial class Simulation
                 UpdateLock(s, input, tick); // missile lock timer (no-op on hulls with no rack)
                 if (input.Firing)
                     TryFire(s, tick);
+                // Crew-served turrets fire off their GUNNERS' held input, not the captain's — so
+                // this runs unconditionally beside the pilot's own trigger (Simulation.Firing.cs).
+                TryFireTurrets(s, tick);
                 if (input.Firing2)
                     TryFireMissile(s, tick);
                 if (input.DropChaff)
@@ -1017,6 +1039,18 @@ public sealed partial class Simulation
                 continue;
             s.Shield = MathF.Min(cap, s.Shield + ShieldRechargeFor(s) * dt);
         }
+
+        // Crew turrets: collect the ships whose aim moved / whose stations fired this step into the
+        // hub's read-side list (StepEvents.TurretUpdates -> the per-client MsgTurrets frames). Last
+        // thing in the step, so a turret that fired in Pass A and a seat vacated by the structural
+        // pass both land in the same tick's frame. A ship that left the world this step is no longer
+        // in _order, so its flag simply dies with it (the client drops its turrets with the hull).
+        foreach (var s in _order)
+            if (s.TurretDirty)
+            {
+                s.TurretDirty = false;
+                Events.TurretUpdates.Add(s);
+            }
     }
 
     // Per-ship boundary erosion, asteroid/base-sphere/deployable collisions, and enemy-bounce /
@@ -1491,6 +1525,17 @@ public sealed partial class Simulation
         s.PaidCost = ShipDefs.TryGetValue(cls, out var cd) ? cd.Cost : 0;
         // D6/D9: seed the chaff/mine dispenser ammo from the validated spawn cargo (empty ⇒ hull default).
         SeedDispenserAmmo(s, hold);
+        // Crew-served turret aim/fire state (v42): allocated for EVERY hull that authors stations,
+        // crewed or not — a PIG bomber simply never has a gunner holding fire — so Pass A never has
+        // to test for them. Each station starts at its rest pose (TurretAim.Rest of its zenith).
+        int stations = TurretStationCount(cls);
+        if (stations > 0)
+        {
+            s.TurretAim = new Vec3[stations];
+            s.TurretLastFire = new uint[stations];
+            for (int i = 0; i < stations; i++)
+                s.TurretAim[i] = TurretAim.Rest(TurretZenithOf(cls, i));
+        }
         _ships[s.ShipId] = s;
         _order.Add(s);
         if (clientId >= 0)
@@ -1511,6 +1556,8 @@ public sealed partial class Simulation
                 crew.Ship = s;
                 s.Crew = crew;
                 s.CrewSeats = crew.SeatGunnerIds;
+                // A watcher's FIRST MsgTurrets for this ship shows its manned seats at rest.
+                s.TurretDirty = true;
                 Events.CrewChanged = true; // the roster flips from "joinable" to "in flight"
             }
         }

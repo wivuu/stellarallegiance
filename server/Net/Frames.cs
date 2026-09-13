@@ -723,6 +723,38 @@ public static class Frames
         return new CrewMessage { Ships = rows.ToArray() };
     }
 
+    // One crewed ship's live TURRET state (the body of MsgTurrets, v42 crews slice 2). MANNED
+    // stations only — an omitted seat means "unmanned, at rest", which is exactly what the roster
+    // frame already told the client. SeatIndex is the station's HardpointDef.Index (the same index
+    // MsgCrew/MsgCrewSeat speak), the aim is the SHIP-LOCAL unit vector the server already clamped
+    // into the station's arc, and LastFireTick is that station's own stamp (0 = never fired) — the
+    // client rebuilds the turret's bolts from it the way BoltRenderer rebuilds a pilot's from
+    // ShipRecord.LastFireTick. Empty when the ship flies no crew (the hub then sends nothing).
+    public static TurretRecord[] Turrets(Simulation sim, Simulation.ShipSim s)
+    {
+        if (s.CrewSeats is not { } seats || s.TurretAim is not { } aims || s.TurretLastFire is not { } stamps)
+            return System.Array.Empty<TurretRecord>();
+        int n = Math.Min(seats.Length, Math.Min(aims.Length, stamps.Length));
+        List<TurretRecord>? rows = null;
+        for (int i = 0; i < n; i++)
+        {
+            if (seats[i] == Simulation.NoGunner)
+                continue;
+            (rows ??= new()).Add(
+                new TurretRecord
+                {
+                    ShipId = s.ShipId,
+                    SeatIndex = sim.TurretStationIndex(s.Class, i),
+                    AimX = aims[i].X,
+                    AimY = aims[i].Y,
+                    AimZ = aims[i].Z,
+                    LastFireTick = stamps[i],
+                }
+            );
+        }
+        return rows?.ToArray() ?? System.Array.Empty<TurretRecord>();
+    }
+
     // ~1.5 s at 20 Hz: keep emitting 0-count frames this long after the last active build so a lossy
     // client is guaranteed to see the drop and fade its build sphere out.
     public const uint ConstructorBuildEmptyGraceTicks = 30;

@@ -105,4 +105,17 @@ public static class HubFrames
             CaptainId = captainId,
             SeatIndex = seatIndex,
         }.ToBytes();
+
+    // A riding gunner's turret input: the SHIP-LOCAL aim direction plus the flag bits
+    // (TurretAim.FlagFiring). HELD semantics — the server keeps the latest frame per gunner and
+    // fires on its own cadence for as long as Firing is set, so a test sends it once and steps.
+    public static byte[] TurretInput(uint tick, StellarAllegiance.Shared.Vec3 aim, byte flags) =>
+        new TurretInputMessage
+        {
+            Tick = tick,
+            AimX = aim.X,
+            AimY = aim.Y,
+            AimZ = aim.Z,
+            Flags = flags,
+        }.ToBytes();
 }

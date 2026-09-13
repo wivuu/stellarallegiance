@@ -42,18 +42,76 @@ public sealed partial class Simulation
             if (!FireCadence.MountFires(tick, ship.MountLastFire[barrel], w.FireIntervalTicks))
                 continue;
             ship.MountLastFire[barrel] = tick;
-            FireBolt(ship, tick, w, muzzles[barrel], barrel);
+            FireBolt(ship, tick, w, muzzles[barrel], barrel, ship.OwnerClientId);
             fired = true;
         }
         if (fired)
             ship.LastFireTick = tick; // wire stamp: "a gun fired this tick" — clients derive which
     }
 
+    // Crew-served TURRET fire (v42 crews slice 2) — the gunners' half of Pass A, run right after the
+    // pilot's TryFire for every ship that flies a bound crew. Each manned station reads its gunner's
+    // HELD input (Simulation.Crew.cs): the aim is clamped into the station's arc by the SHARED
+    // TurretAim rule (so a stale or forged aim can never fire through the hull), stored as the
+    // station's live aim, and — while Firing is held — fired on that station's OWN cadence.
+    //
+    // Two invariants:
+    //   - A turret bolt is credited to the GUNNER, not the captain (FireBolt's attackerClientId), so
+    //     a kill scores on the pilot who actually pulled the trigger.
+    //   - It NEVER stamps ship.LastFireTick / ship.MountLastFire. Those two drive the client's
+    //     PILOT-bolt rebuild; a turret bolt is rebuilt from its own TurretRecord instead, and its
+    //     spread seed is TurretAim.SpreadBarrel (0x80 | hp index), disjoint from the pilot's barrels.
+    private void TryFireTurrets(ShipSim s, uint tick)
+    {
+        if (s.CrewSeats is not { } seats || s.TurretAim is not { } aims || s.TurretLastFire is not { } stamps)
+            return;
+        var stations = StationsOf(s.Class);
+        int n = Math.Min(seats.Length, Math.Min(stations.Length, Math.Min(aims.Length, stamps.Length)));
+        for (int slot = 0; slot < n; slot++)
+        {
+            int gunner = seats[slot];
+            if (gunner < 0 || !_turretHeld.TryGetValue(gunner, out var held))
+                continue; // unmanned, or a gunner who has sent nothing yet: the station stays put
+
+            var st = stations[slot];
+            Vec3 aim = TurretAim.Clamp(st.Zenith, held.Aim);
+            if (
+                MathF.Abs(aim.X - aims[slot].X) > TurretAimEpsilon
+                || MathF.Abs(aim.Y - aims[slot].Y) > TurretAimEpsilon
+                || MathF.Abs(aim.Z - aims[slot].Z) > TurretAimEpsilon
+            )
+            {
+                aims[slot] = aim;
+                s.TurretDirty = true;
+            }
+            if (!held.Firing)
+                continue;
+
+            // The station's EFFECTIVE gun: the captain's resolved swap, else the authored one (the
+            // same value AuthoredTurretIds(s.Class)[slot] carries — both read this hardpoint's def).
+            uint wid = s.TurretWeaponIds is { } ids && slot < ids.Length ? ids[slot] : st.WeaponId;
+            if (!WeaponDefs.TryGetValue(wid, out var w) || w.Kind != WeaponKind.Bolt)
+                continue; // an emptied / non-bolt station fires nothing
+            if (!FireCadence.MountFires(tick, stamps[slot], w.FireIntervalTicks))
+                continue; // the server's cadence is the ONLY debounce — held input replays every tick
+            FireBolt(s, tick, w, new Muzzle(st.Off, aim, wid), TurretAim.SpreadBarrel(st.HpIndex), gunner);
+            stamps[slot] = tick;
+            s.LastTurretFireTick = tick;
+            s.TurretDirty = true;
+        }
+    }
+
+    // How far a clamped aim must move before it is worth a MsgTurrets record (a unit vector, so this
+    // is ~0.006°) — the gunner's mouse jitters every tick and the stream is per-client.
+    private const float TurretAimEpsilon = 1e-4f;
+
     // Cast one bolt from a single muzzle: spawn it at the hardpoint, walk the spatial grid for the
     // first hull/base/rock it enters, and queue the damage at the impact tick. The bolt direction
     // is seeded by (ShipId, fire tick, barrel), so the client renders the same bolt from the same
     // muzzle and the per-barrel scatter agrees on both sides.
-    private void FireBolt(ShipSim ship, uint tick, WeaponDef w, in Muzzle muzzle, byte barrel)
+    // attackerClientId is the PILOT the hit is credited to: the ship's owner for the pilot's own
+    // guns, the seated GUNNER for a crew-served turret (-1 = a PIG / nobody).
+    private void FireBolt(ShipSim ship, uint tick, WeaponDef w, in Muzzle muzzle, byte barrel, int attackerClientId)
     {
         Vec3 fwd = ship.State.Rot.Rotate(muzzle.Dir);
         Vec3 shotDir = FlightModel.SpreadDirection(fwd, w.SpreadRad, ship.ShipId, tick, barrel);
@@ -234,9 +292,7 @@ public sealed partial class Simulation
             // path (ApplyBaseDamage via shot.Damage) inherits it as well.
             float dmg = w.Damage * TeamAttr(ship.Team, Allegiance.Factions.Model.GameAttribute.GunDamage);
             _shotRing[(tick + resolveTicks) % ShotRingSize]
-                .Add(
-                    new PendingShot(targetShip, targetBase, dmg, w.ShieldMult, targetProbe, w.IsHealing, ship.OwnerClientId)
-                );
+                .Add(new PendingShot(targetShip, targetBase, dmg, w.ShieldMult, targetProbe, w.IsHealing, attackerClientId));
         }
     }
 
