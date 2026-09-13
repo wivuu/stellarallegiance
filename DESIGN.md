@@ -72,13 +72,16 @@ subclasses** for anything needing custom `_Draw` or per-frame state.
 - **Game elements** — `LoadoutSlot`, `ContactChip`, `ResourceReadout`, `RadarFrame`, `GunnerStrip`
   (the top-centre HUD strip a crew gunner sees while riding a captain's turret station — built from
   `RosterCells`; `SetMock(…)` renders it standalone in the gallery).
-- **TurretReticle** — the crew gunner's centre-screen crosshair. The ring + four ticks mark the gun's
-  ACTUAL aim: `Data` while the aim is free, `Ok` while the focused target's lead point is on the
-  firing line (`TargetMarkers.OnSolution`), `Warn` — which wins — while `TurretController.Clamped`
-  pins the aim against the station's arc edge. A second, smaller open square marks the DESIRED aim
-  (where the mouse has dragged the sight) and is dropped once the traversing gun catches up, so a
-  heavy mount visibly lags its sight. Shown with the `GunnerStrip`;
-  `SetMock(clamped, onSolution, desired)` renders every state in the gallery.
+- **Crew gunner HUD** — a gunner has NO HUD of its own beyond the `GunnerStrip`. A turret seat is a
+  pilot's seat minus the controls, so it reuses the pilot's flight HUD verbatim: one aim reticle
+  (`MarkerDraw.AimReticle`, drawn by `TargetMarkers` on the turret's real firing line — never a
+  second "desired aim" mark), the `SystemRing` centred on it reading the RIDDEN hull, the
+  `VelocityIndicator` prograde marker, the `WeaponsPanel` cut to one primary row for the seat's gun,
+  and the usual nameplates/brackets/Tab cycle. All of them resolve their subject through
+  `HudSubject`, which answers "whose hull, whose firing line" once for both seats. The only
+  gunner-specific cue is the reticle's `Warn` tint while `TurretController.Clamped` (the mount is
+  pinned against its firing arc). Do not add gunner-only chrome without a reason the pilot's
+  equivalent cannot carry.
 - **TurretBarrelView** — the 3D gun at a MANNED turret station (`Node3D`, not a `Control`): a short
   barrel on a low mount, sized off the hull's model length and tinted with the faction colour
   (`DesignTokens.Faction`, never the cyan chrome accent), swung onto the gunner's live aim. An

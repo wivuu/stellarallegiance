@@ -471,34 +471,8 @@ public partial class UiShowcase : Control
         s.AddChild(gunner);
         gunner.SetMock("T2", "PW GAT GUN 1", "VEX", "⬟ BOMBER");
 
-        // The gunner's crosshair, in every state it reads: settled and free inside the arc, pinned
-        // against the station's horizon (the captain's hull is in the way), on the focused target's
-        // firing solution, and mid-TRAVERSE — the square is the sight the mouse has dragged ahead, the
-        // ring is the gun still swinging onto it.
-        s.AddChild(
-            UiKit.MakeLabel(
-                "// HUD — TURRET RETICLE · FREE / ARC EDGE / ON SOLUTION / TRAVERSING",
-                UiKit.TextStyle.Data,
-                DesignTokens.TextDim
-            )
-        );
-        var reticleRow = new HBoxContainer();
-        reticleRow.AddThemeConstantOverride("separation", 24);
-        foreach (
-            (bool clamped, bool onSolution, Vector2 desired) in new[]
-            {
-                (false, false, Vector2.Zero),
-                (true, false, Vector2.Zero),
-                (false, true, Vector2.Zero),
-                (false, false, new Vector2(26, -14)),
-            }
-        )
-        {
-            var reticle = new TurretReticle { CustomMinimumSize = new Vector2(120, 0) };
-            reticleRow.AddChild(reticle);
-            reticle.SetMock(clamped, onSolution, desired);
-        }
-        s.AddChild(reticleRow);
+        // A gunner has no crosshair of their own to show here: they get the PILOT's aim reticle,
+        // drawn by TargetMarkers on the turret's real firing line (see DESIGN.md).
 
         // Crew-served turret stations: the captain's ▶ TURRET STATIONS rows (manned+selected / open)
         // beside a gunner's ▶ TURRET MANIFEST rows (someone else / YOU / OPEN).

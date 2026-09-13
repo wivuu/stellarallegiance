@@ -5,18 +5,26 @@ using StellarAllegiance.Ui;
 
 // The GUNNER's half of a crewed ship (v42 crews slice 2): free mouse aim from a teammate's turret
 // station and the trigger that fires it. The pilot's ShipController equivalent — same 20 Hz sample
-// cadence, same send-on-change + keepalive, same local fire prediction — but it steers an ANGLE, not
-// a ship: the gimbal is integrated straight into a ship-local aim vector and the server clamps it
-// into the station's arc.
+// cadence, same send-on-change + keepalive, same local fire prediction — but it steers an ORIENTATION,
+// not a ship, and the server clamps that orientation into the station's arc.
+//
+// FREE LOOK, no gimbal (user steer 2026-09-13: the gun camera "should just carry through as if there
+// were no difference at all until it reaches the other side"). The mouse turns a ship-local look
+// basis about its OWN axes — yaw about its up, pitch about its right — exactly the way a pilot's nose
+// turns about the hull. There is no azimuth and no elevation limit: look up past the station's zenith
+// and the view carries over the top and continues down the far side, the up going with it, until the
+// firing ARC stops it. All of that lives in the Godot-free TurretLook.
 //
 // There ARE two aims (slice 2b): the mouse drags a DESIRED sight, and the mount TRAVERSES toward it
 // under its authored slew/accel (shared TurretAim.Slew, run here per frame and on the server per sim
 // tick from the same streamed HardpointDef numbers). The DESIRED aim is what goes on the wire — the
 // server derives the actual one itself — and the ACTUAL aim is what the gunner sees: the camera, the
 // barrel, the reticle and the predicted bolts all follow it, so a heavy gun visibly lags the sight.
+// There is only ONE mark on screen for it: the pilot's own aim reticle, drawn by TargetMarkers off
+// the same firing line (a gunner is a pilot who cannot steer, so they get the pilot's HUD).
 //
 // Three mirrors of TurretAim must agree or the gunner shoots somewhere nobody else sees
-// (server TryFireTurrets / this / ShipRenderer.ApplyTurrets) — the gimbal→aim maths therefore lives
+// (server TryFireTurrets / this / ShipRenderer.ApplyTurrets) — the arc/traverse maths therefore lives
 // in shared TurretAim, never here. Turret input is HELD input, latest wins: the server re-fires the
 // last aim+trigger on its own cadence, so a dropped frame costs nothing.
 //
@@ -33,38 +41,35 @@ public partial class TurretController : Node
     private const uint KeepaliveTicks = 10; // ~0.5 s — the server holds the last aim between sends
     private const float AimEpsilon = 1e-3f; // smallest aim move worth a frame on the wire
 
-    // Read by CameraRig (the gun cam), TurretReticle (the crosshair) and the barrel view, in the
-    // cross-system static idiom (ZoomView.Active / SectorOverview.Active).
+    // Read by CameraRig (the gun cam), the HUD subject seam and the barrel view, in the cross-system
+    // static idiom (ZoomView.Active / SectorOverview.Active).
     public static bool Active { get; private set; }
 
-    // True while the gunner is pushing the aim BELOW the station's horizon — the hull is in the way,
-    // so the reticle warns rather than silently eating the input.
+    // True while the gunner is pushing the look past the station's firing arc — the mount cannot go
+    // there, so the aim reticle warns rather than letting the input silently vanish.
     public static bool Clamped { get; private set; }
-
-    // True while the lead solution for the Tab-focused target sits inside the gun's aim cone — the
-    // reticle's "on solution" cue. Owned by TargetMarkers (which does the lead solve and the
-    // projection); mirrored here only so the reticle reads ONE static for its ring colour.
-    public static bool OnSolution => TargetMarkers.OnSolution;
 
     // The live ship-local ACTUAL aim (where the gun points, and therefore where the bolts go), the
     // gunner's DESIRED aim (where the mouse has dragged the sight — the gun traverses toward it), and
     // the station's zenith (its outward normal). All three are in the captain's hull frame; the camera
-    // and the reticle rotate them into world space through the ridden node's pose.
+    // and the HUD rotate them into world space through the ridden node's pose.
     public static Vector3 Aim { get; private set; } = Vector3.Forward;
     public static Vector3 DesiredAim { get; private set; } = Vector3.Forward;
     public static Vector3 Zenith { get; private set; } = Vector3.Up;
 
-    // The gun cam's up, ship-local (see TurretGimbal): the elevation tangent of the ACTUAL aim on a
-    // continuously-tracked azimuth branch, so the view keeps the same horizon all the way to the pole.
-    public static Vector3 CamUp { get; private set; } = Vector3.Up;
+    // The gun cam's full ship-local basis: Z = the ACTUAL aim, Y = the gunner's up, X = Y × Z. It is
+    // the free-look basis carried onto the traversing gun by the shortest rotation (TurretLook), so
+    // the horizon is one continuous thing all the way over the zenith — never a projection re-derived
+    // per frame, which is what used to spin the view at the pole.
+    public static Basis CamBasis { get; private set; } = Basis.Identity;
 
     // The station's ship-local mount offset — where the gun cam sits and where the bolts leave.
     public static Vector3 Station { get; private set; } = Vector3.Zero;
 
-    // The ridden hull's world pose as of this frame's aim sample. Published so the consumers that turn
-    // a ship-local aim into a screen point (TurretReticle's desired-aim marker) don't each re-walk the
-    // world for the node — and so they all use the SAME pose the aim was sampled against.
-    public static Transform3D RiddenPose { get; private set; } = Transform3D.Identity;
+    // This station's own fire cadence, in the same prediction-tick space the pilot's predictor uses,
+    // so the weapons panel can draw the gunner's CYCLE bar off the gate the server will actually apply.
+    public static uint LastFireTick { get; private set; }
+    public static uint PredTick { get; private set; }
 
     // The station we man — hardpoint geometry, the gun it fires (null when the seat's weapon isn't a
     // bolt weapon) and the ridden ship id — or null when we aren't seated. One resolution, shared with
@@ -73,44 +78,42 @@ public partial class TurretController : Node
 
     // Where the gunner's aim reticle is ranged: the seat gun's effective reach (its bolts die there),
     // or a plain anchor distance for a station whose gun hasn't streamed. Single source for the HUD
-    // reticle, the desired-aim marker and the Tab-target ranking point.
+    // reticle, the system ring's centre and the Tab-target ranking point (all via HudSubject).
     public const float DefaultAimRange = 500f;
 
     public static float AimRange { get; private set; } = DefaultAimRange;
 
-    // --crew-demo harness: while set, the gimbal sweeps on its own and the trigger is held, so a
+    // --crew-demo harness: while set, the look sweeps on its own and the trigger is held, so a
     // scripted gunner proves the aim/fire round trip without a hand on the mouse. Describe() is what
     // the harness prints beside each shot.
     public static bool DemoDrive;
     private int _sentFrames,
         _predictedShots;
 
-    public static string Describe(TurretController? tc) =>
-        tc is null
-            ? "no controller"
-            : $"active={Active} clamped={Clamped} on={OnSolution} aim=({Aim.X:0.00},{Aim.Y:0.00},{Aim.Z:0.00}) want=({DesiredAim.X:0.00},{DesiredAim.Y:0.00},{DesiredAim.Z:0.00}) up=({CamUp.X:0.00},{CamUp.Y:0.00},{CamUp.Z:0.00}) rate={tc._rate:0.00} firing={tc._firing} sent={tc._sentFrames} predicted={tc._predictedShots}";
+    public static string Describe(TurretController? tc)
+    {
+        if (tc is null)
+            return "no controller";
+        Vector3 up = CamBasis.Y;
+        return $"active={Active} clamped={Clamped} aim=({Aim.X:0.00},{Aim.Y:0.00},{Aim.Z:0.00}) want=({DesiredAim.X:0.00},{DesiredAim.Y:0.00},{DesiredAim.Z:0.00}) up=({up.X:0.00},{up.Y:0.00},{up.Z:0.00}) rate={tc._rate:0.00} firing={tc._firing} sent={tc._sentFrames} predicted={tc._predictedShots}";
+    }
 
     private WorldRenderer _world = null!;
     private GameNetClient? _net;
     private DefRegistry? _defs;
 
-    // Gimbal state in the station frame (TurretAim.Frame): azimuth turns about the zenith, elevation
-    // lifts from the horizon toward it. Seeded from the shared rest pose on every (re)activation.
-    private float _azimuth,
-        _elevation;
+    // The free-look basis the mouse turns (TurretLook): its Z is the DESIRED aim. Carried frame to
+    // frame and NEVER re-derived from the aim — carrying it is exactly what makes the horizon survive
+    // a pass over the zenith. Seeded from the shared rest pose on every (re)activation.
+    private TurretLook _look = TurretLook.Seed(new Vec3(0f, 1f, 0f));
 
     // Traverse state: the mount's scalar slew speed (rad/s), carried between frames by the shared
     // TurretAim.Slew rule — the same number the server carries per station, so the gun the gunner
     // watches swing is the gun the server fires. Zeroed on every (re)activation.
     private float _rate;
 
-    // The continuous azimuth branch the gun cam's up is built on (TurretGimbal). Seeded with the aim
-    // at activation and only ever carried forward — never re-read from a raw frame, which is the whole
-    // point (see TurretGimbal).
-    private float _camAzimuth;
-
-    // Which seat the gimbal belongs to, so a seat change (or a relaunch of the same captain) re-seeds
-    // instead of carrying the previous station's angles onto a differently-oriented mount.
+    // Which seat the look belongs to, so a seat change (or a relaunch of the same captain) re-seeds
+    // instead of carrying the previous station's orientation onto a differently-oriented mount.
     private ulong _seatShipId;
     private byte _seatIndex;
     private bool _seated;
@@ -200,21 +203,20 @@ public partial class TurretController : Node
         Station = new Vector3(hp.OffX, hp.OffY, hp.OffZ);
         Seat = seat;
         AimRange = GunRange(gun);
-        RiddenPose = _world.Ships.RidingNode?.GlobalTransform ?? Transform3D.Identity;
         var zenith = ShipMath.ToShared(Zenith);
 
         TakeCursor();
         SampleAim(zenith);
 
-        // The mouse drives the DESIRED gimbal; the gun TRAVERSES toward it under the mount's authored
+        // The mouse drives the DESIRED look; the gun TRAVERSES toward it under the mount's authored
         // slew/accel (v42 crews slice 2b). Both peers run the same shared rule from the same streamed
         // numbers — the server per sim tick, this per frame — so the aim the gunner watches the gun
         // reach is the aim the server's bolts leave on. The wire carries the DESIRED aim; everything
         // the gunner SEES (camera, barrel, reticle, predicted bolts) follows the ACTUAL one.
-        DesiredAim = ShipMath.ToGodot(TurretAim.FromGimbal(zenith, _azimuth, _elevation));
+        DesiredAim = ShipMath.ToGodot(_look.Z);
         Vec3 actual = TurretAim.Slew(
             ShipMath.ToShared(Aim),
-            ShipMath.ToShared(DesiredAim),
+            _look.Z,
             ref _rate,
             hp.TurretSlewRad,
             hp.TurretAccelRad,
@@ -222,13 +224,12 @@ public partial class TurretController : Node
         );
         Aim = ShipMath.ToGodot(actual);
 
-        // Roll reference for the gun cam, carried on its own azimuth branch so the horizon never flips
-        // as the gun sweeps through the zenith.
-        _camAzimuth = TurretGimbal.TrackAzimuth(zenith, actual, _camAzimuth);
-        CamUp = ShipMath.ToGodot(TurretGimbal.Up(zenith, actual, _camAzimuth));
+        // The camera rides the ACTUAL gun, not the sight: the look basis carried onto it by the
+        // shortest rotation, which leaves the up continuous while the mount catches up.
+        CamBasis = ToBasis(_look.WithForward(actual));
 
-        // The gunner's own barrel follows the LIVE gimbal: ApplyTurrets deliberately ignores our
-        // seat's echo, so this is the only thing that moves it.
+        // The gunner's own barrel follows the LIVE aim: ApplyTurrets deliberately ignores our seat's
+        // echo, so this is the only thing that moves it.
         _world.Ships.SetLocalTurretAim(shipId, hp.Index, Aim);
         // Inside the turret the ridden hull is hidden (you are in the gun, not above the deck); the F3
         // overview un-hides it the same way it does the pilot's own hull.
@@ -236,6 +237,11 @@ public partial class TurretController : Node
 
         StepSend(shipId, hp, gun, delta);
     }
+
+    // A TurretLook's three axes as a Godot basis (columns X/Y/Z) — the form CameraRig multiplies the
+    // ridden hull's pose by. Both spaces are the same right-handed axes, so this is a re-type.
+    private static Basis ToBasis(TurretLook l) =>
+        new Basis(ShipMath.ToGodot(l.X), ShipMath.ToGodot(l.Y), ShipMath.ToGodot(l.Z));
 
     // A bolt weapon's effective reach — where its shots die, and therefore where the aim reticle is
     // ranged. Mirrors DefRegistry.BoltAimRange for a gun resolved per STATION rather than per hull.
@@ -271,19 +277,17 @@ public partial class TurretController : Node
         Clamped = false;
 
         var zenith = new Vec3(hp.DirX, hp.DirY, hp.DirZ);
-        Vec3 rest = TurretAim.Rest(zenith);
-        (_azimuth, _elevation) = TurretAim.ToGimbal(zenith, rest);
+        _look = TurretLook.Seed(zenith);
         // Both aims start ON the rest pose (a fresh mount is not mid-traverse) and the traverse starts
         // from a dead stop — carrying the previous station's aim or rate would make the gun sweep in
         // from wherever the last seat pointed.
-        Aim = DesiredAim = ShipMath.ToGodot(rest);
+        Aim = DesiredAim = ShipMath.ToGodot(_look.Z);
         _rate = 0f;
-        _camAzimuth = _azimuth;
-        CamUp = ShipMath.ToGodot(TurretGimbal.Up(zenith, rest, _camAzimuth));
+        CamBasis = ToBasis(_look);
 
-        _predTick = _world.ServerTick;
+        _predTick = PredTick = _world.ServerTick;
         _acc = 0;
-        _lastFire = 0;
+        _lastFire = LastFireTick = 0;
         _lastSentTick = 0;
         _lastSentAim = Vector3.Zero; // force the first sample onto the wire
         _lastSentFiring = false;
@@ -325,9 +329,9 @@ public partial class TurretController : Node
         _mouseDelta = Vector2.Zero;
     }
 
-    // Fold this frame's cursor motion into the gimbal. Unlike the pilot's self-centering virtual
+    // Fold this frame's cursor motion into the look basis. Unlike the pilot's self-centering virtual
     // stick, the turret HOLDS where it was pointed — the mouse moves the gun, it doesn't deflect a
-    // spring — so the delta is integrated rather than eased back to zero.
+    // spring — so the delta turns the basis rather than being eased back to zero.
     private void SampleAim(Vec3 zenith)
     {
         Vector2 m = _mouseDelta;
@@ -339,27 +343,25 @@ public partial class TurretController : Node
             && !Scoreboard.PostMatchActive;
         if (DemoDrive)
         {
-            m += new Vector2(3f, -0.9f); // a slow sweep right and UP (through the zenith pole), every frame
+            m += new Vector2(3f, -0.9f); // a slow sweep right and UP (over the top of the mount), every frame
             _firing = true;
             look = true;
         }
         if (!look)
             return;
 
-        // Mouse-right sweeps the aim right; mouse-UP raises the elevation (first-person look, the
-        // convention every gun cam uses) unless the invert-Y pref flips it. This deliberately differs
-        // from the pilot's stick (mouse-down = nose up): the pilot pushes a spring that commands a
-        // turn RATE, the gunner drags a sight — a direct look, so it follows the direct-look sign.
+        // Mouse-right sweeps the view right; mouse-UP looks up (first-person look, the convention
+        // every gun cam uses) unless the invert-Y pref flips it. This deliberately differs from the
+        // pilot's stick (mouse-down = nose up): the pilot pushes a spring that commands a turn RATE,
+        // the gunner drags a sight — a direct look, so it follows the direct-look sign.
+        //
+        // Both turns are about the look's OWN axes, so there is no reference orientation to be spun
+        // around and no elevation to run out of: pitching up past the zenith carries over the top and
+        // keeps going down the far side. The ARC is the only limit, and it moves the whole basis.
         Vector2 md = m / ZoomView.Magnification;
-        _azimuth -= TurretStations.AimDeltaRad(md.X, _mouseSens);
-        _elevation += TurretStations.AimDeltaRad(_mouseInvert ? md.Y : -md.Y, _mouseSens);
-
-        // Keep the azimuth in (−π, π] so a long sweep can't grind away float precision.
-        _azimuth = Mathf.Wrap(_azimuth, -Mathf.Pi, Mathf.Pi);
-        // The arc floor (TurretAim.MinElevationRad, a little under the horizon) is the captain's
-        // hull. Flag the low edge so the reticle warns; the zenith end is a pole, not a limit.
-        Clamped = _elevation < TurretAim.MinElevationRad;
-        _elevation = Mathf.Clamp(_elevation, TurretAim.MinElevationRad, TurretAim.MaxElevationRad);
+        _look.Yaw(-TurretStations.AimDeltaRad(md.X, _mouseSens));
+        _look.Pitch(TurretStations.AimDeltaRad(_mouseInvert ? -md.Y : md.Y, _mouseSens));
+        Clamped = _look.ClampToArc(zenith);
     }
 
     // The 20 Hz half: send the held aim/trigger on change (or on the keepalive) and predict our own
@@ -377,6 +379,7 @@ public partial class TurretController : Node
             _acc -= FlightModel.Dt;
             budget--;
             _predTick++;
+            PredTick = _predTick;
 
             // The wire carries the DESIRED aim (v42 crews slice 2b): the server runs the same traverse
             // rule from it, so sending the traversed aim instead would make the gun chase its own lag.
@@ -395,7 +398,7 @@ public partial class TurretController : Node
 
             if (_firing && gun is not null && FireCadence.MountFires(_predTick, _lastFire, gun.FireIntervalTicks))
             {
-                _lastFire = _predTick;
+                _lastFire = LastFireTick = _predTick;
                 _predictedShots++;
                 PredictShot(shipId, hp, gun);
             }

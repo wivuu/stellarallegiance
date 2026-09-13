@@ -119,10 +119,11 @@ public partial class Hud : CanvasLayer
         // Prograde velocity marker (direction of travel, not aim). Drawn under the text/menu.
         var velo = new VelocityIndicator { Name = "VelocityIndicator" };
         AddChild(velo);
-        velo.Init(_world, GetNode<Camera3D>("../Camera3D"));
+        velo.Init(_world, GetNode<Camera3D>("../Camera3D"), _defs);
 
         // HULL + BOOST system ring: concentric arc gauges framing the aim reticle. Added here
-        // so the top-left text/menu still draw over it. Reads the local ship's hull + boost ramp.
+        // so the top-left text/menu still draw over it. Reads the HUD subject's hull + boost ramp
+        // (the own hull, or the one a crew gunner rides).
         var systemRing = new SystemRing { Name = "SystemRing" };
         AddChild(systemRing);
         systemRing.Init(_world, GetNode<Camera3D>("../Camera3D"), _defs);
@@ -138,17 +139,12 @@ public partial class Hud : CanvasLayer
         AddChild(weapons);
         weapons.Init(_world, _net, _defs);
 
-        // Crew gunner strip, top-centre: shown only while riding a captain's turret station (the
-        // pilot has no hull of their own then, so the weapons/system readouts above stay blank).
+        // Crew gunner strip, top-centre: shown only while riding a captain's turret station. The ONE
+        // gunner-only piece of chrome — every other readout above is the pilot's, re-pointed at the
+        // ridden hull and the seat's gun through HudSubject.
         var gunner = new GunnerStrip { Name = "GunnerStrip" };
         AddChild(gunner);
         gunner.Init(_world, _net, _defs);
-
-        // The gunner's crosshair, centre screen: the pilot's aim reticle + system ring are blank while
-        // riding, so this is the only mark on where the turret's bolts go.
-        var turretReticle = new TurretReticle { Name = "TurretReticle" };
-        AddChild(turretReticle);
-        turretReticle.Init();
 
         // Telescopic zoom scope (+/−): a circular PiP magnifier that replaces the centre gauges
         // while open. Added after the combat overlays so it draws above them, under the text/menu.

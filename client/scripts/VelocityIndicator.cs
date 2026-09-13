@@ -1,11 +1,16 @@
 using Godot;
 using StellarAllegiance.Ui;
 
-// A prograde velocity marker: a small circle on the HUD sitting where the local ship's
-// velocity vector points — i.e. the direction it is actually TRAVELING, independent of where
-// the nose is AIMING (the cyan aim reticle in TargetMarkers shows aim). The ship has true
-// 6DOF flight, so strafing/drifting makes travel diverge from aim; this gives the player a
-// cue for "where am I actually going."
+// A prograde velocity marker: a small circle on the HUD sitting where the subject's velocity
+// vector points — i.e. the direction it is actually TRAVELING, independent of where the guns are
+// AIMING (the cyan aim reticle in TargetMarkers shows aim). The ship has true 6DOF flight, so
+// strafing/drifting makes travel diverge from aim; this gives the player a cue for "where am I
+// actually going."
+//
+// A crew GUNNER gets it too, off the hull they RIDE (v42 crews slice 2c): they can't steer it, but
+// knowing which way the captain is actually carrying them is exactly how a gunner leads a shot. The
+// forward-hemisphere gate is measured against the FIRING LINE in both seats — the pilot's nose, the
+// gunner's turret aim — so "behind me" always means behind where I am looking.
 //
 // Styled after the design's "self MOVEMENT indicator": a dim cyan ring + centre dot, a mono
 // speed readout to its right, and a couple of faint velocity-trail dots streaming toward the
@@ -33,6 +38,7 @@ public partial class VelocityIndicator : Control
 
     private WorldRenderer _world = null!;
     private Camera3D _camera = null!;
+    private DefRegistry _defs = null!; // HudSubject resolves the seat's gun/reach through it
 
     // Mirror TargetMarkers: project through the F3 overview camera while it's active, else the
     // flight chase camera. Resolved per-access so it follows the toggle live.
@@ -45,10 +51,11 @@ public partial class VelocityIndicator : Control
     private bool _hasTrail; // whether the ship centre projected in front (so a trail can draw)
 
     // Wired up by the Hud (which already resolves these siblings).
-    public void Init(WorldRenderer world, Camera3D camera)
+    public void Init(WorldRenderer world, Camera3D camera, DefRegistry defs)
     {
         _world = world;
         _camera = camera;
+        _defs = defs;
         SetAnchorsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Ignore; // never eat clicks meant for the game
         UiFonts.EnsureLoaded(); // mono speed readout is drawn directly, not via a Theme
@@ -76,8 +83,7 @@ public partial class VelocityIndicator : Control
     {
         screen = default;
         _hasTrail = false;
-        var local = _world.Ships.LocalShip;
-        if (local == null)
+        if (HudSubject.Resolve(_world, _defs) is not { } local)
             return false;
 
         Vector3 vel = local.Velocity;
@@ -86,13 +92,13 @@ public partial class VelocityIndicator : Control
             return false;
 
         Vector3 dir = vel.Normalized();
-        Vector3 fwd = local.GlobalTransform.Basis.Z.Normalized();
-        // Forward-hemisphere gate: only show when traveling forward (strafing-while-advancing
-        // still shows; pure reverse is hidden, matching the "backwards = not visible" rule).
-        if (dir.Dot(fwd) <= 0f)
+        // Forward-hemisphere gate: only show when traveling forward of the firing line (strafing-
+        // while-advancing still shows; pure reverse is hidden, matching the "backwards = not
+        // visible" rule).
+        if (dir.Dot(local.Fwd) <= 0f)
             return false;
 
-        Vector3 pt = local.GlobalPosition + dir * MarkerRange;
+        Vector3 pt = local.Origin + dir * MarkerRange;
         Camera3D cam = Cam;
         if (cam.IsPositionBehind(pt))
             return false;
@@ -102,9 +108,9 @@ public partial class VelocityIndicator : Control
         // Trail direction: project the ship centre and point from it toward the marker, so the
         // trail dots stream back along the actual on-screen travel path. Skipped (no trail)
         // when the ship centre is behind the camera.
-        if (!cam.IsPositionBehind(local.GlobalPosition))
+        if (!cam.IsPositionBehind(local.Origin))
         {
-            Vector2 shipScreen = cam.UnprojectPosition(local.GlobalPosition);
+            Vector2 shipScreen = cam.UnprojectPosition(local.Origin);
             Vector2 d = screen - shipScreen;
             if (d.LengthSquared() > 1e-4f)
             {

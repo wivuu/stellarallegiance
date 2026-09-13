@@ -9,8 +9,10 @@ namespace StellarAllegiance.Ui;
 // roster and the Scoreboard; mouse-transparent like every other HUD overlay, and hidden whenever a
 // full-screen surface (F3 map, hangar) owns the screen.
 //
-// Its last cell is the control legend for the seat (v42 crews slice 2: the gunner aims with the
-// mouse and fires with LMB) — the TurretReticle at screen centre is the other half of that story.
+// It is the ONLY gunner-specific overlay: every other readout (the aim reticle, the system ring, the
+// prograde marker, the weapons panel, the target brackets) is the PILOT's, re-pointed at the ridden
+// hull and the seat's gun through HudSubject. Its last cell is the control legend for the seat (v42
+// crews slice 2: the gunner aims with the mouse and fires with LMB).
 // Wired up by the Hud alongside the other overlays; the UiShowcase renders it from SetMock so the
 // gallery needs no live world.
 public partial class GunnerStrip : Control

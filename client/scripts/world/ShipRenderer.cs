@@ -274,6 +274,11 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
             _ => Vector3.Zero,
         };
 
+    // The newest authoritative row for a ship, for the few HUD readouts RemoteShip doesn't mirror
+    // (the fuel tank, the afterburner ramp): a crew gunner's system ring reads the captain's from here
+    // rather than growing a second copy of them on the node.
+    public bool TryLastRow(ulong shipId, out Ship row) => _lastRow.TryGetValue(shipId, out row!);
+
     // The other ships the LOCAL predicted ship can bump into: every visible remote ship in the local
     // sector, as shared MovingShip obstacles. Fogged / other-sector ships aren't included — a small
     // predict-miss the server reconciles. One reusable buffer; PredictionController consumes it each tick.

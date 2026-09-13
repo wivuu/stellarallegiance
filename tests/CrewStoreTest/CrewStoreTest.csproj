@@ -18,6 +18,6 @@
          Same idiom as tests/TeamStateStoreTest. -->
     <Compile Include="../../client/scripts/world/CrewStore.cs" Link="CrewStore.cs" />
     <Compile Include="../../client/scripts/world/TurretStations.cs" Link="TurretStations.cs" />
-    <Compile Include="../../client/scripts/world/TurretGimbal.cs" Link="TurretGimbal.cs" />
+    <Compile Include="../../client/scripts/world/TurretLook.cs" Link="TurretLook.cs" />
   </ItemGroup>
 </Project>

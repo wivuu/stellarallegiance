@@ -16,7 +16,13 @@ using StellarAllegiance.Ui;
 //                (READY / LOCK nn% / LOCKED / EMPTY) decoded from the local ship's snapshot.
 //   • any further gun mounts fall out as extra secondary rows (rare — most hulls carry one gun).
 //
-// Pure overlay, exactly like the Minimap/SystemRing siblings: it reads the local ship's
+// A crew GUNNER gets the panel too (v42 crews slice 2c), cut down to the one thing they actually
+// hold: a single PRIMARY row for the SEAT's gun, its cadence bar driven by this client's own turret
+// fire gate (TurretController.PredTick/LastFireTick — the same prediction-tick space the pilot's
+// predictor uses). No ordnance, dispenser or hold rows: a gunner carries none of it, and the
+// captain's rack is not theirs to read out.
+//
+// Pure overlay, exactly like the Minimap/SystemRing siblings: it reads the HUD subject's
 // authoritative-derived state (weapon mounts from the def registry, ammo/lock from GameNetClient,
 // fire cadence from the predictor) and draws. It never touches authoritative state. Mouse-transparent
 // so it never eats a click meant for the game. Created and wired up by the Hud.
@@ -38,10 +44,14 @@ public partial class WeaponsPanel : Control
     private DefRegistry _defs = null!;
     private int _localHoldCount; // slots in use this draw, for the first HOLD row's n/cap label
 
+    // Whoever the HUD is about this frame (pilot or crew gunner), sampled in _Process so the
+    // visibility gate and the draw can never disagree about whose armament they list.
+    private HudSubject? _subject;
+
     // Pulse phase for the LOCKED cues (mirrors the design's saPulse), advanced by real time.
     private double _t;
 
-    // Distinct weapon mounts for the local ship, rebuilt each frame (a cheap cached lookup on the
+    // Distinct weapon mounts for the subject, rebuilt each frame (a cheap cached lookup on the
     // registry). Deduped by WeaponId in hardpoint order so a twin-barrel gun is one row, not two.
     private readonly List<WeaponDef> _weapons = new();
 
@@ -58,23 +68,29 @@ public partial class WeaponsPanel : Control
     public override void _Process(double delta)
     {
         _t += delta;
-        var local = _world.Ships.LocalShip;
+        _subject = HudSubject.Resolve(_world, _defs);
         // Only armed hulls in flight get the readout — a pod (no weapon hardpoint) shows nothing.
-        BuildWeapons(local);
-        Visible = local != null && !local.IsPod && _weapons.Count > 0 && !SectorOverview.Active;
+        BuildWeapons(_subject);
+        Visible = _subject is { IsPod: false } && _weapons.Count > 0 && !SectorOverview.Active;
         if (Visible)
             QueueRedraw();
     }
 
-    // Distinct weapons the local ship ACTUALLY mounts (its effective loadout, not the class
-    // default — an emptied/swapped slot shows what really launched), in hardpoint order,
-    // deduped by WeaponId.
-    private void BuildWeapons(PredictionController? local)
+    // Distinct weapons the subject ACTUALLY fires: for a pilot every mount of their effective
+    // loadout (not the class default — an emptied/swapped slot shows what really launched), in
+    // hardpoint order and deduped by WeaponId; for a gunner the one gun their station holds.
+    private void BuildWeapons(HudSubject? subject)
     {
         _weapons.Clear();
-        if (local == null || local.IsPod)
+        if (subject is not { IsPod: false } s)
             return;
-        foreach (var (_, weapon) in _defs.SlotsForShip((byte)local.Class, local.LoadoutIds))
+        if (s.IsGunner)
+        {
+            if (s.Gun is { } seatGun)
+                _weapons.Add(seatGun);
+            return;
+        }
+        foreach (var (_, weapon) in _defs.SlotsForShip(s.ClassId, s.LoadoutIds))
         {
             if (weapon is null)
                 continue; // empty slot — nothing to read out
@@ -92,8 +108,7 @@ public partial class WeaponsPanel : Control
 
     public override void _Draw()
     {
-        var local = _world.Ships.LocalShip;
-        if (local == null || _weapons.Count == 0)
+        if (_subject is not { } local || _weapons.Count == 0)
             return;
 
         // Primary = the first bolt gun (the Space/LMB weapon); everything else is a secondary row.
@@ -104,15 +119,18 @@ public partial class WeaponsPanel : Control
 
         // Dispenser rows (chaff / mine / probe) — NOT hardpoint-mounted, so absent from _weapons;
         // resolved from the class's default hold OR live ammo (the spawned hold can differ from the
-        // default).
-        byte cls = (byte)local.Class;
-        WeaponDef? chaffDisp = DispenserFor(cls, WeaponKind.Chaff, _net.LocalChaffAmmo);
-        WeaponDef? mineDisp = DispenserFor(cls, WeaponKind.Mine, _net.LocalMineAmmo);
-        WeaponDef? probeDisp = DispenserFor(cls, WeaponKind.Probe, _net.LocalProbeAmmo);
+        // default). Own-hull state, so a gunner (who fires exactly one gun and carries nothing) gets
+        // none of these rows and none of the hold rows either.
+        byte cls = local.ClassId;
+        PredictionController? pilot = local.Pilot;
+        WeaponDef? chaffDisp = pilot is null ? null : DispenserFor(cls, WeaponKind.Chaff, _net.LocalChaffAmmo);
+        WeaponDef? mineDisp = pilot is null ? null : DispenserFor(cls, WeaponKind.Mine, _net.LocalMineAmmo);
+        WeaponDef? probeDisp = pilot is null ? null : DispenserFor(cls, WeaponKind.Probe, _net.LocalProbeAmmo);
 
         // The cargo hold (v40): one HOLD row per inert salvaged item, and nothing at all when the
         // hold is empty — the common case, which must cost the panel no height.
-        var hold = local.Hold;
+        IReadOnlyList<(byte Kind, uint ItemId, byte Count)> hold =
+            pilot?.Hold ?? System.Array.Empty<(byte Kind, uint ItemId, byte Count)>();
         _localHoldCount = hold.Count;
 
         int secCount =
@@ -374,15 +392,7 @@ public partial class WeaponsPanel : Control
     }
 
     // One secondary weapon row: "[n]  NAME  <pips|bar>  STATE".
-    private void DrawSecondaryRow(
-        WeaponDef w,
-        int slot,
-        float left,
-        float right,
-        float y,
-        Font mono,
-        PredictionController local
-    )
+    private void DrawSecondaryRow(WeaponDef w, int slot, float left, float right, float y, Font mono, in HudSubject local)
     {
         float mid = y + SecRowH * 0.5f;
         DrawString(mono, new Vector2(left, mid + 4f), $"[{slot}]", HorizontalAlignment.Left, -1, 10, DesignTokens.TextDim);
@@ -478,16 +488,18 @@ public partial class WeaponsPanel : Control
         : prog > 0 ? ($"LOCK {prog}%", DesignTokens.Warn, false)
         : (readyText, DesignTokens.Ok, false);
 
-    // Fire-cadence readiness for a bolt gun, 0..1 (1 = READY). Mirrors the predictor's per-mount
-    // fire gate (mixed loadouts: each weapon cools down on its own interval, so read THIS
-    // weapon's latest fire tick). Before any def loads (FireIntervalTicks 0) or before the first
-    // shot, it reads ready.
-    private static float BoltReadyFrac(PredictionController local, WeaponDef gun)
+    // Fire-cadence readiness for a bolt gun, 0..1 (1 = READY). Mirrors the fire gate the SIM will
+    // apply, in the seat's own prediction-tick space: the pilot's per-mount gate (mixed loadouts cool
+    // down independently, so read THIS weapon's latest fire tick), or the gunner's single station
+    // cadence. Before any def loads (FireIntervalTicks 0) or before the first shot, it reads ready.
+    private static float BoltReadyFrac(in HudSubject local, WeaponDef gun)
     {
         if (gun.FireIntervalTicks == 0)
             return 1f;
-        uint last = local.LastFireTickFor(gun.WeaponId);
-        uint elapsed = local.ClientTick >= last ? local.ClientTick - last : 0u;
+        (uint now, uint last) = local.Pilot is { } pilot
+            ? (pilot.ClientTick, pilot.LastFireTickFor(gun.WeaponId))
+            : (TurretController.PredTick, TurretController.LastFireTick);
+        uint elapsed = now >= last ? now - last : 0u;
         return Mathf.Clamp((float)elapsed / gun.FireIntervalTicks, 0f, 1f);
     }
 

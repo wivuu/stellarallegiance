@@ -17,9 +17,10 @@ using Kind = StellarAllegiance.Ui.MarkerDraw.Kind;
 // base / scout / fighter / bomber / pod.
 //
 // A crew GUNNER gets the same overlay (v42 crews slice 2b): riding a captain's turret they have no
-// hull, but they do have a firing line, so the brackets, the Tab cycle and the lead circle all solve
-// from the STATION — muzzle at the mount, direction the turret's actual (traversed) aim, inherited
-// velocity the captain's. See ResolveShooter, which is the only place the two seats differ.
+// hull, but they do have a firing line, so the brackets, the Tab cycle, the lead circle AND the aim
+// reticle all solve from the STATION — muzzle at the mount, direction the turret's actual (traversed)
+// aim, inherited velocity the captain's. That resolution lives in HudSubject, shared with the rest of
+// the centre-screen HUD; nothing here knows which seat it is drawing for.
 //
 // Tab cycles the FOCUS through the enemies: it locks whatever enemy is nearest the aim
 // reticle (the real firing line, which the chase camera offsets away from screen center),
@@ -38,10 +39,10 @@ public partial class TargetMarkers : Control
     // it (on screen). Enemy (radar-detected) probes are never suppressed. Hardcoded; tweak to taste.
     private const float ProbeEdgeMarkerRange = 500f;
 
-    // No hand-mirrored muzzle numbers here anymore: the aim line and lead solution read
-    // the SAME streamed WeaponDef row the server's TryFire fires from (via ResolveLocalGun
-    // below), so ProjectileSpeed / muzzle offset / effective range can never drift out of
-    // sync with the server. MaxLeadTime is derived per-gun as ProjectileLifeTicks × FlightModel.Dt.
+    // No hand-mirrored muzzle numbers here: the aim line and lead solution read the SAME
+    // streamed WeaponDef row the server's TryFire fires from (resolved once in HudSubject), so
+    // ProjectileSpeed / muzzle offset / effective range can never drift out of sync with the
+    // server. MaxLeadTime is derived per-gun as ProjectileLifeTicks × FlightModel.Dt.
     private const float DefaultAimRange = 500f; // aim-reticle anchor when no gun (pod/unarmed, or defs not streamed yet)
 
     // Team palette = the faction identity tokens (same colours as WorldRenderer's 3D ship/
@@ -117,31 +118,6 @@ public partial class TargetMarkers : Control
     // base id flagged with GameContent.BaseLockFlag (bit 63), or an asteroid id flagged with
     // GameContent.AsteroidFocusFlag (bit 62). Cleared to 0 whenever focus drops (no ship / target).
     public static ulong FocusedId { get; private set; }
-
-    // AIM ASSIST (v42 crews slice 2b): true while the focused target's lead point sits inside
-    // OnSolutionRad of the shooter's firing line — "a shot fired now connects". Published for the crew
-    // gunner's TurretReticle, whose ring goes Ok on it; the pilot already reads the same thing off the
-    // reticle sitting on the lead circle, so nothing in flight consumes it. Recomputed in _Draw
-    // (the lead solve lives there) and cleared whenever the overlay isn't drawing a solution at all.
-    public static bool OnSolution { get; private set; }
-
-    // How close the lead point has to sit to the gun's line to count. 1.5° is about the angular size
-    // of a fighter at gun range — tight enough that the cue means something, loose enough to reach
-    // while a heavy mount is still settling.
-    private const float OnSolutionRad = 0.0261799f;
-
-    // Everything DrawFiringSolution needs about whoever is shooting, so the pilot and the crew gunner
-    // share one solve. `Origin` is the hull's own point (range readouts, the Tab ranking anchor);
-    // `Muzzle` is where the shot actually leaves; `Fwd` the firing line (the nose for a pilot, the
-    // turret's ACTUAL aim for a gunner); `Velocity` what the shot inherits.
-    private readonly record struct Shooter(
-        Vector3 Origin,
-        Vector3 Muzzle,
-        Vector3 Fwd,
-        Vector3 Velocity,
-        WeaponDef? Gun,
-        float AimRange
-    );
 
     // Whether the current focus is a same-team (friendly) SHIP. All ships are now Tab-targetable (to
     // fly to / autopilot-follow a teammate), but a friendly ship must never reach the missile-lock
@@ -274,8 +250,6 @@ public partial class TargetMarkers : Control
         // the telescopic scope is up: brackets/reticle/lead project through the MAIN camera and
         // would sit wrong over the magnified image.
         Visible = !ZoomView.Active;
-        if (!Visible)
-            OnSolution = false; // _Draw is what computes it; a hidden overlay must not leave it latched
         HandleFocusCycle();
         FocusedId = _focused ?? 0; // publish for ShipController's missile-lock input
         // Flag a same-team ship focus so WireLockId strips it from the missile-lock slot (a friendly
@@ -300,9 +274,9 @@ public partial class TargetMarkers : Control
     // this is NOT screen center — Tab-targeting ranks enemies by closeness to THIS point so
     // "aim at it, press Tab" locks what's actually under your guns. Falls back to screen
     // center if the point is somehow behind the camera.
-    private Vector2 AimReticleScreenPoint(in Shooter sh)
+    private Vector2 AimReticleScreenPoint(in HudSubject sh)
     {
-        Vector3 pt = sh.Origin + sh.Fwd * sh.AimRange;
+        Vector3 pt = sh.AimPoint;
         Camera3D cam = Cam;
         if (cam.IsPositionBehind(pt))
             return GetViewportRect().Size * 0.5f;
@@ -310,43 +284,10 @@ public partial class TargetMarkers : Control
     }
 
     // Whoever this client is shooting with right now, or null when it is neither flying nor manning a
-    // gun (pre-launch, spectating, an unseated rider). Two sources, one shape:
-    //   • the PILOT — their own predicted hull, its first bolt slot, the nose as the firing line;
-    //   • the crew GUNNER — the ridden hull's live pose, the seat's station offset, and the turret's
-    //     ACTUAL (traversed) aim, so the brackets, the Tab cycle and the lead all read the gun that is
-    //     actually pointing rather than the sight the mouse has dragged ahead of it.
-    private Shooter? ResolveShooter()
-    {
-        if (_world.Ships.LocalShip is { } local)
-        {
-            Vector3 fwd = local.GlobalTransform.Basis.Z.Normalized();
-            if (ResolveLocalGun(local) is { hp: var hp, gun: var gun })
-                return new Shooter(
-                    local.GlobalPosition,
-                    local.GlobalPosition + local.GlobalTransform.Basis * new Vector3(hp.OffX, hp.OffY, hp.OffZ),
-                    fwd,
-                    local.Velocity,
-                    gun,
-                    LocalAimRange(local)
-                );
-            // No gun (a pod, an emptied hull, defs not streamed): still an aim line, just no solution.
-            return new Shooter(local.GlobalPosition, local.GlobalPosition, fwd, local.Velocity, null, DefaultAimRange);
-        }
-
-        if (!TurretController.Active || TurretController.Seat is not { } seat)
-            return null;
-        if (_world.Ships.RidingNode is not { } ridden)
-            return null;
-        Transform3D t = ridden.GlobalTransform;
-        return new Shooter(
-            t.Origin,
-            t.Origin + t.Basis * new Vector3(seat.Hp.OffX, seat.Hp.OffY, seat.Hp.OffZ),
-            (t.Basis * TurretController.Aim).Normalized(),
-            ShipRenderer.ShipVelocityOf(ridden),
-            seat.Gun,
-            TurretController.AimRange
-        );
-    }
+    // gun (pre-launch, spectating, an unseated rider). Both seats resolve through the shared HUD
+    // subject, so the brackets, the Tab cycle, the lead solve and the centre gauges are all measured
+    // from ONE firing line — the pilot's nose, or the gunner's turret aim.
+    private HudSubject? ResolveShooter() => HudSubject.Resolve(_world, _defs);
 
     // Tab focus through the enemies, ranked by distance from the aim reticle. The first
     // press (or any press that finds a different enemy nearest your guns) locks that enemy;
@@ -555,32 +496,6 @@ public partial class TargetMarkers : Control
     private bool HasSiegeCapability(PredictionController local) =>
         !local.IsPod && _defs.MissileMount((byte)local.Class, local.LoadoutIds) is { CanDamageBase: true };
 
-    // The local ship's first effective Bolt-kind weapon slot (hardpoint + the WeaponDef it
-    // fires), or null if it carries none (a pod, an unarmed/emptied hull, or the defs haven't
-    // streamed yet — the server won't fire either way, so the aim line has nothing to solve).
-    // Mirrors PredictionController's own slot resolution: same pod-aware class-id lookup
-    // (ShipModelLoader.DefId's idiom) and same "first Bolt slot of the effective loadout" pick,
-    // so the muzzle/lead solve reads the exact slot the server fires from.
-    private (HardpointDef hp, WeaponDef gun)? ResolveLocalGun(PredictionController local)
-    {
-        byte classId = local.IsPod ? DefRegistry.PodClassId : (byte)local.Class;
-        foreach (var (hp, weapon) in _defs.SlotsForShip(classId, local.IsPod ? null : local.LoadoutIds))
-            if (weapon?.Kind == WeaponKind.Bolt)
-                return (hp, weapon);
-        return null;
-    }
-
-    // Where the aim reticle sits along the firing line: the equipped bolt weapon's effective
-    // range (its shots die there) so the crosshair marks the edge of your gun's reach, falling
-    // back to the DefaultAimRange anchor for a pod/unarmed hull. Shared by the reticle draw, the
-    // Tab-target ranking point, and the SystemRing gauge centre so all three stay on one point.
-    private float LocalAimRange(PredictionController local) =>
-        _defs.BoltAimRange(
-            local.IsPod ? DefRegistry.PodClassId : (byte)local.Class,
-            DefaultAimRange,
-            local.IsPod ? null : local.LoadoutIds
-        );
-
     // The enemy closest to the shooter, or null if there are none. Used to pick a
     // fresh focus when the current target dies — nearest is the most useful next threat.
     private static ulong? NearestEnemy(IReadOnlyList<RemoteShip> enemies, Vector3 p)
@@ -694,7 +609,7 @@ public partial class TargetMarkers : Control
 
         // Who is shooting (a pilot's hull, a crew gunner's station, or nobody) — resolved once here and
         // carried through every pass that needs a firing line or a point to measure ranges from.
-        Shooter? shooter = ResolveShooter();
+        HudSubject? shooter = ResolveShooter();
         Vector3? rangeFrom = shooter is { } s0 ? s0.Origin : null;
 
         var (focusedBasePos, focusedBaseTeam, focusedBaseEnemy) = ResolveFocusedBase();
@@ -733,8 +648,6 @@ public partial class TargetMarkers : Control
         // a shooter without a hull, so this is gated on the resolved shooter, not on the own ship.
         if (!SectorOverview.Active && shooter is { } sh)
             DrawFiringSolution(view, sh, focusedShip);
-        else
-            OnSolution = false;
 
         // The missile / autopilot readouts are OWN-HULL state: a gunner carries no launcher, is never
         // locked as a ship and never flies an autopilot, so these stay pilot-only.
@@ -1213,16 +1126,15 @@ public partial class TargetMarkers : Control
     // from the SAME streamed WeaponDef row the shot is fired from (PredictionController's slot for the
     // pilot, the seat's station gun for the gunner), so the muzzle and the lead solve always match the
     // shots that actually get fired.
-    private void DrawFiringSolution(Vector2 view, in Shooter sh, RemoteShip? focusedShip)
+    private void DrawFiringSolution(Vector2 view, in HudSubject sh, RemoteShip? focusedShip)
     {
-        OnSolution = false;
         if (sh.Gun is not { } gun)
         {
             // No gun (a pod, an unarmed hull, a station whose def hasn't streamed): the server won't
             // fire either, so there's no lead solution — just a visual anchor on the firing line.
             Vector3 anchor = sh.Muzzle + sh.Fwd * DefaultAimRange;
             if (!Cam.IsPositionBehind(anchor))
-                _mk.AimReticle(Cam.UnprojectPosition(anchor));
+                _mk.AimReticle(Cam.UnprojectPosition(anchor), ClampTint());
             return;
         }
 
@@ -1247,12 +1159,6 @@ public partial class TargetMarkers : Control
         )
         {
             aimRange = gun.ProjectileSpeed * t;
-            // AIM ASSIST: how far off the firing line the solution sits. A gunner can't feel a
-            // convergence the way a pilot feels their nose come round, so the turret reticle turns Ok
-            // on this — a cue, never an auto-aim: the bolts still leave along the gun's real aim.
-            Vector3 toLead = aimPoint - sh.Muzzle;
-            if (toLead.LengthSquared() > 1e-4f)
-                OnSolution = sh.Fwd.AngleTo(toLead.Normalized()) <= OnSolutionRad;
             if (!Cam.IsPositionBehind(aimPoint))
             {
                 Vector2 lp = Cam.UnprojectPosition(aimPoint);
@@ -1265,8 +1171,13 @@ public partial class TargetMarkers : Control
 
         Vector3 reticlePoint = sh.Muzzle + sh.Fwd * aimRange;
         if (!Cam.IsPositionBehind(reticlePoint))
-            _mk.AimReticle(Cam.UnprojectPosition(reticlePoint));
+            _mk.AimReticle(Cam.UnprojectPosition(reticlePoint), ClampTint());
     }
+
+    // The ONE gunner-specific thing about the gunner's reticle: Warn while the mount is pinned against
+    // its firing arc, so the input that is going nowhere says so instead of silently vanishing. Null
+    // (the cyan chrome) in every other state and in the pilot's seat, where Clamped is never set.
+    private static Color? ClampTint() => TurretController.Clamped ? DesignTokens.Warn : null;
 
     // Autopilot flight-HUD readout: a steady "◈ AUTOPILOT" chrome banner low-center while engaged, and
     // a brief "AUTOPILOT DISENGAGED" toast that fades over ApToastSec on the falling edge. Cyan chrome

@@ -137,7 +137,7 @@ public partial class CameraRig : Camera3D
                 // unseated rider has no cockpit to sit in (left unhandled so nothing is starved).
                 if (!TurretController.Active)
                     return;
-                TurretFirstPerson = !TurretFirstPerson;
+                SetTurretFirstPerson(!TurretFirstPerson);
                 GetViewport().SetInputAsHandled();
                 return;
             }
@@ -174,13 +174,13 @@ public partial class CameraRig : Camera3D
                 if (TurretFirstPerson)
                     return;
                 if (seated && _zoom <= MinZoom + 1e-4f)
-                    TurretFirstPerson = true;
+                    SetTurretFirstPerson(true);
                 else
                     _zoom = Mathf.Max(MinZoom, _zoom / ZoomStep);
             }
             else if (TurretFirstPerson)
             {
-                TurretFirstPerson = false;
+                SetTurretFirstPerson(false);
                 _zoom = MinZoom;
             }
             else
@@ -206,6 +206,19 @@ public partial class CameraRig : Camera3D
             else
                 _zoom = Mathf.Min(MaxZoom, _zoom * ZoomStep);
         }
+    }
+
+    // Move the GUNNER between the gun cam and the inside-the-turret view. The mode itself isn't
+    // persisted (a seat is transient, unlike the pilot's chosen framing), but it stamps the same
+    // view-mode statics the pilot's toggle does so the transient FPV/3RD chip flashes in both seats.
+    // Edge-guarded: the "seat is gone" reset below clears the flag without a flash.
+    private static void SetTurretFirstPerson(bool fp)
+    {
+        if (TurretFirstPerson == fp)
+            return;
+        TurretFirstPerson = fp;
+        ViewIsFirstPerson = fp;
+        ViewChangedMsec = Time.GetTicksMsec();
     }
 
     // Change (and persist) the view mode. The blend animates toward it from its current value, so a
@@ -382,9 +395,9 @@ public partial class CameraRig : Camera3D
     }
 
     // Gun-cam framing knobs (multiplied by the hull's size scale and the wheel dolly), in the
-    // station's own frame: lifted along the ZENITH so the barrel and the hull below it stay in shot,
-    // pulled BACK along the aim's horizon component so the muzzle sits in the lower third rather than
-    // in the viewer's eye (and the eye never dips below the mount when the gun points high).
+    // GUNNER'S OWN look frame: lifted along their up and pulled back along their aim, so the shot is
+    // framed exactly the way the chase shot frames a pilot's hull — the eye sits over the shoulder of
+    // the gun and the framing never changes character as the gun sweeps.
     private const float GunCamUp = 0.6f;
     private const float GunCamBack = 2.5f;
 
@@ -392,49 +405,39 @@ public partial class CameraRig : Camera3D
     // mount's own base ring, never so far the gun reads as "hovering".
     private const float GunInsideUp = 0.2f;
 
-    // The turret's eye: over the gunner's own mount, looking down their aim with the station's zenith
-    // as up. Aim and zenith arrive ship-local from TurretController (that is what the wire speaks), so
-    // they are rotated into world space through the ridden hull's live pose — the camera then inherits
-    // the captain's manoeuvres for free, exactly as a seat welded to the hull would.
+    // The turret's eye: over the gunner's own mount, looking down their aim with THEIR up. The whole
+    // look basis arrives ship-local from TurretController (that is what the wire speaks), so it is
+    // rotated into world space through the ridden hull's live pose — the camera then inherits the
+    // captain's manoeuvres for free, exactly as a seat welded to the hull would. No zenith-projected
+    // up and no horizon-only pull-back: both were reference frames outside the gunner's own, and both
+    // are what made the view spin as the aim neared the mount's pole.
     private Transform3D GunCamPose(Transform3D ship, float scale)
     {
-        Vector3 aim = (ship.Basis * TurretController.Aim).Normalized();
+        Basis look = ship.Basis * TurretController.CamBasis; // Z = the ACTUAL aim, Y = the gunner's up
+        Vector3 aim = look.Z.Normalized();
+        Vector3 up = look.Y.Normalized();
         Vector3 zenith = (ship.Basis * TurretController.Zenith).Normalized();
         Vector3 mount = ship.Origin + ship.Basis * TurretController.Station;
 
-        // Roll reference: the ELEVATION TANGENT of the aim on the controller's tracked azimuth branch
-        // (TurretGimbal), not the zenith projected off the aim. The projection vanishes exactly at the
-        // zenith, and every fallback picked there is a different vector than the frame before — which
-        // is why the view used to snap as a gunner tracked something up over the mount. The tangent is
-        // unit length and perpendicular to the aim at every elevation, the pole included, so the same
-        // "up" carries all the way through. Ship-local (that is what the controller publishes), so it
-        // rotates into world space through the ridden hull's live pose like the aim does.
-        Vector3 up = (ship.Basis * TurretController.CamUp).Normalized();
-        if (up.LengthSquared() < 0.5f)
-            up = ship.Basis.Y; // a pose so degenerate the basis collapsed; any hull up beats a NaN
-
-        // Pull back along the aim's HORIZON component, never the raw aim: at high elevation the raw
-        // aim's pull-back would sink the eye through the mount's own hull (live-run finding, first
-        // gun-cam shot sat inside the bomber's back). At the pole itself there is no horizon component
-        // to take — but the up vector there IS minus the branch's horizon, so it stands in exactly.
-        if (TurretFirstPerson)
-        {
-            Vector3 insideEye = mount + zenith * (GunInsideUp * scale);
-            Vector3 insideBack = -aim;
-            return new Transform3D(new Basis(up.Cross(insideBack), up, insideBack), insideEye);
-        }
-
-        float dolly = scale * _zoom;
-        Vector3 backAlong = aim - zenith * aim.Dot(zenith);
-        if (backAlong.LengthSquared() < 1e-4f)
-            backAlong = -up;
-        backAlong = backAlong.Normalized();
-        Vector3 eye = mount + zenith * (GunCamUp * dolly) - backAlong * (GunCamBack * dolly);
         // A Camera3D looks down its own −Z, so the basis is built with +Z opposite the aim — the same
         // reason the chase shot multiplies the ship basis by FaceForward. X = Y × Z keeps it
         // right-handed (a mirrored basis would flip the whole view left-to-right).
         Vector3 back = -aim;
-        return new Transform3D(new Basis(up.Cross(back), up, back), eye);
+        var basis = new Basis(up.Cross(back), up, back);
+
+        if (TurretFirstPerson)
+            return new Transform3D(basis, mount + zenith * (GunInsideUp * scale));
+
+        float dolly = scale * _zoom;
+        Vector3 eye = mount + up * (GunCamUp * dolly) - aim * (GunCamBack * dolly);
+        // …but never BELOW the mount's own deck. Looking steeply up or down puts the pull-back through
+        // the captain's hull (live-run finding: the first gun-cam shot sat inside the bomber's back),
+        // so the eye is lifted straight along the station's zenith until it clears the mount. This is
+        // the ONE place the zenith still has a say — as a floor on the eye, not as the view's up.
+        float lift = GunCamUp * scale - (eye - mount).Dot(zenith);
+        if (lift > 0f)
+            eye += zenith * lift;
+        return new Transform3D(basis, eye);
     }
 
     // Model length/width for the launch-cam framing, off the "ShipModel" child's meta (stashed by

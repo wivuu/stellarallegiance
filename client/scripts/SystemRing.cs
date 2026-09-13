@@ -11,17 +11,16 @@ using StellarAllegiance.Ui;
 // legacy hulls (MaxFuel <= 0, fuel unmodeled) it falls back to the old AbPower ramp so those
 // classes keep a BOOST readout instead of a meaningless empty gauge.
 //
-// Pure overlay: reads the local ship's authoritative-derived state (Health/MaxHealth, Fuel/
+// A crew GUNNER gets the same ring, reading the hull they RIDE and centred on their turret's aim
+// (v42 crews slice 2c) — the captain's hull is the one that can kill them, so it is the one their
+// gauges have to show. Both seats resolve through HudSubject; the own-hull-only extras below the
+// FUEL tag (pod reserve, the load sweep) are gated on actually being the pilot.
+//
+// Pure overlay: reads the subject's authoritative-derived state (Health/MaxHealth, Fuel/
 // MaxFuel, the synced afterburner ramp AbPower) and the active camera, and draws. Never
 // touches authoritative state. Created and wired up by the Hud, like the other combat overlays.
 public partial class SystemRing : Control
 {
-    // Must stay consistent with TargetMarkers.AimReticleScreenPoint so the ring centres on
-    // the SAME point as the aim reticle (the firing line, forward of the nose): the equipped
-    // bolt weapon's effective range (via DefRegistry.BoltAimRange), or this anchor for a
-    // pod/unarmed hull (or before defs stream in).
-    private const float DefaultAimRange = 500f;
-
     private const float Radius = 82f; // arc radius (px) — frames the reticle/lead circle
     private const float ArcWidth = 7f; // lit/track block thickness (px)
     private const int Blocks = 10; // segments per gauge
@@ -32,7 +31,11 @@ public partial class SystemRing : Control
 
     private WorldRenderer _world = null!;
     private Camera3D _camera = null!;
-    private DefRegistry _defs = null!; // resolves the local hull's bolt-weapon range for the reticle centre
+    private DefRegistry _defs = null!; // resolves the subject's bolt-weapon range for the reticle centre
+
+    // Whoever the HUD is about this frame (pilot or crew gunner), sampled in _Process so the gate and
+    // the draw can never disagree about which hull they are reading.
+    private HudSubject? _subject;
 
     // Match TargetMarkers: project through the F3 overview camera while the sector map is
     // open, otherwise the flight chase camera. Resolved per-access so it follows the toggle.
@@ -51,33 +54,24 @@ public partial class SystemRing : Control
 
     public override void _Process(double delta)
     {
-        Visible = _world.Ships.LocalShip != null && !ZoomView.Active && !SectorOverview.Active; // scope circle or F3 map replaces these gauges
+        _subject = HudSubject.Resolve(_world, _defs);
+        Visible = _subject is not null && !ZoomView.Active && !SectorOverview.Active; // scope circle or F3 map replaces these gauges
         if (Visible)
             QueueRedraw();
     }
 
     public override void _Draw()
     {
-        var local = _world.Ships.LocalShip;
-        if (local == null)
+        if (_subject is not { } local)
             return;
 
-        // Centre on the aim reticle (muzzle projected forward along the nose) so the ring
-        // hugs the crosshair the player is already looking at; fall back to screen centre
-        // when that point is behind the camera.
+        // Centre on the aim reticle so the ring hugs the crosshair the player is already looking at —
+        // HudSubject.AimPoint is the very point TargetMarkers draws that reticle on, in either seat;
+        // fall back to screen centre when it is behind the camera.
         Camera3D cam = Cam;
-        Vector2 c;
-        Vector3 fwd = local.GlobalTransform.Basis.Z.Normalized();
-        float aimRange = _defs.BoltAimRange(
-            local.IsPod ? DefRegistry.PodClassId : (byte)local.Class,
-            DefaultAimRange,
-            local.IsPod ? null : local.LoadoutIds // effective gun's reach, not the class default
-        );
-        Vector3 reticle = local.GlobalPosition + fwd * aimRange;
-        if (cam.IsPositionBehind(reticle))
-            c = GetViewportRect().Size * 0.5f;
-        else
-            c = cam.UnprojectPosition(reticle);
+        Vector2 c = cam.IsPositionBehind(local.AimPoint)
+            ? GetViewportRect().Size * 0.5f
+            : cam.UnprojectPosition(local.AimPoint);
 
         Color track = DesignTokens.BorderLo;
 
@@ -95,9 +89,14 @@ public partial class SystemRing : Control
             SolidArc(c, ShieldRadius, 0f, shieldFrac, DesignTokens.TeamAccent, track, ShieldWidth);
 
         // FUEL — left span (centre 180°), on hulls with a modeled tank. Legacy hulls
-        // (MaxFuel <= 0) keep the old BOOST/AbPower ramp instead.
+        // (MaxFuel <= 0) keep the old BOOST/AbPower ramp instead; a subject that exposes neither
+        // (a ridden hull whose first snapshot hasn't landed) gets a bare track rather than a lie.
         bool hasFuel = local.MaxFuel > 0f;
-        float leftFrac = hasFuel ? Mathf.Clamp(local.Fuel / local.MaxFuel, 0f, 1f) : Mathf.Clamp(local.AbPower, 0f, 1f);
+        float? ab = local.AbPower;
+        float leftFrac =
+            hasFuel ? Mathf.Clamp(local.Fuel / local.MaxFuel, 0f, 1f)
+            : ab is float p ? Mathf.Clamp(p, 0f, 1f)
+            : 0f;
         Color leftColor = hasFuel ? FuelColor(leftFrac) : DesignTokens.Warn;
         SegmentedArc(c, 180f, leftFrac, leftColor, track, litFromEnd: false);
 
@@ -118,29 +117,38 @@ public partial class SystemRing : Control
             HealthColor(hullFrac),
             rightAlign: false
         );
-        string leftTag = hasFuel ? "FUEL" : "BST";
-        DrawTagValue(c + new Vector2(-(Radius + 12f), 4f), leftTag, $"{leftFrac * 100f:0}", leftColor, rightAlign: true);
+        if (hasFuel || ab is not null)
+            DrawTagValue(
+                c + new Vector2(-(Radius + 12f), 4f),
+                hasFuel ? "FUEL" : "BST",
+                $"{leftFrac * 100f:0}",
+                leftColor,
+                rightAlign: true
+            );
         // Fuel-pod reserve under the FUEL tag (predicted count — drops the instant one is committed
         // to the loader). Hidden at zero so the legacy layout is untouched without pods. While a pod
         // is LOADING the tank is dead, so the line becomes a load readout in the danger tone with a
         // sweep arc wrapping the FUEL blocks (mirroring the SHLD band on the right) — the pilot can
-        // see how long the afterburner stays out.
-        if (hasFuel && local.FuelLoading)
+        // see how long the afterburner stays out. PREDICTED own-hull state, so pilot-only: a gunner
+        // rides the captain's tank but has no say over it and no prediction of it.
+        if (!hasFuel || local.Pilot is not { } pilot)
+            return;
+        if (pilot.FuelLoading)
         {
-            SolidArc(c, ShieldRadius, 180f, local.FuelLoadFrac, DesignTokens.Danger, track, ShieldWidth);
+            SolidArc(c, ShieldRadius, 180f, pilot.FuelLoadFrac, DesignTokens.Danger, track, ShieldWidth);
             DrawTagValue(
                 c + new Vector2(-(Radius + 12f), 22f),
                 "LOAD",
-                $"{local.FuelLoadFrac * 100f:0}%",
+                $"{pilot.FuelLoadFrac * 100f:0}%",
                 DesignTokens.Danger,
                 rightAlign: true
             );
         }
-        else if (hasFuel && local.FuelPods > 0)
+        else if (pilot.FuelPods > 0)
             DrawTagValue(
                 c + new Vector2(-(Radius + 12f), 22f),
                 "POD",
-                $"+{local.FuelPods}",
+                $"+{pilot.FuelPods}",
                 DesignTokens.Warn,
                 rightAlign: true
             );

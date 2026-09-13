@@ -6,9 +6,9 @@
 // the docked-vs-flying flag, Clear, and the SeatId label — plus the v42 turret-aim seams the same
 // two files own: the ship-id index and manned-gun query MsgTurrets resolves through, the
 // station/seat-index -> slot mapping every turret consumer must agree on, and the mouse gain that
-// turns one sensitivity setting into gimbal radians — plus TurretGimbal, the gun cam's roll
-// reference, whose whole reason to exist (an up vector that survives the pole) is a property no
-// screenshot can assert.
+// turns one sensitivity setting into aim radians — plus TurretLook, the gunner's free-look basis,
+// whose whole reason to exist (an orientation that carries straight over the station's zenith
+// instead of spinning around a gimbal pole) is a property no screenshot can assert.
 
 using StellarAllegiance.Shared;
 
@@ -192,73 +192,108 @@ Check(Math.Abs(sweep - MathF.PI / 2f) < 0.05f, "a ~400 px sweep is ~90 degrees a
 Check(TurretStations.AimDeltaRad(-10f, DefaultMouseSens) < 0f, "AimDeltaRad keeps the sign of the motion");
 Check(TurretStations.AimDeltaRad(10f, 0f) == 0f, "a zero sensitivity moves the gimbal not at all");
 
-// ---- TurretGimbal: the gun cam's roll reference (v42 crews slice 2b) -------------------------------
-// The camera up must be perpendicular to the aim at EVERY elevation and must not flip as the aim
-// sweeps through the station's zenith — the pole is where the old zenith-projection reference
-// vanished and snapped. Both properties are pure maths on the shared station frame, so they are
-// checked here rather than by eye in a live run.
+// ---- TurretLook: the gunner's FREE-LOOK basis (v42 crews slice 2c) --------------------------------
+// The gun camera has no azimuth and no elevation: the mouse turns a basis about its OWN axes, so
+// looking up past the station's zenith carries over the top and keeps going down the far side with
+// the up coming along, and the firing ARC is the only thing that ever stops it. Every property that
+// matters here (the axes stay a rigid orthonormal frame, the up never jumps, the clamp lands ON the
+// arc) is pure maths no screenshot can assert — and it is the property the previous gimbal failed.
 {
-    var zenith = new Vec3(0f, 1f, 0f); // a dorsal station: zenith = ship +Y, frame Z = ship +Z
+    var zenith = new Vec3(0f, 1f, 0f); // a dorsal station: zenith = ship +Y, rest = 45° up from +Z
     float AngleBetween(Vec3 a, Vec3 b) => MathF.Acos(Math.Clamp(Vec3.Dot(Vec3.Normalize(a), Vec3.Normalize(b)), -1f, 1f));
+    float Orthonormality(TurretLook l) =>
+        MathF.Max(
+            MathF.Max(
+                MathF.Abs(Vec3.Dot(l.X, l.Y)),
+                MathF.Max(MathF.Abs(Vec3.Dot(l.Y, l.Z)), MathF.Abs(Vec3.Dot(l.X, l.Z)))
+            ),
+            MathF.Max(
+                MathF.Abs(l.X.LengthSquared() - 1f),
+                MathF.Max(MathF.Abs(l.Y.LengthSquared() - 1f), MathF.Abs(l.Z.LengthSquared() - 1f))
+            )
+        );
 
-    // Perpendicularity across the whole arc, on and off the azimuth branch.
-    float worstDot = 0f,
-        worstLen = 0f;
-    for (int ai = 0; ai < 16; ai++)
-    for (int ei = 0; ei <= 24; ei++)
+    // The seed IS the shared rest pose, with the zenith overhead — a fresh gunner looks where the
+    // unmanned gun already points.
+    var seed = TurretLook.Seed(zenith);
+    Check(AngleBetween(seed.Z, TurretAim.Rest(zenith)) < 1e-4f, "TurretLook.Seed looks down the shared rest pose");
+    Check(Vec3.Dot(seed.Y, zenith) > 0f, "TurretLook.Seed puts the station's zenith overhead");
+    Check(Orthonormality(seed) < 1e-5f, "TurretLook.Seed is orthonormal");
+
+    // 10k random yaw/pitch steps: float drift must never accumulate into a skewed or scaled frame,
+    // because the camera basis is built from these axes verbatim every frame.
+    var rng = new Random(1234);
+    var wander = TurretLook.Seed(zenith);
+    float worstOrtho = 0f;
+    for (int i = 0; i < 10_000; i++)
     {
-        float az = -MathF.PI + ai * (MathF.Tau / 16f);
-        float el = TurretAim.MinElevationRad + ei * (TurretAim.MaxElevationRad - TurretAim.MinElevationRad) / 24f;
-        Vec3 aim = TurretAim.FromGimbal(zenith, az, el);
-        Vec3 up = TurretGimbal.Up(zenith, aim, TurretGimbal.TrackAzimuth(zenith, aim, az));
-        worstDot = MathF.Max(worstDot, MathF.Abs(Vec3.Dot(up, aim)));
-        worstLen = MathF.Max(worstLen, MathF.Abs(up.LengthSquared() - 1f));
+        wander.Yaw((float)(rng.NextDouble() - 0.5) * 0.2f);
+        wander.Pitch((float)(rng.NextDouble() - 0.5) * 0.2f);
+        worstOrtho = MathF.Max(worstOrtho, Orthonormality(wander));
     }
-    Check(worstDot < 1e-4f, "TurretGimbal.Up is perpendicular to the aim over the whole arc");
-    Check(worstLen < 1e-4f, "TurretGimbal.Up is a unit vector over the whole arc");
+    Check(worstOrtho < 1e-4f, "the look basis stays orthonormal over 10k random yaw/pitch steps");
 
-    // At the zenith itself the up is exactly minus the branch horizon — a real vector where the
-    // zenith-off-aim projection has none at all.
-    Vec3 pole = TurretAim.FromGimbal(zenith, 0f, TurretAim.MaxElevationRad);
-    Vec3 poleUp = TurretGimbal.Up(zenith, pole, 0f);
-    Check(AngleBetween(poleUp, TurretGimbal.Horizon(zenith, 0f) * -1f) < 1e-3f, "at the pole the up is -horizon(az)");
-    Check(MathF.Abs(Vec3.Dot(poleUp, pole)) < 1e-4f, "the pole's up is still perpendicular to the aim");
-
-    // Sweep a great circle straight THROUGH the zenith (up the front, down the back) one small step at
-    // a time, tracking the azimuth exactly as the controller does. Every consecutive up must be a
-    // small rotation of the last — no flip anywhere, least of all at the pole.
-    float branch = 0f;
-    Vec3? prevUp = null;
-    float worstStep = 0f;
-    Vec3 beforePole = default,
-        afterPole = default;
-    const int Steps = 400;
-    for (int i = 0; i <= Steps; i++)
+    // Pitch straight up and over the top in 1° steps, WITHOUT the arc clamp: this is the motion the
+    // old gimbal could not survive (the azimuth folds at the pole and the horizon flipped). Here the
+    // up is simply carried, so every step rotates it by the step angle and no more.
+    var loop = TurretLook.Seed(zenith);
+    Vec3 startZ = loop.Z,
+        startY = loop.Y;
+    float step = MathF.PI / 180f;
+    float worstUpStep = 0f;
+    for (int i = 0; i < 180; i++)
     {
-        // t runs 45° -> 135° of elevation: the second half is PAST the pole, which ToGimbal reports as
-        // the opposite azimuth with a reflected elevation (the very fold that used to flip the view).
-        float t = (MathF.PI / 4f) + (MathF.PI / 2f) * i / Steps;
-        Vec3 aim = Vec3.Normalize(TurretGimbal.Horizon(zenith, 0f) * MathF.Cos(t) + zenith * MathF.Sin(t));
-        branch = TurretGimbal.TrackAzimuth(zenith, aim, branch);
-        Vec3 up = TurretGimbal.Up(zenith, aim, branch);
-        if (prevUp is Vec3 pu)
-            worstStep = MathF.Max(worstStep, AngleBetween(pu, up));
-        prevUp = up;
-        if (t < MathF.PI / 2f)
-            beforePole = up;
-        else if (afterPole.LengthSquared() == 0f)
-            afterPole = up;
+        Vec3 prevUp = loop.Y;
+        loop.Pitch(-step); // negative = look UP (positive pitches the forward toward −Y)
+        worstUpStep = MathF.Max(worstUpStep, AngleBetween(prevUp, loop.Y));
     }
-    Check(worstStep < 0.02f, "the gun-cam up never jumps as the aim sweeps through the zenith");
-    Check(AngleBetween(beforePole, afterPole) < 0.02f, "the up either side of the zenith is the same up (no flip)");
-    Check(branch == 0f, "the azimuth branch survives the crossing (never re-derived to the far side)");
+    Check(worstUpStep < 1.5f * step, "pitching through the zenith never jumps the up by more than a step");
+    Check(AngleBetween(loop.Z, startZ * -1f) < 0.02f, "180° of pitch ends looking backward");
+    Check(AngleBetween(loop.Y, startY * -1f) < 0.02f, "…with the up carried over the top, not re-derived");
+    // Concretely: from the rest pose (45° up from ship +Z) the far side looks down-and-back and the
+    // up now points FORWARD-ish — inverted like an aircraft that has looped, never snapped.
+    Check(loop.Z.Z < 0f && loop.Y.Z > 0f, "over the top the view is backward and the up points forward-ish");
+    Check(Orthonormality(loop) < 1e-4f, "the basis is still orthonormal after the loop");
 
-    // A normal sweep BELOW the pole does track the azimuth: the branch follows the aim so the horizon
-    // rolls with it, which is the whole point of not simply freezing the reference.
-    float low = TurretGimbal.TrackAzimuth(zenith, TurretAim.FromGimbal(zenith, 0.7f, 0.2f), 0.6f);
-    Check(MathF.Abs(low - 0.7f) < 1e-3f, "off the pole the azimuth tracks the aim");
-    float atPole = TurretGimbal.TrackAzimuth(zenith, zenith, 1.234f);
-    Check(atPole == 1.234f, "inside the pole band the azimuth is held, never re-read from noise");
+    // Now the same sweep WITH the arc clamp, which is what a live gunner gets: the aim must stay
+    // inside the station's firing arc at every step and the up must stay continuous while it does.
+    var arc = TurretLook.Seed(zenith);
+    bool everOut = false,
+        sawClamp = false;
+    float worstClampedUpStep = 0f;
+    for (int i = 0; i < 360; i++)
+    {
+        Vec3 prevUp = arc.Y;
+        arc.Yaw(step * 0.5f);
+        arc.Pitch(-step);
+        sawClamp |= arc.ClampToArc(zenith);
+        everOut |= !TurretAim.InArc(zenith, arc.Z);
+        worstClampedUpStep = MathF.Max(worstClampedUpStep, AngleBetween(prevUp, arc.Y));
+    }
+    Check(sawClamp, "a long sweep up eventually reaches the station's arc edge");
+    Check(!everOut, "the arc clamp keeps the aim inside TurretAim.InArc after every step");
+    Check(worstClampedUpStep < 0.05f, "the arc clamp leaves the up continuous (no jump at the edge)");
+    Check(Orthonormality(arc) < 1e-4f, "the clamped basis is still orthonormal");
+    // …and an aim already inside the arc is left strictly alone.
+    var free = TurretLook.Seed(zenith);
+    Check(!free.ClampToArc(zenith), "ClampToArc reports false (and changes nothing) inside the arc");
+
+    // WithForward: the CAMERA basis while the mount is still traversing — the look carried onto the
+    // gun's ACTUAL aim by the shortest rotation, so the up follows the gun instead of being rebuilt.
+    var sight = TurretLook.Seed(zenith);
+    sight.Yaw(0.6f);
+    sight.Pitch(-0.4f);
+    float rate = 0f;
+    Vec3 actual = TurretAim.Slew(TurretAim.Rest(zenith), sight.Z, ref rate, 2f, 6f, 0.05f);
+    var cam = sight.WithForward(actual);
+    Check(AngleBetween(cam.Z, actual) < 1e-4f, "WithForward's forward IS the gun's actual aim");
+    Check(Orthonormality(cam) < 1e-4f, "WithForward returns an orthonormal basis");
+    Check(
+        AngleBetween(cam.Y, sight.Y) <= AngleBetween(sight.Z, actual) + 1e-3f,
+        "…and rolls the up no further than the aim moved"
+    );
+    var settled = sight.WithForward(sight.Z);
+    Check(AngleBetween(settled.Y, sight.Y) < 1e-4f, "once the gun catches up WithForward is the identity");
 }
 
 Console.WriteLine(failures == 0 ? "ALL PASS" : $"{failures} FAILURE(S)");
