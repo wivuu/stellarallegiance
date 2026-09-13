@@ -30,19 +30,28 @@
 //       authored gun, a legal swap sticks, tier migration applies, pure authored resolves to null.
 //   7.  Bind at launch: CrewSeats, RidingShipIdOf, the gunner still owns no ship, CrewChanged.
 //   8.  A captain launching a DIFFERENT hull than advertised dissolves the crew.
-//   9.  Release: death (hull to 0 -> pod), dock, captain leave, gunner leave, ReturnToLobby.
+//   9.  Release: death (hull to 0 -> pod), dock (the crew SURVIVES it), captain leave, gunner leave,
+//       ReturnToLobby.
 //   10. Detach + reclaim renames the captain and keeps the gunner seated.
 //   11. A gunner sending MsgSpawn auto-vacates and owns a ship.
 //   12. Frame shapes: Frames.Crew rows/seats, and the crewed ship's MsgShipLoadout row.
 //   13. Hub level (TestKit): a riding gunner gets MsgCrew naming itself with a live ShipId, NEVER a
 //       MsgYouAre, and its anchor-scoped frames follow the captain's ship into another sector.
-//   14. The shared TurretAim rule itself (rest pose, arc clamp, gimbal round-trip, spread barrel).
+//   14. The shared TurretAim rule itself (rest pose, arc clamp, gimbal round-trip, spread barrel)
+//       and the slice-2b TRAVERSE rule (TurretAim.Slew: no overshoot, the speed cap, settling on
+//       the target with rate 0, the slew-0 snap, a capital station's 90° taking >= 20 ticks).
 //   15. Aim/fire in the sim: held input is dropped while the captain is docked, a below-horizon aim
-//       is stored clamped, a held trigger fires on the station's OWN cadence (never touching the
-//       pilot's LastFireTick) and credits the GUNNER, an unmanned station never fires, vacating
-//       rests the station, Frames.Turrets carries only manned seats.
+//       is traversed toward and stored clamped, a held trigger fires on the station's OWN cadence
+//       (never touching the pilot's LastFireTick) and credits the GUNNER, an unmanned station never
+//       fires, vacating rests the station, Frames.Turrets carries only manned seats.
 //   16. Hub level: MsgTurrets reaches a same-sector watcher and the gunner itself, never a client
 //       anchored in another sector.
+//   17. Slice 2b: the captain's death gives every seated gunner their OWN escape pod at the wreck,
+//       scores the captain one EJ and the gunners nothing until their pods are shot down.
+//   18. Slice 2b: a dock KEEPS the crew (ShipId back to 0 = joinable, seats held, held fire dropped);
+//       a same-class relaunch re-binds them, a station-less intent vacates them.
+//   19. Hub level: what the gunner's client is told on a dock (MsgCrew ShipId 0, no YouAre) and on
+//       the captain's death (a MsgYouAre naming its own pod).
 
 using System.Linq;
 using SimServer.Content;
@@ -63,6 +72,9 @@ void Check(bool cond, string pass, string fail)
         failures++;
     }
 }
+
+// The angle between two (unit-ish) directions, in radians — the traverse tests' one measure.
+static float Angle(Vec3 a, Vec3 b) => MathF.Acos(Math.Clamp(Vec3.Dot(Vec3.Normalize(a), Vec3.Normalize(b)), -1f, 1f));
 
 string stockPath = Path.Combine(AppContext.BaseDirectory, "content", "core", "core.manifest.yaml");
 string worldPath = Path.Combine(AppContext.BaseDirectory, "content", "core", "world.yaml");
@@ -521,9 +533,9 @@ Simulation.ShipSim Launch(Simulation sim, int cid, byte team, byte cls)
         "the captain never docked — the release check below is vacuous"
     );
     Check(
-        CrewOf(dockSim, 1) is null && SeatsOf(dockSim, 2).Count == 0,
-        "a dock dissolves the crew too (everyone back to the hangar)",
-        "a docked ship kept its crew"
+        CrewOf(dockSim, 1) is { ClassId: Bomber } && SeatsOf(dockSim, 2).SequenceEqual(new[] { (1, 0) }),
+        "a dock KEEPS the crew: the record survives under the captain and the gunner stays seated",
+        "a docked ship lost its crew"
     );
 
     // 9c. The captain leaving the server.
@@ -853,6 +865,79 @@ Simulation.ShipSim Launch(Simulation sim, int cid, byte team, byte cls)
         "TurretAim.SpreadBarrel tags a station's spread seed with the 0x80 turret bit",
         $"SpreadBarrel(1) = 0x{TurretAim.SpreadBarrel(1):X2}, expected 0x81"
     );
+
+    // ---- TurretAim.Slew: the traverse rule both peers run (v42 slice 2b) ----
+    const float Dt = FlightModel.Dt;
+    float Rad(double deg) => (float)(deg * Math.PI / 180.0);
+
+    // A light mount (the bomber's unauthored default) swinging 90°: it must never overshoot, never
+    // turn faster than its speed cap in one step, and come to a dead stop ON the target.
+    {
+        float slew = Rad(TurretAim.DefaultSlewDeg);
+        float accel = Rad(TurretAim.DefaultAccelDeg);
+        var from = new Vec3(0f, 0f, 1f);
+        var to = new Vec3(1f, 0f, 0f);
+        var cur = from;
+        float rate = 0f;
+        float gap = Angle(cur, to);
+        bool monotone = true,
+            withinCap = true;
+        int steps = 0;
+        for (; steps < 400 && gap > 1e-4f; steps++)
+        {
+            var next = TurretAim.Slew(cur, to, ref rate, slew, accel, Dt);
+            withinCap &= Angle(cur, next) <= slew * Dt + 1e-4f;
+            float g = Angle(next, to);
+            monotone &= g <= gap + 1e-5f;
+            gap = g;
+            cur = next;
+        }
+        Check(monotone, "TurretAim.Slew never overshoots the desired aim", "a Slew step moved past the target");
+        Check(
+            withinCap,
+            "TurretAim.Slew never turns faster than the station's slew cap in one step",
+            "a Slew step broke the speed cap"
+        );
+        // The step that lands ON the target is clamped to the remaining angle; the call after it is
+        // the one that reports the gun stopped, and it must leave the aim exactly where it is.
+        var settled = TurretAim.Slew(cur, to, ref rate, slew, accel, Dt);
+        Check(
+            gap <= 1e-4f && steps < 400 && rate == 0f && Near(settled, to),
+            "TurretAim.Slew reaches the desired aim and then reports rate 0 (the gun has stopped)",
+            $"the traverse never settled (gap={gap}, rate={rate}, steps={steps})"
+        );
+    }
+
+    // An unauthored / test def (slew 0) SNAPS — the fallback every mirror shares.
+    {
+        float rate = 7f;
+        var snapped = TurretAim.Slew(new Vec3(0f, 0f, 1f), new Vec3(1f, 0f, 0f), ref rate, 0f, 0f, Dt);
+        Check(
+            Near(snapped, new Vec3(1f, 0f, 0f)) && rate == 0f,
+            "a station with no authored traverse (slew 0) snaps straight to the desired aim",
+            $"slew 0 did not snap ({snapped.X},{snapped.Y},{snapped.Z}, rate={rate})"
+        );
+    }
+
+    // A heavy capital station (the Devastator's authored 90°/s, 240°/s²) takes at least a full
+    // second of ticks to come round 90° — the traverse is the feature, so this is a floor, not a
+    // fit: 90° at 90°/s is 20 ticks of pure travel before any wind-up is counted.
+    {
+        float rate = 0f;
+        var cur = new Vec3(0f, 0f, 1f);
+        var to = new Vec3(1f, 0f, 0f);
+        int ticks = 0;
+        while (ticks < 400 && Angle(cur, to) > 1e-4f)
+        {
+            cur = TurretAim.Slew(cur, to, ref rate, Rad(90.0), Rad(240.0), Dt);
+            ticks++;
+        }
+        Check(
+            ticks >= 20,
+            $"a 90°/s capital station needs {ticks} ticks (>= 20) to traverse 90°",
+            $"a 90°/s station came round 90° in {ticks} ticks"
+        );
+    }
 }
 
 // ---- 15. Aim + fire in the sim -------------------------------------------------------------------
@@ -925,31 +1010,78 @@ void TurretIn(Simulation sim, int gunner, Vec3 aim, bool firing) =>
 }
 
 {
-    // An aim past the station's arc floor is stored CLAMPED — the gunner keeps the azimuth they
-    // pushed toward, the elevation is pinned at the floor, and nothing ever fires into the hull.
+    // An aim past the station's arc floor is TRAVERSED toward and stored CLAMPED — the gunner keeps
+    // the azimuth they pushed toward, the elevation is pinned at the floor, and nothing ever fires
+    // into the hull. The gun does not teleport there: the aim on the wire is where the barrel has
+    // actually swung to, so the first tick covers a fraction of the angle and the rest follows.
     var (sim, ship) = CrewedLaunch(16);
     var zenith = Vec3.Normalize(sim.TurretZenithOf(Bomber, 0));
     var horizon = TurretAim.Frame(zenith).Z; // azimuth 0 on the station's horizon
     var below = Vec3.Normalize(horizon - zenith); // 45 degrees UNDER the horizon
+    var start = ship.TurretAim![0];
+    var desired = TurretAim.Clamp(zenith, below);
+    float full = Angle(start, desired);
+
     TurretIn(sim, 2, below, firing: false);
     Park(ship, new Vec3(0f, 0f, 0f));
     sim.Step();
-    var stored = ship.TurretAim![0];
+    float first = Angle(start, ship.TurretAim![0]);
     Check(
-        TurretAim.InArc(zenith, stored)
-            && MathF.Abs(Vec3.Dot(zenith, stored) - MathF.Cos(TurretAim.ArcHalfAngleRad)) < 1e-3f,
-        "a held aim 45° under the horizon is stored clamped to the arc floor, inside the arc",
-        $"the stored aim is outside the arc (dot={Vec3.Dot(zenith, stored)})"
+        first > 1e-4f && first < full - 1e-3f,
+        $"the station TRAVERSES toward a new aim: one tick covers {first * 180f / MathF.PI:F1}° of the {full * 180f / MathF.PI:F1}° swing",
+        $"the first tick moved {first} rad of a {full} rad swing (expected a partial step)"
     );
     Check(
         sim.Events.TurretUpdates.Contains(ship),
         "an aim that moved puts the ship in this step's TurretUpdates",
         "the moved aim raised no turret update"
     );
+
+    // ...and it closes on the desired aim monotonically, never overshooting it.
+    float prev = Angle(ship.TurretAim![0], desired);
+    bool monotone = true;
+    for (int i = 0; i < 60; i++)
+    {
+        Park(ship, new Vec3(0f, 0f, 0f));
+        sim.Step();
+        float gap = Angle(ship.TurretAim![0], desired);
+        monotone &= gap <= prev + 1e-4f;
+        prev = gap;
+    }
+    Check(
+        monotone,
+        "...closing the gap to the desired aim on every tick, never past it",
+        "the traverse overshot or backed up"
+    );
+    var stored = ship.TurretAim![0];
+    Check(
+        TurretAim.InArc(zenith, stored)
+            && MathF.Abs(Vec3.Dot(zenith, stored) - MathF.Cos(TurretAim.ArcHalfAngleRad)) < 1e-3f,
+        "a held aim 45° under the horizon settles clamped to the arc floor, inside the arc",
+        $"the stored aim is outside the arc (dot={Vec3.Dot(zenith, stored)})"
+    );
+    Check(
+        ship.TurretRate![0] == 0f,
+        "a station parked on the gunner's aim has stopped (traverse rate back to 0)",
+        $"the settled station still reports a traverse rate ({ship.TurretRate![0]})"
+    );
     Check(
         ship.LastTurretFireTick == 0,
         "an aim-only input (no Firing flag) fires nothing",
         "an aim-only input fired the station"
+    );
+
+    // A gunner who stops sending keeps the gun exactly where it is — a station never drifts.
+    var held = ship.TurretAim![0];
+    for (int i = 0; i < 10; i++)
+    {
+        Park(ship, new Vec3(0f, 0f, 0f));
+        sim.Step();
+    }
+    Check(
+        Angle(held, ship.TurretAim![0]) < 1e-5f,
+        "a manned station with nothing new held keeps its current aim (no drift)",
+        "an idle manned station drifted off its aim"
     );
 }
 
@@ -1076,6 +1208,180 @@ void TurretIn(Simulation sim, int gunner, Vec3 aim, bool firing) =>
         !any && scout.TurretAim is null,
         "a hull with no turret stations never allocates turret state or raises a turret update",
         "a station-less hull produced turret updates"
+    );
+}
+
+// ---- 17. The captain dies: every gunner punches out in their own pod ------------------------------
+{
+    var sim = BootSim(171);
+    Intent(sim, 1, 0, Bomber);
+    Seat(sim, 2, 0, 1, 1, 0);
+    Seat(sim, 3, 0, 1, 1, 1);
+    var ship = Launch(sim, 1, 0, Bomber);
+    Park(ship, new Vec3(0f, 0f, 0f));
+    ship.Health = 0f;
+    sim.Step();
+
+    Simulation.ShipSim? PodOf(int cid)
+    {
+        ulong id = sim.ShipIdOf(cid);
+        return id == 0 ? null : sim.Ships.FirstOrDefault(x => x.ShipId == id);
+    }
+    var gunnerPod = PodOf(2);
+    var otherPod = PodOf(3);
+    var captainPod = PodOf(1);
+    Check(
+        gunnerPod is { IsPod: true } && otherPod is { IsPod: true } && captainPod is { IsPod: true },
+        "a destroyed crewed hull leaves one escape pod per SEATED GUNNER, plus the captain's",
+        $"the wreck produced pods: gunner={gunnerPod?.ShipId}, other={otherPod?.ShipId}, captain={captainPod?.ShipId}"
+    );
+    Check(
+        gunnerPod!.OwnerClientId == 2 && otherPod!.OwnerClientId == 3 && gunnerPod.ShipId != otherPod.ShipId,
+        "...each pod is owned by the gunner who was in that seat (their own, not a shared one)",
+        "a gunner's pod is not owned by the gunner"
+    );
+    Check(
+        gunnerPod.SectorId == ship.SectorId && (gunnerPod.State.Pos - ship.State.Pos).Length() < 25f,
+        "...spawned at the wreck, in the wreck's sector",
+        $"the gunner's pod is {(gunnerPod.State.Pos - ship.State.Pos).Length()}u from the wreck in sector {gunnerPod.SectorId}"
+    );
+    Check(
+        gunnerPod.Team == ship.Team,
+        "...on the captain's team",
+        $"the gunner's pod flies team {gunnerPod.Team}, expected {ship.Team}"
+    );
+    Check(
+        SeatsOf(sim, 2).Count == 0 && SeatsOf(sim, 3).Count == 0 && CrewOf(sim, 1) is null,
+        "the seats are vacated and the crew dissolves with the hull",
+        "a destroyed hull kept its crew seated"
+    );
+    Check(sim.Events.CrewChanged, "the death step raised Events.CrewChanged", "the death left Events.CrewChanged clear");
+
+    // The ledger: the CAPTAIN wears the EJ for the hull that was lost; the gunners lost no hull of
+    // their own, so they have no row yet at all. Only their POD's death scores them a D.
+    Simulation.PilotStats Row(int cid) => sim.MatchStats.TryGetValue(cid, out var st) ? st : new Simulation.PilotStats();
+    Check(
+        Row(1).Ejects == 1 && Row(1).Deaths == 0,
+        "the captain is charged exactly one EJ for the hull they lost",
+        $"captain row wrong (EJ={Row(1).Ejects}, D={Row(1).Deaths})"
+    );
+    Check(
+        Row(2).Ejects == 0 && Row(2).Deaths == 0 && Row(3).Ejects == 0,
+        "a gunner is charged NOTHING for the ride they lost (no hull of their own)",
+        $"gunner row wrong (EJ={Row(2).Ejects}, D={Row(2).Deaths})"
+    );
+
+    // Now shoot the gunner's pod down: THAT scores their D, exactly once.
+    gunnerPod.Health = 0f;
+    sim.Step();
+    Check(
+        Row(2).Deaths == 1 && Row(2).Ejects == 0,
+        "the gunner's pod dying later scores exactly one D (and still no EJ)",
+        $"the gunner's pod death scored D={Row(2).Deaths}, EJ={Row(2).Ejects}"
+    );
+    Check(
+        sim.ShipIdOf(2) == 0,
+        "...and the gunner is back in the spawn menu with no ship",
+        "the gunner still owns a ship after its pod died"
+    );
+}
+
+// ---- 18. A dock KEEPS the crew ---------------------------------------------------------------------
+{
+    // Put a crewed bomber on its home base's docking door and step it in. (Same idiom as 9b: a
+    // model-less test world falls back to the legacy core-sphere dock.)
+    (Simulation sim, Simulation.ShipSim ship) DockedCrew(ulong seed)
+    {
+        var sim = BootSim(seed);
+        Intent(sim, 1, 0, Bomber);
+        Seat(sim, 2, 0, 1, 1, 0);
+        var ship = Launch(sim, 1, 0, Bomber);
+        var home = sim.World.Bases.First(b => b.Team == 0);
+        var faces = sim.World.BaseDockFacesOf(home.BaseTypeId);
+        if (faces.Length > 0)
+        {
+            int fi = Math.Max(0, sim.World.BaseLargestDockFaceOf(home.BaseTypeId));
+            var face = faces[Math.Min(fi, faces.Length - 1)];
+            ship.State.Pos = home.Pos + face.Center;
+            ship.State.Vel = face.Normal * 20f;
+        }
+        else
+        {
+            ship.State.Pos = home.Pos;
+            ship.State.Vel = default;
+        }
+        ship.SectorId = home.SectorId;
+        sim.Step();
+        return (sim, ship);
+    }
+
+    var (sim, docked) = DockedCrew(181);
+    Check(!sim.Ships.Contains(docked), "premise: the crewed captain docked", "the captain never docked");
+    Check(
+        docked.Crew is null && docked.CrewSeats is null && CrewOf(sim, 1)!.Ship is null,
+        "the docked hull is unbound from the record (and the record from the hull)",
+        "the docked hull is still cross-linked with its crew"
+    );
+    var roster = Frames.Crew(sim, 0);
+    Check(
+        roster.Ships.Length == 1
+            && roster.Ships[0].CaptainId == 1
+            && roster.Ships[0].ClassId == Bomber
+            && roster.Ships[0].ShipId == 0
+            && roster.Ships[0].Seats.Any(s => s.GunnerId == 2),
+        "Frames.Crew streams the docked captain at ShipId 0 (joinable again) with the gunner still seated",
+        "the docked crew's roster row is wrong"
+    );
+    Check(
+        sim.RidingShipIdOf(2) == 0 && sim.ShipIdOf(2) == 0,
+        "the gunner rides nothing while the captain is in the hangar, and owns no ship",
+        "a gunner of a docked captain is still riding something"
+    );
+
+    // The captain re-advertises the SAME hull and relaunches: the kept seats re-bind to the new ship.
+    Intent(sim, 1, 0, Bomber);
+    Check(
+        SeatsOf(sim, 2).SequenceEqual(new[] { (1, 0) }),
+        "a same-class re-intent after a dock keeps the gunner in their station",
+        "the captain's re-intent threw the kept gunner out"
+    );
+    var relaunched = Launch(sim, 1, 0, Bomber);
+    Check(
+        relaunched.CrewSeats is { } cs && cs[0] == 2 && ReferenceEquals(relaunched.Crew, CrewOf(sim, 1)),
+        "...and the relaunch re-binds the crew to the new hull",
+        "the relaunch did not re-bind the kept crew"
+    );
+    Check(
+        sim.ShipIdOf(2) == 0 && sim.RidingShipIdOf(2) == relaunched.ShipId,
+        "...the gunner owns no ship and is riding the NEW hull",
+        $"the gunner rides {sim.RidingShipIdOf(2)}, expected {relaunched.ShipId}"
+    );
+    Check(
+        relaunched.TurretAim is { Length: 2 } && relaunched.TurretRate is { Length: 2 },
+        "...with freshly seeded per-station aim/traverse state",
+        "the relaunched hull has no turret state"
+    );
+
+    // A dock does NOT leave held fire behind: the station of a docked-then-relaunched crew starts cold.
+    Park(relaunched, new Vec3(0f, 0f, 0f));
+    for (int i = 0; i < 10; i++)
+    {
+        Park(relaunched, new Vec3(0f, 0f, 0f));
+        sim.Step();
+    }
+    Check(
+        relaunched.LastTurretFireTick == 0,
+        "the gunner's pre-dock held aim/fire is dropped — the relaunched station fires nothing",
+        "a held trigger survived the dock"
+    );
+
+    // The other branch: a captain who picks a hull with no stations dissolves the kept crew.
+    var (other, _) = DockedCrew(182);
+    Intent(other, 1, 0, Scout);
+    Check(
+        CrewOf(other, 1) is null && SeatsOf(other, 2).Count == 0,
+        "a post-dock intent naming a hull with no turret stations vacates the kept crew",
+        "a station-less re-intent kept the crew seated"
     );
 }
 
@@ -1219,6 +1525,163 @@ void TurretIn(Simulation sim, int gunner, Vec3 aim, bool firing) =>
         farT.SentOf(Protocol.MsgTurrets).Count == farBefore,
         "a client anchored in another sector receives no turret frames",
         $"a far-away client got {farT.SentOf(Protocol.MsgTurrets).Count - farBefore} turret frame(s) after warping out"
+    );
+
+    cts.Cancel();
+}
+
+// ---- 19. Hub level: what a gunner's client is told on a dock and on the captain's death ----------
+{
+    var content = ContentLoader.Load(stockPath, worldPath);
+    content.Start.BaseTechs.Add("supremacy-1");
+    content.Start.BaseTechs.Add("bomber");
+    var world = new World(19, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
+    var sim = new Simulation(world, content)
+    {
+        PigsEnabled = false,
+        MinersEnabled = false,
+        FogEnabled = false,
+    };
+    var hub = new ClientHub(
+        sim,
+        new SimServer.Backend.OpenAuthenticator(),
+        new SimServer.Backend.InMemoryPlayerDirectory(),
+        new SimServer.Backend.ReadyUpMatchmaker(autoStart: false),
+        "Test Arena",
+        Array.Empty<MapCatalogEntry>()
+    );
+    sim.ShouldStartMatch = hub.ShouldStartMatch;
+    sim.OnReturnToLobby = hub.OnReturnToLobby;
+    sim.OnMatchStart = hub.OnMatchStart;
+
+    var capT = new FakeHubTransport();
+    var gunT = new FakeHubTransport();
+    var cts = new System.Threading.CancellationTokenSource();
+    foreach (var t in new[] { capT, gunT })
+    {
+        _ = hub.HandleConnection(t, cts.Token);
+        System.Threading.Thread.Sleep(50);
+    }
+
+    void Pump(int n)
+    {
+        for (int i = 0; i < n; i++)
+        {
+            sim.Step();
+            hub.AfterStep();
+        }
+        System.Threading.Thread.Sleep(60);
+    }
+    void Feed(FakeHubTransport t, byte[] frame)
+    {
+        t.Feed(frame);
+        System.Threading.Thread.Sleep(50);
+    }
+
+    Feed(capT, HubFrames.Hello("vex"));
+    Feed(gunT, HubFrames.Hello("nova"));
+    foreach (var t in new[] { capT, gunT })
+    {
+        Feed(t, HubFrames.SetTeam(0));
+        Feed(t, HubFrames.SetReady(true));
+    }
+    Pump(20);
+    foreach (var ts in sim.World.TeamStates.Values)
+        ts.Credits += 100000;
+
+    int IdOf(FakeHubTransport t) => WelcomeMessage.TryParse(t.SentOf(Protocol.MsgWelcome)[0], out var w) ? w.ClientId : -1;
+    int capId = IdOf(capT);
+    int gunId = IdOf(gunT);
+
+    Feed(capT, HubFrames.HangarIntent(Bomber));
+    Pump(10);
+    Feed(gunT, HubFrames.CrewSeat(1, capId, 0));
+    Pump(10);
+    Feed(capT, HubFrames.Spawn(Bomber));
+    Pump(20);
+
+    var captainShip = sim.Ships.FirstOrDefault(s => s.OwnerClientId == capId && !s.IsPod);
+    Check(
+        captainShip is { Crew: not null } && gunId >= 0,
+        "premise: the captain launched a crewed bomber through the hub",
+        "the hub setup for the dock/death tests failed"
+    );
+
+    // The roster row the gunner sees for its own seat, from the LAST MsgCrew the hub sent it.
+    (ulong ShipId, bool Seated)? LastRoster()
+    {
+        var frames = gunT.SentOf(Protocol.MsgCrew);
+        if (frames.Count == 0 || !CrewMessage.TryParse(frames[^1], out var m) || m.Ships.Length == 0)
+            return null;
+        var row = m.Ships[0];
+        return (row.ShipId, row.Seats.Any(s => s.GunnerId == gunId));
+    }
+    Check(
+        LastRoster() is { ShipId: not 0, Seated: true },
+        "premise: the gunner's roster shows it riding a live ship",
+        $"the pre-dock roster is {LastRoster()}"
+    );
+
+    // ---- Dock: the ship goes away, the gunner stays in its station ----
+    var home = sim.World.Bases.First(b => b.Team == 0);
+    var faces = sim.World.BaseDockFacesOf(home.BaseTypeId);
+    if (faces.Length > 0)
+    {
+        int fi = Math.Max(0, sim.World.BaseLargestDockFaceOf(home.BaseTypeId));
+        var face = faces[Math.Min(fi, faces.Length - 1)];
+        captainShip!.State.Pos = home.Pos + face.Center;
+        captainShip.State.Vel = face.Normal * 20f;
+    }
+    else
+    {
+        captainShip!.State.Pos = home.Pos;
+        captainShip.State.Vel = default;
+    }
+    captainShip.SectorId = home.SectorId;
+    Pump(10);
+    Check(
+        !sim.Ships.Contains(captainShip),
+        "premise: the captain docked through the hub",
+        "the hub-driven captain never docked"
+    );
+    Check(
+        LastRoster() is { ShipId: 0, Seated: true },
+        "after the captain docks the gunner receives a MsgCrew with ShipId 0 and its seat still held",
+        $"the post-dock roster the gunner saw is {LastRoster()}"
+    );
+    Check(
+        gunT.SentOf(Protocol.MsgYouAre).Count == 0,
+        "...and still no MsgYouAre (a standing-by gunner owns nothing)",
+        "a docked captain's gunner was handed a ship"
+    );
+
+    // ---- Death: the gunner is handed a pod, which IS a MsgYouAre ----
+    Feed(capT, HubFrames.Spawn(Bomber));
+    Pump(20);
+    var relaunched = sim.Ships.FirstOrDefault(s => s.OwnerClientId == capId && !s.IsPod);
+    Check(
+        relaunched is { Crew: not null },
+        "premise: the captain relaunched and the kept crew re-bound",
+        "the hub relaunch lost the crew"
+    );
+    relaunched!.SectorId = EmptySector;
+    relaunched.State.Pos = new Vec3(0f, 0f, 0f);
+    relaunched.State.Vel = default;
+    relaunched.Health = 0f;
+    Pump(10);
+
+    ulong gunnerPodId = sim.ShipIdOf(gunId);
+    var youAre = gunT.SentOf(Protocol.MsgYouAre);
+    ulong told = youAre.Count > 0 && YouAreMessage.TryParse(youAre[^1], out var ya) ? ya.ShipId : 0UL;
+    Check(
+        gunnerPodId != 0 && told == gunnerPodId,
+        "after the captain dies the gunner receives a MsgYouAre naming its own escape pod",
+        $"the gunner was told ship {told}, its pod is {gunnerPodId}"
+    );
+    Check(
+        sim.Ships.FirstOrDefault(x => x.ShipId == gunnerPodId) is { IsPod: true },
+        "...and that ship really is a pod",
+        "the gunner's new ship is not a pod"
     );
 
     cts.Cancel();
