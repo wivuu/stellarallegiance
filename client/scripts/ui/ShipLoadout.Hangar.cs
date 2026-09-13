@@ -47,8 +47,12 @@ public partial class ShipLoadout
         pad.AddChild(col);
 
         // Ship-class card strip — horizontal, above the preview bay (replaces the old ship-list column).
-        col.AddChild(UiKit.MakeLabel("SHIP CLASS", UiKit.TextStyle.Label, DesignTokens.TextDim));
-        col.AddChild(BuildShipCardStrip());
+        // Both it and its label belong to the captain's view: the CREWING variant of this tab hides
+        // them (a gunner picks no hull) — see ApplyTabVisibility.
+        _shipClassLabel = UiKit.MakeLabel("SHIP CLASS", UiKit.TextStyle.Label, DesignTokens.TextDim);
+        col.AddChild(_shipClassLabel);
+        _cardStripScroll = BuildShipCardStrip();
+        col.AddChild(_cardStripScroll);
 
         var header = new HBoxContainer();
         var titleCol = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
@@ -63,6 +67,10 @@ public partial class ShipLoadout
         header.AddChild(_hullLabel);
         col.AddChild(header);
 
+        // CREWING notice bar — only visible while riding a teammate's station (hidden in the hangar).
+        _crewNotice = BuildCrewNotice();
+        col.AddChild(_crewNotice);
+
         // Render bay: backdrop (hatch/scanline/glow) under the 3D viewport under the
         // marker overlay — PanelContainer stacks all children over the same rect.
         var bay = new BracketPanel { SizeFlagsVertical = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, 240) };
@@ -70,14 +78,15 @@ public partial class ShipLoadout
         bay.AddChild(new HoloBackdrop());
         _preview = new LoadoutPreview();
         bay.AddChild(_preview);
-        var overlay = new HardpointMarkerOverlay();
-        overlay.Init(_preview, IsSlotFilled);
-        bay.AddChild(overlay);
-        _preview.HardpointClicked += SelectSlot;
+        _markers = new HardpointMarkerOverlay();
+        _markers.Init(_preview, IsSlotFilled, TurretMarkerFor);
+        bay.AddChild(_markers);
+        _preview.HardpointClicked += OnMountClicked;
 
-        // Stats + description.
+        // Stats + description. Captain-only (a gunner is looking at someone else's hull).
         var lower = new HBoxContainer();
         lower.AddThemeConstantOverride("separation", 28);
+        _statsRow = lower;
         col.AddChild(lower);
         var stats = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = 1.3f };
         stats.AddThemeConstantOverride("separation", 10);
@@ -243,6 +252,9 @@ public partial class ShipLoadout
         _slotList.AddThemeConstantOverride("separation", 7);
         col.AddChild(_slotList);
 
+        // ▶ TURRET STATIONS — the crew-served stations of THIS hull (hidden on hulls with none).
+        col.AddChild(BuildTurretSection());
+
         col.AddChild(new DiamondDivider());
 
         // Arsenal frame — tinted container listing what fits the selected slot.
@@ -275,7 +287,17 @@ public partial class ShipLoadout
         col.AddChild(_arsenalFrame);
 
         col.AddChild(BuildCargoSection());
-        return scroll;
+
+        // The right column has TWO stacked variants — the captain's hardpoint/arsenal column above,
+        // and the gunner's TURRET MANIFEST — with exactly one visible (ApplyTabVisibility). A hidden
+        // BoxContainer child takes no space, so the visible one owns the full width.
+        _rightHangarScroll = scroll;
+        _rightCrewScroll = BuildCrewColumn();
+        var host = new HBoxContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
+        host.AddThemeConstantOverride("separation", 0);
+        host.AddChild(scroll);
+        host.AddChild(_rightCrewScroll);
+        return host;
     }
 
     private Control BuildCargoSection()
@@ -697,10 +719,12 @@ public partial class ShipLoadout
         );
     }
 
+    // The demo drives the WEAPON loadout, so it must skip turret stations (which are also assignable
+    // markers now but open the crew-station arsenal instead of the weapon arsenal).
     private void ClickFirstMarker()
     {
         foreach (LoadoutPreview.Mount m in _preview.Mounts)
-            if (m.Assignable && _preview.MountScreenPos(m) is Vector2 sp)
+            if (m.Assignable && m.Hp.Kind == HardpointKind.Weapon && _preview.MountScreenPos(m) is Vector2 sp)
             {
                 ClickAt(_preview.GetGlobalRect().Position + sp);
                 return;
@@ -891,18 +915,51 @@ public partial class HoloBackdrop : Control
 }
 
 // Screen-space hardpoint markers over the 3D preview: a dot + mono tag per weapon mount
-// (filled = weapon assigned, hollow = empty, pulsing ring = selected, bright = hovered)
-// and inert dim dots for the non-assignable hardpoints. Lives OUTSIDE the SubViewport
-// (own-world) and reprojects through the preview camera every frame.
+// (filled = weapon assigned, hollow = empty, pulsing ring = selected, bright = hovered),
+// a DIAMOND + seat tag per crew-served turret station, and inert dim dots for the
+// non-assignable hardpoints. Lives OUTSIDE the SubViewport (own-world) and reprojects
+// through the preview camera every frame.
+//
+// Two modes share one overlay because the docked screen has one preview: HANGAR is the
+// captain's own hull (weapon circles + station diamonds showing who mans what), CREWING is
+// a teammate's hull seen from a gunner's seat (stations only — click yours to leave, click
+// an open one to switch).
 public partial class HardpointMarkerOverlay : Control
 {
+    public enum Mode
+    {
+        Hangar,
+        Crewing,
+    }
+
+    // How one station reads on the hull: unmanned, manned by someone else, or MINE (the seat the
+    // local pilot holds). Mine is the only state that gets the accent + pulse.
+    public enum TurretState
+    {
+        Open,
+        Manned,
+        Mine,
+    }
+
+    // One station's marker text: its state plus the by-line under the seat id ("YOU" / a callsign /
+    // "OPEN"). The owner resolves callsigns — the overlay never touches the roster.
+    public readonly record struct TurretMarker(TurretState State, string By);
+
+    private const int TagSize = 10;
+    private const int BySize = 9;
+
+    public Mode DisplayMode = Mode.Hangar;
+
     private LoadoutPreview _preview = null!;
     private Func<byte, bool> _isFilled = _ => false;
+    private Func<byte, TurretMarker> _turretState = _ => new TurretMarker(TurretState.Open, "OPEN");
 
-    public void Init(LoadoutPreview preview, Func<byte, bool> isFilled)
+    public void Init(LoadoutPreview preview, Func<byte, bool> isFilled, Func<byte, TurretMarker>? turretState = null)
     {
         _preview = preview;
         _isFilled = isFilled;
+        if (turretState != null)
+            _turretState = turretState;
     }
 
     public override void _Ready() => MouseFilter = MouseFilterEnum.Ignore;
@@ -911,26 +968,13 @@ public partial class HardpointMarkerOverlay : Control
 
     public override void _Draw()
     {
-        // Legend + rotate hint (static chrome, drawn with the markers to stay one pass).
-        DrawString(
-            UiFonts.Mono,
-            new Vector2(14, 20),
-            "● WEAPON MOUNT",
-            HorizontalAlignment.Left,
-            -1,
-            10,
-            DesignTokens.TeamAccent
-        );
-        DrawString(UiFonts.Mono, new Vector2(14, 34), "· SYSTEM", HorizontalAlignment.Left, -1, 10, DesignTokens.TextDim);
-        DrawString(
-            UiFonts.Mono,
-            new Vector2(14, Size.Y - 12),
-            "ROTATE ◄ ► · SCROLL ZOOM · CLICK MOUNT",
-            HorizontalAlignment.Left,
-            -1,
-            10,
-            DesignTokens.Text2
-        );
+        bool hasStations = false;
+        if (_preview != null)
+            foreach (LoadoutPreview.Mount m in _preview.Mounts)
+                if (m.Hp.Kind == HardpointKind.Turret)
+                    hasStations = true;
+
+        DrawLegend(hasStations);
 
         if (_preview == null)
             return;
@@ -944,41 +988,146 @@ public partial class HardpointMarkerOverlay : Control
                 DrawCircle(sp, 2f, new Color(DesignTokens.TextDim, 0.5f));
                 continue;
             }
-
-            bool selected = _preview.SelectedIndex == m.Hp.Index;
-            bool hovered = _preview.HoverIndex == m.Hp.Index;
-            bool filled = _isFilled(m.Hp.Index);
-            Color c = DesignTokens.TeamAccent;
-            float r =
-                selected ? 9f
-                : hovered ? 8f
-                : 6.5f;
-            if (selected)
-            {
-                // Pulsing halo, the design's saMarker glow.
-                float pulse = 0.5f + 0.5f * Mathf.Sin(Time.GetTicksMsec() / 220f);
-                DrawCircle(sp, r + 4f + pulse * 3f, new Color(c, 0.12f + 0.10f * pulse));
-            }
-            DrawCircle(sp, r, filled ? c : new Color(DesignTokens.Void, 0.75f));
-            DrawArc(sp, r, 0, Mathf.Tau, 24, c, 2f, true);
-
-            string tag = $"P{m.Hp.Index + 1}";
-            Vector2 sz = UiFonts.Mono.GetStringSize(tag, HorizontalAlignment.Left, -1, 10);
-            var tagPos = sp + new Vector2(-sz.X * 0.5f, r + 14f);
-            DrawRect(
-                new Rect2(tagPos + new Vector2(-3, -10), sz + new Vector2(6, 4)),
-                new Color(DesignTokens.Void, 0.7f),
-                filled: true
-            );
-            DrawString(
-                UiFonts.Mono,
-                tagPos,
-                tag,
-                HorizontalAlignment.Left,
-                -1,
-                10,
-                selected || hovered ? c : DesignTokens.Text2
-            );
+            if (m.Hp.Kind == HardpointKind.Turret)
+                DrawStation(sp, m.Hp.Index);
+            else
+                DrawWeaponMount(sp, m.Hp.Index);
         }
     }
+
+    // Legend + rotate hint (static chrome, drawn with the markers to stay one pass).
+    private void DrawLegend(bool hasStations)
+    {
+        Font f = UiFonts.Mono;
+        if (DisplayMode == Mode.Crewing)
+        {
+            DrawString(
+                f,
+                new Vector2(14, 20),
+                "◆ YOUR STATION",
+                HorizontalAlignment.Left,
+                -1,
+                TagSize,
+                DesignTokens.TeamAccent
+            );
+            DrawString(f, new Vector2(14, 34), "◆ MANNED", HorizontalAlignment.Left, -1, TagSize, DesignTokens.Text2);
+            DrawString(f, new Vector2(14, 48), "◇ OPEN", HorizontalAlignment.Left, -1, TagSize, DesignTokens.TextDim);
+            DrawString(
+                f,
+                new Vector2(14, Size.Y - 12),
+                "CLICK YOUR STATION TO LEAVE · CLICK OPEN TO SWITCH",
+                HorizontalAlignment.Left,
+                -1,
+                TagSize,
+                DesignTokens.Text2
+            );
+            return;
+        }
+
+        DrawString(f, new Vector2(14, 20), "● WEAPON MOUNT", HorizontalAlignment.Left, -1, TagSize, DesignTokens.TeamAccent);
+        DrawString(f, new Vector2(14, 34), "· SYSTEM", HorizontalAlignment.Left, -1, TagSize, DesignTokens.TextDim);
+        if (hasStations)
+            DrawString(f, new Vector2(14, 48), "◆ TURRET STATION", HorizontalAlignment.Left, -1, TagSize, DesignTokens.Ok);
+        DrawString(
+            f,
+            new Vector2(14, Size.Y - 12),
+            "ROTATE ◄ ► · SCROLL ZOOM · CLICK MOUNT",
+            HorizontalAlignment.Left,
+            -1,
+            TagSize,
+            DesignTokens.Text2
+        );
+    }
+
+    private void DrawWeaponMount(Vector2 sp, byte index)
+    {
+        var key = new LoadoutPreview.MountKey(HardpointKind.Weapon, index);
+        bool selected = _preview.SelectedKey == key;
+        bool hovered = _preview.HoverKey == key;
+        bool filled = _isFilled(index);
+        Color c = DesignTokens.TeamAccent;
+        float r =
+            selected ? 9f
+            : hovered ? 8f
+            : 6.5f;
+        if (selected)
+        {
+            // Pulsing halo, the design's saMarker glow.
+            float pulse = Pulse();
+            DrawCircle(sp, r + 4f + pulse * 3f, new Color(c, 0.12f + 0.10f * pulse));
+        }
+        DrawCircle(sp, r, filled ? c : new Color(DesignTokens.Void, 0.75f));
+        DrawArc(sp, r, 0, Mathf.Tau, 24, c, 2f, true);
+        DrawTag(sp, r, $"P{index + 1}", selected || hovered ? c : DesignTokens.Text2, TagSize, null, default);
+    }
+
+    // A crew-served station: a DIAMOND (never a circle — the shape is what separates a station from a
+    // gun mount at a glance), with the seat id and who mans it stacked underneath.
+    private void DrawStation(Vector2 sp, byte index)
+    {
+        var key = new LoadoutPreview.MountKey(HardpointKind.Turret, index);
+        bool selected = _preview.SelectedKey == key;
+        bool hovered = _preview.HoverKey == key;
+        TurretMarker mk = _turretState(index);
+        bool mine = mk.State == TurretState.Mine;
+        Color c = mk.State switch
+        {
+            TurretState.Mine => DesignTokens.TeamAccent,
+            TurretState.Manned => DesignTokens.Text2,
+            _ => DesignTokens.TextDim,
+        };
+        float r =
+            mine || selected ? 9f
+            : hovered ? 8f
+            : 7f;
+
+        // Your own seat always pulses (it's the "you are here" marker); in the hangar the captain's
+        // SELECTED station pulses too, matching the weapon mounts' selection halo.
+        if (mine || (selected && DisplayMode == Mode.Hangar))
+        {
+            float pulse = Pulse();
+            UiDraw.Diamond(this, sp, r + 5f + pulse * 3f, new Color(c, 0.12f + 0.10f * pulse));
+        }
+
+        if (mk.State == TurretState.Open)
+            DashedDiamond(sp, r, c);
+        else
+            UiDraw.Diamond(this, sp, r, c);
+
+        Color tagCol =
+            mine ? DesignTokens.TeamAccent
+            : selected || hovered ? DesignTokens.Data
+            : DesignTokens.Data;
+        DrawTag(sp, r, CrewStore.SeatId(index), tagCol, TagSize, mk.By, c);
+    }
+
+    // Hollow dashed diamond — the "open seat" outline (four dashed edges, no fill).
+    private void DashedDiamond(Vector2 c, float r, Color color)
+    {
+        Vector2 top = c + new Vector2(0, -r),
+            right = c + new Vector2(r, 0),
+            bottom = c + new Vector2(0, r),
+            left = c + new Vector2(-r, 0);
+        DrawDashedLine(top, right, color, 1.5f, 3f);
+        DrawDashedLine(right, bottom, color, 1.5f, 3f);
+        DrawDashedLine(bottom, left, color, 1.5f, 3f);
+        DrawDashedLine(left, top, color, 1.5f, 3f);
+    }
+
+    // Void-backed mono tag under a marker; `second` adds a smaller by-line below it.
+    private void DrawTag(Vector2 sp, float r, string tag, Color color, int size, string? second, Color secondColor)
+    {
+        Vector2 sz = UiFonts.Mono.GetStringSize(tag, HorizontalAlignment.Left, -1, size);
+        var tagPos = sp + new Vector2(-sz.X * 0.5f, r + 14f);
+        DrawRect(new Rect2(tagPos + new Vector2(-3, -10), sz + new Vector2(6, 4)), new Color(DesignTokens.Void, 0.7f), true);
+        DrawString(UiFonts.Mono, tagPos, tag, HorizontalAlignment.Left, -1, size, color);
+        if (string.IsNullOrEmpty(second))
+            return;
+        Vector2 sz2 = UiFonts.Mono.GetStringSize(second, HorizontalAlignment.Left, -1, BySize);
+        var byPos = sp + new Vector2(-sz2.X * 0.5f, r + 26f);
+        DrawRect(new Rect2(byPos + new Vector2(-3, -9), sz2 + new Vector2(6, 3)), new Color(DesignTokens.Void, 0.7f), true);
+        DrawString(UiFonts.Mono, byPos, second, HorizontalAlignment.Left, -1, BySize, secondColor);
+    }
+
+    private static float Pulse() => 0.5f + 0.5f * Mathf.Sin(Time.GetTicksMsec() / 220f);
 }

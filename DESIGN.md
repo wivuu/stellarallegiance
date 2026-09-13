@@ -72,6 +72,12 @@ subclasses** for anything needing custom `_Draw` or per-frame state.
 - **Game elements** — `LoadoutSlot`, `ContactChip`, `ResourceReadout`, `RadarFrame`, `GunnerStrip`
   (the top-centre HUD strip a crew gunner sees while riding a captain's turret station — built from
   `RosterCells`; `SetMock(…)` renders it standalone in the gallery).
+- **Crew / turret stations** — `TurretStationRow` (a captain's ▶ TURRET STATIONS row: ◣ tile,
+  seat id + MANNED/OPEN, gun, gunner — selectable into the arsenal frame), `CrewManifestRow`
+  (a gunner's read-only ▶ TURRET MANIFEST row: ◆ pip tile, seat id + gun, YOU / name / OPEN), and
+  `CrewCard` (the CommandSidebar's CREWED SHIPS · TAKE A TURRET card — hull header, `n/N MANNED` /
+  `IN FLIGHT`, one row per station with the `＋ JOIN` / `✕ LEAVE` tag). Station state is always
+  server-owned (`CrewStore`); these never paint an optimistic seat.
 - **Roster primitives** (`RosterCells`) — the small builders every pilot-roster surface composes:
   `Mono`/`Lbl` cells, `Cell` (proportional column width), `Badge`, `Diamond`, `RowPanel`
   (hairline row, faction tint + 2px bar for "me"), `HeaderPanel` (4% accent wash), `TabStyle`,

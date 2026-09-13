@@ -471,12 +471,42 @@ public partial class UiShowcase : Control
         s.AddChild(gunner);
         gunner.SetMock("T2", "PW GAT GUN 1", "VEX", "⬟ BOMBER");
 
+        // Crew-served turret stations: the captain's ▶ TURRET STATIONS rows (manned+selected / open)
+        // beside a gunner's ▶ TURRET MANIFEST rows (someone else / YOU / OPEN).
+        s.AddChild(
+            UiKit.MakeLabel("// DOCKED SCREEN — TURRET STATIONS · MANIFEST", UiKit.TextStyle.Data, DesignTokens.TextDim)
+        );
+        var turretRow = new HBoxContainer();
+        turretRow.AddThemeConstantOverride("separation", 20);
+        var stationCol = new VBoxContainer { CustomMinimumSize = new Vector2(360, 0) };
+        stationCol.AddThemeConstantOverride("separation", 7);
+        var st1 = new TurretStationRow { Selected = true };
+        st1.Configure("T1", "PW GAT GUN 1", true, "CINDER");
+        var st2 = new TurretStationRow();
+        st2.Configure("T2", "PW GAT GUN 1", false, "— UNMANNED");
+        stationCol.AddChild(st1);
+        stationCol.AddChild(st2);
+        turretRow.AddChild(stationCol);
+        var manifestCol = new VBoxContainer { CustomMinimumSize = new Vector2(360, 0) };
+        manifestCol.AddThemeConstantOverride("separation", 7);
+        var mf1 = new CrewManifestRow();
+        mf1.Configure("T1", "PW GAT GUN 1", "CINDER", mine: false, occupied: true);
+        var mf2 = new CrewManifestRow();
+        mf2.Configure("T2", "PW GAT GUN 1", "YOU", mine: true, occupied: true);
+        var mf3 = new CrewManifestRow();
+        mf3.Configure("T3", "PW AUTOCAN 1", "OPEN", mine: false, occupied: false);
+        foreach (var mf in new CrewManifestRow[] { mf1, mf2, mf3 })
+            manifestCol.AddChild(mf);
+        turretRow.AddChild(manifestCol);
+        s.AddChild(turretRow);
+
         // Docked-screen CommandSidebar: live map + selectable YOUR BASES rows (active / selected /
-        // destroyed). Mock data lives only here — the component itself bakes none.
+        // destroyed) over the CREWED SHIPS join list. Mock data lives only here — the component
+        // itself bakes none.
         s.AddChild(UiKit.MakeLabel("// DOCKED SCREEN — COMMAND SIDEBAR", UiKit.TextStyle.Data, DesignTokens.TextDim));
         var sidebar = new CommandSidebar
         {
-            CustomMinimumSize = new Vector2(340, 560),
+            CustomMinimumSize = new Vector2(340, 1120),
             SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
         };
         s.AddChild(sidebar);
@@ -514,6 +544,42 @@ public partial class UiShowcase : Control
                 new CommandSidebar.BaseEntry(3, "GARRISON 03", "PALLAS-7", 1, false),
             },
             mockMap
+        );
+
+        // CREWED SHIPS · TAKE A TURRET — one card we're crewing (T2 is ours, T1 held by CINDER) and
+        // one open capital. With a seat held, every other station reads OPEN rather than offering
+        // JOIN — that's the rule: one seat at a time.
+        sidebar.SetCrewData(
+            new[]
+            {
+                new CommandSidebar.CrewShipEntry(
+                    11,
+                    "VEX",
+                    "BOMBER",
+                    "⬟",
+                    0,
+                    new[]
+                    {
+                        new CommandSidebar.CrewSeatEntry(0, "T1", "PW GAT GUN 1", 7, "CINDER"),
+                        new CommandSidebar.CrewSeatEntry(1, "T2", "PW GAT GUN 1", 42, "HALBERD"),
+                    }
+                ),
+                new CommandSidebar.CrewShipEntry(
+                    12,
+                    "RAMPART",
+                    "DEVASTATOR",
+                    "◆",
+                    0,
+                    new[]
+                    {
+                        new CommandSidebar.CrewSeatEntry(0, "T1", "PW AUTOCAN 1", -1, ""),
+                        new CommandSidebar.CrewSeatEntry(1, "T2", "PW AUTOCAN 1", -1, ""),
+                        new CommandSidebar.CrewSeatEntry(2, "T3", "PW AUTOCAN 1", -1, ""),
+                        new CommandSidebar.CrewSeatEntry(3, "T4", "PW AUTOCAN 1", -1, ""),
+                    }
+                ),
+            },
+            (11, (byte)1)
         );
     }
 

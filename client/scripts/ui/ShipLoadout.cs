@@ -55,6 +55,8 @@ public partial class ShipLoadout : Control
     private int _activeTab;
 
     // -- hangar: ship-class card strip --------------------------------------
+    private Control _shipClassLabel = null!;
+    private Control _cardStripScroll = null!;
     private HBoxContainer _cardStrip = null!;
     private readonly List<(byte classId, ShipCard card)> _shipCards = new();
     private int _builtShipCount = -1;
@@ -66,6 +68,8 @@ public partial class ShipLoadout : Control
     private Label _hullLabel = null!;
     private Label _descLabel = null!;
     private LoadoutPreview _preview = null!;
+    private HardpointMarkerOverlay _markers = null!;
+    private Control _statsRow = null!;
     private readonly List<(Label value, SegmentedBar bar)> _statBars = new();
     private static readonly string[] StatNames = ["VELOCITY", "ARMOR", "PAYLOAD", "SIGNATURE"];
 
@@ -103,7 +107,12 @@ public partial class ShipLoadout : Control
     private Control _launchBar = null!;
 
     private byte? _classId;
+
+    // The selected mount in the right column. Weapon slot and turret station are MUTUALLY EXCLUSIVE
+    // (both index from 0, so only one may be set) — SelectSlot/SelectTurret keep that invariant and
+    // RefreshArsenal branches on which one is live.
     private byte? _selectedHp;
+    private byte? _selectedTurret;
 
     // A LAUNCH was clicked and the spawn hasn't landed yet — the button holds
     // "LAUNCHING…" until the ship exists (Hud then closes us) or the gate refuses
@@ -140,6 +149,13 @@ public partial class ShipLoadout : Control
         Active = false;
         SfxManager.Instance?.PlayUi(SfxManager.SfxId.MenuClose);
         SfxManager.Instance?.StopAmbient();
+        if (_net != null)
+            _net.LobbyChanged -= OnLobbyChanged;
+        // Closing the hangar retracts a crew advertisement — UNLESS we're closing because the captain
+        // just LAUNCHED. The ship exists by then and the server has already bound the crew to it, so
+        // retracting would dissolve a crew mid-flight.
+        if (_intentAdvertised && _world != null && _world.Ships.LocalShip == null)
+            SendHangarIntent(retract: true);
         DemoAfterLaunch();
     }
 
@@ -188,6 +204,10 @@ public partial class ShipLoadout : Control
         body.AddChild(_tabContent);
 
         rows.AddChild(_launchBar);
+
+        _sidebar.SeatJoinRequested += OnSeatJoin;
+        _sidebar.SeatLeaveRequested += OnLeaveCrew;
+        _net.LobbyChanged += OnLobbyChanged; // a callsign resolving must repaint the crew names
 
         OnTabSelected(0);
     }
@@ -256,8 +276,7 @@ public partial class ShipLoadout : Control
     private void OnTabSelected(int idx)
     {
         _activeTab = idx;
-        _hangarContent.Visible = idx == 0;
-        _launchBar.Visible = idx == 0; // launching a ship only makes sense from the hangar
+        ApplyTabVisibility();
 
         if (idx == 1)
         {
@@ -312,7 +331,11 @@ public partial class ShipLoadout : Control
 
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 16);
+        _launchRow = row;
         panel.AddChild(row);
+        // The CREWING variant of this bar (readouts + LEAVE CREW) stacks in the same panel; exactly
+        // one row is visible at a time (ApplyTabVisibility).
+        panel.AddChild(BuildCrewLaunchRow());
 
         _costReadout = new StatReadout();
         _payloadReadout = new StatReadout();
@@ -345,6 +368,7 @@ public partial class ShipLoadout : Control
         RefreshLoadoutViews();
         foreach ((uint _, Label count) in _cargoCounts)
             count.Text = "00";
+        SendHangarIntent(); // the reset also reverted every turret station to its authored gun
     }
 
     // LAUNCH = the spawn request. The screen stays open showing "LAUNCHING…" until the
@@ -412,7 +436,10 @@ public partial class ShipLoadout : Control
         // 1..9 select the Nth hull — the old buy menu's 1/2/3 spawn hotkeys, now scoped
         // to selection (LAUNCH/Enter-free so chat and launch stay deliberate). The order
         // matches the VISIBLE card strip: tech-locked hulls are hidden there, so they
-        // don't consume a number either.
+        // don't consume a number either. A gunner picks no hull, so the strip — and these
+        // hotkeys with it — is gone in crewing mode.
+        if (_crewMode)
+            return;
         int slot = (int)(key.Keycode - Key.Key1);
         if (slot >= 0 && slot < 9)
         {
@@ -478,6 +505,12 @@ public partial class ShipLoadout : Control
             RefreshBaseLaunchHints(); // fresh rows — re-dress them for the selected hull
         }
         UpdateBaseReadouts();
+
+        // Crew roster: CrewStore.Version only moves on a real structural change, so this repaints the
+        // CREWED SHIPS list / station column / crewing view exactly when the seats actually changed
+        // (or a callsign resolved — _crewDirty, raised by the lobby-roster event).
+        if (_world.Crew.Version != _crewSig || _crewDirty)
+            RefreshCrewViews();
     }
 
     // Cheap order-independent signature of this team's known bases (id + alive) so the sidebar
@@ -493,6 +526,8 @@ public partial class ShipLoadout : Control
 
     private void RefreshLaunchGate(byte team)
     {
+        if (_crewMode)
+            return; // crewing: the bar shows the crew readouts + LEAVE CREW, there is nothing to gate
         if (_classId is not byte classId || !_defs.TryGetShipDef(classId, out _))
             return;
         bool flying = _world.Ships.LocalShip != null;
@@ -588,6 +623,7 @@ public partial class ShipLoadout : Control
             return;
         _classId = classId;
         _selectedHp = null;
+        _selectedTurret = null;
         _state.SeedDefaults(classId, def); // open on the hull's authored default hold (once per class)
 
         foreach ((byte id, ShipCard card) in _shipCards)
@@ -600,7 +636,10 @@ public partial class ShipLoadout : Control
         _descLabel.Text = desc;
 
         RefreshStatBars(def);
-        _preview.ShowShip(_defs, classId);
+        // While crewing, the preview belongs to the CAPTAIN's hull — a defs-driven re-select of our
+        // own hull underneath must not steal it (RefreshCrewViews re-shows it on the way out).
+        if (!_crewMode)
+            _preview.ShowShip(_defs, classId);
         // Rebuild the cargo rows for THIS hull (fuel rows only exist on fuel-modeled hulls),
         // then relabel — RefreshCargoSection already seeds per-class counts, so the loop is
         // just the legacy relabel for any row it kept.
@@ -610,6 +649,7 @@ public partial class ShipLoadout : Control
 
         RefreshLoadoutViews();
         RefreshBaseLaunchHints(); // the hull changed — the sidebar's can't-launch hints follow it
+        SendHangarIntent(); // advertise (or clear) this hull's crew stations to the team
     }
 
     // Normalize each stat against the biggest hull in the buildable set so the bars
@@ -657,9 +697,12 @@ public partial class ShipLoadout : Control
     private void SelectSlot(byte hpIndex)
     {
         _selectedHp = hpIndex;
-        _preview.SelectedIndex = hpIndex;
+        _selectedTurret = null;
+        _preview.SelectedKey = new LoadoutPreview.MountKey(HardpointKind.Weapon, hpIndex);
         foreach ((byte idx, LoadoutSlot row) in _slotRows)
             row.Selected = idx == hpIndex;
+        foreach ((byte _, TurretStationRow trow) in _turretRows)
+            trow.Selected = false;
         RefreshArsenal();
     }
 
@@ -702,6 +745,7 @@ public partial class ShipLoadout : Control
         int holdSlots = _defs.TryGetShipDef(classId, out ShipClassDef holdDef) ? holdDef.CargoCapacity : 0;
         _slotCount.Text = holdSlots > 0 ? $"{slots} SLOTS · HOLD {holdSlots}" : $"{slots} SLOTS";
 
+        RefreshTurretStations();
         RefreshPayload();
         RefreshArsenal();
     }
@@ -736,15 +780,24 @@ public partial class ShipLoadout : Control
         foreach (var child in _arsenalRows.GetChildren())
             child.QueueFree();
 
-        if (
-            _classId is not byte classId
-            || _selectedHp is not byte hpIndex
-            || _defs.GetHardpoints(classId) is not List<HardpointDef> hps
-        )
+        if (_classId is not byte classId || _defs.GetHardpoints(classId) is not List<HardpointDef> hps)
         {
             _arsenalFrame.Visible = false;
             return;
         }
+        // A TURRET STATION is selected: the frame becomes the crew-station panel (who mans it + the
+        // ASSIGN WEAPON list) instead of the weapon arsenal. See ShipLoadout.Crew.cs.
+        if (_selectedTurret is byte turretIdx)
+        {
+            RefreshTurretArsenal(classId, turretIdx, hps);
+            return;
+        }
+        if (_selectedHp is not byte hpIndex)
+        {
+            _arsenalFrame.Visible = false;
+            return;
+        }
+        StyleArsenalFrame(DesignTokens.TeamAccentBase, 0.08f);
         HardpointDef? slot = null;
         foreach (HardpointDef hp in hps)
             if (hp.Kind == HardpointKind.Weapon && hp.Index == hpIndex && hp.Mount != WeaponMountKind.NonMountable)
@@ -786,15 +839,7 @@ public partial class ShipLoadout : Control
         int fit = 0;
         foreach (WeaponDef w in _defs.AllWeapons())
         {
-            if (!LoadoutState.Compatible(slot, w))
-                continue;
-            // A tier the team has outgrown (an owned tech obsoletes it) is retired from the arsenal
-            // entirely. Its successor tier carries the mount instead.
-            if (w.ObsoletedByTechIdx.Length > 0 && w.ObsoletedByTechIdx.Any(t => _world.TeamState.OwnsTech(team, t)))
-                continue;
-            // A weapon gated behind tech the team hasn't fully researched can't be equipped —
-            // it's hidden entirely (heavy-cannon is the stock case), not rendered as a locked row.
-            if (w.RequiredTechIdx.Length > 0 && !w.RequiredTechIdx.All(t => _world.TeamState.OwnsTech(team, t)))
+            if (!LoadoutState.Compatible(slot, w) || !ArsenalVisible(w, team))
                 continue;
             fit++;
             uint weaponId = w.WeaponId;
@@ -814,6 +859,15 @@ public partial class ShipLoadout : Control
         }
         _arsenalFit.Text = $"{fit} FIT";
     }
+
+    // Whether a weapon is offered at all, for ANY mount (weapon slot or crew station). A tier the team
+    // has outgrown (an owned tech obsoletes it) is retired outright — its successor carries the mount
+    // instead — and a weapon gated behind tech the team hasn't fully researched is HIDDEN, not shown
+    // as a locked row (heavy-cannon is the stock case). Both arsenals share this rule so a station
+    // can never offer a gun the weapon list wouldn't.
+    private bool ArsenalVisible(WeaponDef w, byte team) =>
+        (w.ObsoletedByTechIdx.Length == 0 || !w.ObsoletedByTechIdx.Any(t => _world.TeamState.OwnsTech(team, t)))
+        && (w.RequiredTechIdx.Length == 0 || w.RequiredTechIdx.All(t => _world.TeamState.OwnsTech(team, t)));
 
     // Walk the weapon-tier successor chain — the DISPLAY mirror of Simulation.ResolveLoadout's
     // server-side migrate (the authoritative one at spawn). Shared with WeaponsPanel via

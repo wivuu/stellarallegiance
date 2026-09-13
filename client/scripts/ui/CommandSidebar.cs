@@ -39,6 +39,32 @@ public partial class CommandSidebar : Control
         int ResearchMore = 0
     );
 
+    // ---- CREWED SHIPS (v41 crews) ------------------------------------------
+    // One crew-served turret station on a teammate's docked hull, as the join list shows it.
+    // Seat is the station's hardpoint index — exactly what SendCrewSeat takes — and SeatId its
+    // display name ("T1"). GunnerId < 0 means open; GunnerName is the resolved callsign.
+    public readonly record struct CrewSeatEntry(byte Seat, string SeatId, string GunName, int GunnerId, string GunnerName)
+    {
+        public bool IsOpen => GunnerId < 0;
+    }
+
+    // One crewable ship in the TAKE A TURRET list: whose it is, what it is, and every station.
+    // ShipId 0 = the captain is still docked, which is also the "joinable" flag (boarding is
+    // docked-only) — a flying ship's card reads IN FLIGHT and offers no JOIN.
+    public readonly record struct CrewShipEntry(
+        int CaptainId,
+        string CaptainName,
+        string ClassName,
+        string Glyph,
+        ulong ShipId,
+        IReadOnlyList<CrewSeatEntry> Seats
+    );
+
+    // Raised on a click that WANTS a seat change; the sidebar never mutates seat state itself (the
+    // store is server-driven, so an optimistic paint would fight the next frame).
+    public event Action<int, byte>? SeatJoinRequested;
+    public event Action? SeatLeaveRequested;
+
     public event Action<ulong>? BaseSelected;
     public ulong SelectedBaseId { get; private set; }
 
@@ -57,6 +83,12 @@ public partial class CommandSidebar : Control
 
     private SectorMapPreview _map = null!;
     private VBoxContainer _rowsBox = null!;
+    private VBoxContainer _crewSection = null!;
+    private VBoxContainer _crewBox = null!;
+
+    // UI-only double-click guard: seat changes are round-trips, so a second click inside half a
+    // second can't fire another one (Time.GetTicksMsec is fine here — nothing simulation-facing).
+    private ulong _seatClickReadyMs;
     private readonly List<(ulong Id, uint Sector, string Title, string SectorName, byte TypeId, BaseRow Row)> _rows = new();
 
     public void Init(WorldRenderer world, GameNetClient net, DefRegistry? defs = null)
@@ -94,11 +126,41 @@ public partial class CommandSidebar : Control
 
         col.AddChild(new DiamondDivider());
 
-        var basesPanel = new HairlinePanel { Title = "YOUR BASES", SizeFlagsVertical = SizeFlags.ExpandFill };
-        col.AddChild(basesPanel);
+        // Bases AND the crew list share one scroll: on a tall roster the column would otherwise push
+        // the crew section off the bottom of a fixed-height sidebar with no way to reach it.
+        var scroll = new ScrollContainer
+        {
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+        };
+        col.AddChild(scroll);
+        var scrollCol = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        scrollCol.AddThemeConstantOverride("separation", 12);
+        scroll.AddChild(scrollCol);
+
+        var basesPanel = new HairlinePanel { Title = "YOUR BASES", SizeFlagsVertical = SizeFlags.ShrinkBegin };
+        scrollCol.AddChild(basesPanel);
         _rowsBox = new VBoxContainer();
         _rowsBox.AddThemeConstantOverride("separation", 7);
         basesPanel.AddChild(_rowsBox);
+
+        // CREWED SHIPS · TAKE A TURRET — hidden outright while no teammate advertises a crewable hull
+        // (the section only earns its space once there's something to join).
+        _crewSection = new VBoxContainer { Visible = false };
+        _crewSection.AddThemeConstantOverride("separation", 10);
+        scrollCol.AddChild(_crewSection);
+        _crewSection.AddChild(new DiamondDivider());
+        var crewHead = new HBoxContainer();
+        var crewTitle = UiKit.MakeLabel("CREWED SHIPS", UiKit.TextStyle.Label, DesignTokens.TextDim);
+        crewTitle.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        var crewHint = UiKit.MakeLabel("TAKE A TURRET", UiKit.TextStyle.Data, DesignTokens.TextDim);
+        crewHint.AddThemeFontSizeOverride("font_size", DesignTokens.MicroSize);
+        crewHead.AddChild(crewTitle);
+        crewHead.AddChild(crewHint);
+        _crewSection.AddChild(crewHead);
+        _crewBox = new VBoxContainer();
+        _crewBox.AddThemeConstantOverride("separation", 8);
+        _crewSection.AddChild(_crewBox);
 
         // Politely wait for world data (mirrors the ship list's "awaiting" guard).
         _rowsBox.AddChild(UiKit.MakeLabel("AWAITING BASE TELEMETRY…", UiKit.TextStyle.Data, DesignTokens.TextDim));
@@ -318,6 +380,256 @@ public partial class CommandSidebar : Control
         }
         _map.HighlightSector = sector;
         BaseSelected?.Invoke(id);
+    }
+
+    // Rebuild the CREWED SHIPS list. `ships` is every OTHER captain on our team advertising a crewable
+    // hull (the caller filters us out); `mySeat` is the station we hold, if any, so the card that owns
+    // it can mark itself. Store-driven only — a click raises an event and the next server frame paints
+    // the result, so the list never shows a seat we merely asked for.
+    public void SetCrewData(IReadOnlyList<CrewShipEntry> ships, (int CaptainId, byte Seat)? mySeat)
+    {
+        if (_crewBox == null)
+            return;
+        foreach (Node c in _crewBox.GetChildren())
+            c.QueueFree();
+
+        bool hasCrew = ships != null && ships.Count > 0;
+        _crewSection.Visible = hasCrew;
+        if (!hasCrew)
+        {
+            // Unreachable while the section is hidden on an empty roster, but a sidebar that is shown
+            // with an empty list must still say so rather than render a bare header.
+            _crewBox.AddChild(UiKit.MakeLabel("NO CREWED SHIPS", UiKit.TextStyle.Data, DesignTokens.TextDim));
+            return;
+        }
+
+        foreach (CrewShipEntry e in ships!)
+        {
+            CrewShipEntry entry = e;
+            var card = new CrewCard();
+            card.Configure(entry, mySeat);
+            card.JoinRequested += seat =>
+            {
+                if (SeatClickAllowed())
+                    SeatJoinRequested?.Invoke(entry.CaptainId, seat);
+            };
+            card.LeaveRequested += () =>
+            {
+                if (SeatClickAllowed())
+                    SeatLeaveRequested?.Invoke();
+            };
+            _crewBox.AddChild(card);
+        }
+    }
+
+    private bool SeatClickAllowed()
+    {
+        ulong now = Time.GetTicksMsec();
+        if (now < _seatClickReadyMs)
+            return false;
+        _seatClickReadyMs = now + 500;
+        return true;
+    }
+
+    // One teammate's crewable ship: the hull header (glyph tile, name, CLASS · CAPT, manned count)
+    // over one row per turret station. Rebuilt whole on every roster change — it's a handful of
+    // controls and the seat state it paints is entirely server-owned.
+    private sealed partial class CrewCard : PanelContainer
+    {
+        // The sidebar is a fixed 340px, so the fixed columns are kept tight: everything they don't
+        // claim goes to the gun name, which is the only label worth reading in full.
+        private const int SeatIdWidth = 44;
+        private const int TagWidth = 74;
+
+        public event Action<byte>? JoinRequested;
+        public event Action? LeaveRequested;
+
+        public void Configure(in CrewShipEntry e, (int CaptainId, byte Seat)? mySeat)
+        {
+            foreach (Node c in GetChildren())
+                c.QueueFree();
+
+            bool mineShip = mySeat is { } m0 && m0.CaptainId == e.CaptainId;
+            bool seatedSomewhere = mySeat != null;
+            bool docked = e.ShipId == 0;
+            int manned = 0;
+            foreach (CrewSeatEntry s in e.Seats)
+                if (!s.IsOpen)
+                    manned++;
+
+            // The 2px left bar is the "this is the ship I'm on" marker (StyleBoxFlat carries ONE border
+            // colour, so the whole hairline takes the accent at low alpha — the BaseRow idiom).
+            var sb = new StyleBoxFlat
+            {
+                BgColor = DesignTokens.PanelFill,
+                BorderColor = mineShip ? new Color(DesignTokens.TeamAccent, 0.55f) : DesignTokens.BorderLo,
+                AntiAliasing = false,
+            };
+            sb.SetCornerRadiusAll(0);
+            sb.SetBorderWidthAll(1);
+            sb.BorderWidthLeft = 2;
+            sb.SetContentMarginAll(12);
+            sb.ContentMarginTop = sb.ContentMarginBottom = 13;
+            AddThemeStyleboxOverride("panel", sb);
+
+            var col = new VBoxContainer();
+            col.AddThemeConstantOverride("separation", 9);
+            AddChild(col);
+
+            var head = new HBoxContainer();
+            head.AddThemeConstantOverride("separation", 11);
+            col.AddChild(head);
+            head.AddChild(GlyphTile(e.Glyph, mineShip));
+
+            var texts = new VBoxContainer
+            {
+                SizeFlagsHorizontal = SizeFlags.ExpandFill,
+                SizeFlagsVertical = SizeFlags.ShrinkCenter,
+            };
+            texts.AddThemeConstantOverride("separation", 1);
+            // Ships carry no authored NAME in this game (the design mock's "BLU-FORGE" is flavor), so
+            // the HULL is the card's title and the subline names its captain — repeating the class in
+            // the subline the way the mock does would just be noise.
+            var name = UiKit.MakeLabel(e.ClassName, UiKit.TextStyle.Body);
+            name.AddThemeFontOverride("font", UiFonts.SairaSemi);
+            var sub = UiKit.MakeLabel($"CAPT {e.CaptainName}", UiKit.TextStyle.Data, DesignTokens.Text2);
+            sub.AddThemeFontSizeOverride("font_size", 10);
+            sub.ClipText = true;
+            sub.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+            texts.AddChild(name);
+            texts.AddChild(sub);
+            head.AddChild(texts);
+
+            // In flight = no longer joinable (boarding is docked-only), so the count says that instead.
+            string countText = docked ? $"{manned}/{e.Seats.Count} MANNED" : "IN FLIGHT";
+            Color countCol =
+                !docked ? DesignTokens.Warn
+                : mineShip ? DesignTokens.TeamAccent
+                : manned >= e.Seats.Count ? DesignTokens.Warn
+                : DesignTokens.Data;
+            var count = UiKit.MakeLabel(countText, UiKit.TextStyle.Data, countCol);
+            count.AddThemeFontSizeOverride("font_size", 10);
+            count.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+            head.AddChild(count);
+
+            col.AddChild(new ColorRect { Color = DesignTokens.BorderLo, CustomMinimumSize = new Vector2(0, 1) });
+
+            var seats = new VBoxContainer();
+            seats.AddThemeConstantOverride("separation", 6);
+            col.AddChild(seats);
+            foreach (CrewSeatEntry s in e.Seats)
+                seats.AddChild(
+                    SeatRow(s, mySeat is { } m && m.CaptainId == e.CaptainId && m.Seat == s.Seat, seatedSomewhere, docked)
+                );
+        }
+
+        private static Control GlyphTile(string glyph, bool mine)
+        {
+            var tile = new Label
+            {
+                Text = string.IsNullOrEmpty(glyph) ? "◇" : glyph,
+                CustomMinimumSize = new Vector2(34, 34),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                SizeFlagsVertical = SizeFlags.ShrinkCenter,
+            };
+            Color c = mine ? DesignTokens.TeamAccent : DesignTokens.Text2;
+            tile.AddThemeFontOverride("font", UiFonts.Mono);
+            tile.AddThemeFontSizeOverride("font_size", 16);
+            tile.AddThemeColorOverride("font_color", c);
+            var sb = new StyleBoxFlat
+            {
+                BgColor = new Color(c, mine ? 0.10f : 0.05f),
+                BorderColor = new Color(c, mine ? 0.6f : 0.3f),
+                AntiAliasing = false,
+            };
+            sb.SetCornerRadiusAll(0);
+            sb.SetBorderWidthAll(1);
+            tile.AddThemeStyleboxOverride("normal", sb);
+            return tile;
+        }
+
+        // One station: pip + seat id + gun + the action tag. JOIN is offered only for an open seat on
+        // a DOCKED ship while we hold no seat at all — every other case is a read-only tag.
+        private Control SeatRow(in CrewSeatEntry s, bool mine, bool seatedSomewhere, bool docked)
+        {
+            bool claimable = s.IsOpen && docked && !seatedSomewhere;
+            var panel = new PanelContainer();
+            var sb = new StyleBoxFlat
+            {
+                BgColor = DesignTokens.PanelFill,
+                BorderColor =
+                    mine ? new Color(DesignTokens.TeamAccent, 0.4f)
+                    : claimable ? new Color(DesignTokens.Ok, 0.25f)
+                    : new Color(DesignTokens.BorderLo, 0.1f),
+                AntiAliasing = false,
+            };
+            sb.SetCornerRadiusAll(0);
+            sb.SetBorderWidthAll(1);
+            sb.SetContentMarginAll(8);
+            sb.ContentMarginTop = sb.ContentMarginBottom = 6;
+            panel.AddThemeStyleboxOverride("panel", sb);
+
+            var row = new HBoxContainer();
+            row.AddThemeConstantOverride("separation", 8);
+            panel.AddChild(row);
+
+            Color pipCol =
+                mine ? DesignTokens.TeamAccent
+                : s.IsOpen ? DesignTokens.TextDim
+                : DesignTokens.Text2;
+            row.AddChild(RosterCells.Diamond(pipCol, hollow: s.IsOpen && !mine));
+
+            var id = UiKit.MakeLabel(s.SeatId, UiKit.TextStyle.Data, DesignTokens.Data);
+            id.AddThemeFontSizeOverride("font_size", 10);
+            id.CustomMinimumSize = new Vector2(SeatIdWidth, 0);
+            id.VerticalAlignment = VerticalAlignment.Center;
+            row.AddChild(id);
+
+            var gun = UiKit.MakeLabel(
+                s.GunName,
+                UiKit.TextStyle.Body,
+                !s.IsOpen || mine ? DesignTokens.TextHi : DesignTokens.Text2
+            );
+            gun.AddThemeFontSizeOverride("font_size", 12);
+            gun.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            gun.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+            gun.ClipText = true;
+            gun.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+            row.AddChild(gun);
+
+            row.AddChild(SeatTag(s, mine, claimable));
+            return panel;
+        }
+
+        private Control SeatTag(in CrewSeatEntry s, bool mine, bool claimable)
+        {
+            if (mine)
+            {
+                var leave = UiKit.MakeButton("✕ LEAVE", () => LeaveRequested?.Invoke(), ButtonVariant.Ghost);
+                leave.AccentOverride = DesignTokens.Danger;
+                leave.CustomMinimumSize = new Vector2(TagWidth, 26);
+                return leave;
+            }
+            if (claimable)
+            {
+                byte seat = s.Seat;
+                var join = UiKit.MakeButton("＋ JOIN", () => JoinRequested?.Invoke(seat), ButtonVariant.Ghost);
+                join.AccentOverride = DesignTokens.Ok;
+                join.CustomMinimumSize = new Vector2(TagWidth, 26);
+                return join;
+            }
+            var tag = UiKit.MakeLabel(
+                s.IsOpen ? "OPEN" : s.GunnerName,
+                UiKit.TextStyle.Data,
+                s.IsOpen ? DesignTokens.TextDim : DesignTokens.Data
+            );
+            tag.AddThemeFontSizeOverride("font_size", 9);
+            tag.VerticalAlignment = VerticalAlignment.Center;
+            tag.HorizontalAlignment = HorizontalAlignment.Right;
+            tag.CustomMinimumSize = new Vector2(TagWidth, 0);
+            return tag;
+        }
     }
 
     // A selectable friendly-base row: glyph tile + title + sector line + status line, framed in the

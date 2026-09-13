@@ -38,6 +38,17 @@ public sealed class LoadoutState
     // the items themselves are streamed defs (DefRegistry.AllCargoItems).
     private readonly Dictionary<byte, Dictionary<uint, int>> _cargo = new();
 
+    // classId -> (TURRET hardpoint Index -> assigned WeaponId). A crew-served station always mounts
+    // SOMETHING (there is no empty turret — the authored gun is the floor), so unlike _weaponOverrides
+    // the value is non-nullable and an absent key means "authored default". These ride MsgHangarIntent
+    // (not MsgSpawn) because a captain advertises the stations to their crew BEFORE launching.
+    private readonly Dictionary<byte, Dictionary<byte, uint>> _turretOverrides = new();
+
+    // Turret guns are CREW-SERVED, not hold cargo: they are exempt from the hull's payload-capacity
+    // budget (the Devastator ships 12/12 full before a single station is counted). One switch so the
+    // decision is reversible in one line — PayloadUsed is the only reader.
+    public const bool TurretGunsCountTowardPayload = false;
+
     // Loadouts are PER-MATCH and never touch disk: a customization lives only in this process-wide
     // instance and is wiped at each match boundary via ResetAll (WorldRenderer.NetSetMatch on the
     // return-to-lobby transition), so the next match opens the hangar on every hull's authored
@@ -98,10 +109,53 @@ public sealed class LoadoutState
         return list.ToArray();
     }
 
+    // ---- Turret stations (crew-served) -------------------------------------
+    // A station's gun is the captain's pick for a GUNNER to fire, so it never goes empty and never
+    // rides MsgSpawn's mount tail — the full per-station list rides MsgHangarIntent instead
+    // (TurretPicksFor), and the server re-resolves every entry against the team's tech.
+
+    // The gun currently shown on a station: the captain's override if one exists, else the hull's
+    // authored station gun. NoWeapon can only appear on an UNAUTHORED mesh turret node, which is
+    // NonMountable and therefore never a station at all (filtered out everywhere).
+    public uint AssignedTurretWeapon(byte classId, HardpointDef hp)
+    {
+        if (_turretOverrides.TryGetValue(classId, out var seats) && seats.TryGetValue(hp.Index, out uint w))
+            return w;
+        return hp.WeaponId;
+    }
+
+    public void AssignTurret(byte classId, byte hpIndex, uint weaponId)
+    {
+        if (!_turretOverrides.TryGetValue(classId, out var seats))
+            _turretOverrides[classId] = seats = new Dictionary<byte, uint>();
+        seats[hpIndex] = weaponId;
+    }
+
+    // The MsgHangarIntent station tail: the FULL pick list — one entry per real turret station in
+    // hardpoint Index order, each carrying its effective gun — never a delta. The server matches
+    // entries by hardpoint Index and falls back to the authored gun per station, so a complete list
+    // keeps both sides in step even when the captain changed nothing.
+    public (byte hpIndex, uint weaponId)[] TurretPicksFor(byte classId, IReadOnlyList<HardpointDef> hardpoints)
+    {
+        var list = new List<(byte, uint)>();
+        foreach (HardpointDef hp in hardpoints)
+            if (hp.Kind == HardpointKind.Turret && hp.Mount != WeaponMountKind.NonMountable)
+                list.Add((hp.Index, AssignedTurretWeapon(classId, hp)));
+        list.Sort((a, b) => a.Item1.CompareTo(b.Item1));
+        return list.ToArray();
+    }
+
+    // Whether a weapon may be assigned to a turret station. Stations are GUN stations by content rule
+    // (CoreValidator refuses a rack on a turret), so the filter is narrower than Compatible: a real
+    // station (NonMountable = an unauthored mesh node, not a station) mounting a Bolt gun.
+    public static bool TurretAccepts(HardpointDef hp, WeaponDef w) =>
+        hp.Kind == HardpointKind.Turret && hp.Mount != WeaponMountKind.NonMountable && w.Kind == WeaponKind.Bolt;
+
     // RESET one hull: back to the authored loadout and an empty hold (the hangar's per-hull reset).
     public void ResetClass(byte classId)
     {
         _weaponOverrides.Remove(classId);
+        _turretOverrides.Remove(classId);
         _cargo.Remove(classId);
     }
 
@@ -113,6 +167,7 @@ public sealed class LoadoutState
     public void ResetAll()
     {
         _weaponOverrides.Clear();
+        _turretOverrides.Clear();
         _cargo.Clear();
         _seeded.Clear();
         SelectedBaseId = 0;
@@ -174,9 +229,17 @@ public sealed class LoadoutState
         float used = 0f;
         foreach (HardpointDef hp in hardpoints)
         {
-            if (hp.Kind != HardpointKind.Weapon)
+            // Crew-served turret guns are exempt from the budget unless the switch above says
+            // otherwise; every other kind (engines, docking markers) never carried payload at all.
+            bool counts = hp.Kind switch
+            {
+                HardpointKind.Weapon => true,
+                HardpointKind.Turret => TurretGunsCountTowardPayload && hp.Mount != WeaponMountKind.NonMountable,
+                _ => false,
+            };
+            if (!counts)
                 continue;
-            uint? id = AssignedWeapon(classId, hp);
+            uint? id = hp.Kind == HardpointKind.Turret ? AssignedTurretWeapon(classId, hp) : AssignedWeapon(classId, hp);
             if (id is uint wid && weaponById(wid) is WeaponDef w)
                 used += w.Mass;
         }
