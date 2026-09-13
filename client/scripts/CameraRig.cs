@@ -350,7 +350,8 @@ public partial class CameraRig : Camera3D
 
     // Gun-cam framing knobs (multiplied by the hull's size scale and the wheel dolly), in the
     // station's own frame: lifted along the ZENITH so the barrel and the hull below it stay in shot,
-    // pulled BACK along the aim so the muzzle sits in the lower third rather than in the viewer's eye.
+    // pulled BACK along the aim's horizon component so the muzzle sits in the lower third rather than
+    // in the viewer's eye (and the eye never dips below the mount when the gun points high).
     private const float GunCamUp = 0.6f;
     private const float GunCamBack = 2.5f;
 
@@ -377,8 +378,21 @@ public partial class CameraRig : Camera3D
         }
         up = up.Normalized();
 
+        // Pull back along the aim's HORIZON component, never the raw aim: at high elevation the raw
+        // aim's pull-back would sink the eye through the mount's own hull (live-run finding, first
+        // gun-cam shot sat inside the bomber's back). At the pole itself there is no horizon component,
+        // so fall back to the station frame's rest azimuth — the same reference the up vector uses.
         float dolly = scale * _zoom;
-        Vector3 eye = mount + zenith * (GunCamUp * dolly) - aim * (GunCamBack * dolly);
+        Vector3 backAlong = aim - zenith * aim.Dot(zenith);
+        if (backAlong.LengthSquared() < 1e-4f)
+        {
+            Vector3 fwd = ship.Basis.Z;
+            backAlong = fwd - zenith * fwd.Dot(zenith);
+            if (backAlong.LengthSquared() < 1e-4f)
+                backAlong = ship.Basis.Y - zenith * ship.Basis.Y.Dot(zenith);
+        }
+        backAlong = backAlong.Normalized();
+        Vector3 eye = mount + zenith * (GunCamUp * dolly) - backAlong * (GunCamBack * dolly);
         // A Camera3D looks down its own −Z, so the basis is built with +Z opposite the aim — the same
         // reason the chase shot multiplies the ship basis by FaceForward. X = Y × Z keeps it
         // right-handed (a mirrored basis would flip the whole view left-to-right).

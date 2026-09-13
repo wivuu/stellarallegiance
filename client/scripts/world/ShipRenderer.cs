@@ -496,6 +496,22 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
     private readonly Dictionary<ulong, TurretState[]> _turrets = new();
     private readonly Dictionary<ulong, TurretBarrelView?[]> _turretBarrels = new();
 
+    // --crew-demo harness readout: what this client currently believes about a hull's stations, plus
+    // how many remote turret bolts it has rebuilt so far (the captain's side of the fire round trip).
+    public int TurretBoltsSeen { get; private set; }
+
+    public string TurretDebug(ulong shipId)
+    {
+        if (!_turrets.TryGetValue(shipId, out var state))
+            return $"ship {shipId}: no turret state (bolts seen {TurretBoltsSeen})";
+        var sb = new System.Text.StringBuilder($"ship {shipId}: bolts seen {TurretBoltsSeen};");
+        for (int i = 0; i < state.Length; i++)
+            sb.Append(
+                $" slot{i} manned={state[i].Manned} aim=({state[i].Aim.X:0.00},{state[i].Aim.Y:0.00},{state[i].Aim.Z:0.00}) fire={state[i].LastFireTick}"
+            );
+        return sb.ToString();
+    }
+
     // The crew roster + our own client id, handed over on every MsgCrew (ShipRenderer is built before
     // the connection exists, so this can't be a ctor dependency). The roster is authoritative for
     // WHICH gun each station mounts — a captain re-assigns them in the hangar, so the authored
@@ -558,7 +574,10 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
                 && !row.IsPod
                 && TurretGun(row, stations[slot]) is { } w
             )
+            {
                 _bolts.SpawnTurretBolt(row, stations[slot], w, state[slot].Aim, rec.LastFireTick);
+                TurretBoltsSeen++;
+            }
 
             EnsureBarrel(rec.ShipId, row, stations, slot)?.SetAim(ShipMath.ToGodot(state[slot].Aim));
         }

@@ -628,8 +628,23 @@ public partial class ShipLoadout
             // here would leave the lobby roster (and the ship behind in reconnect grace), so every
             // gunner-side callsign would fall back to the raw client id. Stay connected until the
             // other client has taken its shots.
-            SceneTreeTimer hold = tree.CreateTimer(10.0);
-            hold.Timeout += () => tree.Quit();
+            // Slice 2: the gunner starts sweeping + firing ~2 s into the ride; catch the barrel and
+            // the rebuilt turret bolts from the captain's chase cam, with the client's turret readout.
+            ulong mine = _world?.Ships.LocalShip?.ShipId ?? 0;
+            void Later(double after, string name, bool quit)
+            {
+                SceneTreeTimer lt = tree.CreateTimer(after);
+                lt.Timeout += () =>
+                {
+                    tree.Root.GetTexture().GetImage().SavePng($"{dir}/{name}.png");
+                    GD.Print($"HANGAR_DEMO_SHOT:{name}");
+                    GD.Print($"CREW_DEMO[{name}]: {_world?.Ships.TurretDebug(mine)}");
+                    if (quit)
+                        tree.Quit();
+                };
+            }
+            Later(6.0, "c5-crew-firing", false);
+            Later(10.0, "c6-crew-firing-later", true);
         };
     }
 

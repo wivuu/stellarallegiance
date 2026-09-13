@@ -80,9 +80,14 @@ YAML, so it lands in the existing seams without rework.
     ride along after launch (camera follows the captain, gunner HUD strip). Mechanics + file map:
     [`GLOSSARY.md` → *Crew / Turret Station*](../GLOSSARY.md); suites `tests/CrewTest`,
     `tests/CrewStoreTest`.
-  - ☐ **Slice 2 — aim + fire**: once launched, the gunner controls the gun from the turret's
-    hardpoint, aiming and firing it (gunner aim input frame, server-side turret fire + hits, gunner
-    reticle/HUD). Also: mid-flight boarding, gunner reconnect grace, salvage for turret guns.
+  - ✅ **Slice 2 — aim + fire** (2026-09-13, protocol 42, branch `crews`): the gunner aims freely
+    inside a hemisphere around the station's zenith (mouse gimbal, gun cam at the hardpoint,
+    centre reticle that warns at the arc edge), fires on LMB/`fire_primary`; the server clamps the
+    held aim, fires the station's gun on its own cadence and credits hits to the GUNNER; every
+    client in range sees the aim (procedural barrel) and the bolts via `MsgTurrets`. Shared rule:
+    `shared/TurretAim.cs`. No slew-rate limit, no lead indicator for gunners yet.
+  - ☐ **Slice 3**: mid-flight boarding, gunner reconnect grace, salvage for turret guns, turret
+    slew rate + lead indicator, gunner K/D on the scoreboard readout.
   - ☐ If pigs are active, and a player is docked, the bomber pig should not launch until all
     players either undock or at least one player joins as a gunner (take control of a turret).
 - ☐ **Ripcord** — allows specific types of ships (with the ability) to jump to a specific location

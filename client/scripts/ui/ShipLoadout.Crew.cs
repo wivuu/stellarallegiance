@@ -937,8 +937,24 @@ public partial class ShipLoadout
                     tree.Quit();
             };
         }
+        void Say(string tag)
+        {
+            var tc = tree.Root.GetNodeOrNull<TurretController>("Main/TurretController");
+            GD.Print($"CREW_DEMO[{tag}]: {TurretController.Describe(tc)}");
+        }
+        SceneTreeTimer drive = tree.CreateTimer(2.0);
+        drive.Timeout += () => TurretController.DemoDrive = true; // slice 2: sweep the gun and hold fire
         Shot(1.5, "g3-riding", false);
-        Shot(5.5, "g4-riding-later", true);
+        Shot(5.5, "g4-riding-later", false);
+        SceneTreeTimer s5 = tree.CreateTimer(5.6);
+        s5.Timeout += () => Say("g4");
+        Shot(9.0, "g5-firing", false);
+        SceneTreeTimer s6 = tree.CreateTimer(9.1);
+        s6.Timeout += () =>
+        {
+            Say("g5");
+            tree.Quit();
+        };
     }
 }
 

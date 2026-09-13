@@ -43,6 +43,18 @@ public partial class TurretController : Node
     // The station's ship-local mount offset — where the gun cam sits and where the bolts leave.
     public static Vector3 Station { get; private set; } = Vector3.Zero;
 
+    // --crew-demo harness: while set, the gimbal sweeps on its own and the trigger is held, so a
+    // scripted gunner proves the aim/fire round trip without a hand on the mouse. Describe() is what
+    // the harness prints beside each shot.
+    public static bool DemoDrive;
+    private int _sentFrames,
+        _predictedShots;
+
+    public static string Describe(TurretController? tc) =>
+        tc is null
+            ? "no controller"
+            : $"active={Active} clamped={Clamped} az={tc._azimuth:0.00} el={tc._elevation:0.00} aim=({Aim.X:0.00},{Aim.Y:0.00},{Aim.Z:0.00}) firing={tc._firing} sent={tc._sentFrames} predicted={tc._predictedShots}";
+
     private WorldRenderer _world = null!;
     private GameNetClient? _net;
     private DefRegistry? _defs;
@@ -232,14 +244,22 @@ public partial class TurretController : Node
             look
             && (Input.IsActionPressed("fire_primary") || Input.IsMouseButtonPressed(MouseButton.Left))
             && !Scoreboard.PostMatchActive;
+        if (DemoDrive)
+        {
+            m += new Vector2(4f, -1.2f); // a slow sweep right and up, every frame
+            _firing = true;
+            look = true;
+        }
         if (!look)
             return;
 
-        // Mouse-right sweeps the aim right; mouse-down raises the elevation unless inverted — the
-        // exact signs ShipController's mouse-look uses, so the two seats never feel opposite.
+        // Mouse-right sweeps the aim right; mouse-UP raises the elevation (first-person look, the
+        // convention every gun cam uses) unless the invert-Y pref flips it. This deliberately differs
+        // from the pilot's stick (mouse-down = nose up): the pilot pushes a spring that commands a
+        // turn RATE, the gunner drags a sight — a direct look, so it follows the direct-look sign.
         Vector2 md = m / ZoomView.Magnification;
         _azimuth -= TurretStations.AimDeltaRad(md.X, _mouseSens);
-        _elevation += TurretStations.AimDeltaRad(_mouseInvert ? -md.Y : md.Y, _mouseSens);
+        _elevation += TurretStations.AimDeltaRad(_mouseInvert ? md.Y : -md.Y, _mouseSens);
 
         // Keep the azimuth in (−π, π] so a long sweep can't grind away float precision.
         _azimuth = Mathf.Wrap(_azimuth, -Mathf.Pi, Mathf.Pi);
@@ -272,6 +292,7 @@ public partial class TurretController : Node
             )
             {
                 _net?.SendTurretInput(_predTick, Aim, _firing);
+                _sentFrames++;
                 _lastSentAim = Aim;
                 _lastSentFiring = _firing;
                 _lastSentTick = _predTick;
@@ -280,6 +301,7 @@ public partial class TurretController : Node
             if (_firing && gun is not null && FireCadence.MountFires(_predTick, _lastFire, gun.FireIntervalTicks))
             {
                 _lastFire = _predTick;
+                _predictedShots++;
                 PredictShot(shipId, hp, gun);
             }
         }
