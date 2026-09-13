@@ -88,7 +88,7 @@ public partial class TurretController : Node
     public static string Describe(TurretController? tc) =>
         tc is null
             ? "no controller"
-            : $"active={Active} clamped={Clamped} az={tc._azimuth:0.00} el={tc._elevation:0.00} aim=({Aim.X:0.00},{Aim.Y:0.00},{Aim.Z:0.00}) want=({DesiredAim.X:0.00},{DesiredAim.Y:0.00},{DesiredAim.Z:0.00}) rate={tc._rate:0.00} firing={tc._firing} sent={tc._sentFrames} predicted={tc._predictedShots}";
+            : $"active={Active} clamped={Clamped} on={OnSolution} aim=({Aim.X:0.00},{Aim.Y:0.00},{Aim.Z:0.00}) want=({DesiredAim.X:0.00},{DesiredAim.Y:0.00},{DesiredAim.Z:0.00}) up=({CamUp.X:0.00},{CamUp.Y:0.00},{CamUp.Z:0.00}) rate={tc._rate:0.00} firing={tc._firing} sent={tc._sentFrames} predicted={tc._predictedShots}";
 
     private WorldRenderer _world = null!;
     private GameNetClient? _net;
@@ -339,7 +339,7 @@ public partial class TurretController : Node
             && !Scoreboard.PostMatchActive;
         if (DemoDrive)
         {
-            m += new Vector2(4f, 0.6f); // a slow sweep right and DOWN (to the arc floor), every frame
+            m += new Vector2(3f, -0.9f); // a slow sweep right and UP (through the zenith pole), every frame
             _firing = true;
             look = true;
         }

@@ -958,6 +958,12 @@ public partial class ShipLoadout
         SceneTreeTimer drive = tree.CreateTimer(2.0);
         drive.Timeout += () => TurretController.DemoDrive = true; // slice 2: sweep the gun and hold fire
         Shot(1.5, "g3-riding", false);
+        // Traverse: sample the actual-vs-desired gap shortly after the sweep starts, then at the pole.
+        SceneTreeTimer s3 = tree.CreateTimer(2.6);
+        s3.Timeout += () => Say("g3+0.6s");
+        Shot(4.0, "g4a-through-pole", false);
+        SceneTreeTimer s4 = tree.CreateTimer(4.1);
+        s4.Timeout += () => Say("g4a");
         Shot(5.5, "g4-riding-later", false);
         SceneTreeTimer s5 = tree.CreateTimer(5.6);
         s5.Timeout += () => Say("g4");

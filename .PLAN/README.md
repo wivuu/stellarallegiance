@@ -86,9 +86,12 @@ YAML, so it lands in the existing seams without rework.
     centre reticle that warns at the arc edge), fires on LMB/`fire_primary`; the server clamps the
     held aim, fires the station's gun on its own cadence and credits hits to the GUNNER; every
     client in range sees the aim (procedural barrel) and the bolts via `MsgTurrets`. Shared rule:
-    `shared/TurretAim.cs`. No slew-rate limit, no lead indicator for gunners yet.
-  - ☐ **Slice 3**: mid-flight boarding, gunner reconnect grace, salvage for turret guns, turret
-    slew rate + lead indicator, gunner K/D on the scoreboard readout.
+    `shared/TurretAim.cs`. Follow-up (same day): per-station traverse `slew-deg` / `accel-deg`
+    (gun swings toward the desired aim, second reticle mark), Tab targeting + lead indicator for
+    gunners, gun-cam up stable through the zenith, gunners eject into pods on the captain's death,
+    a clean dock keeps the crew seated (joinable again while docked).
+  - ☐ **Slice 3**: mid-flight boarding, gunner reconnect grace, salvage for turret guns, gunner
+    K/D on the scoreboard readout, turret slew feel tuning per hull.
   - ☐ If pigs are active, and a player is docked, the bomber pig should not launch until all
     players either undock or at least one player joins as a gunner (take control of a turret).
 - ☐ **Ripcord** — allows specific types of ships (with the ability) to jump to a specific location
