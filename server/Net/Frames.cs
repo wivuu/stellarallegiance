@@ -686,6 +686,43 @@ public static class Frames
         return new ShipLoadoutMessage { Ships = rows.ToArray() };
     }
 
+    // The team's HANGAR CREW roster (MsgCrew, per team, full reconcile — an omitted captain has no
+    // crew any more). Seats stream in station declaration order; SeatIndex is the station's
+    // hardpoint index (Simulation.TurretStationIndex), the same index MsgCrewSeat/MsgHangarIntent
+    // speak. WeaponId is the EFFECTIVE gun: the captain's resolved picks while they are still in the
+    // hangar, and what the launched ship actually flies once it is airborne (an authored-default
+    // ship carries no TurretWeaponIds array, so it falls back to the class's authored guns).
+    public static CrewMessage Crew(Simulation sim, byte team)
+    {
+        var rows = new List<CrewShipRecord>();
+        foreach (var crew in sim.CrewShips)
+        {
+            if (crew.Team != team || rows.Count >= 255)
+                continue;
+            var ship = crew.Ship;
+            uint[] guns = ship is null ? crew.SeatWeaponIds : ship.TurretWeaponIds ?? sim.AuthoredTurretIds(ship.Class);
+            int n = Math.Min(crew.SeatGunnerIds.Length, guns.Length);
+            var seats = new CrewSeatRecord[n];
+            for (int i = 0; i < n; i++)
+                seats[i] = new CrewSeatRecord
+                {
+                    SeatIndex = sim.TurretStationIndex(crew.ClassId, i),
+                    WeaponId = guns[i],
+                    GunnerId = crew.SeatGunnerIds[i],
+                };
+            rows.Add(
+                new CrewShipRecord
+                {
+                    CaptainId = crew.CaptainClientId,
+                    ClassId = crew.ClassId,
+                    ShipId = ship?.ShipId ?? 0UL,
+                    Seats = seats,
+                }
+            );
+        }
+        return new CrewMessage { Ships = rows.ToArray() };
+    }
+
     // ~1.5 s at 20 Hz: keep emitting 0-count frames this long after the last active build so a lossy
     // client is guaranteed to see the drop and fade its build sphere out.
     public const uint ConstructorBuildEmptyGraceTicks = 30;

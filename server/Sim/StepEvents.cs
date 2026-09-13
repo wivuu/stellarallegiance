@@ -50,6 +50,10 @@ public sealed class StepEvents
     public bool BasesChanged;
     public bool TeamStateChanged;
     public bool LoadoutsChanged;
+
+    // Hangar crews: a captain advertised/retracted a crewable hull, a seat changed hands, a crew
+    // launched or dissolved (Simulation.Crew.cs). Gates the per-team MsgCrew stream.
+    public bool CrewChanged;
     public bool StatsChanged;
     public bool ResearchChanged;
     public bool ConstructorChanged;
@@ -89,6 +93,7 @@ public sealed class StepEvents
         BasesChanged = false;
         TeamStateChanged = false;
         LoadoutsChanged = false;
+        CrewChanged = false;
         StatsChanged = false;
         Reclaims.Clear();
         MinerNotices.Clear();

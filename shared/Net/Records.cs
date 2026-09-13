@@ -440,8 +440,11 @@ public partial struct MountOverrideRecord
 }
 
 // One crew-served TURRET STATION on a captain's ship (9 bytes): which gun it mounts and who mans
-// it. SeatIndex is the station's ordinal in hardpoint declaration order (the client labels it
-// "T{SeatIndex+1}"), NOT the HardpointDef.Index.
+// it. SeatIndex is the station's HardpointDef.Index — the SAME index HangarIntentMessage's pick
+// list and CrewSeatMessage speak, so one "station index" travels the whole round trip (the client
+// labels it "T{SeatIndex+1}"). Stock hulls author turret indices 0..N-1 in declaration order, so it
+// reads as the station ordinal too; the server maps index <-> slot (Simulation.TurretSlotOf /
+// TurretStationIndex) so a hull that ever authors them out of order still resolves.
 [WireRecord]
 public partial struct CrewSeatRecord
 {

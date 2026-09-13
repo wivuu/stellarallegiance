@@ -49,6 +49,8 @@ public static class Protocol
     public const byte MsgBuildConstructor = BuildConstructorMessage.MsgId;
     public const byte MsgConstructorCancel = ConstructorCancelMessage.MsgId;
     public const byte MsgBuyMiner = BuyMinerMessage.MsgId;
+    public const byte MsgHangarIntent = HangarIntentMessage.MsgId;
+    public const byte MsgCrewSeat = CrewSeatMessage.MsgId;
 
     // ---- server -> client ----
     public const byte MsgWelcome = WelcomeMessage.MsgId;
@@ -82,6 +84,7 @@ public static class Protocol
     public const byte MsgMatchStats = MatchStatsMessage.MsgId;
     public const byte MsgSalvage = SalvageMessage.MsgId;
     public const byte MsgSalvageGone = SalvageGoneMessage.MsgId;
+    public const byte MsgCrew = CrewMessage.MsgId;
 
     // ---- MsgInput flags byte ----
     public const byte FlagFiring = InputFlags.Firing;
@@ -261,6 +264,9 @@ public static class Protocol
     public static byte[]? BuildMinerTargets(Simulation sim) => Frames.MinerTargets(sim)?.ToBytes();
 
     public static byte[] BuildShipLoadouts(Simulation sim) => Frames.ShipLoadouts(sim).ToBytes();
+
+    // The team's hangar-crew roster (per team, full reconcile).
+    public static byte[] BuildCrewFor(Simulation sim, byte team) => Frames.Crew(sim, team).ToBytes();
 
     public static byte[]? BuildConstructorBuilds(Simulation sim) => Frames.ConstructorBuilds(sim)?.ToBytes();
 

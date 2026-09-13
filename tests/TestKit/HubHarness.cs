@@ -86,4 +86,23 @@ public static class HubFrames
             Cargo = Array.Empty<StellarAllegiance.Shared.CargoLoadDef>(),
             Mounts = Array.Empty<MountOverrideRecord>(),
         }.ToBytes();
+
+    // A docked captain's crew advertisement: the hull teammates may crew plus the FULL per-station
+    // gun pick list (empty = every station keeps its authored gun). ClassId 0xFF retracts.
+    public static byte[] HangarIntent(byte classId, params (byte hpIndex, uint weaponId)[] turrets)
+    {
+        var picks = new MountOverrideRecord[turrets.Length];
+        for (int i = 0; i < picks.Length; i++)
+            picks[i] = new MountOverrideRecord { HpIndex = turrets[i].hpIndex, WeaponId = turrets[i].weaponId };
+        return new HangarIntentMessage { ClassId = classId, Turrets = picks }.ToBytes();
+    }
+
+    // Claim (mode 1) or give up (mode 0) a turret station on a teammate's docked ship.
+    public static byte[] CrewSeat(byte mode, int captainId, byte seatIndex) =>
+        new CrewSeatMessage
+        {
+            Mode = mode,
+            CaptainId = captainId,
+            SeatIndex = seatIndex,
+        }.ToBytes();
 }

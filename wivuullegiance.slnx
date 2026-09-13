@@ -30,6 +30,8 @@
     <Project Path="tests/CommanderTest/CommanderTest.csproj" />
     <Project Path="tests/ConstructorTest/ConstructorTest.csproj" />
     <Project Path="tests/ContentTest/ContentTest.csproj" />
+    <Project Path="tests/CrewTest/CrewTest.csproj" />
+    <Project Path="tests/CrewStoreTest/CrewStoreTest.csproj" />
     <Project Path="tests/CryptoTest/CryptoTest.csproj" />
     <Project Path="tests/FactionsTest/FactionsTest.csproj" />
     <Project Path="tests/FlightModelTest/FlightModelTest.csproj" />

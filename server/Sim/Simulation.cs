@@ -289,6 +289,14 @@ public sealed partial class Simulation
         // costs no payload budget.
         public uint[]? TurretWeaponIds;
 
+        // ---- Hangar crew (Simulation.Crew.cs) ----
+        // CrewSeats[station] = the riding gunner's client id at that turret station (-1 open) — the
+        // SAME array instance CrewShip.SeatGunnerIds holds, so a seat change needs no copy. Crew is
+        // the record this ship flies for; BOTH are null on every ship with no crew (and the release
+        // seam keys off Crew, never _byClient — a pod ejection rebinds _byClient under the captain).
+        public int[]? CrewSeats;
+        public CrewShip? Crew;
+
         // Per-mount gun cadence gates (FireCadence.MountFires), lazily sized to the class muzzle
         // array in TryFire. LastFireTick stays the wire stamp "some gun fired this tick"; clients
         // derive WHICH mounts from the same shared rule, so these never go on the wire.
@@ -694,6 +702,7 @@ public sealed partial class Simulation
             ClassMissileMounts[c] = mis.ToArray();
         }
         ClassTurretGuns = BuildTurretGuns(content.Ships, ClassMuzzles.Length);
+        ClassTurretStations = BuildTurretStations(content.Ships, ClassMuzzles.Length); // Simulation.Crew.cs
         _stats = new Dictionary<byte, ShipStats>(content.Ships.Count);
         foreach (var d in content.Ships)
             _stats[d.ClassId] = ShipStats.FromDef(d); // same path the client takes → identical flight
@@ -1130,9 +1139,15 @@ public sealed partial class Simulation
     {
         lock (_qLock)
         {
+            // Crew intake FIRST: a seat claim must resolve against the roster as it stood before
+            // this tick's joins/leaves, and the join drain below relies on the seats being current.
+            DrainCrewQueues(tick); // Simulation.Crew.cs
             while (_joinQueue.Count > 0)
             {
                 var (cid, team, cls, cargo, launchBase, mounts) = _joinQueue.Dequeue();
+                // A gunner who asks for their own hull gives up their seat — a spawn is never
+                // rejected for it (the crew decision: MsgSpawn always wins over a claimed station).
+                VacateSeat(cid, null);
                 // Remember the slot (team/cls/hold/launch base/mount overrides) and spawn this
                 // very step (ProcessRespawns, tick now).
                 _clientInfo[cid] = (team, cls, cargo, launchBase, mounts);
@@ -1141,6 +1156,7 @@ public sealed partial class Simulation
             while (_leaveQueue.Count > 0)
             {
                 int cid = _leaveQueue.Dequeue();
+                ClearCrewOf(cid); // dissolves the crew they captained AND frees the seat they held
                 if (_byClient.Remove(cid, out var ship))
                     RemoveShipNow(ship);
                 _clientInfo.Remove(cid);
@@ -1174,6 +1190,15 @@ public sealed partial class Simulation
                         _clientInfo[newCid] = info;
                     if (_clientRespawn.Remove(orphan.oldClientId, out var rt))
                         _clientRespawn[newCid] = rt;
+                    // The crew follows the ship across the reconnect too: only the CAPTAIN's key
+                    // changes (the gunner index points at the record, not at a client id), so the
+                    // riders stay seated under the reclaimed captain.
+                    if (_crewByCaptain.Remove(orphan.oldClientId, out var crew))
+                    {
+                        crew.CaptainClientId = newCid;
+                        _crewByCaptain[newCid] = crew;
+                        Events.CrewChanged = true;
+                    }
                     // The scoreboard row (and any in-flight attribution naming the old id) follows
                     // the ship across the reconnect (Simulation.Scoring.cs).
                     MigrateStats(orphan.oldClientId, newCid);
@@ -1299,6 +1324,7 @@ public sealed partial class Simulation
         ResolveTeamUnlocks();
         SeedMinerSlots(Tick); // one free miner slot per team, on the fresh economy + world
         DespawnAllConstructors(); // constructors are bought, never seeded — clear any from a prior match
+        ClearAllCrew(); // no hangar crew survives a match start (Simulation.Crew.cs)
         ResetVision(); // clear/reseed per-team fog vision, drain any in-flight compute (Simulation.Vision.cs)
         Events.TeamStateChanged = true;
         Log.MatchStarted(_log);
@@ -1404,6 +1430,7 @@ public sealed partial class Simulation
         _order.Clear();
         _byClient.Clear();
         _clientRespawn.Clear();
+        ClearAllCrew(); // every crew dissolves with the ships (Simulation.Crew.cs)
         // Held orphans' ships were just torn down by the _order loop above; drop the stale tokens
         // so a reconnect mid-grace can't try to reclaim a ship that no longer exists.
         _heldOrphans.Clear();
@@ -1467,7 +1494,26 @@ public sealed partial class Simulation
         _ships[s.ShipId] = s;
         _order.Add(s);
         if (clientId >= 0)
+        {
             _byClient[clientId] = s;
+            // Hangar crew (Simulation.Crew.cs). A stale advertisement — the captain launched a
+            // DIFFERENT hull than the one the crew claimed seats on — dissolves before anything
+            // binds; the stations of the hull actually launching are then resolved from whatever
+            // record survives (null = the class's authored guns, re-migrated for the team's tier).
+            if (_crewByCaptain.TryGetValue(clientId, out var stale) && stale.ClassId != cls)
+                ClearCrewOf(clientId, "Your captain launched a different hull — the crew was dissolved.");
+            _crewByCaptain.TryGetValue(clientId, out var crew);
+            s.TurretWeaponIds = ResolveTurretLoadout(team, cls, crew?.SeatWeaponIds);
+            if (s.TurretWeaponIds is not null)
+                Events.LoadoutsChanged = true; // MsgShipLoadout table gains a row this step
+            if (crew is not null)
+            {
+                crew.Ship = s;
+                s.Crew = crew;
+                s.CrewSeats = crew.SeatGunnerIds;
+                Events.CrewChanged = true; // the roster flips from "joinable" to "in flight"
+            }
+        }
         return s;
     }
 
@@ -2724,10 +2770,11 @@ public sealed partial class Simulation
     // passes iterate _order). Emits a ShipGone via Events.Deaths.
     private void RemoveShipNow(ShipSim s)
     {
+        ReleaseCrewOfShip(s); // riding gunners go back to the hangar (Simulation.Crew.cs)
         _ships.Remove(s.ShipId);
         _order.Remove(s);
         Events.Deaths.Add((s.ShipId, GoneDestroyed));
-        if (s.MountWeaponIds is not null)
+        if (s.MountWeaponIds is not null || s.TurretWeaponIds is not null)
             Events.LoadoutsChanged = true; // MsgShipLoadout table shrinks — reconcile-by-omission
     }
 
@@ -2763,10 +2810,13 @@ public sealed partial class Simulation
         {
             foreach (var s in _toRemove)
             {
+                // Dock, death (the wreck, before its pod is added), leave, orphan expiry — every
+                // way a crewed hull leaves the world funnels here, and all of them dissolve.
+                ReleaseCrewOfShip(s); // Simulation.Crew.cs
                 _ships.Remove(s.ShipId);
                 _order.Remove(s);
                 Events.Deaths.Add((s.ShipId, s.GoneReason));
-                if (s.MountWeaponIds is not null)
+                if (s.MountWeaponIds is not null || s.TurretWeaponIds is not null)
                     Events.LoadoutsChanged = true; // MsgShipLoadout table shrinks — reconcile-by-omission
             }
             _toRemove.Clear();

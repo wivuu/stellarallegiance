@@ -794,6 +794,10 @@ public sealed partial class ClientHub
                     // later spawn) reflect the pick immediately, not just at deploy time.
                     byte prevTeam = client.Team;
                     client.Team = _lobby.TeamOf(client.Id);
+                    // A crew is per-team state: switching sides dissolves the hull this pilot
+                    // advertised and frees any turret station they were holding.
+                    if (client.Team != prevTeam)
+                        _sim.EnqueueCrewClear(client.Id);
                     // Fog on: the discovered map is per-team, so a team change must re-sync this client
                     // to the new team's remembered world — re-send a fresh Welcome (the client rebuilds
                     // its world on it) with the new team's vision + re-seeded reveal cursors (F1). This
@@ -894,6 +898,42 @@ public sealed partial class ClientHub
                     if (!SetAutopilotMessage.TryParse(buffer.AsSpan(0, count), out var ap))
                         break;
                     _sim.EnqueueSetAutopilot(client.Id, ap.Mode, ap.Kind, ap.Id, ap.Sector, ap.Pos);
+                    break;
+                }
+                case Protocol.MsgHangarIntent:
+                {
+                    // A docked captain advertises (ClassId 0xFF retracts) the hull teammates may
+                    // crew, with the FULL per-station gun pick list. One-shot command like
+                    // MsgSetAutopilot: decode + queue; the sim thread owns every rule.
+                    if (!HangarIntentMessage.TryParse(buffer.AsSpan(0, count), out var intent))
+                        break;
+                    byte intentTeam = _lobby.TeamOf(client.Id);
+                    if (intentTeam >= TeamCount)
+                    {
+                        SystemTo(client, "Pick a team before crewing.");
+                        break;
+                    }
+                    client.Team = intentTeam;
+                    var picks = new (byte hpIndex, uint weaponId)[intent.Turrets.Length];
+                    for (int i = 0; i < picks.Length; i++)
+                        picks[i] = (intent.Turrets[i].HpIndex, intent.Turrets[i].WeaponId);
+                    _sim.EnqueueHangarIntent(client.Id, intentTeam, intent.ClassId, picks);
+                    break;
+                }
+                case Protocol.MsgCrewSeat:
+                {
+                    // Claim (Mode 1) or give up (Mode 0) a turret station on a teammate's docked
+                    // ship. Same team gate as MsgSpawn — a NOAT pilot has no roster to join.
+                    if (!CrewSeatMessage.TryParse(buffer.AsSpan(0, count), out var seat))
+                        break;
+                    byte seatTeam = _lobby.TeamOf(client.Id);
+                    if (seatTeam >= TeamCount)
+                    {
+                        SystemTo(client, "Pick a team before crewing.");
+                        break;
+                    }
+                    client.Team = seatTeam;
+                    _sim.EnqueueCrewSeat(client.Id, seatTeam, seat.Mode, seat.CaptainId, seat.SeatIndex);
                     break;
                 }
                 case Protocol.MsgOrder:
@@ -1649,6 +1689,9 @@ public sealed partial class ClientHub
                 client.Out.SendReliable(OutFrame.Whole(Protocol.BuildYouAre(sid)));
         }
 
+        // A shipless pilot who is manning a teammate's turret rides that captain's ship (0 otherwise).
+        ulong riding = sid != 0 ? 0UL : _sim.RidingShipIdOf(client.Id);
+
         if (sid != 0 && _shipIndexById.TryGetValue(sid, out int si))
         {
             client.AnchorPos = ships[si].State.Pos;
@@ -1671,6 +1714,15 @@ public sealed partial class ClientHub
                 if (fog)
                     SendWelcome(client);
             }
+        }
+        else if (riding != 0 && _shipIndexById.TryGetValue(riding, out int ri))
+        {
+            // Riding gunner: no ship of their own (YouAre and client.ShipId stay untouched — they
+            // must never think they are flying), but the AOI anchors on the CAPTAIN's ship, so the
+            // ship they are strapped to and everything around it streams at full rate, and the
+            // anchor-scoped sets (minefields/salvage) follow the captain through a warp.
+            client.AnchorPos = ships[ri].State.Pos;
+            client.AnchorSector = ships[ri].SectorId;
         }
         else
         {
