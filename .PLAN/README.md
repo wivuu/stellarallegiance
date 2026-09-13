@@ -72,10 +72,19 @@ Condensed outcomes. Each line names where the detail now lives.
 Richer dogfighting on shipped systems. New content is priced + gated by construction and authored in
 YAML, so it lands in the existing seams without rework.
 
-- ☐ **Turrets** — allow players to mount turret endpoints while a ship that supports turret
+- ◐ **Turrets** — allow players to mount turret endpoints while a ship that supports turret
   hardpoints is in-base ('load up' the turrets).
-  - Once launched, the player will 'ride along' with the pilot, able to control a gun from the
-    turret's hardpoint, aiming it and firing it.
+  - ✅ **Slice 1 — hangar crews + ride-along** (2026-09-13, protocol 41, branch `crews`): authored
+    `kind: turret` stations (bomber ×2, Devastator ×4), captain-side per-station gun assignment,
+    CREWED SHIPS seat claims from the hangar (docked captains only), per-team crew stream, gunners
+    ride along after launch (camera follows the captain, gunner HUD strip). Mechanics + file map:
+    [`GLOSSARY.md` → *Crew / Turret Station*](../GLOSSARY.md); suites `tests/CrewTest`,
+    `tests/CrewStoreTest`.
+  - ☐ **Slice 2 — aim + fire**: once launched, the gunner controls the gun from the turret's
+    hardpoint, aiming and firing it (gunner aim input frame, server-side turret fire + hits, gunner
+    reticle/HUD). Also: mid-flight boarding, gunner reconnect grace, salvage for turret guns.
+  - ☐ If pigs are active, and a player is docked, the bomber pig should not launch until all
+    players either undock or at least one player joins as a gunner (take control of a turret).
 - ☐ **Ripcord** — allows specific types of ships (with the ability) to jump to a specific location
   in a sector after a brief, configurable, delay.
   - When the player picks the sector to teleport to, the ship will pick a ripcordable device (either
