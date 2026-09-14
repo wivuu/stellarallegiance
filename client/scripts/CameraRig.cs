@@ -279,6 +279,13 @@ public partial class CameraRig : Camera3D
                 GlobalTransform = new Transform3D(d.Basis * FaceForward, d.Origin + d.Basis * (ChaseOffset * _zoom));
                 return;
             }
+            // A hull of ours is one snapshot away (a crew gunner promoted to captain of the hull they
+            // were riding, or any spawn between the YouAre and its first row): hold the framing we
+            // already have rather than snapping out to the battlefield overview for a frame or two.
+            // The ship's own arrival re-frames us — and skips the launch cinematic, so the promoted
+            // gunner's view simply becomes the pilot's from where the gun cam left it.
+            if (_world.Ships.AwaitingLocalShip)
+                return;
             GlobalPosition = OverviewPos;
             LookAt(Vector3.Zero, Vector3.Up);
             return;

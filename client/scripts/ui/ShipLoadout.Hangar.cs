@@ -631,16 +631,25 @@ public partial class ShipLoadout
             // Slice 2: the gunner starts sweeping + firing ~2 s into the ride; catch the barrel and
             // the rebuilt turret bolts from the captain's chase cam, with the client's turret readout.
             ulong mine = _world?.Ships.LocalShip?.ShipId ?? 0;
-            void Later(double after, string name, bool quit)
+            WorldRenderer? world = _world;
+            void Later(double after, string name, bool leave)
             {
                 SceneTreeTimer lt = tree.CreateTimer(after);
                 lt.Timeout += () =>
                 {
                     tree.Root.GetTexture().GetImage().SavePng($"{dir}/{name}.png");
                     GD.Print($"HANGAR_DEMO_SHOT:{name}");
-                    GD.Print($"CREW_DEMO[{name}]: {_world?.Ships.TurretDebug(mine)}");
-                    if (quit)
-                        tree.Quit();
+                    GD.Print($"CREW_DEMO[{name}]: {world?.Ships.TurretDebug(mine)}");
+                    if (!leave)
+                        return;
+                    // CAPTAIN PROMOTION (v42 crews): the captain LEAVES the match rather than killing
+                    // the process, so the server sees a clean MsgBye and promotes the seated gunner in
+                    // the lowest station to captain of this hull. QuitGracefully is the existing
+                    // graceful path (Bye → 0.3 s drain → quit); a bare tree.Quit() would drop the
+                    // socket instead and park a 5 s reconnect-grace orphan, and the gunner would never
+                    // be promoted. The gunner client's g6/g7 steps then observe the hand-over.
+                    GD.Print("CREW_DEMO[c6-leaving]: captain leaving the match (MsgBye)");
+                    tree.Root.GetNodeOrNull<ConnectionManager>("Main/ConnectionManager")?.QuitGracefully();
                 };
             }
             Later(6.0, "c5-crew-firing", false);

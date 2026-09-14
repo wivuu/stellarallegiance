@@ -352,6 +352,11 @@ public partial class WorldRenderer
         // would yank the gunner's view back to their garrison on the next roster frame.
         if (_shipRenderer.Riding)
             return;
+        // Same for the frame or two between a YouAre and that hull's first snapshot — a crew gunner
+        // promoted to captain is momentarily neither riding nor flying, and a roster frame landing in
+        // that gap would yank the view (and a full ApplySectorEnv) back to their garrison.
+        if (_shipRenderer.AwaitingLocalShip)
+            return;
         uint home = HomeSector;
         if (home == _localSector)
             return;

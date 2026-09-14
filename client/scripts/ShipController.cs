@@ -120,9 +120,15 @@ public partial class ShipController : Node
     // _Process for the same reason _hasShip is cached — _Input runs between frames.
     private bool _riding;
 
+    // A hull the server has already named ours whose first snapshot hasn't landed — a crew gunner
+    // promoted to CAPTAIN goes riding → (this gap) → flying, and handing the cursor back to a menu for
+    // those frames would drop the pilot's mouse-look the instant they inherit the hull. Cached for the
+    // same reason as the two above.
+    private bool _shipInbound;
+
     // Either seat: flight input sampling still gates on the local ship alone (ReadInput is never
     // called while riding), but everything about the CURSOR is shared.
-    private bool InFlightSeat => _hasShip || _riding;
+    private bool InFlightSeat => _hasShip || _riding || _shipInbound;
 
     // Headless verification: `--autofly` auto-spawns a Scout and flies a fixed
     // input so the full ApplyInput -> SimTick -> reconcile loop can be checked
@@ -464,6 +470,7 @@ public partial class ShipController : Node
         bool hasShip = _world.Ships.LocalShip != null;
         _hasShip = hasShip; // cached for _Input's capture gate (event-driven, runs between frames)
         _riding = _world.Ships.Riding; // …and so is the gunner's seat, which shares that gate
+        _shipInbound = _world.Ships.AwaitingLocalShip; // …and the promotion gap between the two
 
         TickAutoFlyBootstrap(connected, hasShip, delta);
 

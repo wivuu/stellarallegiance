@@ -453,15 +453,21 @@ public partial class Hud : CanvasLayer
         // A crew gunner riding the captain's hull is deliberately shipless: the spawn hangar must NOT
         // reclaim the screen while they're out there. The else-branch below then frees the hangar the
         // moment the captain launches, and this same rule re-opens it when the ride ends.
+        // …and a hull of ours that is one snapshot away is NOT shipless either. A crew gunner promoted
+        // to captain (their captain left) stops riding on the YouAre and only becomes "flying" when that
+        // hull's snapshot lands a frame or two later — without this the mandatory spawn hangar would
+        // flash open over the cockpit they are being handed. Both branches sit still through the gap:
+        // whatever is on screen stays, and nothing new opens.
+        bool shipInbound = _world.Ships.AwaitingLocalShip;
         bool hangarUp = _hangar != null && IsInstanceValid(_hangar);
-        if (inMatch && !flying && !_world.Ships.Riding && DeployRequested && !_world.Ships.DeathCamActive)
+        if (inMatch && !flying && !_world.Ships.Riding && DeployRequested && !_world.Ships.DeathCamActive && !shipInbound)
         {
             if (hangarUp)
                 _hangar!.OpenedForSpawn = true;
             else if (_defs.BuildableShips().Count > 0)
                 OpenHangar(forSpawn: true);
         }
-        else if (hangarUp && _hangar!.OpenedForSpawn)
+        else if (hangarUp && _hangar!.OpenedForSpawn && !shipInbound)
         {
             _hangar.QueueFree();
             _hangar = null;

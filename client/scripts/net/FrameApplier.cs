@@ -429,13 +429,18 @@ public sealed class FrameApplier
         // where a snapshot raced ahead of the YouAre) so the next snapshot re-inserts it
         // as the predicted local ship rather than leaving it an un-predicted remote.
         _rows.Remove(LocalShipId);
+        // Our own hull ends any ride-along: the server vacates a spawning gunner's seat, so the crew
+        // frame will confirm it — but a YouAre is the earliest, most authoritative "you're flying now".
+        // Run this BEFORE NetPromoteLocal for the CAPTAIN-PROMOTION case (the captain left and the
+        // server handed us the hull we were riding): the ride ends against a node that is still in the
+        // tree, so a gunner sitting INSIDE the turret gets the hull un-hidden on a live node — and
+        // NetPromoteLocal's "we own a hull now" bookkeeping (which clears the deferred pull-back to the
+        // home overview that ending a ride arms) then gets the last word.
+        _world.Ships.SetRiding(0);
         _world.Ships.NetPromoteLocal(LocalShipId);
         // A fresh hull launches with every slot loaded: drop the previous ship's spend ticks
         // so a smaller hold on the new loadout can't read as a reload in progress.
         _localMissileLoadTick = _localChaffLoadTick = _localMineLoadTick = _localProbeLoadTick = 0;
-        // Our own hull ends any ride-along: the server vacates a spawning gunner's seat, so the crew
-        // frame will confirm it — but a YouAre is the earliest, most authoritative "you're flying now".
-        _world.Ships.SetRiding(0);
         Log.Print($"[GameNet] assigned ship {LocalShipId}");
     }
 

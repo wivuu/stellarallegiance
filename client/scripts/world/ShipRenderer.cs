@@ -96,6 +96,23 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
     // re-insert skips the launch cinematic).
     private ulong? _reclaimedShipId;
 
+    // CAPTAIN PROMOTION (v42 crews): a YouAre names a hull as ours, but LocalShip only exists once
+    // that hull's first SNAPSHOT lands — a different (lossy) stream, so it can be a frame or two
+    // behind the reliable YouAre. In that gap the client is neither flying nor riding, and every
+    // "shipless" rule — the mandatory spawn hangar, the pull-back to the home overview, handing the
+    // cursor back to a menu, the pre-launch re-home — would fire for those frames and blink the
+    // screen. It matters most for a GUNNER promoted to captain when their captain leaves: they were
+    // riding the very hull they are about to fly, so the ride ends on the YouAre and NOTHING else
+    // covers the gap (on a normal launch the hangar is still up and papers over it). Everything that
+    // reads "shipless" holds still while this is true. Deadline-bounded so a YouAre whose snapshot
+    // never arrives (the hull died in the same breath) can't wedge the hangar shut for good.
+    private const double AwaitingShipSec = 2.0;
+    private ulong _awaitingShipId;
+    private double _awaitingUntil;
+
+    public bool AwaitingLocalShip =>
+        _awaitingShipId != 0 && LocalShip == null && Time.GetTicksMsec() / 1000.0 < _awaitingUntil;
+
     // Scratch reused by EnemyShips()/FriendlyShips()/ShipObstacles() so the per-frame passes allocate none.
     private readonly List<RemoteShip> _enemyScratch = new();
     private readonly List<RemoteShip> _friendlyScratch = new();
@@ -153,7 +170,10 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
 
     // Death-cam home-reset handshake: the coordinator's _Process pulls the view back to the home overview
     // once the hold expires (deferred from DeleteShip so the death sector stays visible), then clears it.
-    public bool NeedsHomeReset => _pendingHomeReset && LocalShip == null && !DeathCamActive && _ridingShipId == 0;
+    // AwaitingLocalShip: a hull of ours is one snapshot away (the promoted gunner's ride ended on the
+    // YouAre and armed this), so the pull-back would land — and be undone — inside a frame or two.
+    public bool NeedsHomeReset =>
+        _pendingHomeReset && LocalShip == null && !DeathCamActive && _ridingShipId == 0 && !AwaitingLocalShip;
 
     public void ClearPendingHomeReset() => _pendingHomeReset = false;
 
@@ -483,10 +503,16 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
         _pendingHomeReset = false;
         if (LocalShip is not null && LocalShip.ShipId == shipId)
             return;
+        // This hull is ours from now on, but LocalShip only exists once its snapshot lands. Hold every
+        // shipless rule still until then (see AwaitingLocalShip) — for a PROMOTED GUNNER the ride has
+        // just ended under them and nothing else is covering the screen.
+        _awaitingShipId = shipId;
+        _awaitingUntil = Time.GetTicksMsec() / 1000.0 + AwaitingShipSec;
         if (_nodes.TryGetValue(shipId, out var node) && node is RemoteShip)
         {
-            // Only path here is a reconnect reclaim of an in-flight ship — mark it so the re-insert as a
-            // local ship skips the launch cinematic (a returning pilot isn't "launching").
+            // Two paths land here: a reconnect reclaim of an in-flight ship, and a crew gunner promoted
+            // to CAPTAIN of the hull they were riding (already rendered as a RemoteShip). Mark it so the
+            // re-insert as a local ship skips the launch cinematic — neither is "launching".
             _reclaimedShipId = shipId;
             _nodes.Remove(shipId);
             _forgetCollidingShip(shipId);
@@ -776,7 +802,13 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
                 pc.SetPilotName(localPilot);
             LocalShip = pc;
             _player.LocalTeam = row.Team;
-            _ridingShipId = 0; // our own hull supersedes any ride (the server vacated the seat too)
+            // Our own hull supersedes any ride (the server vacated the seat too). Route the end of the
+            // ride through the hull-hide seam rather than just zeroing the id: a gunner PROMOTED to
+            // captain of this very hull may have been sitting INSIDE its turret, and the mirror must not
+            // keep pointing at the model of the node this insert replaces.
+            SetRiddenHullHidden(false);
+            _ridingShipId = 0;
+            _awaitingShipId = 0; // the snapshot every shipless rule was holding still for just landed
             // Respawn cancels any in-flight death-cam: the camera follows the new ship at once.
             _deathCamUntil = -1.0;
             _pendingHomeReset = false;
@@ -853,6 +885,10 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
     // 2 = fog lost-contact (quiet fade, no blast).
     private void DeleteShip(Ship row, byte reason)
     {
+        // The hull a YouAre promised us died before its first snapshot: stop holding the shipless rules
+        // still (the deadline would, eventually — this makes the spawn hangar reopen at once).
+        if (_awaitingShipId == row.ShipId)
+            _awaitingShipId = 0;
         if (!_nodes.Remove(row.ShipId, out var node))
             return;
 
@@ -944,5 +980,6 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
         _deathCamUntil = -1.0;
         _pendingHomeReset = false;
         _ridingShipId = 0; // the rebuilt world re-seats us from the next MsgCrew
+        _awaitingShipId = 0; // a rebuilt world re-binds our ship from the next YouAre
     }
 }

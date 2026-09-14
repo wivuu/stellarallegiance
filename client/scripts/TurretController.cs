@@ -302,8 +302,15 @@ public partial class TurretController : Node
         _wantCapture = false;
         _mouseDelta = Vector2.Zero;
         // Hand the cursor back only when nothing else is about to want it: launching our own hull
-        // (the usual way a ride ends) leaves flight holding the capture it just took.
-        if (_world.Ships.LocalShip == null && Input.MouseMode == Input.MouseModeEnum.Captured)
+        // (the usual way a ride ends) leaves flight holding the capture it just took — and so does
+        // being PROMOTED to captain of the hull we were riding, where the YouAre ends the ride a frame
+        // or two before the hull's snapshot makes LocalShip real (AwaitingLocalShip covers that gap;
+        // releasing there would pop the cursor onto the screen just as the pilot takes the stick).
+        if (
+            _world.Ships.LocalShip == null
+            && !_world.Ships.AwaitingLocalShip
+            && Input.MouseMode == Input.MouseModeEnum.Captured
+        )
             Input.MouseMode = Input.MouseModeEnum.Visible;
     }
 

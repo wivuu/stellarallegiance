@@ -939,6 +939,7 @@ public partial class ShipLoadout
             return;
         _rideShotsScheduled = true;
         SceneTree tree = GetTree();
+        WorldRenderer world = _world; // this node is freed the moment the ride starts; the world isn't
         void Shot(double after, string name, bool quit)
         {
             SceneTreeTimer t = tree.CreateTimer(after);
@@ -954,6 +955,20 @@ public partial class ShipLoadout
         {
             var tc = tree.Root.GetNodeOrNull<TurretController>("Main/TurretController");
             GD.Print($"CREW_DEMO[{tag}]: {TurretController.Describe(tc)}");
+        }
+        // CAPTAIN PROMOTION (v42 crews): the one readout that proves the RIDING → FLYING hand-over.
+        // Every flag the transition has to move is on one line: the hull we now predict, the ride that
+        // ended, the seat that let go, whether the spawn hangar flashed back open, and where the camera
+        // landed (both gun-cam first person and the pilot's cockpit must read false right after —
+        // the promoted pilot inherits their normal chase view, no launch cinematic).
+        void Readout(string tag)
+        {
+            ulong local = world.Ships.LocalShip?.ShipId ?? 0;
+            GD.Print(
+                $"CREW_DEMO[{tag}]: local={local} riding={world.Ships.RidingShipId} "
+                    + $"seat={TurretController.Active} flying={local != 0} hangar={Active} "
+                    + $"cam={CameraRig.FirstPersonActive}/{CameraRig.TurretFirstPerson}"
+            );
         }
         SceneTreeTimer drive = tree.CreateTimer(2.0);
         drive.Timeout += () => TurretController.DemoDrive = true; // slice 2: sweep the gun and hold fire
@@ -973,9 +988,27 @@ public partial class ShipLoadout
             Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = MouseButton.WheelDown, Pressed = true });
         Shot(9.0, "g5-firing", false);
         SceneTreeTimer s6 = tree.CreateTimer(9.1);
-        s6.Timeout += () =>
+        s6.Timeout += () => Say("g5");
+        // CAPTAIN PROMOTION (v42 crews). Both clients hang their timers off the SAME event — the
+        // captain's launch, which is what starts this ride — so these offsets are directly comparable
+        // with the captain's, except that DemoAfterLaunch wraps its Later() steps in a 1 s settle
+        // timer. The captain's Later(10.0) leave therefore lands at launch+11 s, so g6 at 13.5 s sits
+        // 2.5 s past it: comfortably clear of the MsgBye → promote → YouAre + snapshot round trip
+        // while still inside the crew demo's 240 s failsafe.
+        Shot(13.5, "g6-promoted", false);
+        SceneTreeTimer s7 = tree.CreateTimer(13.6);
+        s7.Timeout += () =>
         {
-            Say("g5");
+            Readout("g6-promoted");
+            Say("g6");
+        };
+        // …and again once the promoted pilot has actually been flying for a couple of seconds, so the
+        // shot shows a settled cockpit rather than the first frame after the hand-over.
+        Shot(16.0, "g7-flying", false);
+        SceneTreeTimer s8 = tree.CreateTimer(16.1);
+        s8.Timeout += () =>
+        {
+            Readout("g7-flying");
             tree.Quit();
         };
     }
