@@ -21,7 +21,9 @@ using StellarAllegiance.Ui;
 // server derives the actual one itself. The CAMERA is the desired look and nothing else: it moves
 // with the mouse, the ship and the arc fence, never with the gun (user steer 2026-09-13: a camera
 // that rode the traversing gun felt "clunky" — "constrained only by its position, the ship's
-// orientation and its arc fence, not other physics of the turret"). The ACTUAL aim is what the
+// orientation and its arc fence, not other physics of the turret"), except that its turn is
+// capped at the mount's slew SPEED so the view can never outrun the gun by more than the wind-up
+// (user steer, same day: "let's not let the camera look faster than the aim"). The ACTUAL aim is what the
 // barrel, the predicted bolts and the ONE reticle follow: the pilot's own aim reticle, drawn by
 // TargetMarkers off the firing line (a gunner is a pilot who cannot steer, so they get the pilot's
 // HUD), so a heavy gun reads as the reticle trailing the centre of the view until it catches up.
@@ -209,7 +211,7 @@ public partial class TurretController : Node
         var zenith = ShipMath.ToShared(Zenith);
 
         TakeCursor();
-        SampleAim(zenith);
+        SampleAim(zenith, hp.TurretSlewRad, (float)delta);
 
         // The mouse drives the DESIRED look; the gun TRAVERSES toward it under the mount's authored
         // slew/accel (v42 crews slice 2b). Both peers run the same shared rule from the same streamed
@@ -338,7 +340,7 @@ public partial class TurretController : Node
     // Fold this frame's cursor motion into the look basis. Unlike the pilot's self-centering virtual
     // stick, the turret HOLDS where it was pointed — the mouse moves the gun, it doesn't deflect a
     // spring — so the delta turns the basis rather than being eased back to zero.
-    private void SampleAim(Vec3 zenith)
+    private void SampleAim(Vec3 zenith, float slewRad, float dt)
     {
         Vector2 m = _mouseDelta;
         _mouseDelta = Vector2.Zero;
@@ -365,8 +367,28 @@ public partial class TurretController : Node
         // around and no elevation to run out of: pitching up past the zenith carries over the top and
         // keeps going down the far side. The ARC is the only limit, and it moves the whole basis.
         Vector2 md = m / ZoomView.Magnification;
-        _look.Yaw(-TurretStations.AimDeltaRad(md.X, _mouseSens));
-        _look.Pitch(TurretStations.AimDeltaRad(_mouseInvert ? -md.Y : md.Y, _mouseSens));
+        float yaw = -TurretStations.AimDeltaRad(md.X, _mouseSens);
+        float pitch = TurretStations.AimDeltaRad(_mouseInvert ? -md.Y : md.Y, _mouseSens);
+
+        // …but never faster than the mount can traverse (user steer 2026-09-13: "let's not let the
+        // camera look faster than the aim"). The frame's turn is capped at the station's slew speed
+        // — the SPEED cap only, not the wind-up, so the view leads the gun by at most its
+        // acceleration lag and the reticle stays near the centre. Motion past the cap is dropped,
+        // not banked: a banked turn would keep the view moving after the hand stopped. A station
+        // with no authored traverse (slew 0 = snap) has nothing to cap against.
+        if (slewRad > 0f && dt > 0f)
+        {
+            float turn = Mathf.Sqrt(yaw * yaw + pitch * pitch);
+            float cap = slewRad * dt;
+            if (turn > cap)
+            {
+                float k = cap / turn;
+                yaw *= k;
+                pitch *= k;
+            }
+        }
+        _look.Yaw(yaw);
+        _look.Pitch(pitch);
         Clamped = _look.ClampToArc(zenith);
     }
 
