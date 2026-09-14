@@ -765,7 +765,7 @@ development started at the wrong family (mirrored derivation — keep the two in
   - `shared/Net/Wire.cs`, `server/Net/Protocol.cs`, `client/scripts/GameNetClient.cs` — `MsgResearch` (13, c→s: start/queue/cancel) + `MsgResearchState` (24, s→c: per-team live progress)
 - **Related:** [[Tech Tree]], [[YAML Content Pipeline]], [[Def]], [[Build Tab]]
 - **Notes:** Client status is derived from streamed data only (owned techs/caps + per-base research),
-  never baked; non-commanders see a disabled affordance. Protocol v36 introduced the wire.
+  never baked; non-commanders see a disabled affordance. The hub drops every gameplay frame a connection sends after its MsgBye (a quitting client's world reset pops the hangar, whose teardown would otherwise retract the crew advertisement and dissolve the crew before the leave drains). Protocol v36 introduced the wire.
 
 ---
 

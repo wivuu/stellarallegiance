@@ -116,4 +116,25 @@ internal static partial class Log
         Message = "turret station pick {WeaponId} on class {Cls} is not researched — using the authored gun"
     )]
     public static partial void TurretPickTechLocked(ILogger logger, uint weaponId, byte cls);
+
+    [LoggerMessage(
+        EventId = 1417,
+        Level = LogLevel.Information,
+        Message = "[crew] captain {OldClientId} left — client {NewClientId} (T{Seat}) promoted to captain of ship {ShipId}"
+    )]
+    public static partial void CrewCaptainPromoted(ILogger logger, int oldClientId, int newClientId, int seat, ulong shipId);
+
+    [LoggerMessage(
+        EventId = 1418,
+        Level = LogLevel.Information,
+        Message = "[crew] captain {OldClientId} left ship {ShipId}: no promotion ({Reason})"
+    )]
+    public static partial void CrewCaptainLeftNoPromotion(ILogger logger, int oldClientId, ulong shipId, string reason);
+
+    [LoggerMessage(
+        EventId = 1419,
+        Level = LogLevel.Information,
+        Message = "[crew] captain {CaptainClientId} crew unbound from ship {ShipId}: {Reason}"
+    )]
+    public static partial void CrewUnbound(ILogger logger, int captainClientId, ulong shipId, string reason);
 }

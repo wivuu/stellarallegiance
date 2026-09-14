@@ -509,6 +509,7 @@ public sealed partial class Simulation
     {
         if (s.Crew is not { } crew)
             return;
+        Log.CrewUnbound(_log, crew.CaptainClientId, s.ShipId, "docked (seats kept)");
         crew.Ship = null;
         s.Crew = null;
         s.CrewSeats = null;
@@ -531,6 +532,7 @@ public sealed partial class Simulation
     {
         if (s.Crew is not { } crew)
             return;
+        Log.CrewUnbound(_log, crew.CaptainClientId, s.ShipId, $"ship left the world (gone reason {s.GoneReason})");
         s.Crew = null;
         s.CrewSeats = null;
         _crewByCaptain.Remove(crew.CaptainClientId);
@@ -544,6 +546,7 @@ public sealed partial class Simulation
         var ship = crew.Ship; // kept past the unbind below so the stations can be put back at rest
         if (ship is not null)
         {
+            Log.CrewUnbound(_log, crew.CaptainClientId, ship.ShipId, $"dissolved: {gunnerNotice ?? "(silent)"}");
             ship.Crew = null;
             ship.CrewSeats = null;
             crew.Ship = null;
@@ -581,7 +584,10 @@ public sealed partial class Simulation
     private bool TryPromoteGunner(ShipSim ship, int oldCaptainId)
     {
         if (ship.Crew is not { } crew)
+        {
+            Log.CrewCaptainLeftNoPromotion(_log, oldCaptainId, ship.ShipId, "no crew bound");
             return false;
+        }
         int slot = -1;
         for (int i = 0; i < crew.SeatGunnerIds.Length; i++)
             if (crew.SeatGunnerIds[i] != NoGunner)
@@ -590,7 +596,10 @@ public sealed partial class Simulation
                 break;
             }
         if (slot < 0)
-            return false; // nobody aboard
+        {
+            Log.CrewCaptainLeftNoPromotion(_log, oldCaptainId, ship.ShipId, "nobody aboard");
+            return false;
+        }
         int g = crew.SeatGunnerIds[slot];
         // The same invariant EjectCrewPods states: a seated gunner owns no ship and is never
         // mid-respawn (DrainCrewQueues refuses the claim in both states, and a gunner's own MsgSpawn
@@ -601,7 +610,10 @@ public sealed partial class Simulation
             "a seated gunner must own no ship and have no pending respawn"
         );
         if (_byClient.ContainsKey(g) || _clientRespawn.ContainsKey(g))
+        {
+            Log.CrewCaptainLeftNoPromotion(_log, oldCaptainId, ship.ShipId, $"gunner {g} owns a ship or is mid-respawn");
             return false;
+        }
 
         // Out of the station, into the pilot's seat: the vacate takes their held turret aim/fire and
         // their _seatOf entry with it (so RidingShipIdOf(g) goes back to 0) and rests the gun.
@@ -633,6 +645,7 @@ public sealed partial class Simulation
             if (other != NoGunner)
                 Events.PilotNotices.Add((other, $"Your captain left — {seatId} has the ship."));
         Events.CrewChanged = true;
+        Log.CrewCaptainPromoted(_log, oldCaptainId, g, slot + 1, ship.ShipId);
         return true;
     }
 

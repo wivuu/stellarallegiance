@@ -1815,6 +1815,12 @@ void TurretIn(Simulation sim, int gunner, Vec3 aim, bool firing) =>
     // The captain says goodbye and drops: a clean leave (MsgBye), so no reconnect grace.
     ulong shipId = captainShip!.ShipId;
     Feed(capT, HubFrames.Bye());
+    // What a real client does in the beat between its Bye and the socket close (live finding
+    // 2026-09-13): the graceful quit resets its world, the spawn hangar pops open over the now
+    // ship-less view and its teardown RETRACTS the crew advertisement. The hub must drop every
+    // gameplay frame after the Bye, or that retract dissolves the crew before the leave drains and
+    // there is nobody left to promote.
+    Feed(capT, HubFrames.HangarIntent(0xFF));
     capCts.Cancel();
     System.Threading.Thread.Sleep(100);
     Pump(20);

@@ -635,6 +635,14 @@ public sealed partial class ClientHub
             if (count < 1)
                 continue; // empty frame
 
+            // After a MsgBye nothing else this connection says counts: the client is tearing itself
+            // down, and a real client keeps talking for a beat between the Bye and the socket close
+            // (its world reset pops the spawn hangar, whose teardown retracts the crew advertisement
+            // — live finding 2026-09-13: that retract dissolved a crew before the leave drained, so
+            // there was nobody left to promote to captain). The leave itself is handled in `finally`.
+            if (client.Leaving)
+                continue;
+
             // One whole frame per receive. Each case parses it with the shared generated codec
             // (shared/Net/Messages.cs) — the same layout the client compiles. A truncated or malformed
             // frame fails TryParse and is ignored, exactly the "not a protocol error" treatment the old
