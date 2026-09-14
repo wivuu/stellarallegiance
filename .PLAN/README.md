@@ -87,12 +87,12 @@ YAML, so it lands in the existing seams without rework.
     centre reticle that warns at the arc edge), fires on LMB/`fire_primary`; the server clamps the
     held aim, fires the station's gun on its own cadence and credits hits to the GUNNER; every
     client in range sees the aim (procedural barrel) and the bolts via `MsgTurrets`. Shared rule:
-    `shared/TurretAim.cs`. Follow-up (same day): per-station traverse `slew-deg` / `accel-deg`
-    (gun swings toward the desired aim; the ONE pilot reticle rides the traversed aim), Tab
-    targeting + lead indicator for gunners, gun cam = pure free look (`TurretLook`, arc fence only,
-    never the gun's traverse), gunners eject into pods on the captain's death, a clean dock keeps
-    the crew seated (joinable again while docked). Traverse retuned 2026-09-13: defaults 60/180,
-    Devastator 45/120 (150 was "too quick" in a bomber).
+    `shared/TurretAim.cs`. Follow-up (same day): Tab targeting + lead indicator for gunners, gun cam
+    = pure free look (`TurretLook`, arc fence only), gunners eject into pods on the captain's death,
+    a clean dock keeps the crew seated (joinable again while docked). Aim made CLIENT-AUTHORITATIVE
+    2026-09-13 (the traversing gun was "very laggy and difficult to control"): `MsgTurretInput`
+    carries the ACTUAL aim, the server only arc-clamps it, and the per-station `slew-deg` is now just
+    the client's cap on how fast the look/gun may turn (default 69°/s, Devastator 45; no wind-up).
   - ☐ **Slice 3**: mid-flight boarding, gunner reconnect grace, salvage for turret guns, gunner
     K/D on the scoreboard readout, turret slew feel tuning per hull.
   - ☐ If pigs are active, and a player is docked, the bomber pig should not launch until all

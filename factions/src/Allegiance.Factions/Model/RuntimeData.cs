@@ -74,18 +74,12 @@ public record Hardpoint
     public RuntimeMountKind? Mount { get; set; }
 
     /// <summary>
-    /// <see cref="RuntimeHardpointKind.Turret"/> only: the station's traverse speed in degrees per
-    /// second (how fast the gun swings toward where the gunner is pulling it). Null = the runtime
+    /// <see cref="RuntimeHardpointKind.Turret"/> only: the station's slew speed in degrees per
+    /// second — the cap the gunner's client puts on how fast its look, and so the gun, may turn
+    /// (turret aim is client-authoritative; the server only arc-clamps it). Null = the runtime
     /// default (a nimble light mount); author lower on a heavy capital station.
     /// </summary>
     public double? SlewDeg { get; set; }
-
-    /// <summary>
-    /// <see cref="RuntimeHardpointKind.Turret"/> only: the station's traverse acceleration in degrees
-    /// per second squared (how quickly it winds up to / down from <see cref="SlewDeg"/>). Null = the
-    /// runtime default.
-    /// </summary>
-    public double? AccelDeg { get; set; }
 }
 
 /// <summary>
