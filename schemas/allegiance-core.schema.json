@@ -421,14 +421,7 @@
                     "number",
                     "null"
                   ],
-                  "description": "Turret only: the station\u0027s traverse speed in degrees per second (how fast the gun swings toward where the gunner is pulling it). Null = the runtime default (a nimble light mount); author lower on a heavy capital station."
-                },
-                "accel-deg": {
-                  "type": [
-                    "number",
-                    "null"
-                  ],
-                  "description": "Turret only: the station\u0027s traverse acceleration in degrees per second squared (how quickly it winds up to / down from SlewDeg). Null = the runtime default."
+                  "description": "Turret only: the station\u0027s slew speed in degrees per second \u2014 the cap the gunner\u0027s client puts on how fast its look, and so the gun, may turn (turret aim is client-authoritative; the server only arc-clamps it). Null = the runtime default (a nimble light mount); author lower on a heavy capital station."
                 }
               },
               "description": "A mount point on a hull/station, in LOCAL space \u2014 mirrors the game\u0027s HardpointDef. Carries what a loader needs to attach a weapon muzzle, engine nozzle, light or docking marker without any hard-coded offset. Declaration order of RuntimeHardpointKind fixes the wire byte, so it is APPEND-ONLY.",

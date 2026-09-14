@@ -37,11 +37,10 @@
 //   12. Frame shapes: Frames.Crew rows/seats, and the crewed ship's MsgShipLoadout row.
 //   13. Hub level (TestKit): a riding gunner gets MsgCrew naming itself with a live ShipId, NEVER a
 //       MsgYouAre, and its anchor-scoped frames follow the captain's ship into another sector.
-//   14. The shared TurretAim rule itself (rest pose, arc clamp, gimbal round-trip, spread barrel)
-//       and the slice-2b TRAVERSE rule (TurretAim.Slew: no overshoot, the speed cap, settling on
-//       the target with rate 0, the slew-0 snap, a capital station's 90° taking >= 40 ticks).
-//   15. Aim/fire in the sim: held input is dropped while the captain is docked, a below-horizon aim
-//       is traversed toward and stored clamped, a held trigger fires on the station's OWN cadence
+//   14. The shared TurretAim rule itself (rest pose, arc clamp, gimbal round-trip, spread barrel).
+//   15. Aim/fire in the sim: held input is dropped while the captain is docked, turret aim is
+//       CLIENT-AUTHORITATIVE (an in-arc aim lands verbatim on the next tick, an out-of-arc one lands
+//       arc-clamped — no lag either way), a held trigger fires on the station's OWN cadence
 //       (never touching the pilot's LastFireTick) and credits the GUNNER, an unmanned station never
 //       fires, vacating rests the station, Frames.Turrets carries only manned seats.
 //   16. Hub level: MsgTurrets reaches a same-sector watcher and the gunner itself, never a client
@@ -73,7 +72,7 @@ void Check(bool cond, string pass, string fail)
     }
 }
 
-// The angle between two (unit-ish) directions, in radians — the traverse tests' one measure.
+// The angle between two (unit-ish) directions, in radians — the aim tests' one measure.
 static float Angle(Vec3 a, Vec3 b) => MathF.Acos(Math.Clamp(Vec3.Dot(Vec3.Normalize(a), Vec3.Normalize(b)), -1f, 1f));
 
 string stockPath = Path.Combine(AppContext.BaseDirectory, "content", "core", "core.manifest.yaml");
@@ -865,79 +864,6 @@ Simulation.ShipSim Launch(Simulation sim, int cid, byte team, byte cls)
         "TurretAim.SpreadBarrel tags a station's spread seed with the 0x80 turret bit",
         $"SpreadBarrel(1) = 0x{TurretAim.SpreadBarrel(1):X2}, expected 0x81"
     );
-
-    // ---- TurretAim.Slew: the traverse rule both peers run (v42 slice 2b) ----
-    const float Dt = FlightModel.Dt;
-    float Rad(double deg) => (float)(deg * Math.PI / 180.0);
-
-    // A light mount (the bomber's unauthored default) swinging 90°: it must never overshoot, never
-    // turn faster than its speed cap in one step, and come to a dead stop ON the target.
-    {
-        float slew = Rad(TurretAim.DefaultSlewDeg);
-        float accel = Rad(TurretAim.DefaultAccelDeg);
-        var from = new Vec3(0f, 0f, 1f);
-        var to = new Vec3(1f, 0f, 0f);
-        var cur = from;
-        float rate = 0f;
-        float gap = Angle(cur, to);
-        bool monotone = true,
-            withinCap = true;
-        int steps = 0;
-        for (; steps < 400 && gap > 1e-4f; steps++)
-        {
-            var next = TurretAim.Slew(cur, to, ref rate, slew, accel, Dt);
-            withinCap &= Angle(cur, next) <= slew * Dt + 1e-4f;
-            float g = Angle(next, to);
-            monotone &= g <= gap + 1e-5f;
-            gap = g;
-            cur = next;
-        }
-        Check(monotone, "TurretAim.Slew never overshoots the desired aim", "a Slew step moved past the target");
-        Check(
-            withinCap,
-            "TurretAim.Slew never turns faster than the station's slew cap in one step",
-            "a Slew step broke the speed cap"
-        );
-        // The step that lands ON the target is clamped to the remaining angle; the call after it is
-        // the one that reports the gun stopped, and it must leave the aim exactly where it is.
-        var settled = TurretAim.Slew(cur, to, ref rate, slew, accel, Dt);
-        Check(
-            gap <= 1e-4f && steps < 400 && rate == 0f && Near(settled, to),
-            "TurretAim.Slew reaches the desired aim and then reports rate 0 (the gun has stopped)",
-            $"the traverse never settled (gap={gap}, rate={rate}, steps={steps})"
-        );
-    }
-
-    // An unauthored / test def (slew 0) SNAPS — the fallback every mirror shares.
-    {
-        float rate = 7f;
-        var snapped = TurretAim.Slew(new Vec3(0f, 0f, 1f), new Vec3(1f, 0f, 0f), ref rate, 0f, 0f, Dt);
-        Check(
-            Near(snapped, new Vec3(1f, 0f, 0f)) && rate == 0f,
-            "a station with no authored traverse (slew 0) snaps straight to the desired aim",
-            $"slew 0 did not snap ({snapped.X},{snapped.Y},{snapped.Z}, rate={rate})"
-        );
-    }
-
-    // A heavy capital station (the Devastator's authored 45°/s, 120°/s²) takes at least two full
-    // seconds of ticks to come round 90° — the traverse is the feature, so this is a floor, not a
-    // fit: 90° at 45°/s is 40 ticks of pure travel before any wind-up is counted.
-    {
-        float rate = 0f;
-        var cur = new Vec3(0f, 0f, 1f);
-        var to = new Vec3(1f, 0f, 0f);
-        int ticks = 0;
-        while (ticks < 400 && Angle(cur, to) > 1e-4f)
-        {
-            cur = TurretAim.Slew(cur, to, ref rate, Rad(45.0), Rad(120.0), Dt);
-            ticks++;
-        }
-        Check(
-            ticks >= 40,
-            $"a 45°/s capital station needs {ticks} ticks (>= 40) to traverse 90°",
-            $"a 45°/s station came round 90° in {ticks} ticks"
-        );
-    }
 }
 
 // ---- 15. Aim + fire in the sim -------------------------------------------------------------------
@@ -1010,26 +936,24 @@ void TurretIn(Simulation sim, int gunner, Vec3 aim, bool firing) =>
 }
 
 {
-    // An aim past the station's arc floor is TRAVERSED toward and stored CLAMPED — the gunner keeps
-    // the azimuth they pushed toward, the elevation is pinned at the floor, and nothing ever fires
-    // into the hull. The gun does not teleport there: the aim on the wire is where the barrel has
-    // actually swung to, so the first tick covers a fraction of the angle and the rest follows.
+    // Turret aim is CLIENT-AUTHORITATIVE: whatever the gunner sends IS the gun's aim on the very
+    // next tick — no traverse, no lag. The server's only edit is the arc clamp, so an in-arc aim
+    // lands verbatim and an out-of-arc one lands exactly where TurretAim.Clamp puts it (the azimuth
+    // the gunner pushed toward survives, the elevation is pinned at the floor, and nothing ever
+    // fires into the hull).
     var (sim, ship) = CrewedLaunch(16);
     var zenith = Vec3.Normalize(sim.TurretZenithOf(Bomber, 0));
     var horizon = TurretAim.Frame(zenith).Z; // azimuth 0 on the station's horizon
-    var below = Vec3.Normalize(horizon - zenith); // 45 degrees UNDER the horizon
+    var inArc = Vec3.Normalize(horizon + zenith * 0.2f); // just above the horizon: well inside the arc
     var start = ship.TurretAim![0];
-    var desired = TurretAim.Clamp(zenith, below);
-    float full = Angle(start, desired);
 
-    TurretIn(sim, 2, below, firing: false);
+    TurretIn(sim, 2, inArc, firing: false);
     Park(ship, new Vec3(0f, 0f, 0f));
     sim.Step();
-    float first = Angle(start, ship.TurretAim![0]);
     Check(
-        first > 1e-4f && first < full - 1e-3f,
-        $"the station TRAVERSES toward a new aim: one tick covers {first * 180f / MathF.PI:F1}° of the {full * 180f / MathF.PI:F1}° swing",
-        $"the first tick moved {first} rad of a {full} rad swing (expected a partial step)"
+        Angle(start, inArc) > 0.1f && Angle(ship.TurretAim![0], inArc) < 1e-5f,
+        "an in-arc aim is the station's aim on the NEXT tick, exactly as sent (no traverse lag)",
+        $"the sent aim was not applied whole ({Angle(ship.TurretAim![0], inArc)} rad off after one step)"
     );
     Check(
         sim.Events.TurretUpdates.Contains(ship),
@@ -1037,33 +961,19 @@ void TurretIn(Simulation sim, int gunner, Vec3 aim, bool firing) =>
         "the moved aim raised no turret update"
     );
 
-    // ...and it closes on the desired aim monotonically, never overshooting it.
-    float prev = Angle(ship.TurretAim![0], desired);
-    bool monotone = true;
-    for (int i = 0; i < 60; i++)
-    {
-        Park(ship, new Vec3(0f, 0f, 0f));
-        sim.Step();
-        float gap = Angle(ship.TurretAim![0], desired);
-        monotone &= gap <= prev + 1e-4f;
-        prev = gap;
-    }
-    Check(
-        monotone,
-        "...closing the gap to the desired aim on every tick, never past it",
-        "the traverse overshot or backed up"
-    );
+    // An aim past the arc floor: applied on the next tick too, but arc-clamped.
+    var below = Vec3.Normalize(horizon - zenith); // 45 degrees UNDER the horizon
+    var clamped = TurretAim.Clamp(zenith, below);
+    TurretIn(sim, 2, below, firing: false);
+    Park(ship, new Vec3(0f, 0f, 0f));
+    sim.Step();
     var stored = ship.TurretAim![0];
     Check(
-        TurretAim.InArc(zenith, stored)
+        Angle(stored, clamped) < 1e-5f
+            && TurretAim.InArc(zenith, stored)
             && MathF.Abs(Vec3.Dot(zenith, stored) - MathF.Cos(TurretAim.ArcHalfAngleRad)) < 1e-3f,
-        "a held aim 45° under the horizon settles clamped to the arc floor, inside the arc",
-        $"the stored aim is outside the arc (dot={Vec3.Dot(zenith, stored)})"
-    );
-    Check(
-        ship.TurretRate![0] == 0f,
-        "a station parked on the gunner's aim has stopped (traverse rate back to 0)",
-        $"the settled station still reports a traverse rate ({ship.TurretRate![0]})"
+        "an aim 45° under the horizon lands on the NEXT tick as TurretAim.Clamp of it (at the arc floor)",
+        $"the stored aim is not the clamp of the sent one (dot={Vec3.Dot(zenith, stored)}, gap={Angle(stored, clamped)})"
     );
     Check(
         ship.LastTurretFireTick == 0,
@@ -1357,8 +1267,8 @@ void TurretIn(Simulation sim, int gunner, Vec3 aim, bool firing) =>
         $"the gunner rides {sim.RidingShipIdOf(2)}, expected {relaunched.ShipId}"
     );
     Check(
-        relaunched.TurretAim is { Length: 2 } && relaunched.TurretRate is { Length: 2 },
-        "...with freshly seeded per-station aim/traverse state",
+        relaunched.TurretAim is { Length: 2 } && relaunched.TurretLastFire is { Length: 2 },
+        "...with freshly seeded per-station aim/fire state",
         "the relaunched hull has no turret state"
     );
 

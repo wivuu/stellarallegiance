@@ -7,12 +7,15 @@ namespace StellarAllegiance.Shared;
 // ship-local unit vector anywhere in the cone around it — a hemisphere plus a little depression
 // below the mount's horizon (user steer 2026-09-13: the bare hemisphere felt too restricted). Three
 // mirrors consume this and must never drift (same pattern as FireCadence):
-//   - server Simulation.TryFireTurrets   (authoritative: clamps + traverses the held aim, fires along it)
-//   - client TurretController             (the gunner: free look → desired aim, same traverse, local bolts)
+//   - server Simulation.TryFireTurrets   (trusts the gunner's aim: arc-clamps it and fires along it)
+//   - client TurretController             (the gunner: free look = the aim, sent on the wire, local bolts)
 //   - client ShipRenderer.ApplyTurrets    (remote turrets: rebuilds bolts along the streamed aim)
-// The traverse (Slew, below) is the ONLY physics a turret has, and it is the gun's, not the camera's:
-// the gunner's view is a free look that moves with the mouse; the traversed aim is where the bolts
-// leave and where the reticle is drawn.
+// Turret aim is CLIENT-AUTHORITATIVE (user steer 2026-09-13: a gun that lags the sight was "very
+// laggy and difficult to control"): the gun is exactly where the gunner looks. The station's slew
+// SPEED (HardpointDef.TurretSlewRad) is the only physics left, and the CLIENT applies it — as the cap
+// on how fast the look (and so the gun) may turn in a frame. The server never traverses anything: it
+// takes the aim the gunner sent, clamps it into the arc (so a stale or forged aim can never fire
+// through the hull) and fires along it.
 public static class TurretAim
 {
     // Firing arc half-angle around the zenith: a hemisphere plus 15° of depression below the
@@ -31,12 +34,12 @@ public static class TurretAim
     // TurretInputMessage.Flags bits.
     public const byte FlagFiring = 1;
 
-    // Traverse defaults for a station that authors no `slew-deg` / `accel-deg` (projection fills
-    // HardpointDef.TurretSlewRad / TurretAccelRad from these): a light mount that comes round 90° in
-    // about two seconds and reaches full speed in a third of one. The bomber flies these (user steer
-    // 2026-09-13: 150°/s was "too quick" for a bomber). A heavy capital station authors lower numbers.
-    public const double DefaultSlewDeg = 60.0;
-    public const double DefaultAccelDeg = 180.0;
+    // Slew-speed default for a station that authors no `slew-deg` (projection fills
+    // HardpointDef.TurretSlewRad from it): how fast the gunner's look — and so the gun — may turn,
+    // in degrees per second. A light mount comes round 90° in about a second and a third. The bomber
+    // flies this; a heavy capital station authors lower. There is no wind-up: within the cap the aim
+    // is instant.
+    public const double DefaultSlewDeg = 69.0;
 
     // Spread-seed "barrel" for a station: 0x80 | HardpointDef.Index — disjoint from the pilot's
     // barrel indices (< 128), so a turret volley never shares a scatter seed with a hull gun on the
@@ -121,49 +124,6 @@ public static class TurretAim
         float sa = (float)System.Math.Sin(azimuthRad);
         Vec3 horizon = z * ca + x * sa;
         return Normalize(horizon * ce + y * se);
-    }
-
-    // Traverse: swing the gun's CURRENT aim toward the gunner's DESIRED aim under a speed cap and a
-    // wind-up/wind-down acceleration, over `dt` seconds. `rate` is the mount's scalar traverse speed
-    // (rad/s), carried between calls; it ramps up by accel, is capped by slew, and is held below
-    // the speed that could still stop exactly on the target (v² ≤ 2·a·θ), so the gun settles on the
-    // desired aim without overshoot. Both peers run this — the server per sim tick, the gunner's
-    // client per frame — from the same streamed HardpointDef numbers, so the aim the bolts leave on
-    // is the aim the gunner watched the gun reach. A non-positive slew/accel (an unauthored test
-    // def) snaps straight to the desired aim.
-    public static Vec3 Slew(Vec3 current, Vec3 desired, ref float rate, float slewRad, float accelRad, float dt)
-    {
-        current = Normalize(current);
-        desired = Normalize(desired);
-        if (slewRad <= 0f || accelRad <= 0f || dt <= 0f)
-        {
-            rate = 0f;
-            return desired;
-        }
-        float cosT = System.Math.Clamp(Dot(current, desired), -1f, 1f);
-        float theta = (float)System.Math.Acos(cosT);
-        if (theta < 1e-4f)
-        {
-            rate = 0f;
-            return desired;
-        }
-        float stopCap = (float)System.Math.Sqrt(2f * accelRad * theta);
-        float target = System.Math.Min(slewRad, stopCap);
-        rate = System.Math.Min(rate + accelRad * dt, target);
-        float step = System.Math.Min(rate * dt, theta);
-        // Rotate `current` toward `desired` by `step` inside their shared plane. Antiparallel aims
-        // (no plane) pivot through the zenith-free fallback: any perpendicular will do, the arc clamp
-        // downstream keeps the result legal.
-        Vec3 axisDir = desired - current * cosT;
-        if (axisDir.LengthSquared() < 1e-10f)
-            axisDir =
-                System.Math.Abs(current.Y) < 0.9f
-                    ? Cross(current, new Vec3(0f, 1f, 0f))
-                    : Cross(current, new Vec3(1f, 0f, 0f));
-        axisDir = Normalize(axisDir);
-        float c = (float)System.Math.Cos(step);
-        float s = (float)System.Math.Sin(step);
-        return Normalize(current * c + axisDir * s);
     }
 
     // Ship-local aim → (azimuth, elevation) in the station frame — the inverse of FromGimbal for an

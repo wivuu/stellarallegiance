@@ -119,22 +119,18 @@ public static class CoreValidator
                         result.Error(
                             $"hull '{hull.Id}' turret index {hp.Index} authors mount: {hp.Mount} — a turret station is always a gun mount; drop the `mount:` key."
                         );
-                    // Traverse tuning is optional but must be a real speed when authored: a zero
-                    // slew is a gun that can never move, a zero accel one that never starts.
+                    // Slew tuning is optional but must be a real speed when authored: a zero slew is
+                    // a gun the gunner could never turn.
                     if (hp.SlewDeg is double slew && !(slew > 0))
                         result.Error(
                             $"hull '{hull.Id}' turret index {hp.Index} authors slew-deg {slew} — must be > 0 (degrees per second)."
                         );
-                    if (hp.AccelDeg is double accel && !(accel > 0))
-                        result.Error(
-                            $"hull '{hull.Id}' turret index {hp.Index} authors accel-deg {accel} — must be > 0 (degrees per second squared)."
-                        );
                     continue;
                 }
-                // Traverse keys mean nothing off a turret: refuse rather than silently ignore.
-                if (hp.SlewDeg is not null || hp.AccelDeg is not null)
+                // The slew key means nothing off a turret: refuse rather than silently ignore.
+                if (hp.SlewDeg is not null)
                     result.Error(
-                        $"hull '{hull.Id}' hardpoint kind={hp.Kind} index {hp.Index} authors slew-deg/accel-deg — those keys belong on `kind: turret` stations only."
+                        $"hull '{hull.Id}' hardpoint kind={hp.Kind} index {hp.Index} authors slew-deg — that key belongs on `kind: turret` stations only."
                     );
                 if (hp.Kind != RuntimeHardpointKind.Weapon)
                     continue;

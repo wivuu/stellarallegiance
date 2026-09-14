@@ -224,12 +224,13 @@ public partial struct CrewSeatMessage
     public byte SeatIndex;
 }
 
-// 18 bytes. A riding gunner's turret input (v42 crews slice 2): the ship-local DESIRED aim (where
-// the gunner is pulling the gun — the mount traverses toward it under its authored slew/accel,
-// TurretAim.Slew) and the fire flag, sent at input rate while seated on a LAUNCHED ship. Held-input
-// semantics — the server keeps the latest per gunner and fires on its own cadence while Flags
-// carries Firing; the server clamps the aim into the station's arc (TurretAim), so a stale/forged
-// aim can never fire through the hull. Tick is the sender's prediction tick (diagnostics only — turret fire never joins
+// 18 bytes. A riding gunner's turret input (v42 crews slice 2): the ship-local ACTUAL aim — turret
+// aim is CLIENT-AUTHORITATIVE, so this is where the gun IS, not a request the server traverses
+// toward (the client caps its own look at the station's slew SPEED) — and the fire flag, sent at
+// input rate while seated on a LAUNCHED ship. Held-input semantics — the server keeps the latest per
+// gunner and fires on its own cadence while Flags carries Firing; the only thing it does to the aim
+// is clamp it into the station's arc (TurretAim.Clamp), so a stale/forged aim can never fire through
+// the hull. Tick is the sender's prediction tick (diagnostics only — turret fire never joins
 // the deterministic flight step).
 [WireMessage(19)]
 public partial struct TurretInputMessage

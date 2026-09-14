@@ -23,9 +23,10 @@
 #   station a TEAMMATE mans — they claim the seat in the hangar, ride along after launch and aim/fire
 #   the gun from the station (a 105° cone around the mount's outward normal). A station must author
 #   a `weapon-id` naming a GUN and must NOT author `mount:` (it is always a gun mount) — CoreValidator
-#   refuses to boot otherwise. Optional `slew-deg` (traverse speed, °/s) and `accel-deg` (wind-up,
-#   °/s²) give the mount its weight; omitted = a light mount (60 / 180). Author lower on a
-#   capital station so its guns swing like something heavy. Turret guns are EXEMPT from payload-capacity: a crew station is not
+#   refuses to boot otherwise. Turret aim is CLIENT-AUTHORITATIVE (the server only clamps it into the
+#   arc); the optional `slew-deg` is the mount's weight — the cap the gunner's client puts on how
+#   fast their look, and so the gun, may turn (°/s); omitted = a light mount (69). Author lower on a
+#   capital station so its guns come round like something heavy. Turret guns are EXEMPT from payload-capacity: a crew station is not
 #   hold cargo. A mesh HP_Turret node with no YAML entry stays a marker (NoWeapon / non-mountable),
 #   never an armed station.
 #   Mount types: a Weapon hardpoint only accepts its own weapon CATEGORY in the hangar (and the
@@ -358,10 +359,10 @@ hulls:
       - { kind: weapon, index: 1, weapon-id: 12 }   # HP_Weapon_1 (PW AutoCan 1)
       - { kind: weapon, index: 2, weapon-id: 12 }   # HP_Weapon_2 (PW AutoCan 1)
       - { kind: weapon, index: 3, weapon-id: 12 }   # HP_Weapon_3 (PW AutoCan 1)
-      - { kind: turret, index: 0, weapon-id: 12, slew-deg: 45, accel-deg: 120 }   # binds mesh HP_Turret_0 — crew station T1 (PW AutoCan 1); heavy capital mount
-      - { kind: turret, index: 1, weapon-id: 12, slew-deg: 45, accel-deg: 120 }   # binds mesh HP_Turret_1 — crew station T2 (PW AutoCan 1)
-      - { kind: turret, index: 2, weapon-id: 12, slew-deg: 45, accel-deg: 120 }   # binds mesh HP_Turret_2 — crew station T3 (PW AutoCan 1)
-      - { kind: turret, index: 3, weapon-id: 12, slew-deg: 45, accel-deg: 120 }   # binds mesh HP_Turret_3 — crew station T4 (PW AutoCan 1)
+      - { kind: turret, index: 0, weapon-id: 12, slew-deg: 45 }   # binds mesh HP_Turret_0 — crew station T1 (PW AutoCan 1); heavy capital mount
+      - { kind: turret, index: 1, weapon-id: 12, slew-deg: 45 }   # binds mesh HP_Turret_1 — crew station T2 (PW AutoCan 1)
+      - { kind: turret, index: 2, weapon-id: 12, slew-deg: 45 }   # binds mesh HP_Turret_2 — crew station T3 (PW AutoCan 1)
+      - { kind: turret, index: 3, weapon-id: 12, slew-deg: 45 }   # binds mesh HP_Turret_3 — crew station T4 (PW AutoCan 1)
       - { kind: cockpit, off-y: 0.9, off-z: 3.2, dir-z: 1 }
     default-cargo:
       - { item: prox-mine-1, count: 8 }

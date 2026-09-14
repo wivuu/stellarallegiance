@@ -57,15 +57,7 @@ public sealed partial class Simulation
     // HardpointDef.Dir the geometry merge already flipped for a turret node), which is the axis the
     // shared TurretAim arc is measured around — and its TRAVERSE (Slew = speed cap rad/s, Accel =
     // wind-up rad/s², the streamed HardpointDef numbers the gunner's client runs the same rule on).
-    private readonly record struct TurretStation(
-        byte HpIndex,
-        WeaponMountKind Mount,
-        uint WeaponId,
-        Vec3 Off,
-        Vec3 Zenith,
-        float Slew,
-        float Accel
-    );
+    private readonly record struct TurretStation(byte HpIndex, WeaponMountKind Mount, uint WeaponId, Vec3 Off, Vec3 Zenith);
 
     // Per-class turret stations in hardpoint declaration order — the SAME order ClassTurretGuns /
     // AuthoredTurretIds / ShipSim.TurretWeaponIds / CrewShip.Seat*Ids use. Assigned in the ctor
@@ -90,9 +82,7 @@ public sealed partial class Simulation
                             h.Mount,
                             h.WeaponId,
                             new Vec3(h.OffX, h.OffY, h.OffZ),
-                            new Vec3(h.DirX, h.DirY, h.DirZ),
-                            h.TurretSlewRad,
-                            h.TurretAccelRad
+                            new Vec3(h.DirX, h.DirY, h.DirZ)
                         )
                     );
             if (rows is not null)
@@ -443,16 +433,13 @@ public sealed partial class Simulation
         Events.CrewChanged = true;
     }
 
-    // Put one station of a LAUNCHED ship back at rest (aim AND traverse speed — a gun left mid-swing
-    // must not carry that momentum into the next gunner) and flag the ship for this tick's
-    // MsgTurrets. No-op for a crew still in the hangar (no ship, no aim arrays yet).
+    // Put one station of a LAUNCHED ship back at rest and flag the ship for this tick's MsgTurrets.
+    // No-op for a crew still in the hangar (no ship, no aim arrays yet).
     private void RestTurret(ShipSim? ship, int slot)
     {
         if (ship?.TurretAim is not { } aims || slot < 0 || slot >= aims.Length)
             return;
         aims[slot] = TurretAim.Rest(TurretZenithOf(ship.Class, slot));
-        if (ship.TurretRate is { } rates && slot < rates.Length)
-            rates[slot] = 0f;
         ship.TurretDirty = true;
     }
 

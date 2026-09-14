@@ -543,22 +543,15 @@ Check(
     $"bomber turret zeniths wrong ({string.Join(" ", bomberTurrets.Select(DirOf))})"
 );
 
-// Traverse tuning (aim + fire): the bomber leaves it unauthored (TurretAim defaults), the Devastator
-// authors a heavier mount; a non-turret hardpoint always streams 0.
+// Slew tuning (the client-side cap on how fast a gunner's look may turn): the bomber leaves it
+// unauthored (the TurretAim default), the Devastator authors a heavier mount; a non-turret hardpoint
+// always streams 0.
 Check(
-    bomberTurrets.All(h =>
-        Math.Abs(h.TurretSlewRad - (float)(TurretAim.DefaultSlewDeg * Math.PI / 180.0)) < 1e-4f
-        && Math.Abs(h.TurretAccelRad - (float)(TurretAim.DefaultAccelDeg * Math.PI / 180.0)) < 1e-4f
-    )
-        && devastatorTurrets.All(h =>
-            Math.Abs(h.TurretSlewRad - (float)(45.0 * Math.PI / 180.0)) < 1e-4f
-            && Math.Abs(h.TurretAccelRad - (float)(120.0 * Math.PI / 180.0)) < 1e-4f
-        )
-        && bomber
-            .Hardpoints.Where(h => h.Kind != HardpointKind.Turret)
-            .All(h => h.TurretSlewRad == 0f && h.TurretAccelRad == 0f),
-    "turret traverse: bomber stations take the TurretAim defaults, Devastator authors 90°/s + 240°/s², other kinds stream 0",
-    $"turret traverse wrong (bomber {string.Join(",", bomberTurrets.Select(h => $"{h.TurretSlewRad:0.00}/{h.TurretAccelRad:0.00}"))}; devastator {string.Join(",", devastatorTurrets.Select(h => $"{h.TurretSlewRad:0.00}/{h.TurretAccelRad:0.00}"))})"
+    bomberTurrets.All(h => Math.Abs(h.TurretSlewRad - (float)(TurretAim.DefaultSlewDeg * Math.PI / 180.0)) < 1e-4f)
+        && devastatorTurrets.All(h => Math.Abs(h.TurretSlewRad - (float)(45.0 * Math.PI / 180.0)) < 1e-4f)
+        && bomber.Hardpoints.Where(h => h.Kind != HardpointKind.Turret).All(h => h.TurretSlewRad == 0f),
+    $"turret slew: bomber stations take the TurretAim default ({TurretAim.DefaultSlewDeg:0}°/s), Devastator authors 45°/s, other kinds stream 0",
+    $"turret slew wrong (bomber {string.Join(",", bomberTurrets.Select(h => $"{h.TurretSlewRad:0.00}"))}; devastator {string.Join(",", devastatorTurrets.Select(h => $"{h.TurretSlewRad:0.00}"))})"
 );
 Check(
     devastatorTurrets.Count == 4

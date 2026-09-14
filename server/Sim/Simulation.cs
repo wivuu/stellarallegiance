@@ -298,8 +298,9 @@ public sealed partial class Simulation
         public CrewShip? Crew;
 
         // ---- Crew-served turret aim + fire (v42 crews slice 2; Simulation.Firing.TryFireTurrets) ----
-        // TurretAim[slot] = that station's CURRENT ship-local aim (a unit vector already clamped into
-        // the station's arc by the shared TurretAim rule); TurretLastFire[slot] = its OWN cadence
+        // TurretAim[slot] = that station's CURRENT ship-local aim — the aim its gunner sent, clamped
+        // into the station's arc by the shared TurretAim rule (turret aim is client-authoritative:
+        // the server trusts it and never traverses toward it); TurretLastFire[slot] = its OWN cadence
         // stamp, which is also the per-seat stamp MsgTurrets carries. Both are sized to the class's
         // station count at spawn for EVERY hull that authors stations — crewed or not, since a PIG
         // bomber simply never has a gunner holding fire — and seeded to TurretAim.Rest(zenith).
@@ -309,13 +310,6 @@ public sealed partial class Simulation
         // TurretRecord along the streamed aim instead.
         public Vec3[]? TurretAim;
         public uint[]? TurretLastFire;
-
-        // TurretRate[slot] = that station's CURRENT scalar traverse speed (rad/s) — the state the
-        // shared TurretAim.Slew rule carries between ticks so a heavy mount winds up, runs at its
-        // authored speed cap and settles exactly on the gunner's desired aim instead of snapping to
-        // it. Allocated beside TurretAim; zeroed whenever the station stops being driven (vacated,
-        // unmanned, or a gunner holding nothing).
-        public float[]? TurretRate;
         public uint LastTurretFireTick;
 
         // "This ship's turret state changed this tick" — an aim that moved, a station that fired, a
@@ -1540,7 +1534,6 @@ public sealed partial class Simulation
         {
             s.TurretAim = new Vec3[stations];
             s.TurretLastFire = new uint[stations];
-            s.TurretRate = new float[stations]; // every station starts stopped
             for (int i = 0; i < stations; i++)
                 s.TurretAim[i] = TurretAim.Rest(TurretZenithOf(cls, i));
         }

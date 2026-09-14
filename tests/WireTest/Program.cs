@@ -114,7 +114,7 @@ var sizePins = new (string, int, int)[]
     ("AlephStatic", AlephStatic.Size, 28),
     ("DustCloudWire", DustCloudWire.Size, 20),
     ("SunEnvWire", SunEnvWire.Size, 40),
-    ("HardpointDef", HardpointDef.Size, 39),
+    ("HardpointDef", HardpointDef.Size, 35),
     ("CargoLoadDef", CargoLoadDef.Size, 5),
     ("AttrMod", AttrMod.Size, 5),
     ("WorldConfigWire", WorldConfigWire.Size, 12),
@@ -2607,7 +2607,7 @@ static class Goldens
         ["Hello.hex"] = "010173016E017401006A",
         ["Welcome.sha"] = "7F14443FC9C31349AEB7EE1FAD7EC40374C31124D7580A03B1D32FC3A8F10C01",
         ["Snapshot.sha"] = "9B98F4552A954612681978B6D6BDA9B94B28B5F877F90AA700F041A383E99F6F",
-        ["Defs.sha"] = "D603A4011822BBF38811BF19D016FDA8B8BA2B18DA74455770052917DDF80026",
+        ["Defs.sha"] = "A7940A383CCD58689BE6010896C05BF4A1BE968E64F80B9D4B6D4F8A8C645E7F",
         ["TeamState.sha"] = "25235899FBC33C1A257D7B77EAEAE952505462B4646ECB87A97839F338E447AE",
         ["MapList.sha"] = "F769D835423E744FA13F3CDC7D3D9EC75F04237A3D22D015A5C95724EB7986E1",
         ["LobbyState.sha"] = "4B0A27B18C1D18069B72B844B39215B352BFA8041C7EEA6285A0E88AA87ADA0B", // team rows (MsgLobbyState)
