@@ -20,14 +20,16 @@ using static StellarAllegiance.Shared.Vec3;
 // up stays continuous — rather than as a clamp on an angle, which is what used to make the horizon
 // jump at the edge.
 //
-// This basis IS the gun camera (user steer 2026-09-13: the turret cam is "a free-look camera,
-// constrained only by its position on the ship, the ship's orientation and its arc fence, but not
-// other physics of the turret"). The mount traverses toward its forward under TurretAim.Slew on its
-// own time; that lag is shown by the aim reticle trailing the view's centre, never by the camera.
+// This basis IS the gun camera AND the gun (user steer 2026-09-13: the turret cam is "a free-look
+// camera, constrained only by its position on the ship, the ship's orientation and its arc fence, but
+// not other physics of the turret"). Its forward is the gun's aim itself — where the bolts leave and
+// where the one reticle sits — so nothing trails anything. The only brake is the per-frame turn cap the
+// CALLER applies (TurretController.SampleAim scales the mouse delta down to the station's slew speed)
+// before handing the turn to Yaw/Pitch; this class just turns the basis it is told to.
 //
-// Axes are the columns of a right-handed basis in the hull's frame: Z = forward (the gunner's DESIRED
-// aim), Y = up, X = Y × Z. Note that the hull's forward is +Z, so X points to the viewer's LEFT — the
-// same convention CameraRig's FaceForward exists to undo — which is why the caller yaws by MINUS the
+// Axes are the columns of a right-handed basis in the hull's frame: Z = forward (the aim), Y = up,
+// X = Y × Z. Note that the hull's forward is +Z, so X points to the viewer's LEFT — the same
+// convention CameraRig's FaceForward exists to undo — which is why the caller yaws by MINUS the
 // mouse's X.
 public sealed class TurretLook
 {

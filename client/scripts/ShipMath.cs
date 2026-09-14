@@ -24,7 +24,7 @@ public static class ShipMath
     public static Vector3 ToGodot(Vec3 v) => new Vector3(v.X, v.Y, v.Z);
 
     // The other direction, for the seams that hand a Godot-space direction back to a SHARED rule
-    // (TurretAim.Slew, FlightModel.SpreadDirection): both spaces are the same right-handed axes, so
+    // (TurretAim.Clamp, FlightModel.SpreadDirection): both spaces are the same right-handed axes, so
     // this is a pure re-type, never a conversion.
     public static Vec3 ToShared(Vector3 v) => new Vec3(v.X, v.Y, v.Z);
 

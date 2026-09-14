@@ -10,8 +10,8 @@ using StellarAllegiance.Shared;
 // is the gun ready. Resolving that ONCE here is what keeps the answers identical.
 //
 // For a gunner the numbers come off the RIDDEN hull (its interpolated pose, its snapshot row, its
-// class def) and the SEAT's gun, and the firing line is the turret's ACTUAL (traversed) aim — never
-// the sight the mouse has dragged ahead of it, which is not where the bolts go.
+// class def) and the SEAT's gun, and the firing line is the turret's aim — which is the gunner's look
+// itself (TurretController.Aim), so the reticle lands on the centre of their view.
 //
 // `Pilot` is non-null ONLY in the pilot's seat. The own-hull-only extras (fuel pods, the cargo hold,
 // missile ammo/lock, the autopilot) hang off it, so an overlay that needs one gates on it rather than
@@ -33,7 +33,7 @@ public readonly record struct HudSubject
     public Vector3 Origin { get; init; }
     public Vector3 Muzzle { get; init; }
 
-    // The firing line: the pilot's nose, or the gunner's ACTUAL turret aim.
+    // The firing line: the pilot's nose, or the gunner's turret aim.
     public Vector3 Fwd { get; init; }
     public Vector3 Velocity { get; init; }
 

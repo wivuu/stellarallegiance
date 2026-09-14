@@ -406,7 +406,7 @@ public partial class CameraRig : Camera3D
     private const float GunInsideUp = 0.2f;
 
     // The turret's eye: over the gunner's own mount, looking where THEY look with THEIR up — a free
-    // look, not a gun cam bolted to the traversing mount (the gun's lag is the reticle's business).
+    // look, and since the look IS the gun's aim the reticle sits dead centre in it.
     // The whole look basis arrives ship-local from TurretController (that is what the wire speaks),
     // so it is rotated into world space through the ridden hull's live pose — the camera then
     // inherits the captain's manoeuvres for free, exactly as a seat welded to the hull would. No
@@ -414,7 +414,7 @@ public partial class CameraRig : Camera3D
     // gunner's own, and both are what made the view spin as the aim neared the mount's pole.
     private Transform3D GunCamPose(Transform3D ship, float scale)
     {
-        Basis look = ship.Basis * TurretController.CamBasis; // Z = the DESIRED look, Y = the gunner's up
+        Basis look = ship.Basis * TurretController.CamBasis; // Z = the look (= the aim), Y = the gunner's up
         Vector3 aim = look.Z.Normalized();
         Vector3 up = look.Y.Normalized();
         Vector3 zenith = (ship.Basis * TurretController.Zenith).Normalized();

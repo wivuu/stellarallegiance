@@ -18,9 +18,9 @@ using Kind = StellarAllegiance.Ui.MarkerDraw.Kind;
 //
 // A crew GUNNER gets the same overlay (v42 crews slice 2b): riding a captain's turret they have no
 // hull, but they do have a firing line, so the brackets, the Tab cycle, the lead circle AND the aim
-// reticle all solve from the STATION — muzzle at the mount, direction the turret's actual (traversed)
-// aim, inherited velocity the captain's. That resolution lives in HudSubject, shared with the rest of
-// the centre-screen HUD; nothing here knows which seat it is drawing for.
+// reticle all solve from the STATION — muzzle at the mount, direction the turret's aim (which is the
+// gunner's look itself), inherited velocity the captain's. That resolution lives in HudSubject, shared
+// with the rest of the centre-screen HUD; nothing here knows which seat it is drawing for.
 //
 // Tab cycles the FOCUS through the enemies: it locks whatever enemy is nearest the aim
 // reticle (the real firing line, which the chase camera offsets away from screen center),

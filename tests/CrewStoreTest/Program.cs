@@ -278,19 +278,22 @@ Check(TurretStations.AimDeltaRad(10f, 0f) == 0f, "a zero sensitivity moves the g
     var free = TurretLook.Seed(zenith);
     Check(!free.ClampToArc(zenith), "ClampToArc reports false (and changes nothing) inside the arc");
 
-    // The look basis IS the camera: a mouse turn changes it immediately and completely (no traverse
-    // in the camera path — the gun lags on its own, the view never does).
+    // The look basis IS the gun AND the camera: a mouse turn moves the aim immediately and completely,
+    // with nothing left over to catch up (the whole turn cap lives in the caller, on the mouse delta).
     var sight = TurretLook.Seed(zenith);
     Vec3 before = sight.Z;
     sight.Yaw(0.6f);
     sight.Pitch(-0.4f);
     Check(AngleBetween(before, sight.Z) > 0.5f, "a yaw+pitch moves the look's forward the full amount at once");
-    float rate = 0f;
-    Vec3 actual = TurretAim.Slew(TurretAim.Rest(zenith), sight.Z, ref rate, 2f, 6f, 0.05f);
-    Check(
-        AngleBetween(actual, sight.Z) > 0.1f,
-        "the gun's traversed aim still lags the look on the same frame (the reticle, not the camera, shows it)"
-    );
+    // The same turn applied in one step and in two halves lands on the same aim — there is no rate
+    // carried between frames that a split could wind up differently.
+    var halves = TurretLook.Seed(zenith);
+    halves.Yaw(0.3f);
+    halves.Yaw(0.3f);
+    halves.Pitch(-0.2f);
+    halves.Pitch(-0.2f);
+    Check(AngleBetween(halves.Z, sight.Z) < 1e-3f, "the aim is the look, not a state that winds up between frames");
+    Check(Orthonormality(sight) < 1e-4f, "the aimed basis is still orthonormal");
 }
 
 Console.WriteLine(failures == 0 ? "ALL PASS" : $"{failures} FAILURE(S)");
