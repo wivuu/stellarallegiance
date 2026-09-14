@@ -14,6 +14,8 @@ namespace SimServer.Sim;
 // The five rules that shape everything here:
 //   - Boarding is DOCKED-ONLY. A crew record's Ship is null while the captain is in the hangar and
 //     becomes the live ship at launch; a non-null Ship is exactly "no longer joinable".
+//   - A captain who LEAVES hands the launched hull to their lowest-slot gunner (TryPromoteGunner);
+//     only a crew with nobody aboard dies with them.
 //   - Dock AND death both DISSOLVE the crew (everyone back to the hangar, intent cleared). The
 //     release therefore hangs off ShipSim.Crew, never off _byClient — a pod ejection swaps
 //     _byClient[captain] to the pod, and reclaim renames the captain's client id.
@@ -444,7 +446,8 @@ public sealed partial class Simulation
     }
 
     // Everything this client is part of: the crew they captain (dissolved, its gunners freed) AND
-    // the seat they hold. The one call a leave / team change / stale-class launch makes.
+    // the seat they hold. The one call a team change / stale-class launch makes. A LEAVE takes the
+    // two halves separately — its crew only dissolves when no gunner is there to be promoted.
     public void ClearCrewOf(int clientId, string? gunnerNotice = "The crew you were on was dissolved.")
     {
         DissolveCrewCaptainedBy(clientId, gunnerNotice);
@@ -558,6 +561,79 @@ public sealed partial class Simulation
                 Events.PilotNotices.Add((g, gunnerNotice));
         }
         Events.CrewChanged = true;
+    }
+
+    // ---- succession: the captain is gone, a gunner takes the ship ---------------------------
+
+    // A LAUNCHED crewed hull OUTLIVES its captain. When the captain's connection ends for good —
+    // the clean leave drain (MsgBye) or a held orphan whose reconnect grace expired — the seated
+    // gunner in the LOWEST station slot is PROMOTED and flies the hull on; every other gunner stays
+    // in their station. Returns true when the ship was taken over, in which case the caller must
+    // NEITHER remove the ship NOR dissolve the crew.
+    //
+    // The caller's contract (the one the reclaim branch already keeps): the OLD client id has been
+    // removed from _byClient before this runs, and is dropped from _clientInfo/_clientRespawn right
+    // after. Nothing is scored — no ShipGone, no EJ, no D — and MigrateStats is deliberately NOT
+    // called: the new captain keeps their own scoreboard row.
+    //
+    // Returns false (ship removed, crew dissolved, as before) for a captain with no launched ship,
+    // for a pod (a death already ejected the gunners), and for an empty crew.
+    private bool TryPromoteGunner(ShipSim ship, int oldCaptainId)
+    {
+        if (ship.Crew is not { } crew)
+            return false;
+        int slot = -1;
+        for (int i = 0; i < crew.SeatGunnerIds.Length; i++)
+            if (crew.SeatGunnerIds[i] != NoGunner)
+            {
+                slot = i;
+                break;
+            }
+        if (slot < 0)
+            return false; // nobody aboard
+        int g = crew.SeatGunnerIds[slot];
+        // The same invariant EjectCrewPods states: a seated gunner owns no ship and is never
+        // mid-respawn (DrainCrewQueues refuses the claim in both states, and a gunner's own MsgSpawn
+        // vacates the seat first). Defensive too — promoting over a hull this client already flies
+        // would strand that hull ownerless.
+        System.Diagnostics.Debug.Assert(
+            !_byClient.ContainsKey(g) && !_clientRespawn.ContainsKey(g),
+            "a seated gunner must own no ship and have no pending respawn"
+        );
+        if (_byClient.ContainsKey(g) || _clientRespawn.ContainsKey(g))
+            return false;
+
+        // Out of the station, into the pilot's seat: the vacate takes their held turret aim/fire and
+        // their _seatOf entry with it (so RidingShipIdOf(g) goes back to 0) and rests the gun.
+        VacateSeat(g, null);
+
+        // Rebind exactly as the reconnect reclaim does — the old id is already out of _byClient.
+        ship.OwnerClientId = g;
+        _byClient[g] = ship; // ShipIdOf(g) now answers it, so the hub re-issues a reliable MsgYouAre
+        // Nothing of the old captain's flying survives the hand-over: no held thrust or trigger, and
+        // no future-stamped frame left in the ring to be replayed at its tick.
+        ship.HeldInput = default;
+        System.Array.Clear(ship.InputRingTick, 0, ship.InputRingTick.Length);
+
+        // The record follows the ship the way a reclaim renames it: only the KEY changes, so the
+        // remaining gunners' _seatOf entries still point at the very same record.
+        _crewByCaptain.Remove(oldCaptainId);
+        crew.CaptainClientId = g;
+        _crewByCaptain[g] = crew;
+
+        // The remembered join slot now describes the hull they fly, so both readers stay coherent:
+        // TeamOfClient (Simulation.Scoring.cs) resolves a leaver's team, and ProcessRespawns
+        // re-creates this hull if their pod dies and they ask to relaunch.
+        if (_clientInfo.TryGetValue(oldCaptainId, out var info))
+            _clientInfo[g] = info;
+
+        Events.PilotNotices.Add((g, "Your captain left — you have the ship."));
+        string seatId = $"T{slot + 1}"; // CrewStore.SeatId convention
+        foreach (int other in crew.SeatGunnerIds)
+            if (other != NoGunner)
+                Events.PilotNotices.Add((other, $"Your captain left — {seatId} has the ship."));
+        Events.CrewChanged = true;
+        return true;
     }
 
     // Match teardown / restart: no crew survives a phase flip (the ships don't either).

@@ -1191,9 +1191,17 @@ public sealed partial class Simulation
             while (_leaveQueue.Count > 0)
             {
                 int cid = _leaveQueue.Dequeue();
-                ClearCrewOf(cid); // dissolves the crew they captained AND frees the seat they held
-                if (_byClient.Remove(cid, out var ship))
-                    RemoveShipNow(ship);
+                VacateSeat(cid, null); // a station they manned as a GUNNER is always freed
+                _byClient.Remove(cid, out var ship);
+                // A launched crewed hull outlives its captain: the lowest-slot gunner is promoted
+                // and flies it on, the rest stay seated (Simulation.Crew.cs). Only when nobody is
+                // aboard does the ship leave the world and the crew they captained dissolve.
+                if (ship is null || !TryPromoteGunner(ship, cid))
+                {
+                    DissolveCrewCaptainedBy(cid);
+                    if (ship is not null)
+                        RemoveShipNow(ship);
+                }
                 _clientInfo.Remove(cid);
                 _clientRespawn.Remove(cid);
             }
@@ -2847,7 +2855,10 @@ public sealed partial class Simulation
         {
             var orphan = _heldOrphans[token];
             _heldOrphans.Remove(token);
-            if (_byClient.Remove(orphan.oldClientId, out var ship))
+            // As with a clean leave, a crewed hull whose captain never came back is HANDED OVER to
+            // its lowest-slot gunner instead of removed (Simulation.Crew.cs). A reclaim inside the
+            // window still wins — this only runs once the grace has run out.
+            if (_byClient.Remove(orphan.oldClientId, out var ship) && !TryPromoteGunner(ship, orphan.oldClientId))
                 RemoveShipNow(ship);
             _clientInfo.Remove(orphan.oldClientId);
             _clientRespawn.Remove(orphan.oldClientId);

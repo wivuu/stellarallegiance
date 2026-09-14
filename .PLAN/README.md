@@ -89,7 +89,9 @@ YAML, so it lands in the existing seams without rework.
     client in range sees the aim (procedural barrel) and the bolts via `MsgTurrets`. Shared rule:
     `shared/TurretAim.cs`. Follow-up (same day): Tab targeting + lead indicator for gunners, gun cam
     = pure free look (`TurretLook`, arc fence only), gunners eject into pods on the captain's death,
-    a clean dock keeps the crew seated (joinable again while docked). Aim made CLIENT-AUTHORITATIVE
+    a clean dock keeps the crew seated (joinable again while docked), and a captain who LEAVES (or
+    whose reconnect grace expires) hands the launched hull to the lowest-slot gunner rather than
+    taking it with them (`Simulation.TryPromoteGunner`). Aim made CLIENT-AUTHORITATIVE
     2026-09-13 (the traversing gun was "very laggy and difficult to control"): `MsgTurretInput`
     carries the ACTUAL aim, the server only arc-clamps it, and the per-station `slew-deg` is now just
     the client's cap on how fast the look/gun may turn (default 69°/s, Devastator 45; no wind-up).

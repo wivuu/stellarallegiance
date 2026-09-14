@@ -77,6 +77,10 @@ public static class HubFrames
 
     public static byte[] SetReady(bool ready) => new SetReadyMessage { Ready = ready }.ToBytes();
 
+    // A voluntary leave. The hub only marks the client as Leaving here; the ship is freed when the
+    // transport then closes (cancel the connection's token), instead of being parked for the grace.
+    public static byte[] Bye() => new ByeMessage().ToBytes();
+
     // A bare spawn: hull default cargo, authored loadout, server default launch base.
     public static byte[] Spawn(byte shipClass, ulong launchBaseId = 0) =>
         new SpawnMessage
