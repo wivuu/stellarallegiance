@@ -7,6 +7,7 @@ The live roadmap: what is shipped (one line each, with a pointer to the real doc
 **Next to incorporate into the plan**
 - Distribution e.g. https://github.com/velopack/velopack
   - https://github.com/velopack/velopack/tree/develop/samples/CSharpUnityMono
+- Nebula looks different for the same sector on two different clients
 
 **What else lives in `.PLAN/`**
 
