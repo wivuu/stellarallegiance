@@ -51,6 +51,11 @@
 //       a same-class relaunch re-binds them, a station-less intent vacates them.
 //   19. Hub level: what the gunner's client is told on a dock (MsgCrew ShipId 0, no YouAre) and on
 //       the captain's death (a MsgYouAre naming its own pod).
+//   20. Succession: a departed captain's LAUNCHED hull is handed to the lowest-slot gunner (leave
+//       drain and orphan expiry alike) — same ship, no death, the other gunners stay seated; with
+//       nobody aboard, or with no ship at all, it dissolves exactly as before.
+//   21. Hub level: the promoted gunner gets a MsgYouAre naming the crewed ship and a MsgCrew that
+//       names it captain.
 
 using System.Linq;
 using SimServer.Content;
@@ -1595,6 +1600,247 @@ void TurretIn(Simulation sim, int gunner, Vec3 aim, bool firing) =>
     );
 
     cts.Cancel();
+}
+
+// ---- 20. Succession: a departed captain's ship goes to its lowest-slot gunner --------------------
+{
+    // Whether the crew record moved to a new captain, as the wire shows it (Frames.Crew is the same
+    // roster the gunners' clients read).
+    (int CaptainId, ulong ShipId, int[] Gunners)? RosterRow(Simulation s, byte team)
+    {
+        var rows = Frames.Crew(s, team).Ships;
+        return rows.Length == 0
+            ? null
+            : (rows[0].CaptainId, rows[0].ShipId, rows[0].Seats.Select(x => x.GunnerId).ToArray());
+    }
+    bool Noticed(Simulation s, int cid, string text) => s.Events.PilotNotices.Any(n => n.ClientId == cid && n.Text == text);
+
+    // 20a. Two gunners aboard a LAUNCHED bomber, and the captain sends MsgBye.
+    var sim = BootSim(20);
+    Intent(sim, 1, 0, Bomber);
+    Seat(sim, 2, 0, 1, 1, 0); // T1 (slot 0)
+    Seat(sim, 3, 0, 1, 1, 1); // T2 (slot 1)
+    var ship = Launch(sim, 1, 0, Bomber);
+    ship.HeldInput.Thrust = 1f; // the departing captain's last order — it must NOT carry over
+    ship.HeldInput.Firing = true;
+    Check(
+        sim.RidingShipIdOf(2) == ship.ShipId && sim.RidingShipIdOf(3) == ship.ShipId,
+        "premise: two gunners ride the launched bomber",
+        "the two-gunner launch premise failed"
+    );
+
+    ulong shipId = ship.ShipId;
+    sim.EnqueueLeave(1);
+    sim.Step();
+
+    Check(
+        sim.Ships.Contains(ship) && ship.ShipId == shipId && sim.ShipIdOf(2) == shipId,
+        "a captain's leave PROMOTES the lowest-slot gunner — the SAME ship is now theirs",
+        $"the crewed ship didn't survive its captain's leave (ShipIdOf(T1)={sim.ShipIdOf(2)}, ship={shipId})"
+    );
+    Check(
+        sim.RidingShipIdOf(2) == 0 && SeatsOf(sim, 2).Count == 0,
+        "...the promoted gunner's station is vacated (it rides nothing — it FLIES)",
+        "the promoted gunner is still listed in a turret station"
+    );
+    Check(
+        SeatsOf(sim, 3).SequenceEqual(new[] { (2, 1) }) && sim.RidingShipIdOf(3) == shipId,
+        "...the OTHER gunner stays in its station, riding the same hull under the new captain",
+        "the promotion threw the second gunner out of its turret"
+    );
+    Check(
+        CrewOf(sim, 1) is null && CrewOf(sim, 2) is { ClassId: Bomber } c20 && c20.Ship == ship,
+        "...the crew record is re-keyed onto the new captain, still flying the same ship",
+        "the crew record didn't follow the promotion"
+    );
+    Check(
+        RosterRow(sim, 0) is { CaptainId: 2, ShipId: var rid } && rid == shipId,
+        $"...and the streamed roster names the new captain on the live ship",
+        $"the roster row after the promotion is {RosterRow(sim, 0)}"
+    );
+    Check(
+        !sim.Events.Deaths.Any(d => d.id == shipId),
+        "...no ShipGone is emitted (the hull never left the world)",
+        "the promotion emitted a death event for the ship"
+    );
+    Check(sim.Events.CrewChanged, "...Events.CrewChanged is raised", "the promotion never flagged the crew stream");
+    Check(
+        ship.HeldInput.Thrust == 0f && !ship.HeldInput.Firing && ship.OwnerClientId == 2,
+        "...and the hull drops the old captain's held thrust/fire",
+        $"the promoted hull kept held input (thrust={ship.HeldInput.Thrust}, firing={ship.HeldInput.Firing})"
+    );
+    Check(
+        Noticed(sim, 2, "Your captain left — you have the ship."),
+        "the promoted gunner is told it has the ship",
+        "the promoted gunner got no notice"
+    );
+    Check(
+        Noticed(sim, 3, "Your captain left — T1 has the ship."),
+        "...and the remaining gunner is told which station took it (T1)",
+        "the remaining gunner got no succession notice"
+    );
+
+    // 20b. Nobody aboard: the launched ship still goes, exactly as before.
+    var empty = BootSim(202);
+    Intent(empty, 1, 0, Bomber);
+    var lone = Launch(empty, 1, 0, Bomber);
+    empty.EnqueueLeave(1);
+    empty.Step();
+    Check(
+        !empty.Ships.Contains(lone) && CrewOf(empty, 1) is null && empty.ShipIdOf(1) == 0,
+        "a captain with NO seated gunner still takes the ship with them",
+        "an unmanned crewed hull survived its captain's leave"
+    );
+
+    // 20c. A crew that never launched has no ship to hand over — it dissolves (as 9c asserts too).
+    var docked = BootSim(203);
+    Intent(docked, 1, 0, Bomber);
+    Seat(docked, 2, 0, 1, 1, 0);
+    docked.EnqueueLeave(1);
+    docked.Step();
+    Check(
+        CrewOf(docked, 1) is null && !docked.CrewShips.Any() && docked.ShipIdOf(2) == 0 && SeatsOf(docked, 2).Count == 0,
+        "a DOCKED captain's leave dissolves the crew — there is no ship to promote anyone onto",
+        "a hangar-only crew was promoted instead of dissolved"
+    );
+
+    // 20d. The orphan path: a dropped captain whose 5 s reconnect grace runs out.
+    var orphan = BootSim(204);
+    Intent(orphan, 1, 0, Bomber);
+    Seat(orphan, 2, 0, 1, 1, 0);
+    Seat(orphan, 3, 0, 1, 1, 1);
+    var held = Launch(orphan, 1, 0, Bomber);
+    held.SectorId = EmptySector; // boundless + empty: it can coast out the grace window undisturbed
+    held.State.Pos = default;
+    held.State.Vel = default;
+    ulong heldId = held.ShipId;
+    orphan.EnqueueDetach(1, "tok");
+    orphan.Step();
+    Check(
+        orphan.Ships.Contains(held) && orphan.ShipIdOf(2) == 0 && orphan.RidingShipIdOf(2) == heldId,
+        "premise: during the grace window the hull coasts on with its gunners aboard",
+        "the detached crewed hull didn't survive its first tick"
+    );
+    for (int i = 0; i < 200; i++) // well past GraceTicks (5 s @ 20 Hz)
+        orphan.Step();
+    Check(
+        orphan.Ships.Contains(held) && orphan.ShipIdOf(2) == heldId && orphan.RidingShipIdOf(2) == 0,
+        "an expired reconnect grace promotes the lowest-slot gunner instead of reaping the ship",
+        $"the orphan expiry left ShipIdOf(T1)={orphan.ShipIdOf(2)}, expected {heldId}"
+    );
+    Check(
+        CrewOf(orphan, 1) is null && CrewOf(orphan, 2) is not null && SeatsOf(orphan, 3).SequenceEqual(new[] { (2, 1) }),
+        "...with the record re-keyed and the second gunner still seated",
+        "the orphan promotion lost the crew record or the second gunner"
+    );
+}
+
+// ---- 21. Hub level: the promoted gunner is told it owns the ship ---------------------------------
+{
+    var content = ContentLoader.Load(stockPath, worldPath);
+    content.Start.BaseTechs.Add("supremacy-1");
+    content.Start.BaseTechs.Add("bomber");
+    var world = new World(21, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
+    var sim = new Simulation(world, content)
+    {
+        PigsEnabled = false,
+        MinersEnabled = false,
+        FogEnabled = false,
+    };
+    var hub = new ClientHub(
+        sim,
+        new SimServer.Backend.OpenAuthenticator(),
+        new SimServer.Backend.InMemoryPlayerDirectory(),
+        new SimServer.Backend.ReadyUpMatchmaker(autoStart: false),
+        "Test Arena",
+        Array.Empty<MapCatalogEntry>()
+    );
+    sim.ShouldStartMatch = hub.ShouldStartMatch;
+    sim.OnReturnToLobby = hub.OnReturnToLobby;
+    sim.OnMatchStart = hub.OnMatchStart;
+
+    var capT = new FakeHubTransport();
+    var gunT = new FakeHubTransport();
+    var capCts = new System.Threading.CancellationTokenSource();
+    var gunCts = new System.Threading.CancellationTokenSource();
+    _ = hub.HandleConnection(capT, capCts.Token);
+    System.Threading.Thread.Sleep(50);
+    _ = hub.HandleConnection(gunT, gunCts.Token);
+    System.Threading.Thread.Sleep(50);
+
+    void Pump(int n)
+    {
+        for (int i = 0; i < n; i++)
+        {
+            sim.Step();
+            hub.AfterStep();
+        }
+        System.Threading.Thread.Sleep(60);
+    }
+    void Feed(FakeHubTransport t, byte[] frame)
+    {
+        t.Feed(frame);
+        System.Threading.Thread.Sleep(50);
+    }
+
+    Feed(capT, HubFrames.Hello("vex"));
+    Feed(gunT, HubFrames.Hello("nova"));
+    foreach (var t in new[] { capT, gunT })
+    {
+        Feed(t, HubFrames.SetTeam(0));
+        Feed(t, HubFrames.SetReady(true));
+    }
+    Pump(20);
+    foreach (var ts in sim.World.TeamStates.Values)
+        ts.Credits += 100000;
+
+    int IdOf(FakeHubTransport t) => WelcomeMessage.TryParse(t.SentOf(Protocol.MsgWelcome)[0], out var w) ? w.ClientId : -1;
+    int capId = IdOf(capT);
+    int gunId = IdOf(gunT);
+
+    Feed(capT, HubFrames.HangarIntent(Bomber));
+    Pump(10);
+    Feed(gunT, HubFrames.CrewSeat(1, capId, 0));
+    Pump(10);
+    Feed(capT, HubFrames.Spawn(Bomber));
+    Pump(20);
+
+    var captainShip = sim.Ships.FirstOrDefault(s => s.OwnerClientId == capId && !s.IsPod);
+    Check(
+        captainShip is { Crew: not null } && gunT.SentOf(Protocol.MsgYouAre).Count == 0,
+        "premise: the captain launched a crewed bomber and the riding gunner owns nothing yet",
+        "the hub setup for the succession test failed"
+    );
+
+    // The captain says goodbye and drops: a clean leave (MsgBye), so no reconnect grace.
+    ulong shipId = captainShip!.ShipId;
+    Feed(capT, HubFrames.Bye());
+    capCts.Cancel();
+    System.Threading.Thread.Sleep(100);
+    Pump(20);
+
+    var youAre = gunT.SentOf(Protocol.MsgYouAre);
+    ulong told = youAre.Count > 0 && YouAreMessage.TryParse(youAre[^1], out var ya) ? ya.ShipId : 0UL;
+    Check(
+        told == shipId && sim.Ships.Any(s => s.ShipId == shipId),
+        "after the captain leaves, the gunner's client is sent a MsgYouAre naming the crewed ship",
+        $"the gunner was told ship {told}, the crewed hull is {shipId}"
+    );
+    var rosters = gunT.SentOf(Protocol.MsgCrew);
+    bool nowCaptain =
+        rosters.Count > 0
+        && CrewMessage.TryParse(rosters[^1], out var m21)
+        && m21.Ships.Length == 1
+        && m21.Ships[0].CaptainId == gunId
+        && m21.Ships[0].ShipId == shipId
+        && m21.Ships[0].Seats.All(s => s.GunnerId != gunId);
+    Check(
+        nowCaptain,
+        "...and its next MsgCrew names it CAPTAIN of that ship, in no station",
+        "the post-succession roster never made the gunner captain"
+    );
+
+    gunCts.Cancel();
 }
 
 Console.WriteLine(failures == 0 ? "ALL CREW TESTS PASSED" : $"{failures} CREW TEST(S) FAILED");
