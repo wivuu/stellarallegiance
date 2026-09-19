@@ -2,7 +2,11 @@
 #Requires -Version 7.3
 #
 # export-clients.ps1 — export the Godot client for macOS + Windows + Linux and
-# package them for tester distribution.
+# package them as plain zips for a quick hand-off to a tester.
+#
+# NOT the release path: releases are Velopack packages (Game Launcher + client, installer +
+# auto-update) built by scripts/package-clients.ps1 — see docs/RELEASING.md. A zip made here
+# has no launcher, so it never updates itself.
 #
 # macOS gotcha: Godot's built-in macOS signing always enables the *hardened
 # runtime* (codesign flags 0x10002). That's only meaningful once you notarize;
@@ -32,7 +36,8 @@ New-Item -ItemType Directory -Force -Path "$Out/mac", "$Out/win", "$Out/linux" |
 # Make sure GLB import sidecars exist before exporting — un-imported assets export "successfully"
 # but silently fall back to procedural placeholders at runtime. No-op when already imported.
 & "$RepoRoot/tools/godot-import.ps1"
-if (-not (Test-Path -LiteralPath "$Client/assets/bases/base.glb.import")) {
+# (garrison.glb is the assets-dir sentinel — the same file release.yml and package-clients.ps1 check.)
+if (-not (Test-Path -LiteralPath "$Client/assets/bases/garrison.glb.import")) {
     [Console]::Error.WriteLine("[export] ERROR: GLB import sidecars missing — export would ship placeholder meshes")
     exit 1
 }

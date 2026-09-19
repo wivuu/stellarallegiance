@@ -1,16 +1,34 @@
 name: Release
 
-# Pushing a version tag (e.g. v1.2.3) builds the Godot client for all three desktop platforms,
-# publishes the native sim-server image to GHCR, and attaches the client zips to a GitHub Release.
-# Version = tag minus the leading "v". Tags containing "-" (e.g. v1.2.0-rc1) publish as a
-# pre-release and do NOT move the :latest image tag.
+# Pushing a version tag (e.g. v1.2.3) builds one Velopack package per desktop OS — the Game Launcher plus
+# the Godot client, as an installer, a self-updating portable zip and the update feed (full + delta
+# packages) — publishes the native sim-server image to GHCR, and attaches everything to a GitHub Release.
+# Installed clients update themselves from that release (launcher/, docs/RELEASING.md).
+#
+# Version = tag minus the leading "v". Tags containing "-" publish as a PRE-RELEASE: they do NOT move the
+# :latest image tag and are only offered to players who switched the launcher to the BETA channel.
+# Pre-release labels must be DOTTED (v1.2.0-rc.1, not -rc1): SemVer compares "rc10" < "rc2" as text.
+#
+#   prepare ──► package (linux | macos | windows) ──┐
+#           └─► server-image ───────────────────────┴─► publish
+#
+# Nothing becomes visible until `publish`: the release stays a draft while the three OS jobs run, and only
+# one job (publish) ever holds `contents: write` for longer than it takes to create that draft.
 on:
   push:
     tags:
       - 'v*'
 
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   GODOT_VERSION: 4.7.0
+  REPO_URL: https://github.com/${{ github.repository }}
   DOTNET_NOLOGO: true
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
@@ -20,51 +38,91 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------------------------
-  # Godot client — Linux / macOS / Windows. Mirrors build-godot-client.yml's proven setup, then
-  # packages release-named zips (macOS re-signed ad-hoc per scripts/export-clients.ps1).
+  # Version, release notes and the DRAFT release. Creating the draft here (once) is what lets the
+  # three uploads in `publish` merge into it instead of racing to create it.
   # ---------------------------------------------------------------------------------------------
-  client:
-    name: Client (${{ matrix.name }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Linux
-            os: ubuntu-latest
-            preset: Linux
-            platform: linux
-            output_path: build/linux/stellarallegiance.x86_64
-          - name: macOS
-            os: macos-latest
-            preset: macOS
-            platform: macos
-            output_path: "build/mac/Stellar Allegiance.app" # the .app file name is what the Dock and Cmd+Tab show
-          - name: Windows
-            os: windows-latest
-            preset: Windows Desktop
-            platform: windows
-            output_path: build/win/stellarallegiance.exe
-
-    defaults:
-      run:
-        shell: bash
-
+  prepare:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
       - name: Resolve version
         id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
-      # Bake the release version into the client binary so its startup update check knows what it is
-      # (BuildInfo.Version ships as the "0.0.0-dev" sentinel; replace it with this tag's version).
-      # sed -i.bak is portable across the BSD (macOS) and GNU (Linux/Windows-bash) runners.
-      - name: Stamp client version
         run: |
-          sed -i.bak "s/0.0.0-dev/${{ steps.version.outputs.version }}/" client/scripts/BuildInfo.cs
-          rm -f client/scripts/BuildInfo.cs.bak
+          version="${GITHUB_REF_NAME#v}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          case "$version" in
+            *-*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
+            *)   echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      # The launcher shows these as PATCH NOTES / WHAT'S NEW (they are embedded in the update feed by
+      # `vpk pack --releaseNotes`). A hand-written changelog on a pre-created release wins; otherwise
+      # GitHub's generated notes are used. The downloads boilerplate is never part of the notes.
+      - name: Release notes
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --json body --jq .body > body.md 2>/dev/null && [ -s body.md ]; then
+            echo "using the existing release body"
+          else
+            gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$GITHUB_REF_NAME" --jq .body > body.md
+          fi
+          sed '/<!-- sa:downloads -->/,/<!-- \/sa:downloads -->/d' body.md > notes.md
+          cat notes.md
+
+      - name: Create the draft release (if missing)
+        run: |
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "$GITHUB_REF_NAME" --notes-file notes.md \
+              ${{ steps.version.outputs.prerelease == 'true' && '--prerelease' || '' }}
+          fi
+
+      - name: Upload release notes
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-notes
+          path: notes.md
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------------------------
+  # One Velopack package per OS: Game Launcher + Godot client. Host-OS only by necessity (macOS
+  # packages need codesign/pkgbuild; the launcher is NativeAOT on Windows + macOS). ALL of the real
+  # work is scripts/package-clients.ps1 — the same script a developer runs locally.
+  # ---------------------------------------------------------------------------------------------
+  package:
+    name: Package (${{ matrix.name }})
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    # The slowest OS (macOS: universal export + two AOT publishes) needs about 10 minutes. A headless Godot
+    # that never exits must not be allowed to sit on a runner for GitHub's default six hours.
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Linux, os: ubuntu-latest, channel: linux }
+          - { name: macOS, os: macos-latest, channel: osx }
+          - { name: Windows, os: windows-latest, channel: win }
+    defaults:
+      run:
+        shell: bash
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      # Signing is optional and switched on purely by adding these secrets (docs/RELEASING.md).
+      MAC_APP_IDENTITY: ${{ secrets.MAC_APP_IDENTITY }}
+      MAC_INSTALL_IDENTITY: ${{ secrets.MAC_INSTALL_IDENTITY }}
+      MAC_NOTARY_PROFILE: ${{ secrets.MAC_NOTARY_PROFILE }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -79,13 +137,24 @@ jobs:
           include-templates: true
           cache: true
 
-      - name: Restore client dependencies
-        run: dotnet restore client/stellarallegiance.csproj
+      # vpk needs a system zstd for delta packages — without it, it silently writes bsdiff deltas that the
+      # updater REJECTS (package-clients.ps1 refuses to run in that state) — and mksquashfs for the AppImage.
+      - name: Linux prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y zstd squashfs-tools libfontconfig1
 
+      - name: macOS prerequisites
+        if: runner.os == 'macOS'
+        run: brew list zstd >/dev/null 2>&1 || brew install zstd
+
+      - name: Restore tools and client dependencies
+        run: |
+          dotnet tool restore
+          dotnet restore client/stellarallegiance.csproj
+
+      # Headless Godot can SIGSEGV (exit 139) during SHUTDOWN on the Windows runner after a successful
+      # build/import. Tolerate only that code here; the package script checks the real artifacts.
       - name: Generate Godot C# solution
-        # Godot headless can SIGSEGV (exit 139) during shutdown on the Windows runner *after* a
-        # successful build+import (the C# assembly is already written). Tolerate only that code;
-        # the export step below is the real gate. Any other non-zero code still fails.
         run: |
           ec=0
           godot --headless --path client --build-solutions --quit || ec=$?
@@ -93,9 +162,8 @@ jobs:
           if [ "$ec" -ne 0 ] && [ "$ec" -ne 139 ]; then exit "$ec"; fi
 
       # .glb.import sidecars are gitignored, so a fresh checkout has NO imported assets. Without an
-      # explicit import pass the export packs un-imported GLBs and every model silently falls back
-      # to its procedural placeholder (spheres for bases) at runtime. Same shutdown-segfault
-      # tolerance as build-solutions; the sidecar check below is the real gate.
+      # explicit import pass the export packs un-imported GLBs and every model silently falls back to
+      # its procedural placeholder (spheres for bases) at runtime.
       - name: Import assets
         run: |
           ec=0
@@ -104,51 +172,50 @@ jobs:
           if [ "$ec" -ne 0 ] && [ "$ec" -ne 139 ]; then exit "$ec"; fi
           test -f client/assets/bases/garrison.glb.import || { echo "::error::GLB import produced no sidecars — exported client would ship placeholder meshes"; exit 1; }
 
-      - name: Create export directory
-        run: mkdir -p "$GITHUB_WORKSPACE/$(dirname "${{ matrix.output_path }}")"
-
-      - name: Export ${{ matrix.name }} client
-        # Same shutdown-segfault tolerance, but require the artifact to actually exist so a real
-        # export failure (missing assembly, bad preset) still fails the job.
-        run: |
-          ec=0
-          godot --headless --path client --export-release "${{ matrix.preset }}" "$GITHUB_WORKSPACE/${{ matrix.output_path }}" || ec=$?
-          echo "export exit: $ec"
-          test -e "$GITHUB_WORKSPACE/${{ matrix.output_path }}" || { echo "::error::export produced no output at ${{ matrix.output_path }}"; exit 1; }
-
-      # Linux & Windows ship as the WHOLE export folder zipped — the executable needs its sibling
-      # .pck and data_* dir (see scripts/export-clients.ps1).
-      - name: Package Linux
-        if: matrix.name == 'Linux'
-        run: |
-          chmod +x build/linux/stellarallegiance.x86_64
-          ( cd build/linux && zip -rq "$GITHUB_WORKSPACE/stellarallegiance-${{ steps.version.outputs.version }}-linux.zip" . )
-
-      # The Windows runner's git-bash has no `zip`; use PowerShell's Compress-Archive. `build/win/*`
-      # puts the .exe + .pck + data_* at the zip root so testers extract one self-contained folder.
-      - name: Package Windows
-        if: matrix.name == 'Windows'
+      # Cheap and fast, so it runs first: install → update → play with the stub game, against the REAL
+      # Velopack updater (on Windows: the real Setup.exe + its --veloapp-install hook). A launcher that
+      # cannot update itself must never reach players — they would be stuck on that version forever.
+      - name: Launcher end-to-end test
         shell: pwsh
-        run: Compress-Archive -Path build/win/* -DestinationPath "$env:GITHUB_WORKSPACE/stellarallegiance-${{ steps.version.outputs.version }}-windows.zip" -Force
+        run: ./scripts/launcher-e2e.ps1
 
-      # macOS: Godot's signing enables the hardened runtime, which SIGKILLs an un-notarized build.
-      # Strip it and re-sign plain ad-hoc, then ditto-zip to preserve the signature + symlinks
-      # (verbatim from scripts/export-clients.ps1). Testers still clear quarantine once.
-      - name: Package macOS
-        if: matrix.name == 'macOS'
+      - name: Download release notes
+        uses: actions/download-artifact@v8
+        with:
+          name: release-notes
+
+      # The previous full package is the base the DELTA is generated against. A first-ever Velopack
+      # release finds nothing (that is fine: it ships without a delta). Stable tags diff against the last
+      # stable release, pre-release tags against the last pre-release.
+      - name: Fetch the previous release (delta base)
         run: |
-          APP="build/mac/Stellar Allegiance.app"
-          codesign --remove-signature "$APP" 2>/dev/null || true
-          codesign --force --deep --sign - "$APP"
-          codesign --verify --deep --strict "$APP" && echo "signature valid"
-          ditto -c -k --keepParent "$APP" "$GITHUB_WORKSPACE/stellarallegiance-${{ steps.version.outputs.version }}-macos.zip"
+          mkdir -p "build/releases/${{ matrix.channel }}"
+          dotnet vpk download github --repoUrl "$REPO_URL" --channel "${{ matrix.channel }}" \
+            --outputDir "build/releases/${{ matrix.channel }}" --token "${{ secrets.GITHUB_TOKEN }}" \
+            ${{ needs.prepare.outputs.prerelease == 'true' && '--pre' || '' }} \
+            || echo "::notice::no previous Velopack release for '${{ matrix.channel }}' — shipping without a delta"
 
-      - name: Upload ${{ matrix.name }} zip
+      - name: Package ${{ matrix.name }}
+        shell: pwsh
+        run: ./scripts/package-clients.ps1 -Version $env:VERSION -ReleaseNotes notes.md -OutputDir "build/releases/${{ matrix.channel }}" -Ci
+
+      # Only THIS version's files travel on: the delta base fetched above is already on the last release.
+      - name: Drop the delta base
+        shell: pwsh
+        run: |
+          Get-ChildItem "build/releases/${{ matrix.channel }}" -Filter '*.nupkg' |
+            Where-Object { $_.Name -notlike "*-$env:VERSION-*" -and $_.Name -notlike "*-$env:VERSION.nupkg" } |
+            Remove-Item -Force -Verbose
+          Get-ChildItem "build/releases/${{ matrix.channel }}" | Format-Table Name, Length
+
+      - name: Upload ${{ matrix.name }} package
         uses: actions/upload-artifact@v7
         with:
-          name: client-${{ matrix.platform }}
-          path: stellarallegiance-${{ steps.version.outputs.version }}-${{ matrix.platform }}.zip
+          name: velopack-${{ matrix.channel }}
+          path: build/releases/${{ matrix.channel }}
           if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
 
   # ---------------------------------------------------------------------------------------------
   # Native sim-server image -> GHCR. Context MUST be repo root (server/Dockerfile references
@@ -197,55 +264,89 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
   # ---------------------------------------------------------------------------------------------
-  # Publish the GitHub Release with the client zips attached.
+  # Attach the three packages to the draft release and publish it. `vpk upload github` sends only
+  # the NEW build's files (from assets.<channel>.json) plus a per-channel feed (releases.<channel>.json);
+  # the uploads run one after another, in one job, so nothing races.
   # ---------------------------------------------------------------------------------------------
-  release:
+  publish:
     name: Publish Release
     runs-on: ubuntu-latest
-    needs: [client, server-image]
+    needs: [prepare, package, server-image]
     permissions:
       contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      VERSION: ${{ needs.prepare.outputs.version }}
     steps:
-      - name: Resolve version
-        id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Checkout
+        uses: actions/checkout@v6
 
-      - name: Download client zips
-        uses: actions/download-artifact@v5
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Download packages
+        uses: actions/download-artifact@v8
         with:
           path: dist
-          pattern: client-*   # only the client zips — skip the server job's .dockerbuild record
-          merge-multiple: true
+          pattern: velopack-*
 
-      - name: Publish Release
-        uses: softprops/action-gh-release@v2
+      - name: Download release notes
+        uses: actions/download-artifact@v8
         with:
-          files: dist/*.zip
-          generate_release_notes: false
-          # Keep any existing release body (e.g. a hand-written changelog on a
-          # pre-created release) and append the download/self-hosting boilerplate
-          # below instead of overwriting it.
-          append_body: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          body: |
-            ## Client downloads
+          name: release-notes
 
-            Pick your platform below. Unzip and run.
+      # Re-running a failed publish must work: vpk refuses to upload when the channel's feed file is
+      # already on the release, so clear whatever a previous attempt left behind first.
+      - name: Remove assets from a previous attempt
+        run: |
+          for ch in win osx linux; do
+            for f in dist/velopack-$ch/*; do
+              gh release delete-asset "$GITHUB_REF_NAME" "$(basename "$f")" -y >/dev/null 2>&1 || true
+            done
+          done
+          gh release delete-asset "$GITHUB_REF_NAME" RELEASES -y >/dev/null 2>&1 || true
 
-            - **macOS** — ad-hoc signed (not notarized). After unzipping, clear quarantine once:
-              `xattr -dr com.apple.quarantine "Stellar Allegiance.app"`, then launch.
-            - **Windows / Linux** — keep the whole unzipped folder together (the executable needs
-              its sibling `.pck` and `data_*` directory).
+      - name: Upload packages
+        run: |
+          dotnet tool restore
+          for ch in win osx linux; do
+            dotnet vpk upload github --repoUrl "$REPO_URL" --token "$GH_TOKEN" --outputDir "dist/velopack-$ch" \
+              --channel "$ch" --tag "$GITHUB_REF_NAME" --releaseName "$GITHUB_REF_NAME" --merge \
+              ${{ needs.prepare.outputs.prerelease == 'true' && '--pre' || '' }}
+          done
 
-            On first launch you can browse the public lobby or enter a server address directly.
-
-            ## Self-hosting a game server
-
-            Run the published image (pairs with `docker-compose.server.yml` in the repo):
-
-            ```
-            docker pull ghcr.io/${{ github.repository_owner }}/stellarallegiance-sim:${{ steps.version.outputs.version }}
-            ```
-
-            Set `SIM_PUBLIC_NAME` to be listed in the public server browser. See
-            `docker-compose.server.yml` for the full env/NAT configuration.
+      # Body = the notes (hand-written or generated) + the downloads/self-hosting block. The block is
+      # wrapped in markers so `prepare` can strip it again when a release is re-run.
+      - name: Publish
+        run: |
+          base="$REPO_URL/releases/download/$GITHUB_REF_NAME"
+          {
+            cat notes.md
+            echo
+            echo "<!-- sa:downloads -->"
+            echo "## Install"
+            echo
+            echo "Installed copies update themselves — you only ever download an installer once."
+            echo
+            echo "- **Windows** — [StellarAllegiance-win-Setup.exe]($base/StellarAllegiance-win-Setup.exe). Installs per-user (no admin prompt) and adds Start menu + desktop shortcuts. Unsigned: SmartScreen will ask once (*More info → Run anyway*)."
+            echo "- **macOS** — [StellarAllegiance-osx-Portable.zip]($base/StellarAllegiance-osx-Portable.zip). Unzip, **drag *Stellar Allegiance* into Applications**, then run it from there. Ad-hoc signed (not notarized): clear quarantine once with \`xattr -dr com.apple.quarantine \"/Applications/Stellar Allegiance.app\"\`. (A \`.pkg\` is attached too — choose *Install for me only*: an all-users install is owned by root, and every update would then ask for an admin password.)"
+            echo "- **Linux** — [StellarAllegiance.AppImage]($base/StellarAllegiance.AppImage). \`chmod +x\` it, keep it somewhere writable (it replaces itself when it updates), and run it."
+            echo
+            echo "Coming from a pre-launcher zip build (v0.0.12 or older)? Install once with the link above; your settings and sign-in are kept."
+            echo
+            echo "## Self-hosting a game server"
+            echo
+            echo "Run the published image (pairs with \`docker-compose.server.yml\` in the repo):"
+            echo
+            echo '```'
+            echo "docker pull ghcr.io/${{ github.repository_owner }}/stellarallegiance-sim:$VERSION"
+            echo '```'
+            echo
+            echo "Set \`SIM_PUBLIC_NAME\` to be listed in the public server browser. See \`docker-compose.server.yml\` for the full env/NAT configuration."
+            echo "<!-- /sa:downloads -->"
+          } > body.md
+          gh release edit "$GITHUB_REF_NAME" --draft=false --notes-file body.md \
+            --prerelease=${{ needs.prepare.outputs.prerelease }} \
+            --latest=${{ needs.prepare.outputs.prerelease == 'true' && 'false' || 'true' }}

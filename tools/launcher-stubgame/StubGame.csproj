@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- A few-hundred-KB stand-in for the 300 MB Godot game, used ONLY by the launcher's end-to-end
+       tests (scripts/launcher-e2e.ps1, the package-dryrun CI workflow). It lands at the exact path the
+       real game occupies inside a Velopack package, records how it was started, and exits with a
+       scripted code — so install → update → restart → play can be proven in seconds.
+
+       Lives under tools/, NOT tests/: scripts/run-tests.ps1 runs every tests/<Name>/<Name>.csproj as
+       a suite. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <!-- Same base name as the Godot export, so the launcher's GameLocator finds it unchanged. -->
+    <AssemblyName>stellarallegiance</AssemblyName>
+    <RootNamespace>StellarAllegiance.StubGame</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <IsAotCompatible>true</IsAotCompatible>
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../shared/LauncherContract.cs" Link="LauncherContract.cs" />
+  </ItemGroup>
+</Project>

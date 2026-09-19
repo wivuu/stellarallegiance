@@ -7,6 +7,7 @@
 | `client/` | Godot 4.7 (C#/.NET 10) client — rendering, input, client-side prediction. Scripts live in `client/scripts/`. |
 | `server/` | .NET 10 console — the authoritative 20 Hz sim (`Sim/`), the networking/lobby layer (`Net/`), and pluggable backend seams (`Backend/`). |
 | `shared/` | Deterministic `FlightModel` + content `Defs` (ship/weapon/base/world). **Referenced** by both client and server so physics + content stay bit-identical — edit it once, here. |
+| `launcher/` | The **Game Launcher** — a small Avalonia app that installs/updates the game through Velopack and then runs the client as a child process (`Core/` = UI-free flow + services, `App/` = the themed window). See [`launcher/README.md`](launcher/README.md) and [`docs/RELEASING.md`](docs/RELEASING.md). |
 | `tools/simbot/` | Bot swarm for load testing the server. |
 | `tools/asteroid-gen/` | Generates the asteroid mesh/normal-map catalog. |
 | `tests/` | 24 suites — `FlightModelTest` (determinism + golden), `CryptoTest` (shared-secret HMAC), plus `ShieldTest`, `FogTest`, `MissileTest`, `MineTest`, `MiningTest`, `CommanderTest`, `ConstructorTest`, `FuelPodTest`, `LoadoutTest`, and more (one `.csproj` per suite). |

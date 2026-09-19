@@ -132,6 +132,30 @@ subclasses** for anything needing custom `_Draw` or per-frame state.
   `godot --headless --import` after pulling new fonts. `UiFonts` falls back to the engine font if
   the import cache is cold.
 
+## Game Launcher port (Avalonia)
+
+The Game Launcher (`launcher/`, see `launcher/README.md`) is a separate Avalonia app that must look like
+the game. It does **not** get its own copy of the design system:
+
+- **Tokens are linked, not copied.** `launcher/Core` compiles THIS repo's `client/scripts/ui/DesignTokens.cs`
+  via `<Compile Include … Link>` together with a small `Godot.Color` shim
+  (`launcher/Core/Theme/GodotColorShim.cs`). Consequence for this file's owner: **`DesignTokens.cs` must
+  stay limited to `Color.FromHtml`, `new Color(…)` and consts** — anything Godot-only breaks the launcher
+  build (loudly; extend the shim or move the value). `tests/LauncherTest` guards it.
+- **Text styles** are mirrored as data (`launcher/Core/Theme/TextStyleTable.cs`) and drift-tested against the
+  `TextStyle` switch in `UiKit.cs`. `Sa.Text(…)` is the launcher's `UiKit.MakeLabel`.
+- **Controls are ports with the same numbers** (`launcher/App/Controls/`): `ChamferButton`, `BracketPanel`,
+  `HairlinePanel`, `DiamondDivider`, `ProgressSweepBar`, `StatusPill`, `AlertBox`, plus `Backdrop`
+  (pre-rendered nebula from `tools/launcher-art` + device-pixel scanlines/star dots). When a component's
+  drawing rules change here, change its port too and compare `--launcher-showcase` with `UiShowcase`.
+- **Two forced differences.** Fonts are **static instances** (`tools/font-instancer`: Avalonia ignores
+  variable-font axes, and Saira's default `wght` is 100/Thin). Symbols are **vector icons** (`SaIcon`):
+  Saira has none of ◆ ● ✓ ▸ ✕ ○ ⚠ ⚙ — the game gets them from Godot's fallback fonts, Avalonia would fall
+  back to whatever the OS has.
+- A lint in `tests/LauncherTest` rejects colour literals anywhere in `launcher/App` — same rule as above.
+- Screenshots without a display: `StellarLauncher --launcher-showcase --launcher-shot=out.png`, or
+  `--launcher-fake=<state>` for any window state (`launcher/App/Views/FakeViews.cs`).
+
 ## Adding / changing a component
 
 1. Read the source spec via the `claude_design` MCP first (don't guess at the visual language).

@@ -1294,6 +1294,39 @@ Ensures YAML content compiles consistently: no missing references, type safety.
 
 ---
 
+## Distribution & Updates
+
+### Game Launcher
+The small themed **Avalonia** app (`launcher/`) that players actually start. It is the Velopack main executable on Windows/macOS/Linux: it owns the install/update hooks, the update UX (check → download → apply → restart) and crash recovery, then runs the Godot client as a **direct child process**. NOT a weapon launcher (that is [[Missile]] / `launchers.yaml`) — always say "Game Launcher". The game takes **no** Velopack dependency.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `launcher/Core/Flow/LauncherFlow.cs` — the UI-free state machine (`LauncherView` out, `LauncherCommand` in); `launcher/Core/Update/VelopackUpdateService.cs` — the only Velopack-shaped code; `launcher/Core/Game/GameLocator.cs` — where the game sits inside a package
+  - `launcher/App/Program.cs` — the load-bearing `Main` order (hooks → single-instance lock → `VelopackApp` with auto-apply OFF → UI); `launcher/App/Views/MainWindow.cs` — a pure view of `LauncherFlow.View`
+  - `launcher/README.md` (flags, layout), `docs/RELEASING.md`, `docs/adr/0004-game-launcher-fronts-velopack.md`
+  - `tests/LauncherTest/` (flow + invariant fuzz + guards), `scripts/launcher-e2e.ps1` (real install → update → play), `tools/launcher-stubgame/`
+- **Related:** [[Launcher Handoff]], [[Update Feed / Channel]], [[UI Design System]]
+- **Notes:** THE invariant: **no update is downloaded or applied while a game is alive** (own child OR an adopted orphan) — a Velopack apply on Windows kills every process under the install root. The launcher stays resident-but-hidden while the game runs (required on Linux: the AppImage mount dies with it). Package layout: Windows `current\StellarLauncher.exe` + `current\game\…`; Linux the same inside the AppImage's `usr/bin`; macOS the pristine Godot `.app` nested at `Contents/Helpers/` of the launcher bundle. NativeAOT on Windows + macOS, self-contained JIT on Linux. Look = the game's own `DesignTokens.cs` compiled through a `Godot.Color` shim (see DESIGN.md → *Game Launcher port*).
+
+### Launcher Handoff
+The two-way contract between the [[Game Launcher]] and the game, in ONE file compiled by both: `shared/LauncherContract.cs`. Launcher → game: env `SA_LAUNCHER=1` ("you run under the launcher") and `SA_LAUNCHER_UPDATE` (`<semver>` = that release is available · `none` = checked, nothing newer · absent = the launcher does not know). Game → launcher: its **exit code** — `0` quit, **`85`** = the player pressed UPDATE NOW in the server browser, anything else = crash notice.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `shared/LauncherContract.cs` — the constants (linked into `launcher/Core`, referenced by the client through `Shared.csproj`)
+  - `client/scripts/LauncherHandoff.cs` — env detection + the "started without the launcher" redirect; `client/scripts/ServerLobbyOverlay.cs` (`CheckUpdateAsync` / `ShowUpdateBanner`) — UPDATE NOW row; `ConnectionManager.QuitGracefully(int exitCode)`
+  - `launcher/Core/Game/GameExitCodes.cs` — classification (SIGINT/SIGTERM/`STATUS_CONTROL_C_EXIT` are "told to stop", not crashes); `launcher/Core/Game/GameProcess.cs` — sets the env
+- **Related:** [[Game Launcher]], [[Update Feed / Channel]]
+- **Notes:** Without the env (dev run, editor, plain zip) the game keeps its notify-only "download" banner (`UpdateChecker`). UPDATE NOW only exists in the server browser, so it can never fire mid-match. A Dock/taskbar pin on the packaged game binary would bypass the launcher forever — `LauncherHandoff.TryRedirectToLauncher` relaunches through it (`SA_NO_LAUNCHER_REDIRECT=1` opts out).
+
+### Update Feed / Channel
+Where installed clients find updates: the repo's **GitHub Releases**. Each release carries, per OS, a `releases.<win|osx|linux>.json` feed plus `-full.nupkg` / `-delta.nupkg` packages (Velopack). *Channel* has two meanings — Velopack's per-OS channel (`win`/`osx`/`linux`, fixed by the package) and the launcher's **STABLE / BETA** preference (BETA = also GitHub pre-releases, i.e. tags containing `-`).
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `.github/workflows/release.yml` (`prepare → package ×3 → publish`), `scripts/package-clients.ps1` (the one packaging entry point, CI and local), `.github/workflows/package-dryrun.yml`
+  - `launcher/Core/Update/VelopackUpdateService.cs` — `GithubSource`, or `--launcher-feed=<dir|url>` for a folder feed
+  - `docs/RELEASING.md` — assets, limits, signing, failure recovery
+- **Related:** [[Game Launcher]]
+- **Notes:** One unauthenticated GitHub API call per check (60/h/IP) — failures are silent and never block PLAY. Deltas chain up to 10 releases and fall back to the full package. `vpk` (root `dotnet-tools.json`) and the `Velopack` NuGet must be the SAME version. No `zstd` on the build machine ⇒ vpk silently writes bsdiff deltas the updater rejects (the package script refuses to run). No single packaged file may reach 1 GiB.
+
 ## Tools & Utilities
 
 ### ship-gen

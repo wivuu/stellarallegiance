@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Info.plist of the OUTER bundle: the Game Launcher. The pristine Godot export is nested at
+     Contents/Helpers/Stellar Allegiance.app and keeps its own Info.plist and bundle id
+     (com.stellarallegiance.game) — the two ids MUST differ, or macOS treats launcher and game as one app.
+     scripts/package-clients.ps1 replaces __VERSION__ / __BUILD__ when it assembles the bundle. -->
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Stellar Allegiance</string>
+    <key>CFBundleDisplayName</key>
+    <string>Stellar Allegiance</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.stellarallegiance.launcher</string>
+    <key>CFBundleExecutable</key>
+    <string>StellarLauncher</string>
+    <key>CFBundleIconFile</key>
+    <string>icon.icns</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>__VERSION__</string>
+    <key>CFBundleVersion</key>
+    <string>__BUILD__</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>12.0</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.games</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+</dict>
+</plist>

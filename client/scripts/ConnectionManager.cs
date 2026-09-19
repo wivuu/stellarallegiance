@@ -124,6 +124,14 @@ public partial class ConnectionManager : Node
 
     public override void _Ready()
     {
+        // Started from a Dock/taskbar pin on the packaged game binary instead of through the launcher?
+        // Hand over and leave — otherwise this install would never see another update.
+        if (LauncherHandoff.TryRedirectToLauncher())
+        {
+            GetTree().Quit();
+            return;
+        }
+
         _net = GetNode<GameNetClient>("../GameNetClient");
 
         UiCursor.Apply(); // custom cursor from the first visible screen (address input) on
@@ -322,7 +330,11 @@ public partial class ConnectionManager : Node
     // (or may be) up — Disconnect unconditionally queues the Bye byte into the lifetime _tx
     // channel, so queuing it while idle would leave a stale Bye poisoning the NEXT connection.
     // Used by the escape menu's QUIT TO DESKTOP and the window-close path above.
-    public async void QuitGracefully()
+    //
+    // `exitCode` is how the game talks to the Game Launcher that started it: the server browser's UPDATE
+    // NOW button quits with LauncherContract.UpdateExitCode (shared/LauncherContract.cs), and the resident
+    // launcher answers by updating and bringing the player straight back. Everything else quits with 0.
+    public async void QuitGracefully(int exitCode = 0)
     {
         if (_quitting)
             return;
@@ -333,7 +345,7 @@ public partial class ConnectionManager : Node
         // 0.3s covers Disconnect's internal 200ms delay-then-cancel, letting the send loop
         // drain the Bye frame before the process goes away.
         await ToSignal(GetTree().CreateTimer(0.3), SceneTreeTimer.SignalName.Timeout);
-        GetTree().Quit();
+        GetTree().Quit(exitCode);
     }
 
     // ---- Connect-stage tracking ------------------------------------------

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Console suite for the Game Launcher's UI-free core (launcher/Core). References Core ONLY, so it
+       never pulls Avalonia — that separation is the point of the Core/App split. Auto-discovered by
+       scripts/run-tests.ps1 like every other tests/<Name>/<Name>.csproj. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../launcher/Core/StellarLauncher.Core.csproj" />
+  </ItemGroup>
+</Project>

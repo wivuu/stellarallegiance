@@ -1,0 +1,87 @@
+name: Package dry-run (launcher e2e)
+
+# Proves, on all three desktop OSes, that the Game Launcher installs and updates through Velopack —
+# WITHOUT exporting the 300 MB Godot game and WITHOUT publishing anything. Run it by hand before
+# touching launcher/, scripts/package-clients.ps1 or the Velopack version.
+#
+# scripts/launcher-e2e.ps1 does all the work: it packs three versions of the launcher around the stub
+# game (tools/launcher-stubgame), installs the first the way a player would (on Windows: the real
+# Setup.exe --silent, which runs the --veloapp-install hook against the launcher), then drives the
+# installed launcher headless through two real updates — one triggered by the game's "UPDATE NOW" exit
+# code — and asserts every step from log markers. This is how Windows is verified without a Windows box.
+#
+# Triggers: by hand, and on pull requests that touch the launcher or its packaging. The PR trigger is
+# what makes this usable BEFORE a merge — GitHub only offers "Run workflow" for workflow files that
+# already exist on the default branch. The path filter keeps ordinary gameplay PRs free of it.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'launcher/**'
+      - 'shared/LauncherContract.cs'
+      - 'tools/launcher-stubgame/**'
+      - 'scripts/package-clients.ps1'
+      - 'scripts/launcher-e2e.ps1'
+      - 'dotnet-tools.json'
+      - '.github/workflows/package-dryrun.yml'
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_CLI_USE_MSBUILD_SERVER: 0
+  MSBUILDDISABLENODEREUSE: 1
+
+jobs:
+  e2e:
+    name: Launcher e2e (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Linux, os: ubuntu-latest }
+          - { name: macOS, os: macos-latest }
+          - { name: Windows, os: windows-latest }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      # vpk needs a system zstd for delta packages (without it, it silently writes bsdiff deltas that the
+      # updater rejects — package-clients.ps1 refuses to run in that state) and mksquashfs for the AppImage.
+      # libfontconfig1 is what Skia needs to draw the launcher window (every Linux desktop has it).
+      - name: Linux prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y zstd squashfs-tools libfontconfig1
+
+      - name: macOS prerequisites
+        if: runner.os == 'macOS'
+        run: brew list zstd >/dev/null 2>&1 || brew install zstd
+
+      - name: Install → update → play, end to end
+        shell: pwsh
+        run: ./scripts/launcher-e2e.ps1 -KeepFiles
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: launcher-e2e-${{ matrix.name }}
+          if-no-files-found: ignore
+          retention-days: 7
+          path: |
+            build/launcher-e2e/launcher.png
+            build/launcher-e2e/velopack-updater.log
+            build/launcher-e2e/data/logs/
+            build/launcher-e2e/data-ui/logs/
+            build/launcher-e2e/setup.log
+            build/launcher-e2e/stub-report.txt
+            build/launcher-e2e/feed/*.json

@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- UI-free heart of the Game Launcher: the update/launch flow, services and parsers.
+       Deliberately has NO Avalonia reference — a UI type leaking in here is a compile error, and the
+       console suite (tests/LauncherTest) can reference this project without pulling a UI stack.
+       IsAotCompatible turns the trim/AOT analyzers on for every build, not just at publish. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>StellarAllegiance.Launcher</RootNamespace>
+    <AssemblyName>StellarLauncher.Core</AssemblyName>
+    <IsAotCompatible>true</IsAotCompatible>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Repo convention (client, TestKit, simbot): NuGetAudit adds a slow vulnerability-db download
+         to every restore. Check CVEs explicitly with `dotnet list package -vulnerable`. -->
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Pure managed, zero dependencies on net10.0. MUST match the `vpk` version in the root
+         dotnet-tools.json — vpk warns (and may one day fail) when the two drift apart. -->
+    <PackageReference Include="Velopack" Version="1.2.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Single-source files compiled by BOTH the game and the launcher (same trick the client uses
+         for shared/Net/WebRtcSdp.cs): the exit-code/env-var handoff contract. -->
+    <Compile Include="../../shared/LauncherContract.cs" Link="Contract/LauncherContract.cs" />
+    <!-- Single source of truth for the design system (see Theme/GodotColorShim.cs): compiled here
+         too, outside Godot, so DesignTokens.cs must stay limited to what the shim provides. -->
+    <Compile Include="../../client/scripts/ui/DesignTokens.cs" Link="Theme/DesignTokens.cs" />
+  </ItemGroup>
+</Project>

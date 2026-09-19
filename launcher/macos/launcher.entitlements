@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Entitlements for the OUTER bundle (the NativeAOT launcher). vpk always signs with the hardened
+     runtime; under it, library validation rejects any dylib not signed by Apple or by OUR Team ID.
+     With ad-hoc signing there is no Team ID at all, so without this key the launcher could not load its
+     own Skia / HarfBuzz / AvaloniaNative dylibs. No JIT entitlement: the launcher is AOT-compiled. -->
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+</dict>
+</plist>

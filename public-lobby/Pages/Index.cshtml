@@ -3,7 +3,16 @@
 @{
     ViewData["Title"] = "Stellar Allegiance — Public Lobby";
     const string Repo = "https://github.com/wivuu/stellarallegiance";
-    const string Releases = Repo + "/releases/latest";
+
+    // Release asset names are stable (docs/RELEASING.md), so /releases/latest/download/<name> always serves
+    // the newest STABLE build of that file: no version in the URL, nothing to bump per release.
+    // macOS leads with the app bundle, not the .pkg: an all-users .pkg install is root-owned, and then every
+    // update has to ask for an admin password (docs/adr/0004-game-launcher-fronts-velopack.md).
+    const string Latest = Repo + "/releases/latest/download/";
+    const string WinSetup = Latest + "StellarAllegiance-win-Setup.exe";
+    const string MacApp = Latest + "StellarAllegiance-osx-Portable.zip";
+    const string MacPkg = Latest + "StellarAllegiance-osx-Setup.pkg";
+    const string LinuxAppImage = Latest + "StellarAllegiance.AppImage";
 
     // Head of the ladder gets a little hierarchy the paginated /ladder table doesn't need.
     string RankClass(int rank) => rank == 1 ? "text-accent" : rank <= 3 ? "text-text-2" : "text-text-dim";
@@ -26,7 +35,7 @@
                 from the map.
             </p>
             <div class="flex flex-wrap items-center justify-center gap-3 pt-1 sm:justify-start">
-                <a href="@Releases" class="chamfer flex items-center gap-2 bg-accent px-3.5 py-[11px] text-sm font-semibold tracking-[0.02em] text-void hover:bg-accent/85">
+                <a href="#download" class="chamfer flex items-center gap-2 bg-accent px-3.5 py-[11px] text-sm font-semibold tracking-[0.02em] text-void hover:bg-accent/85">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M4 19h16"></path></svg>
                     Download the game
                 </a>
@@ -124,47 +133,64 @@
     </div>
 
     @* ---- Get in the cockpit ----------------------------------------------------------------- *@
-    <section class="flex flex-col gap-3 pb-6">
+    <section id="download" class="flex scroll-mt-6 flex-col gap-3 pb-6">
         <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <h2 class="text-[22px] font-bold text-text-hi">Get in the cockpit</h2>
             <a href="@Repo/releases" class="text-sm text-data hover:text-text-hi">All releases &rarr;</a>
         </div>
         <p class="text-sm leading-relaxed text-text-dim">
-            Grab the latest build for your platform, unzip it, and run it &mdash; there is no installer
-            and nothing to compile. Keep the unzipped folder together; the game needs the files that
-            ship beside the executable.
+            Pick your platform, install, and play &mdash; there is nothing to compile. Every download
+            includes the Game Launcher, which updates the game by itself from then on, so you only
+            come back here once.
         </p>
-
-        <div class="mt-1">
-            <a href="@Releases" class="chamfer inline-flex items-center gap-2 bg-accent px-3.5 py-[11px] text-sm font-semibold tracking-[0.02em] text-void hover:bg-accent/85">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M4 19h16"></path></svg>
-                Download the latest release
-            </a>
-        </div>
 
         <div class="mt-2 grid gap-3 sm:grid-cols-3 sm:gap-4">
             <div class="flex flex-col gap-2 rounded border border-hairline bg-panel-fill p-3.5">
                 <span class="font-mono text-xs text-accent">WINDOWS</span>
-                <h3 class="text-[15px] font-semibold text-text-hi">&hellip;-windows.zip</h3>
-                <p class="text-[13px] leading-relaxed text-text-2">Unzip anywhere and run <code class="font-mono text-xs text-data">stellarallegiance.exe</code>.</p>
+                <h3 class="text-[15px] font-semibold text-text-hi">Installer</h3>
+                <p class="text-[13px] leading-relaxed text-text-2">Installs just for you &mdash; no admin prompt &mdash; with shortcuts and an uninstall entry. Not code-signed yet: if SmartScreen steps in, choose <span class="text-text-hi">More info &rarr; Run anyway</span>.</p>
+                <span class="mt-auto pt-1 font-mono text-[11px] wrap-anywhere text-text-dim">StellarAllegiance-win-Setup.exe</span>
+                <a href="@WinSetup" class="chamfer inline-flex items-center justify-center gap-2 bg-accent px-3.5 py-2.5 text-sm font-semibold tracking-[0.02em] text-void hover:bg-accent/85">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M4 19h16"></path></svg>
+                    Download<span class="sr-only"> for Windows</span>
+                </a>
             </div>
             <div class="flex flex-col gap-2 rounded border border-hairline bg-panel-fill p-3.5">
                 <span class="font-mono text-xs text-accent">MACOS</span>
-                <h3 class="text-[15px] font-semibold text-text-hi">&hellip;-macos.zip</h3>
-                <p class="text-[13px] leading-relaxed text-text-2">Ad-hoc signed, not notarized &mdash; clear quarantine once, then open the app.</p>
+                <h3 class="text-[15px] font-semibold text-text-hi">App bundle</h3>
+                <p class="text-[13px] leading-relaxed text-text-2">Open the download and drag <span class="text-text-hi">Stellar Allegiance</span> into Applications. Ad-hoc signed, not notarized &mdash; clear quarantine once with the command below, then open it.</p>
+                <span class="mt-auto pt-1 font-mono text-[11px] wrap-anywhere text-text-dim">StellarAllegiance-osx-Portable.zip</span>
+                <a href="@MacApp" class="chamfer inline-flex items-center justify-center gap-2 bg-accent px-3.5 py-2.5 text-sm font-semibold tracking-[0.02em] text-void hover:bg-accent/85">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M4 19h16"></path></svg>
+                    Download<span class="sr-only"> for macOS</span>
+                </a>
             </div>
             <div class="flex flex-col gap-2 rounded border border-hairline bg-panel-fill p-3.5">
                 <span class="font-mono text-xs text-accent">LINUX</span>
-                <h3 class="text-[15px] font-semibold text-text-hi">&hellip;-linux.zip</h3>
-                <p class="text-[13px] leading-relaxed text-text-2">Unzip anywhere and run <code class="font-mono text-xs text-data">stellarallegiance.x86_64</code>.</p>
+                <h3 class="text-[15px] font-semibold text-text-hi">AppImage</h3>
+                <p class="text-[13px] leading-relaxed text-text-2">Mark it executable and run it &mdash; nothing to install. It replaces itself when it updates, so keep it somewhere you can write to.</p>
+                <span class="mt-auto pt-1 font-mono text-[11px] wrap-anywhere text-text-dim">StellarAllegiance.<wbr />AppImage</span>
+                <a href="@LinuxAppImage" class="chamfer inline-flex items-center justify-center gap-2 bg-accent px-3.5 py-2.5 text-sm font-semibold tracking-[0.02em] text-void hover:bg-accent/85">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M4 19h16"></path></svg>
+                    Download<span class="sr-only"> for Linux</span>
+                </a>
             </div>
         </div>
 
-        <code class="mt-1 block overflow-x-auto whitespace-pre rounded-sm border border-hairline bg-void px-3 py-2.5 font-mono text-[12px] leading-[1.7] text-data sm:text-[12.5px]">macOS only: xattr -dr com.apple.quarantine stellarallegiance.app</code>
+        <code class="mt-1 block overflow-x-auto whitespace-pre rounded-sm border border-hairline bg-void px-3 py-2.5 font-mono text-[12px] leading-[1.7] text-data sm:text-[12.5px]">macOS only: xattr -dr com.apple.quarantine "/Applications/Stellar Allegiance.app"
+Linux only: chmod +x StellarAllegiance.AppImage &amp;&amp; ./StellarAllegiance.AppImage</code>
+
+        <p class="text-[13px] leading-relaxed text-text-dim">
+            Prefer a guided install on macOS? There is also an
+            <a href="@MacPkg" class="text-data hover:text-text-hi">installer package (.pkg)</a>
+            &mdash; choose <span class="text-text-2">Install for me only</span>, or every update will ask
+            for an admin password.
+        </p>
 
         <p class="mt-1 text-sm leading-relaxed text-text-dim">
-            On first launch, the client shows a device code and opens this site to approve it &mdash;
-            after that, pick a <span class="text-ok">Verified</span> server and ready up. You can also
+            Press <span class="text-text-2">PLAY</span> in the launcher. On first launch, the game shows
+            a device code and opens this site to approve it &mdash; after that, pick a
+            <span class="text-ok">Verified</span> server and ready up. You can also
             join any address directly, or
             <a href="@Repo/blob/master/QUICKSTART.md" class="text-data hover:text-text-hi">build from source</a>
             if you would rather.

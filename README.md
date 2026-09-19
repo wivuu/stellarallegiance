@@ -98,6 +98,7 @@ See **[QUICKSTART.md](QUICKSTART.md)** for a step-by-step walkthrough and
 | **Run server (public lobby)** | `scripts/run-server.ps1` | Build (Release) + run the sim server published to the **hosted** public lobby. |
 | **Run client (public lobby)** | `scripts/run-client.ps1` | Rebuild + launch a Godot client on the **hosted** lobby's server browser. |
 | **Export clients (all platforms)** | `scripts/export-clients.ps1` | Export macOS/Windows/Linux builds (macOS `.app` only when run on macOS). |
+| **Package client (this OS)** | `scripts/package-clients.ps1 -Version <x.y.z>` | Build this OS's **release package**: Game Launcher + client as a Velopack installer with auto-update ([`docs/RELEASING.md`](docs/RELEASING.md)). `-FakeGame` skips the Godot export. |
 | **Godot: import assets (if needed)** | `tools/godot-import.ps1` | Import GLB assets. Runs automatically on folder-open; a no-op unless something needs importing. |
 | **Godot: reimport assets (force)** | `tools/godot-import.ps1 -Force` | Force a full reimport after editing a `.glb`. |
 | **Asteroid-gen: build catalog** | `tools/asteroid-gen/build.ps1` | Regenerate the asteroid mesh catalog (Docker). |
@@ -112,7 +113,7 @@ configuration; if none resolve, the dashboard prompts for the path and offers to
 secrets (`dotnet user-secrets set godot.executablePath "/path/to/Godot" --id stellarallegiance`,
 outside the repo — never committed, survives `git clean`).
 
-**PowerShell 7+** is still needed for `scripts/export-clients.ps1` and the `tools/*.ps1` helpers
+**PowerShell 7+** is still needed for `scripts/export-clients.ps1`, `scripts/package-clients.ps1` and the `tools/*.ps1` helpers
 (Godot import/export, asteroid-gen). It's preinstalled on Windows; on macOS/Linux install it with
 `brew install powershell` or your package manager.
 

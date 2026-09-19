@@ -118,6 +118,43 @@
             "problemMatcher": []
         },
         {
+            // The release path: Game Launcher + client as a Velopack package for THIS OS
+            // (docs/RELEASING.md). Prompts for the version; add -FakeGame in a terminal to skip the export.
+            "label": "Package client (this OS)",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-File",
+                "${workspaceFolder}/scripts/package-clients.ps1",
+                "-Version",
+                "${input:packageVersion}"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            // install → update → restart → play with the stub game, against the real Velopack updater.
+            "label": "Launcher: end-to-end update test",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-File",
+                "${workspaceFolder}/scripts/launcher-e2e.ps1"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
             "label": "Export clients (all platforms)",
             "type": "shell",
             "command": "pwsh",
@@ -172,6 +209,11 @@
         }
     ],
     "inputs": [
+        {
+            "id": "packageVersion",
+            "type": "promptString",
+            "description": "Version to package (SemVer, e.g. 0.0.13 — must be greater than any package already in build/releases/<channel>)"
+        },
         {
             "id": "godotPath",
             "type": "promptString",
