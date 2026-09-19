@@ -2183,9 +2183,24 @@ public sealed partial class ClientHub
     {
         Vec3 myPos = client.AnchorPos;
         uint mySector = client.AnchorSector;
+        // Fog of war: the same enemy-ship gate the snapshot build applies (radar OR eyeball set, own
+        // team always passes). Unlike the missile stream this is NOT an accepted leak — a fogged
+        // crewed ship's id + aim every tick would be a wallhack for a modified client.
+        bool fog = _sim.FogEnabled;
+        byte myTeam = client.Team;
+        Simulation.TeamVision? vision = fog ? _sim.VisionFor(myTeam) : null;
         List<TurretRecord>? rows = null;
         foreach (var (ship, recs) in updates)
         {
+            if (
+                fog
+                && ship.Team != myTeam
+                && (
+                    vision == null
+                    || (!vision.VisibleEnemyShips.Contains(ship.ShipId) && !vision.EyeballShips.Contains(ship.ShipId))
+                )
+            )
+                continue;
             bool inView =
                 (ship.SectorId == mySector && (ship.State.Pos - myPos).LengthSquared() <= FullRateRadiusSq)
                 || (riding != 0 && riding == ship.ShipId);

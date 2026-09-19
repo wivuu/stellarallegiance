@@ -72,6 +72,11 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
     // class loadout). Fed whole by GameNetClient.ApplyShipLoadout each frame.
     private readonly Dictionary<ulong, uint[]> _mounts = new();
 
+    // The EFFECTIVE gun at each crew-served turret station (station order), from the same
+    // MsgShipLoadout row. Absent = authored guns. TurretGun reads it for ships the team crew roster
+    // doesn't cover (enemies), so a captain's re-assigned station draws the right bolt.
+    private readonly Dictionary<ulong, uint[]> _turretGuns = new();
+
     // Per-remote-ship derived MountLastFire shadow (FireCadence): which tick each gun barrel last fired,
     // reconstructed from observed LastFireTick changes so SpawnBoltFor knows WHICH mounts fired a given
     // volley. Reset when that ship's loadout changes; pruned with the ship.
@@ -399,6 +404,7 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
     {
         _shield.Remove(row.ShipId);
         _mounts.Remove(row.ShipId); // immediate prune; the next MsgShipLoadout omits it anyway
+        _turretGuns.Remove(row.ShipId);
         _mountShadow.Remove(row.ShipId);
         _hold.Remove(row.ShipId);
         _lastRow.Remove(row.ShipId);
@@ -412,15 +418,21 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
     // arrives as a ~0.5s keepalive; resetting shadows on every keepalive would re-derive "all mounts
     // eligible" mid-burst). The v40 hold tail rides the same row but is tracked SEPARATELY: an item
     // stowed mid-flight changes the hold, never the barrels, so it must not reset a cadence shadow.
-    public void NetShipLoadouts(List<(ulong shipId, uint[] ids, (byte kind, uint itemId, byte count)[] hold)> table)
+    public void NetShipLoadouts(
+        List<(ulong shipId, uint[] ids, (byte kind, uint itemId, byte count)[] hold, uint[] turretGuns)> table
+    )
     {
         _loadoutScratch.Clear();
         foreach (var id in _mounts.Keys)
             _loadoutScratch.Add(id);
-        foreach (var (shipId, ids, hold) in table)
+        foreach (var (shipId, ids, hold, turretGuns) in table)
         {
             _loadoutScratch.Remove(shipId);
             PushHold(shipId, hold);
+            if (turretGuns is { Length: > 0 })
+                _turretGuns[shipId] = turretGuns;
+            else
+                _turretGuns.Remove(shipId);
             if (_mounts.TryGetValue(shipId, out var old) && old.AsSpan().SequenceEqual(ids))
                 continue; // unchanged keepalive row
             _mounts[shipId] = ids;
@@ -432,6 +444,7 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
         {
             _mounts.Remove(shipId);
             _mountShadow.Remove(shipId);
+            _turretGuns.Remove(shipId);
             PushHold(shipId, System.Array.Empty<(byte, uint, byte)>()); // omitted ⇒ the hold is empty too
             if (LocalShip is { } pc && pc.ShipId == shipId)
                 pc.SetLoadout(null);
@@ -539,6 +552,11 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
     // how many remote turret bolts it has rebuilt so far (the captain's side of the fire round trip).
     public int TurretBoltsSeen { get; private set; }
 
+    // How old (in ticks, against TurretsMessage.Tick) a station's fire stamp may be and still draw a
+    // bolt — the same 8-tick window BoltRenderer.SpawnTurretBolt rewinds the muzzle over. uint
+    // subtraction: a stamp "ahead" of the frame wraps huge and is rejected too.
+    private const uint StaleTurretFireTicks = 8;
+
     public string TurretDebug(ulong shipId)
     {
         if (!_turrets.TryGetValue(shipId, out var state))
@@ -590,6 +608,11 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
         _localClientId = localClientId;
         foreach (var (shipId, state) in _turrets)
         {
+            // MsgCrew is a PER-TEAM roster: an ENEMY crewed ship is never in it, so its absence says
+            // nothing about that ship's seats — its state lives on MsgTurrets alone (and dies with
+            // the ship). Clearing it here would wipe every enemy barrel on each ~0.5 s keepalive.
+            if (!RosterCovers(shipId))
+                continue;
             var stations = StationsFor(shipId);
             if (crew.ShipByShipId(shipId) is not { } ship)
             {
@@ -630,12 +653,16 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
             state[slot].Manned = true;
 
             // This station's OWN fire stamp advanced ⇒ exactly one shot left it since we last looked.
-            // (A pod carries no crew; the guard mirrors the pilot-bolt path.)
+            // (A pod carries no crew; the guard mirrors the pilot-bolt path.) The stamp must also be
+            // FRESH against the frame's tick: the first record we ever see for a station (it just
+            // entered our AOI, or the world was rebuilt) carries whatever the station last fired,
+            // possibly minutes ago — an aim-only update must not replay that as a phantom bolt.
             if (
                 rec.LastFireTick != wasFire
                 && rec.LastFireTick != 0
+                && m.Tick - rec.LastFireTick <= StaleTurretFireTicks
                 && !row.IsPod
-                && TurretGun(row, stations[slot]) is { } w
+                && TurretGun(row, stations[slot], slot) is { } w
             )
             {
                 _bolts.SpawnTurretBolt(row, stations[slot], w, state[slot].Aim, rec.LastFireTick);
@@ -657,6 +684,11 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
         if (slot >= 0)
             EnsureBarrel(shipId, row, stations, slot)?.SetAim(aim);
     }
+
+    // Is this ship one the team crew roster (MsgCrew, per team) is authoritative for? Only our own
+    // team's ships are; for anything else "not in the roster" carries no information.
+    private bool RosterCovers(ulong shipId) =>
+        _lastRow.TryGetValue(shipId, out var row) && _player.MarkerTeam is byte team && row.Team == team;
 
     // Is (ship, seat) the station WE man? Only ever true for one seat at a time.
     private bool IsLocalSeat(ulong shipId, byte seatIndex) =>
@@ -686,10 +718,14 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
     // The gun a station actually fires: the captain's assignment from the crew roster (authoritative —
     // it is what the server bound at launch), else the authored hardpoint gun. Null when neither
     // resolves to a bolt weapon, in which case there is no bolt to rebuild.
-    private WeaponDef? TurretGun(Ship row, HardpointDef hp)
+    private WeaponDef? TurretGun(Ship row, HardpointDef hp, int slot)
     {
+        // Roster first (own team), then the MsgShipLoadout turret tail — the only source for an ENEMY
+        // ship, whose crew record we never see — and the authored gun last.
         uint id =
-            (_crew?.ShipByShipId(row.ShipId) is { } ship ? CrewStore.MannedGunAt(ship, hp.Index) : null) ?? hp.WeaponId;
+            (_crew?.ShipByShipId(row.ShipId) is { } ship ? CrewStore.MannedGunAt(ship, hp.Index) : null)
+            ?? (_turretGuns.TryGetValue(row.ShipId, out var guns) && slot < guns.Length ? guns[slot] : (uint?)null)
+            ?? hp.WeaponId;
         var w = _defs.GetWeapon(id);
         return w is { Kind: WeaponKind.Bolt } ? w : null;
     }
@@ -716,8 +752,9 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
         }
         // Crews that vanished from the roster entirely (captain docked/left): their ships may still be
         // in view, so the barrels have to come down explicitly.
+        // (Own team only — the roster never lists an enemy crew, see RosterCovers.)
         foreach (var (shipId, views) in _turretBarrels)
-            if (_crew.ShipByShipId(shipId) is null)
+            if (RosterCovers(shipId) && _crew.ShipByShipId(shipId) is null)
                 for (int slot = 0; slot < views.Length; slot++)
                     DropBarrel(shipId, slot);
     }

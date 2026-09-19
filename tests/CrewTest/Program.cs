@@ -861,6 +861,14 @@ Simulation.ShipSim Launch(Simulation sim, int cid, byte team, byte cls)
         "an aim straight into the hull has no azimuth to keep, so it lands on the rest pose",
         $"Clamp(+Y, -Y) = {intoHull.X},{intoHull.Y},{intoHull.Z}"
     );
+    // A finite but HUGE forged aim squares past float range: it must still come back a unit vector
+    // (an infinite length² once scaled it to zero, and a zero aim passed the arc test).
+    var huge = TurretAim.Clamp(up, new Vec3(1e30f, 1e30f, 0f));
+    Check(
+        MathF.Abs(huge.Length() - 1f) < 1e-4f && TurretAim.InArc(up, huge),
+        "an overflow-magnitude aim still clamps to a UNIT vector inside the arc",
+        $"Clamp(+Y, (1e30,1e30,0)) = {huge.X},{huge.Y},{huge.Z}"
+    );
     var pinned = TurretAim.Clamp(up, Vec3.Normalize(new Vec3(1f, -1f, 0f)));
     var edge = new Vec3(MathF.Cos(-TurretAim.MinElevationRad), MathF.Sin(TurretAim.MinElevationRad), 0f); // 15° under +X
     Check(

@@ -504,7 +504,9 @@ public sealed class FrameApplier
     // loadout + the owner's HOLD readout).
     private void ApplyShipLoadout(ShipLoadoutMessage m)
     {
-        var table = new List<(ulong shipId, uint[] ids, (byte kind, uint itemId, byte count)[] hold)>(m.Ships.Length);
+        var table = new List<(ulong shipId, uint[] ids, (byte kind, uint itemId, byte count)[] hold, uint[] turretGuns)>(
+            m.Ships.Length
+        );
         foreach (var s in m.Ships)
         {
             var hold =
@@ -513,7 +515,7 @@ public sealed class FrameApplier
                     : new (byte kind, uint itemId, byte count)[s.Hold.Length];
             for (int i = 0; i < s.Hold.Length; i++)
                 hold[i] = (s.Hold[i].Kind, s.Hold[i].ItemId, s.Hold[i].Count);
-            table.Add((s.ShipId, s.WeaponIds, hold));
+            table.Add((s.ShipId, s.WeaponIds, hold, s.TurretWeaponIds));
         }
         _world.Ships.NetShipLoadouts(table);
     }

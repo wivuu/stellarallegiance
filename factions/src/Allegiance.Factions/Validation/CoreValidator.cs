@@ -119,11 +119,13 @@ public static class CoreValidator
                         result.Error(
                             $"hull '{hull.Id}' turret index {hp.Index} authors mount: {hp.Mount} — a turret station is always a gun mount; drop the `mount:` key."
                         );
-                    // Slew tuning is optional but must be a real speed when authored: a zero slew is
-                    // a gun the gunner could never turn.
-                    if (hp.SlewDeg is double slew && !(slew > 0))
+                    // Slew tuning is optional but must be a real speed when authored. 0 = UNLIMITED
+                    // (TurretAim.SlewLimit treats slew <= 0 as uncapped) — the same meaning world.yaml
+                    // `turret.default-slew-deg: 0` has and hulls.yaml documents; only a negative or
+                    // non-finite value is refused.
+                    if (hp.SlewDeg is double slew && !(slew >= 0 && double.IsFinite(slew)))
                         result.Error(
-                            $"hull '{hull.Id}' turret index {hp.Index} authors slew-deg {slew} — must be > 0 (degrees per second)."
+                            $"hull '{hull.Id}' turret index {hp.Index} authors slew-deg {slew} — must be >= 0 (degrees per second; 0 = unlimited)."
                         );
                     continue;
                 }

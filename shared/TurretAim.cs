@@ -109,10 +109,13 @@ public static class TurretAim
         zenith = Normalize(zenith);
         if (!float.IsFinite(aim.X) || !float.IsFinite(aim.Y) || !float.IsFinite(aim.Z))
             return Rest(zenith);
-        float len2 = aim.LengthSquared();
-        if (len2 < 1e-8f)
+        // Length in double: a finite but huge forged aim (1e30) squares past float range, and an
+        // infinite len2 would scale the aim to ZERO — which then passes the arc test below.
+        double len2 = (double)aim.X * aim.X + (double)aim.Y * aim.Y + (double)aim.Z * aim.Z;
+        if (len2 < 1e-8)
             return Rest(zenith);
-        aim = aim * (1f / (float)System.Math.Sqrt(len2));
+        double inv = 1.0 / System.Math.Sqrt(len2);
+        aim = new Vec3((float)(aim.X * inv), (float)(aim.Y * inv), (float)(aim.Z * inv));
         float d = Dot(zenith, aim);
         if (d >= CosArc)
             return aim;

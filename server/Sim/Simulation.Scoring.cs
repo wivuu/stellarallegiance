@@ -81,6 +81,10 @@ public sealed partial class Simulation
     {
         if (_byClient.TryGetValue(clientId, out var ship))
             return ship.Team;
+        // A seated GUNNER owns no ship, and one who took a station without ever launching a hull of
+        // their own has no join slot either — their turret kills must still roll up to their team.
+        if (_seatOf.TryGetValue(clientId, out var crew))
+            return crew.Team;
         if (_clientInfo.TryGetValue(clientId, out var info))
             return info.team;
         return Wire.NoTeam;

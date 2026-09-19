@@ -1218,6 +1218,17 @@ public sealed partial class Simulation
                     Array.Clear(ship.InputRingTick, 0, ship.InputRingTick.Length);
                     _heldOrphans[token] = (cid, tick + GraceTicks);
                 }
+                else
+                {
+                    // The ship the hub saw at disconnect is gone by the time this drains (it DOCKED
+                    // in the gap): nothing to hold, no orphan to expire, and no leave will ever be
+                    // queued for this id. Take the leave path here, or the crew they captained stays
+                    // on the roster — joinable, its gunners stranded — until the match ends.
+                    VacateSeat(cid, null);
+                    DissolveCrewCaptainedBy(cid);
+                    _clientInfo.Remove(cid);
+                    _clientRespawn.Remove(cid);
+                }
             }
             // Reclaim: a returning client re-presented a held token — rebind that ship (or its
             // current pod) from the old client id to the new connection. ShipIdOf(newCid) then
