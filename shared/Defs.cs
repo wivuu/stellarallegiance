@@ -801,6 +801,7 @@ namespace StellarAllegiance.Shared
         public WorldConstructorTuning Constructor = new();
         public WorldBuildTuning Build = new();
         public WorldScoringTuning Scoring = new();
+        public WorldTurretTuning Turret = new();
     }
 
     // PIG drone AI tuning (world.yaml `ai:`). Server-side only — clients never simulate
@@ -1161,6 +1162,17 @@ namespace StellarAllegiance.Shared
         // tick) but costs no points.
         public int Ejection = 0; // when YOUR combat ship is destroyed and you eject
         public int Death = -25; // when YOUR escape pod is destroyed
+    }
+
+    // Crew-served turret tuning (world.yaml `turret:`). Server-side: it only feeds the content
+    // projection, which resolves it into the streamed HardpointDef.TurretSlewRad — the client never
+    // sees this block, only the per-station result.
+    public sealed class WorldTurretTuning
+    {
+        // Sustained slew rate (deg/s) of a turret station that authors no `slew-deg` of its own.
+        // 0 = such stations are unlimited. Small motions are never limited either way
+        // (TurretAim.SlewLimit's token bucket).
+        public float DefaultSlewDeg = (float)TurretAim.DefaultSlewDeg;
     }
 
     // Stable content IDENTIFIERS the engine branches on. These are NOT tunable content — the actual

@@ -543,16 +543,54 @@ Check(
     $"bomber turret zeniths wrong ({string.Join(" ", bomberTurrets.Select(DirOf))})"
 );
 
-// Slew tuning (the client-side cap on how fast a gunner's look may turn): the bomber leaves it
-// unauthored (the TurretAim default), the Devastator authors a heavier mount; a non-turret hardpoint
-// always streams 0.
+// Slew tuning (the client-side limit on a gunner's SUSTAINED turn rate): the bomber leaves it
+// unauthored and so takes world.yaml `turret.default-slew-deg` (stock = the TurretAim default), the
+// Devastator authors a heavier mount; a non-turret hardpoint always streams 0.
 Check(
     bomberTurrets.All(h => Math.Abs(h.TurretSlewRad - (float)(TurretAim.DefaultSlewDeg * Math.PI / 180.0)) < 1e-4f)
-        && devastatorTurrets.All(h => Math.Abs(h.TurretSlewRad - (float)(45.0 * Math.PI / 180.0)) < 1e-4f)
+        && devastatorTurrets.All(h => Math.Abs(h.TurretSlewRad - (float)(110.0 * Math.PI / 180.0)) < 1e-4f)
         && bomber.Hardpoints.Where(h => h.Kind != HardpointKind.Turret).All(h => h.TurretSlewRad == 0f),
-    $"turret slew: bomber stations take the TurretAim default ({TurretAim.DefaultSlewDeg:0}°/s), Devastator authors 45°/s, other kinds stream 0",
+    $"turret slew: bomber stations take the world default ({TurretAim.DefaultSlewDeg:0}°/s), Devastator authors 110°/s, other kinds stream 0",
     $"turret slew wrong (bomber {string.Join(",", bomberTurrets.Select(h => $"{h.TurretSlewRad:0.00}"))}; devastator {string.Join(",", devastatorTurrets.Select(h => $"{h.TurretSlewRad:0.00}"))})"
 );
+
+// The world default is CONFIGURABLE per server: a world authoring `turret.default-slew-deg: 90`
+// moves every station that authors no `slew-deg` (the bomber) and leaves an authored one (the
+// Devastator's 110) alone; a negative default refuses to boot.
+{
+    string stockWorld = File.ReadAllText(worldPath);
+    string sweptPath = Path.Combine(Path.GetDirectoryName(worldPath)!, "world.turret-sweep.yaml");
+    File.WriteAllText(sweptPath, stockWorld.Replace("default-slew-deg: 180", "default-slew-deg: 90"));
+    var swept = ContentLoader.Load(stockPath, sweptPath);
+    var sweptBomber = swept
+        .Ships.First(s => s.ClassId == FlightModel.ClassBomber)
+        .Hardpoints.Where(h => h.Kind == HardpointKind.Turret)
+        .ToList();
+    var sweptDev = swept
+        .Ships.First(s => s.ClassId == devastatorDef.ClassId)
+        .Hardpoints.Where(h => h.Kind == HardpointKind.Turret)
+        .ToList();
+    Check(
+        stockWorld.Contains("default-slew-deg: 180")
+            && sweptBomber.Count == 2
+            && sweptBomber.All(h => Math.Abs(h.TurretSlewRad - (float)(90.0 * Math.PI / 180.0)) < 1e-4f)
+            && sweptDev.All(h => Math.Abs(h.TurretSlewRad - (float)(110.0 * Math.PI / 180.0)) < 1e-4f),
+        "world turret.default-slew-deg feeds stations with no slew-deg; an authored slew-deg still wins",
+        $"world default slew not applied (bomber {string.Join(",", sweptBomber.Select(h => $"{h.TurretSlewRad:0.00}"))}; devastator {string.Join(",", sweptDev.Select(h => $"{h.TurretSlewRad:0.00}"))})"
+    );
+    File.WriteAllText(sweptPath, stockWorld.Replace("default-slew-deg: 180", "default-slew-deg: -5"));
+    bool refused = false;
+    try
+    {
+        ContentLoader.Load(stockPath, sweptPath);
+    }
+    catch (Exception)
+    {
+        refused = true;
+    }
+    Check(refused, "a negative turret.default-slew-deg refuses to load", "a negative turret.default-slew-deg loaded");
+    File.Delete(sweptPath);
+}
 Check(
     devastatorTurrets.Count == 4
         && Z(devastatorTurrets[0]).Y > 0.9f // T1 dorsal

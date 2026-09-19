@@ -377,13 +377,15 @@ public sealed partial class Simulation
                 Events.PilotNotices.Add((cid, "Dock your ship before taking a turret."));
                 continue;
             }
-            if (_crewByCaptain.ContainsKey(cid))
-            {
-                Events.PilotNotices.Add((cid, "Retract your own hangar pick before taking a turret."));
-                continue;
-            }
-            // Everything validated: an already-seated gunner MOVES (the old seat is only given up
-            // once the new one is certain).
+            // Everything validated. A pilot who was ADVERTISING a hull of their own stops being a
+            // captain the moment they take a seat (user steer 2026-09-19): the hangar advertises the
+            // selected hull on open, so a returning bomber pilot's ＋ JOIN used to be refused with
+            // "Retract your own hangar pick" and look like a dead button. The withdrawal happens HERE,
+            // after every refusal above, so a join that fails costs the captain nothing; one that
+            // succeeds frees any gunners already seated on the hull they were offering.
+            DissolveCrewCaptainedBy(cid, "Your captain joined another crew — the crew was dissolved.");
+            // An already-seated gunner MOVES (the old seat is only given up once the new one is
+            // certain).
             VacateSeat(cid, null);
             crew.SeatGunnerIds[slot] = cid;
             _seatOf[cid] = crew;
@@ -455,8 +457,8 @@ public sealed partial class Simulation
     }
 
     // Half of ClearCrewOf: dissolve the crew this client CAPTAINS (its gunners freed), leaving any
-    // seat they themselves man alone. The hangar-intent retraction is the only caller that wants
-    // this half — see DrainCrewQueues.
+    // seat they themselves man alone. Callers: the hangar-intent retraction, and a successful seat
+    // claim by a pilot who was advertising a hull of their own — see DrainCrewQueues.
     private void DissolveCrewCaptainedBy(int clientId, string? gunnerNotice = "The crew you were on was dissolved.")
     {
         if (_crewByCaptain.Remove(clientId, out var crew))

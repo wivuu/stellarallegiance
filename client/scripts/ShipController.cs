@@ -314,6 +314,14 @@ public partial class ShipController : Node
                 _hangarDemo = true;
                 _hangarDemoLimit = 240;
             }
+            // --turret-test=captain|gunner|auto: same QuickJoin + deploy intent, but it is an
+            // open-ended feel rig — a human is aiming — so the failsafe clock never fires.
+            // Debug builds only, like the rest of the rig.
+            if (a.StartsWith("--turret-test=") && OS.IsDebugBuild())
+            {
+                _hangarDemo = true;
+                _hangarDemoLimit = double.PositiveInfinity;
+            }
         }
         // Headless runs are otherwise uncapped: _Process spins as fast as possible,
         // flooding ApplyInput and racing the prediction far ahead of the 20 Hz

@@ -46,11 +46,14 @@ public static class TurretStations
     }
 
     // Radians of gimbal travel per unit of ShipController's virtual-stick gain, so one mouse
-    // sensitivity setting drives BOTH flight and the turret with the same feel. The pilot's stick
-    // gain is a deflection-per-pixel (DefaultMouseSens 0.01 × the UserPrefs multiplier); a turret has
-    // no self-centering stick, so that gain is converted straight to an angle here. 0.4 puts a ~400 px
-    // sweep at ~90° of azimuth at the default sensitivity — the usual mouse-look feel.
-    public const float RadPerStickUnit = 0.4f;
+    // sensitivity setting drives BOTH flight and the turret. The pilot's stick gain is a
+    // deflection-per-pixel (DefaultMouseSens 0.01 × the UserPrefs multiplier); a turret has no
+    // self-centering stick, so that gain is converted straight to an angle here — strictly LINEAR,
+    // no curve. 0.12 is ~0.07°/px at the default sensitivity (a 90° sweep ≈ 1300 px), the usual
+    // mouse-look gain; the old 0.4 (0.23°/px) made a careful nudge jump (user report 2026-09-19).
+    // TURRET_GAIN overrides it for feel-tuning (scripts/turret-test.ps1).
+    public const float RadPerStickUnit = 0.12f;
 
-    public static float AimDeltaRad(float pixels, float stickGain) => pixels * stickGain * RadPerStickUnit;
+    public static float AimDeltaRad(float pixels, float stickGain, float radPerStickUnit = RadPerStickUnit) =>
+        pixels * stickGain * radPerStickUnit;
 }

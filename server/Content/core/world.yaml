@@ -266,3 +266,10 @@ scoring:
   kill-outpost: 250     # killing blow on an enemy forward base
   ejection: 0           # penalty when YOUR combat ship is destroyed
   death: -25            # penalty when YOUR escape pod is destroyed
+
+# Crew-served turrets. The gunner's CLIENT applies a station's slew limit, so this resolves at
+# content projection into the streamed per-station value (hulls.yaml `slew-deg` overrides it per
+# station). The limit is on SUSTAINED turn rate only — a motion under ~0.15 s of traverse is never
+# limited on any mount. 0 = stations with no `slew-deg` are unlimited.
+turret:
+  default-slew-deg: 180

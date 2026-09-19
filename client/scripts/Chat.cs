@@ -136,9 +136,12 @@ public partial class Chat : Control
     //     Lobby._Process's `!SectorOverview.Active` show-gate).
     //   - the hangar / ship-loadout: it covers the Lobby (hidden when the spawn hangar is committed,
     //     or its comms box unfocused while ShipLoadout.Active) and binds no Enter of its own.
+    //   - riding a teammate's turret: a gunner has no LocalShip but IS in flight (the Lobby is down),
+    //     so without this the gunner had no chat at all — no Enter-to-talk and no log.
     private bool LobbyOwnsScreen =>
         _cm.State == ConnectionManager.ConnState.Connected
         && _world.Ships.LocalShip == null
+        && !_world.Ships.Riding
         && !SectorOverview.Active
         && !ShipLoadout.Active;
 

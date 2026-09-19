@@ -680,6 +680,14 @@ public partial class ShipLoadout
     }
 
     private CrewDemoRole _crewDemoRole;
+
+    // --turret-test=captain|gunner|auto (scripts/turret-test.ps1): the SAME two roles, but as a
+    // feel-testing rig rather than a screenshot run — no snapshots, no scripted sweep, nobody leaves.
+    // The captain launches the bomber and sits still; the gunner claims T1 and the mouse is the
+    // human's (auto: TurretTestProbe scripts it and quits with a verdict). The launcher pre-unlocks
+    // the bomber (faction `base-techs`), so the 120 s research is skipped when it isn't needed.
+    private bool _turretTest;
+    private bool _turretTestAuto;
     private double _crewDemoHold; // seconds spent re-entering the current wait step
     private bool _rideShotsScheduled;
 
@@ -705,16 +713,145 @@ public partial class ShipLoadout
             GD.PrintErr($"CREW_DEMO: unknown role '{role}' (expected captain|gunner)");
     }
 
+    private void ParseTurretTestArg(string role)
+    {
+        _turretTest = true;
+        _turretTestAuto = role == "auto";
+        _crewDemoRole = role switch
+        {
+            "captain" => CrewDemoRole.Captain,
+            "gunner" or "auto" => CrewDemoRole.Gunner,
+            _ => CrewDemoRole.None,
+        };
+        if (_crewDemoRole == CrewDemoRole.None)
+        {
+            _turretTest = false;
+            GD.PrintErr($"TURRET_TEST: unknown role '{role}' (expected captain|gunner|auto)");
+        }
+    }
+
     private void RunCrewDemo(double delta)
     {
         _demoWait -= delta;
         if (_demoWait > 0 || _classId == null)
             return;
-        _demoWait = 0.8;
-        if (_crewDemoRole == CrewDemoRole.Captain)
+        _demoWait = _turretTest ? 0.4 : 0.8;
+        if (_turretTest && _crewDemoRole == CrewDemoRole.Captain)
+            RunTurretTestCaptain();
+        else if (_turretTest)
+            RunTurretTestGunner();
+        else if (_crewDemoRole == CrewDemoRole.Captain)
             RunCaptainDemo();
         else
             RunGunnerDemo();
+    }
+
+    // ---- turret-test roles (the quick path: no shots, no gun re-assignment) ----
+
+    private void RunTurretTestCaptain()
+    {
+        switch (_demoStep++)
+        {
+            // Pre-unlocked by the launcher's content; otherwise research it the way the crew demo does.
+            case 0:
+                if (BomberUnlocked())
+                    _demoStep = 4;
+                else
+                    ClickTab("RESEARCH");
+                break;
+            case 1:
+                ClickResearchNode();
+                break;
+            case 2:
+                ClickAuthorize();
+                _demoWait = 1.5;
+                break;
+            case 3:
+                CrewWaitFor(BomberUnlocked(), 180, "bomber-research");
+                break;
+            case 4:
+                ClickTab("HANGAR");
+                break;
+            case 5:
+                ClickShipCardOfClass(DemoBomberClass);
+                break;
+            case 6:
+                CrewWaitFor(MannedSeatCount() > 0, 300, "gunner-never-joined");
+                break;
+            case 7:
+                GD.Print("TURRET_TEST: station manned — launching");
+                ClickAt(_launch.GetGlobalRect().GetCenter());
+                break;
+        }
+    }
+
+    private int _joinAttempts;
+
+    private void RunTurretTestGunner()
+    {
+        switch (_demoStep++)
+        {
+            case 0:
+                CrewWaitFor(OpenSeatOffered(), 300, "no-seat-offered");
+                break;
+            // The CREWED SHIPS card is rebuilt on the roster frame that offered the seat; its ＋ JOIN
+            // button has no settled rect until the next layout pass, so give it a beat before clicking.
+            case 1:
+                _demoWait = 1.0;
+                break;
+            // The rig tests AIMING, not the hangar's widgets, so the seat is claimed through the same
+            // handler the ＋ JOIN button raises rather than through a synthetic click (which proved
+            // layout-fragile here; --crew-demo still covers the real button).
+            case 2:
+                JoinFirstOpenSeat();
+                _demoWait = 1.5;
+                break;
+            // A request the server dropped (e.g. the captain re-advertised) is simply retried.
+            case 3:
+                if (_crewMode && _world.Crew.SeatOf(_net.LocalClientId) != null)
+                {
+                    GD.Print("TURRET_TEST: seated — waiting for the captain to launch");
+                    break;
+                }
+                if (++_joinAttempts >= 10)
+                {
+                    GD.PrintErr("TURRET_TEST: FAIL — the seat was never granted");
+                    GetTree().Quit(1);
+                    break;
+                }
+                _demoStep = OpenSeatOffered() ? 2 : 0;
+                break;
+        }
+    }
+
+    private void JoinFirstOpenSeat()
+    {
+        int me = _net.LocalClientId;
+        foreach (CrewStore.CrewShip ship in _world.Crew.Ships)
+        {
+            if (ship.CaptainId == me || !ship.Docked)
+                continue;
+            foreach (CrewStore.CrewSeat seat in ship.Seats)
+                if (seat.IsOpen)
+                {
+                    GD.Print($"TURRET_TEST: claiming {CrewStore.SeatId(seat.SeatIndex)} on captain {ship.CaptainId}'s hull");
+                    OnSeatJoin(ship.CaptainId, seat.SeatIndex);
+                    return;
+                }
+        }
+    }
+
+    // The ride started (this hangar is closing): hand the rest to TurretTestProbe, which lives on the
+    // tree root — it draws the aim readout and, in auto mode, scripts the mouse and quits.
+    private void TurretTestAfterRideStart()
+    {
+        if (!_turretTest || _crewDemoRole != CrewDemoRole.Gunner || _rideShotsScheduled)
+            return;
+        if (_world == null || !_world.Ships.Riding)
+            return;
+        _rideShotsScheduled = true;
+        GD.Print("TURRET_TEST: riding — the gun is yours");
+        GetTree().Root.AddChild(new TurretTestProbe { Auto = _turretTestAuto });
     }
 
     // Hold the current step until `ready`, re-entering it every 0.4 s. Returns true once satisfied;
@@ -733,7 +870,7 @@ public partial class ShipLoadout
         {
             GD.PrintErr($"CREW_DEMO: timed out waiting ({timeoutShot})");
             Snap(timeoutShot);
-            GetTree().Quit();
+            GetTree().Quit(_turretTest ? 1 : 0);
         }
         return false;
     }

@@ -659,6 +659,8 @@ public partial class ShipLoadout
 
     private void Snap(string name)
     {
+        if (_demoDir is null) // --turret-test runs the crew roles with no snapshot directory
+            return;
         GetViewport().GetTexture().GetImage().SavePng($"{_demoDir}/{name}.png");
         GD.Print($"HANGAR_DEMO_SHOT:{name}");
     }

@@ -158,6 +158,7 @@ public partial class ShipLoadout : Control
             SendHangarIntent(retract: true);
         DemoAfterLaunch();
         DemoAfterRideStart();
+        TurretTestAfterRideStart();
     }
 
     public override void _Ready()
@@ -176,6 +177,10 @@ public partial class ShipLoadout : Control
             // --crew-demo=captain:<dir> / --crew-demo=gunner:<dir> — the two-client crew harness.
             if (a.StartsWith("--crew-demo="))
                 ParseCrewDemoArg(a["--crew-demo=".Length..]);
+            // --turret-test=captain|gunner|auto — the turret feel rig (scripts/turret-test.ps1).
+            // Debug builds only — see TurretController's env overrides.
+            if (a.StartsWith("--turret-test=") && OS.IsDebugBuild())
+                ParseTurretTestArg(a["--turret-test=".Length..]);
         }
 
         var bg = new ColorRect { Color = DesignTokens.Void };

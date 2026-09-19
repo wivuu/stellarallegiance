@@ -188,7 +188,15 @@ Check(TurretStations.Of(null).Count == 0, "TurretStations.Of tolerates a hull wh
 const float DefaultMouseSens = 0.01f; // ShipController's px -> stick deflection
 float sweep = TurretStations.AimDeltaRad(400f, DefaultMouseSens);
 Check(Math.Abs(sweep - 400f * DefaultMouseSens * TurretStations.RadPerStickUnit) < 1e-6f, "AimDeltaRad is linear in px");
-Check(Math.Abs(sweep - MathF.PI / 2f) < 0.05f, "a ~400 px sweep is ~90 degrees at the default sensitivity");
+
+// ~0.07 deg/px — the usual mouse-look gain. The old 0.4 rad/stick (0.23 deg/px: 400 px = 90 degrees) made a
+// careful nudge jump (user report 2026-09-19).
+float degPerPx = TurretStations.AimDeltaRad(1f, DefaultMouseSens) * 180f / MathF.PI;
+Check(degPerPx > 0.05f && degPerPx < 0.09f, $"the default gain is ~0.07 degrees per px ({degPerPx:0.000})");
+Check(
+    Math.Abs(TurretStations.AimDeltaRad(400f, DefaultMouseSens, 0.4f) - MathF.PI / 2f) < 0.05f,
+    "an explicit rad-per-stick (the TURRET_GAIN tuning override) replaces the default gain"
+);
 Check(TurretStations.AimDeltaRad(-10f, DefaultMouseSens) < 0f, "AimDeltaRad keeps the sign of the motion");
 Check(TurretStations.AimDeltaRad(10f, 0f) == 0f, "a zero sensitivity moves the gimbal not at all");
 

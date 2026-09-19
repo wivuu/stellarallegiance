@@ -23,7 +23,8 @@
 //   1.  Content premise: the bomber's two stations, their indices, the slot<->index mapping.
 //   2.  Intent: create / retract (0xFF) / a hull with no stations / an unspawnable class.
 //   3.  The join matrix, one check per rule (self, unknown captain, cross-team, in flight, bad
-//       slot, taken seat, already flying, already a captain) + the plain success.
+//       slot, taken seat, already flying) + the plain success + an advertising captain's claim
+//       withdrawing their own offer (only when it succeeds).
 //   4.  Move: a claim while seated vacates the old seat first and leaves exactly one.
 //   5.  Leave (silent), and a captain's retraction releasing its gunners.
 //   6.  Turret gun resolution: tech-locked / rack / dispenser picks fall back PER SEAT to the
@@ -281,14 +282,38 @@ Simulation.ShipSim Launch(Simulation sim, int cid, byte team, byte cls)
     Seat(sim, 5, 0, 1, 1, 1);
     Check(SeatsOf(sim, 5).Count == 0, "a pilot with a live ship can't claim a turret", "a flying pilot took a turret");
 
-    // A pilot advertising their OWN crew can't ride someone else's.
-    Intent(sim, 6, 0, Bomber);
-    Seat(sim, 6, 0, 1, 1, 1);
-    Check(
-        SeatsOf(sim, 6).Count == 0,
-        "a captain advertising their own hull can't also claim a teammate's turret",
-        "a captain double-booked as a gunner"
-    );
+    // A pilot advertising their OWN hull who takes a seat elsewhere stops being a captain: the
+    // advertisement is withdrawn BY the successful claim (the hangar advertises on open, so refusing
+    // here made ＋ JOIN a dead button for a returning bomber pilot). Own sim, so the matrix above
+    // keeps its seats.
+    {
+        var own = BootSim(3);
+        Intent(own, 1, 0, Bomber); // the ship being joined
+        Intent(own, 6, 0, Bomber); // client 6 offers a bomber of their own...
+        Seat(own, 7, 0, 1, 6, 0); // ...which client 7 has already manned
+        Seat(own, 8, 0, 1, 1, 0); // and station 0 of captain 1 is taken
+        Check(
+            SeatsOf(own, 7).SequenceEqual(new[] { (6, 0) }),
+            "premise: client 7 mans captain 6's hull",
+            "client 7 never sat"
+        );
+
+        // A claim that FAILS (taken seat) costs the advertising captain nothing.
+        Seat(own, 6, 0, 1, 1, 0);
+        Check(
+            SeatsOf(own, 6).Count == 0 && CrewOf(own, 6) is not null && SeatsOf(own, 7).SequenceEqual(new[] { (6, 0) }),
+            "a REFUSED claim leaves the claimant's own advertisement and its gunners untouched",
+            "a refused claim dissolved the claimant's own crew"
+        );
+
+        // A claim that SUCCEEDS withdraws the advertisement and frees the gunners seated on it.
+        Seat(own, 6, 0, 1, 1, 1);
+        Check(
+            SeatsOf(own, 6).SequenceEqual(new[] { (1, 1) }) && CrewOf(own, 6) is null && SeatsOf(own, 7).Count == 0,
+            "an advertising captain who takes a teammate's turret is seated, and their own offer is withdrawn (its gunners freed)",
+            $"captain-joins-crew wrong (seats {SeatsOf(own, 6).Count}, still captain {CrewOf(own, 6) is not null}, gunner 7 seats {SeatsOf(own, 7).Count})"
+        );
+    }
 
     // ...and the mirror rule: a seated gunner can't advertise a hull of their own.
     Intent(sim, 2, 0, Bomber);
@@ -868,6 +893,72 @@ Simulation.ShipSim Launch(Simulation sim, int cid, byte team, byte cls)
         TurretAim.SpreadBarrel(1) == 0x81,
         "TurretAim.SpreadBarrel tags a station's spread seed with the 0x80 turret bit",
         $"SpreadBarrel(1) = 0x{TurretAim.SpreadBarrel(1):X2}, expected 0x81"
+    );
+
+    // The SLEW limit is a token bucket (user steer 2026-09-19: "don't limit small motions for any
+    // type of turret, limit max turn rate"). Driven here exactly the way TurretController drives it:
+    // one call per 60 Hz frame with that frame's requested turn.
+    const float Dt = 1f / 60f;
+    float Deg(float d) => d * MathF.PI / 180f;
+
+    // Feed `totalRad` of turn spread evenly over `frames` frames from a full bucket; return what landed.
+    float Sweep(float slewRad, float totalRad, int frames)
+    {
+        float budget = float.MaxValue; // a fresh seat: SlewLimit clamps it to the capacity
+        float got = 0f;
+        float per = totalRad / frames;
+        for (int i = 0; i < frames; i++)
+            got += per * TurretAim.SlewLimit(ref budget, slewRad, Dt, per);
+        return got;
+    }
+
+    // A motion smaller than the bucket passes 1:1 on EVERY mount — even dumped into a single frame,
+    // which the old per-frame cap cut to a fraction of a degree.
+    bool smallFree = true;
+    foreach (float slewDeg in new[] { 45f, 110f, 180f })
+    {
+        float small = Deg(slewDeg) * TurretAim.SlewWindowSec * 0.9f;
+        smallFree &= MathF.Abs(Sweep(Deg(slewDeg), small, 1) - small) < 1e-6f;
+        smallFree &= MathF.Abs(Sweep(Deg(slewDeg), small, 6) - small) < 1e-5f;
+    }
+    Check(
+        smallFree,
+        "SlewLimit never limits a motion under the bucket (45/110/180 deg/s mounts, one-frame flick or spread)",
+        "SlewLimit scaled a motion smaller than the bucket"
+    );
+
+    // Below the limit the response is LINEAR: twice the hand motion is twice the angle.
+    float slow = Sweep(Deg(180f), Deg(60f), 60); // 60 deg/s for a second on a 180 deg/s mount
+    float twice = Sweep(Deg(180f), Deg(120f), 60);
+    Check(
+        MathF.Abs(slow - Deg(60f)) < 1e-4f && MathF.Abs(twice - 2f * slow) < 1e-4f,
+        "SlewLimit is linear below the slew rate (2x the motion = 2x the angle, nothing dropped)",
+        $"sub-limit response not linear ({slow} rad then {twice} rad)"
+    );
+
+    // A SUSTAINED spin far past the rate converges on the slew rate (+ the one-off bucket).
+    float spun = Sweep(Deg(110f), Deg(2000f), 120); // asks 1000 deg/s for 2 s on a 110 deg/s mount
+    float expected = Deg(110f) * (2f + TurretAim.SlewWindowSec);
+    Check(
+        MathF.Abs(spun - expected) < Deg(2.5f),
+        "SlewLimit holds a sustained spin to the station's slew rate (plus the one-off bucket)",
+        $"sustained spin gave {spun * 180f / MathF.PI:0.0} deg over 2 s, expected ~{expected * 180f / MathF.PI:0.0}"
+    );
+
+    // The bucket never banks more than its capacity however long the hand rests, a 0-slew station is
+    // unlimited, and a zero window degenerates to the old per-frame cap (still turns at the rate).
+    float rested = 0f;
+    for (int i = 0; i < 600; i++)
+        TurretAim.SlewLimit(ref rested, Deg(110f), Dt, 0f);
+    float noBudget = 0f;
+    float frameCap = float.MaxValue;
+    float perFrame = Deg(90f) * TurretAim.SlewLimit(ref frameCap, Deg(110f), Dt, Deg(90f), windowSec: 0f);
+    Check(
+        MathF.Abs(rested - TurretAim.SlewCapacity(Deg(110f), Dt)) < 1e-5f
+            && TurretAim.SlewLimit(ref noBudget, 0f, Dt, Deg(500f)) == 1f
+            && MathF.Abs(perFrame - Deg(110f) * Dt) < 1e-5f,
+        "SlewLimit: the bucket caps at its capacity, slew 0 is unlimited, window 0 = a per-frame cap",
+        $"bucket edge cases wrong (rested {rested}, per-frame {perFrame})"
     );
 }
 

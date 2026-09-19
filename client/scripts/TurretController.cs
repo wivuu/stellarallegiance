@@ -18,10 +18,11 @@ using StellarAllegiance.Ui;
 // The gun IS the look, and the CLIENT owns it (user steer 2026-09-13: a gun that traversed toward the
 // sight under its own slew/accel was "very laggy and difficult to control"). There is exactly ONE aim —
 // the look basis' forward — and it goes on the wire as the real thing; the server only fences it into
-// the station's arc. The single piece of turret physics left is the per-frame SPEED cap in SampleAim,
-// which caps the MOUSE's own turn at the station's authored TurretSlewRad (user steer, same day: "let's
-// not let the camera look faster than the aim"); it lives here, on the client, and nothing anywhere
-// re-derives the aim from it. The CAMERA is that same look: it moves with the mouse, the ship's pose and
+// the station's arc. The single piece of turret physics left is the SLEW limit in SampleAim, which
+// holds the MOUSE's own SUSTAINED turn rate to the station's authored TurretSlewRad (user steer, same
+// day: "let's not let the camera look faster than the aim") through TurretAim.SlewLimit's token bucket
+// — small motions are never limited on any mount (user steer 2026-09-19); it lives here, on the
+// client, and nothing anywhere re-derives the aim from it. The CAMERA is that same look: it moves with the mouse, the ship's pose and
 // the arc fence and with nothing else (user steer 2026-09-13: the turret cam is a free look,
 // "constrained only by its position, the ship's orientation and its arc fence, not other physics of the
 // turret"). So the ONE reticle — the pilot's own aim reticle, drawn by TargetMarkers off the firing line
@@ -93,6 +94,34 @@ public partial class TurretController : Node
     // scripted gunner proves the aim/fire round trip without a hand on the mouse. Describe() is what
     // the harness prints beside each shot.
     public static bool DemoDrive;
+
+    // --turret-test harness (scripts/turret-test.ps1). StatsEnabled turns on the once-a-second
+    // [turret-stats] log line + StatsLine (the on-screen readout Hud draws); InjectMouse feeds
+    // scripted cursor motion through the SAME path a real InputEventMouseMotion takes, so the auto
+    // role measures the real mapping. Response is the running requested/applied angle since the last
+    // ResetResponse — the auto role's linearity probe.
+    public static bool StatsEnabled;
+    public static string StatsLine { get; private set; } = "";
+    private static Vector2 _injected;
+
+    public static void InjectMouse(Vector2 pixels)
+    {
+        if (OS.IsDebugBuild()) // scripted input is a harness seam, never live in an exported build
+            _injected += pixels;
+    }
+
+    public static (float WantDeg, float GotDeg) Response { get; private set; }
+
+    public static void ResetResponse() => Response = (0f, 0f);
+
+    private double _statT;
+    private float _statPx,
+        _statWant,
+        _statGot,
+        _statDropped;
+    private int _statFrames,
+        _statLimited;
+
     private int _sentFrames,
         _predictedShots;
 
@@ -129,6 +158,15 @@ public partial class TurretController : Node
     // one sensitivity setting drives both seats.
     private const float DefaultMouseSens = 0.01f;
 
+    // The slew token bucket's carried allowance (TurretAim.SlewLimit), refilled on taking a seat.
+    private float _slewBudget;
+
+    // Feel-tuning overrides (env, harness only, ignored outside a debug build): TURRET_GAIN = rad per stick unit, TURRET_SLEW_DEG =
+    // every station's slew (0 = uncapped), TURRET_SLEW_WINDOW = the bucket window in seconds.
+    private float _radPerStick = TurretStations.RadPerStickUnit;
+    private float _slewOverrideRad = -1f;
+    private float _slewWindow = TurretAim.SlewWindowSec;
+
     private double _acc;
     private uint _predTick;
     private uint _lastFire; // this station's own cadence stamp, in prediction-tick space
@@ -160,9 +198,32 @@ public partial class TurretController : Node
             _mouseInvert = invertEnv is "1" or "true";
             _invertFromEnv = true;
         }
+        // DEBUG BUILDS ONLY (editor / run-from-source, which is all scripts/turret-test.ps1 needs):
+        // the slew limit is enforced on this client, so in an exported build TURRET_SLEW_DEG=0 would
+        // be a one-line unlimited-traverse cheat. STDB_MOUSE_SENS above stays open — a preference,
+        // not an advantage.
+        if (OS.IsDebugBuild())
+        {
+            if (EnvFloat("TURRET_GAIN") is float gain && gain > 0f)
+                _radPerStick = gain;
+            if (EnvFloat("TURRET_SLEW_DEG") is float slewDeg && slewDeg >= 0f)
+                _slewOverrideRad = Mathf.DegToRad(slewDeg);
+            if (EnvFloat("TURRET_SLEW_WINDOW") is float window && window >= 0f)
+                _slewWindow = window;
+        }
         RefreshMousePrefs();
         UserPrefs.Changed += RefreshMousePrefs;
     }
+
+    private static float? EnvFloat(string name) =>
+        float.TryParse(
+            OS.GetEnvironment(name),
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var v
+        )
+            ? v
+            : null;
 
     public override void _ExitTree()
     {
@@ -207,7 +268,7 @@ public partial class TurretController : Node
         var zenith = ShipMath.ToShared(Zenith);
 
         TakeCursor();
-        SampleAim(zenith, hp.TurretSlewRad, (float)delta);
+        SampleAim(zenith, _slewOverrideRad >= 0f ? _slewOverrideRad : hp.TurretSlewRad, (float)delta);
 
         // The look's forward IS the aim: where the mouse has just put the sight is where the gun points,
         // where the bolts leave and what goes on the wire. SampleAim has already capped this frame's
@@ -283,6 +344,9 @@ public partial class TurretController : Node
         _lastSentAim = Vector3.Zero; // force the first sample onto the wire
         _lastSentFiring = false;
         _mouseDelta = Vector2.Zero;
+        _injected = Vector2.Zero;
+        // A fresh seat starts with a full bucket: the first motion is never the limited one.
+        _slewBudget = float.MaxValue; // SlewLimit clamps it to the station's capacity on first use
 
         // Taking a seat is the ride's launch: lock the cursor straight to the gun so the gunner aims
         // without a click first — the same courtesy ShipController's AnchorFreshShip does on spawn.
@@ -301,6 +365,7 @@ public partial class TurretController : Node
         _firing = false;
         _wantCapture = false;
         _mouseDelta = Vector2.Zero;
+        StatsLine = "";
         // Hand the cursor back only when nothing else is about to want it: launching our own hull
         // (the usual way a ride ends) leaves flight holding the capture it just took — and so does
         // being PROMOTED to captain of the hull we were riding, where the YouAre ends the ride a frame
@@ -331,8 +396,9 @@ public partial class TurretController : Node
     // spring — so the delta turns the basis rather than being eased back to zero.
     private void SampleAim(Vec3 zenith, float slewRad, float dt)
     {
-        Vector2 m = _mouseDelta;
+        Vector2 m = _mouseDelta + _injected;
         _mouseDelta = Vector2.Zero;
+        _injected = Vector2.Zero;
         bool look = Input.MouseMode == Input.MouseModeEnum.Captured && InputGate.FlightInputFree;
         _firing =
             look
@@ -356,29 +422,55 @@ public partial class TurretController : Node
         // around and no elevation to run out of: pitching up past the zenith carries over the top and
         // keeps going down the far side. The ARC is the only limit, and it moves the whole basis.
         Vector2 md = m / ZoomView.Magnification;
-        float yaw = -TurretStations.AimDeltaRad(md.X, _mouseSens);
-        float pitch = TurretStations.AimDeltaRad(_mouseInvert ? -md.Y : md.Y, _mouseSens);
+        float yaw = -TurretStations.AimDeltaRad(md.X, _mouseSens, _radPerStick);
+        float pitch = TurretStations.AimDeltaRad(_mouseInvert ? -md.Y : md.Y, _mouseSens, _radPerStick);
 
-        // …but never faster than the mount can traverse (user steer 2026-09-13: "let's not let the
-        // camera look faster than the aim"). This cap is the WHOLE of a turret's physics now: the
-        // frame's turn is limited to the station's slew speed, and since the look IS the gun that
-        // limits both together — a heavy mount reads as a heavy view, never as a reticle drifting off
-        // the centre. Motion past the cap is dropped, not banked: a banked turn would keep the view
-        // moving after the hand stopped. A station with no authored traverse (slew 0) is uncapped.
-        if (slewRad > 0f && dt > 0f)
-        {
-            float turn = Mathf.Sqrt(yaw * yaw + pitch * pitch);
-            float cap = slewRad * dt;
-            if (turn > cap)
-            {
-                float k = cap / turn;
-                yaw *= k;
-                pitch *= k;
-            }
-        }
+        // …but never SUSTAINED faster than the mount can traverse (user steer 2026-09-13: "let's not
+        // let the camera look faster than the aim"). This limit is the WHOLE of a turret's physics: a
+        // heavy mount reads as a heavy view, never as a reticle drifting off the centre. It is a token
+        // bucket (TurretAim.SlewLimit), NOT a per-frame cap: a motion smaller than the bucket passes
+        // 1:1 on every mount (user steer 2026-09-19: "don't limit small motions for any type of
+        // turret"), and only a held spin is brought down to the slew rate. Motion past the allowance
+        // is dropped, not banked: a banked turn would keep the view moving after the hand stopped. A
+        // station with no authored traverse (slew 0) is unlimited.
+        float turn = Mathf.Sqrt(yaw * yaw + pitch * pitch);
+        float k = TurretAim.SlewLimit(ref _slewBudget, slewRad, dt, turn, _slewWindow);
+        yaw *= k;
+        pitch *= k;
+        if (StatsEnabled)
+            RecordStats(m.Length(), turn, turn * k, slewRad, dt);
         _look.Yaw(yaw);
         _look.Pitch(pitch);
         Clamped = _look.ClampToArc(zenith);
+    }
+
+    // --turret-test readout: what the hand asked for against what the mount gave, once a second.
+    // "limited" is the share of frames the slew bucket scaled; a healthy feel keeps it near zero
+    // outside a deliberate hard spin.
+    private void RecordStats(float pixels, float wantRad, float gotRad, float slewRad, float dt)
+    {
+        Response = (Response.WantDeg + Mathf.RadToDeg(wantRad), Response.GotDeg + Mathf.RadToDeg(gotRad));
+        _statT += dt;
+        _statPx += pixels;
+        _statWant += wantRad;
+        _statGot += gotRad;
+        _statDropped += wantRad - gotRad;
+        _statFrames++;
+        if (gotRad < wantRad - 1e-6f)
+            _statLimited++;
+        if (_statT < 1.0)
+            return;
+        float t = (float)_statT;
+        float capacity = TurretAim.SlewCapacity(slewRad, dt, _slewWindow);
+        float fill = slewRad > 0f && capacity > 0f ? Mathf.Clamp(_slewBudget / capacity, 0f, 1f) : 1f;
+        StatsLine =
+            $"hand {_statPx / t:0} px/s  want {Mathf.RadToDeg(_statWant) / t:0.0}°/s  got {Mathf.RadToDeg(_statGot) / t:0.0}°/s  "
+            + $"limited {100f * _statLimited / Mathf.Max(_statFrames, 1):0}%  dropped {Mathf.RadToDeg(_statDropped):0.0}°  "
+            + $"budget {fill:0.00}  slew {Mathf.RadToDeg(slewRad):0}°/s  gain {Mathf.RadToDeg(_mouseSens * _radPerStick):0.000}°/px  fps {_statFrames / t:0}";
+        GD.Print($"[turret-stats] {StatsLine}");
+        _statT = 0;
+        _statPx = _statWant = _statGot = _statDropped = 0f;
+        _statFrames = _statLimited = 0;
     }
 
     // The 20 Hz half: send the held aim/trigger on change (or on the keepalive) and predict our own

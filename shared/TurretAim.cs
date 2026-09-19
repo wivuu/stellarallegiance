@@ -12,8 +12,8 @@ namespace StellarAllegiance.Shared;
 //   - client ShipRenderer.ApplyTurrets    (remote turrets: rebuilds bolts along the streamed aim)
 // Turret aim is CLIENT-AUTHORITATIVE (user steer 2026-09-13: a gun that lags the sight was "very
 // laggy and difficult to control"): the gun is exactly where the gunner looks. The station's slew
-// SPEED (HardpointDef.TurretSlewRad) is the only physics left, and the CLIENT applies it — as the cap
-// on how fast the look (and so the gun) may turn in a frame. The server never traverses anything: it
+// SPEED (HardpointDef.TurretSlewRad) is the only physics left, and the CLIENT applies it — as the
+// SUSTAINED-rate limit on the look (SlewLimit's token bucket: small motions are never limited). The server never traverses anything: it
 // takes the aim the gunner sent, clamps it into the arc (so a stale or forged aim can never fire
 // through the hull) and fires along it.
 public static class TurretAim
@@ -34,12 +34,49 @@ public static class TurretAim
     // TurretInputMessage.Flags bits.
     public const byte FlagFiring = 1;
 
-    // Slew-speed default for a station that authors no `slew-deg` (projection fills
-    // HardpointDef.TurretSlewRad from it): how fast the gunner's look — and so the gun — may turn,
-    // in degrees per second. A light mount comes round 90° in about a second and a third. The bomber
-    // flies this; a heavy capital station authors lower. There is no wind-up: within the cap the aim
-    // is instant.
-    public const double DefaultSlewDeg = 69.0;
+    // Slew-speed default for a station that authors no `slew-deg` and whose world authors no
+    // `turret.default-slew-deg` (projection fills HardpointDef.TurretSlewRad): the fastest SUSTAINED
+    // rate the gunner's look — and so the gun — may turn, in degrees per second. A light mount comes
+    // round 180° in a second; a heavy capital station authors lower. There is no wind-up.
+    public const double DefaultSlewDeg = 180.0;
+
+    // The slew limit is a TOKEN BUCKET, not a per-frame cap (user steer 2026-09-19: "don't limit small
+    // motions for any type of turret, limit max turn rate"). The bucket holds SlewWindowSec worth of
+    // traverse (slew × window) and refills at the slew rate, so any motion smaller than the bucket —
+    // a nudge, a correction, a short flick — passes 1:1 on every mount, and only a SUSTAINED spin is
+    // held to the slew rate. A per-frame cap did the opposite: at a 60 Hz frame it bit at a few
+    // hundred px/s of hand speed, so almost every motion was truncated and the response went
+    // sub-linear ("small movements feel large, large movements feel slow").
+    public const float SlewWindowSec = 0.15f;
+
+    // One frame of the bucket. `budgetRad` is the gunner's carried allowance (seed it with
+    // SlewCapacity on taking a seat); `turnRad` is the magnitude of the turn the mouse asked for this
+    // frame. Returns the scale (0..1) to apply to that turn. Motion past the allowance is DROPPED, not
+    // banked — a banked turn would keep the view moving after the hand stopped. slewRad <= 0 is an
+    // uncapped station.
+    public static float SlewLimit(
+        ref float budgetRad,
+        float slewRad,
+        float dt,
+        float turnRad,
+        float windowSec = SlewWindowSec
+    )
+    {
+        if (slewRad <= 0f)
+            return 1f;
+        float capacity = SlewCapacity(slewRad, dt, windowSec);
+        budgetRad = MathF.Min(budgetRad + slewRad * MathF.Max(dt, 0f), capacity);
+        if (turnRad <= 0f)
+            return 1f;
+        float granted = MathF.Min(turnRad, budgetRad);
+        budgetRad -= granted;
+        return granted / turnRad;
+    }
+
+    // The bucket's size: the window's worth of traverse, never less than one frame's so a long frame
+    // (or a zero window, = the old per-frame cap) still turns at the slew rate.
+    public static float SlewCapacity(float slewRad, float dt = 0f, float windowSec = SlewWindowSec) =>
+        MathF.Max(slewRad * MathF.Max(windowSec, 0f), slewRad * MathF.Max(dt, 0f));
 
     // Spread-seed "barrel" for a station: 0x80 | HardpointDef.Index — disjoint from the pilot's
     // barrel indices (< 128), so a turret volley never shares a scatter seed with a hull gun on the
