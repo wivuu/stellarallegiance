@@ -20,7 +20,10 @@
 # All state lives under build/launcher-e2e (gitignored) plus Velopack's own per-app cache, which is why
 # the test packs under its own id (StellarAllegianceE2E) — a real install is never touched.
 param(
-    [switch]$KeepFiles # leave build/launcher-e2e in place afterwards for inspection
+    [switch]$KeepFiles, # leave build/launcher-e2e in place afterwards for inspection
+    # The three versions to pack, oldest first. The default is what CI runs; pass pre-release strings to
+    # rehearse a release candidate's numbering, e.g. -Versions 0.0.13-ci.1, 0.0.13-ci.2, 0.0.13
+    [string[]]$Versions = @('1.0.0', '1.0.1', '1.0.2')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -37,6 +40,9 @@ $Data = Join-Path $Root 'data'
 $Report = Join-Path $Root 'stub-report.txt'
 $Log = Join-Path $Data 'logs/launcher.log'
 $Failures = [System.Collections.Generic.List[string]]::new()
+if ($Versions.Count -ne 3) { throw '-Versions takes exactly three versions, oldest first' }
+$v0, $v1, $v2 = $Versions
+$r0, $r1, $r2 = $Versions | ForEach-Object { [regex]::Escape($_) }
 
 function Step([string]$Message) { Write-Host "[e2e] $Message" }
 
@@ -151,8 +157,8 @@ New-Item -ItemType Directory -Force -Path $Root, $Data | Out-Null
 Clear-VelopackState
 
 try {
-    Step 'packing 1.0.0 and installing it ...'
-    New-Package '1.0.0'
+    Step "packing $v0 and installing it ..."
+    New-Package $v0
     $launcher = Install-First
     Assert (Test-Path -LiteralPath $launcher) "installed launcher exists ($launcher)"
 
@@ -172,21 +178,21 @@ try {
         Assert ((Test-Path -LiteralPath $shot) -and (Get-Item -LiteralPath $shot).Length -gt 50000) 'the rendered window is a real image (launcher.png > 50 KB)'
     }
 
-    Step 'packing 1.0.1 ...'
-    New-Package '1.0.1'
+    Step "packing $v1 ..."
+    New-Package $v1
 
     # Flags before the bare `--` and everything after it must reach the game verbatim and in order.
     $gameArgs = @("--stub-report=$Report", '--host', '127.0.0.1:8090', '--', '--ui-x')
     $common = @("--launcher-feed=$Feed", "--launcher-data=$Data")
 
-    Step 'pass 1: selftest=update (1.0.0 → 1.0.1) ...'
+    Step "pass 1: selftest=update ($v0 → $v1) ..."
     $m = Invoke-Launcher $launcher (@('--launcher-selftest=update') + $common + $gameArgs) -Until '^GameExited code=0' -Skip 0
     $m | ForEach-Object { Write-Host "[e2e]     $_" }
-    Assert ([bool]($m -match '^UpdateAvailable version=1\.0\.1')) 'the feed offered 1.0.1'
-    Assert ([bool]($m -match '^UpdatedJustNow version=1\.0\.1 from=1\.0\.0 notes=1')) 'restarted as 1.0.1 and recognised the finished update (with its release notes)'
+    Assert ([bool]($m -match "^UpdateAvailable version=$r1 ")) "the feed offered $v1"
+    Assert ([bool]($m -match "^UpdatedJustNow version=$r1 from=$r0 notes=1")) "restarted as $v1 and recognised the finished update (with its release notes)"
     Assert ([bool]($m -match '^GameExited code=0 kind=Quit')) 'the game ran after the update and quit cleanly'
     $installed = Get-InstalledVersion
-    if ($null -ne $installed) { Assert ($installed -eq '1.0.1') "installed manifest says 1.0.1 (was $installed)" }
+    if ($null -ne $installed) { Assert ($installed -eq $v1) "installed manifest says $v1 (was $installed)" }
     $runs = @(Get-Content -LiteralPath $Report -ErrorAction SilentlyContinue)
     Assert ($runs.Count -eq 1) "the stub game ran exactly once (ran $($runs.Count)x)"
     Assert ([bool]($runs[-1] -match 'SA_LAUNCHER=1 ')) 'the game saw SA_LAUNCHER=1'
@@ -194,23 +200,23 @@ try {
     Assert ([bool]($runs[-1] -match [regex]::Escape('|--host|127.0.0.1:8090|--|--ui-x]'))) 'game args passed through verbatim, in order, including the bare --'
     Assert (-not ($runs[-1] -match '--launcher-')) 'no --launcher-* flag leaked into the game'
 
-    Step 'packing 1.0.2 ...'
-    New-Package '1.0.2'
+    Step "packing $v2 ..."
+    New-Package $v2
 
-    Step 'pass 2: selftest=play, the game asks for the update with exit code 85 (1.0.1 → 1.0.2) ...'
+    Step "pass 2: selftest=play, the game asks for the update with exit code 85 ($v1 → $v2) ..."
     $skip = (Get-Markers).Count
     $m = Invoke-Launcher $launcher (@('--launcher-selftest=play') + $common + @('--stub-exit=85') + $gameArgs) -Until '^GameExited code=0' -Skip $skip
     $m | ForEach-Object { Write-Host "[e2e]     $_" }
-    Assert ([bool]($m -match '^UpdateAvailable version=1\.0\.2 delta=True')) 'the second update is a DELTA (the first one seeded the package cache)'
+    Assert ([bool]($m -match "^UpdateAvailable version=$r2 delta=True")) 'the second update is a DELTA (the first one seeded the package cache)'
     Assert ([bool]($m -match '^GameExited code=85 kind=UpdateRequested')) 'the game exited 85 and it was read as "update requested"'
-    Assert ([bool]($m -match '^UpdateRequestedByGame version=1\.0\.2')) 'the launcher started the update the game asked for'
-    Assert ([bool]($m -match '^UpdatedJustNow version=1\.0\.2')) 'restarted as 1.0.2'
+    Assert ([bool]($m -match "^UpdateRequestedByGame version=$r2(\s|$)")) 'the launcher started the update the game asked for'
+    Assert ([bool]($m -match "^UpdatedJustNow version=$r2 ")) "restarted as $v2"
     Assert ([bool]($m -match '^GameExited code=0 kind=Quit')) 'went straight back into the game after the update'
     $installed = Get-InstalledVersion
-    if ($null -ne $installed) { Assert ($installed -eq '1.0.2') "installed manifest says 1.0.2 (was $installed)" }
+    if ($null -ne $installed) { Assert ($installed -eq $v2) "installed manifest says $v2 (was $installed)" }
     $runs = @(Get-Content -LiteralPath $Report -ErrorAction SilentlyContinue)
     Assert ($runs.Count -eq 3) "the stub game ran three times in total (ran $($runs.Count)x)"
-    Assert ([bool]($runs[1] -match 'SA_LAUNCHER_UPDATE=1\.0\.2 ')) 'before the update the game was told 1.0.2 is available'
+    Assert ([bool]($runs[1] -match "SA_LAUNCHER_UPDATE=$r2 ")) "before the update the game was told $v2 is available"
     Assert ([bool]($runs[2] -match 'SA_LAUNCHER_UPDATE=none ')) 'after the update the game was told it is current'
 }
 finally {

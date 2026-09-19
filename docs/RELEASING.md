@@ -61,6 +61,7 @@ Things that would quietly break updating — the workflow asserts all of them:
 
 ```sh
 scripts/launcher-e2e.ps1                                  # prove install → update → play on this machine
+scripts/launcher-e2e.ps1 -Versions 0.0.13-ci.1, 0.0.13-ci.2, 0.0.13   # …with a release candidate's numbering
 scripts/package-clients.ps1 -Version 0.0.13                # this OS's real package → build/releases/<channel>
 scripts/package-clients.ps1 -Version 0.0.13 -FakeGame       # …with the stub game (seconds instead of minutes)
 ```
@@ -70,6 +71,35 @@ Host-OS only: macOS packages need `codesign`/`pkgbuild`, and the launcher is Nat
 **Package dry-run** workflow — it runs on any pull request that touches those paths (and by hand once it
 is on the default branch), runs the e2e on all three OSes, publishes nothing,
 and is the only way Windows gets verified without a Windows machine.
+
+## Rehearsing the pipeline
+
+The dry-run packs a stub game and never talks to GitHub Releases, so it cannot prove the Godot export, the
+upload or a real update from GitHub. After changing `release.yml`, the package script's export path or the
+Velopack version, rehearse with throw-away **pre-release** tags. A tag runs the workflow file of the commit
+it points at, so this works from a branch — nothing has to be merged first.
+
+```sh
+git tag v0.0.13-ci.1 && git push origin v0.0.13-ci.1   # export + package + upload + publish, no delta yet
+# install it, set the launcher to BETA (pre-releases are hidden on STABLE), play once, then:
+git tag v0.0.13-ci.2 && git push origin v0.0.13-ci.2   # delta-base download, a real delta, a real update from GitHub
+```
+
+Stable players never see any of it: old zip clients read `/releases/latest`, the launcher's STABLE channel
+filters pre-releases out, and the `:latest` image tag does not move. A machine left on a rehearsal build
+updates to the real `0.0.13` by itself (`0.0.13-ci.2` < `0.0.13`) — that exact sequence is what
+`scripts/launcher-e2e.ps1 -Versions 0.0.13-ci.1, 0.0.13-ci.2, 0.0.13` runs locally.
+
+Clean up afterwards, so the first real release starts from an empty feed:
+
+```sh
+gh release delete v0.0.13-ci.1 --cleanup-tag -y
+gh release delete v0.0.13-ci.2 --cleanup-tag -y
+git tag -d v0.0.13-ci.1 v0.0.13-ci.2
+```
+
+(The run also pushes `stellarallegiance-sim:0.0.13-ci.N` images to GHCR; delete those package versions in
+the GitHub UI if they bother you.)
 
 ## If a release run fails
 

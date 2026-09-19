@@ -118,7 +118,10 @@ function Export-Game {
     $godot = Resolve-Godot
     if (-not $godot) { Fail 'no Godot 4 .NET executable found (see scripts/godot-bin.ps1)' }
 
-    & (Join-Path $RepoRoot 'tools/godot-import.ps1')
+    # This function's OUTPUT is its return value (`$gameSource = Export-Game`), and whatever a native command
+    # prints to stdout rides along in it — Godot's log lines would come back as extra "paths". So everything
+    # chatty in here is piped to the host.
+    & (Join-Path $RepoRoot 'tools/godot-import.ps1') | Out-Host
     if (-not (Test-Path -LiteralPath (Join-Path $Client 'assets/bases/garrison.glb.import'))) {
         Fail 'GLB import sidecars missing — an export now would ship placeholder meshes'
     }
@@ -146,7 +149,7 @@ function Export-Game {
         # Headless Godot .NET can segfault during SHUTDOWN after a successful export (exit 139); the
         # artifact check below is the real gate, exactly as in release.yml.
         $PSNativeCommandUseErrorActionPreference = $false
-        & $godot --headless --path $Client --export-release $preset $target
+        & $godot --headless --path $Client --export-release $preset $target | Out-Host
         $PSNativeCommandUseErrorActionPreference = $true
         if (-not (Test-Path -LiteralPath $target)) { Fail "export produced no output at $target" }
         if ($IsMacOS) { return $target }
@@ -215,6 +218,11 @@ elseif ($GameDir) {
 }
 else {
     $gameSource = Export-Game
+}
+# Exactly one existing path. (A function that leaks output into its return value hands back an ARRAY,
+# and every copy below would then fail on its first element — far from the cause.)
+if ($gameSource -isnot [string] -or -not (Test-Path -LiteralPath $gameSource)) {
+    Fail "the game did not resolve to one existing path (got $(@($gameSource).Count): $(@($gameSource) -join ' | '))"
 }
 
 # ---- 2. the launcher + 3. assemble ---------------------------------------------------------------------
