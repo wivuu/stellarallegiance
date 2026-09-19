@@ -62,6 +62,9 @@ public sealed class ChamferButton : Button
         };
         _label = Sa.Text("", TextStyle.Label, size: DesignTokens.LabelSize + 1);
         _label.VerticalAlignment = VerticalAlignment.Center;
+        // Hidden until it has text (see Label): a VISIBLE empty caption still costs the row its 8px spacing,
+        // which would push the glyph of a label-less button 4px left of centre.
+        _label.IsVisible = false;
         var row = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -77,7 +80,10 @@ public sealed class ChamferButton : Button
                 {
                     Name = "PART_ContentPresenter",
                     [!ContentPresenter.ContentProperty] = this[!ContentProperty],
-                    Padding = new Thickness(LabelPad, 0),
+                    // Bound, not baked in: the Icon variant zeroes Padding. With LabelPad hard-coded here a
+                    // 30px title-bar button had a 2px content box starting at x=14, so its 12px glyph
+                    // overflowed to the right and sat 5px off centre.
+                    [!ContentPresenter.PaddingProperty] = this[!PaddingProperty],
                     HorizontalContentAlignment = HorizontalAlignment.Center,
                     VerticalContentAlignment = VerticalAlignment.Center,
                     Background = Brushes.Transparent, // the whole shape is clickable, not just the glyphs
@@ -85,6 +91,7 @@ public sealed class ChamferButton : Button
         );
         Cursor = new Cursor(StandardCursorType.Hand);
         Focusable = true;
+        Padding = new Thickness(LabelPad, 0);
         MinWidth = 130;
         MinHeight = 38;
         _glowTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, OnGlowTick);

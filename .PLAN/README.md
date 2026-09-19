@@ -7,6 +7,7 @@ The live roadmap: what is shipped (one line each, with a pointer to the real doc
 **Next to incorporate into the plan**
 - Nebula looks different for the same sector on two different clients
 - NativeAOT for game server if possible
+- Launch the game launcher from aspire (to review UI, but does not need to actually launch the game)
 
 **What else lives in `.PLAN/`**
 
