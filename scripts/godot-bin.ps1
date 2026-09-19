@@ -18,6 +18,13 @@
 #   4. standard install locations (macOS .app bundles, Windows, scoop/winget, Linux).
 # Returns `$null` (and prints guidance to stderr) if nothing usable is found, so callers can bail.
 #
+# Windows + a symlink: whatever was found is followed to its final target when it has no extension.
+# chickensoft-games/setup-godot (CI) exposes Godot as an EXTENSIONLESS symlink (…\bin\godot, which is also
+# what it puts in $env:GODOT). bash runs that happily; PowerShell only runs files whose extension is in
+# PATHEXT as programs — anything else is a "document": handed to the shell to open, never waited on, and
+# refused outright in a pipeline ("Cannot run a document in the middle of a pipeline"). The real
+# Godot_v*_win64.exe also has its GodotSharp folder beside it, which is what a .NET build needs.
+#
 # NOTE: $env:GODOT must be the Godot *executable*, not the macOS `.app` folder that the
 # godot-tools extension's `godotTools.editorPath.godot4` setting points at.
 #
@@ -28,6 +35,23 @@ $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
 
 function Resolve-Godot {
+    [CmdletBinding()]
+    param()
+
+    $found = Find-Godot
+    if (-not $found) { return $null }
+    if ($IsWindows -and -not [System.IO.Path]::GetExtension($found)) {
+        try {
+            $target = (Get-Item -LiteralPath $found -Force).ResolveLinkTarget($true)
+            if ($target -and $target.Exists) { return $target.FullName }
+        }
+        catch { [Console]::Error.WriteLine("[godot] could not follow the link '$found': $($_.Exception.Message)") }
+    }
+    return $found
+}
+
+# The search itself (see the header for the order). Returns the first hit exactly as it was found.
+function Find-Godot {
     [CmdletBinding()]
     param()
 

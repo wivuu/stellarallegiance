@@ -101,6 +101,9 @@ jobs:
     name: Package (${{ matrix.name }})
     needs: prepare
     runs-on: ${{ matrix.os }}
+    # The slowest OS (macOS: universal export + two AOT publishes) needs about 10 minutes. A headless Godot
+    # that never exits must not be allowed to sit on a runner for GitHub's default six hours.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:

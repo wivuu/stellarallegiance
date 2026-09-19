@@ -71,6 +71,23 @@ function Fail([string]$Message) {
     exit 1
 }
 
+# Runs a program to completion with its output going STRAIGHT to the console, and returns its exit code.
+# Used for Godot instead of `& $exe … | Out-Host`, because:
+#   - inside a function whose result is captured, un-piped native stdout leaks into the return value;
+#   - piping makes PowerShell read the child's stdout until EOF, and a build server that Godot's own
+#     `dotnet publish` leaves behind inherits that pipe and can hold it open long after Godot has exited;
+#   - on Windows Godot is a GUI-subsystem exe, which PowerShell only waits for when its output is redirected.
+# A plain Process with inherited handles has none of these problems (same idea as Start-Native in
+# scripts/launcher-e2e.ps1). ArgumentList quotes correctly on every OS.
+function Invoke-Program([string]$Exe, [string[]]$Arguments) {
+    $info = [System.Diagnostics.ProcessStartInfo]::new($Exe)
+    $info.UseShellExecute = $false
+    foreach ($a in $Arguments) { $info.ArgumentList.Add($a) }
+    $process = [System.Diagnostics.Process]::Start($info)
+    $process.WaitForExit()
+    return $process.ExitCode
+}
+
 # vpk strips these itself — but only AFTER the bundle has been copied, which on macOS is after we have
 # sealed the nested game bundle, and removing a sealed file breaks its signature. So strip them first.
 # (createdump + *.pdb really are inside a Godot .NET export's data_* folder.)
@@ -119,8 +136,9 @@ function Export-Game {
     if (-not $godot) { Fail 'no Godot 4 .NET executable found (see scripts/godot-bin.ps1)' }
 
     # This function's OUTPUT is its return value (`$gameSource = Export-Game`), and whatever a native command
-    # prints to stdout rides along in it — Godot's log lines would come back as extra "paths". So everything
-    # chatty in here is piped to the host.
+    # prints to stdout rides along in it — Godot's log lines would come back as extra "paths". So nothing
+    # chatty in here may write to the pipeline: the import script goes to the host, Godot runs through
+    # Invoke-Program.
     & (Join-Path $RepoRoot 'tools/godot-import.ps1') | Out-Host
     if (-not (Test-Path -LiteralPath (Join-Path $Client 'assets/bases/garrison.glb.import'))) {
         Fail 'GLB import sidecars missing — an export now would ship placeholder meshes'
@@ -146,12 +164,12 @@ function Export-Game {
         if (Test-Path -LiteralPath $target) { Remove-Item -Recurse -Force -LiteralPath $target }
 
         Step "exporting the game ('$preset') — this takes a few minutes ..."
-        # Headless Godot .NET can segfault during SHUTDOWN after a successful export (exit 139); the
-        # artifact check below is the real gate, exactly as in release.yml.
-        $PSNativeCommandUseErrorActionPreference = $false
-        & $godot --headless --path $Client --export-release $preset $target | Out-Host
-        $PSNativeCommandUseErrorActionPreference = $true
-        if (-not (Test-Path -LiteralPath $target)) { Fail "export produced no output at $target" }
+        # Headless Godot .NET can segfault during SHUTDOWN after a successful export (exit 139, or an
+        # access violation on Windows), so the exit code is only reported; the artifact check is the gate.
+        Step "  $godot"
+        $exportExit = Invoke-Program $godot @('--headless', '--path', $Client, '--export-release', $preset, $target)
+        Step "  export exit code: $exportExit"
+        if (-not (Test-Path -LiteralPath $target)) { Fail "export produced no output at $target (exit code $exportExit)" }
         if ($IsMacOS) { return $target }
         return (Split-Path $target -Parent)
     }
