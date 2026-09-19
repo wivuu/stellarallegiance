@@ -2,7 +2,7 @@
 #
 # IMPORTANT: the build context MUST be the repo root, because SimServer.csproj has a
 # <ProjectReference> on ../shared/Shared.csproj (the deterministic FlightModel + content defs
-# shared with the Godot client). Build with:
+# shared with the Godot client), which needs ../tools/wire-gen at compile time. Build with:
 #     docker build -f server/Dockerfile -t stellarallegiance-sim .
 # or via the repo-root docker-compose.yml (which sets context: .).
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
@@ -10,8 +10,12 @@ WORKDIR /src
 
 # Restore against just the project files first so the (slow) restore layer caches across
 # source-only changes. SimServer.csproj also ProjectReferences the in-repo Allegiance.Factions
-# content library, so its .csproj must be present for restore to resolve.
+# content library, so its .csproj must be present for restore to resolve. Shared.csproj in turn
+# references the wire-format source generator (tools/wire-gen) as an ANALYZER: leave it out and
+# MSBuild only warns ("Skipping project ... not found"), no codec is generated, and the server
+# then fails to compile with CS0117 on every ShipRecord.Size / XMessage.MsgId.
 COPY shared/Shared.csproj shared/
+COPY tools/wire-gen/WireGen.csproj tools/wire-gen/
 COPY server/SimServer.csproj server/
 COPY factions/src/Allegiance.Factions/Allegiance.Factions.csproj factions/src/Allegiance.Factions/
 RUN dotnet restore server/SimServer.csproj
@@ -20,6 +24,7 @@ RUN dotnet restore server/SimServer.csproj
 # docking hardpoints). publish copies them to /app/assets, so the runtime image needs no
 # separate asset copy. client/assets is also where the Godot client's canonical copy lives.
 COPY shared/ shared/
+COPY tools/wire-gen/ tools/wire-gen/
 COPY server/ server/
 COPY factions/ factions/
 COPY client/assets/bases client/assets/bases

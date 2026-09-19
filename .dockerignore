@@ -1,4 +1,4 @@
-# The sim-server image needs shared/, server/, and the canonical GLB assets it loads for
+# The sim-server image needs shared/, server/, factions/, tools/wire-gen, and the canonical GLB assets it loads for
 # server-side collision: client/assets/bases and client/assets/asteroids (see server/Dockerfile).
 # Keep the build context tiny + reproducible by excluding everything else, build outputs, and
 # local state. (The Dockerfile copies what it needs explicitly, so excluding the rest here just
@@ -23,7 +23,13 @@ client/assets/*
 !client/assets/ships
 docs
 tests
-tools
+# Exclude tools/ but keep the wire-format source generator: shared/Shared.csproj references it as an
+# analyzer, and without it the sim-server does not compile (see server/Dockerfile). The last matching
+# line wins, so bin/obj are excluded again after the re-include.
+tools/*
+!tools/wire-gen
+tools/wire-gen/bin
+tools/wire-gen/obj
 module
 scripts
 deploy
