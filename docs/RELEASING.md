@@ -34,7 +34,7 @@ its output folder, and clients never "update" to the same version.
 | `StellarAllegiance.AppImage` | Linux (replaces itself when it updates — keep it somewhere writable) |
 | `StellarAllegiance-win-Portable.zip` | Windows without installing |
 | `*-full.nupkg`, `*-delta.nupkg` | What updates download. Deltas are tiny (0.0.11→0.0.12: macOS 343 MiB → 9 MiB, Windows 282 MiB → 0.8 MiB) |
-| `releases.<win\|osx\|linux>.json`, `assets.*.json`, `RELEASES` | The update feed |
+| `releases.<win\|osx\|linux>.json`, `RELEASES` | The update feed (`assets.<channel>.json` is a build-side manifest: it tells `vpk upload` what to send and is not uploaded itself) |
 
 The file names are stable, so `https://github.com/wivuu/stellarallegiance/releases/latest/download/<name>`
 is a permanent download link.
