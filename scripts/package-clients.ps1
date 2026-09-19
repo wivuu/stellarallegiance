@@ -72,10 +72,15 @@ function Fail([string]$Message) {
 }
 
 # Runs a program to completion with its output going STRAIGHT to the console, and returns its exit code.
-# Used for Godot instead of `& $exe … | Out-Host`, because:
+# Used for Godot instead of PowerShell's own `& $exe …`, because:
+#   - on the Windows CI runner, setup-godot exposes Godot as `…\bin\godot`: a HARD LINK with no extension
+#     (there is no link target to follow). PowerShell only runs files whose extension is in PATHEXT as
+#     programs; anything else is a "document" ("Cannot run a document in the middle of a pipeline").
+#     CreateProcess has no such rule and runs it as the PE file it is — this was the first rehearsal's
+#     Windows failure;
 #   - inside a function whose result is captured, un-piped native stdout leaks into the return value;
-#   - piping makes PowerShell read the child's stdout until EOF, and a build server that Godot's own
-#     `dotnet publish` leaves behind inherits that pipe and can hold it open long after Godot has exited;
+#   - piping instead makes PowerShell read the child's stdout until EOF, and a build server that Godot's
+#     own `dotnet publish` leaves behind inherits that pipe and can hold it open after Godot has exited;
 #   - on Windows Godot is a GUI-subsystem exe, which PowerShell only waits for when its output is redirected.
 # A plain Process with inherited handles has none of these problems (same idea as Start-Native in
 # scripts/launcher-e2e.ps1). ArgumentList quotes correctly on every OS.
