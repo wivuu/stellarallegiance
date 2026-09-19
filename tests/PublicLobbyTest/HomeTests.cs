@@ -36,6 +36,26 @@ static partial class Suite
         Check(html.Contains("Get in the cockpit"), "root renders the how-to-play section");
         Check(html.Contains("https://github.com/wivuu/stellarallegiance"), "root links the GitHub repository");
 
+        // ---- each platform downloads its release asset DIRECTLY ----
+        // Asset names are stable (docs/RELEASING.md), so /releases/latest/download/<name> is a permanent
+        // link. A release page now lists a dozen feed/package files, so the page must not send players there
+        // to pick one — and a mistyped name here is a 404 for every new player.
+        const string latest = "https://github.com/wivuu/stellarallegiance/releases/latest/download/";
+        foreach (
+            var asset in new[]
+            {
+                "StellarAllegiance-win-Setup.exe",
+                "StellarAllegiance-osx-Portable.zip",
+                "StellarAllegiance-osx-Setup.pkg",
+                "StellarAllegiance.AppImage",
+            }
+        )
+            Check(html.Contains($"href=\"{latest}{asset}\""), $"root links {asset} directly");
+        Check(
+            !html.Contains("unzip", StringComparison.OrdinalIgnoreCase),
+            "root no longer describes the old unzip-and-run builds"
+        );
+
         // ---- a listing shows up in the strip WITHOUT a player bearer ----
         // (GET /servers stays 401 for the same anonymous caller — plan §1.5 — which is exactly the
         // trade this page makes: a few live listings are public, the browsable list is not.)
