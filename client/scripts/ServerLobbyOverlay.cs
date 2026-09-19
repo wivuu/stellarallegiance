@@ -12,6 +12,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Godot;
+using StellarAllegiance.Shared;
 using StellarAllegiance.Shared.Lobby;
 using StellarAllegiance.Ui;
 // Godot ships its own HttpClient; the lobby uses the BCL one.
@@ -86,6 +87,11 @@ public partial class ServerLobbyOverlay : Control
     private RichTextLabel _updateBanner = null!;
     private UpdateChecker.UpdateInfo? _update;
 
+    // The same nudge when the Game Launcher started us: an alert + UPDATE NOW, which quits with
+    // LauncherContract.UpdateExitCode so the launcher installs the update and brings the player back.
+    private HBoxContainer _updateRow = null!;
+    private AlertBox _updateAlert = null!;
+
     // Selection state. The rendered ServerDto instance is remembered so RenderServers can skip
     // rebuilding the detail panel when the selected entry didn't change (SSE events replace
     // instances, so a reference compare is exactly "did an update arrive for this server").
@@ -137,6 +143,20 @@ public partial class ServerLobbyOverlay : Control
         _updateBanner.AddThemeFontSizeOverride("normal_font_size", 15);
         _updateBanner.MetaClicked += meta => OS.ShellOpen(meta.AsString());
         col.AddChild(_updateBanner);
+
+        _updateRow = new HBoxContainer { Visible = false };
+        _updateRow.AddThemeConstantOverride("separation", 12);
+        _updateAlert = new AlertBox { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _updateRow.AddChild(_updateAlert);
+        var updateNow = UiKit.MakeButton(
+            "◆ UPDATE NOW",
+            () => _cm.QuitGracefully(LauncherContract.UpdateExitCode),
+            ButtonVariant.Primary
+        );
+        updateNow.CustomMinimumSize = new Vector2(190, 44);
+        updateNow.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+        _updateRow.AddChild(updateNow);
+        col.AddChild(_updateRow);
 
         var body = new HBoxContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
         body.AddThemeConstantOverride("separation", 14);
@@ -501,6 +521,22 @@ public partial class ServerLobbyOverlay : Control
 
     private async Task CheckUpdateAsync()
     {
+        // The launcher already asked the release feed: reuse its answer instead of spending a second
+        // GitHub API call on the same question. Only when it does not know (its check failed or never
+        // finished) do we fall through and ask for ourselves, exactly as a launcher-less build does.
+        if (LauncherHandoff.KnownUpdate is not null)
+        {
+            if (LauncherHandoff.KnownUpdateVersion is { } known)
+            {
+                _update = new UpdateChecker.UpdateInfo(
+                    known,
+                    $"https://github.com/wivuu/stellarallegiance/releases/tag/v{known}"
+                );
+                CallDeferred(nameof(ShowUpdateBanner));
+            }
+            return;
+        }
+
         _update = await UpdateChecker.CheckAsync();
         if (_update is not null)
             CallDeferred(nameof(ShowUpdateBanner));
@@ -510,8 +546,24 @@ public partial class ServerLobbyOverlay : Control
     {
         if (_update is null)
             return;
+
+        // Under the launcher the nudge is an ACTION. This screen is the server browser, so the button can
+        // never be pressed mid-match.
+        if (LauncherHandoff.UnderLauncher)
+        {
+            _updateAlert.Configure(
+                $"UPDATE {_update.Version} READY",
+                "The launcher will install it and bring you straight back.",
+                StatusPill.Kind.Ok
+            );
+            _updateRow.Visible = true;
+            return;
+        }
+
+        // No launcher (zip build): notify only, and link to the download — also the one-time migration
+        // path from the pre-launcher zips to the installer.
         _updateBanner.Text =
-            $"[center][color=#9fe6a0]A new version ({_update.Version}) is available — "
+            $"[center][color=#{DesignTokens.Ok.ToHtml(false)}]A new version ({_update.Version}) is available — "
             + $"[url={_update.Url}]download[/url][/color][/center]";
         _updateBanner.Visible = true;
     }

@@ -13,6 +13,10 @@
   <Folder Name="/factions/tests/">
     <Project Path="factions/tests/Allegiance.Factions.Tests/Allegiance.Factions.Tests.csproj" />
   </Folder>
+  <Folder Name="/launcher/">
+    <Project Path="launcher/App/StellarLauncher.csproj" />
+    <Project Path="launcher/Core/StellarLauncher.Core.csproj" />
+  </Folder>
   <Folder Name="/public-lobby/">
     <Project Path="public-lobby/PublicLobby.csproj" />
     <Project Path="public-lobby-data/PublicLobby.Data.csproj" />
@@ -55,6 +59,9 @@
     <Project Path="tests/WireTest/WireTest.csproj" />
   </Folder>
   <Folder Name="/tools/" />
+  <Folder Name="/tools/launcher-stubgame/">
+    <Project Path="tools/launcher-stubgame/StubGame.csproj" />
+  </Folder>
   <Folder Name="/tools/simbot/">
     <Project Path="tools/simbot/SimBot.csproj" />
   </Folder>

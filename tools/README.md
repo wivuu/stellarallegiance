@@ -19,6 +19,19 @@ Draws the Stellar Allegiance mouse cursors (`client/assets/ui/cursor.png`,
 cyan chrome accent, colors mirrored from `DesignTokens`. Run
 `python3 tools/cursor-gen/gen_cursor.py`.
 
+### `font-instancer/` — static fonts for the Game Launcher
+The launcher (Avalonia) cannot select weights from variable fonts, so `instance_fonts.py` (fontTools)
+pins the game's two variable TTFs into the static instances the launcher embeds
+(`launcher/App/Assets/Fonts/`: Saira 400/600/700 at width 100 — Saira's DEFAULT weight is Thin and it has
+a second `wdth` axis — and JetBrains Mono 400/500). Deterministic; outputs are committed. See
+[`font-instancer/README.md`](font-instancer/README.md).
+
+### `launcher-art/` — Game Launcher icons + backdrop
+`gen_icons.py` rasterises `client/assets/ui/app_icon.svg` into `app.ico` / `icon-256.png` and downsizes the
+logo; `gen_nebula.py` evaluates the game's `NebulaBackground` shader maths at a fixed time into
+`nebula-clouds.png` (scanlines + star dots are drawn live by the launcher, in device pixels). Deterministic;
+outputs are committed under `launcher/App/Assets/`. See [`launcher-art/README.md`](launcher-art/README.md).
+
 ### `collision-hull/` — compound collision baker
 Generates and bakes compound `COL_` convex collision parts into any mesh GLB from its visual
 volume: voxel solid-fill → seal interior → carve dock corridors → marching cubes →
@@ -26,6 +39,12 @@ volume: voxel solid-fill → seal interior → carve dock corridors → marching
 with hard containment/corridor/reachability validations and a deterministic (byte-identical
 re-bake) output. See [`collision-hull/README.md`](collision-hull/README.md) and the
 `base-collision` / `collision-hull-generator` skills.
+
+### `launcher-stubgame/` — stand-in game for launcher tests
+A few-hundred-KB console app that lands where the real game sits inside a Velopack package, records how it
+was started (args + the launcher's env vars) and exits with a scripted code. Used only by
+`scripts/launcher-e2e.ps1` and the **Package dry-run** workflow. Lives here, not under `tests/`, because
+`scripts/run-tests.ps1` runs every `tests/<Name>` as a suite.
 
 ## Load testing
 

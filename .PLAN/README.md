@@ -5,8 +5,6 @@ The live roadmap: what is shipped (one line each, with a pointer to the real doc
 [`GLOSSARY.md`](../GLOSSARY.md) and the per-feature docs are the authority for how things work.
 
 **Next to incorporate into the plan**
-- Distribution e.g. https://github.com/velopack/velopack
-  - https://github.com/velopack/velopack/tree/develop/samples/CSharpUnityMono
 - Nebula looks different for the same sector on two different clients
 
 **What else lives in `.PLAN/`**
@@ -67,6 +65,25 @@ Condensed outcomes. Each line names where the detail now lives.
 ---
 
 ## Roadmap — open work
+
+### Distribution — installer + auto-update (in flight)
+
+- ◐ **[L] Game Launcher + Velopack** (2026-09-19, branch `game-launcher`, **not merged, never run on
+  Windows/Linux yet**). A separate themed Avalonia launcher (`launcher/`) is the Velopack main executable on
+  all three OSes: installer, delta auto-updates from GitHub Releases, in-game **UPDATE NOW** handoff (exit
+  code 85), crash notice. Why a launcher at all, the package layout and the no-update-while-playing
+  invariant: [`docs/adr/0004`](../docs/adr/0004-game-launcher-fronts-velopack.md) ·
+  [`launcher/README.md`](../launcher/README.md) · release process: [`docs/RELEASING.md`](../docs/RELEASING.md) ·
+  terms: [`GLOSSARY.md` → *Distribution & Updates*](../GLOSSARY.md).
+  - ✅ Verified on macOS: NativeAOT launcher (universal), nested game bundle signs + survives real updates,
+    `scripts/launcher-e2e.ps1` (install → full update → delta update triggered by the game's exit code),
+    the real 0.0.12 export running as the launcher's child, `tests/LauncherTest`.
+  - ☐ **Run the *Package dry-run* workflow** (Windows `Setup.exe` hooks + Linux AppImage have only been read
+    in Velopack's source, never executed), then a rehearsal pre-release tag (`v0.0.13-ci.1`).
+  - ☐ By hand on a real machine: macOS Dock/focus while the launcher is resident, Windows SmartScreen +
+    taskbar behaviour, a Linux desktop AppImage.
+  - ☐ Later: Developer ID + notarization, Azure Trusted Signing (switched on by secrets —
+    `docs/RELEASING.md`); REPAIR INSTALL in the launcher (today it links to the releases page).
 
 ### Stage 3 — Combat feel & depth
 
