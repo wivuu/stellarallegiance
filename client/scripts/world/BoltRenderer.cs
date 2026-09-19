@@ -182,7 +182,10 @@ public sealed class BoltRenderer
         // The tracer starts at the END of the barrel (TurretBarrelView runs pivot → aim × length), not
         // at the pivot buried in the mount. Same line the server resolves (it fires from the pivot
         // along this aim); only the visible start moves out, by well under a tick of flight.
-        Vec3 mp = pivot + fwd * _ships.TurretBarrelLength(row.ShipId);
+        // The tracer mesh is CENTRED on its position, so the spawn point is a further half bolt length
+        // down the shot: the bolt's TAIL sits on the barrel tip and nothing trails back through the gun
+        // (glaring from the gunner's over-the-turret camera, where the tail poked out toward the lens).
+        Vec3 mp = pivot + fwd * _ships.TurretBarrelLength(row.ShipId) + shotDir * BoltHalfLength(weapon.BoltLength);
         Vec3 mv = shotDir * weapon.ProjectileSpeed + shipVel;
 
         AddBolt(
@@ -467,10 +470,16 @@ public sealed class BoltRenderer
 
     // Bolt visual size is authored per-projectile (WeaponDef.BoltRadius/BoltLength); a 0 falls back to the
     // built-in default so an unauthored weapon still renders a bolt.
+    // Half the drawn tracer's length (the mesh is centred on the bolt's position) — what a spawn that
+    // must CLEAR a barrel adds beyond the muzzle. Same default NewProjectileMesh falls back to.
+    private const float DefaultBoltLength = 2.2f;
+
+    public static float BoltHalfLength(float boltLength) => (boltLength > 0f ? boltLength : DefaultBoltLength) * 0.5f;
+
     private MeshInstance3D NewProjectileMesh(float radius, float height, bool isHeal)
     {
         float r = radius > 0f ? radius : 0.22f;
-        float h = height > 0f ? height : 2.2f;
+        float h = height > 0f ? height : DefaultBoltLength;
         return new MeshInstance3D
         {
             // Slim tracer bolt. The cylinder's long axis is local +Y; rotate it to local +Z so it runs along

@@ -533,12 +533,15 @@ public partial class TurretController : Node
             TurretAim.SpreadBarrel(hp.Index)
         );
         Vector3 dir = ShipMath.ToGodot(shotDir);
-        // From the END of the barrel (pivot + aim × barrel length), not the pivot inside the mount —
-        // the same start every other client's rebuild of this shot uses (BoltRenderer.SpawnTurretBolt).
+        // From the END of the barrel (pivot + aim × barrel length), not the pivot inside the mount, plus
+        // half the tracer's length: the mesh is centred on its position, so this puts the bolt's TAIL on
+        // the barrel tip instead of trailing it back through the gun toward our over-the-turret camera.
+        // The same start every other client's rebuild of this shot uses (BoltRenderer.SpawnTurretBolt).
         Vector3 muzzle =
             t.Origin
             + t.Basis * new Vector3(hp.OffX, hp.OffY, hp.OffZ)
-            + fwdG.Normalized() * _world.Ships.TurretBarrelLength(shipId);
+            + fwdG.Normalized() * _world.Ships.TurretBarrelLength(shipId)
+            + dir * BoltRenderer.BoltHalfLength(gun.BoltLength);
         Vector3 vel = dir * gun.ProjectileSpeed + ShipRenderer.ShipVelocityOf(ridden);
         _world.Bolts.SpawnLocalTurretBolt(
             muzzle,
