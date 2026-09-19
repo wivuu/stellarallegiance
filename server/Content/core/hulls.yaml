@@ -19,6 +19,18 @@
 #   one slot per part or per consumable stack, inert, no payload cost, re-drops on death, lost on
 #   dock. 0/omitted = no hold — the hull ricochets what it can't use. IGC gives every hull the same
 #   fixed cargo bay; we author it per hull so bigger hulls scavenge more.
+#   Turret stations are CREW-SERVED: a `kind: turret` entry binds a mesh HP_Turret_N node as a gun
+#   station a TEAMMATE mans — they claim the seat in the hangar, ride along after launch and aim/fire
+#   the gun from the station (a 105° cone around the mount's outward normal). A station must author
+#   a `weapon-id` naming a GUN and must NOT author `mount:` (it is always a gun mount) — CoreValidator
+#   refuses to boot otherwise. Turret aim is CLIENT-AUTHORITATIVE (the server only clamps it into the
+#   arc); the optional `slew-deg` is the mount's weight — the SUSTAINED rate (°/s) the gunner's
+#   client holds their look, and so the gun, to; omitted = world.yaml `turret.default-slew-deg`
+#   (180, a light mount), 0 = unlimited. It never limits a small motion: anything under ~0.15 s of
+#   traverse passes 1:1 on every mount, only a held spin feels the weight. Author lower on a
+#   capital station so its guns come round like something heavy. Turret guns are EXEMPT from payload-capacity: a crew station is not
+#   hold cargo. A mesh HP_Turret node with no YAML entry stays a marker (NoWeapon / non-mountable),
+#   never an armed station.
 #   Mount types: a Weapon hardpoint only accepts its own weapon CATEGORY in the hangar (and the
 #   server rejects anything else): a mount binding a gun is gun-typed, one binding a missile rack is
 #   missile-typed. A mesh HP_Weapon node that NO yaml entry binds or types is NON-MOUNTABLE — not a
@@ -275,13 +287,16 @@ hulls:
     # wc_icbmb carries HP_Weapon_0 (top-left) + HP_Weapon_1/2 (symmetric nose tips). The nose pair take
     # the two heavy PW AutoCans; the top-left mount + an authored symmetric top-right mount take the two
     # PW Gat Guns; index 4 (authored belly rack, no mesh node) carries the SRM Anti-Base rack. Guns stay
-    # at the low indices, rack last. Booster_0/1, Thruster_0, Turret_0/1, Light_0..4 append.
+    # at the low indices, rack last. The two turret entries BIND mesh HP_Turret_0/1 as crew-served gun
+    # stations (see the header note). Booster_0/1, Thruster_0, Light_0..4 append.
     hardpoints:
       - { kind: weapon, index: 0, weapon-id: 0 }   # binds mesh HP_Weapon_0 (PW Gat Gun 1)
       - { kind: weapon, index: 1, weapon-id: 12 }  # binds mesh HP_Weapon_1 (right nose PW AutoCan 1)
       - { kind: weapon, index: 2, weapon-id: 12 }  # binds mesh HP_Weapon_2 (left nose PW AutoCan 1)
       - { kind: weapon, index: 3, weapon-id: 0, off-x: 2.25, off-y: 0.92, off-z: 1.36, dir-z: 1 } # PW Gat Gun 1 (top-right, mirror of HP_Weapon_0)
       - { kind: weapon, index: 4, weapon-id: 5, off-y: -0.5, off-z: 1.5, dir-z: 1 } # SRM Anti-Base rack (belly)
+      - { kind: turret, index: 0, weapon-id: 0 }   # binds mesh HP_Turret_0 — crew station T1 (PW Gat Gun 1)
+      - { kind: turret, index: 1, weapon-id: 0 }   # binds mesh HP_Turret_1 — crew station T2 (PW Gat Gun 1)
       - { kind: cockpit, off-y: 0.7, off-z: 1.8, dir-z: 1 }
     default-cargo:
       - { item: prox-mine-1, count: 8 }
@@ -336,8 +351,9 @@ hulls:
     required-capabilities: [base]
     required-techs: [shipyard-1]   # both granted by shipyard-1 for now (should be heavy-class, shipyard-dry later)
     launch-station-classes: [shipyard]  # capital hull: launches from / docks at Shipyard(3) + Shipyard Dry(6) only (both class: shipyard), largest door only
-    # cap09 carries HP_Weapon_0..3 (four hull mounts) — all four take the heavy PW AutoCan. Turret_0..3,
-    # Thruster_0, Light_0..8 append. Cockpit authored (no mesh node). The stern HP_Thruster_0 (world
+    # cap09 carries HP_Weapon_0..3 (four hull mounts) — all four take the heavy PW AutoCan — and
+    # HP_Turret_0..3, bound below as the capital's four crew-served gun stations (see the header
+    # note). Thruster_0, Light_0..8 append. Cockpit authored (no mesh node). The stern HP_Thruster_0 (world
     # z ≈ -35 at model-length 75) is the capital's engine nozzle — the client glows Thruster hardpoints
     # at full size (ShipModelLoader.BuildEngineGlow), so no authored main-engine is needed.
     hardpoints:
@@ -345,6 +361,10 @@ hulls:
       - { kind: weapon, index: 1, weapon-id: 12 }   # HP_Weapon_1 (PW AutoCan 1)
       - { kind: weapon, index: 2, weapon-id: 12 }   # HP_Weapon_2 (PW AutoCan 1)
       - { kind: weapon, index: 3, weapon-id: 12 }   # HP_Weapon_3 (PW AutoCan 1)
+      - { kind: turret, index: 0, weapon-id: 12, slew-deg: 110 }   # binds mesh HP_Turret_0 — crew station T1 (PW AutoCan 1); heavy capital mount
+      - { kind: turret, index: 1, weapon-id: 12, slew-deg: 110 }   # binds mesh HP_Turret_1 — crew station T2 (PW AutoCan 1)
+      - { kind: turret, index: 2, weapon-id: 12, slew-deg: 110 }   # binds mesh HP_Turret_2 — crew station T3 (PW AutoCan 1)
+      - { kind: turret, index: 3, weapon-id: 12, slew-deg: 110 }   # binds mesh HP_Turret_3 — crew station T4 (PW AutoCan 1)
       - { kind: cockpit, off-y: 0.9, off-z: 3.2, dir-z: 1 }
     default-cargo:
       - { item: prox-mine-1, count: 8 }

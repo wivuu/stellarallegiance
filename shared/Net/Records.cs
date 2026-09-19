@@ -299,13 +299,19 @@ public partial struct HoldItemRecord
     public byte Count;
 }
 
-// One ship's effective loadout: per-barrel weapon ids in hardpoint declaration order + hold.
+// One ship's effective loadout: per-barrel weapon ids in hardpoint declaration order + hold +
+// the crew-served turret guns.
 [WireRecord]
 public partial struct ShipLoadoutRecord
 {
     public ulong ShipId;
     public uint[] WeaponIds; // uint.MaxValue = emptied slot
     public HoldItemRecord[] Hold;
+
+    // The gun at each crew-served TURRET STATION, in hardpoint declaration order (empty = the hull
+    // has no stations). REQUIRED, not [WireOptional]: an optional tail reads "absent" as
+    // "nothing left in the reader", which inside an array element would swallow the rows after it.
+    public uint[] TurretWeaponIds;
 }
 
 // One team's low-rate economy / research state.
@@ -431,6 +437,50 @@ public partial struct MountOverrideRecord
 {
     public byte HpIndex;
     public uint WeaponId; // uint.MaxValue = leave the slot empty
+}
+
+// One crew-served TURRET STATION on a captain's ship (9 bytes): which gun it mounts and who mans
+// it. SeatIndex is the station's HardpointDef.Index — the SAME index HangarIntentMessage's pick
+// list and CrewSeatMessage speak, so one "station index" travels the whole round trip (the client
+// labels it "T{SeatIndex+1}"). Stock hulls author turret indices 0..N-1 in declaration order, so it
+// reads as the station ordinal too; the server maps index <-> slot (Simulation.TurretSlotOf /
+// TurretStationIndex) so a hull that ever authors them out of order still resolves.
+[WireRecord]
+public partial struct CrewSeatRecord
+{
+    public byte SeatIndex;
+    public uint WeaponId; // the gun this station fires (never NoWeapon — every station binds a gun)
+    public int GunnerId; // the seated pilot's client id; -1 = open
+}
+
+// One crewable ship in the team's crew roster: the captain, the hull they intend to fly (or are
+// flying), and every station. ShipId is 0 while the captain is still in the hangar and becomes the
+// live ship id at launch — that is also the "can still be joined" flag (boarding is docked-only).
+[WireRecord]
+public partial struct CrewShipRecord
+{
+    public int CaptainId;
+    public byte ClassId;
+    public ulong ShipId; // 0 = docked (joinable); non-zero = in flight
+    public CrewSeatRecord[] Seats;
+}
+
+// One MANNED turret station's live state (25 bytes, v42 crews slice 2): where the gunner aims and
+// the last tick that gun fired. Aim is the gun's ship-local unit vector (stable under the captain's
+// turns): the aim the gunner's client sent, after the server's arc clamp (TurretAim.Clamp) — turret
+// aim is client-authoritative, so there is no lag between the two. LastFireTick is this station's
+// own stamp — a remote client rebuilds the turret's bolt from (aim, ship pose, gun) exactly as
+// BoltRenderer rebuilds a pilot's from ShipRecord.LastFireTick. Streamed per client in MsgTurrets
+// (AOI-filtered, lossy) only for manned seats; an omitted seat means "unmanned, at rest".
+[WireRecord]
+public partial struct TurretRecord
+{
+    public ulong ShipId;
+    public byte SeatIndex; // the station's HardpointDef.Index (the same index CrewSeatRecord speaks)
+    public float AimX,
+        AimY,
+        AimZ;
+    public uint LastFireTick; // 0 = never fired
 }
 
 // ---- World statics (Welcome + MsgReveal share these encodings — byte-identical, load-bearing) ----

@@ -101,6 +101,39 @@ public static class CoreValidator
             double defaultPayload = 0;
             foreach (var hp in hull.Hardpoints)
             {
+                // A TURRET is a crew-served gun station: a gunner rides along and mans it, so it
+                // must bind a real GUN (never a rack/dispenser) and its mount type is always gun —
+                // authoring `mount:` on one is a mistake, not an override. Deliberately NOT added
+                // to defaultPayload: a crew station is not hold cargo and costs no payload budget.
+                if (hp.Kind == RuntimeHardpointKind.Turret)
+                {
+                    if (hp.WeaponId is not uint turretWid)
+                        result.Error(
+                            $"hull '{hull.Id}' turret index {hp.Index} authors no weapon-id — a crew-served turret station must name the gun it mounts."
+                        );
+                    else if (!gunWeaponIds.Contains(turretWid))
+                        result.Error(
+                            $"hull '{hull.Id}' turret index {hp.Index} binds weapon-id {turretWid}, which is not a gun — a turret station mounts guns only."
+                        );
+                    if (hp.Mount is not null)
+                        result.Error(
+                            $"hull '{hull.Id}' turret index {hp.Index} authors mount: {hp.Mount} — a turret station is always a gun mount; drop the `mount:` key."
+                        );
+                    // Slew tuning is optional but must be a real speed when authored. 0 = UNLIMITED
+                    // (TurretAim.SlewLimit treats slew <= 0 as uncapped) — the same meaning world.yaml
+                    // `turret.default-slew-deg: 0` has and hulls.yaml documents; only a negative or
+                    // non-finite value is refused.
+                    if (hp.SlewDeg is double slew && !(slew >= 0 && double.IsFinite(slew)))
+                        result.Error(
+                            $"hull '{hull.Id}' turret index {hp.Index} authors slew-deg {slew} — must be >= 0 (degrees per second; 0 = unlimited)."
+                        );
+                    continue;
+                }
+                // The slew key means nothing off a turret: refuse rather than silently ignore.
+                if (hp.SlewDeg is not null)
+                    result.Error(
+                        $"hull '{hull.Id}' hardpoint kind={hp.Kind} index {hp.Index} authors slew-deg — that key belongs on `kind: turret` stations only."
+                    );
                 if (hp.Kind != RuntimeHardpointKind.Weapon)
                     continue;
                 if (hp.WeaponId is not uint hpWid)

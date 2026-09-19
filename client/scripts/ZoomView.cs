@@ -13,6 +13,8 @@ using StellarAllegiance.Ui;
 // marker) hides while scoped and ShipController divides mouse-look sensitivity by the
 // magnification so fine aiming at 20x is possible.
 //
+// A turret GUNNER gets the same scope down their station's aim (ScopePose).
+//
 // Pure overlay: reads the local ship's render transform and drives its own camera, never
 // touching authoritative state. Created and wired up by the Hud like the other combat overlays.
 public partial class ZoomView : Control
@@ -138,9 +140,10 @@ public partial class ZoomView : Control
 
     public override void _Input(InputEvent @event)
     {
-        // Same inputFree idiom the rest of the client gates keys on, plus a live local ship.
+        // Same inputFree idiom the rest of the client gates keys on, plus something to look down:
+        // the pilot's own hull, or the turret station a gunner mans.
         bool inputFree = InputGate.FlightInputFree;
-        if (!inputFree || _world.Ships.LocalShip == null)
+        if (!inputFree || ScopePose() is null)
             return;
 
         // scope_zoom_in / scope_zoom_out are rebindable InputMap actions (InputBindings), so accept
@@ -174,8 +177,10 @@ public partial class ZoomView : Control
     public override void _Process(double delta)
     {
         var ship = _world.Ships.LocalShip;
-        // Auto-close when the ship is gone (death / dock) or another full-screen overlay takes over.
-        if (Active && (ship == null || SectorOverview.Active || ShipLoadout.Active || EscapeMenu.Active))
+        Transform3D? pose = ScopePose();
+        // Auto-close when there is nothing left to look down (death / dock / the ride ended) or another
+        // full-screen overlay takes over.
+        if (Active && (pose is null || SectorOverview.Active || ShipLoadout.Active || EscapeMenu.Active))
         {
             Close();
             return;
@@ -183,7 +188,7 @@ public partial class ZoomView : Control
         if (_demoDir != null && ship != null)
             RunDemo(delta); // self-drive runs scope-open OR closed (it drives the toggle itself)
 
-        if (!Active || ship == null)
+        if (!Active || pose is not { } scopePose)
             return;
 
         if (!Mathf.IsEqualApprox(Magnification, _targetMag, SnapEpsilon))
@@ -196,14 +201,37 @@ public partial class ZoomView : Control
             Magnification = _targetMag;
         }
 
-        // Mirror the ship down its firing line: sit a little forward of the nose (own hull out of
-        // frame) and inherit the ship's full orientation (FaceForward), so the scope looks exactly
-        // where the guns point at any attitude. The FOV narrows with the magnification.
-        Transform3D t = ship.GlobalTransform;
-        Vector3 fwd = t.Basis.Z.Normalized();
-        _scopeCam.GlobalTransform = new Transform3D(t.Basis * FaceForward, t.Origin + fwd * CamForwardOffset);
+        // Look down the firing line (ScopePose). The FOV narrows with the magnification.
+        _scopeCam.GlobalTransform = scopePose;
         _scopeCam.Fov = Mathf.RadToDeg(2f * Mathf.Atan(Mathf.Tan(Mathf.DegToRad(FlightFovDeg) * 0.5f) / Magnification));
         QueueRedraw();
+    }
+
+    // Where the scope looks from, or null when there is no firing line to look down.
+    //   PILOT  — mirror the ship down its nose: sit a little forward of it (own hull out of frame) and
+    //            inherit the ship's full orientation (FaceForward), so the scope looks exactly where
+    //            the guns point at any attitude.
+    //   GUNNER — the same thing for the station they man (user request 2026-09-19): the eye sits
+    //            forward of the mount along the AIM, with the gunner's own up, built exactly the way
+    //            CameraRig.GunCamPose builds the gun cam (a Camera3D looks down −Z, so +Z is opposite
+    //            the aim). The look IS the gun, so the scope's centre is where the bolts go, and
+    //            TurretController already divides its mouse gain by Magnification for fine aim.
+    private Transform3D? ScopePose()
+    {
+        if (_world.Ships.LocalShip is { } ship)
+        {
+            Transform3D t = ship.GlobalTransform;
+            return new Transform3D(t.Basis * FaceForward, t.Origin + t.Basis.Z.Normalized() * CamForwardOffset);
+        }
+        if (!TurretController.Active || _world.Ships.RidingNode is not { } ridden)
+            return null;
+        Transform3D r = ridden.GlobalTransform;
+        Basis look = r.Basis * TurretController.CamBasis;
+        Vector3 aim = look.Z.Normalized();
+        Vector3 up = look.Y.Normalized();
+        Vector3 back = -aim;
+        Vector3 mount = r.Origin + r.Basis * TurretController.Station;
+        return new Transform3D(new Basis(up.Cross(back), up, back), mount + aim * CamForwardOffset);
     }
 
     // ---- --zoom-demo=<dir>: scripted self-drive for screenshot verification --------

@@ -2,7 +2,8 @@ using Microsoft.Extensions.Logging;
 
 namespace SimServer;
 
-// Sim-layer log messages: Simulation (1400–1409), World (1410), salvage (1411–1414). See
+// Sim-layer log messages: Simulation (1400–1409), World (1410), salvage (1411–1414), crew
+// (1415–1416). See
 // Log.Server.cs for the map.
 internal static partial class Log
 {
@@ -101,4 +102,39 @@ internal static partial class Log
         Message = "[salvage] sector {Sector} at cap {Cap} — expiring oldest item {SalvageId}"
     )]
     public static partial void SalvageSectorCap(ILogger logger, uint sector, ulong salvageId, int cap);
+
+    [LoggerMessage(
+        EventId = 1415,
+        Level = LogLevel.Warning,
+        Message = "turret station {Slot} pick {WeaponId} is invalid for class {Cls} — using the authored gun"
+    )]
+    public static partial void TurretPickInvalid(ILogger logger, int slot, uint weaponId, byte cls);
+
+    [LoggerMessage(
+        EventId = 1416,
+        Level = LogLevel.Warning,
+        Message = "turret station pick {WeaponId} on class {Cls} is not researched — using the authored gun"
+    )]
+    public static partial void TurretPickTechLocked(ILogger logger, uint weaponId, byte cls);
+
+    [LoggerMessage(
+        EventId = 1417,
+        Level = LogLevel.Information,
+        Message = "[crew] captain {OldClientId} left — client {NewClientId} (T{Seat}) promoted to captain of ship {ShipId}"
+    )]
+    public static partial void CrewCaptainPromoted(ILogger logger, int oldClientId, int newClientId, int seat, ulong shipId);
+
+    [LoggerMessage(
+        EventId = 1418,
+        Level = LogLevel.Information,
+        Message = "[crew] captain {OldClientId} left ship {ShipId}: no promotion ({Reason})"
+    )]
+    public static partial void CrewCaptainLeftNoPromotion(ILogger logger, int oldClientId, ulong shipId, string reason);
+
+    [LoggerMessage(
+        EventId = 1419,
+        Level = LogLevel.Information,
+        Message = "[crew] captain {CaptainClientId} crew unbound from ship {ShipId}: {Reason}"
+    )]
+    public static partial void CrewUnbound(ILogger logger, int captainClientId, ulong shipId, string reason);
 }

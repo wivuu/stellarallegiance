@@ -83,7 +83,9 @@ public static class FactionsContentProjection
 
         var ships = core
             .Hulls.Where(h => h.ClassId is not null)
-            .Select(h => ProjectShip(h, cargoIdByExpendable, partSigById, techIdx, rackWeaponIds))
+            .Select(h =>
+                ProjectShip(h, cargoIdByExpendable, partSigById, techIdx, rackWeaponIds, world.Turret.DefaultSlewDeg)
+            )
             .ToList();
 
         // Weapon-tier succession: a weapon's/launcher's SuccessorPartId names the next-tier part by
@@ -111,7 +113,7 @@ public static class FactionsContentProjection
 
         var bases = core
             .Stations.Where(s => s.BaseTypeId is not null)
-            .Select(s => ProjectBase(s, SuccessorBaseType(s.SuccessorStationId), rackWeaponIds))
+            .Select(s => ProjectBase(s, SuccessorBaseType(s.SuccessorStationId), rackWeaponIds, world.Turret.DefaultSlewDeg))
             .ToList();
 
         // AllExpendables() iterates Missiles→Mines→Chaffs→Probes→Fuels in list order — deterministic.
@@ -224,7 +226,8 @@ public static class FactionsContentProjection
         IReadOnlyDictionary<string, uint> cargoIdByExpendable,
         IReadOnlyDictionary<string, double> partSigById,
         IReadOnlyDictionary<string, ushort> techIdx,
-        IReadOnlySet<uint> rackWeaponIds
+        IReadOnlySet<uint> rackWeaponIds,
+        double defaultSlewDeg
     ) =>
         new()
         {
@@ -283,7 +286,7 @@ public static class FactionsContentProjection
             MaxFuel = (float)h.MaxFuel,
             AbFuelDrain = (float)h.AbFuelDrain,
             AbFuelRecharge = (float)h.AbFuelRecharge,
-            Hardpoints = h.Hardpoints.Select(hp => ProjectHardpoint(hp, rackWeaponIds)).ToList(),
+            Hardpoints = h.Hardpoints.Select(hp => ProjectHardpoint(hp, rackWeaponIds, defaultSlewDeg)).ToList(),
             FactionId = 0, // reserved (per-team content); Stage-1 is a single stock bundle
             // Default consumable hold: authored by expendable id, projected to (cargo-id, count) in
             // authored list order (deterministic). CoreValidator already proved each id resolves.
@@ -528,7 +531,12 @@ public static class FactionsContentProjection
             ModelName = e.ModelName ?? "",
         };
 
-    private static BaseDef ProjectBase(Factions.Station s, short successorBaseTypeId, IReadOnlySet<uint> rackWeaponIds) =>
+    private static BaseDef ProjectBase(
+        Factions.Station s,
+        short successorBaseTypeId,
+        IReadOnlySet<uint> rackWeaponIds,
+        double defaultSlewDeg
+    ) =>
         new()
         {
             BaseTypeId = s.BaseTypeId!.Value,
@@ -539,7 +547,7 @@ public static class FactionsContentProjection
             // authored 0/omitted to 1.0, mirroring the hull rule.
             VisionSphereRadius = (float)s.VisionSphereRadius,
             RadarSignature = Sig(s.RadarSignature),
-            Hardpoints = s.Hardpoints.Select(hp => ProjectHardpoint(hp, rackWeaponIds)).ToList(),
+            Hardpoints = s.Hardpoints.Select(hp => ProjectHardpoint(hp, rackWeaponIds, defaultSlewDeg)).ToList(),
             // Stage-4 research: authored 0/omitted resolves to the default single slot.
             ResearchSlots = (byte)Math.Clamp(s.ResearchSlots <= 0 ? 1 : s.ResearchSlots, 1, 255),
             // Base building (v37): the GLB, the win-condition ("headquarters") flag = the `start`
@@ -556,7 +564,11 @@ public static class FactionsContentProjection
             ? (byte)255
             : (byte)rc;
 
-    private static HardpointDef ProjectHardpoint(Factions.Hardpoint h, IReadOnlySet<uint> rackWeaponIds) =>
+    private static HardpointDef ProjectHardpoint(
+        Factions.Hardpoint h,
+        IReadOnlySet<uint> rackWeaponIds,
+        double defaultSlewDeg
+    ) =>
         new()
         {
             // The library and shared enums are declared value-for-value, so a byte cast is exact.
@@ -570,19 +582,39 @@ public static class FactionsContentProjection
             DirX = (float)(h.DirX ?? 0),
             DirY = (float)(h.DirY ?? 0),
             DirZ = (float)(h.DirZ ?? 0),
-            // Null WeaponId = an authored/appended EMPTY weapon mount (non-weapon kinds ignore it).
-            WeaponId = h.WeaponId ?? (h.Kind == Factions.RuntimeHardpointKind.Weapon ? HardpointDef.NoWeapon : 0u),
+            // Null WeaponId = an authored/appended EMPTY weapon mount, or an UNAUTHORED mesh
+            // HP_Turret node (a marker, not a station). Other kinds ignore it.
+            WeaponId =
+                h.WeaponId
+                ?? (
+                    h.Kind is Factions.RuntimeHardpointKind.Weapon or Factions.RuntimeHardpointKind.Turret
+                        ? HardpointDef.NoWeapon
+                        : 0u
+                ),
             // Mount type: authored `mount:` wins; else derive from the bound weapon (rack ->
             // missile mount, gun -> gun mount); an UNAUTHORED empty mount (a mesh HP_Weapon node
             // hulls.yaml never bound or typed) is NonMountable — not a loadout slot, hidden in the
             // hangar. Author `mount:` to expose an empty mount. Streamed, so the hangar filters
-            // with the SAME resolved value the server's ResolveLoadout enforces. (Non-weapon kinds
-            // carry Any as an inert placeholder — nothing reads their Mount.)
+            // with the SAME resolved value the server's ResolveLoadout enforces. A TURRET is a
+            // crew-served gun station: an authored one is always a Gun mount (CoreValidator
+            // refuses a rack there and refuses an authored `mount:`), an appended mesh node with
+            // no YAML entry stays NonMountable — a marker, never an armed station. (Every other
+            // kind carries Any as an inert placeholder — nothing reads their Mount.)
             Mount =
                 h.Mount is Factions.RuntimeMountKind m ? (WeaponMountKind)(byte)m
+                : h.Kind == Factions.RuntimeHardpointKind.Turret
+                    ? h.WeaponId is null ? WeaponMountKind.NonMountable
+                        : WeaponMountKind.Gun
                 : h.Kind != Factions.RuntimeHardpointKind.Weapon ? WeaponMountKind.Any
                 : h.WeaponId is not uint wid ? WeaponMountKind.NonMountable
                 : rackWeaponIds.Contains(wid) ? WeaponMountKind.Missile
                 : WeaponMountKind.Gun,
+            // Turret slew speed (v42 slice 2): authored degrees -> radians; a station with no
+            // `slew-deg` takes the world's `turret.default-slew-deg` (stock = TurretAim.DefaultSlewDeg).
+            // Every other kind carries 0 (CoreValidator refuses the key there).
+            TurretSlewRad =
+                h.Kind == Factions.RuntimeHardpointKind.Turret
+                    ? (float)((h.SlewDeg ?? defaultSlewDeg) * Math.PI / 180.0)
+                    : 0f,
         };
 }

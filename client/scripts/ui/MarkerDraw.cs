@@ -675,17 +675,20 @@ internal sealed class MarkerDraw
     }
 
     // A gunsight at p marking the firing line: a ring with four short spokes and a
-    // center dot, so it reads clearly against ships and the lead circle.
-    public void AimReticle(Vector2 p)
+    // center dot, so it reads clearly against ships and the lead circle. `tint` overrides the cyan
+    // chrome for a state the line itself is in — a crew gunner pushing their mount against its arc
+    // edge turns it Warn, which is the ONE way their reticle differs from a pilot's.
+    public void AimReticle(Vector2 p, Color? tint = null)
     {
-        _ci.DrawArc(p, AimRadius, 0f, Mathf.Tau, 24, AimColor, 1.5f, true);
+        Color c = tint ?? AimColor;
+        _ci.DrawArc(p, AimRadius, 0f, Mathf.Tau, 24, c, 1.5f, true);
         float inner = AimRadius + 1f;
         float outer = AimRadius + 5f;
-        _ci.DrawLine(p + new Vector2(-outer, 0f), p + new Vector2(-inner, 0f), AimColor, 1.5f, true);
-        _ci.DrawLine(p + new Vector2(outer, 0f), p + new Vector2(inner, 0f), AimColor, 1.5f, true);
-        _ci.DrawLine(p + new Vector2(0f, -outer), p + new Vector2(0f, -inner), AimColor, 1.5f, true);
-        _ci.DrawLine(p + new Vector2(0f, outer), p + new Vector2(0f, inner), AimColor, 1.5f, true);
-        _ci.DrawCircle(p, 1.5f, AimColor);
+        _ci.DrawLine(p + new Vector2(-outer, 0f), p + new Vector2(-inner, 0f), c, 1.5f, true);
+        _ci.DrawLine(p + new Vector2(outer, 0f), p + new Vector2(inner, 0f), c, 1.5f, true);
+        _ci.DrawLine(p + new Vector2(0f, -outer), p + new Vector2(0f, -inner), c, 1.5f, true);
+        _ci.DrawLine(p + new Vector2(0f, outer), p + new Vector2(0f, inner), c, 1.5f, true);
+        _ci.DrawCircle(p, 1.5f, c);
     }
 
     // The lead indicator for the focused target: a dashed connector from the target marker to

@@ -296,6 +296,7 @@ public partial class AuthSession : Node
                 || a == "--ui-showcase"
                 || a == "--hangar"
                 || a.StartsWith("--hangar-demo=")
+                || a.StartsWith("--crew-demo=")
             )
                 return true;
         }

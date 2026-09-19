@@ -69,7 +69,29 @@ subclasses** for anything needing custom `_Draw` or per-frame state.
   `StatReadout`, `DataTable`, `ToastHost`.
 - **Connect feedback** — `LinkRadar` (rotating dashed radar ring with centred link %),
   `ProgressSweepBar` (continuous fill + sweeping highlight while indeterminate).
-- **Game elements** — `LoadoutSlot`, `ContactChip`, `ResourceReadout`, `RadarFrame`.
+- **Game elements** — `LoadoutSlot`, `ContactChip`, `ResourceReadout`, `RadarFrame`, `GunnerStrip`
+  (the top-centre HUD strip a crew gunner sees while riding a captain's turret station — built from
+  `RosterCells`; `SetMock(…)` renders it standalone in the gallery).
+- **Crew gunner HUD** — a gunner has NO HUD of its own beyond the `GunnerStrip`. A turret seat is a
+  pilot's seat minus the controls, so it reuses the pilot's flight HUD verbatim: one aim reticle
+  (`MarkerDraw.AimReticle`, drawn by `TargetMarkers` on the turret's real firing line — never a
+  second "desired aim" mark), the `SystemRing` centred on it reading the RIDDEN hull, the
+  `VelocityIndicator` prograde marker, the `WeaponsPanel` cut to one primary row for the seat's gun,
+  and the usual nameplates/brackets/Tab cycle. All of them resolve their subject through
+  `HudSubject`, which answers "whose hull, whose firing line" once for both seats. The only
+  gunner-specific cue is the reticle's `Warn` tint while `TurretController.Clamped` (the mount is
+  pinned against its firing arc). Do not add gunner-only chrome without a reason the pilot's
+  equivalent cannot carry.
+- **TurretBarrelView** — the 3D gun at a MANNED turret station (`Node3D`, not a `Control`): a short
+  barrel on a low mount, sized off the hull's model length and tinted with the faction colour
+  (`DesignTokens.Faction`, never the cyan chrome accent), swung onto the gunner's live aim. An
+  unmanned station shows nothing at all.
+- **Crew / turret stations** — `TurretStationRow` (a captain's ▶ TURRET STATIONS row: ◣ tile,
+  seat id + MANNED/OPEN, gun, gunner — selectable into the arsenal frame), `CrewManifestRow`
+  (a gunner's read-only ▶ TURRET MANIFEST row: ◆ pip tile, seat id + gun, YOU / name / OPEN), and
+  `CrewCard` (the CommandSidebar's CREWED SHIPS · TAKE A TURRET card — hull header, `n/N MANNED` /
+  `IN FLIGHT`, one row per station with the `＋ JOIN` / `✕ LEAVE` tag). Station state is always
+  server-owned (`CrewStore`); these never paint an optimistic seat.
 - **Roster primitives** (`RosterCells`) — the small builders every pilot-roster surface composes:
   `Mono`/`Lbl` cells, `Cell` (proportional column width), `Badge`, `Diamond`, `RowPanel`
   (hairline row, faction tint + 2px bar for "me"), `HeaderPanel` (4% accent wash), `TabStyle`,

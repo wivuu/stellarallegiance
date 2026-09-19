@@ -32,6 +32,12 @@ For the full local stack (local lobby + Postgres + server + dashboard) use `aspi
 |--------|--------------|
 | `run-tests.ps1` | Runs every suite under `tests/` (each is a console app: `dotnet run --project tests/<Suite> -c Release`, printing its own PASS/FAIL lines and exiting non-zero on failure), then prints a suite/result/seconds summary table and exits 1 if any failed. `-Filter <substring>[,<substring>]` runs a subset (`-Filter Collision`). `tests/PublicLobbyTest` is skipped unless `-IncludeDocker` is passed — its schema/grain sections need a reachable Docker for the Testcontainers Postgres. **Local only; there is no CI**, so nothing runs these but you. Some suites are known-red at the moment. |
 
+## Turret feel rig
+
+| Script | What it does |
+|--------|--------------|
+| `turret-test.ps1` | **One command → you are in a bomber's dorsal turret** with a live aim readout. A gunner needs a captain, so it starts a private sim server on its own port (`-Port`, default 8097, stock content copied to a temp dir with the bomber pre-unlocked), a small CAPTAIN client that launches the bomber and sits still (`--turret-test=captain`), and YOUR client, which claims station T1 and hands you the mouse (`--turret-test=gunner`). Everything is torn down when your window exits; logs stay in the printed temp dir. The readout (also logged once a second as `[turret-stats]`) shows hand px/s, wanted vs applied °/s, `limited %` (frames the slew bucket scaled — should be 0 outside a deliberate hard spin), dropped °, bucket fill, the station's slew, the live gain in °/px and fps. `-Auto` scripts the mouse instead (100 px/s track, 1000 px/s sweep, a 300 px / 50 ms flick — all must land 1:1 — a 6000 px/s spin that must be limited, and an injected Enter that must open chat) and exits non-zero on a failure. Feel-tuning without a rebuild: `-Gain` (rad per stick unit, stock 0.12), `-SlewDeg` (every station's sustained rate; 110 = the Devastator's mount, 0 = unlimited), `-Window` (seconds of traverse the bucket holds, stock 0.15), `-Sens`. `-Pigs` leaves the AI on for moving targets; `-NoBuild` skips the builds. The `--turret-test` flag and the `TURRET_*` env overrides are honoured by **debug builds only** (editor / run-from-source — `OS.IsDebugBuild()`); an exported client ignores them, since the slew limit is client-enforced and an override would be a free traverse cheat. |
+
 ## Export
 
 | Script | What it does |

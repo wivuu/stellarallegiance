@@ -991,10 +991,12 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
     );
 
     // Hand-parse the frame: [28][u8 rows] then rows x (u64 shipId, u8 nSlots, nSlots x u32, u8
-    // nHold, nHold x (u8 kind, u32 itemId, u8 count)).
+    // nHold, nHold x (u8 kind, u32 itemId, u8 count), u8 nTurrets, nTurrets x u32) — the v41 tail
+    // is the ship's crew-served turret-station guns (the bomber's two authored stations).
     byte[] frame = Protocol.BuildShipLoadouts(sim);
     var ids = new List<uint>();
     var stowed = new List<(byte kind, uint itemId, byte count)>();
+    var turrets = new List<uint>();
     bool found = false;
     {
         int o = 2;
@@ -1016,11 +1018,19 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
                 rowStowed.Add((frame[o], BitConverter.ToUInt32(frame, o + 1), frame[o + 5]));
                 o += 6;
             }
+            int nTurrets = frame[o++];
+            var rowTurrets = new List<uint>();
+            for (int s = 0; s < nTurrets; s++)
+            {
+                rowTurrets.Add(BitConverter.ToUInt32(frame, o));
+                o += 4;
+            }
             if (shipId != bomber.ShipId)
                 continue;
             found = true;
             ids.AddRange(rowIds);
             stowed.AddRange(rowStowed);
+            turrets.AddRange(rowTurrets);
         }
         Check(
             o == frame.Length,
@@ -1029,9 +1039,12 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
         );
     }
     Check(
-        found && ids is [GatGun1, 12u, 12u, GatGun1, 5u] && stowed is [(2, QuickfireRack1, 2)],
-        "a hold-only ship rides MsgShipLoadout with its AUTHORED ids plus the hold entry (kind, id, count)",
-        $"loadout row wrong (found {found}, ids [{string.Join(",", ids)}], hold [{string.Join(",", stowed.Select(s => $"k{s.kind}:{s.itemId}x{s.count}"))}])"
+        found
+            && ids is [GatGun1, 12u, 12u, GatGun1, 5u]
+            && stowed is [(2, QuickfireRack1, 2)]
+            && turrets is [GatGun1, GatGun1],
+        "a hold-only ship rides MsgShipLoadout with its AUTHORED ids + turret stations plus the hold entry (kind, id, count)",
+        $"loadout row wrong (found {found}, ids [{string.Join(",", ids)}], hold [{string.Join(",", stowed.Select(s => $"k{s.kind}:{s.itemId}x{s.count}"))}], turrets [{string.Join(",", turrets)}])"
     );
 }
 

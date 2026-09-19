@@ -136,9 +136,12 @@ public partial class Chat : Control
     //     Lobby._Process's `!SectorOverview.Active` show-gate).
     //   - the hangar / ship-loadout: it covers the Lobby (hidden when the spawn hangar is committed,
     //     or its comms box unfocused while ShipLoadout.Active) and binds no Enter of its own.
+    //   - riding a teammate's turret: a gunner has no LocalShip but IS in flight (the Lobby is down),
+    //     so without this the gunner had no chat at all — no Enter-to-talk and no log.
     private bool LobbyOwnsScreen =>
         _cm.State == ConnectionManager.ConnState.Connected
         && _world.Ships.LocalShip == null
+        && !_world.Ships.Riding
         && !SectorOverview.Active
         && !ShipLoadout.Active;
 
@@ -296,7 +299,9 @@ public partial class Chat : Control
         if (_inputRow.Visible)
             _inputRow.Position = new Vector2((vp.X - _inputRow.Size.X) * 0.5f, vp.Y * 0.72f);
 
-        bool keepVisible = _inputRow.Visible || _world.Ships.LocalShip == null;
+        // Pinned open whenever there's no flight to watch — but riding a teammate's turret IS flight
+        // (the gunner is looking at the live sector), so the log fades there like it does in a cockpit.
+        bool keepVisible = _inputRow.Visible || (_world.Ships.LocalShip == null && !_world.Ships.Riding);
         float target;
         if (keepVisible || _sinceLastMsg < FadeDelay)
             target = 1f;

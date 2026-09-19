@@ -399,6 +399,12 @@ public sealed class FrameApplier
             case MatchStatsMessage.MsgId:
                 ApplyMatchStats(MatchStatsMessage.Parse(f));
                 break;
+            case CrewMessage.MsgId:
+                ApplyCrew(CrewMessage.Parse(f));
+                break;
+            case TurretsMessage.MsgId:
+                _world.Ships.ApplyTurrets(TurretsMessage.Parse(f));
+                break;
             case SalvageMessage.MsgId:
                 ApplySalvage(SalvageMessage.Parse(f));
                 break;
@@ -423,11 +429,42 @@ public sealed class FrameApplier
         // where a snapshot raced ahead of the YouAre) so the next snapshot re-inserts it
         // as the predicted local ship rather than leaving it an un-predicted remote.
         _rows.Remove(LocalShipId);
+        // Our own hull ends any ride-along: the server vacates a spawning gunner's seat, so the crew
+        // frame will confirm it — but a YouAre is the earliest, most authoritative "you're flying now".
+        // Run this BEFORE NetPromoteLocal for the CAPTAIN-PROMOTION case (the captain left and the
+        // server handed us the hull we were riding): the ride ends against a node that is still in the
+        // tree, so a gunner sitting INSIDE the turret gets the hull un-hidden on a live node — and
+        // NetPromoteLocal's "we own a hull now" bookkeeping (which clears the deferred pull-back to the
+        // home overview that ending a ride arms) then gets the last word.
+        _world.Ships.SetRiding(0);
         _world.Ships.NetPromoteLocal(LocalShipId);
         // A fresh hull launches with every slot loaded: drop the previous ship's spend ticks
         // so a smaller hold on the new loadout can't read as a reload in progress.
         _localMissileLoadTick = _localChaffLoadTick = _localMineLoadTick = _localProbeLoadTick = 0;
         Log.Print($"[GameNet] assigned ship {LocalShipId}");
+    }
+
+    // MsgCrew: our team's FULL crew roster — every captain advertising (or flying) a crewable hull with
+    // all of its turret stations. Reconcile-by-omission; decode into the store's records and re-derive
+    // whether WE are riding a captain's ship (seated + shipless ⇒ the camera and the sector view follow
+    // that hull).
+    private void ApplyCrew(CrewMessage m)
+    {
+        var list = new List<CrewStore.CrewShip>(m.Ships.Length);
+        foreach (var s in m.Ships)
+        {
+            var seats = new CrewStore.CrewSeat[s.Seats.Length];
+            for (int i = 0; i < s.Seats.Length; i++)
+                seats[i] = new CrewStore.CrewSeat(s.Seats[i].SeatIndex, s.Seats[i].WeaponId, s.Seats[i].GunnerId);
+            list.Add(new CrewStore.CrewShip(s.CaptainId, s.ClassId, s.ShipId, seats));
+        }
+        _world.Crew.Apply(list);
+        // The roster is what opens and closes seats, so it is also what raises and drops turret
+        // barrels and forgets a vacated station's last aim (v42 crews slice 2).
+        _world.Ships.OnCrewChanged(_world.Crew, LocalClientId);
+        _world.Ships.SetRiding(
+            _world.Ships.LocalShip == null && _world.Crew.SeatOf(LocalClientId) is { } seat ? seat.ShipId : 0
+        );
     }
 
     // MsgMatchStats: the whole match scoreboard ledger — one row per pilot who has flown this match
@@ -467,7 +504,9 @@ public sealed class FrameApplier
     // loadout + the owner's HOLD readout).
     private void ApplyShipLoadout(ShipLoadoutMessage m)
     {
-        var table = new List<(ulong shipId, uint[] ids, (byte kind, uint itemId, byte count)[] hold)>(m.Ships.Length);
+        var table = new List<(ulong shipId, uint[] ids, (byte kind, uint itemId, byte count)[] hold, uint[] turretGuns)>(
+            m.Ships.Length
+        );
         foreach (var s in m.Ships)
         {
             var hold =
@@ -476,7 +515,7 @@ public sealed class FrameApplier
                     : new (byte kind, uint itemId, byte count)[s.Hold.Length];
             for (int i = 0; i < s.Hold.Length; i++)
                 hold[i] = (s.Hold[i].Kind, s.Hold[i].ItemId, s.Hold[i].Count);
-            table.Add((s.ShipId, s.WeaponIds, hold));
+            table.Add((s.ShipId, s.WeaponIds, hold, s.TurretWeaponIds));
         }
         _world.Ships.NetShipLoadouts(table);
     }

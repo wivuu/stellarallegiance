@@ -138,6 +138,24 @@ public sealed class WorldDef
 
     /// <summary>Per-pilot scoreboard weights (server-side only — never streamed). Null -&gt; stock.</summary>
     public WorldScoringDef? Scoring { get; set; }
+
+    /// <summary>Crew-served turret tuning (feeds the streamed per-station slew). Null -&gt; stock.</summary>
+    public WorldTurretDef? Turret { get; set; }
+}
+
+/// <summary>
+/// Crew-served turret tuning, authored under <c>turret:</c>. The gunner's CLIENT applies a station's
+/// slew limit, so this block is resolved at content projection into the streamed per-station
+/// <c>HardpointDef.TurretSlewRad</c>; the block itself is never streamed.
+/// </summary>
+public sealed class WorldTurretDef
+{
+    /// <summary>
+    /// Sustained slew rate, in degrees per second, of every turret station that authors no
+    /// <c>slew-deg</c> of its own (hulls.yaml). Must be &gt;= 0; 0 leaves such stations unlimited. A
+    /// motion smaller than ~0.15 s of traverse is never limited on any mount.
+    /// </summary>
+    public double? DefaultSlewDeg { get; set; }
 }
 
 /// <summary>
@@ -916,6 +934,13 @@ public static class WorldLoader
             t.KillOutpost = sc.KillOutpost ?? t.KillOutpost;
             t.Ejection = sc.Ejection ?? t.Ejection;
             t.Death = sc.Death ?? t.Death;
+        }
+        if (w.Turret is { } tu)
+        {
+            var t = cfg.Turret;
+            t.DefaultSlewDeg = F(tu.DefaultSlewDeg, t.DefaultSlewDeg);
+            if (!(t.DefaultSlewDeg >= 0f))
+                throw new InvalidDataException($"turret.default-slew-deg: must be >= 0 (got {t.DefaultSlewDeg}).");
         }
         return cfg;
     }

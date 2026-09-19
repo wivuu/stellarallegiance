@@ -1,4 +1,4 @@
-[gd_scene load_steps=17 format=3 uid="uid://main"]
+[gd_scene load_steps=18 format=3 uid="uid://main"]
 
 [ext_resource type="Script" path="res://scripts/ConnectionManager.cs" id="1"]
 [ext_resource type="Script" path="res://scripts/auth/AuthSession.cs" id="15"]
@@ -8,6 +8,7 @@
 [ext_resource type="Script" path="res://scripts/GameNetClient.cs" id="10"]
 [ext_resource type="Script" path="res://scripts/WorldRenderer.cs" id="2"]
 [ext_resource type="Script" path="res://scripts/ShipController.cs" id="3"]
+[ext_resource type="Script" path="res://scripts/TurretController.cs" id="16"]
 [ext_resource type="Script" path="res://scripts/CameraRig.cs" id="4"]
 [ext_resource type="Script" path="res://scripts/Hud.cs" id="5"]
 [ext_resource type="Script" path="res://scripts/Sun.cs" id="6"]
@@ -59,6 +60,9 @@ script = ExtResource("10")
 
 [node name="ShipController" type="Node" parent="."]
 script = ExtResource("3")
+
+[node name="TurretController" type="Node" parent="."]
+script = ExtResource("16")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Env")

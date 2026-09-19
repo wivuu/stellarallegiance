@@ -32,17 +32,22 @@ namespace StellarAllegiance.Shared
         MainEngine, // primary thruster nozzle (engine glow + team trail anchor)
         Booster, // afterburner / secondary nozzle
         Thruster, // maneuvering thruster (RCS-style; cosmetic for now)
-        Turret, // turret base (data + marker now; firing logic is a later phase)
+        Turret, // a CREW-SERVED gun station: WeaponId names the gun a riding gunner mans. Its Dir
+
+        // is the station's ZENITH (outward normal); the gunner aims freely inside the hemisphere
+        // around it (TurretAim — the one shared arc rule). An UNAUTHORED mesh HP_Turret node stays
+        // a marker (NoWeapon + NonMountable) — a real station must be authored in hulls.yaml.
         Light, // a blinking nav light
         DockingEntrance, // where a ship docks in (marker only)
         DockingExit, // where a ship spawns back out (marker only)
         Cockpit, // eye point for the first-person camera (client-only; the sim never reads it)
     }
 
-    // What weapon category a Weapon hardpoint accepts in the hangar. Resolved server-side at
-    // projection (authored `mount:` in hulls.yaml, else derived from the bound weapon: rack ->
-    // Missile, gun -> Gun; an UNAUTHORED empty mesh mount -> NonMountable) and streamed on the
-    // HardpointDef, so the hangar filter and the server's ResolveLoadout gate read the SAME value.
+    // What weapon category a Weapon (or Turret) hardpoint accepts in the hangar. Resolved
+    // server-side at projection (authored `mount:` in hulls.yaml, else derived from the bound
+    // weapon: rack -> Missile, gun -> Gun; an UNAUTHORED empty mesh mount -> NonMountable; an
+    // authored Turret station is always Gun) and streamed on the HardpointDef, so the hangar
+    // filter and the server's ResolveLoadout gate read the SAME value.
     // Declaration order fixes the wire byte, so it is APPEND-ONLY.
     public enum WeaponMountKind : byte
     {
@@ -55,8 +60,9 @@ namespace StellarAllegiance.Shared
     }
 
     // Off* is the local offset from the hull origin; Dir* is the local forward (e.g. +Z
-    // muzzle, −Z nozzle in this codebase's +Z-forward convention). WeaponId is meaningful
-    // only for Kind == Weapon.
+    // muzzle, −Z nozzle in this codebase's +Z-forward convention). WeaponId/Mount are meaningful
+    // for Kind == Weapon (a barrel the pilot fires) and Kind == Turret (a crew-served station a
+    // gunner mans); every other kind carries the inert placeholders 0 / Any.
     [WireRecord]
     public sealed partial class HardpointDef
     {
@@ -73,8 +79,15 @@ namespace StellarAllegiance.Shared
         public float DirX,
             DirY,
             DirZ;
-        public uint WeaponId; // Weapon hardpoints only; NoWeapon = empty mount; 0 otherwise
-        public WeaponMountKind Mount; // Weapon hardpoints only; which weapon category fits here
+        public uint WeaponId; // Weapon + Turret hardpoints; NoWeapon = empty mount/marker; 0 otherwise
+        public WeaponMountKind Mount; // Weapon + Turret hardpoints; which weapon category fits here
+
+        // Turret stations only (0 on every other kind): the "weight" of the mount — how fast the
+        // gunner's look, and so the gun, may turn (rad/s). Authored per station in hulls.yaml
+        // (`slew-deg`, default in TurretAim) and streamed because the CLIENT is the one that applies
+        // it: turret aim is client-authoritative, the server only arc-clamps what it is sent.
+        // Streamed LAST in the hardpoint record.
+        public float TurretSlewRad;
 
         // THE mount-compatibility rule, shared so the hangar UI (LoadoutState.Compatible) and the
         // server's ResolveLoadout accept exactly the same swaps: dispensers never mount on a
@@ -788,6 +801,7 @@ namespace StellarAllegiance.Shared
         public WorldConstructorTuning Constructor = new();
         public WorldBuildTuning Build = new();
         public WorldScoringTuning Scoring = new();
+        public WorldTurretTuning Turret = new();
     }
 
     // PIG drone AI tuning (world.yaml `ai:`). Server-side only — clients never simulate
@@ -1148,6 +1162,17 @@ namespace StellarAllegiance.Shared
         // tick) but costs no points.
         public int Ejection = 0; // when YOUR combat ship is destroyed and you eject
         public int Death = -25; // when YOUR escape pod is destroyed
+    }
+
+    // Crew-served turret tuning (world.yaml `turret:`). Server-side: it only feeds the content
+    // projection, which resolves it into the streamed HardpointDef.TurretSlewRad — the client never
+    // sees this block, only the per-station result.
+    public sealed class WorldTurretTuning
+    {
+        // Sustained slew rate (deg/s) of a turret station that authors no `slew-deg` of its own.
+        // 0 = such stations are unlimited. Small motions are never limited either way
+        // (TurretAim.SlewLimit's token bucket).
+        public float DefaultSlewDeg = (float)TurretAim.DefaultSlewDeg;
     }
 
     // Stable content IDENTIFIERS the engine branches on. These are NOT tunable content — the actual

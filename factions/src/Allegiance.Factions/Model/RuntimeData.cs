@@ -72,6 +72,14 @@ public record Hardpoint
     /// opt a bound mount out of the restriction (<c>any</c>).
     /// </summary>
     public RuntimeMountKind? Mount { get; set; }
+
+    /// <summary>
+    /// <see cref="RuntimeHardpointKind.Turret"/> only: the station's slew speed in degrees per
+    /// second — the cap the gunner's client puts on how fast its look, and so the gun, may turn
+    /// (turret aim is client-authoritative; the server only arc-clamps it). Null = the runtime
+    /// default (a nimble light mount); author lower on a heavy capital station.
+    /// </summary>
+    public double? SlewDeg { get; set; }
 }
 
 /// <summary>

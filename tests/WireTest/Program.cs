@@ -107,12 +107,14 @@ var sizePins = new (string, int, int)[]
     ("BaseHealthRecord", BaseHealthRecord.Size, 12),
     ("ConstructorStateRecord", ConstructorStateRecord.Size, 43),
     ("HoldItemRecord", HoldItemRecord.Size, 6),
+    ("CrewSeatRecord", CrewSeatRecord.Size, 9),
+    ("TurretRecord", TurretRecord.Size, 25),
     ("BaseStatic", BaseStatic.Size, 34),
     ("RockStatic", RockStatic.Size, 51),
     ("AlephStatic", AlephStatic.Size, 28),
     ("DustCloudWire", DustCloudWire.Size, 20),
     ("SunEnvWire", SunEnvWire.Size, 40),
-    ("HardpointDef", HardpointDef.Size, 31),
+    ("HardpointDef", HardpointDef.Size, 35),
     ("CargoLoadDef", CargoLoadDef.Size, 5),
     ("AttrMod", AttrMod.Size, 5),
     ("WorldConfigWire", WorldConfigWire.Size, 12),
@@ -123,6 +125,8 @@ var sizePins = new (string, int, int)[]
     ("BuildConstructorMessage", BuildConstructorMessage.Size, 10),
     ("ConstructorCancelMessage", ConstructorCancelMessage.Size, 9),
     ("BuyMinerMessage", BuyMinerMessage.Size, 9),
+    ("CrewSeatMessage", CrewSeatMessage.Size, 7),
+    ("TurretInputMessage", TurretInputMessage.Size, 18),
     ("MissileGoneMessage", MissileGoneMessage.Size, 18),
     ("ProbeGoneMessage", ProbeGoneMessage.Size, 18),
     ("MineGoneMessage", MineGoneMessage.Size, 19),
@@ -165,6 +169,9 @@ var idPairs = new (string, byte, byte)[]
     ("BuildConstructor", BuildConstructorMessage.MsgId, 14),
     ("ConstructorCancel", ConstructorCancelMessage.MsgId, 15),
     ("BuyMiner", BuyMinerMessage.MsgId, 16),
+    ("HangarIntent", HangarIntentMessage.MsgId, 17),
+    ("CrewSeat", CrewSeatMessage.MsgId, 18),
+    ("TurretInput", TurretInputMessage.MsgId, 19),
     ("Welcome", WelcomeMessage.MsgId, 1),
     ("YouAre", YouAreMessage.MsgId, 2),
     ("Snapshot", SnapshotMessage.MsgId, 3),
@@ -196,6 +203,8 @@ var idPairs = new (string, byte, byte)[]
     ("MatchStats", MatchStatsMessage.MsgId, 29),
     ("Salvage", SalvageMessage.MsgId, 30),
     ("SalvageGone", SalvageGoneMessage.MsgId, 31),
+    ("Crew", CrewMessage.MsgId, 32),
+    ("Turrets", TurretsMessage.MsgId, 33),
 };
 bool idsOk = true;
 foreach (var (n, a, b) in idPairs)
@@ -902,8 +911,10 @@ sim.Step();
         Check(
             parsed.Ships.Length == 2
                 && r0.WeaponIds.SequenceEqual(new uint[] { 0, HardpointDef.NoWeapon })
-                && r0.Hold.Length == 0,
-            "ShipLoadouts: override row carries the effective ids + empty hold",
+                && r0.Hold.Length == 0
+                // the scout has no crew-served turret stations, so its station list is empty
+                && r0.TurretWeaponIds.Length == 0,
+            "ShipLoadouts: override row carries the effective ids + empty hold + turret stations",
             "loadout override row"
         );
         Check(
@@ -1903,10 +1914,116 @@ RoundTrip(
                         Count = 6,
                     },
                 },
+                TurretWeaponIds = new uint[] { 0, 12 },
             },
         },
     }.ToBytes(),
     b => ShipLoadoutMessage.Parse(b),
+    v => v.ToBytes()
+);
+RoundTrip(
+    "HangarIntent (synthetic)",
+    new HangarIntentMessage
+    {
+        ClassId = 3,
+        Turrets = new[]
+        {
+            new MountOverrideRecord { HpIndex = 0, WeaponId = 12 },
+            new MountOverrideRecord { HpIndex = 1, WeaponId = 0 },
+        },
+    }.ToBytes(),
+    b => HangarIntentMessage.Parse(b),
+    v => v.ToBytes()
+);
+RoundTrip(
+    "CrewSeat (synthetic)",
+    new CrewSeatMessage
+    {
+        Mode = 1,
+        CaptainId = 7,
+        SeatIndex = 2,
+    }.ToBytes(),
+    b => CrewSeatMessage.Parse(b),
+    v => v.ToBytes()
+);
+RoundTrip(
+    "TurretInput (synthetic)",
+    new TurretInputMessage
+    {
+        Tick = 4242,
+        AimX = 0.1f,
+        AimY = 0.7f,
+        AimZ = -0.707f,
+        Flags = TurretAim.FlagFiring,
+    }.ToBytes(),
+    b => TurretInputMessage.Parse(b),
+    v => v.ToBytes()
+);
+var synthTurrets = new TurretsMessage
+{
+    Tick = 9001,
+    Turrets = new[]
+    {
+        new TurretRecord
+        {
+            ShipId = 77,
+            SeatIndex = 1,
+            AimX = 0f,
+            AimY = 0.6f,
+            AimZ = 0.8f,
+            LastFireTick = 8999,
+        },
+        new TurretRecord
+        {
+            ShipId = 78,
+            SeatIndex = 0,
+            AimX = -1f,
+            AimY = 0f,
+            AimZ = 0f,
+            LastFireTick = 0,
+        },
+    },
+};
+RoundTrip("Turrets (synthetic)", synthTurrets.ToBytes(), b => TurretsMessage.Parse(b), v => v.ToBytes());
+var synthCrew = new CrewMessage
+{
+    Ships = new[]
+    {
+        new CrewShipRecord
+        {
+            CaptainId = 7,
+            ClassId = 3,
+            ShipId = 0, // docked = joinable
+            Seats = new[]
+            {
+                new CrewSeatRecord
+                {
+                    SeatIndex = 0,
+                    WeaponId = 0,
+                    GunnerId = 9,
+                },
+                new CrewSeatRecord
+                {
+                    SeatIndex = 1,
+                    WeaponId = 12,
+                    GunnerId = -1, // open
+                },
+            },
+        },
+        new CrewShipRecord
+        {
+            CaptainId = 11,
+            ClassId = 7,
+            ShipId = 0xABCDEF0123UL, // in flight
+            Seats = System.Array.Empty<CrewSeatRecord>(),
+        },
+    },
+};
+RoundTrip("Crew (synthetic)", synthCrew.ToBytes(), b => CrewMessage.Parse(b), v => v.ToBytes());
+RoundTrip(
+    "Crew (empty roster — the reconcile-by-omission prune)",
+    new CrewMessage { Ships = System.Array.Empty<CrewShipRecord>() }.ToBytes(),
+    b => CrewMessage.Parse(b),
     v => v.ToBytes()
 );
 var synthLobby = Frames
@@ -2390,10 +2507,13 @@ Golden(
                         Count = 6,
                     },
                 },
+                TurretWeaponIds = new uint[] { 0, 12 },
             },
         },
     }.ToBytes()
 );
+Golden("Crew.sha", synthCrew.ToBytes());
+Golden("Turrets.sha", synthTurrets.ToBytes());
 Golden(
     "ResearchState.sha",
     new ResearchStateMessage
@@ -2487,7 +2607,7 @@ static class Goldens
         ["Hello.hex"] = "010173016E017401006A",
         ["Welcome.sha"] = "7F14443FC9C31349AEB7EE1FAD7EC40374C31124D7580A03B1D32FC3A8F10C01",
         ["Snapshot.sha"] = "9B98F4552A954612681978B6D6BDA9B94B28B5F877F90AA700F041A383E99F6F",
-        ["Defs.sha"] = "788C0B6B5DB71F2F274DA8577072ABDA338AC8AF019BC3EB7751ECEA6C8AB799",
+        ["Defs.sha"] = "A7940A383CCD58689BE6010896C05BF4A1BE968E64F80B9D4B6D4F8A8C645E7F",
         ["TeamState.sha"] = "25235899FBC33C1A257D7B77EAEAE952505462B4646ECB87A97839F338E447AE",
         ["MapList.sha"] = "F769D835423E744FA13F3CDC7D3D9EC75F04237A3D22D015A5C95724EB7986E1",
         ["LobbyState.sha"] = "4B0A27B18C1D18069B72B844B39215B352BFA8041C7EEA6285A0E88AA87ADA0B", // team rows (MsgLobbyState)
@@ -2496,7 +2616,9 @@ static class Goldens
         ["Minefields.sha"] = "D2373973B1AE71B791C4982E628ECB480C3082E506167F52E8242E3BAFFA9137",
         ["Salvage.sha"] = "662E2256144D77C491EAD5CF39E3D5B0AAD6CA7ADCDE5295FF1C740E991E8CCB",
         ["Probes.sha"] = "37D850ABA44223163079AD407EF3ED07726567CFDCF710F15E311BC086D6CCA6",
-        ["ShipLoadout.sha"] = "E25830D434802BBDC3274934EF42363535C1C00DC985528F16EAF115FDD80F3C",
+        ["ShipLoadout.sha"] = "9EF7781C2F8C9A567CA29F6883FFD6233AEBC4285D0B3F394E6FB47893CA70A2",
+        ["Crew.sha"] = "664298509128CD9A39A9953A65370D81004C5E77A3811B3B68E6BA435B97CF0C",
+        ["Turrets.sha"] = "031111F49B12A3EDCB340670614E30709773F835F6EC546FB97014FF14674756",
         ["ResearchState.sha"] = "1E67F5C4D26E391B7E9BD73FB76C2D2216C7C3F08B8772F7FF6B96BC5C45C2F8",
         ["ConstructorState.sha"] = "5C9343E66F44F0303D3F519D85F8A7D5A873EF0AB3B147798745503BED27AAA9",
         ["Gone.sha"] = "E7FB379DD828E264574FC8CFE836AFD98BA348B3FCF23F9643DE7AE4CFAAD4A3",

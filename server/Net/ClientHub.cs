@@ -635,6 +635,14 @@ public sealed partial class ClientHub
             if (count < 1)
                 continue; // empty frame
 
+            // After a MsgBye nothing else this connection says counts: the client is tearing itself
+            // down, and a real client keeps talking for a beat between the Bye and the socket close
+            // (its world reset pops the spawn hangar, whose teardown retracts the crew advertisement
+            // — live finding 2026-09-13: that retract dissolved a crew before the leave drained, so
+            // there was nobody left to promote to captain). The leave itself is handled in `finally`.
+            if (client.Leaving)
+                continue;
+
             // One whole frame per receive. Each case parses it with the shared generated codec
             // (shared/Net/Messages.cs) — the same layout the client compiles. A truncated or malformed
             // frame fails TryParse and is ignored, exactly the "not a protocol error" treatment the old
@@ -794,6 +802,10 @@ public sealed partial class ClientHub
                     // later spawn) reflect the pick immediately, not just at deploy time.
                     byte prevTeam = client.Team;
                     client.Team = _lobby.TeamOf(client.Id);
+                    // A crew is per-team state: switching sides dissolves the hull this pilot
+                    // advertised and frees any turret station they were holding.
+                    if (client.Team != prevTeam)
+                        _sim.EnqueueCrewClear(client.Id);
                     // Fog on: the discovered map is per-team, so a team change must re-sync this client
                     // to the new team's remembered world — re-send a fresh Welcome (the client rebuilds
                     // its world on it) with the new team's vision + re-seeded reveal cursors (F1). This
@@ -894,6 +906,57 @@ public sealed partial class ClientHub
                     if (!SetAutopilotMessage.TryParse(buffer.AsSpan(0, count), out var ap))
                         break;
                     _sim.EnqueueSetAutopilot(client.Id, ap.Mode, ap.Kind, ap.Id, ap.Sector, ap.Pos);
+                    break;
+                }
+                case Protocol.MsgHangarIntent:
+                {
+                    // A docked captain advertises (ClassId 0xFF retracts) the hull teammates may
+                    // crew, with the FULL per-station gun pick list. One-shot command like
+                    // MsgSetAutopilot: decode + queue; the sim thread owns every rule.
+                    if (!HangarIntentMessage.TryParse(buffer.AsSpan(0, count), out var intent))
+                        break;
+                    byte intentTeam = _lobby.TeamOf(client.Id);
+                    if (intentTeam >= TeamCount)
+                    {
+                        SystemTo(client, "Pick a team before crewing.");
+                        break;
+                    }
+                    client.Team = intentTeam;
+                    var picks = new (byte hpIndex, uint weaponId)[intent.Turrets.Length];
+                    for (int i = 0; i < picks.Length; i++)
+                        picks[i] = (intent.Turrets[i].HpIndex, intent.Turrets[i].WeaponId);
+                    _sim.EnqueueHangarIntent(client.Id, intentTeam, intent.ClassId, picks);
+                    break;
+                }
+                case Protocol.MsgCrewSeat:
+                {
+                    // Claim (Mode 1) or give up (Mode 0) a turret station on a teammate's docked
+                    // ship. Same team gate as MsgSpawn — a NOAT pilot has no roster to join.
+                    if (!CrewSeatMessage.TryParse(buffer.AsSpan(0, count), out var seat))
+                        break;
+                    byte seatTeam = _lobby.TeamOf(client.Id);
+                    if (seatTeam >= TeamCount)
+                    {
+                        SystemTo(client, "Pick a team before crewing.");
+                        break;
+                    }
+                    client.Team = seatTeam;
+                    _sim.EnqueueCrewSeat(client.Id, seatTeam, seat.Mode, seat.CaptainId, seat.SeatIndex);
+                    break;
+                }
+                case Protocol.MsgTurretInput:
+                {
+                    // A riding gunner's held aim + fire flag, at input rate. Decode + queue only:
+                    // the sim thread owns every rule (is this client still seated, has the captain
+                    // launched, is the aim inside the station's arc). Same team gate as MsgCrewSeat,
+                    // silent — this is a stream, not a command, so a stale frame just drops.
+                    if (!TurretInputMessage.TryParse(buffer.AsSpan(0, count), out var ti))
+                        break;
+                    byte turretTeam = _lobby.TeamOf(client.Id);
+                    if (turretTeam >= TeamCount)
+                        break;
+                    client.Team = turretTeam;
+                    _sim.EnqueueTurretInput(client.Id, ti.Tick, new Vec3(ti.AimX, ti.AimY, ti.AimZ), ti.Flags);
                     break;
                 }
                 case Protocol.MsgOrder:
@@ -1393,6 +1456,10 @@ public sealed partial class ClientHub
         public byte[][]? MineGoneFrames;
         public List<byte[]>? ProbeGoneFrames;
         public List<byte[]>? SalvageGoneFrames;
+
+        // Crew turrets: this tick's changed ships, each with its MANNED records built ONCE (the
+        // per-client pass only picks which of them are in view). Null when nothing changed.
+        public List<(Simulation.ShipSim ship, TurretRecord[] rows)>? TurretUpdates;
         public Dictionary<byte, List<byte[]>>? LostByTeam;
         public bool SendRocks;
         public List<ulong>? ChangedRockList;
@@ -1542,6 +1609,18 @@ public sealed partial class ClientHub
                 salvageGoneFrames.Add(Protocol.BuildSalvageGone(g.id, g.reason, g.sector, g.pos, g.byShipId));
         }
 
+        // Crew turrets (v42): build each changed ship's MANNED records ONCE per tick — the
+        // per-client pass below only decides which ships are in view, never re-serializes them.
+        // A ship whose last gunner just left produces no records; its seat going back to rest is
+        // the roster frame's job (MsgCrew), so it is dropped here rather than sent as an empty set.
+        List<(Simulation.ShipSim ship, TurretRecord[] rows)>? turretUpdates = null;
+        foreach (var ts in _sim.Events.TurretUpdates)
+        {
+            var rows = Frames.Turrets(_sim, ts);
+            if (rows.Length > 0)
+                (turretUpdates ??= new()).Add((ts, rows));
+        }
+
         bool fog = _sim.FogEnabled;
 
         // Lost contacts (fog): a ship that left a team's streamed union this vision apply → a reason-2
@@ -1601,6 +1680,7 @@ public sealed partial class ClientHub
             MineGoneFrames = mineGoneFrames,
             ProbeGoneFrames = probeGoneFrames,
             SalvageGoneFrames = salvageGoneFrames,
+            TurretUpdates = turretUpdates,
             LostByTeam = lostByTeam,
             SendRocks = sendRocks,
             ChangedRockList = changedRockList,
@@ -1649,6 +1729,9 @@ public sealed partial class ClientHub
                 client.Out.SendReliable(OutFrame.Whole(Protocol.BuildYouAre(sid)));
         }
 
+        // A shipless pilot who is manning a teammate's turret rides that captain's ship (0 otherwise).
+        ulong riding = sid != 0 ? 0UL : _sim.RidingShipIdOf(client.Id);
+
         if (sid != 0 && _shipIndexById.TryGetValue(sid, out int si))
         {
             client.AnchorPos = ships[si].State.Pos;
@@ -1671,6 +1754,15 @@ public sealed partial class ClientHub
                 if (fog)
                     SendWelcome(client);
             }
+        }
+        else if (riding != 0 && _shipIndexById.TryGetValue(riding, out int ri))
+        {
+            // Riding gunner: no ship of their own (YouAre and client.ShipId stay untouched — they
+            // must never think they are flying), but the AOI anchors on the CAPTAIN's ship, so the
+            // ship they are strapped to and everything around it streams at full rate, and the
+            // anchor-scoped sets (minefields/salvage) follow the captain through a warp.
+            client.AnchorPos = ships[ri].State.Pos;
+            client.AnchorSector = ships[ri].SectorId;
         }
         else
         {
@@ -1823,6 +1915,17 @@ public sealed partial class ClientHub
             byte[]? missileFrame = BuildMissilesFor(client, ev.Missiles, tick);
             if (missileFrame is not null)
                 client.Out.SendLossy(OutFrame.Whole(missileFrame));
+        }
+
+        // Crew turrets this client can see: the same AOI rule as the missiles above (its anchor
+        // sector, within full-rate range), plus the ship it is RIDING at any range — a gunner's own
+        // seat is in the frame too (the client ignores it; it predicts its own aim and bolts).
+        // LOSSY: a dropped frame is superseded by the next change, and the aim is continuous.
+        if (ev.TurretUpdates is not null)
+        {
+            byte[]? turretFrame = BuildTurretsFor(client, riding, ev.TurretUpdates, tick);
+            if (turretFrame is not null)
+                client.Out.SendLossy(OutFrame.Whole(turretFrame));
         }
 
         return rosterDirty;
@@ -2064,6 +2167,51 @@ public sealed partial class ClientHub
             dst += Protocol.MissileRecordSize;
         }
         return buf;
+    }
+
+    // Build one client's MsgTurrets frame from this tick's pre-built per-ship records, or null when
+    // none of the changed ships are in view. `riding` is the ship a shipless gunner is strapped to
+    // (0 otherwise) — it always sees its own ride's turrets, however far the anchor pass placed it.
+    // The record count is a u8 on the wire, so the frame is capped at 255 records (a ship that loses
+    // the race simply streams on the next tick one of its turrets changes).
+    private byte[]? BuildTurretsFor(
+        Client client,
+        ulong riding,
+        List<(Simulation.ShipSim ship, TurretRecord[] rows)> updates,
+        uint tick
+    )
+    {
+        Vec3 myPos = client.AnchorPos;
+        uint mySector = client.AnchorSector;
+        // Fog of war: the same enemy-ship gate the snapshot build applies (radar OR eyeball set, own
+        // team always passes). Unlike the missile stream this is NOT an accepted leak — a fogged
+        // crewed ship's id + aim every tick would be a wallhack for a modified client.
+        bool fog = _sim.FogEnabled;
+        byte myTeam = client.Team;
+        Simulation.TeamVision? vision = fog ? _sim.VisionFor(myTeam) : null;
+        List<TurretRecord>? rows = null;
+        foreach (var (ship, recs) in updates)
+        {
+            if (
+                fog
+                && ship.Team != myTeam
+                && (
+                    vision == null
+                    || (!vision.VisibleEnemyShips.Contains(ship.ShipId) && !vision.EyeballShips.Contains(ship.ShipId))
+                )
+            )
+                continue;
+            bool inView =
+                (ship.SectorId == mySector && (ship.State.Pos - myPos).LengthSquared() <= FullRateRadiusSq)
+                || (riding != 0 && riding == ship.ShipId);
+            if (!inView)
+                continue;
+            rows ??= new();
+            if (rows.Count + recs.Length > 255)
+                break;
+            rows.AddRange(recs);
+        }
+        return rows is null || rows.Count == 0 ? null : Protocol.BuildTurrets(tick, rows.ToArray());
     }
 
     // Build the MsgMinefields frame for one anchor sector: [13][u16 anchorSector][u8 count] + count x

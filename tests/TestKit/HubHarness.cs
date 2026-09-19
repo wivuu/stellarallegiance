@@ -77,6 +77,10 @@ public static class HubFrames
 
     public static byte[] SetReady(bool ready) => new SetReadyMessage { Ready = ready }.ToBytes();
 
+    // A voluntary leave. The hub only marks the client as Leaving here; the ship is freed when the
+    // transport then closes (cancel the connection's token), instead of being parked for the grace.
+    public static byte[] Bye() => new ByeMessage().ToBytes();
+
     // A bare spawn: hull default cargo, authored loadout, server default launch base.
     public static byte[] Spawn(byte shipClass, ulong launchBaseId = 0) =>
         new SpawnMessage
@@ -85,5 +89,37 @@ public static class HubFrames
             LaunchBaseId = launchBaseId,
             Cargo = Array.Empty<StellarAllegiance.Shared.CargoLoadDef>(),
             Mounts = Array.Empty<MountOverrideRecord>(),
+        }.ToBytes();
+
+    // A docked captain's crew advertisement: the hull teammates may crew plus the FULL per-station
+    // gun pick list (empty = every station keeps its authored gun). ClassId 0xFF retracts.
+    public static byte[] HangarIntent(byte classId, params (byte hpIndex, uint weaponId)[] turrets)
+    {
+        var picks = new MountOverrideRecord[turrets.Length];
+        for (int i = 0; i < picks.Length; i++)
+            picks[i] = new MountOverrideRecord { HpIndex = turrets[i].hpIndex, WeaponId = turrets[i].weaponId };
+        return new HangarIntentMessage { ClassId = classId, Turrets = picks }.ToBytes();
+    }
+
+    // Claim (mode 1) or give up (mode 0) a turret station on a teammate's docked ship.
+    public static byte[] CrewSeat(byte mode, int captainId, byte seatIndex) =>
+        new CrewSeatMessage
+        {
+            Mode = mode,
+            CaptainId = captainId,
+            SeatIndex = seatIndex,
+        }.ToBytes();
+
+    // A riding gunner's turret input: the SHIP-LOCAL aim direction plus the flag bits
+    // (TurretAim.FlagFiring). HELD semantics — the server keeps the latest frame per gunner and
+    // fires on its own cadence for as long as Firing is set, so a test sends it once and steps.
+    public static byte[] TurretInput(uint tick, StellarAllegiance.Shared.Vec3 aim, byte flags) =>
+        new TurretInputMessage
+        {
+            Tick = tick,
+            AimX = aim.X,
+            AimY = aim.Y,
+            AimZ = aim.Z,
+            Flags = flags,
         }.ToBytes();
 }

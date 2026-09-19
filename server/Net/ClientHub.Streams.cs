@@ -123,6 +123,24 @@ public sealed partial class ClientHub
             Protocol.BuildShipLoadouts(hub._sim);
     }
 
+    // MsgCrew: PER-TEAM hangar-crew roster, full reconcile. RELIABLE like the loadout table it sits
+    // beside — a lost seat change strands a gunner's hangar on a stale roster, and the frame is tiny.
+    // There is NO per-client first-send: a fresh or reconnected client waits for the next change or
+    // the coarse keepalive (SIM_COARSE_EVERY, ~0.5 s at 20 Hz), which is the accepted latency here.
+    private sealed class CrewStream : LowRateStream
+    {
+        public override string Name => "crew";
+        public override StreamScope Scope => StreamScope.PerTeam;
+        public override StreamTier Tier => StreamTier.Reliable;
+        public override bool SpectatorsToo => false;
+
+        public override bool Due(ClientHub hub, byte team, uint anchor, bool coarse) =>
+            hub._sim.Events.CrewChanged || coarse;
+
+        public override byte[]? Build(ClientHub hub, byte team, uint anchor, bool coarse) =>
+            Protocol.BuildCrewFor(hub._sim, team);
+    }
+
     // MsgResearchState: PER-TEAM (a team sees only its own bases' research — the fog-safe choice).
     private sealed class ResearchStream : LowRateStream
     {
@@ -341,6 +359,7 @@ public sealed partial class ClientHub
         new BasesStream(),
         new TeamStateStream(),
         new LoadoutStream(),
+        new CrewStream(),
         new ResearchStream(),
         new MinerTargetsStream(),
         new ConstructorBuildsStream(),

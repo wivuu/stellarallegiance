@@ -68,6 +68,12 @@ public partial class CameraRig : Camera3D
     // cross-system idiom (mirrors ZoomView.Active / SectorOverview.Active); false with no local ship.
     public static bool FirstPersonActive { get; private set; }
 
+    // GUNNER first person (v42 crews slice 2): the wheel wound in past the tightest gun-cam shot (or
+    // toggle_view while seated) puts the eye INSIDE the turret — on the mount, looking down the aim.
+    // ShipRenderer hides the ridden hull while this is set (you can't see the deck from inside the
+    // gun, and the hull would fill the view). Cleared the moment the seat is gone.
+    public static bool TurretFirstPerson { get; private set; }
+
     // Surfaced for the transient HUD view-mode chip: which mode the player last selected and when
     // (ms), so the readout can flash briefly on a change and fade out.
     public static bool ViewIsFirstPerson { get; private set; }
@@ -115,13 +121,26 @@ public partial class CameraRig : Camera3D
         // ship: no view-mode changes while a full-screen overlay owns the screen (F3 overview reads
         // the wheel itself; chat/menus capture keys).
         bool inputFree = InputGate.FlightInputFree;
-        if (!inputFree || _world.Ships.LocalShip == null)
+        // A crew gunner riding the captain's hull has no ship of their own but IS "in flight": the wheel
+        // still dollies their chase shot (see HandleWheel's riding branch).
+        bool riding = _world.Ships.Riding;
+        if (!inputFree || (_world.Ships.LocalShip == null && !riding))
             return;
 
         // toggle_view flips modes WITHOUT touching _zoom, so toggling round-trips to the prior
         // framing. Rebindable via the InputMap (InputBindings), so it accepts a key or a pad button.
         if (@event.IsActionPressed("toggle_view"))
         {
+            if (riding)
+            {
+                // A seated gunner toggles between the gun cam and the inside-the-turret view; an
+                // unseated rider has no cockpit to sit in (left unhandled so nothing is starved).
+                if (!TurretController.Active)
+                    return;
+                SetTurretFirstPerson(!TurretFirstPerson);
+                GetViewport().SetInputAsHandled();
+                return;
+            }
             SetDesiredMode(!_fpDesired);
             GetViewport().SetInputAsHandled();
             return;
@@ -130,10 +149,10 @@ public partial class CameraRig : Camera3D
         switch (@event)
         {
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelDown }:
-                HandleWheel(down: true);
+                HandleWheel(down: true, riding);
                 break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelUp }:
-                HandleWheel(down: false);
+                HandleWheel(down: false, riding);
                 break;
         }
     }
@@ -141,8 +160,33 @@ public partial class CameraRig : Camera3D
     // WheelDown narrows the shot; WheelUp widens it. The two ends of the zoom range hand off to the
     // view mode: winding IN past the closest chase shot dives into the cockpit, winding OUT of the
     // cockpit pulls back to the tightest chase framing.
-    private void HandleWheel(bool down)
+    private void HandleWheel(bool down, bool riding)
     {
+        // Riding a teammate's turret station: the wheel dollies the gun cam, and — exactly like the
+        // pilot's cockpit hand-off — one more notch in from the tightest shot sits the gunner INSIDE
+        // the turret, one notch out climbs back to the tightest gun cam. An unseated rider (no
+        // station resolved) just dollies the chase shot.
+        if (riding)
+        {
+            bool seated = TurretController.Active;
+            if (down)
+            {
+                if (TurretFirstPerson)
+                    return;
+                if (seated && _zoom <= MinZoom + 1e-4f)
+                    SetTurretFirstPerson(true);
+                else
+                    _zoom = Mathf.Max(MinZoom, _zoom / ZoomStep);
+            }
+            else if (TurretFirstPerson)
+            {
+                SetTurretFirstPerson(false);
+                _zoom = MinZoom;
+            }
+            else
+                _zoom = Mathf.Min(MaxZoom, _zoom * ZoomStep);
+            return;
+        }
         if (down) // narrower
         {
             if (_fpDesired)
@@ -164,6 +208,19 @@ public partial class CameraRig : Camera3D
         }
     }
 
+    // Move the GUNNER between the gun cam and the inside-the-turret view. The mode itself isn't
+    // persisted (a seat is transient, unlike the pilot's chosen framing), but it stamps the same
+    // view-mode statics the pilot's toggle does so the transient FPV/3RD chip flashes in both seats.
+    // Edge-guarded: the "seat is gone" reset below clears the flag without a flash.
+    private static void SetTurretFirstPerson(bool fp)
+    {
+        if (TurretFirstPerson == fp)
+            return;
+        TurretFirstPerson = fp;
+        ViewIsFirstPerson = fp;
+        ViewChangedMsec = Time.GetTicksMsec();
+    }
+
     // Change (and persist) the view mode. The blend animates toward it from its current value, so a
     // change mid-transition just reverses the dolly. A no-op if the mode is unchanged.
     private void SetDesiredMode(bool fp)
@@ -179,9 +236,40 @@ public partial class CameraRig : Camera3D
     public override void _Process(double delta)
     {
         var ship = _world.Ships.LocalShip;
+        if (ship != null || !_world.Ships.Riding)
+            TurretFirstPerson = false; // the seat is gone (own launch / ride ended): back to a normal view
         if (ship == null)
         {
             FirstPersonActive = false; // no ship ⇒ never "in the cockpit" (hull-hide seam reads this)
+            // RIDE-ALONG (v41 crews): seated on a teammate's turret station — chase THEIR hull with the
+            // normal third-person framing, scaled by the ridden model's length so a 75 u capital keeps
+            // the camera well outside its own geometry (the baseline offset frames a 4.5 u fighter). The
+            // node's pose is already MatchClock-interpolated by RemoteShip, so this borrows that
+            // timeline rather than starting one. Checked BEFORE the death-cam: taking a seat supersedes
+            // any lingering hold.
+            if (_world.Ships.RidingNode is { } ridden)
+            {
+                _ship = null; // our own next spawn must re-resolve its cockpit against a fresh node
+                float len = ResolveModelExtents(ridden).Length;
+                float scale = Mathf.Max(1f, len / ShipModelLoader.DefaultModelLength);
+                Transform3D rt = ridden.GlobalTransform;
+                // GUN CAM (v42 crews slice 2): once the gunner actually holds a station, the view stops
+                // being a chase of someone else's hull and becomes the turret's own — parked just above
+                // and behind the mount, looking straight down the aim, so the reticle at screen centre
+                // IS where the bolts go. The slice-1 chase stays as the fallback for a rider with no
+                // resolved station (a one-frame race, or a seat whose def hasn't streamed yet).
+                if (TurretController.Active)
+                {
+                    GlobalTransform = GunCamPose(rt, scale);
+                    return;
+                }
+                TurretFirstPerson = false; // no station resolved ⇒ nothing to sit inside
+                GlobalTransform = new Transform3D(
+                    rt.Basis * FaceForward,
+                    rt.Origin + rt.Basis * (ChaseOffset * scale * _zoom)
+                );
+                return;
+            }
             // Just died: hold the last chase framing on the death point for a beat so the player
             // sees their own blast up close (see WorldRenderer death-cam) before the view pulls back
             // to the wide overview. The death cam always frames the wreck from OUTSIDE (third person).
@@ -191,6 +279,13 @@ public partial class CameraRig : Camera3D
                 GlobalTransform = new Transform3D(d.Basis * FaceForward, d.Origin + d.Basis * (ChaseOffset * _zoom));
                 return;
             }
+            // A hull of ours is one snapshot away (a crew gunner promoted to captain of the hull they
+            // were riding, or any spawn between the YouAre and its first row): hold the framing we
+            // already have rather than snapping out to the battlefield overview for a frame or two.
+            // The ship's own arrival re-frames us — and skips the launch cinematic, so the promoted
+            // gunner's view simply becomes the pilot's from where the gun cam left it.
+            if (_world.Ships.AwaitingLocalShip)
+                return;
             GlobalPosition = OverviewPos;
             LookAt(Vector3.Zero, Vector3.Up);
             return;
@@ -304,6 +399,53 @@ public partial class CameraRig : Camera3D
         if (shipModel?.FindChild("HP_Cockpit_0", recursive: true, owned: false) is Node3D cockpit)
             return ship.GlobalTransform.AffineInverse() * cockpit.GlobalTransform.Origin;
         return CockpitFallback;
+    }
+
+    // Gun-cam framing knobs (multiplied by the hull's size scale and the wheel dolly), in the
+    // GUNNER'S OWN look frame: lifted along their up and pulled back along their aim, so the shot is
+    // framed exactly the way the chase shot frames a pilot's hull — the eye sits over the shoulder of
+    // the gun and the framing never changes character as the gun sweeps.
+    private const float GunCamUp = 0.6f;
+    private const float GunCamBack = 2.5f;
+
+    // Inside the turret: the eye sits just up the zenith from the mount point — enough to clear the
+    // mount's own base ring, never so far the gun reads as "hovering".
+    private const float GunInsideUp = 0.2f;
+
+    // The turret's eye: over the gunner's own mount, looking where THEY look with THEIR up — a free
+    // look, and since the look IS the gun's aim the reticle sits dead centre in it.
+    // The whole look basis arrives ship-local from TurretController (that is what the wire speaks),
+    // so it is rotated into world space through the ridden hull's live pose — the camera then
+    // inherits the captain's manoeuvres for free, exactly as a seat welded to the hull would. No
+    // zenith-projected up and no horizon-only pull-back: both were reference frames outside the
+    // gunner's own, and both are what made the view spin as the aim neared the mount's pole.
+    private Transform3D GunCamPose(Transform3D ship, float scale)
+    {
+        Basis look = ship.Basis * TurretController.CamBasis; // Z = the look (= the aim), Y = the gunner's up
+        Vector3 aim = look.Z.Normalized();
+        Vector3 up = look.Y.Normalized();
+        Vector3 zenith = (ship.Basis * TurretController.Zenith).Normalized();
+        Vector3 mount = ship.Origin + ship.Basis * TurretController.Station;
+
+        // A Camera3D looks down its own −Z, so the basis is built with +Z opposite the aim — the same
+        // reason the chase shot multiplies the ship basis by FaceForward. X = Y × Z keeps it
+        // right-handed (a mirrored basis would flip the whole view left-to-right).
+        Vector3 back = -aim;
+        var basis = new Basis(up.Cross(back), up, back);
+
+        if (TurretFirstPerson)
+            return new Transform3D(basis, mount + zenith * (GunInsideUp * scale));
+
+        float dolly = scale * _zoom;
+        Vector3 eye = mount + up * (GunCamUp * dolly) - aim * (GunCamBack * dolly);
+        // …but never BELOW the mount's own deck. Looking steeply up or down puts the pull-back through
+        // the captain's hull (live-run finding: the first gun-cam shot sat inside the bomber's back),
+        // so the eye is lifted straight along the station's zenith until it clears the mount. This is
+        // the ONE place the zenith still has a say — as a floor on the eye, not as the view's up.
+        float lift = GunCamUp * scale - (eye - mount).Dot(zenith);
+        if (lift > 0f)
+            eye += zenith * lift;
+        return new Transform3D(basis, eye);
     }
 
     // Model length/width for the launch-cam framing, off the "ShipModel" child's meta (stashed by

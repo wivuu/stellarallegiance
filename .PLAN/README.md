@@ -7,6 +7,7 @@ The live roadmap: what is shipped (one line each, with a pointer to the real doc
 **Next to incorporate into the plan**
 - Distribution e.g. https://github.com/velopack/velopack
   - https://github.com/velopack/velopack/tree/develop/samples/CSharpUnityMono
+- Nebula looks different for the same sector on two different clients
 
 **What else lives in `.PLAN/`**
 
@@ -72,10 +73,32 @@ Condensed outcomes. Each line names where the detail now lives.
 Richer dogfighting on shipped systems. New content is priced + gated by construction and authored in
 YAML, so it lands in the existing seams without rework.
 
-- ☐ **Turrets** — allow players to mount turret endpoints while a ship that supports turret
+- ◐ **Turrets** — allow players to mount turret endpoints while a ship that supports turret
   hardpoints is in-base ('load up' the turrets).
-  - Once launched, the player will 'ride along' with the pilot, able to control a gun from the
-    turret's hardpoint, aiming it and firing it.
+  - ✅ **Slice 1 — hangar crews + ride-along** (2026-09-13, protocol 41, branch `crews`): authored
+    `kind: turret` stations (bomber ×2, Devastator ×4), captain-side per-station gun assignment,
+    CREWED SHIPS seat claims from the hangar (docked captains only), per-team crew stream, gunners
+    ride along after launch (camera follows the captain, gunner HUD strip). Mechanics + file map:
+    [`GLOSSARY.md` → *Crew / Turret Station*](../GLOSSARY.md); suites `tests/CrewTest`,
+    `tests/CrewStoreTest`.
+  - ✅ **Slice 2 — aim + fire** (2026-09-13, protocol 42, branch `crews`): the gunner aims freely
+    inside a 105° cone around the station's zenith (mouse gimbal, gun cam at the hardpoint with an
+    inside-the-turret zoom that hides the ridden hull,
+    centre reticle that warns at the arc edge), fires on LMB/`fire_primary`; the server clamps the
+    held aim, fires the station's gun on its own cadence and credits hits to the GUNNER; every
+    client in range sees the aim (procedural barrel) and the bolts via `MsgTurrets`. Shared rule:
+    `shared/TurretAim.cs`. Follow-up (same day): Tab targeting + lead indicator for gunners, gun cam
+    = pure free look (`TurretLook`, arc fence only), gunners eject into pods on the captain's death,
+    a clean dock keeps the crew seated (joinable again while docked), and a captain who LEAVES (or
+    whose reconnect grace expires) hands the launched hull to the lowest-slot gunner rather than
+    taking it with them (`Simulation.TryPromoteGunner`). Aim made CLIENT-AUTHORITATIVE
+    2026-09-13 (the traversing gun was "very laggy and difficult to control"): `MsgTurretInput`
+    carries the ACTUAL aim, the server only arc-clamps it, and the per-station `slew-deg` is now just
+    the client's cap on how fast the look/gun may turn (default 69°/s, Devastator 45; no wind-up).
+  - ☐ **Slice 3**: mid-flight boarding, gunner reconnect grace, salvage for turret guns, gunner
+    K/D on the scoreboard readout, turret slew feel tuning per hull.
+  - ☐ If pigs are active, and a player is docked, the bomber pig should not launch until all
+    players either undock or at least one player joins as a gunner (take control of a turret).
 - ☐ **Ripcord** — allows specific types of ships (with the ability) to jump to a specific location
   in a sector after a brief, configurable, delay.
   - When the player picks the sector to teleport to, the ship will pick a ripcordable device (either

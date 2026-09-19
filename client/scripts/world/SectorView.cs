@@ -59,6 +59,11 @@ public sealed class SectorView
     // Whether node `n` is tagged for `sector` (its "sector" meta, stored as an int Godot Variant).
     public static bool InSector(Node3D n, uint sector) => n.HasMeta("sector") && (int)n.GetMeta("sector") == (int)sector;
 
+    // The sector `n` is tagged for (`fallback` when it carries no tag yet). Same meta contract as
+    // InSector; read by the ride-along seam, which must follow a node's sector without a snapshot row.
+    public static uint SectorOf(Node3D n, uint fallback = 0) =>
+        n.HasMeta("sector") ? (uint)(int)n.GetMeta("sector") : fallback;
+
     // Tag `n` with its sector and show it iff that's the current view. A constructor mesh hidden inside its
     // build sphere (HideForBuild) stays hidden even as its per-snapshot update re-runs this — otherwise the
     // frame-rate build-hide and this snapshot-rate show fight and the drone blinks at the snapshot rate.

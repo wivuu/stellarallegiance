@@ -120,12 +120,24 @@ public partial class RemoteShip : Node3D
     // resolve a name never allocate one. Billboarded + fixed screen size so it stays readable at any
     // range and orientation, no depth test so the hull never clips it.
     private Label3D? _nameplate;
+    private bool _nameplateHidden; // the local gunner sits inside this hull's turret (no floating captain name)
+
+    // Hide/show this hull's nameplate independently of the sector pass — set by ShipRenderer while
+    // the local gunner is INSIDE one of its turrets (the hull is hidden too; a name floating in the
+    // gun sight would be the only thing left of it). Survives a later rename.
+    public void SetNameplateHidden(bool hidden)
+    {
+        _nameplateHidden = hidden;
+        if (_nameplate is not null)
+            _nameplate.Visible = !hidden;
+    }
+
     private string _pilotName = "";
 
     // No per-frame visibility drive here (unlike PredictionController's own nameplate), so a
     // (re)assigned non-empty name always sets Visible = true.
     public void SetPilotName(string name) =>
-        Nameplate.SetText(ref _nameplate, ref _pilotName, name, Team, this, visibleWhenSet: true);
+        Nameplate.SetText(ref _nameplate, ref _pilotName, name, Team, this, visibleWhenSet: !_nameplateHidden);
 
     public void Initialize(Ship row, DefRegistry defs, MatchClock clock)
     {

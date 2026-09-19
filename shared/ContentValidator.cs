@@ -440,7 +440,9 @@ namespace StellarAllegiance.Shared
         // BOUND mount's weapon must also pass the mount-type rule (HardpointDef.MountAccepts): a
         // default loadout that contradicts its own mount type (or binds a dispenser) would author a
         // ship the hangar/server gate could never legally reproduce. These also cover a def set
-        // built by hand or via an operator Upsert that never ran the GLB merge.
+        // built by hand or via an operator Upsert that never ran the GLB merge. Crew-served TURRET
+        // stations ride the same fields under a stricter rule (gun on a Gun mount, or the unbound
+        // marker NoWeapon + NonMountable).
         private static void ValidateWeaponHardpoints(
             string ownerName,
             List<HardpointDef> hardpoints,
@@ -458,6 +460,30 @@ namespace StellarAllegiance.Shared
                     errors.Add($"\"{ownerName}\" has a duplicate hardpoint (kind {h.Kind}, index {h.Index})");
                 if (h.DirX == 0f && h.DirY == 0f && h.DirZ == 0f)
                     errors.Add($"\"{ownerName}\" hardpoint (kind {h.Kind}, index {h.Index}) has a zero-length direction");
+                // A TURRET is a crew-served gun station (a riding gunner mans it): a bound station
+                // must resolve to a real GUN on a Gun mount, and an UNBOUND one (an appended mesh
+                // HP_Turret node hulls.yaml never authored) must stay a marker — NoWeapon on a
+                // NonMountable mount, never something the hangar could offer or assign.
+                if (h.Kind == HardpointKind.Turret)
+                {
+                    if (h.WeaponId == HardpointDef.NoWeapon)
+                    {
+                        if (h.Mount != WeaponMountKind.NonMountable)
+                            errors.Add(
+                                $"\"{ownerName}\" turret index {h.Index} binds no gun but is a {h.Mount} mount (an unauthored turret node is a marker, not a station)"
+                            );
+                    }
+                    else if (!weaponsById.TryGetValue(h.WeaponId, out var tw))
+                    {
+                        if (!weaponIds.Contains(h.WeaponId))
+                            errors.Add($"\"{ownerName}\" turret hardpoint references unknown WeaponId {h.WeaponId}");
+                    }
+                    else if (tw.Kind != WeaponKind.Bolt || h.Mount != WeaponMountKind.Gun)
+                        errors.Add(
+                            $"\"{ownerName}\" turret index {h.Index} ({h.Mount} mount) binds {h.WeaponId} (\"{tw.Name}\", {tw.Kind}) — a crew-served turret station mounts a gun (Bolt) on a Gun mount"
+                        );
+                    continue;
+                }
                 if (h.Kind != HardpointKind.Weapon || h.WeaponId == HardpointDef.NoWeapon)
                     continue;
                 if (!weaponsById.TryGetValue(h.WeaponId, out var w))

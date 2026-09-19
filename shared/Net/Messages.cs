@@ -201,6 +201,47 @@ public partial struct BuyMinerMessage
     public ulong LaunchBaseId; // 0 = team default garrison
 }
 
+// A docked captain advertises the hull they intend to launch, so teammates can claim one of its
+// crew-served turret stations before it flies. Turrets is the FULL pick list (one entry per
+// station, HpIndex = the station's hardpoint index), never a delta — the server re-resolves every
+// pick against the team's tech and falls back to the authored gun per station. ClassId 0xFF
+// retracts the intent and dissolves the crew.
+[WireMessage(17)]
+public partial struct HangarIntentMessage
+{
+    public byte ClassId; // 0xFF = clear
+    public MountOverrideRecord[] Turrets;
+}
+
+// 7 bytes. Claim (Mode 1) or give up (Mode 0) a turret station on a teammate's docked ship. A join
+// while already seated is a MOVE (the server vacates the old seat first); on Mode 0 the captain +
+// seat fields are ignored.
+[WireMessage(18)]
+public partial struct CrewSeatMessage
+{
+    public byte Mode; // 0 leave, 1 join/move
+    public int CaptainId;
+    public byte SeatIndex;
+}
+
+// 18 bytes. A riding gunner's turret input (v42 crews slice 2): the ship-local ACTUAL aim — turret
+// aim is CLIENT-AUTHORITATIVE, so this is where the gun IS, not a request the server traverses
+// toward (the client caps its own look at the station's slew SPEED) — and the fire flag, sent at
+// input rate while seated on a LAUNCHED ship. Held-input semantics — the server keeps the latest per
+// gunner and fires on its own cadence while Flags carries Firing; the only thing it does to the aim
+// is clamp it into the station's arc (TurretAim.Clamp), so a stale/forged aim can never fire through
+// the hull. Tick is the sender's prediction tick (diagnostics only — turret fire never joins
+// the deterministic flight step).
+[WireMessage(19)]
+public partial struct TurretInputMessage
+{
+    public uint Tick;
+    public float AimX,
+        AimY,
+        AimZ;
+    public byte Flags; // TurretAim.FlagFiring
+}
+
 // ---- server -> client -------------------------------------------------------------------------
 
 // The handshake: version + identity + reconnect token + the world statics this client may see
@@ -503,4 +544,24 @@ public partial struct SalvageGoneMessage
     public Vec3 Pos;
 
     public ulong ByShipId;
+}
+
+// PER-TEAM crew roster: every captain who advertised a crewable hull (docked) or is flying one,
+// with all of its turret stations. A full reconcile — an omitted captain has no crew any more.
+[WireMessage(32)]
+public partial struct CrewMessage
+{
+    public CrewShipRecord[] Ships;
+}
+
+// Live turret state for the crewed ships this client can see (v42 crews slice 2): every MANNED
+// station of every crewed ship in the client's sector within full-rate range of its AOI anchor, or
+// that the client rides. Sent lossy on the ticks a turret's aim or fire changed; a seat missing from
+// the frame keeps its last state client-side and resets to rest on the next MsgCrew that shows it
+// open. The gunner's own seat is included (the client ignores it — it predicts its own aim/bolts).
+[WireMessage(33)]
+public partial struct TurretsMessage
+{
+    public uint Tick;
+    public TurretRecord[] Turrets;
 }

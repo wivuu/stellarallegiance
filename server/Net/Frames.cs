@@ -626,9 +626,10 @@ public static class Frames
         return rows is null ? null : new MinerTargetsMessage { Targets = rows.ToArray() };
     }
 
-    // Per-ship loadout table: one row per ship flying a NON-authored loadout or holding anything —
-    // effective per-barrel ids (a hold-only row streams the authored ids) + the inert hold. Always a
-    // frame (count may be 0) so a stale entry prunes when the last override ship leaves.
+    // Per-ship loadout table: one row per ship flying a NON-authored loadout (barrels OR crew-served
+    // turret stations) or holding anything — effective per-barrel ids + the turret-station guns (a
+    // row that only differs in one of them streams the authored values for the rest) + the inert
+    // hold. Always a frame (count may be 0) so a stale entry prunes when the last override ship leaves.
     public static ShipLoadoutMessage ShipLoadouts(Simulation sim)
     {
         // The authored per-barrel ids for a class with no override array — the SAME rule
@@ -658,7 +659,7 @@ public static class Frames
         {
             if (rows.Count >= 255)
                 break;
-            if (s.MountWeaponIds is null && s.Hold is not { Count: > 0 })
+            if (s.MountWeaponIds is null && s.TurretWeaponIds is null && s.Hold is not { Count: > 0 })
                 continue;
             int nHold = Math.Min(s.Hold?.Count ?? 0, 255);
             var hold = new HoldItemRecord[nHold];
@@ -678,10 +679,80 @@ public static class Frames
                     ShipId = s.ShipId,
                     WeaponIds = s.MountWeaponIds ?? AuthoredIds(s.Class),
                     Hold = hold,
+                    TurretWeaponIds = s.TurretWeaponIds ?? sim.AuthoredTurretIds(s.Class),
                 }
             );
         }
         return new ShipLoadoutMessage { Ships = rows.ToArray() };
+    }
+
+    // The team's HANGAR CREW roster (MsgCrew, per team, full reconcile — an omitted captain has no
+    // crew any more). Seats stream in station declaration order; SeatIndex is the station's
+    // hardpoint index (Simulation.TurretStationIndex), the same index MsgCrewSeat/MsgHangarIntent
+    // speak. WeaponId is the EFFECTIVE gun: the captain's resolved picks while they are still in the
+    // hangar, and what the launched ship actually flies once it is airborne (an authored-default
+    // ship carries no TurretWeaponIds array, so it falls back to the class's authored guns).
+    public static CrewMessage Crew(Simulation sim, byte team)
+    {
+        var rows = new List<CrewShipRecord>();
+        foreach (var crew in sim.CrewShips)
+        {
+            if (crew.Team != team || rows.Count >= 255)
+                continue;
+            var ship = crew.Ship;
+            uint[] guns = ship is null ? crew.SeatWeaponIds : ship.TurretWeaponIds ?? sim.AuthoredTurretIds(ship.Class);
+            int n = Math.Min(crew.SeatGunnerIds.Length, guns.Length);
+            var seats = new CrewSeatRecord[n];
+            for (int i = 0; i < n; i++)
+                seats[i] = new CrewSeatRecord
+                {
+                    SeatIndex = sim.TurretStationIndex(crew.ClassId, i),
+                    WeaponId = guns[i],
+                    GunnerId = crew.SeatGunnerIds[i],
+                };
+            rows.Add(
+                new CrewShipRecord
+                {
+                    CaptainId = crew.CaptainClientId,
+                    ClassId = crew.ClassId,
+                    ShipId = ship?.ShipId ?? 0UL,
+                    Seats = seats,
+                }
+            );
+        }
+        return new CrewMessage { Ships = rows.ToArray() };
+    }
+
+    // One crewed ship's live TURRET state (the body of MsgTurrets, v42 crews slice 2). MANNED
+    // stations only — an omitted seat means "unmanned, at rest", which is exactly what the roster
+    // frame already told the client. SeatIndex is the station's HardpointDef.Index (the same index
+    // MsgCrew/MsgCrewSeat speak), the aim is the SHIP-LOCAL unit vector the server already clamped
+    // into the station's arc, and LastFireTick is that station's own stamp (0 = never fired) — the
+    // client rebuilds the turret's bolts from it the way BoltRenderer rebuilds a pilot's from
+    // ShipRecord.LastFireTick. Empty when the ship flies no crew (the hub then sends nothing).
+    public static TurretRecord[] Turrets(Simulation sim, Simulation.ShipSim s)
+    {
+        if (s.CrewSeats is not { } seats || s.TurretAim is not { } aims || s.TurretLastFire is not { } stamps)
+            return System.Array.Empty<TurretRecord>();
+        int n = Math.Min(seats.Length, Math.Min(aims.Length, stamps.Length));
+        List<TurretRecord>? rows = null;
+        for (int i = 0; i < n; i++)
+        {
+            if (seats[i] == Simulation.NoGunner)
+                continue;
+            (rows ??= new()).Add(
+                new TurretRecord
+                {
+                    ShipId = s.ShipId,
+                    SeatIndex = sim.TurretStationIndex(s.Class, i),
+                    AimX = aims[i].X,
+                    AimY = aims[i].Y,
+                    AimZ = aims[i].Z,
+                    LastFireTick = stamps[i],
+                }
+            );
+        }
+        return rows?.ToArray() ?? System.Array.Empty<TurretRecord>();
     }
 
     // ~1.5 s at 20 Hz: keep emitting 0-count frames this long after the last active build so a lossy

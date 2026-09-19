@@ -119,10 +119,11 @@ public partial class Hud : CanvasLayer
         // Prograde velocity marker (direction of travel, not aim). Drawn under the text/menu.
         var velo = new VelocityIndicator { Name = "VelocityIndicator" };
         AddChild(velo);
-        velo.Init(_world, GetNode<Camera3D>("../Camera3D"));
+        velo.Init(_world, GetNode<Camera3D>("../Camera3D"), _defs);
 
         // HULL + BOOST system ring: concentric arc gauges framing the aim reticle. Added here
-        // so the top-left text/menu still draw over it. Reads the local ship's hull + boost ramp.
+        // so the top-left text/menu still draw over it. Reads the HUD subject's hull + boost ramp
+        // (the own hull, or the one a crew gunner rides).
         var systemRing = new SystemRing { Name = "SystemRing" };
         AddChild(systemRing);
         systemRing.Init(_world, GetNode<Camera3D>("../Camera3D"), _defs);
@@ -137,6 +138,13 @@ public partial class Hud : CanvasLayer
         var weapons = new WeaponsPanel { Name = "WeaponsPanel" };
         AddChild(weapons);
         weapons.Init(_world, _net, _defs);
+
+        // Crew gunner strip, top-centre: shown only while riding a captain's turret station. The ONE
+        // gunner-only piece of chrome — every other readout above is the pilot's, re-pointed at the
+        // ridden hull and the seat's gun through HudSubject.
+        var gunner = new GunnerStrip { Name = "GunnerStrip" };
+        AddChild(gunner);
+        gunner.Init(_world, _net, _defs);
 
         // Telescopic zoom scope (+/−): a circular PiP magnifier that replaces the centre gauges
         // while open. Added after the combat overlays so it draws above them, under the text/menu.
@@ -442,15 +450,24 @@ public partial class Hud : CanvasLayer
         // (LAUNCH to leave). The death-cam guard holds the hangar back for the blast beat (dock has
         // no death-cam, so it opens immediately). Once the ship exists — or the match leaves Active
         // — the spawn hangar closes itself and the lobby overlay takes over.
+        // A crew gunner riding the captain's hull is deliberately shipless: the spawn hangar must NOT
+        // reclaim the screen while they're out there. The else-branch below then frees the hangar the
+        // moment the captain launches, and this same rule re-opens it when the ride ends.
+        // …and a hull of ours that is one snapshot away is NOT shipless either. A crew gunner promoted
+        // to captain (their captain left) stops riding on the YouAre and only becomes "flying" when that
+        // hull's snapshot lands a frame or two later — without this the mandatory spawn hangar would
+        // flash open over the cockpit they are being handed. Both branches sit still through the gap:
+        // whatever is on screen stays, and nothing new opens.
+        bool shipInbound = _world.Ships.AwaitingLocalShip;
         bool hangarUp = _hangar != null && IsInstanceValid(_hangar);
-        if (inMatch && !flying && DeployRequested && !_world.Ships.DeathCamActive)
+        if (inMatch && !flying && !_world.Ships.Riding && DeployRequested && !_world.Ships.DeathCamActive && !shipInbound)
         {
             if (hangarUp)
                 _hangar!.OpenedForSpawn = true;
             else if (_defs.BuildableShips().Count > 0)
                 OpenHangar(forSpawn: true);
         }
-        else if (hangarUp && _hangar!.OpenedForSpawn)
+        else if (hangarUp && _hangar!.OpenedForSpawn && !shipInbound)
         {
             _hangar.QueueFree();
             _hangar = null;

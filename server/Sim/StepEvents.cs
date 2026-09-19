@@ -43,6 +43,12 @@ public sealed class StepEvents
     // Bases created this step (constructor completions): fog-off broadcasts a one-slice reveal.
     public readonly List<ulong> BasesCreated = new();
 
+    // Crew turrets (v42): the ships whose turret state changed this step — a gunner's aim moved, a
+    // station fired, or a vacated seat swung back to rest. Collected at the very end of Step from
+    // ShipSim.TurretDirty (which is reset as each ship is added); the hub turns each into the MANNED
+    // TurretRecords of one ship and AOI-filters them per client (MsgTurrets, lossy).
+    public readonly List<Simulation.ShipSim> TurretUpdates = new();
+
     // ---- change flags (the low-rate streams' cadence gates: "changed OR coarse keepalive") ----
 
     public bool MinefieldsChanged;
@@ -50,6 +56,10 @@ public sealed class StepEvents
     public bool BasesChanged;
     public bool TeamStateChanged;
     public bool LoadoutsChanged;
+
+    // Hangar crews: a captain advertised/retracted a crewable hull, a seat changed hands, a crew
+    // launched or dissolved (Simulation.Crew.cs). Gates the per-team MsgCrew stream.
+    public bool CrewChanged;
     public bool StatsChanged;
     public bool ResearchChanged;
     public bool ConstructorChanged;
@@ -89,11 +99,13 @@ public sealed class StepEvents
         BasesChanged = false;
         TeamStateChanged = false;
         LoadoutsChanged = false;
+        CrewChanged = false;
         StatsChanged = false;
         Reclaims.Clear();
         MinerNotices.Clear();
         ConstructorNotices.Clear();
         BasesCreated.Clear();
+        TurretUpdates.Clear();
         OrderNotices.Clear();
         OrderDirectives.Clear();
         ResearchChanged = false;

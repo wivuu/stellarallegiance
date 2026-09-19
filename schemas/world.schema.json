@@ -1179,6 +1179,23 @@
       },
       "description": "Per-pilot scoreboard weights (server-side only \u2014 never streamed). Null -\u003E stock.",
       "additionalProperties": false
+    },
+    "turret": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "default-slew-deg": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Sustained slew rate, in degrees per second, of every turret station that authors no slew-deg of its own (hulls.yaml). Must be \u003E= 0; 0 leaves such stations unlimited. A motion smaller than ~0.15 s of traverse is never limited on any mount."
+        }
+      },
+      "description": "Crew-served turret tuning (feeds the streamed per-station slew). Null -\u003E stock.",
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,

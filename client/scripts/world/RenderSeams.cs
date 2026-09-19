@@ -30,6 +30,16 @@ public interface IWarpDriver
 public interface IBoltSource
 {
     void SpawnBoltFor(Ship row);
+
+    // …and for one crew-served TURRET station's observed fire, along the gunner's streamed ship-local
+    // aim rather than the hardpoint's authored Dir (v42 crews slice 2).
+    void SpawnTurretBolt(
+        Ship row,
+        StellarAllegiance.Shared.HardpointDef hp,
+        StellarAllegiance.Shared.WeaponDef weapon,
+        StellarAllegiance.Shared.Vec3 aimShipLocal,
+        uint fireTick
+    );
 }
 
 // Drop a transient self-freeing effect into the world at a sector-local position (coordinator-owned).

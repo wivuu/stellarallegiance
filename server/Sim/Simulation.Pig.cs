@@ -989,8 +989,13 @@ public sealed partial class Simulation
         };
     }
 
-    private bool IsAggressive(ShipSim enemy, uint tick) =>
-        !enemy.IsPod && enemy.LastFireTick != 0 && tick - enemy.LastFireTick <= PigAggroWindowTicks;
+    // A crewed hull whose TURRET just fired is as provoking as one whose pilot did (v42): the
+    // newer of the two stamps is what the aggro window is measured against.
+    private bool IsAggressive(ShipSim enemy, uint tick)
+    {
+        uint last = Math.Max(enemy.LastFireTick, enemy.LastTurretFireTick);
+        return !enemy.IsPod && last != 0 && tick - last <= PigAggroWindowTicks;
+    }
 
     // PIG pod autopilot (IsPod && IsPig): auto-fly to the nearest friendly base (across the
     // aleph if it's in another sector), where the dock check despawns it. Never fires.

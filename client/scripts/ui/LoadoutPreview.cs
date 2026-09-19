@@ -27,9 +27,16 @@ namespace StellarAllegiance.Ui;
 // =====================================================================
 public partial class LoadoutPreview : SubViewportContainer
 {
-    // One pickable/markable mount on the current model. Assignable = Weapon-kind (the
-    // only kind the loadout edits); the rest render as dim inert dots in the overlay.
-    public readonly record struct Mount(HardpointDef Hp, Vector3 LocalPos, bool Assignable);
+    // Identity of a mount on the current model. Weapon and Turret hardpoints BOTH index from 0, so
+    // the index alone is ambiguous — every selection, hover, pick and click carries the kind too.
+    public readonly record struct MountKey(HardpointKind Kind, byte Index);
+
+    // One pickable/markable mount on the current model. Assignable = a mount this screen edits or
+    // claims (weapon slots in the hangar, turret stations always); the rest render as dim inert dots.
+    public readonly record struct Mount(HardpointDef Hp, Vector3 LocalPos, bool Assignable)
+    {
+        public MountKey Key => new(Hp.Kind, Hp.Index);
+    }
 
     private const float Fov = 40f;
     private const float OrbitPerPixel = 0.35f; // deg/px, same feel as the F3 sector map
@@ -47,11 +54,14 @@ public partial class LoadoutPreview : SubViewportContainer
     private readonly List<Mount> _mounts = new();
     public IReadOnlyList<Mount> Mounts => _mounts;
 
-    // Selected/hovered assignable mount (HardpointDef.Index), mirrored by the slot list.
-    public byte? SelectedIndex { get; set; }
-    public byte? HoverIndex { get; private set; }
+    // Selected/hovered assignable mount, mirrored by the slot list / turret-station list.
+    public MountKey? SelectedKey { get; set; }
+    public MountKey? HoverKey { get; private set; }
 
-    public event Action<byte>? HardpointClicked;
+    public event Action<MountKey>? HardpointClicked;
+
+    // Crewing view: only the TURRET stations are pickable (a gunner never edits the captain's guns).
+    private bool _turretsOnly;
 
     private float _yawDeg = 205f; // start on a 3/4 rear-quarter view
     private float _pitchDeg = 18f;
@@ -116,12 +126,15 @@ public partial class LoadoutPreview : SubViewportContainer
     // Swap the previewed hull. Frees the old model, builds the new one at the origin via
     // the same loader the game uses (so the preview IS the ship, hardpoints included),
     // and frames the camera off the class's silhouette length.
-    public void ShowShip(DefRegistry defs, byte classId)
+    // `turretsOnly` is the CREWING view: the hull belongs to a teammate, so its weapon mounts render
+    // as inert dots and only the crew-served stations stay pickable.
+    public void ShowShip(DefRegistry defs, byte classId, bool turretsOnly = false)
     {
         _model?.QueueFree();
         _mounts.Clear();
-        SelectedIndex = null;
-        HoverIndex = null;
+        _turretsOnly = turretsOnly;
+        SelectedKey = null;
+        HoverKey = null;
 
         // Fallback material only matters when a GLB is missing (placeholder silhouette).
         var mat = new StandardMaterial3D
@@ -163,18 +176,23 @@ public partial class LoadoutPreview : SubViewportContainer
         {
             // The loader guarantees a marker per def hardpoint (def-seeded or GLB-authored);
             // fall back to the def offset if an authored GLB hid it somewhere unexpected.
-            // A NonMountable weapon mount isn't a loadout slot (an unauthored mesh HP_Weapon node):
-            // skip it entirely so no marker, dot, or pick area renders — it's HIDDEN in the hangar.
-            if (hp.Kind == HardpointKind.Weapon && hp.Mount == WeaponMountKind.NonMountable)
+            // A NonMountable weapon mount isn't a loadout slot (an unauthored mesh HP_Weapon node),
+            // and a NonMountable turret isn't a crew station (an unauthored mesh HP_Turret node):
+            // skip both entirely so no marker, dot, or pick area renders — they're HIDDEN here.
+            if (
+                (hp.Kind == HardpointKind.Weapon || hp.Kind == HardpointKind.Turret)
+                && hp.Mount == WeaponMountKind.NonMountable
+            )
                 continue;
             Node3D? marker = _model.GetNodeOrNull<Node3D>($"HP_{hp.Kind}_{hp.Index}");
             Vector3 pos = marker?.Position ?? new Vector3(hp.OffX, hp.OffY, hp.OffZ);
-            bool assignable = hp.Kind == HardpointKind.Weapon;
+            bool assignable = (hp.Kind == HardpointKind.Weapon && !_turretsOnly) || hp.Kind == HardpointKind.Turret;
             _mounts.Add(new Mount(hp, pos, assignable));
 
             if (!assignable)
                 continue;
             var area = new Area3D { Position = pos };
+            area.SetMeta("hp_kind", (int)hp.Kind);
             area.SetMeta("hp_index", hp.Index);
             area.AddChild(new CollisionShape3D { Shape = new SphereShape3D { Radius = pickRadius } });
             _model.AddChild(area);
@@ -255,7 +273,7 @@ public partial class LoadoutPreview : SubViewportContainer
 
         // Hover = nearest assignable mount within a comfortable screen distance. 2D
         // proximity (not the ray) so the affordance is forgiving on small mounts.
-        HoverIndex = NearestAssignable(_mousePos, 20f);
+        HoverKey = NearestAssignable(_mousePos, 20f);
     }
 
     public override void _PhysicsProcess(double delta)
@@ -271,23 +289,23 @@ public partial class LoadoutPreview : SubViewportContainer
         query.CollideWithBodies = false;
         Godot.Collections.Dictionary hit = _viewport.World3D.DirectSpaceState.IntersectRay(query);
 
-        byte? picked = null;
+        MountKey? picked = null;
         if (hit.Count > 0 && hit["collider"].As<GodotObject>() is Area3D area && area.HasMeta("hp_index"))
-            picked = (byte)(int)area.GetMeta("hp_index");
+            picked = new MountKey((HardpointKind)(int)area.GetMeta("hp_kind"), (byte)(int)area.GetMeta("hp_index"));
         // The ray misses when the click lands near-but-off a small sphere; the overlay's
         // 2D proximity doubles as the fallback so the dot and the hitbox always agree.
         picked ??= NearestAssignable(p, 14f);
 
-        if (picked is byte idx)
+        if (picked is MountKey key)
         {
             _idleTime = 0f;
-            HardpointClicked?.Invoke(idx);
+            HardpointClicked?.Invoke(key);
         }
     }
 
-    private byte? NearestAssignable(Vector2 screenPos, float maxDistPx)
+    private MountKey? NearestAssignable(Vector2 screenPos, float maxDistPx)
     {
-        byte? best = null;
+        MountKey? best = null;
         float bestD = maxDistPx;
         foreach (Mount m in _mounts)
         {
@@ -299,7 +317,7 @@ public partial class LoadoutPreview : SubViewportContainer
             if (d < bestD)
             {
                 bestD = d;
-                best = m.Hp.Index;
+                best = m.Key;
             }
         }
         return best;

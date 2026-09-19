@@ -136,6 +136,86 @@ public sealed class BoltRenderer
         }
     }
 
+    // A crew-served TURRET station on `row` fired at `fireTick` (v42 crews slice 2): rebuild that one
+    // bolt the way SpawnBoltFor rebuilds a pilot's, but along the gunner's streamed ship-local AIM
+    // instead of the hardpoint's authored Dir (which for a turret is only the station's zenith). The
+    // spread seed's "barrel" is TurretAim.SpreadBarrel(hp.Index) — disjoint from the pilot's barrel
+    // indices, so a turret volley never shares a scatter seed with a hull gun on the same tick. There
+    // is no cadence shadow to replay: MsgTurrets carries this station's OWN LastFireTick, so one
+    // observed advance is exactly one shot.
+    public void SpawnTurretBolt(Ship row, HardpointDef hp, WeaponDef weapon, Vec3 aimShipLocal, uint fireTick)
+    {
+        var state = ShipMath.StateFromRow(row);
+        Vec3 off = new Vec3(hp.OffX, hp.OffY, hp.OffZ);
+        Vec3 fwd,
+            pivot,
+            shipVel;
+        if (_ships.LocalShip is { } pc && pc.ShipId == row.ShipId)
+        {
+            // OUR OWN hull (we are the captain, a gunner fired): it renders at the PREDICTED pose, a
+            // few ticks + RTT ahead of the authoritative row, so a bolt rebuilt from the row would
+            // leave from empty space behind the turret. Anchor it to the rendered transform instead —
+            // the same reasoning PredictionController's own muzzles use.
+            Transform3D t = pc.GlobalTransform;
+            fwd = ShipMath.ToShared(t.Basis * ShipMath.ToGodot(aimShipLocal));
+            pivot = ShipMath.ToShared(t.Origin + t.Basis * ShipMath.ToGodot(off));
+            shipVel = ShipMath.ToShared(pc.Velocity);
+        }
+        else
+        {
+            // Same catch-up rewind SpawnBoltFor does: the row's position is at LastInputTick while the
+            // shot left at fireTick, so walk the ship back along its path to the muzzle it fired from.
+            uint ticksPast = row.LastInputTick > fireTick ? System.Math.Min(row.LastInputTick - fireTick, 8u) : 0u;
+            Vec3 firePos = state.Pos - state.Vel * (ticksPast * FlightModel.Dt);
+            fwd = state.Rot.Rotate(aimShipLocal);
+            pivot = firePos + state.Rot.Rotate(off);
+            shipVel = state.Vel;
+        }
+
+        Vec3 shotDir = FlightModel.SpreadDirection(
+            fwd,
+            weapon.SpreadRad,
+            row.ShipId,
+            fireTick,
+            TurretAim.SpreadBarrel(hp.Index)
+        );
+        // The tracer starts at the END of the barrel (TurretBarrelView runs pivot → aim × length), not
+        // at the pivot buried in the mount. Same line the server resolves (it fires from the pivot
+        // along this aim); only the visible start moves out, by well under a tick of flight.
+        // The tracer mesh is CENTRED on its position, so the spawn point is a further half bolt length
+        // down the shot: the bolt's TAIL sits on the barrel tip and nothing trails back through the gun
+        // (glaring from the gunner's over-the-turret camera, where the tail poked out toward the lens).
+        Vec3 mp = pivot + fwd * _ships.TurretBarrelLength(row.ShipId) + shotDir * BoltHalfLength(weapon.BoltLength);
+        Vec3 mv = shotDir * weapon.ProjectileSpeed + shipVel;
+
+        AddBolt(
+            ShipMath.ToGodot(mp),
+            ShipMath.ToGodot(mv),
+            ShipMath.ToGodot(shotDir),
+            row.SectorId,
+            weapon.ProjectileLifeTicks * FlightModel.Dt,
+            row.ShipId,
+            ShotMaskLeadSec(),
+            weapon.BoltRadius,
+            weapon.BoltLength,
+            weapon.IsHealing
+        );
+    }
+
+    // The LOCAL gunner's own turret prediction produced a shot (TurretController). Like SpawnLocalBolt
+    // — no masking lead, the shot is already now-correct — but the owner is the CAPTAIN'S ship we ride,
+    // so the tracer never sparks on the hull it left.
+    public void SpawnLocalTurretBolt(
+        Vector3 pos,
+        Vector3 vel,
+        Vector3 aimDir,
+        float lifeSec,
+        float boltRadius,
+        float boltLength,
+        bool isHeal,
+        ulong ownerShipId
+    ) => AddBolt(pos, vel, aimDir, _sectors.LocalSector, lifeSec, ownerShipId, 0f, boltRadius, boltLength, isHeal);
+
     // The LOCAL ship's fire prediction produced a shot this tick (ShipController). Same rendering as a
     // remote bolt, no masking lead (prediction is already now-correct).
     public void SpawnLocalBolt(
@@ -390,10 +470,16 @@ public sealed class BoltRenderer
 
     // Bolt visual size is authored per-projectile (WeaponDef.BoltRadius/BoltLength); a 0 falls back to the
     // built-in default so an unauthored weapon still renders a bolt.
+    // Half the drawn tracer's length (the mesh is centred on the bolt's position) — what a spawn that
+    // must CLEAR a barrel adds beyond the muzzle. Same default NewProjectileMesh falls back to.
+    private const float DefaultBoltLength = 2.2f;
+
+    public static float BoltHalfLength(float boltLength) => (boltLength > 0f ? boltLength : DefaultBoltLength) * 0.5f;
+
     private MeshInstance3D NewProjectileMesh(float radius, float height, bool isHeal)
     {
         float r = radius > 0f ? radius : 0.22f;
-        float h = height > 0f ? height : 2.2f;
+        float h = height > 0f ? height : DefaultBoltLength;
         return new MeshInstance3D
         {
             // Slim tracer bolt. The cylinder's long axis is local +Y; rotate it to local +Z so it runs along

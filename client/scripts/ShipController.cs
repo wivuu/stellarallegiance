@@ -114,6 +114,22 @@ public partial class ShipController : Node
         _stickPitch; // persistent self-centering virtual-stick deflection (-1..1)
     private bool _hasShip; // mirrors _world.Ships.LocalShip != null, set each _Process for _Input's capture gate
 
+    // A crew GUNNER riding a teammate's turret station has no hull but IS in flight: the cursor
+    // capture, the Esc two-step and the click-to-recapture must behave exactly as they do for a pilot
+    // (TurretController reads the captured cursor for its gimbal). Mirrors _world.Ships.Riding each
+    // _Process for the same reason _hasShip is cached — _Input runs between frames.
+    private bool _riding;
+
+    // A hull the server has already named ours whose first snapshot hasn't landed — a crew gunner
+    // promoted to CAPTAIN goes riding → (this gap) → flying, and handing the cursor back to a menu for
+    // those frames would drop the pilot's mouse-look the instant they inherit the hull. Cached for the
+    // same reason as the two above.
+    private bool _shipInbound;
+
+    // Either seat: flight input sampling still gates on the local ship alone (ReadInput is never
+    // called while riding), but everything about the CURSOR is shared.
+    private bool InFlightSeat => _hasShip || _riding || _shipInbound;
+
     // Headless verification: `--autofly` auto-spawns a Scout and flies a fixed
     // input so the full ApplyInput -> SimTick -> reconcile loop can be checked
     // without a human at the keyboard.
@@ -136,8 +152,9 @@ public partial class ShipController : Node
 
     private bool _autoFly;
     private bool _autoJoined; // autofly QuickJoins (team + ready) once on connect
-    private bool _hangarDemo; // --hangar-demo: QuickJoin only; the hangar harness drives spawning
+    private bool _hangarDemo; // --hangar-demo / --crew-demo: QuickJoin only; the hangar harness drives spawning
     private double _hangarDemoElapsed; // failsafe clock — quit if the demo never completes
+    private double _hangarDemoLimit = 90; // --crew-demo waits on a SECOND client, so it gets longer
     private bool _selfTestDone; // autofly fires one divergence injection
     private bool _combatTest; // --combat-test: fly straight + fire (head-on damage check)
     private bool _warpTest; // --warp-test: mine-drop run, then manual-steer into the sector's aleph (warp smoke)
@@ -287,8 +304,25 @@ public partial class ShipController : Node
         // (team + ready) so the match starts and the mandatory spawn hangar opens. It is a
         // UI-harness flag (after `--`, GetCmdlineUserArgs) like --ui-shot — see ShipLoadout.
         foreach (var a in OS.GetCmdlineUserArgs())
+        {
             if (a.StartsWith("--hangar-demo="))
                 _hangarDemo = true;
+            // --crew-demo=captain|gunner:<dir> needs the same QuickJoin + deploy intent; its two
+            // clients wait on each other, so the failsafe clock has to cover both halves of the run.
+            if (a.StartsWith("--crew-demo="))
+            {
+                _hangarDemo = true;
+                _hangarDemoLimit = 240;
+            }
+            // --turret-test=captain|gunner|auto: same QuickJoin + deploy intent, but it is an
+            // open-ended feel rig — a human is aiming — so the failsafe clock never fires.
+            // Debug builds only, like the rest of the rig.
+            if (a.StartsWith("--turret-test=") && OS.IsDebugBuild())
+            {
+                _hangarDemo = true;
+                _hangarDemoLimit = double.PositiveInfinity;
+            }
+        }
         // Headless runs are otherwise uncapped: _Process spins as fast as possible,
         // flooding ApplyInput and racing the prediction far ahead of the 20 Hz
         // server, which inflates the prediction lead. Cap to a realistic display
@@ -321,7 +355,9 @@ public partial class ShipController : Node
     // call happens in _Process once the connection is live (with retry).
     public void RequestSpawn(ShipClass cls)
     {
-        if (_world.Ships.LocalShip == null)
+        // Riding a teammate's turret station is a deliberate no-ship state: launching would vacate the
+        // seat server-side, so the hangar must be left through LEAVE CREW, never a stray spawn.
+        if (_world.Ships.LocalShip == null && !_world.Ships.Riding)
             _spawnRequest = cls;
     }
 
@@ -441,10 +477,12 @@ public partial class ShipController : Node
         bool connected = _cm.State == ConnectionManager.ConnState.Connected;
         bool hasShip = _world.Ships.LocalShip != null;
         _hasShip = hasShip; // cached for _Input's capture gate (event-driven, runs between frames)
+        _riding = _world.Ships.Riding; // …and so is the gunner's seat, which shares that gate
+        _shipInbound = _world.Ships.AwaitingLocalShip; // …and the promotion gap between the two
 
         TickAutoFlyBootstrap(connected, hasShip, delta);
 
-        HandleMouseCapture(hasShip);
+        HandleMouseCapture(InFlightSeat);
 
         TickSpawn(connected, hasShip, delta);
 
@@ -512,7 +550,7 @@ public partial class ShipController : Node
                 GetNodeOrNull<Hud>("../Hud")?.RequestDeploy();
             }
             _hangarDemoElapsed += delta;
-            if (_hangarDemoElapsed > 90)
+            if (_hangarDemoElapsed > _hangarDemoLimit)
             {
                 GD.Print("HANGAR_DEMO_TIMEOUT: quitting (demo never completed)");
                 GetTree().Quit();
@@ -522,7 +560,10 @@ public partial class ShipController : Node
 
     private void TickSpawn(bool connected, bool hasShip, double delta)
     {
-        if (!hasShip && !Chat.Capturing && !ShipLoadout.Active)
+        // Riding counts as "not shipless" for every spawn seam: the 1/2/3 hull hotkeys are dead while
+        // crewing (they'd launch the gunner out of their seat) and a queued request never fires.
+        bool riding = _world.Ships.Riding;
+        if (!hasShip && !riding && !Chat.Capturing && !ShipLoadout.Active)
         {
             if (Input.IsPhysicalKeyPressed(Key.Key1))
                 _spawnRequest = ShipClass.Scout;
@@ -551,7 +592,7 @@ public partial class ShipController : Node
             if (!ApEngagedLocal)
                 TargetMarkers.DismissWaypointIfReached(_world.LocalSector, _world.Ships.LocalShip!.GlobalPosition);
         }
-        else if (connected && !_spawnPending && _spawnRequest is { } cls)
+        else if (connected && !riding && !_spawnPending && _spawnRequest is { } cls)
         {
             // Stage-2 buy pre-check: don't spam a request the latest snapshot says will fail (locked
             // hull / can't afford / a launch base that can't serve the hull). The server stays
@@ -826,7 +867,7 @@ public partial class ShipController : Node
 
         if (
             _autoFly
-            || !_hasShip
+            || !InFlightSeat
             || Chat.Capturing
             || SectorOverview.Active
             || ShipLoadout.Active
@@ -879,8 +920,9 @@ public partial class ShipController : Node
         _mouseDelta = Vector2.Zero; // drop any motion from the recapture gesture
     }
 
-    // Release the cursor for the spawn menu (dead / not yet spawned). The flying-state
-    // capture/release lives in _Input; this only handles the no-ship menu case each frame.
+    // Release the cursor for the spawn menu (dead / not yet spawned, and not riding a turret station
+    // either). The in-flight capture/release lives in _Input; this only handles the no-seat menu case
+    // each frame.
     private void HandleMouseCapture(bool flying)
     {
         if (
