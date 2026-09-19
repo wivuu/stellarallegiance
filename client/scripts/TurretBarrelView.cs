@@ -26,12 +26,17 @@ public partial class TurretBarrelView : Node3D
     // basis has a stable "up" even for an aim that lies along the zenith.
     private Vector3 _zenith = Vector3.Up;
 
+    // Pivot-to-muzzle distance of the barrel a hull of this silhouette length gets. Shared with the
+    // bolt spawns (BoltRenderer.SpawnTurretBolt, TurretController.PredictShot): a turret's tracer
+    // starts at the END of the barrel it is drawn leaving, not at the pivot inside the mount.
+    public static float LengthFor(float modelLength) =>
+        LengthPerUnit * Mathf.Max(1f, modelLength / ShipModelLoader.DefaultModelLength);
+
     // Build a barrel for one station: `off`/`zenith` are the hardpoint's ship-local offset and
     // outward normal, `modelLength` the hull's silhouette length, `team` its faction.
     public static TurretBarrelView Create(Vector3 off, Vector3 zenith, float modelLength, byte team)
     {
-        float unit = Mathf.Max(1f, modelLength / ShipModelLoader.DefaultModelLength);
-        float len = LengthPerUnit * unit;
+        float len = LengthFor(modelLength);
         float r = len * RadiusRatio;
 
         var view = new TurretBarrelView { Name = "TurretBarrel", Position = off };

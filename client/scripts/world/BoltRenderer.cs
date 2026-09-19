@@ -146,12 +146,32 @@ public sealed class BoltRenderer
     public void SpawnTurretBolt(Ship row, HardpointDef hp, WeaponDef weapon, Vec3 aimShipLocal, uint fireTick)
     {
         var state = ShipMath.StateFromRow(row);
-        // Same catch-up rewind SpawnBoltFor does: the row's position is at LastInputTick while the
-        // shot left at fireTick, so walk the ship back along its path to the muzzle it fired from.
-        uint ticksPast = row.LastInputTick > fireTick ? System.Math.Min(row.LastInputTick - fireTick, 8u) : 0u;
-        Vec3 firePos = state.Pos - state.Vel * (ticksPast * FlightModel.Dt);
+        Vec3 off = new Vec3(hp.OffX, hp.OffY, hp.OffZ);
+        Vec3 fwd,
+            pivot,
+            shipVel;
+        if (_ships.LocalShip is { } pc && pc.ShipId == row.ShipId)
+        {
+            // OUR OWN hull (we are the captain, a gunner fired): it renders at the PREDICTED pose, a
+            // few ticks + RTT ahead of the authoritative row, so a bolt rebuilt from the row would
+            // leave from empty space behind the turret. Anchor it to the rendered transform instead —
+            // the same reasoning PredictionController's own muzzles use.
+            Transform3D t = pc.GlobalTransform;
+            fwd = ShipMath.ToShared(t.Basis * ShipMath.ToGodot(aimShipLocal));
+            pivot = ShipMath.ToShared(t.Origin + t.Basis * ShipMath.ToGodot(off));
+            shipVel = ShipMath.ToShared(pc.Velocity);
+        }
+        else
+        {
+            // Same catch-up rewind SpawnBoltFor does: the row's position is at LastInputTick while the
+            // shot left at fireTick, so walk the ship back along its path to the muzzle it fired from.
+            uint ticksPast = row.LastInputTick > fireTick ? System.Math.Min(row.LastInputTick - fireTick, 8u) : 0u;
+            Vec3 firePos = state.Pos - state.Vel * (ticksPast * FlightModel.Dt);
+            fwd = state.Rot.Rotate(aimShipLocal);
+            pivot = firePos + state.Rot.Rotate(off);
+            shipVel = state.Vel;
+        }
 
-        Vec3 fwd = state.Rot.Rotate(aimShipLocal);
         Vec3 shotDir = FlightModel.SpreadDirection(
             fwd,
             weapon.SpreadRad,
@@ -159,8 +179,11 @@ public sealed class BoltRenderer
             fireTick,
             TurretAim.SpreadBarrel(hp.Index)
         );
-        Vec3 mp = firePos + state.Rot.Rotate(new Vec3(hp.OffX, hp.OffY, hp.OffZ));
-        Vec3 mv = shotDir * weapon.ProjectileSpeed + state.Vel;
+        // The tracer starts at the END of the barrel (TurretBarrelView runs pivot → aim × length), not
+        // at the pivot buried in the mount. Same line the server resolves (it fires from the pivot
+        // along this aim); only the visible start moves out, by well under a tick of flight.
+        Vec3 mp = pivot + fwd * _ships.TurretBarrelLength(row.ShipId);
+        Vec3 mv = shotDir * weapon.ProjectileSpeed + shipVel;
 
         AddBolt(
             ShipMath.ToGodot(mp),

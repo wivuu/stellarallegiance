@@ -685,6 +685,13 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
             EnsureBarrel(shipId, row, stations, slot)?.SetAim(aim);
     }
 
+    // Barrel length (pivot → muzzle) of the turret views this ship's stations get, 0 when the ship has
+    // no node yet. The bolt spawns push a turret tracer's start out by this much along the aim.
+    public float TurretBarrelLength(ulong shipId) =>
+        _nodes.TryGetValue(shipId, out var node) && node.GetNodeOrNull<Node3D>("ShipModel") is { } model
+            ? TurretBarrelView.LengthFor(model.GetMeta("ModelLength", 0f).AsSingle())
+            : 0f;
+
     // Is this ship one the team crew roster (MsgCrew, per team) is authoritative for? Only our own
     // team's ships are; for anything else "not in the roster" carries no information.
     private bool RosterCovers(ulong shipId) =>
