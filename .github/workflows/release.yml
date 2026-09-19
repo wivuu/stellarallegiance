@@ -138,7 +138,7 @@ jobs:
       # updater REJECTS (package-clients.ps1 refuses to run in that state) — and mksquashfs for the AppImage.
       - name: Linux prerequisites
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y zstd squashfs-tools
+        run: sudo apt-get update && sudo apt-get install -y zstd squashfs-tools libfontconfig1
 
       - name: macOS prerequisites
         if: runner.os == 'macOS'

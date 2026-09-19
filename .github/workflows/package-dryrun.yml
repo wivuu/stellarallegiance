@@ -57,9 +57,10 @@ jobs:
 
       # vpk needs a system zstd for delta packages (without it, it silently writes bsdiff deltas that the
       # updater rejects — package-clients.ps1 refuses to run in that state) and mksquashfs for the AppImage.
+      # libfontconfig1 is what Skia needs to draw the launcher window (every Linux desktop has it).
       - name: Linux prerequisites
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y zstd squashfs-tools
+        run: sudo apt-get update && sudo apt-get install -y zstd squashfs-tools libfontconfig1
 
       - name: macOS prerequisites
         if: runner.os == 'macOS'
@@ -77,7 +78,10 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
           path: |
+            build/launcher-e2e/launcher.png
+            build/launcher-e2e/velopack-updater.log
             build/launcher-e2e/data/logs/
+            build/launcher-e2e/data-ui/logs/
             build/launcher-e2e/setup.log
             build/launcher-e2e/stub-report.txt
             build/launcher-e2e/feed/*.json

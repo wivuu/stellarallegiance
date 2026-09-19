@@ -6,6 +6,7 @@ The live roadmap: what is shipped (one line each, with a pointer to the real doc
 
 **Next to incorporate into the plan**
 - Nebula looks different for the same sector on two different clients
+- NativeAOT for game server if possible
 
 **What else lives in `.PLAN/`**
 
@@ -68,8 +69,8 @@ Condensed outcomes. Each line names where the detail now lives.
 
 ### Distribution — installer + auto-update (in flight)
 
-- ◐ **[L] Game Launcher + Velopack** (2026-09-19, branch `game-launcher`, **not merged, never run on
-  Windows/Linux yet**). A separate themed Avalonia launcher (`launcher/`) is the Velopack main executable on
+- ◐ **[L] Game Launcher + Velopack** (2026-09-19, branch `game-launcher`, **not merged; macOS + Windows
+  verified, Linux not yet green**). A separate themed Avalonia launcher (`launcher/`) is the Velopack main executable on
   all three OSes: installer, delta auto-updates from GitHub Releases, in-game **UPDATE NOW** handoff (exit
   code 85), crash notice. Why a launcher at all, the package layout and the no-update-while-playing
   invariant: [`docs/adr/0004`](../docs/adr/0004-game-launcher-fronts-velopack.md) ·
@@ -78,8 +79,12 @@ Condensed outcomes. Each line names where the detail now lives.
   - ✅ Verified on macOS: NativeAOT launcher (universal), nested game bundle signs + survives real updates,
     `scripts/launcher-e2e.ps1` (install → full update → delta update triggered by the game's exit code),
     the real 0.0.12 export running as the launcher's child, `tests/LauncherTest`.
-  - ☐ **Run the *Package dry-run* workflow** (Windows `Setup.exe` hooks + Linux AppImage have only been read
-    in Velopack's source, never executed), then a rehearsal pre-release tag (`v0.0.13-ci.1`).
+  - ✅ Verified on Windows by the *Package dry-run* workflow (PR run, 2026-09-19): the real `Setup.exe --silent`
+    install, the `--veloapp-install` hook exiting cleanly, the `current\game\` layout, a DELTA on the very first
+    update (Setup seeds the package cache), and the exit-code-85 handoff.
+  - ☐ **Linux:** the first run failed at publish (ILLink trim errors in `Avalonia.DesignerSupport` — the Linux
+    launcher is JIT, and is now published untrimmed); AppImage packing, install and update have still never
+    executed. Then a rehearsal pre-release tag (`v0.0.13-ci.1`).
   - ☐ By hand on a real machine: macOS Dock/focus while the launcher is resident, Windows SmartScreen +
     taskbar behaviour, a Linux desktop AppImage.
   - ☐ Later: Developer ID + notarization, Azure Trusted Signing (switched on by secrets —

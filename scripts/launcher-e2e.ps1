@@ -54,6 +54,17 @@ function Start-Native([string]$Exe, [string[]]$Arguments) {
     return [System.Diagnostics.Process]::Start($info)
 }
 
+# Velopack's updater (Update.exe / UpdateMac / UpdateNix) writes its own log outside the install dir. When
+# something goes wrong mid-update that log is usually the only witness, so keep a copy next to ours.
+function Save-VelopackLog {
+    $log = if ($IsMacOS) { "$HOME/Library/Logs/velopack_$PackId.log" }
+    elseif ($IsWindows) { "$env:LOCALAPPDATA\velopack\velopack_$PackId.log" }
+    else { "/tmp/velopack_$PackId.log" }
+    if ((Test-Path -LiteralPath $log) -and (Test-Path -LiteralPath $Root)) {
+        Copy-Item -LiteralPath $log -Destination (Join-Path $Root 'velopack-updater.log') -Force -ErrorAction SilentlyContinue
+    }
+}
+
 # Velopack keeps a per-app package cache + log outside the install dir; clear the test app's.
 function Clear-VelopackState {
     $stale = if ($IsMacOS) { @("$HOME/Library/Caches/velopack/$PackId", "$HOME/Library/Logs/velopack_$PackId.log") }
@@ -106,7 +117,6 @@ function Get-Markers {
 # the markers written after `$Skip`. The launcher restarts itself through Velopack mid-way, so the process
 # we start is NOT the one that finishes — hence polling the log rather than waiting on a handle.
 function Invoke-Launcher([string]$Exe, [string[]]$LauncherArgs, [string]$Until, [int]$Skip, [int]$TimeoutSeconds = 180) {
-    if (-not $IsWindows -and -not $IsMacOS) { $env:APPIMAGE_EXTRACT_AND_RUN = '1' } # CI runners have no FUSE
     Start-Native $Exe $LauncherArgs | Out-Null
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     while ((Get-Date) -lt $deadline) {
@@ -131,6 +141,11 @@ function Get-InstalledVersion {
 }
 
 # ------------------------------------------------------------------------------------------------------
+# CI runners have no FUSE, which an AppImage normally mounts itself with. The AppImage runtime then
+# unpacks to a temp dir instead; Velopack still finds $APPIMAGE and replaces that file on update, and the
+# variable is inherited by the restarted launcher.
+if ($IsLinux) { $env:APPIMAGE_EXTRACT_AND_RUN = '1' }
+
 if (Test-Path -LiteralPath $Root) { Remove-Item -Recurse -Force -LiteralPath $Root }
 New-Item -ItemType Directory -Force -Path $Root, $Data | Out-Null
 Clear-VelopackState
@@ -140,6 +155,22 @@ try {
     New-Package '1.0.0'
     $launcher = Install-First
     Assert (Test-Path -LiteralPath $launcher) "installed launcher exists ($launcher)"
+
+    # The self-test passes below are headless by design, so on their own they would never notice a launcher
+    # whose WINDOW cannot come up (a missing native Skia/HarfBuzz library, a font that did not get embedded,
+    # UI code lost to trimming/AOT). So render the real window of the INSTALLED build off-screen once — no
+    # display needed — and keep the PNG: on CI it is also the only look anyone gets at the Windows and Linux UI.
+    Step 'UI smoke: rendering the installed launcher off-screen ...'
+    $shot = Join-Path $Root 'launcher.png'
+    $ui = Start-Native $launcher @('--launcher-fake=available', "--launcher-shot=$shot", "--launcher-data=$(Join-Path $Root 'data-ui')")
+    if (-not $ui.WaitForExit(120000)) {
+        $ui.Kill($true)
+        Assert $false 'the launcher window rendered within two minutes'
+    }
+    else {
+        Assert ($ui.ExitCode -eq 0) "the installed launcher built and rendered its window (exit code $($ui.ExitCode))"
+        Assert ((Test-Path -LiteralPath $shot) -and (Get-Item -LiteralPath $shot).Length -gt 50000) 'the rendered window is a real image (launcher.png > 50 KB)'
+    }
 
     Step 'packing 1.0.1 ...'
     New-Package '1.0.1'
@@ -183,6 +214,7 @@ try {
     Assert ([bool]($runs[2] -match 'SA_LAUNCHER_UPDATE=none ')) 'after the update the game was told it is current'
 }
 finally {
+    Save-VelopackLog
     Clear-VelopackState
     if (-not $KeepFiles -and $Failures.Count -eq 0 -and (Test-Path -LiteralPath $Root)) { Remove-Item -Recurse -Force -LiteralPath $Root -ErrorAction SilentlyContinue }
 }

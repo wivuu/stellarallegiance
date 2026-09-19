@@ -88,7 +88,14 @@ function Publish-Launcher([string]$Rid, [string]$OutDir) {
     if ($Rid -like 'linux-*') {
         # Linux = self-contained JIT, not NativeAOT: there are no Velopack hooks to exit fast for, and an
         # AOT binary built on a current runner would raise the glibc floor above the game's own.
-        $publishArgs += @('-p:PublishAot=false', '--self-contained', 'true', '-p:PublishReadyToRun=true', '-p:PublishTrimmed=true', '-p:TrimMode=partial')
+        #
+        # Deliberately NOT trimmed. ILLink (unlike the AOT compiler, which only looks at reachable code)
+        # analyses whole assemblies: `TrimMode=partial` keeps Avalonia.DesignerSupport entirely, its
+        # reflection-heavy previewer code raises IL2026/IL2072/IL2075, and this project promotes those to
+        # errors. `TrimMode=full` passes cleanly and is smaller (measured: 28 MB vs 51 MB gzipped), but Linux is
+        # the one platform whose real windowing backend no test here ever starts — so it ships "boring and
+        # works". Revisit once someone has run a trimmed build on a Linux desktop.
+        $publishArgs += @('-p:PublishAot=false', '--self-contained', 'true', '-p:PublishReadyToRun=true')
     }
     dotnet @publishArgs
     Remove-DebugFiles $OutDir
