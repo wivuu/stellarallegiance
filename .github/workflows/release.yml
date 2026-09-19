@@ -180,7 +180,7 @@ jobs:
         run: ./scripts/launcher-e2e.ps1
 
       - name: Download release notes
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: release-notes
 
@@ -287,13 +287,13 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Download packages
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           path: dist
           pattern: velopack-*
 
       - name: Download release notes
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: release-notes
 
