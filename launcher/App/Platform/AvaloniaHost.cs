@@ -15,6 +15,8 @@ public sealed class AvaloniaDispatcher : IUiDispatcher
 // ILauncherHost for the real app: everything LauncherFlow can only ask the platform to do.
 public sealed class AvaloniaHost(IClassicDesktopStyleApplicationLifetime lifetime, ILauncherLog log) : ILauncherHost
 {
+    private bool _exiting;
+
     public Window? Window { get; set; }
 
     // Fired around hide/show so the window can stop its timers / lobby stream while nobody is looking.
@@ -62,7 +64,16 @@ public sealed class AvaloniaHost(IClassicDesktopStyleApplicationLifetime lifetim
         timer.Start();
     }
 
-    public void Exit(int exitCode) => lifetime.Shutdown(exitCode);
+    // Idempotent on purpose. Shutdown() closes our window, whose Closed handler asks for an exit too, and
+    // Avalonia guards only NON-forced shutdowns against re-entry — a second Shutdown() from inside the first
+    // would close the same windows all over again.
+    public void Exit(int exitCode)
+    {
+        if (_exiting)
+            return;
+        _exiting = true;
+        lifetime.Shutdown(exitCode);
+    }
 
     public void OpenFolder(string path)
     {

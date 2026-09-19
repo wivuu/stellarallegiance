@@ -6,7 +6,8 @@
 # By DEFAULT it publishes itself to the hosted public lobby (PUBLIC_LOBBY, default
 # https://stellarlobby.wivuu.com)
 # so clients can discover and WebRTC-join it; pass -Local to stay private (direct ws:// only,
-# no lobby registration).
+# no lobby registration). A PUBLIC_LOBBY still naming the lobby's old *.up.railway.app address is
+# replaced with that default (with a warning): joins can never succeed through it.
 #
 # Rebuilds every launch (and kills any stale process on the port) so the running binary can
 # never silently serve old-format snapshots — the failure the protocol-version handshake also
@@ -40,7 +41,21 @@ if ($Local) {
     Write-Host "[run-server] -Local: private (not registering with the public lobby)"
 } else {
     # Public: default the lobby + a name (hostname, trimmed to the 50-char cap) so it registers.
-    if (-not $env:PUBLIC_LOBBY) { $env:PUBLIC_LOBBY = 'https://stellarlobby.wivuu.com' }
+    $DefaultLobby = 'https://stellarlobby.wivuu.com'
+    if (-not $env:PUBLIC_LOBBY) { $env:PUBLIC_LOBBY = $DefaultLobby }
+
+    # A PUBLIC_LOBBY left over from before the lobby had its own domain (a persisted environment variable,
+    # an old .env) beats the default above. That old service address still answers, so the server registers
+    # and even lists as Verified - but join tokens are issued for $DefaultLobby, and a server checks a token's
+    # issuer against the address IT dials, so EVERY join is rejected ("join token WrongIssuer"). Nothing can
+    # work through that address: use the real one and say so, rather than host a server nobody can enter.
+    if ($env:PUBLIC_LOBBY -match 'wivuu-public-lobby-production\.up\.railway\.app') {
+        Write-Warning ("[run-server] PUBLIC_LOBBY is set to the lobby's OLD address ($($env:PUBLIC_LOBBY)). A server " +
+            "pointed there lists as Verified but rejects every join (join token WrongIssuer). Using $DefaultLobby " +
+            "instead - remove the stale PUBLIC_LOBBY from this machine's environment. The saved lobby credential " +
+            "belongs to the old address, so expect ONE new device-code approval.")
+        $env:PUBLIC_LOBBY = $DefaultLobby
+    }
     if (-not $env:SIM_PUBLIC_NAME) {
         $name = [System.Net.Dns]::GetHostName()
         if ($name.Length -gt 50) { $name = $name.Substring(0, 50) }
