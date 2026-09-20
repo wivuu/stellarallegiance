@@ -112,8 +112,24 @@ public sealed class VelopackUpdateBackend : IServerUpdateBackend
         return updater.ExitCode == 0;
     }
 
-    public void RelaunchAfterExit(string[] args) =>
-        UpdateExe.Start(_install.Locator, waitPid: _install.Process.GetCurrentProcessId(), startArgs: args);
+    // NOT Velopack's `UpdateExe.Start`: see Relauncher for what that did to a long-lived server.
+    public void RelaunchAfterExit(string[] args)
+    {
+        Relauncher.KeepInheritedDescriptorsToOurselves();
+        using var helper = Relauncher.Start(Environment.ProcessId, _install.AppImagePath, args, CurrentDirectoryOrNull());
+    }
+
+    private static string? CurrentDirectoryOrNull()
+    {
+        try
+        {
+            return Environment.CurrentDirectory;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            return null; // started from a directory that has since been deleted
+        }
+    }
 
     // The updater MOVES the new AppImage over the old one. If this user cannot write the directory
     // that only fails at the very end (it would try `pkexec`, which a server does not have) - so find

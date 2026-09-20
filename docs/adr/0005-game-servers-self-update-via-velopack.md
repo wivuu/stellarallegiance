@@ -57,6 +57,18 @@ applied only once nobody would notice.
   *awaits its exit itself* instead of asking Velopack to wait-and-relaunch — then exits with code `85`, the
   same code the desktop client already uses toward the Game Launcher, so the entrypoint's loop re-extracts
   and relaunches inside the same container.
+- **Outside a supervisor the server relaunches itself — not through Velopack.** A hand-run AppImage
+  (`SIM_UPDATE_RESTART=relaunch`, the default with no container and no systemd) swaps the same synchronous
+  way, then leaves a few lines of `/bin/sh` behind that wait for it to exit and `exec` the new AppImage:
+  same arguments, environment and working directory (`server/Update/Relauncher.cs`). Velopack's own
+  `UpdateNix start --waitPid` was what the first release rehearsal ran, and it failed quietly twice. It runs
+  from *inside* the old version's mounted AppImage and moves into its own folder, so the new server inherited
+  a working directory in the old mount — a relative `--content` path loaded the stock content out of the old
+  package. And it only outlives the old server because it inherits the AppImage runtime's descriptors, which
+  it hands on to the next AppImage: every update left one more dead version mounted, FUSE helper and ~180 MB
+  of deleted AppImage included. Withholding those descriptors is no fix — UpdateNix then loses its own files
+  the moment the old server exits, and nothing comes back. The helper inherits none of them (they are marked
+  close-on-exec first) and needs nothing from the package.
 - **Pinned image tags still self-update.** `docker-compose.server.yml` recommends an exact tag for a
   reproducible deploy, but auto-update replaces the running AppImage inside the container, not the tag it
   was pulled from — only `SIM_AUTO_UPDATE=warn` or `off` actually stops it. A freshly pulled container has no

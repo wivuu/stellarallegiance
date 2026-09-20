@@ -1380,8 +1380,10 @@ player is connected, and the swap only after an idle window of zero connections,
   on its own while listed. Version identity, in order: installed (Velopack) → assembly `-p:Version` →
   `SIM_BUILD_VERSION` (`scripts/run-server.ps1` sets it from `git describe`) → unknown (never compares, never
   warns). `SIM_UPDATE_RESTART=exit` (the default in a container or under systemd) exits code `85` for a
-  supervisor to relaunch; `relaunch` (a server started by hand) asks Velopack to start the new build after
-  this process exits. Decision + rejected alternatives:
+  supervisor to relaunch; `relaunch` (a server started by hand) starts the new build itself once this
+  process has exited — a few lines of `/bin/sh` outside the package (`server/Update/Relauncher.cs`), not
+  Velopack's `UpdateNix start`, which ran the new build inside the old version's mount and never released
+  it. Decision + rejected alternatives:
   `docs/adr/0005-game-servers-self-update-via-velopack.md`.
 
 ### Release Advert

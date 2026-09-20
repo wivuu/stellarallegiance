@@ -13,7 +13,7 @@ name: Release
 #
 #   prepare ──┬─► package (linux | macos | windows) ─────────────────┐
 #             └─► package-server (x64 | arm64) ──┬────────────────────┼─► publish
-#                                                 └─► server-image ───┘
+#   server-e2e (x64 | arm64) ─────────────────────┴─► server-image ───┘
 #
 # Nothing becomes visible until `publish`: the release stays a draft while the OS/arch jobs run, and only
 # one job (publish) ever holds `contents: write` for longer than it takes to create that draft.
@@ -304,13 +304,29 @@ jobs:
           compression-level: 0
           retention-days: 3
 
+      # compression-level 0: the payload is one AppImage (already a compressed squashfs), like the package above.
       - name: Upload staged image context
         uses: actions/upload-artifact@v7
         with:
           name: server-image-${{ matrix.arch }}
           path: build/server-image
           if-no-files-found: error
+          compression-level: 0
           retention-days: 3
+
+  # ---------------------------------------------------------------------------------------------
+  # The server's counterpart of the "Launcher end-to-end test" step above: the release image, built from
+  # THIS commit, must defer an update while a player is connected, apply it once empty, relaunch inside
+  # the same container and stop promptly (scripts/server-update-e2e.ps1, against a local feed). A server
+  # that cannot update itself stays on that version until its operator steps in, so nothing server-side
+  # ships without it: it gates the image push (which moves :latest) and, through that, the publish.
+  # Its own job, not a step of package-server: it runs beside the packaging instead of in front of it
+  # (about 8 minutes, inside what the desktop legs take anyway), and it is the SAME definition the
+  # pull-request dry-run uses - one file, called from here.
+  # ---------------------------------------------------------------------------------------------
+  server-e2e:
+    name: Server update e2e
+    uses: ./.github/workflows/server-update-dryrun.yml
 
   # ---------------------------------------------------------------------------------------------
   # Native sim-server RELEASE image -> GHCR: a small supervisor entrypoint plus the self-updating
@@ -321,7 +337,7 @@ jobs:
   # ---------------------------------------------------------------------------------------------
   server-image:
     name: Server image (GHCR)
-    needs: [prepare, package-server]
+    needs: [prepare, package-server, server-e2e]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -341,10 +357,10 @@ jobs:
           merge-multiple: true
 
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -352,7 +368,7 @@ jobs:
 
       - name: Docker metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository_owner }}/stellarallegiance-sim
           tags: |
@@ -360,7 +376,7 @@ jobs:
             type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ctx
           file: server/Dockerfile.release
@@ -378,7 +394,7 @@ jobs:
   publish:
     name: Publish Release
     runs-on: ubuntu-latest
-    needs: [prepare, package, package-server, server-image]
+    needs: [prepare, package, package-server, server-e2e, server-image]
     permissions:
       contents: write
     env:
@@ -417,7 +433,7 @@ jobs:
       - name: Remove assets from a previous attempt
         run: |
           for ch in $CHANNELS; do
-            for f in dist/velopack-$ch/*; do
+            for f in "dist/velopack-$ch"/*; do
               gh release delete-asset "$GITHUB_REF_NAME" "$(basename "$f")" -y >/dev/null 2>&1 || true
             done
           done
@@ -465,7 +481,7 @@ jobs:
             echo
             echo "A server still running a PRE-auto-update image won't pick this feature up on its own — pull and recreate it once: \`docker compose -f docker-compose.server.yml pull && docker compose -f docker-compose.server.yml up -d\`. From there it updates itself going forward."
             echo
-            echo "Not using Docker? Bare Linux AppImages are attached below too — [StellarAllegianceServer-server-linux-x64.AppImage]($base/StellarAllegianceServer-server-linux-x64.AppImage) / [-arm64]($base/StellarAllegianceServer-server-linux-arm64.AppImage). \`chmod +x\` and run; they self-update the same way."
+            echo "Not using Docker? Bare Linux AppImages are attached below too — [StellarAllegianceServer-server-linux-x64.AppImage]($base/StellarAllegianceServer-server-linux-x64.AppImage) / [-arm64]($base/StellarAllegianceServer-server-linux-arm64.AppImage). \`chmod +x\` and run (needs the \`fusermount\` helper: \`apt install fuse3\`). Outside a container the default is \`SIM_AUTO_UPDATE=warn\`; set \`SIM_AUTO_UPDATE=on\` and it updates itself the same way (systemd unit in \`docs/DEPLOY.md\`)."
             echo "<!-- /sa:downloads -->"
           } > body.md
           gh release edit "$GITHUB_REF_NAME" --draft=false --notes-file body.md \
