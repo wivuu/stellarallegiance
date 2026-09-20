@@ -63,6 +63,25 @@ Things that would quietly break updating — the workflow asserts all of them:
 - A launcher that cannot update itself strands every player on that version **forever** — which is why
   `scripts/launcher-e2e.ps1` runs in every `package` job before anything is packed.
 
+One thing would quietly break **playing**, and `package-clients.ps1` owns both halves of it on every real
+export:
+
+- **It writes the collision sidecars** (`tools/collision-sidecars`, right before the Godot export): one
+  `<name>.glb.simmodel` beside every base / ship / asteroid GLB, shipped by the presets'
+  `include_filter="*.simmodel"`. A package holds **no raw `.glb`** — Godot exports an imported GLB as its
+  imported scene only — so these ~270 KiB are the client's collision data. They are generated, gitignored
+  and rebuilt from the GLBs each time, so they cannot go stale.
+- **It proves the staged game can use them** (step 3b, `scripts/verify-game-assets.ps1`): the staged,
+  re-signed game is run with `--headless --verify-assets` and must report that every base, ship and
+  asteroid model both renders *and* collides (`ASSET_VERIFY: OK 31/31 … 31 from collision sidecars`). A
+  build that fails is not packed. It runs the artifact on purpose — from source every raw `.glb` is on
+  disk and the check can only pass.
+
+v0.0.13 and v0.0.14 shipped with neither: the client predicted a sphere where the server had a station,
+the ship rubber-banded near every base, and it read as server lag. See GLOSSARY → *Collision Sidecar* /
+*Collision Model Fault* / *Asset Verification*. Exporting from the Godot editor UI skips both steps —
+the game says so at the server browser (a red alert), but do not ship such a build.
+
 ## How game servers update
 
 A listed game server never polls GitHub itself. The **public lobby** is the one watcher of the release

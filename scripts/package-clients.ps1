@@ -152,6 +152,16 @@ function Export-Game {
     $env:MSBUILDDISABLENODEREUSE = '1'
     $env:DOTNET_CLI_USE_MSBUILD_SERVER = '0'
 
+    # Collision sidecars (<name>.glb.simmodel beside every base / ship / asteroid GLB): the built collision
+    # model of each, which the presets' include_filter ships. A package holds NO raw .glb — Godot exports an
+    # imported GLB as its imported scene only — so without these the client predicts spheres where the
+    # server has hulls. Written fresh from the GLBs on every export (a current one is a no-op), so they can
+    # never be stale; step 3b then proves the staged game can actually use them. Through Invoke-Program for
+    # the same reason as Godot below: nothing in here may write to this function's output.
+    Step 'writing the collision sidecars (tools/collision-sidecars) ...'
+    $sidecarExit = Invoke-Program 'dotnet' @('run', '-c', 'Release', '--project', (Join-Path $RepoRoot 'tools/collision-sidecars'), '--', (Join-Path $Client 'assets'))
+    if ($sidecarExit -ne 0) { Fail "tools/collision-sidecars failed (exit code $sidecarExit) — an export now would ship a client with no collision data" }
+
     $buildInfo = Join-Path $Client 'scripts/BuildInfo.cs'
     $presets = Join-Path $Client 'export_presets.cfg'
     $buildInfoOriginal = Get-Content -LiteralPath $buildInfo -Raw
@@ -321,6 +331,23 @@ else {
     }
     $packDir = $Stage
     $mainExe = if ($IsWindows) { 'StellarLauncher.exe' } else { 'StellarLauncher' }
+}
+
+# ---- 3b. the gate: can the STAGED game render and collide with every model? --------------------------------
+# Runs the exact bits about to be packed (re-signed on macOS, so they start) with --verify-assets. A stub
+# game has no models to ask about. See scripts/verify-game-assets.ps1 for why this runs the artifact.
+if (-not $FakeGame) {
+    . (Join-Path $RepoRoot 'scripts/verify-game-assets.ps1')
+    $stagedGameExe = if ($IsMacOS) { Join-Path $inner "Contents/MacOS/$GameExeBase" }
+    elseif ($IsWindows) { Join-Path $gameStage "$GameExeBase.exe" }
+    else { Join-Path $gameStage "$GameExeBase.x86_64" }
+    Step 'verifying the staged game (--verify-assets): every model must render AND collide ...'
+    $verdict = Test-GameAssets -GameExe $stagedGameExe -WorkDir (Join-Path $Work 'verify')
+    foreach ($line in $verdict.Lines) { Step "  $line" }
+    if (-not $verdict.Ok) {
+        Fail ("the staged game FAILED its asset check (exit code $($verdict.ExitCode)) - not packaging it. " +
+            'A client in this state predicts spheres where the server has hulls and rubber-bands near every station.')
+    }
 }
 
 # ---- 4. vpk pack ------------------------------------------------------------------------------------------

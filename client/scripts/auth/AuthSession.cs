@@ -113,6 +113,17 @@ public partial class AuthSession : Node
         if (HasAnonymousFlag())
             ContinueWithoutAccount = true;
 
+        // `--verify-assets` (AssetVerify) quits within the first frame. Restoring the session here would
+        // start a refresh-token ROTATION that the exit then abandons mid-flight — the lobby commits the
+        // new token, this process never stores it, and the next real launch presents a spent one (reuse
+        // detection signs the player out). A packaging check must never cost someone their sign-in.
+        if (AssetVerify.Requested)
+        {
+            ContinueWithoutAccount = true;
+            SetState(State.SignedOut);
+            return;
+        }
+
         var saved = LoadAuthFile();
         if (saved is null || saved.LobbyBase != _lobbyBase)
         {
@@ -281,6 +292,8 @@ public partial class AuthSession : Node
             if (
                 a == "--autofly"
                 || a == "--anonymous"
+                || a == AssetVerify.Flag
+                || a.StartsWith(AssetVerify.Flag + "=")
                 || a == "--host"
                 || a.StartsWith("--host=")
                 || a.StartsWith("--stress-")

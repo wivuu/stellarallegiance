@@ -20,6 +20,12 @@ public partial class Hud : CanvasLayer
     private Label _sectorShips = null!;
     private Label _credits = null!;
     private Label _warning = null!;
+
+    // Standing alert, top-right: a collision model the SERVER fielded that this client cannot build
+    // (CollisionModels.FieldedFaults). Polled by version — the ledger is written from a worker thread.
+    private PanelContainer? _faultBacking;
+    private AlertBox? _faultAlert;
+    private int _faultVersion = -1;
     private Label _fps = null!;
     private double _statLogAccum; // throttles the [render-stats] log line (see StressRender.ShowStats)
     private bool _measureEnabled; // one-shot: turn on the viewport's GPU/CPU render-time meters
@@ -190,6 +196,26 @@ public partial class Hud : CanvasLayer
         _warning.OffsetTop = 90f;
         AddChild(_warning);
 
+        // Collision-fault alert, top-right (the one free corner in flight): a standing AlertBox, Danger
+        // tone, for as long as something in THIS match has no collision model. The ship rubber-bands
+        // near such a body, and without this the only explanation is a line in a log file — which is
+        // how a packaging defect came to be reported as server lag. Existing parts only; never clickable.
+        // The AlertBox's own fill is a 10% wash, fine on a menu and unreadable over a sunlit sky — so it
+        // sits on a PanelSolid backing (the token for "must stay readable over the live 3D scene").
+        _faultBacking = new PanelContainer { Visible = false, MouseFilter = Control.MouseFilterEnum.Ignore };
+        var backing = new StyleBoxFlat { BgColor = DesignTokens.PanelSolid, AntiAliasing = false };
+        backing.SetCornerRadiusAll(0);
+        _faultBacking.AddThemeStyleboxOverride("panel", backing);
+        _faultBacking.SetAnchorsPreset(Control.LayoutPreset.TopRight);
+        _faultBacking.GrowHorizontal = Control.GrowDirection.Begin;
+        _faultBacking.OffsetLeft = -(FaultAlertWidth + 16f);
+        _faultBacking.OffsetRight = -16f;
+        _faultBacking.OffsetTop = 12f;
+        _faultBacking.CustomMinimumSize = new Vector2(FaultAlertWidth, 0);
+        _faultAlert = new AlertBox { MouseFilter = Control.MouseFilterEnum.Ignore };
+        _faultBacking.AddChild(_faultAlert);
+        AddChild(_faultBacking);
+
         // Lobby / pre-match / post-match overlay. Owns the team picker, ready-up, and
         // end screen. Only shows once actually connected (see Lobby._Process).
         var lobby = new Lobby { Name = "Lobby" };
@@ -345,8 +371,33 @@ public partial class Hud : CanvasLayer
     // it carries that intent through match-start so readying flows straight into the hangar.
     public void RequestDeploy(bool on = true) => DeployRequested = on;
 
+    private const float FaultAlertWidth = 440f;
+
+    // Re-text the collision-fault alert when the ledger moved (a fault in play appeared, or a world
+    // rebuild cleared the set). Configure rebuilds the box's style, so never per frame.
+    private void RefreshFaultAlert()
+    {
+        if (_faultAlert is null || _faultBacking is null || _faultVersion == CollisionModels.Version)
+            return;
+        _faultVersion = CollisionModels.Version;
+        var fielded = CollisionModels.FieldedFaults;
+        _faultBacking.Visible = fielded.Count > 0;
+        if (fielded.Count == 0)
+            return;
+        string what =
+            fielded.Count <= 3 ? string.Join(", ", fielded) : $"{fielded[0]}, {fielded[1]} and {fielded.Count - 2} more";
+        _faultAlert.Configure(
+            "⚠ COLLISION DATA MISSING",
+            $"This install cannot collide with: {what}. Expect rubber-banding nearby — the server still resolves "
+                + "the real shape. Update or reinstall the game.",
+            StatusPill.Kind.Danger
+        );
+    }
+
     public override void _Process(double delta)
     {
+        RefreshFaultAlert();
+
         // Live framerate, always on (top-left corner). Engine.GetFramesPerSecond is a smoothed
         // per-second reading, so this stays legible without extra averaging. Under --render-stats the
         // draw-call / primitive counters ride alongside it — the FPS says frames dropped, these say

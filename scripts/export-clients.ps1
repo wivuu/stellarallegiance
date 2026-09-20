@@ -31,6 +31,21 @@ $Out = "$RepoRoot/build"
 $Godot = Resolve-Godot
 if (-not $Godot) { exit 1 }
 
+# The same gate the release packages pass (scripts/verify-game-assets.ps1): run the exported game with
+# --verify-assets and refuse to hand a tester a build that cannot render AND collide with every model.
+# Only the HOST's export can be run here; the three presets export the same files under the same filters,
+# so it stands in for the other two.
+. "$RepoRoot/scripts/verify-game-assets.ps1"
+function Assert-GameAssets([string]$GameExe) {
+    Write-Host "[export] verifying $GameExe (--verify-assets) ..."
+    $verdict = Test-GameAssets -GameExe $GameExe -WorkDir "$Out/verify"
+    foreach ($line in $verdict.Lines) { Write-Host "[export]   $line" }
+    if (-not $verdict.Ok) {
+        [Console]::Error.WriteLine("[export] ERROR: the exported game FAILED its asset check (exit code $($verdict.ExitCode)) - not zipping it")
+        exit 1
+    }
+}
+
 New-Item -ItemType Directory -Force -Path "$Out/mac", "$Out/win", "$Out/linux" | Out-Null
 
 # Make sure GLB import sidecars exist before exporting — un-imported assets export "successfully"
@@ -41,6 +56,12 @@ if (-not (Test-Path -LiteralPath "$Client/assets/bases/garrison.glb.import")) {
     [Console]::Error.WriteLine("[export] ERROR: GLB import sidecars missing — export would ship placeholder meshes")
     exit 1
 }
+
+# Collision sidecars (<name>.glb.simmodel beside each base / ship / asteroid GLB), shipped by the presets'
+# include_filter: a package holds no raw .glb, so these ARE the client's collision data. Same step as
+# package-clients.ps1; Assert-GameAssets below proves the exported game can use them.
+Write-Host "[export] writing the collision sidecars (tools/collision-sidecars) ..."
+& dotnet run -c Release --project "$RepoRoot/tools/collision-sidecars" -- "$Client/assets"
 
 # Godot's export rebuilds the C# project with `dotnet` under the hood. MSBuild
 # node reuse can leave wedged worker processes (e.g. from a different SDK or the
@@ -81,6 +102,7 @@ if ($IsMacOS) {
     codesign --force --deep --sign - $App
     codesign --verify --deep --strict $App
     Write-Host "[export]   signature valid"
+    Assert-GameAssets "$App/Contents/MacOS/stellarallegiance"
 
     Write-Host "[export] zipping macOS app with ditto ..."
     Remove-Item -Force -LiteralPath "$Out/mac/stellarallegiance-macos.zip" -ErrorAction SilentlyContinue
@@ -91,6 +113,8 @@ if ($IsMacOS) {
 
 Write-Host "[export] Windows .exe ..."
 & $Godot --headless --path $Client --export-release "Windows Desktop" "$Out/win/stellarallegiance.exe"
+
+if ($IsWindows) { Assert-GameAssets "$Out/win/stellarallegiance.exe" }
 
 Write-Host "[export] zipping Windows folder (testers need the whole folder) ..."
 Remove-Item -Force -LiteralPath "$Out/stellarallegiance-windows.zip" -ErrorAction SilentlyContinue
@@ -104,6 +128,7 @@ Remove-Item -Force -LiteralPath "$Out/stellarallegiance-linux.zip" -ErrorAction 
 if (-not $IsWindows) {
     # Executable bit matters on Linux — set it and use native zip to preserve it.
     chmod +x "$Out/linux/stellarallegiance.x86_64"
+    if ($IsLinux) { Assert-GameAssets "$Out/linux/stellarallegiance.x86_64" }
     Push-Location "$Out/linux"
     try {
         zip -rq "$Out/stellarallegiance-linux.zip" .

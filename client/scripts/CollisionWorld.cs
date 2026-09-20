@@ -15,7 +15,7 @@ using StellarAllegiance.Shared;
 public sealed class CollisionWorld
 {
     // Cached authored-unit models, built once per asteroid variant / for the base. A null entry
-    // marks a GLB that couldn't be read (→ sphere fallback), so we don't retry.
+    // marks a model that FAULTED (→ sphere fallback, reported through CollisionModels), so we don't retry.
     private readonly Dictionary<string, SimModel?> _variantModels = new();
     private readonly Dictionary<string, SimModel?> _baseModels = new(); // v37: per-base-type mesh cache
 
@@ -137,6 +137,7 @@ public sealed class CollisionWorld
         _sphereSector.Clear();
         _rockRefs.Clear();
         _shipHulls.Clear(); // a world rebuild may stream retuned defs (ModelName/ModelLength)
+        CollisionModels.ClearFielded(); // the rebuild re-adds every body and re-reports what still faults
     }
 
     public void AddAsteroid(StellarAllegiance.Net.Asteroid row)
@@ -153,7 +154,10 @@ public sealed class CollisionWorld
         if (model is null || model.Hull.BoundingRadius <= 1e-3f)
         {
             // Sphere fallback — matches the server's ResolveStaticCollision for a hull-less rock.
-            // A sphere is rotation-invariant, so it carries no spin.
+            // A sphere is rotation-invariant, so it carries no spin. A rock that NAMES a variant has a
+            // hull on the server, so landing here for one is a fault in play, not a match.
+            if (!string.IsNullOrEmpty(row.Variant))
+                Fielded($"asteroid variant {row.Variant}", $"res://assets/asteroids/{row.Variant}.glb");
             list.Add(
                 new Entry(
                     Collide.StaticBody.AsteroidSphere(center, rad * CollisionConfig.AsteroidCollisionScale),
@@ -224,6 +228,13 @@ public sealed class CollisionWorld
         SimModel? model = BaseModel(modelName);
         if (model is null || model.LongestAxis <= 1e-3f)
         {
+            // A solid sphere of the def radius, with no docking doors: the ship LAUNCHES inside it and
+            // is shoved out every predicted tick while the server flies it straight — the reconcile
+            // storm that read as server lag in v0.0.14. Never quiet.
+            Fielded(
+                $"{(string.IsNullOrEmpty(def?.Name) ? modelName : def!.Name)} station",
+                $"res://assets/bases/{modelName}.glb"
+            );
             list.Add(new Entry(Collide.StaticBody.BaseSphere(center, radius, row.Team), default, 0f));
             return;
         }
@@ -287,6 +298,11 @@ public sealed class CollisionWorld
                 float ws = def.ModelLength / model.LongestAxis;
                 built = (model.Hull.Scaled(ws), model.Hull.BoundingRadius * ws);
             }
+            else
+                Fielded(
+                    $"{(string.IsNullOrEmpty(def.Name) ? def.ModelName : def.Name)} hull",
+                    $"res://assets/ships/{def.ModelName}.glb"
+                );
         }
         _shipHulls[key] = built;
         return built;
@@ -354,34 +370,15 @@ public sealed class CollisionWorld
         return model;
     }
 
-    // Read the raw .glb bytes from res:// and build the shared SimModel (same path the server takes
-    // from disk). Returns null if the file can't be read so the caller falls back to a sphere.
-    // ponytail: needs the raw .glb included in exported builds (export filter); editor reads it from
-    // disk fine. If a build ships without it, collision degrades to spheres, not a crash.
-    //
-    // AssetPreloader builds the asteroid-variant models OFF-THREAD at startup; a hit skips the
-    // QuickHull rebuild (~60ms per variant, previously on the join frame). The shared cache is
-    // safe because the pre-rotation is a pure function of the path's category (only bases pass
-    // CollisionConfig.BaseModelRotation, and every base load comes through here with it). A build
-    // done here is stored back so a world rebuild's fresh CollisionWorld reuses it too.
-    private static SimModel? LoadGlb(string resPath, Quat pre = default)
-    {
-        if (AssetPreloader.TryGetSimModel(resPath, out SimModel? warm))
-            return warm;
-        byte[] bytes = FileAccess.GetFileAsBytes(resPath);
-        SimModel? model = null;
-        if (bytes is null || bytes.Length == 0)
-            Log.Warn($"[CollisionWorld] could not read {resPath} — sphere-collision fallback");
-        else
-            try
-            {
-                model = SimModel.FromGlb(bytes, resPath, pre);
-            }
-            catch (System.Exception e)
-            {
-                Log.Warn($"[CollisionWorld] failed to build hull for {resPath}: {e.Message}");
-            }
-        AssetPreloader.StoreSimModel(resPath, model);
-        return model;
-    }
+    // The shared SimModel for a res:// GLB, from the RAW .glb bytes (the same bytes the server reads
+    // from disk) — through CollisionModels, the one loader: it caches per path (AssetPreloader warms
+    // most of them off-thread at startup, so this is normally a hit that skips a ~60ms QuickHull), and
+    // it RECORDS a model it cannot build instead of shrugging. Null ⇒ the caller degrades to a sphere
+    // and says so (Fielded below): the server still has the real hull, so that sphere is a mispredict.
+    private static SimModel? LoadGlb(string resPath, Quat pre = default) => CollisionModels.Load(resPath, pre);
+
+    // We are about to stand a sphere in for something the SERVER put in this match, because its model
+    // faulted. Tell the player (the HUD alert reads the fielded set) — quiet degradation here is what
+    // made a packaging defect look like server lag.
+    private static void Fielded(string label, string resPath) => CollisionModels.ReportFielded(label, resPath);
 }

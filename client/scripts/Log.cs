@@ -22,4 +22,9 @@ public static class Log
 
     // Warning → Godot's warning channel (editor Warnings panel / debugger), timestamped like the rest.
     public static void Warn(string message) => GD.PushWarning($"{Stamp()} {message}");
+
+    // Error → Godot's ERROR channel: "ERROR: …" plus a backtrace in the log file, the editor's Errors
+    // panel and the debugger. For a FAULT — something is broken and somebody has to act — as opposed
+    // to Err above, which is only a line on stderr.
+    public static void Error(string message) => GD.PushError($"{Stamp()} {message}");
 }

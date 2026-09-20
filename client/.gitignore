@@ -14,6 +14,12 @@
 assets/**/*.import
 assets/**/*.png
 
+# Collision sidecars — each GLB's BUILT collision model (<name>.glb.simmodel), written by
+# tools/collision-sidecars right before an export (scripts/package-clients.ps1, export-clients.ps1)
+# and shipped through the presets' include_filter: the only collision data a PACKAGED client has.
+# Generated from the committed .glb, so never tracked — same convention as the import sidecars.
+assets/**/*.simmodel
+
 # ...except the brand boot-splash logo, which is a committed source-of-truth asset
 # (regenerate with tools/logo-gen — see its README). Godot still re-imports it.
 !assets/ui/logo.png
