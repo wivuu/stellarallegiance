@@ -80,6 +80,16 @@ jobs:
           if [ "$ec" -ne 0 ] && [ "$ec" -ne 139 ]; then exit "$ec"; fi
           test -f client/assets/bases/garrison.glb.import || { echo "::error::GLB import produced no sidecars — exported client would ship placeholder meshes"; exit 1; }
 
+      # A package holds NO raw .glb (Godot exports an imported GLB as its imported scene only), so the
+      # client's collision data ships as <name>.glb.simmodel sidecars, picked up by the presets'
+      # include_filter. Generated and gitignored, like the import sidecars above — a fresh checkout has
+      # none, and a client exported without them predicts spheres where the server has hulls (it says so
+      # in a red alert at the server browser). Same step scripts/package-clients.ps1 runs for a release.
+      - name: Write collision sidecars
+        run: |
+          dotnet run -c Release --project tools/collision-sidecars -- client/assets
+          test -f client/assets/bases/garrison.glb.simmodel || { echo "::error::no collision sidecars were written — exported client would have no collision data"; exit 1; }
+
       - name: Create export directory
         run: mkdir -p "$GITHUB_WORKSPACE/$(dirname "${{ matrix.output_path }}")"
 
