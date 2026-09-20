@@ -1,0 +1,92 @@
+name: Server update dry-run (server e2e)
+
+# Proves, on native x64 and arm64 Linux runners, that the sim-server RELEASE IMAGE (server/Dockerfile.release)
+# self-updates through Velopack the way the auto-update contract promises — WITHOUT waiting for a real
+# release tag. Run it by hand before touching the update path, or let the path filter below catch it.
+#
+# scripts/server-update-e2e.ps1 does all the work: it packs three versions of the sim server under a
+# throwaway package id, seeds a local feed with only the first, boots the release image against that
+# feed, holds a simulated player connected (tools/simbot) to prove an update DEFERS while occupied,
+# releases it to prove the update APPLIES and relaunches inside the same container, publishes a third
+# (delta) version, then proves a plain `docker restart` does not re-unpack, `docker stop` is prompt and
+# graceful, and SIM_AUTO_UPDATE=warn only logs. Two native runners (not QEMU) because NativeAOT cannot
+# cross-compile — see scripts/package-server.ps1.
+#
+# Triggers: by hand, and on pull requests that touch the update path or its packaging. The PR trigger
+# is what makes this usable BEFORE a merge — GitHub only offers "Run workflow" for workflow files that
+# already exist on the default branch. The path filter keeps ordinary gameplay PRs free of it.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'server/Update/**'
+      - 'server/Dockerfile*'
+      - 'server/docker-entrypoint.sh'
+      - 'server/SimServer.csproj'
+      - 'scripts/package-server.ps1'
+      - 'scripts/server-update-e2e.ps1'
+      - 'dotnet-tools.json'
+      - 'Directory.Packages.props'
+      - 'docker-compose.server.yml'
+      - '.github/workflows/server-update-dryrun.yml'
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_CLI_USE_MSBUILD_SERVER: 0
+  MSBUILDDISABLENODEREUSE: 1
+
+jobs:
+  e2e:
+    name: Server update e2e (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    # One NativeAOT publish inside Docker (the script re-packs that tree for its three versions) plus the
+    # full update cycle (several deadline-polled waits, up to a couple of minutes each) fits comfortably,
+    # but a stuck update loop must not sit on a runner for GitHub's default six hours.
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: x64, os: ubuntu-latest }
+          - { name: arm64, os: ubuntu-24.04-arm }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          # Single source of truth for the SDK: root global.json (>= 10.0.401, which is the
+          # Roslyn 5.9.0 floor tools/wire-gen needs). Bump it there, not here.
+          global-json-file: global.json
+
+      # zstd: without it vpk silently writes bsdiff deltas the updater rejects (package-server.ps1
+      # refuses to run in that state). squashfs-tools: mksquashfs builds the AppImage. shellcheck:
+      # lints server/docker-entrypoint.sh below — Docker itself is already on the runner image.
+      - name: Linux prerequisites
+        run: sudo apt-get update && sudo apt-get install -y zstd squashfs-tools shellcheck
+
+      - name: Shellcheck the entrypoint
+        run: shellcheck server/docker-entrypoint.sh
+
+      - name: Pack, boot, update, restart, stop — end to end
+        shell: pwsh
+        run: ./scripts/server-update-e2e.ps1 -KeepFiles
+
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: server-update-e2e-${{ matrix.name }}
+          if-no-files-found: ignore
+          retention-days: 7
+          path: |
+            build/server-update-e2e/simbot.log
+            build/server-update-e2e/simbot.err.log
+            build/server-update-e2e/velopack_*.log
+            build/server-update-e2e/feed/*.json

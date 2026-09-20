@@ -21,7 +21,13 @@ client/assets/*
 !client/assets/ships
 docs
 tests
-tools
+# Exclude tools/ but keep the wire-format source generator: shared/Shared.csproj references it as an
+# analyzer, and without it the sim-server does not compile (mirrors .dockerignore — see
+# server/Dockerfile). The last matching line wins, so bin/obj are excluded again after the re-include.
+tools/*
+!tools/wire-gen
+tools/wire-gen/bin
+tools/wire-gen/obj
 module
 scripts
 deploy

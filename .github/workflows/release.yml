@@ -2,17 +2,20 @@ name: Release
 
 # Pushing a version tag (e.g. v1.2.3) builds one Velopack package per desktop OS — the Game Launcher plus
 # the Godot client, as an installer, a self-updating portable zip and the update feed (full + delta
-# packages) — publishes the native sim-server image to GHCR, and attaches everything to a GitHub Release.
-# Installed clients update themselves from that release (launcher/, docs/RELEASING.md).
+# packages) — plus one Velopack package per server arch (a self-updating Linux AppImage), publishes the
+# self-updating native sim-server RELEASE image to GHCR, and attaches everything to a GitHub Release.
+# Installed clients AND deployed servers update themselves from that release (launcher/, docs/RELEASING.md,
+# server/docker-entrypoint.sh).
 #
 # Version = tag minus the leading "v". Tags containing "-" publish as a PRE-RELEASE: they do NOT move the
 # :latest image tag and are only offered to players who switched the launcher to the BETA channel.
 # Pre-release labels must be DOTTED (v1.2.0-rc.1, not -rc1): SemVer compares "rc10" < "rc2" as text.
 #
-#   prepare ──► package (linux | macos | windows) ──┐
-#           └─► server-image ───────────────────────┴─► publish
+#   prepare ──┬─► package (linux | macos | windows) ─────────────────┐
+#             └─► package-server (x64 | arm64) ──┬────────────────────┼─► publish
+#                                                 └─► server-image ───┘
 #
-# Nothing becomes visible until `publish`: the release stays a draft while the three OS jobs run, and only
+# Nothing becomes visible until `publish`: the release stays a draft while the OS/arch jobs run, and only
 # one job (publish) ever holds `contents: write` for longer than it takes to create that draft.
 on:
   push:
@@ -220,11 +223,105 @@ jobs:
           retention-days: 3
 
   # ---------------------------------------------------------------------------------------------
-  # Native sim-server image -> GHCR. Context MUST be repo root (server/Dockerfile references
-  # ../shared/Shared.csproj).
+  # One Velopack package per server arch: the self-updating sim-server AppImage. Native runners only
+  # (NativeAOT cannot cross-compile — see scripts/package-server.ps1, which does ALL the real work,
+  # the same script a developer runs locally). Also stages server/Dockerfile.release's build context
+  # (that AppImage + server/docker-entrypoint.sh) as a SEPARATE artifact for the server-image job
+  # below, since that job's context can't be the repo root (server/Dockerfile.release only COPYs a
+  # pre-built AppImage — see its header for why — and the repo's own .dockerignore excludes build/,
+  # where vpk writes).
+  # ---------------------------------------------------------------------------------------------
+  package-server:
+    name: Package server (${{ matrix.name }})
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: x64, os: ubuntu-latest, arch: x64 }
+          - { name: arm64, os: ubuntu-24.04-arm, arch: arm64 }
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          # Single source of truth for the SDK: root global.json (>= 10.0.401, which is the
+          # Roslyn 5.9.0 floor tools/wire-gen needs). Bump it there, not here.
+          global-json-file: global.json
+
+      # zstd: without it vpk silently writes bsdiff deltas that the updater REJECTS
+      # (package-server.ps1 refuses to run in that state). squashfs-tools: mksquashfs builds the
+      # AppImage. Docker itself is already on the runner image.
+      - name: Linux prerequisites
+        run: sudo apt-get update && sudo apt-get install -y zstd squashfs-tools
+
+      - name: Restore tools
+        run: dotnet tool restore
+
+      - name: Download release notes
+        uses: actions/download-artifact@v8
+        with:
+          name: release-notes
+
+      # The previous full package is the base the DELTA is generated against — same reasoning as the
+      # client package job below. A first-ever server release finds nothing (fine: ships without a
+      # delta). Stable tags diff against the last stable release, pre-release tags against the last
+      # pre-release. Channels are per-ARCH (server-linux-x64/arm64), never shared with each other or
+      # with the client's `linux` — see scripts/package-server.ps1.
+      - name: Fetch the previous release (delta base)
+        run: |
+          mkdir -p "build/releases/server-linux-${{ matrix.arch }}"
+          dotnet vpk download github --repoUrl "$REPO_URL" --channel "server-linux-${{ matrix.arch }}" \
+            --outputDir "build/releases/server-linux-${{ matrix.arch }}" --token "${{ secrets.GITHUB_TOKEN }}" \
+            ${{ needs.prepare.outputs.prerelease == 'true' && '--pre' || '' }} \
+            || echo "::notice::no previous Velopack release for 'server-linux-${{ matrix.arch }}' — shipping without a delta"
+
+      - name: Package server (${{ matrix.name }})
+        shell: pwsh
+        run: ./scripts/package-server.ps1 -Version $env:VERSION -ReleaseNotes notes.md -OutputDir "build/releases/server-linux-${{ matrix.arch }}" -ImageContext build/server-image -Ci
+
+      # Only THIS version's files travel on: the delta base fetched above is already on the last release.
+      - name: Drop the delta base
+        shell: pwsh
+        run: |
+          Get-ChildItem "build/releases/server-linux-${{ matrix.arch }}" -Filter '*.nupkg' |
+            Where-Object { $_.Name -notlike "*-$env:VERSION-*" -and $_.Name -notlike "*-$env:VERSION.nupkg" } |
+            Remove-Item -Force -Verbose
+          Get-ChildItem "build/releases/server-linux-${{ matrix.arch }}" | Format-Table Name, Length
+
+      - name: Upload server package
+        uses: actions/upload-artifact@v7
+        with:
+          name: velopack-server-linux-${{ matrix.arch }}
+          path: build/releases/server-linux-${{ matrix.arch }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
+
+      - name: Upload staged image context
+        uses: actions/upload-artifact@v7
+        with:
+          name: server-image-${{ matrix.arch }}
+          path: build/server-image
+          if-no-files-found: error
+          retention-days: 3
+
+  # ---------------------------------------------------------------------------------------------
+  # Native sim-server RELEASE image -> GHCR: a small supervisor entrypoint plus the self-updating
+  # AppImage each package-server leg just packed (server/Dockerfile.release). COPY-only, so this
+  # multi-platform build needs no QEMU: buildx builds each platform's layer natively from ITS OWN
+  # arch's artifact instead of emulating the other one (contrast the old server/Dockerfile build this
+  # job used to do, which genuinely compiled NativeAOT and needed QEMU to cross-build).
   # ---------------------------------------------------------------------------------------------
   server-image:
     name: Server image (GHCR)
+    needs: [prepare, package-server]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -233,8 +330,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      # Merges BOTH package-server legs' staged contexts into one dir: ctx/amd64/…, ctx/arm64/…
+      # (Docker's arch names — see scripts/package-server.ps1) plus ctx/docker-entrypoint.sh (written
+      # identically by both legs from the same checkout, so the duplicate is harmless).
+      - name: Download staged image contexts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: server-image-*
+          path: ctx
+          merge-multiple: true
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
@@ -258,27 +362,34 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: server/Dockerfile
+          context: ctx
+          file: server/Dockerfile.release
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
   # ---------------------------------------------------------------------------------------------
-  # Attach the three packages to the draft release and publish it. `vpk upload github` sends only
-  # the NEW build's files (from assets.<channel>.json) plus a per-channel feed (releases.<channel>.json);
-  # the uploads run one after another, in one job, so nothing races.
+  # Attach every channel's package (3 desktop clients + 2 server arches, $CHANNELS below) to the
+  # draft release and publish it. `vpk upload github` sends only the NEW build's files (from
+  # assets.<channel>.json) plus a per-channel feed (releases.<channel>.json); the uploads run one
+  # after another, in one job, so nothing races.
   # ---------------------------------------------------------------------------------------------
   publish:
     name: Publish Release
     runs-on: ubuntu-latest
-    needs: [prepare, package, server-image]
+    needs: [prepare, package, package-server, server-image]
     permissions:
       contents: write
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       VERSION: ${{ needs.prepare.outputs.version }}
+      # Every Velopack channel this release publishes: the three desktop client channels plus one per
+      # server arch. server-linux-x64/arm64, NOT a shared "linux" — Velopack feeds are per-channel and
+      # not filtered by package id, so the server channels must differ from each other and from the
+      # client's (see scripts/package-server.ps1). ONE list, used by both loops below, so adding a
+      # channel here can never update one loop and miss the other.
+      CHANNELS: "win osx linux server-linux-x64 server-linux-arm64"
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -305,7 +416,7 @@ jobs:
       # already on the release, so clear whatever a previous attempt left behind first.
       - name: Remove assets from a previous attempt
         run: |
-          for ch in win osx linux; do
+          for ch in $CHANNELS; do
             for f in dist/velopack-$ch/*; do
               gh release delete-asset "$GITHUB_REF_NAME" "$(basename "$f")" -y >/dev/null 2>&1 || true
             done
@@ -315,7 +426,7 @@ jobs:
       - name: Upload packages
         run: |
           dotnet tool restore
-          for ch in win osx linux; do
+          for ch in $CHANNELS; do
             dotnet vpk upload github --repoUrl "$REPO_URL" --token "$GH_TOKEN" --outputDir "dist/velopack-$ch" \
               --channel "$ch" --tag "$GITHUB_REF_NAME" --releaseName "$GITHUB_REF_NAME" --merge \
               ${{ needs.prepare.outputs.prerelease == 'true' && '--pre' || '' }}
@@ -349,6 +460,12 @@ jobs:
             echo '```'
             echo
             echo "Set \`SIM_PUBLIC_NAME\` to be listed in the public server browser. See \`docker-compose.server.yml\` for the full env/NAT configuration."
+            echo
+            echo "**This image self-updates.** Once no player is connected it downloads and applies the next release in place and relaunches itself — no redeploy needed. Set \`SIM_AUTO_UPDATE=warn\` to only log that an update is available instead, or \`off\` to disable the check entirely (see \`docker-compose.server.yml\` / \`.env.example\`)."
+            echo
+            echo "A server still running a PRE-auto-update image won't pick this feature up on its own — pull and recreate it once: \`docker compose -f docker-compose.server.yml pull && docker compose -f docker-compose.server.yml up -d\`. From there it updates itself going forward."
+            echo
+            echo "Not using Docker? Bare Linux AppImages are attached below too — [StellarAllegianceServer-server-linux-x64.AppImage]($base/StellarAllegianceServer-server-linux-x64.AppImage) / [-arm64]($base/StellarAllegianceServer-server-linux-arm64.AppImage). \`chmod +x\` and run; they self-update the same way."
             echo "<!-- /sa:downloads -->"
           } > body.md
           gh release edit "$GITHUB_REF_NAME" --draft=false --notes-file body.md \
