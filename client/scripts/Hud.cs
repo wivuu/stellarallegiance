@@ -254,10 +254,14 @@ public partial class Hud : CanvasLayer
     // `--ui-open=scoreboard-live|scoreboard-post` raises that overlay just before the shot, the way
     // the showcase's own --ui-open does for its modals: overlays behind a hotkey can't otherwise be
     // captured, and the scoreboard's two modes are the ones with no other way in.
+    // `--ui-quit=graceful` leaves the way a PLAYER does — ConnectionManager.QuitGracefully (MsgBye, the
+    // drain, then the quit) instead of the bare Quit() below. That is the only unattended way to run the
+    // real exit path while connected, which is where the exit bugs have lived.
     private void CaptureLiveUiIfRequested()
     {
         string? outPath = null;
         string? openOverlay = null;
+        bool gracefulQuit = false;
         double delay = 2.0; // default settle; --ui-shot-delay=<sec> waits longer (e.g. for an autofly spawn)
         foreach (string a in OS.GetCmdlineUserArgs())
         {
@@ -265,6 +269,8 @@ public partial class Hud : CanvasLayer
                 outPath = a["--ui-shot=".Length..];
             else if (a.StartsWith("--ui-open="))
                 openOverlay = a["--ui-open=".Length..];
+            else if (a == "--ui-quit=graceful")
+                gracefulQuit = true;
             else if (a.StartsWith("--ui-shot-delay="))
                 double.TryParse(
                     a["--ui-shot-delay=".Length..],
@@ -287,7 +293,10 @@ public partial class Hud : CanvasLayer
             {
                 GetViewport().GetTexture().GetImage().SavePng(outPath);
                 GD.Print("UI_SHOT_SAVED:" + ProjectSettings.GlobalizePath(outPath));
-                GetTree().Quit();
+                if (gracefulQuit)
+                    _cm.QuitGracefully();
+                else
+                    GetTree().Quit();
             };
         };
     }

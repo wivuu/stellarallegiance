@@ -185,6 +185,10 @@ public partial class GameNetClient : Node, INetClientHost
     private CancellationTokenSource? _socketCts;
     private readonly ConcurrentQueue<byte[]> _rx = new();
 
+    // Raised on the main thread as this node leaves the tree (quit, scene change), read by the socket
+    // tasks: from then on they have nothing more to say to it — see Post.
+    private volatile bool _closing;
+
     // Outbound frames are buffered even before the socket opens (a lobby action can arrive
     // first); the send loop drains it once connected.
     private readonly Channel<byte[]> _tx = Channel.CreateUnbounded<byte[]>();
@@ -267,10 +271,15 @@ public partial class GameNetClient : Node, INetClientHost
         _ = Task.Run(() => RunWebRtc(shareBase, sessionId, seq, ct));
     }
 
-    // Monotonic connect-attempt id. Background tasks stamp their progress/error callbacks with
-    // the seq they were started under; deliveries from a superseded (cancelled) attempt are
-    // dropped so they can't touch the CURRENT attempt's stage log.
+    // Monotonic connect-attempt id. Background tasks stamp EVERY callback — progress, error, open and
+    // close — with the seq they were started under; deliveries from a superseded (cancelled) attempt
+    // are dropped so they can't touch the CURRENT attempt. Abort and Disconnect bump it too: a link we
+    // hung up on ourselves has nothing left to report.
     private int _connectSeq;
+
+    // The attempt whose close has already been delivered. One link closes once, but WebRTC says so
+    // twice (the DataChannel closing, then the peer connection changing state).
+    private int _closedSeq;
 
     // Reset per-connection state and arm a fresh cancellation token (cancelling any prior link).
     private CancellationToken BeginConnect(string what)
@@ -287,8 +296,33 @@ public partial class GameNetClient : Node, INetClientHost
 
     // ---- Connect-progress plumbing (background task -> main thread) --------
 
-    private void EmitStage(int seq, ConnectionManager.ConnectStage stage) =>
-        CallDeferred(nameof(DeliverStage), seq, (int)stage);
+    private void EmitStage(int seq, ConnectionManager.ConnectStage stage) => Post(MethodName.DeliverStage, seq, (int)stage);
+
+    // How a socket task talks to this node, and the only way it may: a deferred call to one of its
+    // methods, stamped with the connect seq the task was started under.
+    //
+    // It refuses once the node is leaving the tree, because that is exactly when the tasks get loud:
+    // the cancel in _ExitTree unwinds them, disposing the peer connection fires its close events, and
+    // those handlers run on SIPSorcery's threads WHILE the main thread tears the engine down. A call
+    // pushed into that is an error line at exit at best and a native crash at worst. Nor may anything
+    // be thrown back at SIPSorcery: it invokes its events bare, some from its ICE timer, where an
+    // exception is an unhandled one on a thread nobody watches.
+    //
+    // Godot matches a deferred call on its name AND its argument count, and knows nothing of C#
+    // default parameters: a short argument list is "Method not found" at the next flush, not a default.
+    private void Post(StringName method, params Variant[] args)
+    {
+        if (_closing)
+            return;
+        try
+        {
+            CallDeferred(method, args);
+        }
+        catch (ObjectDisposedException)
+        {
+            // Freed between the check and the call: nobody left to tell.
+        }
+    }
 
     private void DeliverStage(int seq, int stage)
     {
@@ -339,6 +373,11 @@ public partial class GameNetClient : Node, INetClientHost
         // a beat later so the send loop drains it first; cancelling immediately would race the
         // flush and the server would wrongly park a 5s orphan for every "Leave".
         _tx.Writer.TryWrite(new byte[] { 8 }); // MsgBye
+        // We are hanging up: whatever this link reports from here on is not news. Tearing a peer
+        // connection down fires the same close events a dropped one does, and the only thing that told
+        // the two apart used to be the ConnectionManager state — which QUIT TO DESKTOP never changed, so
+        // quitting read as "connection lost" and redialed the server on the way out.
+        _connectSeq++;
         var cts = _socketCts;
         _ = Task.Run(async () =>
         {
@@ -367,6 +406,7 @@ public partial class GameNetClient : Node, INetClientHost
 
     public override void _ExitTree()
     {
+        _closing = true; // BEFORE the cancel wakes the socket tasks — see Post
         _cts.Cancel();
         _tx.Writer.TryComplete();
     }
@@ -572,7 +612,7 @@ public partial class GameNetClient : Node, INetClientHost
             _ws = new ClientWebSocket();
             await _ws.ConnectAsync(new Uri(uri), ct);
             opened = true;
-            CallDeferred(nameof(OnSocketOpen), seq);
+            Post(MethodName.OnSocketOpen, seq);
 
             // The send loop gets its own linked token so we can stop it the instant the socket closes.
             // Pre-Welcome (e.g. a "bad secret" rejection) nothing is queued after the Hello, so the loop
@@ -620,18 +660,20 @@ public partial class GameNetClient : Node, INetClientHost
             // Unblock the send loop (it may be parked on ReadAllAsync) so the drain returns promptly.
             sendCts.Cancel();
             await send.ContinueWith(_ => { });
-            CallDeferred(nameof(OnSocketClosed), closeReason);
+            Post(MethodName.OnSocketClosed, seq, closeReason);
         }
         catch (OperationCanceledException) { }
         catch (Exception e)
         {
+            if (_closing)
+                return; // unwinding at exit: not an error, and the log is an engine call too
             Log.Err($"[GameNet] socket error: {e.Message}");
             // Never-opened socket = the connect itself failed (carry the reason); a post-open
             // drop keeps flowing through NotifyDisconnected so auto-reconnect can kick in.
             if (opened)
-                CallDeferred(nameof(OnSocketClosed), closeReason);
+                Post(MethodName.OnSocketClosed, seq, closeReason);
             else
-                CallDeferred(nameof(DeliverConnectError), seq, e.Message);
+                Post(MethodName.DeliverConnectError, seq, e.Message);
         }
     }
 
@@ -663,7 +705,7 @@ public partial class GameNetClient : Node, INetClientHost
 
             dc.onopen += () =>
             {
-                CallDeferred(nameof(OnSocketOpen), seq);
+                Post(MethodName.OnSocketOpen, seq);
                 dcOpen.TrySetResult();
             };
             dc.onmessage += (_, _, data) =>
@@ -678,19 +720,25 @@ public partial class GameNetClient : Node, INetClientHost
                 }
                 _rx.Enqueue(data);
             };
-            dc.onclose += () => CallDeferred(nameof(OnSocketClosed), "");
+            dc.onclose += () => Post(MethodName.OnSocketClosed, seq, "");
             pc.onconnectionstatechange += s =>
             {
                 if (
                     s
-                    is RTCPeerConnectionState.failed
+                    is not (
+                        RTCPeerConnectionState.failed
                         or RTCPeerConnectionState.closed
                         or RTCPeerConnectionState.disconnected
+                    )
                 )
-                {
-                    dcOpen.TrySetException(new Exception($"peer connection {s}"));
-                    CallDeferred(nameof(OnSocketClosed));
-                }
+                    return;
+                // Before the channel opened this is a failed CONNECT: fault the wait below and let the
+                // catch report it, with its reason, as one. After it opened it is a dropped LINK — the
+                // only word we get when the peer just goes silent (no DataChannel close arrives; ICE
+                // notices after ~8 s of nothing in either direction).
+                dcOpen.TrySetException(new Exception($"peer connection {s}"));
+                if (dcOpen.Task.IsCompletedSuccessfully)
+                    Post(MethodName.OnSocketClosed, seq, "");
             };
 
             var offer = pc.createOffer();
@@ -745,11 +793,13 @@ public partial class GameNetClient : Node, INetClientHost
         catch (OperationCanceledException) { }
         catch (Exception e)
         {
+            if (_closing)
+                return; // unwinding at exit: not an error, and the log is an engine call too
             Log.Err($"[GameNet] webrtc error: {e.Message}");
             if (opened)
-                CallDeferred(nameof(OnSocketClosed), "");
+                Post(MethodName.OnSocketClosed, seq, "");
             else
-                CallDeferred(nameof(DeliverConnectError), seq, e.Message);
+                Post(MethodName.DeliverConnectError, seq, e.Message);
         }
         finally
         {
@@ -802,8 +852,17 @@ public partial class GameNetClient : Node, INetClientHost
     // rejection); empty for silent drops and the WebRTC path (a DataChannel close has no reason). When
     // the transport gave no reason, fall back to a MsgReject captured on the receive thread — that's
     // how a WebRTC auth rejection reaches the failure UI.
-    private void OnSocketClosed(string reason = "") =>
+    //
+    // Only the CURRENT link's close is news, and only once. A superseded attempt closes late (a redial
+    // cancels the old peer connection, which then reports "closed"): let that through and it settles —
+    // or fails — the attempt that replaced it.
+    private void OnSocketClosed(int seq, string reason)
+    {
+        if (seq != _connectSeq || seq == _closedSeq)
+            return;
+        _closedSeq = seq;
         _cm.NotifyDisconnected(string.IsNullOrEmpty(reason) ? _rejectReason : reason);
+    }
 
     // ---- Main-thread drain (frame application itself lives in FrameApplier) ------------------
 
