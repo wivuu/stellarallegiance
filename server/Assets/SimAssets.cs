@@ -47,14 +47,36 @@ public static class SimAssets
     // tree. Defaults beside the binary; point SIM_CACHE_DIR at a volume for a read-only app dir.
     // Public so other writable-beside-the-binary state (the lobby credential file, WP2.1) can
     // anchor itself relative to the same resolved location without duplicating the env lookup.
-    public static string CacheDir
+    //
+    // A PACKAGED server (Velopack, docs/adr/0005) is the exception to "beside the binary": on Linux
+    // the install is one AppImage, and the binary's own directory is inside it - read-only when the
+    // AppImage is mounted, thrown away and re-extracted on every update when it is unpacked (the release
+    // image). So the default moves BESIDE THE APPIMAGE FILE, the one location that belongs to this
+    // install and survives its updates. Everything durable follows, because it all chains off this
+    // directory: the lobby credential (LobbyCredentialStore), the match-report spool and the update
+    // marker are its siblings. The cache baked into the package is still used - see BakedCacheDir.
+    public static string CacheDir => ResolveCacheDir(Environment.GetEnvironmentVariable, AppContext.BaseDirectory);
+
+    // The folder a packaged server keeps beside its AppImage (one folder, so the state does not pile
+    // up loose next to it).
+    public const string PackagedStateDirName = "stellar-server-data";
+
+    public static string ResolveCacheDir(Func<string, string?> env, string baseDirectory)
     {
-        get
-        {
-            string? env = Environment.GetEnvironmentVariable("SIM_CACHE_DIR");
-            return !string.IsNullOrEmpty(env) ? env : Path.Combine(AppContext.BaseDirectory, "sim-cache");
-        }
+        string? explicitDir = env("SIM_CACHE_DIR");
+        if (!string.IsNullOrEmpty(explicitDir))
+            return explicitDir;
+        string? appImage = env("APPIMAGE");
+        if (!string.IsNullOrEmpty(appImage) && Path.GetDirectoryName(Path.GetFullPath(appImage)) is { Length: > 0 } dir)
+            return Path.Combine(dir, PackagedStateDirName, "sim-cache");
+        return Path.Combine(baseDirectory, "sim-cache");
     }
+
+    // The hull cache that SHIPS with the build (the Dockerfile and the package script run
+    // `--pregen-assets`). Read-only seed for SimModelCache.Load: when CacheDir points somewhere else -
+    // a fresh volume, the folder beside an AppImage - a cold start still loads the baked hulls instead
+    // of recomputing every one of them.
+    public static string BakedCacheDir => Path.Combine(AppContext.BaseDirectory, "sim-cache");
 
     // Load+cache the SimModel for an asset relative to the dir (e.g. "bases/base.glb"),
     // or null if the dir/file is missing or the GLB fails to parse. `pre` is an optional rigid
@@ -70,7 +92,7 @@ public static class SimAssets
             return null;
         try
         {
-            return SimModelCache.Load(full, CacheDir, pre);
+            return SimModelCache.Load(full, CacheDir, pre, BakedCacheDir);
         }
         catch (Exception e)
         {

@@ -42,6 +42,13 @@ internal static partial class Log
     public static partial void JoinedWithPlayerId(ILogger logger, int clientId, Guid playerId, string name);
 
     [LoggerMessage(
+        EventId = 1107,
+        Level = LogLevel.Information,
+        Message = "refused join from client {ClientId}: the server is restarting onto a new release"
+    )]
+    public static partial void RejectedJoinDraining(ILogger logger, int clientId);
+
+    [LoggerMessage(
         EventId = 1104,
         Level = LogLevel.Warning,
         Message = "outbound queue pressure: {Dropped} lossy frame(s) dropped, {Parked} reliable frame(s) parked for retry"

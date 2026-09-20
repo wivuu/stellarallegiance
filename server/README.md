@@ -31,6 +31,9 @@ Sim/
   Simulation.cs         the 20 Hz authoritative step: input ingest, flight, shots, AOI snapshots
   Simulation.Pig.cs     PIG (AI) brains — decision tick decoupled from the sim step
   World.cs              world/sector layout, asteroid field, base placement
+
+Update/
+  ServerUpdateCoordinator.cs  auto-update state machine: no work while connected, drains, applies once empty (docs/adr/0005)
 ```
 
 ## Running
@@ -57,6 +60,20 @@ For a raw run outside Aspire (perf/benchmark measurements, or just this project)
   `--seed`. Seeds are server-side only — clients receive every static streamed per-entity.
 - **Public name** — `SIM_PUBLIC_NAME` is the name shown in the public-lobby server browser.
 - AOI tuning lives behind `SIM_*_RADIUS` / `SIM_*_EVERY` env knobs (distance-tiered LOD).
+- **Auto-update** (`server/Update/`, [`docs/adr/0005`](../docs/adr/0005-game-servers-self-update-via-velopack.md)) —
+  `SIM_AUTO_UPDATE` / `--auto-update` (`off`/`warn`/`on`; default `on` inside a container, else `warn`)
+  gates whether this server swaps itself onto a newer release (Velopack) once it has been empty for a
+  while; `on` needs a packaged Linux install and degrades to `warn` (logged once at boot) anywhere else.
+  `SIM_UPDATE_IDLE_SECONDS` (default `60`, min `10`) — empty time required before any update work starts.
+  `SIM_UPDATE_INTERVAL_SECONDS` (default `21600` = 6h, min `30`, `0` = off) — the safety-net feed check for
+  a server the public lobby can't reach, skipped whenever a lobby advert arrives. `SIM_UPDATE_PRERELEASE`
+  (default off) — also follow GitHub pre-releases (rehearsals). `SIM_UPDATE_FEED` (default unset) —
+  override the feed with a folder or URL. `SIM_UPDATE_RESTART` (default `exit` in a container or under
+  systemd, else `relaunch`) — how the new build starts once swapped in. `SIM_BUILD_VERSION` — this
+  server's version when run from source (`scripts/run-server.ps1` sets it from `git describe`).
+  `SIM_UPDATE_SIMULATE=<version>` — **dev only**: pretend that release is available, to exercise the
+  whole notice/drain/restart path without packaging anything. `GET /version` reports which release this
+  server is (`unknown` for an unstamped source build).
 
 ## Publishing: NativeAOT
 
@@ -76,6 +93,10 @@ warnings (`IL2026`, `IL3050`, …) are errors in this project, also in a plain `
   bundle. A new YAML-bound **class** = one `[YamlSerializable(typeof(X))]` line there; forgetting it is
   build error `YDNG001`. New properties on a registered class need nothing.
 - **Dependencies** — a third-party type that is reflected over goes in `TrimmerRoots.xml`, with the reason.
+- **Velopack** (`server/Update/`, auto-update) is AOT-clean: it adds no trim/AOT warnings beyond the two
+  `IL2104` the build already expects from elsewhere. `VelopackBootstrap` only calls into Velopack at all on
+  Linux with `$APPIMAGE` set (a packaged install); everywhere else — `dotnet run`, a plain publish folder,
+  the source-built Docker image — it is never touched.
 - `--gen-schemas` is reflection tooling: run it from source (`dotnet run --project server -- --gen-schemas`);
   the published binary refuses the flag. It is gated by the `SimServer.SchemaTooling.IsSupported`
   feature switch, which the csproj sets to `false` only inside the native link.
@@ -91,7 +112,10 @@ reflection-era output.
 
 ## Deploy
 
-`docker compose -f docker-compose.server.yml up`, or from the Aspire dashboard **Deploy to
-Railway** on the `server` resource (equivalently `aspire do deploy-server`) to push a game server
-to Railway already wired to the default public lobby. The Docker build mounts the **repo root**
-(not just `server/`) so the `shared/` ProjectReference resolves.
+`docker compose -f docker-compose.server.yml up` pulls the published, self-updating image
+(`ghcr.io/wivuu/stellarallegiance-sim`) — see "Auto-update" above and `docs/DEPLOY.md` → *Server
+auto-update* for the knobs, what persists, and disk footprint. Building from source instead — the Aspire
+dashboard's **Deploy to Railway** on the `server` resource (equivalently `aspire do deploy-server`) pushes
+a game server to Railway already wired to the default public lobby, and only ever **warns** about a newer
+release rather than applying one; that Docker build mounts the **repo root** (not just `server/`) so the
+`shared/` ProjectReference resolves.

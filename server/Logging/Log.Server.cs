@@ -13,6 +13,7 @@ namespace SimServer;
 //   Assets ........................... 1500–1599  (Log.Assets.cs)
 //   Content .......................... 1600–1699  (Log.Content.cs)
 //   Backend .......................... 1700–1799  (Log.Backend.cs)
+//   Auto-update ...................... 1800–1899  (Log.Update.cs)
 internal static partial class Log
 {
     [LoggerMessage(EventId = 1001, Level = LogLevel.Information, Message = "content: loaded '{Path}'{Suffix}")]

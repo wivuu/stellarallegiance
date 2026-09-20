@@ -1,0 +1,47 @@
+# Self-updating sim-server RELEASE image: a Velopack AppImage + the supervisor entrypoint that
+# unpacks and relaunches it (docker-entrypoint.sh), nothing else. COPY-only on purpose — no RUN, no
+# package manager, no compiler — so a multi-arch `buildx build --platform linux/amd64,linux/arm64`
+# needs no QEMU emulation: each platform's stage is just two file copies, which buildx can do
+# natively for the OTHER arch instead of emulating it. Contrast server/Dockerfile (the source build,
+# still used for `docker-compose.yml` local dev): that one compiles NativeAOT and genuinely needs
+# its own platform's toolchain, one real build per arch.
+#
+# Built from a STAGED context, not the repo root: scripts/package-server.ps1's -ImageContext copies
+# the packed AppImage(s) + docker-entrypoint.sh into <ctx>/{amd64,arm64}/... + <ctx>/... because the
+# repo's own .dockerignore excludes build/ (where `vpk pack` writes), so a repo-root context would
+# never see the AppImage at all. release.yml assembles that same shape from two CI artifacts before
+# building. Directory names under the context root are DOCKER's arch names (amd64/arm64), which is
+# also what $TARGETARCH resolves to on a multi-platform buildx build.
+FROM mcr.microsoft.com/dotnet/runtime-deps:10.0
+ARG TARGETARCH
+WORKDIR /opt/stellar
+# --chmod=0755: CI artifact round-trips (upload-artifact / download-artifact) do not preserve the
+# executable bit, so the AppImage and the entrypoint would otherwise land here mode 0644 and fail to
+# exec on first run.
+COPY --chmod=0755 ${TARGETARCH}/StellarAllegianceServer.AppImage ./StellarAllegianceServer.AppImage
+COPY --chmod=0755 docker-entrypoint.sh /usr/local/bin/stellar-entrypoint.sh
+
+# SIM_UPDATE_RESTART=exit is also forced by the entrypoint itself (belt and suspenders: this ENV is
+# what a `docker exec`'d shell or an image inspection sees, and it's the correct default even if the
+# entrypoint is ever swapped for a plain `ENTRYPOINT ["./SimServer"]` during debugging).
+#
+# SIM_AUTH_FILE points OUTSIDE /opt/stellar/run on purpose: that directory is the unpack target
+# (docker-entrypoint.sh) and gets wiped and rebuilt on every update, so anything that must survive
+# an update — here, the paired Game Server credential from public-lobby device-code auth — has to
+# live on a volume mounted elsewhere. /data is that volume's conventional mount point (see
+# docker-compose.server.yml's sim-server-auth volume).
+#
+# Other server config (SIM_SECRET, SIM_PUBLIC_NAME, SIM_AUTO_UPDATE, ...) is intentionally left
+# unset here, same as server/Dockerfile: it is per-deployment, not per-image, and is supplied by the
+# compose file / hosting platform's env at run time.
+ENV SIM_UPDATE_RESTART=exit \
+    SIM_AUTH_FILE=/data/lobby-auth.json
+
+# Binary game socket, same as server/Dockerfile — behind the hosting layer's TLS-terminating
+# ingress (wss:// -> here).
+EXPOSE 8090
+
+# Stays root (no USER switch): /data is written as root today (SIM_AUTH_FILE above), and an existing
+# deploy's volume already holds that file at 0600 owned by root — switching users here would make it
+# unreadable on the next update without a separate migration nobody has asked for.
+ENTRYPOINT ["/usr/local/bin/stellar-entrypoint.sh"]

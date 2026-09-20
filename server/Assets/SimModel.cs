@@ -28,14 +28,25 @@ public static class SimModelCache
     // orientation correction, CollisionConfig.BaseModelRotation); it is folded into the cache key so
     // changing the rotation self-heals a stale sidecar. A default (identity) pre keeps the key equal
     // to the bare GLB hash, so existing un-rotated ship/asteroid sidecars stay valid untouched.
-    public static SimModel Load(string glbPath, string cacheDir, Quat pre = default)
+    //
+    // `seedDir` is an optional READ-ONLY second place to look: the cache that shipped with the build.
+    // A hit there is returned as is (nothing is copied - it is already on disk, and stays valid exactly
+    // as long as the GLB hash matches).
+    public static SimModel Load(string glbPath, string cacheDir, Quat pre = default, string? seedDir = null)
     {
         byte[] glb = File.ReadAllBytes(glbPath);
         byte[] hash = KeyHash(glb, pre);
-        string cachePath = Path.Combine(cacheDir, Path.GetFileNameWithoutExtension(glbPath) + ".simmodel");
+        string fileName = Path.GetFileNameWithoutExtension(glbPath) + ".simmodel";
+        string cachePath = Path.Combine(cacheDir, fileName);
 
         if (TryRead(cachePath, hash, out SimModel? cached))
             return cached!;
+        if (
+            seedDir is not null
+            && !string.Equals(Path.GetFullPath(seedDir), Path.GetFullPath(cacheDir), StringComparison.Ordinal)
+            && TryRead(Path.Combine(seedDir, fileName), hash, out SimModel? seeded)
+        )
+            return seeded!;
 
         var glbModel = GlbReader.Read(glbPath, pre);
         var hull = ConvexHull.Build(glbModel.Vertices);
@@ -48,8 +59,12 @@ public static class SimModelCache
             Directory.CreateDirectory(cacheDir);
             Write(cachePath, hash, model);
         }
-        catch (IOException)
-        { /* read-only fs (e.g. container) — recompute next run, no crash */
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Read-only fs or a directory this user may not write (a container, a mounted AppImage):
+            // recompute next run, no crash. UnauthorizedAccessException is NOT an IOException - letting
+            // it escape used to reach SimAssets.TryLoad's catch-all, which returns null, and the sim
+            // then SILENTLY fell back to sphere collision for that model.
         }
         return model;
     }

@@ -349,6 +349,14 @@ public partial class UiShowcase : Control
         var alert = new AlertBox();
         alert.Configure("GARRISON UNDER ATTACK", "Brimstone · hull 41% · 3 hostiles", StatusPill.Kind.Danger);
         feedback.AddChild(alert);
+        // The Warn tone, as the Game Lobby's server-notice strip uses it (Lobby.BuildNoticeStrip).
+        var notice = new AlertBox();
+        notice.Configure(
+            "⚠ SERVER UPDATE PENDING · v0.0.14",
+            "This server restarts to update once everyone has left. Rejoin from the server browser afterwards.",
+            StatusPill.Kind.Warn
+        );
+        feedback.AddChild(notice);
         feedback.AddChild(
             UiKit.MakeButton(
                 "TRIGGER TOAST",

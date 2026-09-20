@@ -165,6 +165,7 @@ static class JoinTokenVerifierTests
         return failures;
     }
 
+    // The minting itself lives in tests/TestKit (ServerUpdateTest needs the same tokens).
     static string Mint(
         ECDsa key,
         string kid,
@@ -174,51 +175,9 @@ static class JoinTokenVerifierTests
         DateTimeOffset iat,
         TimeSpan life,
         string issuer = Issuer
-    )
-    {
-        var handler = new JsonWebTokenHandler { SetDefaultTimesOnTokenCreation = false };
-        return handler.CreateToken(
-            new SecurityTokenDescriptor
-            {
-                Issuer = issuer,
-                Audience = aud,
-                IssuedAt = iat.UtcDateTime,
-                NotBefore = iat.UtcDateTime,
-                Expires = (iat + life).UtcDateTime,
-                Subject = new ClaimsIdentity([
-                    new Claim("sub", player.ToString()),
-                    new Claim("name", name),
-                    new Claim("jti", Guid.NewGuid().ToString("N")),
-                ]),
-                SigningCredentials = new SigningCredentials(
-                    new ECDsaSecurityKey(key) { KeyId = kid },
-                    SecurityAlgorithms.EcdsaSha256
-                )
-                {
-                    CryptoProviderFactory = new CryptoProviderFactory { CacheSignatureProviders = false },
-                },
-            }
-        );
-    }
+    ) => TestKit.JoinTokenKit.Mint(key, kid, player, name, aud, iat, life, issuer);
 
-    static string Jwks(params (string Kid, ECDsa Key)[] keys)
-    {
-        var list = keys.Select(k =>
-        {
-            var p = k.Key.ExportParameters(false);
-            return new
-            {
-                kty = "EC",
-                crv = "P-256",
-                x = Base64Url.EncodeToString(p.Q.X!),
-                y = Base64Url.EncodeToString(p.Q.Y!),
-                kid = k.Kid,
-                use = "sig",
-                alg = "ES256",
-            };
-        });
-        return JsonSerializer.Serialize(new { keys = list.ToArray() });
-    }
+    static string Jwks(params (string Kid, ECDsa Key)[] keys) => TestKit.JoinTokenKit.Jwks(keys);
 
     sealed class FakeClock(DateTimeOffset now) : TimeProvider
     {

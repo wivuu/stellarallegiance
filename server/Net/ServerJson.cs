@@ -33,6 +33,7 @@ namespace SimServer.Net;
 [JsonSerializable(typeof(WebRtcAnswerDto))]
 [JsonSerializable(typeof(LobbyCredential))]
 [JsonSerializable(typeof(LobbyMatchReporter.SpoolItem))]
+[JsonSerializable(typeof(SimServer.Update.UpdateAttempt))]
 public sealed partial class LobbyHttpJson : JsonSerializerContext;
 
 [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
@@ -90,4 +91,8 @@ public sealed record WsPingMsg([property: JsonPropertyName("type")] string Type)
 
 public sealed record WsReplyDto(string? Type, string? Message);
 
-public sealed record WsOfferMsg(string? Type, string? Ticket, string? SdpOffer);
+// EVERY frame the lobby pushes down the WS binds to this one shape (the receive loop switches on Type):
+//   "offer"    Ticket + SdpOffer - a WebRTC join relayed through the lobby;
+//   "release"  Version - a Release Advert: the latest released game version, sent on every (re)connect
+//              and whenever it rises (public-lobby/ReleaseAdverts). Absent on a lobby that predates it.
+public sealed record WsOfferMsg(string? Type, string? Ticket, string? SdpOffer, string? Version = null);

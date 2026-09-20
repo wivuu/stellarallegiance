@@ -28,6 +28,7 @@ public sealed record RailwayTarget(
             new("STUN_URL", false, "STUN_URL"),
             new("LOBBY_ADMINS", false, "LOBBY_ADMINS"),
             new("RANKED_RESULTS", false, "RANKED_RESULTS (flagged | authenticated)"),
+            new(ReleaseVersionKey, false, "LOBBY_RELEASE_VERSION (blank = the latest stable git tag of this checkout)"),
             new("ALLOW_UNVERIFIED_SERVERS", false, "ALLOW_UNVERIFIED_SERVERS (true | false)"),
             new("AUTH_GITHUB_CLIENT_ID", false, "AUTH_GITHUB_CLIENT_ID"),
             new("AUTH_GITHUB_CLIENT_SECRET", true, "AUTH_GITHUB_CLIENT_SECRET"),
@@ -36,6 +37,13 @@ public sealed record RailwayTarget(
             new("AUTH_STEAM_API_KEY", true, "AUTH_STEAM_API_KEY"),
         ]
     );
+
+    // The lobby's baked-in "latest game release" (public-lobby/ReleaseAdverts/ReleaseState.cs): what it tells
+    // every game server the moment it is back up - and a redeploy is when they all reconnect.
+    public const string ReleaseVersionKey = "LOBBY_RELEASE_VERSION";
+
+    // Which release a source-built Railway game server is (see DeployAsync).
+    public const string ServerBuildVersionKey = "SIM_BUILD_VERSION";
 
     public static readonly RailwayTarget Server = new(
         RailwayTargetKind.Server,
@@ -92,6 +100,29 @@ public static class RailwayDeployer
             if (!string.IsNullOrWhiteSpace(v))
                 vars[k] = v.Trim();
         var secretKeys = target.Vars.Where(v => v.Secret).Select(v => v.Key).ToHashSet(StringComparer.Ordinal);
+
+        // A lobby deploy usually ships WITH a release, so stamp it with the release this checkout is: the
+        // latest stable tag reachable from HEAD. An explicit value from the dialog / .env wins; no git or
+        // no tag leaves whatever Railway already holds untouched.
+        if (target.Kind == RailwayTargetKind.Lobby && !vars.ContainsKey(RailwayTarget.ReleaseVersionKey))
+        {
+            if (await LatestStableTagAsync(repoRoot, log, ct) is { } tagged)
+                vars[RailwayTarget.ReleaseVersionKey] = tagged;
+            else
+                log.LogWarning(
+                    "No stable git tag found for this checkout: {Key} stays as it is on Railway.",
+                    RailwayTarget.ReleaseVersionKey
+                );
+        }
+
+        // A Railway game server is built FROM SOURCE there (server/Dockerfile): not a packaged install,
+        // so it can never update itself - and with no version stamp it could not even tell that it is
+        // behind (server/Update/ServerBuildInfo.cs). Tell it which release this checkout is, the same way
+        // scripts/run-server.ps1 does, so the lobby's Release Adverts at least produce an accurate
+        // "a newer release is out - redeploy" warning in its log.
+        if (target.Kind == RailwayTargetKind.Server && !vars.ContainsKey(RailwayTarget.ServerBuildVersionKey))
+            if (await LatestStableTagAsync(repoRoot, log, ct) is { } serverTag)
+                vars[RailwayTarget.ServerBuildVersionKey] = serverTag;
 
         if (request.DryRun)
         {
@@ -171,6 +202,29 @@ public static class RailwayDeployer
     }
 
     // `railway list --json` shape varies by CLI version; walk the whole document for {name == project, id}.
+    // `--exclude "*-*"` skips pre-release tags (v0.0.14-ci.2): advertising a rehearsal build as the latest
+    // release would have every stable game server ask its feed for a version it will never be offered.
+    static async Task<string?> LatestStableTagAsync(string repoRoot, ILogger log, CancellationToken ct)
+    {
+        try
+        {
+            var result = await ProcessRunner.RunAsync(
+                new ProcessSpec("git", ["describe", "--tags", "--abbrev=0", "--exclude", "*-*"], repoRoot),
+                log,
+                ct
+            );
+            var tag = result.ExitCode == 0 ? result.OutputTail.LastOrDefault()?.Trim() : null;
+            if (string.IsNullOrEmpty(tag))
+                return null;
+            var version = tag.TrimStart('v', 'V');
+            return System.Text.RegularExpressions.Regex.IsMatch(version, @"^\d+\.\d+(\.\d+)?$") ? version : null;
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            return null; // git is not installed / not a checkout
+        }
+    }
+
     static async Task<string?> FindProjectIdAsync(string project, ILogger log, string repoRoot, CancellationToken ct)
     {
         var psi = new System.Diagnostics.ProcessStartInfo("railway")

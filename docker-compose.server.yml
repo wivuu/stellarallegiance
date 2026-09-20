@@ -2,7 +2,7 @@
 # lobby (no local lobby container). Use this to host a community game server that shows up in the
 # shared server browser.
 #
-#   docker compose -f docker-compose.server.yml up --build
+#   docker compose -f docker-compose.server.yml up
 #
 # Discovery is DIRECT-FIRST: the hosted lobby probes your server's public address and, if reachable,
 # advertises a direct host:port so clients connect straight to you over WebSocket (no traffic through
@@ -24,13 +24,21 @@
 #
 # First run:
 #   cp .env.example .env && edit .env   (set SIM_PUBLIC_NAME; set SIM_PUBLIC_ENDPOINT if NAT'd)
-#   docker compose -f docker-compose.server.yml up --build
+#   docker compose -f docker-compose.server.yml up
 #   # watch the logs for the device-code banner and approve it at the printed URL
 services:
   sim-server:
-    build:
-      context: .                     # repo root, so ../shared resolves (see server/Dockerfile)
-      dockerfile: server/Dockerfile
+    # The published release image (server/Dockerfile.release): a small supervisor entrypoint plus a
+    # Velopack AppImage that SELF-UPDATES — see SIM_AUTO_UPDATE below. Pin an exact tag instead of
+    # :latest for a reproducible deploy (auto-update still moves you forward regardless of the tag
+    # you pulled, unless SIM_AUTO_UPDATE is warn/off).
+    image: ghcr.io/wivuu/stellarallegiance-sim:latest
+    # Alternative: build from source instead of pulling the image (server/Dockerfile — the same
+    # NativeAOT build CI runs). A source build never applies its own binary in place, so
+    # SIM_AUTO_UPDATE below only ever logs (Warn), regardless of its setting.
+    # build:
+    #   context: .                     # repo root, so ../shared resolves (see server/Dockerfile)
+    #   dockerfile: server/Dockerfile
     environment:
       # Optional shared-secret password. Leave empty for an open server (LAN/dev); set it to
       # require every client's Hello to carry the same secret.
@@ -50,11 +58,25 @@ services:
       # Persisted Game Server credential (device-code auth) — kept on the volume below so a
       # rebuild/restart re-lists silently instead of asking you to approve a new code.
       SIM_AUTH_FILE: /data/lobby-auth.json
+      # off|warn|on. on (the image's own default) = swap in a downloaded update once no player is
+      # connected and relaunch; warn = only log that an update is available; off = never check. A
+      # PINNED image tag above still self-updates unless you set this to warn/off — auto-update
+      # replaces the running AppImage, not the tag docker-compose pulled it from.
+      SIM_AUTO_UPDATE: ${SIM_AUTO_UPDATE:-}
     volumes:
       - sim-server-auth:/data
+      # Optional: persist Velopack's own download cache across `docker compose up`/container
+      # recreation, so a later update fetches a small DELTA instead of a full package again. Safe to
+      # omit — without it, only in-place updates within one container's lifetime stay deltas.
+      # - velopack-cache:/var/tmp/velopack
     ports:
       - "${SIM_PORT:-8090}:8090"
+    # The entrypoint's own graceful shutdown (docker-entrypoint.sh forwarding SIGTERM, the host
+    # draining players) budgets up to ~30s; Docker's default stop_grace_period is only 10s and would
+    # SIGKILL mid-drain.
+    stop_grace_period: 45s
     restart: unless-stopped
 
 volumes:
   sim-server-auth:
+  # velopack-cache:

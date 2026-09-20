@@ -464,11 +464,24 @@ public partial struct MapListMessage
     public MapCatalogRecord[] Maps;
 }
 
-// Join refused (sent right before the transport closes). 1 = bad secret, 2 = join token required/invalid.
+// Join refused (sent right before the transport closes). The Code is what survives a WebRTC
+// DataChannel close (which carries no reason); a WebSocket close ALSO carries the reason text, and the
+// client prefers that text when it has it - so the strings below are part of the contract too. Both
+// peers take them from here: they used to be typed out separately and had drifted ("join token
+// required" on the server, "join token rejected" on the client), which hid the sign-in prompt.
 [WireMessage(21)]
 public partial struct RejectMessage
 {
     public byte Code;
+
+    public const byte CodeBadSecret = 1; // the shared-secret password was wrong / missing
+    public const byte CodeJoinToken = 2; // a Verified listing wanted a lobby join token: none, or a bad one
+    public const byte CodeUpdating = 3; // the server is restarting onto a new release (seconds) - retry
+
+    public const string ReasonBadSecret = "bad secret";
+    public const string ReasonJoinTokenRequired = "join token required";
+    public const string ReasonJoinTokenRejected = "join token rejected";
+    public const string ReasonUpdating = "server updating";
 }
 
 [WireMessage(22)]
@@ -564,4 +577,22 @@ public partial struct TurretsMessage
 {
     public uint Tick;
     public TurretRecord[] Turrets;
+}
+
+// A standing notice from the server itself (v43), as opposed to a chat line that scrolls away. Sent
+// reliably to everyone when it changes and to every joiner after the lobby state, and it SURVIVES the
+// mid-session re-Welcomes (match start, fog team change): the client clears it only on a new connection.
+// Today there is one: the server has a newer release staged and will restart onto it as soon as it has
+// been empty for a while (server/Update) - the Game Lobby shows that as a banner, so the players who
+// are keeping the server alive know why they might want to move on. Kind 0 withdraws it.
+[WireMessage(34)]
+public partial struct ServerNoticeMessage
+{
+    public byte Kind;
+
+    [Wire(WireEnc.StrU8)]
+    public string Version; // KindUpdatePending: the release it will restart onto; otherwise ""
+
+    public const byte KindNone = 0;
+    public const byte KindUpdatePending = 1;
 }

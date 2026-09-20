@@ -24,6 +24,7 @@ static partial class Suite
             await RunProfileTestsAsync();
             await RunJoinTokenTestsAsync();
             await RunListingTestsAsync();
+            await RunReleaseTestsAsync();
             await RunMatchTestsAsync();
             await RunAdminTestsAsync();
             await RunAdminModerationTestsAsync();

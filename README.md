@@ -195,13 +195,19 @@ docker compose up --build   # sim-server (ws://localhost:8090/game) + public-lob
 
 ### Host a game server from the prebuilt image
 
-Released images are published to GHCR — no checkout or build needed:
+Released images are published to GHCR — no checkout or build needed. The image keeps itself updated to
+the latest release once it has no players connected; set `SIM_AUTO_UPDATE=warn` (log only) or `off` to
+turn that down (see [docs/DEPLOY.md](docs/DEPLOY.md) → *Server auto-update*).
 
 ```bash
-docker run --rm -p 8090:8090 \
+docker run -p 8090:8090 \
   -e SIM_PUBLIC_NAME="My Server" \
+  -v sa-server-data:/data \
   ghcr.io/wivuu/stellarallegiance-sim:latest
 ```
+
+An update relaunches inside this same container, so no `--rm` — the volume keeps the paired lobby
+credential in `/data` across a manual restart.
 
 ## Deployment
 

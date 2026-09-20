@@ -363,6 +363,7 @@ public partial class ConnectLinkModal : Control
             string sig =
                 _cm.AuthRejected ? "auth"
                 : _cm.JoinTokenRejected ? "token"
+                : _cm.ServerUpdating ? "updating"
                 : "drop:" + _cm.FailReason;
             if (sig != _failSig)
             {
@@ -386,6 +387,18 @@ public partial class ConnectLinkModal : Control
                         "⚠ JOIN TOKEN REJECTED",
                         "This Verified server requires a fresh lobby join token. Retry to request one — if it keeps failing, sign in again or pick another server.",
                         StatusPill.Kind.Danger
+                    );
+                }
+                else if (_cm.ServerUpdating)
+                {
+                    // Not a fault: the server was empty, swapped a new release in and is restarting. A
+                    // Warn, not a Danger - and if the release changed the protocol, the server browser's
+                    // update row is what gets the pilot back in.
+                    _retry.Text = "◆ RETRY LINK";
+                    _error.Configure(
+                        "⚠ SERVER UPDATING",
+                        "This server is restarting onto a new release. It is back within a minute — retry, and update your game if the server browser offers it.",
+                        StatusPill.Kind.Warn
                     );
                 }
                 else

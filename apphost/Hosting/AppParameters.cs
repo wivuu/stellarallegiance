@@ -25,6 +25,9 @@ public sealed class AppParameters
     public required IResourceBuilder<ParameterResource> LobbyAdmins { get; init; }
     public required IResourceBuilder<ParameterResource> StunUrl { get; init; }
     public required IResourceBuilder<ParameterResource> RankedResults { get; init; }
+    public required IResourceBuilder<ParameterResource> LobbyReleaseVersion { get; init; }
+    public required IResourceBuilder<ParameterResource> LobbyReleaseFeedUrl { get; init; }
+    public required IResourceBuilder<ParameterResource> LobbyReleasePollSeconds { get; init; }
     public required IResourceBuilder<ParameterResource> AuthGithubClientId { get; init; }
     public required IResourceBuilder<ParameterResource> AuthGithubClientSecret { get; init; }
     public required IResourceBuilder<ParameterResource> AuthGoogleClientId { get; init; }
@@ -144,6 +147,25 @@ public sealed class AppParameters
                 "ranked-results",
                 "flagged",
                 "flagged (only admin-flagged servers count) or authenticated (every Verified server counts)."
+            ),
+            LobbyReleaseVersion = Param(
+                b,
+                "lobby-release-version",
+                "",
+                "Baked-in latest game release the lobby advertises to game servers (Release Advert). Locally: set it to "
+                    + "exercise the advert path. On deploy: empty = the latest stable git tag of this checkout."
+            ),
+            LobbyReleaseFeedUrl = Param(
+                b,
+                "lobby-release-feed-url",
+                "",
+                "Release feed the LOCAL lobby polls: URL or file path; empty = the project's GitHub server feed. Never pushed on deploy."
+            ),
+            LobbyReleasePollSeconds = Param(
+                b,
+                "lobby-release-poll-seconds",
+                "",
+                "LOCAL lobby release poll cadence in seconds (min 5, 0 = off); empty = 300. Never pushed on deploy."
             ),
             AuthGithubClientId = Param(
                 b,

@@ -10,5 +10,6 @@
     <!-- Lobby lives at the server's connection layer; no content bundle needed. -->
     <ProjectReference Include="../../shared/Shared.csproj" />
     <ProjectReference Include="../../server/SimServer.csproj" />
+    <ProjectReference Include="../TestKit/TestKit.csproj" />
   </ItemGroup>
 </Project>

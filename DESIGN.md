@@ -103,6 +103,9 @@ subclasses** for anything needing custom `_Draw` or per-frame state.
   `Input.MouseMode`), and a full-screen POST-MATCH result screen with sortable columns, team-filter
   cards, the team-summary comparison bars and the Top Gun `AlertBox`. `--ui-open=scoreboard-live` /
   `--ui-open=scoreboard-post` raises a mode for a `--ui-shot` capture of the live game UI.
+- **Game Lobby server-notice strip** — a standing `AlertBox` (Warn tone) in a chrome `BarPanel`, inserted
+  between the status bar and the body (`Lobby.BuildNoticeStrip`), hidden unless the server has a pending
+  auto-update notice to show. No new component — existing parts only.
 - **Backgrounds** — `NebulaBackground` (animated warm/blue gas-cloud fill from the `Nebula.dc.html`
   spec; a single `canvas_item` shader — drifting screen-blended clouds, Void vignette, star-dot
   grid, scanlines; `Intensity` 0..1). Use it behind full-screen menu overlays whose backdrop is

@@ -92,6 +92,12 @@ The public-lobby policy that says whose results move the global ladder: ranked g
 or every verified one.
 _Avoid_: mode, security level, ranked mode
 
+**Release Advert**:
+A statement from the public lobby that a newer game release exists, pushed to a connected game server
+on its control connection and to a player's server list. It names only a version; the game server
+decides for itself, against its own update feed, whether there is really something newer to install.
+_Avoid_: update notification, version push
+
 ## Matches
 
 **Result**:

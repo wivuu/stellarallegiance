@@ -735,6 +735,26 @@ public partial class ServerLobbyOverlay : Control
                         return _serverMap.Remove(sid.GetString() ?? "");
                     break;
                 }
+                case "release":
+                {
+                    // A Release Advert: the lobby (the one watcher of the release feed) says which game
+                    // release is the latest - after the snapshot on every (re)connect, and again the
+                    // moment a newer one lands. It arrives WHATEVER protocol we filter on, which matters
+                    // most for a stale client: an empty list, and now the reason for it. Newer than this
+                    // build = the same update row the startup check feeds (UPDATE NOW under the launcher,
+                    // which checks its feed afresh on exit code 85; a download link otherwise).
+                    using var doc = JsonDocument.Parse(data);
+                    if (
+                        doc.RootElement.TryGetProperty("version", out var v)
+                        && UpdateChecker.FromAdvertised(v.GetString()) is { } advertised
+                        && (_update is null || ReleaseVersion.IsNewer(_update.Version, advertised.Version))
+                    )
+                    {
+                        _update = advertised;
+                        ShowUpdateBanner(); // already on the main thread (DrainSseQueue)
+                    }
+                    break;
+                }
             }
         }
         catch

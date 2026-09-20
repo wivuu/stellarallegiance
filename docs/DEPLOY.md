@@ -50,6 +50,47 @@ reach a NAT'd server (it can always join direct servers). Only `public-lobby`'s 
 to be open; put TLS in front of it and set `PUBLIC_LOBBY=https://lobby.example.com`. Full hosting
 guide: **[public-lobby/README.md](../public-lobby/README.md)**.
 
+## Server auto-update
+
+The published image (`ghcr.io/wivuu/stellarallegiance-sim`) is a Velopack-packaged AppImage plus a small
+supervisor entrypoint, and it **updates itself once it has no players connected** — see
+[`docs/adr/0005`](adr/0005-game-servers-self-update-via-velopack.md) and `server/README.md` for the
+mechanism. `docker-compose.server.yml` is wired to that image (`image:`, not `build:`); the
+`docker compose up --build` above still builds `server/Dockerfile` **from source**, which is not a
+packaged install and so can only ever **warn**, never apply.
+
+| Var | Default | Meaning |
+|---|---|---|
+| `SIM_AUTO_UPDATE` | `on` in a container, else `warn` | `off` ignores releases · `warn` logs when a newer one exists · `on` restarts onto it once empty |
+| `SIM_UPDATE_IDLE_SECONDS` | `60` (min `10`) | continuous zero-connection time required before any update work starts |
+| `SIM_UPDATE_INTERVAL_SECONDS` | `21600` (6 h; min `30`, `0` = off) | safety-net feed check for a server the public lobby can't reach; skipped whenever a lobby advert arrives |
+| `SIM_UPDATE_PRERELEASE` | off | also follow GitHub pre-releases — rehearsals only |
+| `SIM_UPDATE_FEED` | unset | override the feed: a folder or URL |
+| `SIM_UPDATE_RESTART` | `exit` in a container or under systemd, else `relaunch` | after a swap: exit `85` for a supervisor to relaunch (the image's own entrypoint), or have Velopack relaunch directly |
+
+**What persists.** The lobby credential (`SIM_AUTH_FILE`, default `/data/lobby-auth.json` in the release
+image) and the update-attempt marker live beside each other on the `sim-server-auth` volume
+(`docker-compose.server.yml`) — that's the one thing that must survive a container recreation. Velopack's
+own download cache does not, by default: mount `/var/tmp/velopack` as a second volume (commented out in
+the compose file) so a later update fetches a small **delta** instead of a full package again after the
+container itself was recreated, not merely restarted.
+
+**Pinned tags still self-update.** `docker-compose.server.yml`'s `image:` recommends an exact tag for a
+reproducible deploy, but auto-update replaces the running AppImage inside the container, not the tag it
+was pulled from — only `SIM_AUTO_UPDATE=warn` (or `off`) actually stops it.
+
+**Read-only root filesystems.** The updater has to write the new AppImage into its own directory
+(`/opt/stellar`) and Velopack stages/logs through `/tmp`; on a read-only root the writability probe fails
+and `on` quietly degrades to `warn` (logged once at boot) — nothing crashes. To let it actually apply
+instead, either set `SIM_AUTO_UPDATE=warn` explicitly and update by hand, or mount `/opt/stellar`, `/tmp`
+and `/var/tmp` as tmpfs (or volumes) rather than making the whole root writable, and accept that every
+update re-downloads without a persistent `/var/tmp/velopack` cache.
+
+**Disk footprint.** The server payload is small (~29 MB binary + ~185 MB of GLB assets), but a fresh
+container's first update is still a full ~200 MB download — there's nothing cached yet to diff against.
+Runtime disk settles around ~850 MB after that first update: the image itself, the extracted run
+directory, the new AppImage, and one cached package.
+
 ## Railway (two separate projects)
 
 Deploy the lobby and a game server as **two separate Railway projects from this same repo** — they
@@ -61,6 +102,13 @@ Both Dockerfiles build from the **repo root** (`server/Dockerfile` needs it for 
 project reference; `public-lobby/Dockerfile` matches for uniformity). `railway up` tars the git
 root and won't read a subdirectory config, so each service just sets `RAILWAY_DOCKERFILE_PATH` to
 point at its Dockerfile — no Root Directory setting needed.
+
+A Railway game-server deploy builds `server/Dockerfile` **from source**, not the packaged
+`server/Dockerfile.release` image — so, same as the local source build above, its `SIM_AUTO_UPDATE` can
+only ever **warn**; there is nothing there for it to swap in place. A source build carries no version of
+its own, so `aspire do deploy-server` stamps `SIM_BUILD_VERSION` from the latest stable git tag of the
+checkout it uploads: that is what lets the server tell, when the public lobby advertises a newer release,
+that it is behind (`update-state Warn …` in its log). Redeploy by hand to actually move it onto that release.
 
 Deploy from the Aspire dashboard's **Deploy to Railway** button on the `lobby` or `server`
 resource (prompts for the project, environment, and which variables to push; blank leaves a
@@ -149,8 +197,61 @@ built-in match-routing layer is future work — the `IMatchmaker`/`IPlayerDirect
 
 ## systemd (non-container) option
 
+Two ways to run the server as a systemd unit. Prefer the **AppImage** — it self-updates; a source publish
+only ever warns.
+
+### AppImage (self-updating)
+
+Download the packaged server directly from the latest release — no SDK, no publish step:
+
+```bash
+mkdir -p /opt/stellarallegiance
+curl -L -o /opt/stellarallegiance/StellarAllegianceServer-server-linux-x64.AppImage \
+  https://github.com/wivuu/stellarallegiance/releases/latest/download/StellarAllegianceServer-server-linux-x64.AppImage
+chmod +x /opt/stellarallegiance/StellarAllegianceServer-server-linux-x64.AppImage
+```
+
+```ini
+# /etc/systemd/system/sim-server.service
+[Unit]
+Description=stellarallegiance sim server
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/stellarallegiance
+ExecStart=/opt/stellarallegiance/StellarAllegianceServer-server-linux-x64.AppImage --port 8090
+Environment=SIM_SECRET=change-me
+Environment=SIM_AUTO_UPDATE=on
+Restart=always
+RestartForceExitStatus=85
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+systemctl daemon-reload && systemctl enable --now sim-server
+```
+
+An AppImage mounts itself through FUSE, so the host needs `libfuse2` (`apt install libfuse2`; not installed
+by default on recent Ubuntu/Debian). This unit is a starting point: the automated end-to-end test covers
+the container image, not a bare systemd host.
+
+systemd sets `INVOCATION_ID` for every unit it starts; the server detects that on its own
+(`AutoUpdateOptions.DetectServiceManager`) and defaults `SIM_UPDATE_RESTART` to `exit` — an update still
+swaps the AppImage in place and exits `85`, and `RestartForceExitStatus=85` is what tells systemd that
+exit code means "restart me" rather than "stay down". `KillMode=mixed` sends `SIGTERM` straight to the
+server (a clean shutdown, same as `docker stop`) while still `SIGKILL`ing anything left behind after
+`TimeoutStopSec`. State — the paired lobby credential and the update-attempt marker — lives in
+`stellar-server-data/`, created beside the AppImage the first time it runs; nothing else needs a backup.
+
+### Building from source
+
 The publish is a NativeAOT binary (no .NET runtime on the host); building it needs `clang` and
-`zlib1g-dev`. Use your host's RID (`linux-x64`, `linux-arm64`).
+`zlib1g-dev`. Use your host's RID (`linux-x64`, `linux-arm64`). This is not a packaged (Velopack) install,
+so `SIM_AUTO_UPDATE` only ever **warns** here — re-run the publish and restart the unit by hand for a new
+release, or switch to the AppImage variant above.
 
 ```bash
 dotnet publish server/SimServer.csproj -c Release -r linux-x64 -o /opt/stellarallegiance/sim

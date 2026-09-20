@@ -7,6 +7,7 @@ using SimServer.Backend;
 using SimServer.Content;
 using SimServer.Net;
 using SimServer.Sim;
+using SimServer.Update;
 using StellarAllegiance.Shared;
 
 // Maintenance flag: build + cache the convex-hull/hardpoint SimModel for the base and EVERY
@@ -175,11 +176,41 @@ ulong seed = pinnedSeed ?? RandomSeed();
 // sim objects. Building the host does NOT start Kestrel — only app.Run() (bottom) does — so this is
 // safe to do up front. Runtime diagnostics now go through ILogger; the one-shot CLI subcommands
 // above and the FATAL boot-abort messages below stay on Console (command results, not logging).
-var builder = WebApplication.CreateBuilder(args);
+// Content root = the binary's directory, NOT the working directory: appsettings.json (log format +
+// levels) ships beside the binary, and a packaged server is started from wherever its supervisor
+// happens to be (the release image's entrypoint, systemd, an AppImage's AppRun never `cd`).
+var builder = WebApplication.CreateBuilder(
+    new WebApplicationOptions { Args = args, ContentRootPath = AppContext.BaseDirectory }
+);
 builder.WebHost.ConfigureKestrel(k => k.ListenAnyIP(port));
 var app = builder.Build();
 var loggerFactory = app.Services.GetRequiredService<ILoggerFactory>();
 var log = loggerFactory.CreateLogger("SimServer");
+
+// ---- Auto-update (server/Update, docs/adr/0005) ----
+// Is this a PACKAGED install (Velopack: on Linux, one AppImage)? Decided before anything else so the
+// boot line below can say which release this is. A source build / plain publish is simply "no".
+var updateLog = loggerFactory.CreateLogger("SimServer.Update");
+var updateOptions = AutoUpdateOptions.Resolve(
+    args,
+    Environment.GetEnvironmentVariable,
+    AutoUpdateOptions.DetectContainer(Environment.GetEnvironmentVariable, File.Exists),
+    AutoUpdateOptions.DetectServiceManager(Environment.GetEnvironmentVariable),
+    out var updateConfigProblems
+);
+foreach (var problem in updateConfigProblems)
+    Log.UpdateConfigProblem(updateLog, problem);
+var packagedInstall = VelopackBootstrap.TryStart(updateLog);
+IServerUpdateBackend updateBackend =
+    updateOptions.SimulatedVersion is { } simulatedRelease && packagedInstall is null
+        ? new SimulatedUpdateBackend(simulatedRelease)
+    : packagedInstall is not null ? new VelopackUpdateBackend(packagedInstall, updateOptions, updateLog)
+    : new NullUpdateBackend("not a packaged install: a source build or a plain publish folder");
+string? serverVersion = ServerBuildInfo.Resolve(
+    (updateBackend as VelopackUpdateBackend)?.CurrentVersion,
+    ServerBuildInfo.AssemblyVersion(),
+    Environment.GetEnvironmentVariable("SIM_BUILD_VERSION")
+);
 
 // The static asset/content helpers have no instance to inject into — hand them the boot logger now,
 // before ContentLoader.Load (which merges GLB hardpoints and loads sim models) runs below.
@@ -365,6 +396,10 @@ app.UseWebSockets();
 // are directly joinable (a reachable port -> advertise direct WebSocket; else clients use WebRTC).
 // Also doubles as a container/systemd healthcheck. Not part of the game protocol.
 app.MapGet("/health", () => Results.Text("wivuu-sim"));
+
+// Which release this server is, as plain text ("unknown" for an unstamped source build). Its own
+// route on purpose: /health must stay the fixed token the lobby's reachability probe matches.
+app.MapGet("/version", () => Results.Text(serverVersion ?? "unknown"));
 app.Map(
     "/game",
     async context =>
@@ -464,6 +499,38 @@ if (registrar is not null)
     results = matchReporter;
 }
 simThread.Start();
+
+// ---- Auto-update: the coordinator decides WHEN, the hub closes the door, the backend swaps ----
+// The restart itself is the ordinary graceful shutdown (the lobby listing drops, the report spool
+// drains) with one difference: the exit code says "the new build is in place, start me again".
+void RestartForUpdate(int exitCode)
+{
+    Environment.ExitCode = exitCode;
+    app.Lifetime.StopApplication();
+}
+var updateCoordinator = new ServerUpdateCoordinator(
+    updateOptions,
+    updateBackend,
+    hub,
+    // Nothing is installed under SIM_UPDATE_SIMULATE, so nothing is remembered across runs either.
+    updateBackend is SimulatedUpdateBackend
+        ? new InMemoryUpdateAttemptStore()
+        : new UpdateAttemptStore(UpdateAttemptStore.ResolveDefaultPath()),
+    // A dev build does not know its version (so it never compares, never warns) - except under
+    // SIM_UPDATE_SIMULATE, whose whole point is to be "behind" the pretend release.
+    serverVersion ?? (updateBackend is SimulatedUpdateBackend ? ServerBuildInfo.DevSentinel : null),
+    TimeProvider.System,
+    updateLog,
+    RestartForUpdate,
+    args
+);
+
+// The public lobby is the one watcher of the release feed: it tells this server which release is the
+// latest on every (re)connect and whenever that rises. An unlisted server has no such link and falls
+// back to the coordinator's slow safety-net tick.
+if (registrar is not null)
+    registrar.OnReleaseAdvertised = updateCoordinator.OnLobbyAdvert;
+app.Lifetime.ApplicationStarted.Register(() => _ = Task.Run(() => updateCoordinator.RunAsync(cts.Token)));
 
 Log.ServerListening(log, port, seed, world.Asteroids.Count);
 app.Run();

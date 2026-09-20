@@ -2,12 +2,15 @@
 
 A release is a git tag. Pushing `vX.Y.Z` runs `.github/workflows/release.yml`, which publishes — per
 desktop OS — a **Velopack package** (Game Launcher + Godot client): an installer, a self-updating
-portable zip, and the update feed installed clients read. Installed copies then update **themselves**.
-The sim-server image goes to GHCR in the same run.
+portable zip, and the update feed installed clients read. It packages the game **server** the same way,
+per Linux arch, as a single self-updating `.AppImage`; the GHCR image is *assembled* from that AppImage
+rather than built from source. Installed clients and listed game servers then update **themselves** — see
+"How game servers update" below for the server's half (`docs/adr/0005`).
 
 ```
-prepare ──► package (linux | macos | windows) ──┐
-        └─► server-image ───────────────────────┴─► publish
+prepare ──┬─► package (linux | macos | windows) ─────────────────┐
+          └─► package-server (x64 | arm64) ──┬────────────────────┼─► publish
+                                              └─► server-image ───┘
 ```
 
 ## Cutting a release
@@ -35,9 +38,12 @@ its output folder, and clients never "update" to the same version.
 | `StellarAllegiance-win-Portable.zip` | Windows without installing |
 | `*-full.nupkg`, `*-delta.nupkg` | What updates download. Deltas are tiny (0.0.11→0.0.12: macOS 343 MiB → 9 MiB, Windows 282 MiB → 0.8 MiB) |
 | `releases.<win\|osx\|linux>.json`, `RELEASES` | The update feed (`assets.<channel>.json` is a build-side manifest: it tells `vpk upload` what to send and is not uploaded itself) |
+| `StellarAllegianceServer-server-linux-<x64\|arm64>.AppImage` | The game server install for that arch — the same file the GHCR image is assembled from; replaces itself in place when the server updates |
+| `StellarAllegianceServer-<ver>-server-linux-<x64\|arm64>-full.nupkg`, `…-delta.nupkg` | What a server's own auto-update downloads |
+| `releases.server-linux-<x64\|arm64>.json` | The server's update feed, one per arch — never merged with the desktop `win`/`osx`/`linux` channels above |
 
 The file names are stable, so `https://github.com/wivuu/stellarallegiance/releases/latest/download/<name>`
-is a permanent download link.
+is a permanent download link (server assets included).
 
 ## How clients update
 
@@ -57,6 +63,31 @@ Things that would quietly break updating — the workflow asserts all of them:
 - A launcher that cannot update itself strands every player on that version **forever** — which is why
   `scripts/launcher-e2e.ps1` runs in every `package` job before anything is packed.
 
+## How game servers update
+
+A listed game server never polls GitHub itself. The **public lobby** is the one watcher of the release
+feed (`docs/adr/0005`, `public-lobby/README.md` → "Release Adverts") and tells every server it's connected
+to — over `/servers/ws` — the moment a release is confirmed, or the moment the server (re)connects. A
+server treats that as a doorbell, not an install order: it still asks its own Velopack feed what to
+install and whether it's really newer, and only ever while **empty**. No update work — download or apply
+— starts while a single player is connected, and the swap only happens once the server has gone empty for
+an idle window (`SIM_UPDATE_IDLE_SECONDS`, default 60 s) — see `docs/DEPLOY.md` for the full knob table.
+Deltas work the same way as the desktop client's (chained, checksum-verified, falling back to the full
+package); a freshly pulled container has no cached base package, so its first update is a full download.
+
+**Deploying the lobby after publishing is what flips every listed server at once.** `aspire do
+deploy-lobby` stamps `LOBBY_RELEASE_VERSION` from the latest **stable** git tag reachable from HEAD
+(pre-release tags excluded), and that baked version reaches every listed server the instant the lobby is
+back up — which is exactly when they all reconnect. Skip the lobby deploy and servers still update: the
+lobby's own `ReleaseWatcher` polls the server feed every `LOBBY_RELEASE_POLL_SECONDS` (default 300 s) and
+pushes the confirmed version the moment it notices, so the fleet catches up on its own within about 5
+minutes.
+
+**Rehearsals:** the lobby only ever advertises **stable** releases. A server follows pre-releases only
+when told to directly — `SIM_UPDATE_PRERELEASE=1` on that server makes every (re)connect count as a
+doorbell regardless of what the lobby says, and switches its own check to the GitHub API (not the
+quota-free CDN feed) so it actually sees `-ci.N` tags. Combine with the rehearsal tags below.
+
 ## Locally
 
 ```sh
@@ -64,6 +95,8 @@ scripts/launcher-e2e.ps1                                  # prove install → up
 scripts/launcher-e2e.ps1 -Versions 0.0.13-ci.1, 0.0.13-ci.2, 0.0.13   # …with a release candidate's numbering
 scripts/package-clients.ps1 -Version 0.0.13                # this OS's real package → build/releases/<channel>
 scripts/package-clients.ps1 -Version 0.0.13 -FakeGame       # …with the stub game (seconds instead of minutes)
+scripts/package-server.ps1 -Version 0.0.13                  # native sim-server package (any Docker host) → build/releases/server-linux-<arch>
+scripts/server-update-e2e.ps1                                # prove a packaged server drains, applies a delta and restarts itself, in a real container
 ```
 
 Host-OS only: macOS packages need `codesign`/`pkgbuild`, and the launcher is NativeAOT on Windows + macOS
@@ -71,6 +104,14 @@ Host-OS only: macOS packages need `codesign`/`pkgbuild`, and the launcher is Nat
 **Package dry-run** workflow — it runs on any pull request that touches those paths (and by hand once it
 is on the default branch), runs the e2e on all three OSes, publishes nothing,
 and is the only way Windows gets verified without a Windows machine.
+
+The two server scripts run on **any** Docker host, macOS included — the actual `dotnet publish` happens
+inside the SDK image (`server/Dockerfile`'s `publish-output` stage), so the produced `.AppImage` always
+matches the Docker *daemon's* architecture, not the host script's. Both need Docker plus `zstd` and
+`mksquashfs` (`brew install zstd squashfs` / `apt-get install zstd squashfs-tools`); without a system
+`zstd`, `vpk` silently falls back to deltas the updater rejects. The **server update dry-run** workflow
+(`.github/workflows/server-update-dryrun.yml`) is `server-update-e2e.ps1`'s CI equivalent, on native x64
+and arm64 runners.
 
 ## Rehearsing the pipeline
 
@@ -104,8 +145,10 @@ the GitHub UI if they bother you.)
 ## If a release run fails
 
 Fix forward and **re-run the failed jobs** — `publish` first deletes whatever assets a previous attempt
-uploaded. If a bad release did get published: delete the release (players on it keep playing; the launcher
-just stops offering it) and tag the next patch version. Do not re-tag the same version.
+uploaded, across all five channels (`win`, `osx`, `linux`, `server-linux-x64`, `server-linux-arm64`). If a
+bad release did get published: delete the release (players on it keep playing; the launcher just stops
+offering it, and a server holds its current build — see `docs/adr/0005`'s restart-loop guard) and tag the
+next patch version. Do not re-tag the same version.
 
 ## Signing (optional — switched on by secrets, no workflow edits)
 

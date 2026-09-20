@@ -45,6 +45,11 @@ services:
       # address when it's behind container NAT or a proxy). The lobby probes it and advertises it
       # only if it answers /health. Unset = the lobby uses the registration source IP.
       SIM_PUBLIC_ENDPOINT: ${SIM_PUBLIC_ENDPOINT:-}
+      # off|warn|on — see docker-compose.server.yml. This service builds from SOURCE
+      # (server/Dockerfile below), which cannot replace its own binary in place, so auto-update only
+      # ever WARNS here regardless of this setting; it matters once you deploy the published
+      # ghcr.io/wivuu/stellarallegiance-sim image instead.
+      SIM_AUTO_UPDATE: ${SIM_AUTO_UPDATE:-}
     ports:
       - "${SIM_PORT:-8090}:8090"
     depends_on:
@@ -85,6 +90,14 @@ services:
       # Public STUN handed to clients/servers for the WebRTC fallback (covers ~80% of NATs via
       # hole-punching). Comma-separate several to list fallbacks, e.g. "stun:a:3478,stun:b:19302".
       STUN_URL: ${STUN_URL:-stun:stun.cloudflare.com:3478}
+      # Release Advert: the lobby is the one watcher of the GAME's release feed, and tells connected
+      # game servers + server-list clients which release is current. LOBBY_RELEASE_VERSION is the
+      # baked-in version advertised before the first poll; LOBBY_RELEASE_FEED_URL is a URL or local
+      # feed path (empty = the project's GitHub server feed); LOBBY_RELEASE_POLL_SECONDS is the poll
+      # cadence (default 300; 0 = off).
+      LOBBY_RELEASE_VERSION: ${LOBBY_RELEASE_VERSION:-}
+      LOBBY_RELEASE_FEED_URL: ${LOBBY_RELEASE_FEED_URL:-}
+      LOBBY_RELEASE_POLL_SECONDS: ${LOBBY_RELEASE_POLL_SECONDS:-}
     ports:
       - "${SHARE_PORT:-8091}:8091"
     depends_on:
