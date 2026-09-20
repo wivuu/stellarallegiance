@@ -87,6 +87,7 @@ public static class Protocol
     public const byte MsgSalvageGone = SalvageGoneMessage.MsgId;
     public const byte MsgCrew = CrewMessage.MsgId;
     public const byte MsgTurrets = TurretsMessage.MsgId;
+    public const byte MsgServerNotice = ServerNoticeMessage.MsgId;
 
     // ---- MsgInput flags byte ----
     public const byte FlagFiring = InputFlags.Firing;
@@ -184,6 +185,10 @@ public static class Protocol
         }.ToBytes();
 
     public static byte[] BuildYouAre(ulong shipId) => new YouAreMessage { ShipId = shipId }.ToBytes();
+
+    // The standing Server Notice (kind 0 withdraws it) - see ClientHub.Update.cs.
+    public static byte[] BuildServerNotice(byte kind, string version) =>
+        new ServerNoticeMessage { Kind = kind, Version = version }.ToBytes();
 
     public static byte[] BuildShipGone(ulong shipId, byte reason) =>
         new ShipGoneMessage { ShipId = shipId, Reason = reason }.ToBytes();

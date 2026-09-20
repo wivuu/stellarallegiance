@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Game-server auto-update (server/Update, docs/adr/0005): the shared version comparison, the
+       options, the ServerUpdateCoordinator state machine and its "no update work while a player is
+       connected" invariant, and the hub-side gate (drain + Server Notice) against the REAL ClientHub. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../shared/Shared.csproj" />
+    <ProjectReference Include="../../server/SimServer.csproj" />
+    <ProjectReference Include="../TestKit/TestKit.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The hub-level sections boot a real Simulation from the stock bundle. -->
+    <Content
+      Include="../../server/content/core/**/*.yaml"
+      Link="content/core/%(RecursiveDir)%(Filename)%(Extension)"
+      CopyToOutputDirectory="PreserveNewest"
+    />
+  </ItemGroup>
+</Project>

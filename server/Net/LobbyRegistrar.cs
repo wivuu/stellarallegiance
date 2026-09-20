@@ -499,7 +499,15 @@ public sealed class LobbyRegistrar : ILobbyIdentity
         catch { }
     }
 
-    // Receives messages from the lobby — currently only WebRTC offer pushes.
+    // Raised (on the registrar's task) when the lobby says which game release is the latest - right
+    // after every (re)connect, and again whenever that rises. The lobby is the one watcher of the release
+    // feed; for this server the advert is only a doorbell (server/Update/ServerUpdateCoordinator.cs).
+    // A lobby redeploy drops every socket and usually ships WITH a release, so "we just reconnected" is
+    // exactly the moment there may be an update.
+    public Action<string>? OnReleaseAdvertised { get; set; }
+
+    // Receives messages from the lobby: WebRTC offer pushes and Release Adverts. Unknown types are
+    // ignored, so a newer lobby can grow the channel without breaking this server.
     private async Task WsRecvLoop(ClientWebSocket ws, CancellationToken ct)
     {
         var buf = new byte[64 * 1024]; // SDP offers can be large
@@ -514,6 +522,8 @@ public sealed class LobbyRegistrar : ILobbyIdentity
                 var msg = JsonSerializer.Deserialize(buf.AsSpan(0, result.Count), LobbyWsJson.Default.WsOfferMsg);
                 if (msg?.Type == "offer" && _offerChannel is not null)
                     _offerChannel.Writer.TryWrite(new PendingOfferDto(msg.Ticket!, msg.SdpOffer!));
+                else if (msg?.Type == "release" && msg.Version is { Length: > 0 } version)
+                    OnReleaseAdvertised?.Invoke(version);
             }
         }
         catch (OperationCanceledException) { }

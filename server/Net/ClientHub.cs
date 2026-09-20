@@ -682,10 +682,20 @@ public sealed partial class ClientHub
                         await client.Transport.CloseAsync(reason, ct);
                     }
 
+                    // Restarting onto a new release (ClientHub.Update.cs): the door is closed for the few
+                    // seconds that takes. Checked first - nothing else about this join matters - and
+                    // again, atomically, at registration below.
+                    if (IsDraining)
+                    {
+                        Log.RejectedJoinDraining(_log, client.Id);
+                        await RejectAndClose(RejectMessage.CodeUpdating, RejectMessage.ReasonUpdating);
+                        return;
+                    }
+
                     if (!_auth.Authenticate(hello.Secret))
                     {
                         Log.RejectedJoinBadSecret(_log, client.Id);
-                        await RejectAndClose(1, "bad secret");
+                        await RejectAndClose(RejectMessage.CodeBadSecret, RejectMessage.ReasonBadSecret);
                         return;
                     }
 
@@ -701,14 +711,14 @@ public sealed partial class ClientHub
                         if (joinToken.Length == 0)
                         {
                             Log.RejectedJoinNoToken(_log, client.Id);
-                            await RejectAndClose(2, "join token required");
+                            await RejectAndClose(RejectMessage.CodeJoinToken, RejectMessage.ReasonJoinTokenRequired);
                             return;
                         }
                         var verdict = await verifier.VerifyAsync(joinToken, listingId, ct);
                         if (!verdict.IsValid)
                         {
                             Log.RejectedJoinBadToken(_log, client.Id, verdict.Failure?.ToString() ?? "invalid");
-                            await RejectAndClose(2, "join token rejected");
+                            await RejectAndClose(RejectMessage.CodeJoinToken, RejectMessage.ReasonJoinTokenRejected);
                             return;
                         }
                         name = verdict.Identity!.DisplayName;
@@ -720,9 +730,14 @@ public sealed partial class ClientHub
                     // rotates the token; the sim keys held orphans by it.
                     client.Token = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
 
-                    _players.OnConnect(client.Id, name, playerId);
-                    _lobby.Add(client.Id, _players.NameOf(client.Id));
-                    _clients[client.Id] = client; // visible to AfterStep / broadcasts once joined
+                    // Registration is atomic against the update drain: the token check above was
+                    // AWAITED, and the server may have found itself empty and closed the door meanwhile.
+                    if (!TryAdmit(client, name, playerId))
+                    {
+                        Log.RejectedJoinDraining(_log, client.Id);
+                        await RejectAndClose(RejectMessage.CodeUpdating, RejectMessage.ReasonUpdating);
+                        return;
+                    }
                     client.Team = _lobby.TeamOf(client.Id);
                     // First pilot on the server becomes host (only they may change the map). Ids are
                     // monotonic, so "unset -> this id" makes the earliest joiner host until they leave.
@@ -740,6 +755,9 @@ public sealed partial class ClientHub
                     // right after Defs, so the lobby's sector pane + map picker have data to render.
                     client.Out.SendReliable(OutFrame.Whole(Protocol.BuildMapList(_mapCatalog)));
                     BroadcastLobby();
+                    // A standing Server Notice ("this server wants to restart for an update") reaches a
+                    // late joiner too, once the lobby it is shown in has its state.
+                    SendStandingNotice(client);
                     // SendWelcome above already handed this joiner the cached board (mid-match F5 has
                     // to work the moment they're in; in the lobby the previous match's board is still
                     // readable). Ask the SIM thread to rebuild next tick so the joiner's own zero row

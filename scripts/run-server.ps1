@@ -106,6 +106,17 @@ if ($stale) {
 }
 
 Write-Host "[run-server] rebuilding server/ (-c Release)"
+# Which release is this checkout? A source build cannot know (its assembly version is the 0.0.0-dev
+# sentinel), so tell it: the latest STABLE tag reachable from HEAD. With that the server can warn when the
+# public lobby advertises a newer release ("update-state Warn ...") - without it, it stays silent rather
+# than guess. An explicit SIM_BUILD_VERSION wins; no git / no tags leaves it unset.
+if (-not $env:SIM_BUILD_VERSION) {
+    $PSNativeCommandUseErrorActionPreference = $false
+    $tag = (& git -C $RepoRoot describe --tags --abbrev=0 --exclude '*-*' 2>$null)
+    if ($LASTEXITCODE -eq 0 -and $tag) { $env:SIM_BUILD_VERSION = ([string]$tag).Trim().TrimStart('v') }
+    $PSNativeCommandUseErrorActionPreference = $true
+}
+
 dotnet build "$RepoRoot/server/SimServer.csproj" -c Release
 
 Write-Host "[run-server] starting on :$SimPort"

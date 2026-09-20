@@ -111,6 +111,22 @@ static class WireJsonTests
             LobbyWsJson.Default.WsOfferMsg
         );
         Check(offer is { Type: "offer", Ticket: "t1", SdpOffer: "v=0" }, "ws offer push binds from camelCase");
+        Check(offer is { Version: null }, "…and an offer carries no release version");
+        // The Release Advert (public-lobby/ReleaseAdverts): same channel, same shape, a different Type. An
+        // older lobby never sends it; an older server ignores it (its loop only acts on "offer").
+        var release = JsonSerializer.Deserialize(
+            """{"type":"release","version":"1.2.3"}"""u8,
+            LobbyWsJson.Default.WsOfferMsg
+        );
+        Check(
+            release is { Type: "release", Version: "1.2.3", Ticket: null, SdpOffer: null },
+            "ws release advert binds: the version, and nothing of an offer"
+        );
+        var future = JsonSerializer.Deserialize(
+            """{"type":"something-new","payload":{"a":1}}"""u8,
+            LobbyWsJson.Default.WsOfferMsg
+        );
+        Check(future is { Type: "something-new", Version: null }, "an unknown frame type still binds (and is then ignored)");
         var registered = JsonSerializer.Deserialize(
             """{"server":{"sessionId":"s1","publicEndpoint":null,"iceServers":[{"urls":["stun:x:3478"],"username":null,"credential":null}],"extra":1},"secret":"cap"}""",
             LobbyHttpJson.Default.RegisterResponseDto
