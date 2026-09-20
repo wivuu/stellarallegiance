@@ -205,6 +205,7 @@ var idPairs = new (string, byte, byte)[]
     ("SalvageGone", SalvageGoneMessage.MsgId, 31),
     ("Crew", CrewMessage.MsgId, 32),
     ("Turrets", TurretsMessage.MsgId, 33),
+    ("ServerNotice", ServerNoticeMessage.MsgId, 34),
 };
 bool idsOk = true;
 foreach (var (n, a, b) in idPairs)
@@ -2086,6 +2087,24 @@ RoundTrip(
     v => v.ToBytes()
 );
 RoundTrip("Reject", new RejectMessage { Code = 2 }.ToBytes(), b => RejectMessage.Parse(b), v => v.ToBytes());
+RoundTrip(
+    "Reject (server updating)",
+    new RejectMessage { Code = RejectMessage.CodeUpdating }.ToBytes(),
+    b => RejectMessage.Parse(b),
+    v => v.ToBytes()
+);
+RoundTrip(
+    "ServerNotice (update pending)",
+    new ServerNoticeMessage { Kind = ServerNoticeMessage.KindUpdatePending, Version = "0.0.14-ci.2" }.ToBytes(),
+    b => ServerNoticeMessage.Parse(b),
+    v => v.ToBytes()
+);
+RoundTrip(
+    "ServerNotice (withdrawn)",
+    new ServerNoticeMessage { Kind = ServerNoticeMessage.KindNone, Version = "" }.ToBytes(),
+    b => ServerNoticeMessage.Parse(b),
+    v => v.ToBytes()
+);
 
 // Synthetic defs: every def type with every list populated; ignored fields must not survive.
 var synthDefs = new DefsMessage
@@ -2514,6 +2533,13 @@ Golden(
 );
 Golden("Crew.sha", synthCrew.ToBytes());
 Golden("Turrets.sha", synthTurrets.ToBytes());
+
+// v43. Small enough to pin as hex: id 34, kind 1, then a u8-length string.
+Golden(
+    "ServerNotice.hex",
+    new ServerNoticeMessage { Kind = ServerNoticeMessage.KindUpdatePending, Version = "1.2.3" }.ToBytes(),
+    hash: false
+);
 Golden(
     "ResearchState.sha",
     new ResearchStateMessage
@@ -2619,6 +2645,7 @@ static class Goldens
         ["ShipLoadout.sha"] = "9EF7781C2F8C9A567CA29F6883FFD6233AEBC4285D0B3F394E6FB47893CA70A2",
         ["Crew.sha"] = "664298509128CD9A39A9953A65370D81004C5E77A3811B3B68E6BA435B97CF0C",
         ["Turrets.sha"] = "031111F49B12A3EDCB340670614E30709773F835F6EC546FB97014FF14674756",
+        ["ServerNotice.hex"] = "220105312E322E33",
         ["ResearchState.sha"] = "1E67F5C4D26E391B7E9BD73FB76C2D2216C7C3F08B8772F7FF6B96BC5C45C2F8",
         ["ConstructorState.sha"] = "5C9343E66F44F0303D3F519D85F8A7D5A873EF0AB3B147798745503BED27AAA9",
         ["Gone.sha"] = "E7FB379DD828E264574FC8CFE836AFD98BA348B3FCF23F9643DE7AE4CFAAD4A3",
