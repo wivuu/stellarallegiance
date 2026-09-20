@@ -15,7 +15,7 @@
          engine; this lets the suite compile the client's interpolator UNMODIFIED, headless.
 
          PINNED to 4.7.2 to match the client's `Godot.NET.Sdk/4.7.2`, the GODOT_VERSION the release
-         and build-godot-client workflows install, and the 4.7.2 editor/export templates. The
+         workflow installs, and the 4.7.2 editor/export templates. The
          Compile Include list below pulls in the PRODUCTION interpolator, so the suite is only
          honest while its Vector3/Quaternion/Mathf are the ones that actually ship. Never bump this
          on its own because `dotnet outdated` offers a newer GodotSharp: that would silently test

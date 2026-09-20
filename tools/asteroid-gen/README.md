@@ -12,7 +12,7 @@ seed ─► shape field (numpy) ─┬─► mesh tessellation ─┐
 ```
 
 Same seed ⇒ the **same asteroid**, every run. File bytes are reproducible within a fixed
-build environment (the pinned Docker image — what CI uses); across CPU architectures the
+build environment (the pinned Docker image); across CPU architectures the
 *shape* is identical but raw bytes may differ by a last-ULP rounding (`sin`/`cos`/`exp` aren't
 bit-identical across arches). Treat the Docker image as the canonical producer.
 
