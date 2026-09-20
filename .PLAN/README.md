@@ -5,7 +5,6 @@ The live roadmap: what is shipped (one line each, with a pointer to the real doc
 [`GLOSSARY.md`](../GLOSSARY.md) and the per-feature docs are the authority for how things work.
 
 **Next to incorporate into the plan**
-- Nebula looks different for the same sector on two different clients
 - Warning on server when lobby drops/reconnects and its a new version - warning to update the gameserver?
   - What would auto update look like?
 
