@@ -855,5 +855,171 @@ else
     );
 }
 
+// ---------------------------------------------------------------------------------------------
+// .simmodel CODEC (shared/Collision/SimModelCodec.cs) — the server's hull cache AND the collision
+// sidecars that are a packaged client's ONLY collision data (tools/collision-sidecars). The contract is
+// exactness: a decoded model must resolve contacts bit-identically to one built from the GLB, or the
+// client predicts a different bounce than the server resolves. So compare FLOAT BITS, never "near".
+// Runs over every GLB the game collides with, so a new model that breaks the round trip fails here.
+// ---------------------------------------------------------------------------------------------
+Console.WriteLine();
+Console.WriteLine("simmodel codec (hull cache + client collision sidecars):");
+{
+    static bool SameBits(float a, float b) => BitConverter.SingleToInt32Bits(a) == BitConverter.SingleToInt32Bits(b);
+    static bool SameVec(Vec3 a, Vec3 b) => SameBits(a.X, b.X) && SameBits(a.Y, b.Y) && SameBits(a.Z, b.Z);
+    static bool SameHull(ConvexHull a, ConvexHull b)
+    {
+        if (!SameBits(a.BoundingRadius, b.BoundingRadius) || !SameBits(a.LongestAxis, b.LongestAxis))
+            return false;
+        if (a.Planes.Length != b.Planes.Length)
+            return false;
+        for (int i = 0; i < a.Planes.Length; i++)
+            if (!SameVec(a.Planes[i].N, b.Planes[i].N) || !SameBits(a.Planes[i].D, b.Planes[i].D))
+                return false;
+        return true;
+    }
+    static bool Partless(SimModel m) => m.Hulls.Count == 1 && ReferenceEquals(m.Hulls[0], m.Hull);
+    static bool SameModel(SimModel a, SimModel b)
+    {
+        if (!SameHull(a.Hull, b.Hull) || a.Hardpoints.Count != b.Hardpoints.Count)
+            return false;
+        for (int i = 0; i < a.Hardpoints.Count; i++)
+            if (
+                a.Hardpoints[i].Name != b.Hardpoints[i].Name
+                || !SameVec(a.Hardpoints[i].Pos, b.Hardpoints[i].Pos)
+                || !SameVec(a.Hardpoints[i].Forward, b.Hardpoints[i].Forward)
+            )
+                return false;
+        // Partless stays partless (its Hulls must ALIAS the merged hull again — same object, no drift);
+        // a compound keeps every part, in order.
+        if (Partless(a) != Partless(b) || a.Hulls.Count != b.Hulls.Count)
+            return false;
+        for (int i = 0; i < a.Hulls.Count; i++)
+            if (!SameHull(a.Hulls[i], b.Hulls[i]))
+                return false;
+        return true;
+    }
+
+    string? assetsDir = glbPath is null ? null : Path.GetDirectoryName(Path.GetDirectoryName(glbPath));
+    if (assetsDir is null)
+        Console.WriteLine("  [SKIP] client/assets not found — skipping the codec round trip");
+    else
+    {
+        // The same folder → pre-rotation table tools/collision-sidecars writes with.
+        (string Folder, Quat Pre)[] folders =
+        [
+            ("bases", CollisionConfig.BaseModelRotation),
+            ("ships", default),
+            ("asteroids", default),
+        ];
+        int models = 0,
+            exact = 0,
+            compoundModels = 0;
+        var broken = new List<string>();
+        byte[]? garrisonBytes = null,
+            garrisonKey = null;
+        foreach (var (folder, pre) in folders)
+        foreach (
+            string glb in Directory
+                .GetFiles(Path.Combine(assetsDir, folder), "*.glb")
+                .OrderBy(f => f, StringComparer.Ordinal)
+        )
+        {
+            byte[] data = File.ReadAllBytes(glb);
+            var built = SimModel.FromGlb(data, Path.GetFileName(glb), pre);
+            byte[] key = SimModelCodec.KeyHash(data, pre);
+            byte[] encoded = SimModelCodec.Encode(key, built);
+            models++;
+            if (!Partless(built))
+                compoundModels++;
+            bool ok =
+                SimModelCodec.TryDecode(encoded, out byte[] readKey, out SimModel? decoded)
+                && decoded is not null
+                && readKey.AsSpan().SequenceEqual(key)
+                && SameModel(built, decoded)
+                // Deterministic bytes: encoding what was decoded gives the same file (no hidden state).
+                && SimModelCodec.Encode(readKey, decoded).AsSpan().SequenceEqual(encoded);
+            if (ok)
+                exact++;
+            else
+                broken.Add($"{folder}/{Path.GetFileName(glb)}");
+            if (Path.GetFileName(glb) == "garrison.glb")
+                (garrisonBytes, garrisonKey) = (encoded, key);
+        }
+        Check(
+            $"every collidable GLB round-trips BIT-EXACTLY ({exact}/{models}; {compoundModels} compound){(broken.Count > 0 ? " — broken: " + string.Join(", ", broken) : "")}",
+            models > 0 && exact == models
+        );
+        Check("the set covers compound bases AND partless ships/asteroids", compoundModels > 0 && compoundModels < models);
+
+        if (garrisonBytes is not null && garrisonKey is not null)
+        {
+            // Keys: the pre-rotation is part of the key (re-orienting a base invalidates what was built
+            // from it); an identity rotation is the bare file hash.
+            byte[] glb = File.ReadAllBytes(glbPath!);
+            Check(
+                "key: identity pre-rotation = SHA-256 of the GLB bytes",
+                SimModelCodec.KeyHash(glb, default).AsSpan().SequenceEqual(System.Security.Cryptography.SHA256.HashData(glb))
+                    && SimModelCodec.KeyHash(glb, Quat.Identity).AsSpan().SequenceEqual(SimModelCodec.KeyHash(glb, default))
+            );
+            Check(
+                "key: a base's pre-rotation changes it",
+                !SimModelCodec
+                    .KeyHash(glb, CollisionConfig.BaseModelRotation)
+                    .AsSpan()
+                    .SequenceEqual(SimModelCodec.KeyHash(glb, default))
+            );
+
+            bool Reads(byte[] bytes, byte[]? expectKey = null)
+            {
+                using var ms = new MemoryStream(bytes);
+                return SimModelCodec.TryRead(ms, expectKey, out _, out SimModel? m) && m is not null;
+            }
+            Check(
+                "expected key: the right one reads, a wrong one is a miss (the server's stale-cache gate)",
+                Reads(garrisonBytes, garrisonKey) && !Reads(garrisonBytes, new byte[SimModelCodec.KeyLength])
+            );
+
+            // Bad DATA must read as "not a model" — never throw, never allocate for a garbage count.
+            bool threw = false;
+            int rejected = 0,
+                cases = 0;
+            void Reject(byte[] bytes)
+            {
+                cases++;
+                try
+                {
+                    if (!Reads(bytes))
+                        rejected++;
+                }
+                catch (Exception)
+                {
+                    threw = true;
+                }
+            }
+            for (int cut = 0; cut < garrisonBytes.Length; cut += Math.Max(1, garrisonBytes.Length / 64))
+                Reject(garrisonBytes[..cut]); // every truncation point, header through the last sub-hull
+            Reject(garrisonBytes[..^1]);
+            byte[] badMagic = (byte[])garrisonBytes.Clone();
+            badMagic[0] ^= 0xFF;
+            Reject(badMagic);
+            byte[] oldVersion = (byte[])garrisonBytes.Clone();
+            oldVersion[4] = 1; // a v1 file (no sub-hull block): its owner must rebuild, not misread
+            Reject(oldVersion);
+            byte[] hugeCount = (byte[])garrisonBytes.Clone();
+            int planeCountAt = 4 + 4 + SimModelCodec.KeyLength + 4 + 4; // magic, version, key, 2 floats
+            BitConverter.TryWriteBytes(hugeCount.AsSpan(planeCountAt, 4), int.MaxValue);
+            Reject(hugeCount);
+            byte[] negativeCount = (byte[])garrisonBytes.Clone();
+            BitConverter.TryWriteBytes(negativeCount.AsSpan(planeCountAt, 4), -1);
+            Reject(negativeCount);
+            Check(
+                $"truncated / foreign / garbled bytes are rejected without throwing ({rejected}/{cases})",
+                !threw && rejected == cases
+            );
+        }
+    }
+}
+
 Console.WriteLine(failures == 0 ? "ALL TESTS PASSED" : $"{failures} TEST(S) FAILED");
 return failures == 0 ? 0 : 1;
