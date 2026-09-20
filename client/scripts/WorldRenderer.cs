@@ -614,6 +614,15 @@ public partial class WorldRenderer
         // Kick the hidden dust prewarm for this sector so a later warp/spawn there only toggles
         // visibility instead of building its clouds inside the swap frame.
         _environment.PrewarmSector(row.SectorId, row.Env);
+        // The row for the sector ON SCREEN just landed: repaint from it. ApplySectorEnv otherwise runs only
+        // when the viewed sector CHANGES, and a world rebuild paints the home sector BEFORE its row streams
+        // in (Reset → fallback look, then the Welcome's rows). A client that then never changes sector — a
+        // gunner seated in their home sector, the pre-launch F3 peek of a garrison in the default sector —
+        // kept the procedural nebula + boot sun + no dust while a launched pilot beside them saw the authored
+        // sector. A pending warp swap is left alone: Phase B repaints the destination under the flash, by
+        // which time this row is in hand. Both drivers dedupe, so a re-revealed row costs nothing visible.
+        if (row.SectorId == ViewSector && _pendingWarpSector is null)
+            ApplySectorEnv(row.SectorId);
     }
 
     // ---- Sector visibility ---------------------------------------------

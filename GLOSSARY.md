@@ -329,7 +329,7 @@ shafts and only amplifies already-bright pixels, so it never flat-tints geometry
   - `server/Sim/Simulation.Vision.cs` — `DustVisionMult`/`SegmentSphereChord`, `_dustClouds`/`_dustFloor` cache
   - `server/Net/Protocol.cs` — `WriteSectorEnv` appended to `WriteSectorStatic` (Welcome + `MsgReveal`); proto v25
   - `client/scripts/SectorEnvironment.cs` — sun + 3D dust (`MultiMesh` fractal billboard puffs, custom shader: noise + colour variation + baked sun shading) + screen-space god rays; `Starscape.cs` — nebula override
-  - `client/scripts/WorldRenderer.cs` — `ApplySectorEnv` seam (routes every sector transition)
+  - `client/scripts/WorldRenderer.cs` — `ApplySectorEnv` seam (routes every sector transition, AND `NetAddSector` when the viewed sector's own row lands after it was painted — so a client that never changes sector still gets the authored look)
 - **Related:** [[Fog of War (Team Vision)]], [[YAML Content Pipeline]], [[MsgWelcome]]
 - **Notes:** Belt tuning is server-only; only sun/nebula/dust-visual + the seeded cloud list ride the wire
 
