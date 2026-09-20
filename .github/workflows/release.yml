@@ -27,7 +27,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  GODOT_VERSION: 4.7.0
+  GODOT_VERSION: 4.7.2
   REPO_URL: https://github.com/${{ github.repository }}
   DOTNET_NOLOGO: true
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true

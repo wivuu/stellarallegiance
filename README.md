@@ -32,7 +32,7 @@ by both sides so their physics and content stay bit-identical.
 - **Aspire CLI** — `dotnet tool install -g Aspire.Cli` or
   `curl -sSL https://aspire.dev/install.sh | bash`. Orchestrates the local stack (`aspire run`).
 - **Docker** — runs the local Postgres container the public lobby needs.
-- **Godot 4.7 — Mono/.NET build**, to run the client. Auto-detected from the `GODOT` env var, the
+- **Godot 4.7.2 — Mono/.NET build**, to run the client. Auto-detected from the `GODOT` env var, the
   `godot.executablePath` user secret, PATH, or standard install locations; the Aspire dashboard
   prompts for the path (and offers to save it to user secrets) if none of those resolve.
 - **PowerShell 7+ (`pwsh`)** — only needed now for `scripts/export-clients.ps1` and the `tools/*.ps1`
