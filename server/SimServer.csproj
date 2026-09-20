@@ -24,6 +24,64 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
+  <PropertyGroup>
+    <!-- `dotnet publish -r <rid>` produces a NativeAOT binary: a single self-contained executable
+         with no JIT - the first sim tick runs at full speed (no tiered-compilation warm-up on the
+         20 Hz thread), it boots in milliseconds and the container needs no .NET runtime (see
+         Dockerfile). `dotnet run` / `dotnet build` / the test suites stay on the JIT, which is
+         also where the settings above (TieredPGO) still apply. Opt out with -p:PublishAot=false
+         for a framework-dependent publish. Needs the platform's native toolchain (clang + zlib
+         headers on Linux, Xcode CLT on macOS, the C++ workload on Windows).
+
+         What this costs: no runtime reflection over our own types. JSON goes through the
+         source-generated contexts in Net/ServerJson.cs, YAML through the static contexts
+         (Content/ServerYaml.cs + the factions library), and the gen-schemas command (reflection
+         tooling) runs from source only. The IL warnings below are exactly "this will break in the
+         native binary", so they fail the build - a normal `dotnet build` too, because PublishAot
+         turns the analyzers on. -->
+    <PublishAot Condition="'$(PublishAot)' == ''">true</PublishAot>
+    <!-- PublishAot also applies the trimmed-app feature defaults to ORDINARY builds (dev runs mimic the
+         native feature set on purpose: no reflection JSON, no dynamic code). Two of those defaults
+         only hurt the inner loop, so Debug keeps them: without startup hooks `dotnet watch` and the
+         IDE cannot attach Hot Reload ("Project does not support Hot Reload: 'PublishAot' is 'True'"). -->
+    <StartupHookSupport Condition="'$(Configuration)' == 'Debug'">true</StartupHookSupport>
+    <MetadataUpdaterSupport Condition="'$(Configuration)' == 'Debug'">true</MetadataUpdaterSupport>
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <!-- YDNG001: a YAML-bound property whose type is missing from ServerYamlContext. -->
+    <WarningsAsErrors>$(WarningsAsErrors);IL2026;IL2057;IL2067;IL2070;IL2072;IL2075;IL2087;IL2091;IL3050;YDNG001</WarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Third-party reflection the trimmer cannot see (today: SIPSorcery's SCTP cookie). -->
+    <TrimmerRootDescriptor Include="TrimmerRoots.xml" />
+  </ItemGroup>
+  <!-- Settings that must exist ONLY in the native link, so they hook the link pipeline instead of
+       sitting in an ItemGroup (where they would also leak into the JIT build's runtimeconfig.json).
+
+       1. SimServer.SchemaTooling.IsSupported=false: Program.cs guards the reflection-only gen-schemas
+          command with that feature switch. Given the value here, the AOT compiler folds the guard to
+          false and drops the branch (without it the publish fails on IL2026/IL3050 - it cannot be
+          forgotten silently); `dotnet run` never sees the item, so the command works from source.
+
+       2. The IL errors above are for OUR code. These dependencies carry trim warnings of their own
+          that were checked by hand, so collapse each to the single IL2104 "assembly produced trim
+          warnings" line (kept visible, not an error) instead of failing the publish:
+            SIPSorcery        - its bundled TinyJson reflection helper. The one use on our path is the
+                                SCTP cookie, rooted in TrimmerRoots.xml; the rest is signaling-helper
+                                JSON the server never calls (it builds its own SDP, see
+                                shared/Net/WebRtcSdp.cs).
+            Common.Logging(*) - Makaretu mDNS logging: reflection only for a CONFIGURED log adapter;
+                                with no config it falls back to the no-op adapter.
+          A NEW warning from any other assembly still breaks the publish. -->
+  <Target Name="ConfigureNativeLink" BeforeTargets="PrepareForILLink">
+    <ItemGroup>
+      <RuntimeHostConfigurationOption Include="SimServer.SchemaTooling.IsSupported" Value="false" Trim="true" />
+      <ManagedAssemblyToLink
+        Condition="'%(Filename)' == 'SIPSorcery' Or '%(Filename)' == 'Common.Logging' Or '%(Filename)' == 'Common.Logging.Core'"
+      >
+        <TrimmerSingleWarn>true</TrimmerSingleWarn>
+      </ManagedAssemblyToLink>
+    </ItemGroup>
+  </Target>
   <ItemGroup>
     <!-- Ship the art GLBs the sim reads for collision hulls + docking hardpoints NEXT TO the
          binary (output/assets/...), so a plain `dotnet publish` is a self-contained server
@@ -78,6 +136,9 @@
          (server/Content/ContentLoader). Server-only, so shared/ stays dependency-free and the
          client/wasm never pull YamlDotNet. -->
     <PackageReference Include="YamlDotNet" Version="18.1.0" />
+    <!-- YamlDotNet's source generator for ServerYamlContext (Content/ServerYaml.cs). Compile-time
+         only; keep the version in lockstep with YamlDotNet. -->
+    <PackageReference Include="Vecc.YamlDotNet.Analyzers.StaticGenerator" Version="18.1.0" PrivateAssets="all" />
     <!-- Join tokens (public-lobby/CONTEXT.md): the lobby-issued ES256 JWT a joiner presents in Hello
          is verified OFFLINE here against the lobby's JWKS (server/Net/JoinTokenVerifier.cs). Server-
          only so shared/ stays dependency-free. -->

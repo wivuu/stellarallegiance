@@ -149,8 +149,11 @@ built-in match-routing layer is future work — the `IMatchmaker`/`IPlayerDirect
 
 ## systemd (non-container) option
 
+The publish is a NativeAOT binary (no .NET runtime on the host); building it needs `clang` and
+`zlib1g-dev`. Use your host's RID (`linux-x64`, `linux-arm64`).
+
 ```bash
-dotnet publish server/SimServer.csproj -c Release -o /opt/stellarallegiance/sim
+dotnet publish server/SimServer.csproj -c Release -r linux-x64 -o /opt/stellarallegiance/sim
 ```
 
 ```ini
@@ -161,7 +164,7 @@ After=network.target
 
 [Service]
 WorkingDirectory=/opt/stellarallegiance/sim
-ExecStart=/usr/bin/dotnet /opt/stellarallegiance/sim/SimServer.dll --port 8090
+ExecStart=/opt/stellarallegiance/sim/SimServer --port 8090
 Environment=SIM_SECRET=change-me
 Restart=always
 

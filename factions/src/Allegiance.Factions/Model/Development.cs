@@ -6,8 +6,10 @@ namespace Allegiance.Factions.Model;
 /// </summary>
 public record Development : Buildable
 {
+#pragma warning disable YDNG001 // read by ModelCollectionConverters, not the static context
     /// <summary>Multiplicative stat modifiers granted to the team while this is owned.</summary>
     public AttributeModifiers Attributes { get; set; } = new();
+#pragma warning restore YDNG001
 
     /// <summary>
     /// When true this development exists only to grant techs (no lasting effect of its own), so it

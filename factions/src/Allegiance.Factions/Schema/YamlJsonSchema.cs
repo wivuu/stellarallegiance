@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -24,9 +25,18 @@ namespace Allegiance.Factions.Schema;
 /// <c>description</c> fields (so they show as hover text in the YAML editor). This requires the model
 /// assemblies to be built with <c>&lt;GenerateDocumentationFile&gt;true&lt;/GenerateDocumentationFile&gt;</c>
 /// so the <c>.xml</c> doc file sits next to the <c>.dll</c>.
+///
+/// AUTHORING-TIME TOOLING: it walks the model with System.Text.Json's reflection resolver, so it is
+/// annotated as unavailable under NativeAOT/trimming. The CLI and <c>dotnet run --project server --
+/// --gen-schemas</c> (JIT) are its callers; the AOT-published server refuses the flag instead.
 /// </summary>
+[RequiresDynamicCode(ReflectionOnly)]
+[RequiresUnreferencedCode(ReflectionOnly)]
 public static class YamlJsonSchema
 {
+    private const string ReflectionOnly =
+        "Schema generation reflects over the content model (authoring-time tooling); run it from a JIT build.";
+
     // Delegates to YamlDotNet's own HyphenatedNamingConvention so STJ emits exactly the kebab-case
     // names CoreSerializer writes (avoids KebabCaseLower-vs-Hyphenated divergence on edge cases).
     private sealed class HyphenatedPolicy : JsonNamingPolicy
@@ -128,6 +138,11 @@ public static class YamlJsonSchema
             return new XmlDocs(merged);
         }
 
+        [UnconditionalSuppressMessage(
+            "SingleFile",
+            "IL3000",
+            Justification = "An empty Location (single-file/AOT) is handled: the schema is emitted without descriptions."
+        )]
         private static XmlDocs Load(Assembly asm)
         {
             var summaries = new Dictionary<string, string>(StringComparer.Ordinal);

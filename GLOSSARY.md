@@ -1174,6 +1174,19 @@ An F3-map command for a friendly ship (`MsgOrder`, proto 34): left-click SELECTS
 - **Related:** [[Commander]], [[PigBrain]], [[Fog of War]]
 - **Notes:** Orders complete-and-revert (target dead / radar contact lost / base destroyed → autonomy); rescue outranks orders; fog-gated at issue AND execution (no wallhack); keyed by ShipId so respawned drones never inherit; miner subjects map onto mining state (rock pins claim, point authorizes + retargets that miner's sector — the old `/mine`, friendly base = pinned offload)
 
+### NativeAOT Server (static contexts)
+How the sim server ships: `dotnet publish` compiles it ahead-of-time into one native executable (no JIT, no .NET runtime in the container), while `dotnet run`/`build` and every test suite stay on the JIT. The consequence that shapes server code: **no runtime reflection over our own types** — serialization is source-generated, and the trim/AOT warnings are build errors.
+- **Frequency:** Occasional (any new JSON body, YAML block class, or server dependency)
+- **Key Files:**
+  - `server/SimServer.csproj` — `PublishAot`, the IL-warnings-as-errors list, the vetted-dependency warning collapse
+  - `server/Net/ServerJson.cs` — `LobbyHttpJson` / `LobbyWsJson` source-generated JSON contexts + every lobby wire DTO
+  - `server/Content/ServerYaml.cs` — `ServerYamlContext` (world.yaml / maps); `factions/.../Serialization/FactionsYamlContext.cs` — the bundle
+  - `factions/.../Serialization/ModelCollectionConverters.cs` — read converters for `TechSet` / `CapabilitySet` / `AttributeModifiers`
+  - `server/TrimmerRoots.xml` — third-party types the trimmer must keep (SIPSorcery's SCTP cookie)
+  - `server/Dockerfile` — clang build stage, `runtime-deps` final stage, the binary as entrypoint
+- **Related:** [[YAML Content Pipeline]], [[WebRTC]], [[Game Server]]
+- **Notes:** "Static context" = YamlDotNet's source-generated type inspector/object factory; a new YAML-bound **class** needs one `[YamlSerializable(typeof(X))]` line (missing = build error `YDNG001`), a new property needs nothing. Reading ALWAYS uses the static path (JIT too) so tests exercise what production runs; YAML *writing* and `--gen-schemas` are reflection tooling and JIT-only (the native binary refuses the flag). The trap that motivated `TrimmerRoots.xml`: SIPSorcery JSON-serializes its SCTP state cookie by reflection — trimmed, ICE+DTLS still connect but the data channel never opens, so only NAT-mode joins break. Guards: `tests/ContentTest` (static reader ≡ reflection reader for every stock file), `tests/LobbyTest` `WireJsonTests` (lobby JSON byte-identical to the reflection-era output).
+
 ---
 
 ## Public Lobby & Signaling
@@ -1357,7 +1370,8 @@ lobby's EF Core migrations, then starts `public-lobby` (`http://localhost:8091`)
 (`ws://localhost:8090/game`).
 - **Frequency:** Common
 - **Key Files:**
-  - `apphost/AppHost.cs` — resource graph (Postgres, `lobby`, `server`, `client`) + custom commands
+  - `apphost/AppHost.cs` — resource graph (Postgres, `lobby`, `server`, `client`, `launcher`) + custom commands
+  - `apphost/Hosting/GameLauncher.cs` — the [[Game Launcher]] as an explicit-start resource for UI review + its `show` command
   - `.env` / `.env.example` — read by both `docker compose` and the AppHost; every `KEY=VALUE`
     becomes a parameter in kebab-case (`SIM_AUTOSTART=1` → `sim-autostart`); unresolved
     parameters are prompted for in the dashboard and can be saved to user secrets
@@ -1380,7 +1394,11 @@ lobby's EF Core migrations, then starts `public-lobby` (`http://localhost:8091`)
   `railway-server-project` / `railway-environment` parameters; the one-time manual Railway steps
   (attach Postgres, pre-deploy `--migrate`, App Sleeping off, custom domain) are unchanged. Perf
   benchmarks still run the raw Release server directly (`dotnet run --project server -c Release`)
-  since Aspire builds Debug.
+  since Aspire builds Debug. The `launcher` resource (explicit start) builds and opens the
+  [[Game Launcher]] against the local lobby for UI review — it never needs to start the game — and
+  `aspire resource launcher show --view <flow|showcase|fake state> [--shot <png>]` opens any one view
+  in its own data dir (own single-instance lock) or renders it off-screen. A window needs an awake
+  display; `--shot` does not.
 
 ---
 

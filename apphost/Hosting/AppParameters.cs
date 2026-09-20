@@ -10,6 +10,10 @@ public sealed class AppParameters
     public required IResourceBuilder<ParameterResource> ClientBuildConfig { get; init; }
     public required IResourceBuilder<ParameterResource> PilotName { get; init; }
 
+    // Game Launcher (UI review only - see Hosting/GameLauncher.cs).
+    public required IResourceBuilder<ParameterResource> LauncherView { get; init; }
+    public required IResourceBuilder<ParameterResource> LauncherArgs { get; init; }
+
     public required IResourceBuilder<ParameterResource> SimPublicName { get; init; }
     public required IResourceBuilder<ParameterResource> SimAutostart { get; init; }
     public required IResourceBuilder<ParameterResource> SimSecret { get; init; }
@@ -73,6 +77,16 @@ public sealed class AppParameters
                 "",
                 "Default pilot name for launched clients (PILOT_NAME); empty = whatever the client remembers."
             ),
+
+            LauncherView = Param(
+                b,
+                "launcher-view",
+                "flow",
+                "View the tracked `launcher` resource opens: flow (the real launcher, from-source so it shows "
+                    + "DEV BUILD / not installed and makes no update calls; default), showcase (component gallery), "
+                    + "or any state name from launcher/App/Views/FakeViews.cs (fake, no install/feed/game needed)."
+            ),
+            LauncherArgs = Param(b, "launcher-args", "", "Extra args appended verbatim to the tracked `launcher` resource."),
 
             SimPublicName = Param(
                 b,

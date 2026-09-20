@@ -28,6 +28,7 @@ public sealed class MainWindow : Window
 
     private readonly LauncherFlow? _flow;
     private readonly AvaloniaHost? _host;
+    private bool _closeAccepted;
     private readonly ILobbyStatus? _lobby;
     private readonly LauncherServices _services;
 
@@ -86,6 +87,7 @@ public sealed class MainWindow : Window
         AddHandler(KeyDownEvent, OnKeyDownTunnel, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         AddHandler(PointerPressedEvent, (_, _) => _flow?.OnUserInput(), Avalonia.Interactivity.RoutingStrategies.Tunnel);
         Closing += OnClosing;
+        Closed += OnClosed;
 
         if (_flow is not null)
             _flow.Changed += Apply;
@@ -522,17 +524,30 @@ public sealed class MainWindow : Window
         }
     }
 
+    // Closing only DECIDES; the exit happens in OnClosed. Exiting from in here shuts the lifetime down, a
+    // shutdown closes every window, and that raises Closing again — Avalonia guards only NON-forced shutdowns
+    // against re-entry, so this handler and Shutdown() called each other until the stack ran out. v0.0.13
+    // crashed that way on EVERY quit: the X, Cmd+Q, and the flow's own exit after a game session (a hidden
+    // window is still in the lifetime's list).
     private void OnClosing(object? sender, WindowClosingEventArgs e)
     {
-        if (_flow is null)
-            return;
+        if (_flow is null || _closeAccepted)
+            return; // accepted once already: a shutdown re-asks every window it closes
         if (!_flow.RequestClose())
         {
             e.Cancel = true; // the updater is about to restart us; closing now would strand it
             return;
         }
+        _closeAccepted = true;
         _lobby?.Stop();
-        _host?.Exit(0);
+    }
+
+    // The launcher outlives its window only while it is HIDDEN. Once the window is really gone there is
+    // nothing left to come back to (ShutdownMode.OnExplicitShutdown would otherwise keep the process alive).
+    private void OnClosed(object? sender, EventArgs e)
+    {
+        if (_flow is not null)
+            _host?.Exit(0);
     }
 
     private static Bitmap? LoadBitmap(string name)

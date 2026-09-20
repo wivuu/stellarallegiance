@@ -64,6 +64,13 @@ server/Content/core/*.yaml            authored bundle (manifest-driven, kebab-ca
 
 1. **Model** — add the property to the library model (kebab-case YAML key is automatic via
    `HyphenatedNamingConvention`). Game-runtime-only? Put it in the runtime-extension section.
+   A new **property** needs nothing else to be read. A new YAML-bound **class** (a nested block type)
+   must also be registered with one `[YamlSerializable(typeof(X))]` line — in
+   `Serialization/FactionsYamlContext.cs` for the bundle, in `server/Content/ServerYaml.cs` for
+   `world.yaml`/maps — because YAML is read through YamlDotNet's source-generated static context
+   (the server publishes as NativeAOT). Forgetting it is build error `YDNG001`. Stick to plain
+   settable properties, `List<T>`, arrays and `Dictionary<K,V>`: any other collection type needs a
+   read converter (see `Serialization/ModelCollectionConverters.cs`).
 2. **Validator** — if bad authoring can break gameplay, add a `CoreValidator` rule (library
    invariants) and/or a `shared/ContentValidator` rule (projected-def invariants).
 3. **Shared def** — add the field to the matching record in `shared/Defs.cs`.

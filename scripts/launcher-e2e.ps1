@@ -178,6 +178,20 @@ try {
         Assert ((Test-Path -LiteralPath $shot) -and (Get-Item -LiteralPath $shot).Length -gt 50000) 'the rendered window is a real image (launcher.png > 50 KB)'
     }
 
+    # ...and once more with the REAL flow behind the window. The fake view above has no flow and the self-test
+    # passes below have no window, so nothing else runs the path a player takes on every quit: window closing
+    # -> flow -> host exit -> lifetime shutdown. v0.0.13 shipped recursing there until the stack ran out (a
+    # crash dialog on every exit) with this whole script green. The shot mode ends in that same shutdown.
+    Step 'UI smoke: the real flow behind the window shuts down cleanly ...'
+    $uiFlow = Start-Native $launcher @("--launcher-feed=$Feed", '--launcher-no-autolaunch', "--launcher-shot=$(Join-Path $Root 'launcher-flow.png')", "--launcher-data=$(Join-Path $Root 'data-ui-flow')")
+    if (-not $uiFlow.WaitForExit(120000)) {
+        $uiFlow.Kill($true)
+        Assert $false 'the launcher with a real flow exited within two minutes'
+    }
+    else {
+        Assert ($uiFlow.ExitCode -eq 0) "the launcher with a real flow shut down cleanly (exit code $($uiFlow.ExitCode))"
+    }
+
     Step "packing $v1 ..."
     New-Package $v1
 

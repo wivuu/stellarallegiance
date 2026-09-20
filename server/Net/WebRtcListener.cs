@@ -198,7 +198,8 @@ public sealed class WebRtcListener
             var answerSdp = WebRtcSdp.EnsureCandidatesInSdp(pc.localDescription.sdp.ToString(), gatheredCands.ToArray());
             using var resp = await _http.PostAsJsonAsync(
                 $"{_shareBase}/connect/{offer.Ticket}/answer",
-                new { sdpAnswer = answerSdp },
+                new WebRtcAnswerDto(answerSdp),
+                LobbyHttpJson.Default.WebRtcAnswerDto,
                 ct
             );
             if (!resp.IsSuccessStatusCode)

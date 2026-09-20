@@ -296,18 +296,18 @@ public sealed class LobbyRegistrar : ILobbyIdentity
         var req = new HttpRequestMessage(HttpMethod.Post, $"{_shareBase}/servers")
         {
             Content = JsonContent.Create(
-                new
-                {
-                    name = _name,
-                    port = _port,
-                    publicEndpoint = _publicEndpoint,
-                    players = _hub.PlayerCount,
-                    maxPlayers = _maxPlayers,
-                    state = _hub.GameState,
-                    protocolVersion = (int)Protocol.Version,
-                    roster = LobbyStatus.BuildRoster(_hub.RosterSnapshot()),
-                    @protected = _protected,
-                }
+                new RegisterRequestDto(
+                    _name,
+                    _port,
+                    _publicEndpoint,
+                    _hub.PlayerCount,
+                    _maxPlayers,
+                    _hub.GameState,
+                    (int)Protocol.Version,
+                    LobbyStatus.BuildRoster(_hub.RosterSnapshot()),
+                    _protected
+                ),
+                LobbyHttpJson.Default.RegisterRequestDto
             ),
         };
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
@@ -336,7 +336,7 @@ public sealed class LobbyRegistrar : ILobbyIdentity
         }
         _refused = false;
 
-        var resultDto = await resp.Content.ReadFromJsonAsync<RegisterResponseDto>(ct);
+        var resultDto = await resp.Content.ReadFromJsonAsync(LobbyHttpJson.Default.RegisterResponseDto, ct);
         var entry = resultDto?.Server;
         if (entry is null || string.IsNullOrEmpty(entry.SessionId) || string.IsNullOrEmpty(resultDto!.Secret))
         {
@@ -420,12 +420,8 @@ public sealed class LobbyRegistrar : ILobbyIdentity
 
             // Auth handshake — carries the per-session secret so the lobby can verify ownership.
             var authBytes = JsonSerializer.SerializeToUtf8Bytes(
-                new
-                {
-                    type = "auth",
-                    sessionId,
-                    secret = _secret,
-                }
+                new WsAuthMsg("auth", sessionId, _secret),
+                LobbyWsJson.Default.WsAuthMsg
             );
             await ws.SendAsync(new ArraySegment<byte>(authBytes), WebSocketMessageType.Text, true, ct);
 
@@ -433,10 +429,7 @@ public sealed class LobbyRegistrar : ILobbyIdentity
             var r = await ws.ReceiveAsync(buf, ct);
             if (r.MessageType == WebSocketMessageType.Close)
                 return;
-            var reply = JsonSerializer.Deserialize<WsReplyDto>(
-                buf.AsSpan(0, r.Count),
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
-            );
+            var reply = JsonSerializer.Deserialize(buf.AsSpan(0, r.Count), LobbyWsJson.Default.WsReplyDto);
             if (reply?.Type != "ok")
             {
                 Log.WsAuthRejected(_log, reply?.Message);
@@ -483,14 +476,8 @@ public sealed class LobbyRegistrar : ILobbyIdentity
                 if (players != lastPlayers || state != lastState || rosterSig != lastRosterSig)
                 {
                     var payload = JsonSerializer.SerializeToUtf8Bytes(
-                        new
-                        {
-                            type = "update",
-                            players,
-                            maxPlayers = _maxPlayers,
-                            state,
-                            roster,
-                        }
+                        new WsUpdateMsg("update", players, _maxPlayers, state, roster),
+                        LobbyWsJson.Default.WsUpdateMsg
                     );
                     await ws.SendAsync(new ArraySegment<byte>(payload), WebSocketMessageType.Text, true, ct);
                     lastPlayers = players;
@@ -500,7 +487,7 @@ public sealed class LobbyRegistrar : ILobbyIdentity
                 }
                 else if (++ticks >= PingAfterTicks)
                 {
-                    var ping = JsonSerializer.SerializeToUtf8Bytes(new { type = "ping" });
+                    var ping = JsonSerializer.SerializeToUtf8Bytes(new WsPingMsg("ping"), LobbyWsJson.Default.WsPingMsg);
                     await ws.SendAsync(new ArraySegment<byte>(ping), WebSocketMessageType.Text, true, ct);
                     ticks = 0;
                 }
@@ -524,10 +511,7 @@ public sealed class LobbyRegistrar : ILobbyIdentity
                 if (result.MessageType == WebSocketMessageType.Close)
                     return;
 
-                var msg = JsonSerializer.Deserialize<WsOfferMsg>(
-                    buf.AsSpan(0, result.Count),
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
-                );
+                var msg = JsonSerializer.Deserialize(buf.AsSpan(0, result.Count), LobbyWsJson.Default.WsOfferMsg);
                 if (msg?.Type == "offer" && _offerChannel is not null)
                     _offerChannel.Writer.TryWrite(new PendingOfferDto(msg.Ticket!, msg.SdpOffer!));
             }
@@ -592,17 +576,6 @@ public sealed class LobbyRegistrar : ILobbyIdentity
         return new Uri(url + "/servers/ws");
     }
 
-    // JSON shapes for the /servers/ws protocol.
-    private sealed record WsReplyDto(string? Type, string? Message);
-
-    private sealed record WsOfferMsg(string? Type, string? Ticket, string? SdpOffer);
-
-    // Public lobby register-response JSON (camelCase; web JSON defaults are case-insensitive).
-    // Secret is the per-session capability, disclosed only here, that we echo to mutate/close our
-    // listing. Server holds only the fields we actually consume.
-    private sealed record RegisterResponseDto(ServerEntryDto? Server, string? Secret);
-
-    private sealed record ServerEntryDto(string SessionId, string? PublicEndpoint, IReadOnlyList<IceServerDto>? IceServers);
-
-    private sealed record IceServerDto(string[]? Urls, string? Username, string? Credential);
+    // The JSON shapes of /servers and /servers/ws live in ServerJson.cs, next to the source-generated
+    // contexts that (de)serialize them.
 }

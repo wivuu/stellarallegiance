@@ -1,4 +1,3 @@
-using Allegiance.Factions.Serialization;
 using StellarAllegiance.Shared;
 
 namespace SimServer.Content;
@@ -91,7 +90,7 @@ public sealed class GarrisonDef
     public int? Team { get; set; }
 }
 
-// YAML shape of a sector's `environment:` block. Kebab-case keys (YamlDotNet via CoreSerializer, same
+// YAML shape of a sector's `environment:` block. Kebab-case keys (YamlDotNet via ServerYaml, same
 // as the rest of the map/content bundle). Doubles/arrays here are downcast to float/Vec3 in ApplyTo.
 public sealed class SectorEnvDef
 {
@@ -191,7 +190,7 @@ public static class MapLoader
             MapDef map;
             try
             {
-                map = CoreSerializer.Deserialize<MapDef>(File.ReadAllText(path));
+                map = ServerYaml.Deserialize<MapDef>(File.ReadAllText(path));
             }
             catch (Exception ex)
             {

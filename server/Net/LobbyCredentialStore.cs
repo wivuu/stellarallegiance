@@ -21,8 +21,6 @@ public sealed record LobbyCredential(
 // both are unit-testable without touching a real filesystem path or a real lobby.
 public static class LobbyCredentialStore
 {
-    static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web) { WriteIndented = false };
-
     // SIM_AUTH_FILE if set, else "<dir containing sim-cache>/lobby-auth.json" — a sibling of the
     // cache dir (NOT inside it: the cache is a disposable hull cache, this is a durable credential).
     public static string ResolveDefaultPath()
@@ -46,7 +44,7 @@ public static class LobbyCredentialStore
             if (!File.Exists(path))
                 return null;
             var json = File.ReadAllText(path);
-            var cred = JsonSerializer.Deserialize<LobbyCredential>(json, JsonOpts);
+            var cred = JsonSerializer.Deserialize(json, LobbyHttpJson.Default.LobbyCredential);
             if (
                 cred is null
                 || string.IsNullOrWhiteSpace(cred.LobbyBase)
@@ -71,7 +69,7 @@ public static class LobbyCredentialStore
             Directory.CreateDirectory(dir);
 
         var tmp = path + ".tmp-" + Guid.NewGuid().ToString("N");
-        File.WriteAllText(tmp, JsonSerializer.Serialize(credential, JsonOpts));
+        File.WriteAllText(tmp, JsonSerializer.Serialize(credential, LobbyHttpJson.Default.LobbyCredential));
         if (!OperatingSystem.IsWindows())
             File.SetUnixFileMode(tmp, UnixFileMode.UserRead | UnixFileMode.UserWrite);
         File.Move(tmp, path, overwrite: true);

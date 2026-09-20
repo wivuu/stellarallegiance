@@ -9,9 +9,22 @@
          undocumented helpers don't spam warnings. -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <!-- The sim server AOT-compiles this library (server/SimServer.csproj, PublishAot): run the
+         trim/AOT analyzers here too, so reflection that would break the native server is a build
+         warning in THIS project instead of a publish-time surprise in another one. -->
+    <IsAotCompatible>true</IsAotCompatible>
+    <!-- YDNG001 = a YAML-bound property whose type is missing from FactionsYamlContext: it would
+         only surface at load time, and only when a file actually authors that key. Break the build
+         instead. (The three converter-backed collections opt out with a pragma at the property.) -->
+    <WarningsAsErrors>$(WarningsAsErrors);YDNG001</WarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="YamlDotNet" Version="18.1.0" />
+    <!-- YamlDotNet's source generator: emits the reflection-free type inspector / object factory
+         behind FactionsYamlContext (Serialization/FactionsYamlContext.cs). Deserialization ALWAYS
+         goes through it - JIT and NativeAOT alike - so tests exercise the path the native server
+         runs. Keep the version in lockstep with YamlDotNet. Compile-time only. -->
+    <PackageReference Include="Vecc.YamlDotNet.Analyzers.StaticGenerator" Version="18.1.0" PrivateAssets="all" />
   </ItemGroup>
 </Project>

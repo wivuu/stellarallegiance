@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using Allegiance.Factions.Serialization;
 using StellarAllegiance.Shared;
 
 namespace SimServer.Content;
@@ -11,7 +10,7 @@ namespace SimServer.Content;
 // bundle manifest — the tech tree tunes buyable gameplay/balance, a map defines the arena, and
 // world.yaml tunes the server's world defaults + per-tick sim. Stock ships next to the binary
 // (content/core/world.yaml); SIM_WORLD / --world points at a replacement file. Every tuning field
-// is optional (kebab-case keys, YamlDotNet via CoreSerializer, same as maps): an omitted key
+// is optional (kebab-case keys, YamlDotNet via ServerYaml, same as maps): an omitted key
 // keeps its stock value (the shared World*Tuning field initializers).
 public sealed class WorldDef
 {
@@ -707,7 +706,7 @@ public static class WorldLoader
         WorldDef def;
         try
         {
-            def = CoreSerializer.Deserialize<WorldDef>(File.ReadAllText(path));
+            def = ServerYaml.Deserialize<WorldDef>(File.ReadAllText(path));
         }
         catch (Exception ex)
         {
