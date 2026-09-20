@@ -800,7 +800,7 @@ Binary wire format with quantized/compressed snapshots, separate missile stride,
   - `shared/Net/Messages.cs` / `Records.cs` — message definitions (generated codecs); `server/Net/Frames.cs` — fills; `server/Net/Protocol.cs` — byte facade (ids/sizes/`Build*`)
   - `client/scripts/GameNetClient.cs` — deserialization and state application
   - `shared/WireQuant.cs` — quantization (f16 compression)
-- **Related:** [[MsgSnapshot]], [[MsgMissiles]], [[WebRTC]]
+- **Related:** [[MsgSnapshot]], [[MsgMissiles]], [[WebRTC]], [[Server Notice]]
 - **Notes:** Little-endian, delta-encoded snapshots; missiles in separate MsgMissiles (never extend MsgSnapshot)
 
 ### MsgSnapshot
@@ -1331,14 +1331,124 @@ The two-way contract between the [[Game Launcher]] and the game, in ONE file com
 - **Notes:** Without the env (dev run, editor, plain zip) the game keeps its notify-only "download" banner (`UpdateChecker`). UPDATE NOW only exists in the server browser, so it can never fire mid-match. A Dock/taskbar pin on the packaged game binary would bypass the launcher forever — `LauncherHandoff.TryRedirectToLauncher` relaunches through it (`SA_NO_LAUNCHER_REDIRECT=1` opts out).
 
 ### Update Feed / Channel
-Where installed clients find updates: the repo's **GitHub Releases**. Each release carries, per OS, a `releases.<win|osx|linux>.json` feed plus `-full.nupkg` / `-delta.nupkg` packages (Velopack). *Channel* has two meanings — Velopack's per-OS channel (`win`/`osx`/`linux`, fixed by the package) and the launcher's **STABLE / BETA** preference (BETA = also GitHub pre-releases, i.e. tags containing `-`).
+Where installed clients and game servers find updates: the repo's **GitHub Releases**. Each release carries,
+per desktop OS, a `releases.<win|osx|linux>.json` feed plus `-full.nupkg` / `-delta.nupkg` packages, and, per
+server arch, `releases.server-linux-<x64|arm64>.json` plus its own full/delta packages and the
+`.AppImage` itself (all Velopack). *Channel* has two meanings — Velopack's own channel (`win`/`osx`/`linux`
+for the desktop client, `server-linux-x64`/`server-linux-arm64` for the game server, each fixed by the
+package) and the launcher's **STABLE / BETA** preference (BETA = also GitHub pre-releases, i.e. tags
+containing `-`); a game server's equivalent is `SIM_UPDATE_PRERELEASE` (see [[Server Auto-Update]]).
 - **Frequency:** Domain-specific
 - **Key Files:**
-  - `.github/workflows/release.yml` (`prepare → package ×3 → publish`), `scripts/package-clients.ps1` (the one packaging entry point, CI and local), `.github/workflows/package-dryrun.yml`
-  - `launcher/Core/Update/VelopackUpdateService.cs` — `GithubSource`, or `--launcher-feed=<dir|url>` for a folder feed
+  - `.github/workflows/release.yml` (`prepare → package ×3 + package-server ×2 → server-image → publish`),
+    `scripts/package-clients.ps1` / `scripts/package-server.ps1` (the packaging entry points, CI and local),
+    `.github/workflows/package-dryrun.yml` / `server-update-dryrun.yml`
+  - `launcher/Core/Update/VelopackUpdateService.cs` — `GithubSource`, or `--launcher-feed=<dir|url>` for a
+    folder feed; `server/Update/VelopackUpdateBackend.cs` — the server's twin, `SimpleWebSource` on
+    `releases/latest/download` (no GitHub API quota) unless `SIM_UPDATE_PRERELEASE`/`SIM_UPDATE_FEED`
   - `docs/RELEASING.md` — assets, limits, signing, failure recovery
-- **Related:** [[Game Launcher]]
-- **Notes:** One unauthenticated GitHub API call per check (60/h/IP) — failures are silent and never block PLAY. Deltas chain up to 10 releases and fall back to the full package. `vpk` (root `dotnet-tools.json`) and the `Velopack` NuGet must be the SAME version. No `zstd` on the build machine ⇒ vpk silently writes bsdiff deltas the updater rejects (the package script refuses to run). No single packaged file may reach 1 GiB.
+- **Related:** [[Game Launcher]], [[Server Auto-Update]], [[Release Advert]]
+- **Notes:** One unauthenticated GitHub API call per check (60/h/IP) — failures are silent and never block PLAY.
+  The server's own feed read is a plain CDN GET instead (no quota to share across a fleet behind one IP).
+  Deltas chain up to 10 releases (desktop) and fall back to the full package. `vpk` (root `dotnet-tools.json`)
+  and the `Velopack` NuGet must be the SAME version. No `zstd` on the build machine ⇒ vpk silently writes
+  bsdiff deltas the updater rejects (the package script refuses to run). No single packaged file may reach
+  1 GiB — on Linux the package *is* one file, so the limit applies to the whole AppImage.
+
+### Server Auto-Update
+A game server updating itself through Velopack once nobody would notice: no download or apply while a
+player is connected, and the swap only after an idle window of zero connections, behind a closed
+[[Update Drain]]. Gated by `SIM_AUTO_UPDATE` (`off`/`warn`/`on`, default `on` in a container else `warn`) —
+`on` needs a packaged (Velopack) Linux install and degrades to `warn` otherwise, logged once at boot.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `server/Update/AutoUpdateOptions.cs` — flags/env, `Resolve`; `ServerUpdateCoordinator.cs` — the state
+    machine (`Idle → Offered → Draining → Restarting`), `TimeProvider`-driven, one public `StepAsync` so
+    tests drive it tick by tick instead of sleeping
+  - `server/Update/VelopackUpdateBackend.cs` — the real backend (mirrors
+    `launcher/Core/Update/VelopackUpdateService.cs`); `VelopackBootstrap.cs` — Linux/`$APPIMAGE` detection +
+    auto-apply-on-startup OFF; `SimulatedUpdateBackend.cs` — the `SIM_UPDATE_SIMULATE` dev harness
+  - `server/Update/UpdateAttemptStore.cs` — the restart-loop guard (2 failed attempts suspend a release)
+  - `server/Logging/Log.Update.cs` — the `update-state <Name> …` line every transition emits (EventIds
+    1801-1832; a stable grep target for `scripts/server-update-e2e.ps1` and operators alike)
+  - `tests/ServerUpdateTest` — options/coordinator/hub-gate/state-path suites plus a 400-random-timeline
+    invariant fuzz
+- **Related:** [[Release Advert]], [[Update Drain]], [[Server Notice]], [[Game Launcher]],
+  [[Update Feed / Channel]]
+- **Notes:** The coordinator only ever reacts to a [[Release Advert]] or its own slow safety-net poll (first
+  check 60 s after boot, then every 6 h, skipped whenever an advert already arrived) — it never polls GitHub
+  on its own while listed. Version identity, in order: installed (Velopack) → assembly `-p:Version` →
+  `SIM_BUILD_VERSION` (`scripts/run-server.ps1` sets it from `git describe`) → unknown (never compares, never
+  warns). `SIM_UPDATE_RESTART=exit` (the default in a container or under systemd) exits code `85` for a
+  supervisor to relaunch; `relaunch` (a server started by hand) asks Velopack to start the new build after
+  this process exits. Decision + rejected alternatives:
+  `docs/adr/0005-game-servers-self-update-via-velopack.md`.
+
+### Release Advert
+The public lobby telling every connected game server and every player's server browser that a released
+version exists — "the advert is a doorbell; Velopack is the truth": it names a version and nothing else, so
+the receiving side still asks the real Velopack feed what to install and whether it's actually newer.
+Delivered as a `release` frame on `/servers/ws` (right after `ok`, and again on a rise) and a `release` event
+on `/servers/events` (after the `snapshot`, exempt from the `?protocol=` filter — a stale-protocol client
+staring at an empty list is exactly who needs to hear it). `GET /release` answers the same numbers
+anonymously.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `public-lobby/ReleaseAdverts/ReleaseState.cs` — `Baked` (`LOBBY_RELEASE_VERSION`) / `Confirmed` (polled) /
+    `Latest` = max of both; `ReleaseWatcher.cs` — the one poller (`LOBBY_RELEASE_FEED_URL`,
+    `LOBBY_RELEASE_POLL_SECONDS`); `ReleaseFeed.cs` — pure `releases.<channel>.json` parser
+  - `public-lobby/ServerConnectionManager.cs` (`ReleasePush`, `BroadcastRelease`), `LobbyEventBus.cs`
+    (`LobbyEventKind.Release`)
+  - `shared/ReleaseVersion.cs` — the ONE semver comparison the lobby's max, the server's doorbell and the
+    client's nudge all share (leading-`v` tolerant, pre-release ordered)
+  - `apphost/Hosting/RailwayDeployer.cs` — stamps `LOBBY_RELEASE_VERSION` from `git describe --tags
+    --abbrev=0 --exclude "*-*"` on a lobby deploy (an explicit value wins; no tag leaves Railway untouched)
+  - `public-lobby/CONTEXT.md` — language
+- **Related:** [[Server Auto-Update]], [[Update Feed / Channel]], [[Public Lobby]]
+- **Notes:** Servers are told `Latest` (`max(baked, confirmed)`) — an early advert only costs a no-op check.
+  Clients are told `Confirmed` only (never `Baked`) — an early "UPDATE READY" would send a player through the
+  Game Launcher and straight back having installed nothing. A server the lobby can't reach (unlisted, or an
+  old lobby) gets no advert at all and relies on [[Server Auto-Update]]'s own safety-net poll instead.
+
+### Update Drain
+The closed front door a game server holds while it swaps its own package in: `IUpdateGate.TryBeginDrain()`
+is one atomic "nobody is connected, and from now on nobody gets in" question, so a `Hello` can never land
+between the coordinator seeing zero connections and the apply starting. A `Hello` arriving while draining is
+refused with `RejectMessage.CodeUpdating` (3, "server updating") rather than a generic disconnect.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `server/Net/ClientHub.Update.cs` — `TryBeginDrain`/`EndDrain` (one `_gateLock`), `TryAdmit` (the Hello
+    path's registration, made atomic against draining), `SendStandingNotice`
+  - `server/Update/ServerUpdateCoordinator.cs` — `FinishDrainAsync` (bounded ~10 s wait for `IsQuiescent`,
+    else `EndDrain` and retry later rather than refuse players indefinitely)
+  - `shared/Net/Messages.cs` — `RejectMessage.CodeUpdating` / `ReasonUpdating`
+  - `tests/ServerUpdateTest/HubGateTests.cs` — the parked-`Hello`-inside-a-blocking-JWKS-fetch race, against
+    the real `ClientHub`
+- **Related:** [[Server Auto-Update]], [[Reconnect Grace]], [[Join Token]]
+- **Notes:** The race is real: a Verified listing awaits the join-token check between reading the `Hello` and
+  registering the client, and during that wait the connection doesn't count toward `ConnectionCount` yet —
+  one lock covers both the admit path and the drain check. The drain closing and the standing
+  [[Server Notice]] changing share that same lock, so a joiner can never be handed a notice that was already
+  withdrawn.
+
+### Server Notice
+A standing notice from the server itself, as opposed to a chat line that scrolls away: `ServerNoticeMessage`
+(id 34, protocol 43), sent reliably to everyone when it changes and to every later joiner, surviving the
+mid-session re-Welcomes a match start or a fog team change sends — cleared only on a fresh connection. Today
+there is one kind, `KindUpdatePending`: the release the server will restart onto. Renders as a Game Lobby
+banner (chrome `BarPanel` + `AlertBox` Warn tone) plus one ★ system chat line, so pilots already in flight
+see it too.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `shared/Net/Messages.cs` — `ServerNoticeMessage` (`Kind`, `Version`; `KindNone`/`KindUpdatePending`)
+  - `server/Net/ClientHub.Update.cs` — `SetServerNotice`/`AnnounceSystem`, the standing-notice send-on-join
+  - `client/scripts/net/FrameApplier.cs` (case 34), `GameNetClient.cs` (`ServerNotice` property +
+    `ServerNoticeChanged` event), `NetTypes.cs` (`ServerNotice` record struct), `client/scripts/Lobby.cs`
+    (`BuildNoticeStrip` / `RefreshServerNotice`), `ConnectLinkModal.cs` ("⚠ SERVER UPDATING" on reject code 3)
+- **Related:** [[Server Auto-Update]], [[Update Drain]], [[Protocol]]
+- **Notes:** Cleared only in `BeginConnect()`/`ResetSession()`, never on a mid-session Welcome — a notice must
+  not silently vanish just because a match started or fog reassigned a team. No new UI component: the Game
+  Lobby's notice strip reuses `AlertBox`'s existing Warn tone (see DESIGN.md).
 
 ## Tools & Utilities
 

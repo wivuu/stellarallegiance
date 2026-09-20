@@ -96,6 +96,9 @@ Environment variables (see [`PublicLobby.cs`](PublicLobby.cs)):
 | `LOBBY_ORLEANS_CLUSTER_ID` | `public-lobby-<RAILWAY_DEPLOYMENT_ID>`, else `public-lobby` | Orleans cluster id. Every replica of one Railway deployment shares the deployment id and clusters together; a redeploy forms a fresh cluster rather than joining the one Railway is stopping. Set explicitly for manual scale-out elsewhere (same value on every replica). |
 | `ORLEANS_SILO_PORT` | `11111` | Orleans silo-to-silo port. |
 | `ORLEANS_GATEWAY_PORT` | `30000` | Orleans client gateway port. |
+| `LOBBY_RELEASE_VERSION` | unset | The lobby's baked-in "latest game release" ([`ReleaseState`](ReleaseAdverts/ReleaseState.cs)), known the instant the process boots — which is exactly when every game server reconnects, so a lobby redeploy is usually what flips the fleet. Set by `aspire do deploy-lobby` from the latest stable git tag; blank/unset means no baked version (adverts then come from the polled feed alone). |
+| `LOBBY_RELEASE_FEED_URL` | the project's own GitHub "latest release" server feed | Feed the lobby polls for the *confirmed* version: an `http(s)` URL, or a local file path (dev / verification). Empty = the default. |
+| `LOBBY_RELEASE_POLL_SECONDS` | `300` (min `5`) | Poll cadence. `0` disables polling — baked-only, and game clients then hear nothing (they're only ever told the *confirmed* version, never the baked one — see "Release Adverts" below). |
 
 A public STUN server is fine — there's nothing to host for it. The live server registry and
 signaling relay still hold everything in memory (registry entries expire 30 s after the last
@@ -268,6 +271,7 @@ Registry:
 | `GET` | `/servers` | — | active server list (browser view); never includes `secret`. |
 | `GET` | `/servers/live` | — | **anonymous** SSE. Announces registry changes to the public web pages as the reduced `PublicServerStrip` projection (`PublicView.cs`) — server names, player counts, state badge, totals; never the session id, endpoint, ICE config or roster. One `snapshot` event on connect, one per change (identical snapshots suppressed), a keepalive comment every 20 s, and `503` past `PublicStreams.Max` concurrent streams. |
 | `DELETE` | `/servers/{sessionId}` | — | graceful removal on host shutdown. Requires `Authorization: Bearer <secret>`; a missing/wrong secret returns `404`. |
+| `GET` | `/release` | — | **anonymous**. What this lobby believes the latest game release is: `{ latest, confirmed, baked }` ([`ReleaseState`](ReleaseAdverts/ReleaseState.cs) — see "Release Adverts" below). Public knowledge (the GitHub releases page says the same); lets an operator, or a tool watching neither stream, ask the one watcher instead of GitHub directly. |
 
 Liveness + status come solely from the server WebSocket (`/servers/ws`): the host authenticates
 with `{ type: "auth", sessionId, secret }`, then its `ping`/`update` frames keep the entry fresh
@@ -281,6 +285,32 @@ Signaling (relays opaque SDP; long-polls so a join settles in ~one round trip):
 | `GET` | `/servers/{sessionId}/pending` | — | game server long-polls for offers. |
 | `POST` | `/connect/{ticket}/answer` | `{ sdpAnswer }` | game server posts its answer. |
 | `GET` | `/connect/{ticket}/answer` | — | client long-polls; `200` with answer, or `204` if not ready. |
+
+### Release Adverts
+
+The public lobby is the **one watcher** of the game's release feed (`docs/adr/0005`) — a listed game
+server no longer polls GitHub on its own, and neither does a player's server browser; both are told by
+the lobby they're already connected to. **The advert is a doorbell; Velopack is the truth:** it names a
+version and nothing else — the receiving side still asks the real Velopack feed for the package, its
+checksum, and whether it's actually newer, so a wrong, stale, or even hostile lobby can cost at most a
+few no-op checks, never a bad install.
+
+- **To game servers** — a `{"type":"release","version":"…"}` frame on `/servers/ws`, right after `ok` on
+  every (re)connect, and again to every connected server whenever the value rises. Carries `Latest` =
+  `max(baked, confirmed)`: the baked version counts immediately, which matters because a lobby redeploy —
+  the moment `LOBBY_RELEASE_VERSION` takes effect — is usually *why* the whole fleet just reconnected. A
+  server running code that predates this frame ignores it (its receive loop only acts on `"offer"`).
+- **To game clients** — a `release` event on `/servers/events`, once after the `snapshot` when a confirmed
+  version is known and again whenever it rises. Carries `Confirmed` only (never `Baked`, which is a lobby
+  operator's word, not proof the packages exist) — a premature "UPDATE READY" would send a player through
+  the Game Launcher and straight back having installed nothing. This event bypasses the `?protocol=` filter
+  on purpose: a client on a stale protocol, staring at an empty server list, is exactly who most needs to
+  hear it. An older client ignores event names it doesn't know.
+
+A server the lobby can't reach at all — unlisted (no `SIM_PUBLIC_NAME`), or talking to a lobby that
+predates adverts — has no fallback here; it relies on its own slow safety-net poll (see the game server's
+`SIM_UPDATE_INTERVAL_SECONDS`). See `public-lobby/CONTEXT.md` ("Release Advert") for the term, and
+`GLOSSARY.md` → *Distribution & Updates* for the full mechanism on the server side.
 
 ## Identity: device codes, sessions, dev login (WP1.1)
 

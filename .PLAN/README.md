@@ -4,11 +4,6 @@ The live roadmap: what is shipped (one line each, with a pointer to the real doc
 (by stage), and the deep backlog. Finished work is condensed here, not narrated — the code,
 [`GLOSSARY.md`](../GLOSSARY.md) and the per-feature docs are the authority for how things work.
 
-**Next to incorporate into the plan**
-- Auto-update for game servers using velopack; put behind a flag, on by default for docker deployments, warn by default for other deployments
-  - ONLY deploy when server has no players on it
-  - WARN players that are on the server (in game lobby) that an update is available and the server wants to restart
-
 **What else lives in `.PLAN/`**
 
 | Path | What it is |
@@ -91,6 +86,34 @@ Condensed outcomes. Each line names where the detail now lives.
     taskbar behaviour, a Linux desktop AppImage.
   - ☐ Later: Developer ID + notarization, Azure Trusted Signing (switched on by secrets —
     `docs/RELEASING.md`); REPAIR INSTALL in the launcher (today it links to the releases page).
+
+- ◐ **[L] Game server auto-update (Velopack)** (2026-09-20, branch `server-auto-update`).
+  A game server updates itself the same way the desktop client does — Velopack — but gated by the public
+  lobby telling it a release exists and only ever while it has no players: no update work while anyone is
+  connected, the swap happens behind a closed drain once the server has been empty for a while, and it
+  restarts onto the new build (exit code 85) from inside its own container. Decision + rejected
+  alternatives: [`docs/adr/0005`](../docs/adr/0005-game-servers-self-update-via-velopack.md) · deploy
+  knobs: [`docs/DEPLOY.md`](../docs/DEPLOY.md) · release process: [`docs/RELEASING.md`](../docs/RELEASING.md) ·
+  terms: [`GLOSSARY.md` → *Distribution & Updates*](../GLOSSARY.md).
+  - ✅ `tests/ServerUpdateTest` (259 checks incl. an invariant fuzz over 400 random timelines and the
+    parked-Hello drain race against the real `ClientHub`, mutation-checked).
+  - ✅ `tests/PublicLobbyTest` release section (73 checks incl. live `/servers/ws` + `/servers/events`
+    against the real host).
+  - ✅ `tests/WireTest` (new golden, every existing golden unchanged by 42→43).
+  - ✅ The NativeAOT publish is warning-clean with Velopack, and the full simulated flow on the native
+    binary ends in exit code 85 after a graceful shutdown.
+  - ✅ The Docker e2e (`scripts/server-update-e2e.ps1`, arm64, 2026-09-20): deferred while a `simbot`
+    player is connected, applied after the idle window, relaunched INSIDE the same container (Docker
+    restart count 0), a real delta for the third version, `docker restart` without a re-unpack, a graceful
+    `docker stop`, and `SIM_AUTO_UPDATE=warn` only warning. It caught one real bug on its first run: a
+    packaged `1.0.0` was read as the SDK's unstamped placeholder, so nothing was ever newer.
+  - ✅ On the local Aspire stack: the real lobby → real registrar advert at connect time, a live push
+    when the feed changed, re-registration after a lobby restart; screenshots of the Game Lobby banner,
+    the "SERVER UPDATING" refusal and the server-list nudge.
+  - ☐ The dry-run workflow (`server-update-dryrun.yml`) on GitHub's x64 + arm64 runners.
+  - ☐ A release rehearsal with `-ci.N` tags proving the GitHub-hosted feed + five-channel upload.
+  - ☐ A bare (non-container) AppImage under systemd - the unit in `docs/DEPLOY.md` is untested.
+  - ☐ The first real release — older images need one manual `docker compose pull && docker compose up -d`.
 
 ### Stage 3 — Combat feel & depth
 
