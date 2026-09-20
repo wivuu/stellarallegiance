@@ -18,7 +18,7 @@
   <ItemGroup>
     <!-- Pure managed, zero dependencies on net10.0. MUST match the `vpk` version in the root
          dotnet-tools.json — vpk warns (and may one day fail) when the two drift apart. -->
-    <PackageReference Include="Velopack" Version="1.2.0" />
+    <PackageReference Include="Velopack" />
   </ItemGroup>
   <ItemGroup>
     <!-- Single-source files compiled by BOTH the game and the launcher (same trick the client uses

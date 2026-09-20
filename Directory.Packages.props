@@ -1,0 +1,94 @@
+<Project>
+  <!-- Central Package Management (CPM): every NuGet version for the repo lives HERE, and the
+       csprojs carry bare <PackageReference Include="..." /> with no Version attribute. One package,
+       one version, one edit — SIPSorcery and Microsoft.IdentityModel.JsonWebTokens are each
+       consumed by two projects that MUST stay in lockstep (the server and the Godot client share
+       the WebRTC SDP handshake; the server verifies the ES256 join tokens the lobby mints).
+
+       CentralPackageTransitivePinningEnabled lets a <PackageVersion> below also raise a TRANSITIVE
+       dependency without any project taking a direct reference on it — that is how AngleSharp is
+       floated off the vulnerable 1.3.0 that AspNet.Security.OpenId.Steam pulls in. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <!-- Transitive pins: NOT referenced directly by any project. Each entry exists only to lift a
+       transitive dependency off a vulnerable or broken version; drop the pin once the package that
+       drags it in has shipped a fix of its own. -->
+  <ItemGroup>
+    <!-- AspNet.Security.OpenId.Steam 10.0.0 -> AngleSharp 1.3.0, which carries GHSA-pgww-w46g-26qg
+         (mXSS via annotation-xml; affects everything below 1.5.0). 1.5.0 is the FIRST patched
+         build, and is chosen over the newer 1.8.x on purpose: this lifts a transitive the Steam
+         OpenID provider resolves for itself, so the smallest jump clear of the advisory is the
+         safest. Drop the pin once that provider raises its own floor past 1.5.0; re-check with
+         `dotnet list package` and its vulnerable flag. -->
+    <PackageVersion Include="AngleSharp" Version="1.5.0" />
+  </ItemGroup>
+
+  <!-- Aspire AppHost (apphost/): local orchestration of postgres + lobby + sim server. -->
+  <ItemGroup>
+    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.5.4" />
+    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.5.4" />
+  </ItemGroup>
+
+  <!-- Public lobby (public-lobby/, public-lobby-data/): identity, Orleans, EF Core, telemetry. -->
+  <ItemGroup>
+    <PackageVersion Include="AspNet.Security.OAuth.GitHub" Version="10.0.0" />
+    <PackageVersion Include="AspNet.Security.OpenId.Steam" Version="10.0.0" />
+    <PackageVersion Include="EFCore.NamingConventions" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.Google" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Orleans.Clustering.AdoNet" Version="10.3.1" />
+    <PackageVersion Include="Microsoft.Orleans.Reminders.AdoNet" Version="10.3.1" />
+    <PackageVersion Include="Microsoft.Orleans.Server" Version="10.3.1" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.19.0" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.19.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.19.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.19.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.19.0" />
+  </ItemGroup>
+
+  <!-- Shared by the sim server AND the Godot client: these two versions must move together. -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.23.0" />
+    <PackageVersion Include="SIPSorcery" Version="10.0.16" />
+  </ItemGroup>
+
+  <!-- Server-only content pipeline (server/Content): YAML loading + the AOT static generator. -->
+  <ItemGroup>
+    <PackageVersion Include="Vecc.YamlDotNet.Analyzers.StaticGenerator" Version="18.1.0" />
+    <PackageVersion Include="YamlDotNet" Version="18.1.0" />
+  </ItemGroup>
+
+  <!-- Game launcher (launcher/): Avalonia shell + Velopack updates. -->
+  <ItemGroup>
+    <PackageVersion Include="Avalonia" Version="12.1.2" />
+    <PackageVersion Include="Avalonia.Desktop" Version="12.1.2" />
+    <PackageVersion Include="Avalonia.Headless" Version="12.1.2" />
+    <PackageVersion Include="Avalonia.Themes.Simple" Version="12.1.2" />
+    <PackageVersion Include="Velopack" Version="1.2.0" />
+  </ItemGroup>
+
+  <!-- NOT here on purpose: Microsoft.CodeAnalysis.CSharp / .Analyzers. tools/wire-gen pins Roslyn
+       4.x deliberately (a source generator loads into the compiler process, so it targets the
+       OLDEST Roslyn it must run on). With transitive pinning ON, a central entry would apply that
+       floor to EVERY project, downgrading what Microsoft.EntityFrameworkCore.Design (Roslyn >=
+       5.0.0) and Microsoft.Orleans.Server (Analyzers >= 3.11.0) resolve, which is NU1109. The pin
+       therefore stays local to WireGen.csproj as a VersionOverride. -->
+
+  <!-- Test suites (tests/, factions/tests/). GodotSharp is absent on purpose: Godot.NET.Sdk
+       defines it IMPLICITLY for the client, and CPM forbids a central version for an implicit
+       reference (NU1009), so InterpTest carries it as a VersionOverride instead. -->
+  <ItemGroup>
+    <PackageVersion Include="coverlet.collector" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.15.0" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
+  </ItemGroup>
+</Project>

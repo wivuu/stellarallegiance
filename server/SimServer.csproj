@@ -131,18 +131,18 @@
     <!-- Pure-managed WebRTC (DataChannels) for the NAT-traversal transport. The same library
          runs on the Godot client and (optionally) simbot, so the offerer/answerer interop on one
          codebase. WebSocket stays the direct/LAN transport; WebRTC is the public-lobby path. -->
-    <PackageReference Include="SIPSorcery" Version="10.0.15" />
+    <PackageReference Include="SIPSorcery" />
     <!-- Stage-1 content pipeline: the server loads per-server YAML content overrides at boot
          (server/Content/ContentLoader). Server-only, so shared/ stays dependency-free and the
          client/wasm never pull YamlDotNet. -->
-    <PackageReference Include="YamlDotNet" Version="18.1.0" />
+    <PackageReference Include="YamlDotNet" />
     <!-- YamlDotNet's source generator for ServerYamlContext (Content/ServerYaml.cs). Compile-time
          only; keep the version in lockstep with YamlDotNet. -->
-    <PackageReference Include="Vecc.YamlDotNet.Analyzers.StaticGenerator" Version="18.1.0" PrivateAssets="all" />
+    <PackageReference Include="Vecc.YamlDotNet.Analyzers.StaticGenerator" PrivateAssets="all" />
     <!-- Join tokens (public-lobby/CONTEXT.md): the lobby-issued ES256 JWT a joiner presents in Hello
          is verified OFFLINE here against the lobby's JWKS (server/Net/JoinTokenVerifier.cs). Server-
          only so shared/ stays dependency-free. -->
-    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.22.0" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
     <!-- Non-trickle SDP/ICE helpers shared with the Godot client (excluded from Shared.csproj,
          which is dependency-free); compiled in here so both sides serialize candidates identically. -->
     <Compile Include="../shared/Net/WebRtcSdp.cs" Link="Net/WebRtcSdp.cs" />
