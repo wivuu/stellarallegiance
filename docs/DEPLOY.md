@@ -59,6 +59,11 @@ mechanism. `docker-compose.server.yml` is wired to that image (`image:`, not `bu
 `docker compose up --build` above still builds `server/Dockerfile` **from source**, which is not a
 packaged install and so can only ever **warn**, never apply.
 
+The image is published for `linux/amd64` and `linux/arm64`; let Docker pick the host's own. It does **not**
+run under CPU emulation (`--platform linux/amd64` on an Apple-silicon Docker Desktop, say): an AppImage
+carries magic bytes in its ELF header that emulation's `binfmt_misc` matcher rejects, so the entrypoint stops
+with `Exec format error` / `FATAL: cannot unpack`.
+
 | Var | Default | Meaning |
 |---|---|---|
 | `SIM_AUTO_UPDATE` | `on` in a container, else `warn` | `off` ignores releases · `warn` logs when a newer one exists · `on` restarts onto it once empty |
@@ -224,6 +229,7 @@ Environment=SIM_SECRET=change-me
 Environment=SIM_AUTO_UPDATE=on
 Restart=always
 RestartForceExitStatus=85
+SuccessExitStatus=85
 KillMode=mixed
 
 [Install]
@@ -234,17 +240,25 @@ WantedBy=multi-user.target
 systemctl daemon-reload && systemctl enable --now sim-server
 ```
 
-An AppImage mounts itself through FUSE, so the host needs `libfuse2` (`apt install libfuse2`; not installed
-by default on recent Ubuntu/Debian). This unit is a starting point: the automated end-to-end test covers
-the container image, not a bare systemd host.
+An AppImage mounts itself through FUSE, and for that it needs the `fusermount` helper on the `PATH`:
+`apt install fuse3` (missing on minimal server images; without it the AppImage stops with *"No suitable
+fusermount binary found"*). It does **not** need `libfuse2` — the runtime vpk packs is static. The automated
+end-to-end test covers the container image only; this unit was walked through by hand on Ubuntu 24.04
+(systemd 255) against the `v0.0.14-ci` rehearsal releases: update found, applied while empty, exit `85`,
+restarted on the new build, and a plain `systemctl stop` exits `0` within a second.
 
 systemd sets `INVOCATION_ID` for every unit it starts; the server detects that on its own
 (`AutoUpdateOptions.DetectServiceManager`) and defaults `SIM_UPDATE_RESTART` to `exit` — an update still
-swaps the AppImage in place and exits `85`, and `RestartForceExitStatus=85` is what tells systemd that
-exit code means "restart me" rather than "stay down". `KillMode=mixed` sends `SIGTERM` straight to the
-server (a clean shutdown, same as `docker stop`) while still `SIGKILL`ing anything left behind after
-`TimeoutStopSec`. State — the paired lobby credential and the update-attempt marker — lives in
+swaps the AppImage in place and exits `85`. `RestartForceExitStatus=85` is what tells systemd that exit code
+means "restart me" whatever `Restart=` says, and `SuccessExitStatus=85` keeps an update from being recorded
+as a **failed** unit (`Failed with result 'exit-code'`, `OnFailure=` handlers, failed-unit alerts).
+`KillMode=mixed` sends `SIGTERM` to the main process only — which *is* the server: the AppImage runtime
+`exec`s into it — for a clean shutdown, same as `docker stop`, and then `SIGKILL`s what is left in the unit
+(the AppImage's FUSE helper). State — the paired lobby credential and the update-attempt marker — lives in
 `stellar-server-data/`, created beside the AppImage the first time it runs; nothing else needs a backup.
+
+Run by hand instead (no unit, no supervisor), the default is `SIM_UPDATE_RESTART=relaunch`: after the swap
+Velopack starts the new build itself, with the same arguments, environment and working directory.
 
 ### Building from source
 

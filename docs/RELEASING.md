@@ -83,6 +83,12 @@ lobby's own `ReleaseWatcher` polls the server feed every `LOBBY_RELEASE_POLL_SEC
 pushes the confirmed version the moment it notices, so the fleet catches up on its own within about 5
 minutes.
 
+A server that cannot update itself stays on that version until its operator steps in, so — like the
+launcher e2e in every `package` job — every release runs `scripts/server-update-e2e.ps1` on both arches
+(`server-e2e`, the same workflow file the pull-request dry-run uses) and neither the image push nor the
+publish happens without it. It covers both ways a packaged server restarts: inside the release image
+(exit `85`, the entrypoint relaunches) and hand-run (the bare AppImage over FUSE, which relaunches itself).
+
 **Rehearsals:** the lobby only ever advertises **stable** releases. A server follows pre-releases only
 when told to directly — `SIM_UPDATE_PRERELEASE=1` on that server makes every (re)connect count as a
 doorbell regardless of what the lobby says, and switches its own check to the GitHub API (not the
@@ -125,6 +131,23 @@ git tag v0.0.13-ci.1 && git push origin v0.0.13-ci.1   # export + package + uplo
 # install it, set the launcher to BETA (pre-releases are hidden on STABLE), play once, then:
 git tag v0.0.13-ci.2 && git push origin v0.0.13-ci.2   # delta-base download, a real delta, a real update from GitHub
 ```
+
+The server half of the same rehearsal — a container on the first rehearsal image must find the second one
+by itself (`SIM_UPDATE_PRERELEASE=1`: GitHub API instead of the stable CDN feed), hold off while anyone is
+connected, then swap and relaunch inside the same container:
+
+```sh
+docker run --rm -p 8090:8090 -e SIM_UPDATE_PRERELEASE=1 -e SIM_UPDATE_IDLE_SECONDS=10 \
+  ghcr.io/wivuu/stellarallegiance-sim:0.0.13-ci.1
+# first check 60 s after boot, then every SIM_UPDATE_INTERVAL_SECONDS. Expect, in order:
+#   update-state Available version=0.0.13-ci.2 … Downloading … Applying … Boot version=0.0.13-ci.2 … Confirmed
+# hold a player meanwhile and it must stop at "Deferred":
+dotnet run --project tools/simbot -c Release -- --bots 1 --url ws://localhost:8090/game --seconds 600
+```
+
+A fresh container downloads the **full** package (no cached base); mount a volume on `/var/tmp/velopack`
+and the next hop is a delta. Every check in this mode is one unauthenticated GitHub API call (60/hour/IP) —
+keep `SIM_UPDATE_INTERVAL_SECONDS` at 120 or more when several test servers share an address.
 
 Stable players never see any of it: old zip clients read `/releases/latest`, the launcher's STABLE channel
 filters pre-releases out, and the `:latest` image tag does not move. A machine left on a rehearsal build
