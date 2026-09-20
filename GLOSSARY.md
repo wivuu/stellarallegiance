@@ -912,7 +912,7 @@ Handshake message from server to client: assigns player ID, initial ship, world 
   - `client/scripts/GameNetClient.cs` — reconnect logic
   - `server/Net/Lobby.cs` — ship state caching
 - **Related:** [[MsgWelcome]], [[Join Token]]
-- **Notes:** Proto v9+; voluntary leave must send MsgBye to release ship immediately
+- **Notes:** Proto v9+; voluntary leave must send MsgBye to release ship immediately. Only an UNREQUESTED drop auto-reconnects: `GameNetClient.Disconnect` retires the connect seq, so a link the client hung up on itself (Leave, quit to desktop) reports nothing, and a quit is terminal in `ConnectionManager` — tearing a WebRTC peer connection down fires the same close events a dropped one does.
 
 ---
 
