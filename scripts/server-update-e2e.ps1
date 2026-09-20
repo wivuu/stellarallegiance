@@ -7,7 +7,10 @@
 # player, publish v2 to the feed, prove the update is DEFERRED while occupied, release the player and
 # watch it apply + relaunch INSIDE the same container, publish v3 (a delta this time), prove a plain
 # `docker restart` does not re-unpack, prove `docker stop` is prompt and graceful, and prove
-# SIM_AUTO_UPDATE=warn only logs. Mirrors scripts/launcher-e2e.ps1's shape (Assert + $Failures, a
+# SIM_AUTO_UPDATE=warn only logs. Beside it runs a HAND-RUN server - the bare AppImage, FUSE-mounted, no
+# supervisor (SIM_UPDATE_RESTART=relaunch) - which must follow the same two releases by starting the new
+# build itself, and come back in its own working directory with the old mount released (-SkipHandRun
+# where containers get no /dev/fuse). Mirrors scripts/launcher-e2e.ps1's shape (Assert + $Failures, a
 # scratch dir under build/, deadline-polling helpers, try/finally cleanup, ALL CHECKS PASSED) for the
 # container update path instead of the desktop launcher.
 #
@@ -23,9 +26,11 @@
 #   scripts/server-update-e2e.ps1                # full run
 #   scripts/server-update-e2e.ps1 -Fast           # skip the restart / stop / warn-mode checks (7-9)
 #   scripts/server-update-e2e.ps1 -KeepFiles      # leave build/server-update-e2e + any failed container for inspection
+#   scripts/server-update-e2e.ps1 -SkipHandRun    # no hand-run (FUSE) server: for a Docker that cannot give a container /dev/fuse
 param(
     [switch]$KeepFiles, # leave build/server-update-e2e (and a failed run's containers/image) in place afterwards
     [switch]$Fast, # skip steps 7-9 (docker restart / docker stop / SIM_AUTO_UPDATE=warn)
+    [switch]$SkipHandRun, # skip the hand-run AppImage (steps 2b / 6b); it needs --device /dev/fuse + SYS_ADMIN
     # The three versions to pack, oldest first. v2/v3 are packed into the SAME output dir as v1 so
     # vpk produces deltas for them (see Publish-ToFeed below for why a SNAPSHOT per version, not the
     # live output dir, is what actually gets copied to the feed at each publish step).
@@ -48,6 +53,8 @@ $Feed = Join-Path $Root 'feed' # what's mounted into the container as SIM_UPDATE
 $ImageCtx = Join-Path $Root 'image-ctx' # server/Dockerfile.release's staged build context
 $Container = 'sa-server-e2e'
 $WarnContainer = 'sa-server-e2e-warn'
+$HandRunContainer = 'sa-server-e2e-handrun'
+$HandRunDir = '/srv/work' # where the hand-run server is started - and must still be after every relaunch
 $bot = $null
 
 $Failures = [System.Collections.Generic.List[string]]::new()
@@ -101,6 +108,17 @@ function Assert-NoLogMatch([string]$Name, [string]$Pattern, [int]$HoldSeconds, [
         Start-Sleep -Milliseconds 1000
     }
     Assert $true $What
+}
+
+# Polls $Read until it returns $Expected or the deadline passes; returns the last value either way.
+function Wait-Value([scriptblock]$Read, [string]$Expected, [int]$TimeoutSeconds) {
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $value = & $Read
+        if ($value -eq $Expected) { return $value }
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $deadline)
+    return $value
 }
 
 function Get-FreePort {
@@ -210,6 +228,30 @@ try {
     Wait-LogMatch $Container (StatePattern 'Boot' $v1) 30 "update-state Boot version=$v1" | Out-Null
     Assert ((Get-RunningVersion $Port) -eq $v1) "GET /version = $v1"
 
+    # ---- 2b. a second server, HAND-RUN: the bare AppImage, no supervisor -----------------------------
+    # The release image only ever exercises SIM_UPDATE_RESTART=exit (its entrypoint relaunches). A server
+    # somebody starts by hand has nobody to relaunch it: after the swap it starts the new build itself
+    # (server/Update/Relauncher.cs). That path goes through the AppImage runtime and FUSE for real, and
+    # the first release rehearsal - then still on Velopack's `UpdateNix start` - found two silent faults
+    # in it that nothing else here could see: the new build ran with its working directory inside the OLD
+    # version's mount (relative paths in the operator's arguments pointed somewhere else after an update),
+    # and every relaunch left the previous version mounted, replaced AppImage and all. It idles through
+    # both publishes below and is checked at 6b. Same image, entrypoint bypassed: the AppImage is already
+    # in there, next to every native dependency. --init gives it a PID 1 that outlives the server; the
+    # server's direct parent (`sleep`) never collects it, so every relaunch also has to see through a ZOMBIE.
+    if (-not $SkipHandRun) {
+        $HandRunPort = Get-FreePort
+        Step "starting a HAND-RUN server (bare AppImage over FUSE, restart=relaunch) on port $HandRunPort ..."
+        Invoke-Quiet { docker rm -f $HandRunContainer }
+        $handRun = "mkdir -p $HandRunDir && cd $HandRunDir && /opt/stellar/StellarAllegianceServer.AppImage --port 8090 & exec sleep infinity"
+        docker run -d --init --name $HandRunContainer -p "${HandRunPort}:8090" -v "${Feed}:/feed:ro" `
+            --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined `
+            -e SIM_UPDATE_FEED=/feed -e SIM_UPDATE_INTERVAL_SECONDS=30 -e SIM_UPDATE_IDLE_SECONDS=10 `
+            -e SIM_AUTO_UPDATE=on -e SIM_UPDATE_RESTART=relaunch `
+            --entrypoint /bin/sh $ImageTag -c $handRun | Out-Host
+        Wait-LogMatch $HandRunContainer (StatePattern 'Boot' $v1 '.* restart=relaunch') 60 "hand-run: update-state Boot version=$v1 ... restart=relaunch" | Out-Null
+    }
+
     # ---- 3. hold a player -----------------------------------------------------------------------
     Step 'holding a player with tools/simbot ...'
     $botLog = Join-Path $Root 'simbot.log'
@@ -263,6 +305,23 @@ try {
     Wait-LogMatch $Container (StatePattern 'Boot' $v3) 120 "update-state Boot version=$v3" | Out-Null
     Assert ((Get-RunningVersion $Port) -eq $v3) "GET /version = $v3"
 
+    # ---- 6b. the hand-run server followed both releases by RELAUNCHING itself ------------------------
+    if (-not $SkipHandRun) {
+        Step 'hand-run server: two relaunches of its own, same working directory, no stale mount ...'
+        Wait-LogMatch $HandRunContainer (StatePattern 'Boot' $v2) 60 "hand-run: relaunched as $v2" | Out-Null
+        Wait-LogMatch $HandRunContainer (StatePattern 'Boot' $v3) 180 "hand-run: relaunched again as $v3 (a relaunched build can relaunch)" | Out-Null
+        Wait-LogMatch $HandRunContainer (StatePattern 'Confirmed' $v3) 30 "hand-run: update-state Confirmed version=$v3" | Out-Null
+        $handRunVersion = Wait-Value { Get-RunningVersion $HandRunPort } $v3 30
+        Assert ($handRunVersion -eq $v3) "hand-run: GET /version = $v3 (was '$handRunVersion')"
+        # Zombies (the old builds, never collected by `sleep`) keep their comm but have no cwd: skip them.
+        $probe = 'for p in /proc/[0-9]*; do [ "$(cat $p/comm 2>/dev/null)" = SimServer ] && readlink $p/cwd; done; true'
+        $cwd = (@(docker exec $HandRunContainer sh -c $probe) -join ',').Trim()
+        Assert ($cwd -eq $HandRunDir) "hand-run: the running server's working directory is still $HandRunDir (was '$cwd')"
+        # The old mount goes away as soon as the old build has exited - nothing else may hold on to it.
+        $mounts = Wait-Value { (docker exec $HandRunContainer sh -c 'grep -c /tmp/.mount_ /proc/mounts; true').Trim() } '1' 20
+        Assert ($mounts -eq '1') "hand-run: exactly one AppImage mount is left - the old versions' were released (found $mounts)"
+    }
+
     if ($Fast) {
         Step '-Fast: skipping steps 7-9 (docker restart / docker stop / SIM_AUTO_UPDATE=warn)'
     }
@@ -309,9 +368,12 @@ finally {
     if ($Failures.Count -gt 0) {
         Save-VelopackLog $Container
         Save-VelopackLog $WarnContainer
+        Save-VelopackLog $HandRunContainer
+        Invoke-Quiet { docker logs $HandRunContainer *> (Join-Path $Root 'handrun.log') }
     }
     Invoke-Quiet { docker rm -f $Container }
     Invoke-Quiet { docker rm -f $WarnContainer }
+    Invoke-Quiet { docker rm -f $HandRunContainer }
     if (-not $KeepFiles -and $Failures.Count -eq 0) {
         Invoke-Quiet { docker rmi -f $ImageTag }
         Remove-Item -Recurse -Force -LiteralPath $Root -ErrorAction SilentlyContinue

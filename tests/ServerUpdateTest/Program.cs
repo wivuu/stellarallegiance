@@ -5,6 +5,7 @@ OptionsTests.Run();
 CoordinatorTests.Run();
 FuzzTests.Run();
 StatePathTests.Run();
+RelauncherTests.Run();
 HubGateTests.Run();
 
 Console.WriteLine();
