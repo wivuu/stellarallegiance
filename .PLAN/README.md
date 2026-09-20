@@ -110,9 +110,16 @@ Condensed outcomes. Each line names where the detail now lives.
   - ✅ On the local Aspire stack: the real lobby → real registrar advert at connect time, a live push
     when the feed changed, re-registration after a lobby restart; screenshots of the Game Lobby banner,
     the "SERVER UPDATING" refusal and the server-list nudge.
-  - ☐ The dry-run workflow (`server-update-dryrun.yml`) on GitHub's x64 + arm64 runners.
-  - ☐ A release rehearsal with `-ci.N` tags proving the GitHub-hosted feed + five-channel upload.
-  - ☐ A bare (non-container) AppImage under systemd - the unit in `docs/DEPLOY.md` is untested.
+  - ✅ The dry-run workflow (`server-update-dryrun.yml`) on GitHub's x64 + arm64 runners — and since PR 90
+    the same file is every release's `server-e2e` gate (no image push, no publish without it).
+  - ✅ Release rehearsal `v0.0.14-ci.1` → `-ci.3` (PR 90): five-channel upload, two-platform image with the
+    right AppImage per arch, `:latest` untouched; containers from the published image deferred while a bot
+    was connected, then updated themselves from GitHub — full download fresh, a 7.6 / 15.8 MB delta with a
+    cached base; the stable source type (`SimpleWebSource`) against a real release URL; the compose file.
+  - ✅ A bare AppImage: under the `docs/DEPLOY.md` systemd unit (update, exit `85`, restart, clean stop; it
+    needs `fuse3`, not `libfuse2`, and gained `SuccessExitStatus=85`) and hand-run. The hand-run RELAUNCH
+    was broken in two quiet ways through Velopack's `UpdateNix start` (working directory inside the old
+    mount; one more dead mount per update) → `server/Update/Relauncher.cs`, and a hand-run server in the e2e.
   - ☐ The first real release — older images need one manual `docker compose pull && docker compose up -d`.
 
 ### Stage 3 — Combat feel & depth
