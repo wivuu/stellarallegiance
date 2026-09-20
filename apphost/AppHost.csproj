@@ -16,6 +16,7 @@
     <UserSecretsId>stellarallegiance</UserSecretsId>
     <!-- Custom commands / parameters / pipeline steps use APIs Aspire still marks experimental. -->
     <NoWarn>$(NoWarn);ASPIREINTERACTION001;ASPIREPIPELINES001;ASPIREPUBLISHERS001</NoWarn>
+    <AspireUseCliBundle>true</AspireUseCliBundle>
   </PropertyGroup>
 
   <ItemGroup>

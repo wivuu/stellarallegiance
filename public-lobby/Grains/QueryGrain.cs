@@ -207,7 +207,7 @@ public sealed class QueryGrain(IDbContextFactory<LobbyDbContext> dbFactory, IMem
                             new LadderRow(
                                 (page - 1) * pageSize + i + 1,
                                 x.r.PlayerId,
-                                x.DisplayName,
+                                x.DisplayName ?? "<deleted>",
                                 x.r.MatchesPlayed,
                                 x.r.Wins,
                                 x.r.Losses,
