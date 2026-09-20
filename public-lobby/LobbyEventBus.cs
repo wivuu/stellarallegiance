@@ -8,10 +8,20 @@ public enum LobbyEventKind
     Registered,
     Updated,
     Removed,
+
+    // Not about a listing: a newer release of the game was confirmed (ReleaseAdverts/ReleaseWatcher). The
+    // player stream forwards it to every subscriber whatever protocol they filter on - the player on a
+    // stale protocol, staring at an empty list, is the one who most needs to hear it.
+    Release,
 }
 
-// Entry is set for Registered/Updated; SessionId is set for Removed.
-public sealed record LobbyEvent(LobbyEventKind Kind, ServerEntry? Entry = null, string? SessionId = null);
+// Entry is set for Registered/Updated; SessionId is set for Removed; Version is set for Release.
+public sealed record LobbyEvent(
+    LobbyEventKind Kind,
+    ServerEntry? Entry = null,
+    string? SessionId = null,
+    string? Version = null
+);
 
 // In-process fanout bus. Every SSE subscriber holds a bounded ChannelReader; registry mutations
 // call Publish. Bounded + DropOldest: a lagging SSE client skips stale updates rather than

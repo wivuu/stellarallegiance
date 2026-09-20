@@ -13,6 +13,7 @@ using PublicLobby.Auth;
 using PublicLobby.Data;
 using PublicLobby.Grains;
 using PublicLobby.Hosting;
+using PublicLobby.ReleaseAdverts;
 
 // Public lobby + WebRTC signaling box. Player-run game servers register here (name + port) and
 // maintain a WebSocket connection to stay listed; clients subscribe via SSE for live updates.
@@ -29,6 +30,8 @@ using PublicLobby.Hosting;
 //   SHARE_PORT   listen port (default 8091)
 //   STUN_URL     public STUN url(s) handed to clients/servers for the WebRTC fallback. Comma- or
 //                space-separate several for redundancy. Default stun:stun.cloudflare.com:3478.
+//   LOBBY_RELEASE_VERSION / LOBBY_RELEASE_FEED_URL / LOBBY_RELEASE_POLL_SECONDS
+//                the Release Advert: which game release is the latest (ReleaseAdverts/ReleaseWatcher.cs).
 
 // Listen port: PORT (PaaS like Railway inject it and route their HTTPS edge to it) wins, then
 // SHARE_PORT (compose/self-host), else the 8091 default.
@@ -46,6 +49,22 @@ builder.AddLobbyTelemetry();
 
 var bus = new LobbyEventBus();
 builder.Services.AddSingleton(bus);
+
+// Release Adverts: the lobby is the ONE watcher of the release feed and tells everyone connected to it
+// (game servers over /servers/ws, game clients over /servers/events). The baked version answers the
+// moment the process is up - which is when the whole fleet reconnects after a redeploy.
+var releaseOptions = ReleaseWatcherOptions.FromEnv(Environment.GetEnvironmentVariable);
+builder.Services.AddSingleton(
+    new ReleaseState(
+        ReleaseState.ResolveBaked(
+            Environment.GetEnvironmentVariable("LOBBY_RELEASE_VERSION"),
+            ReleaseWatcher.AssemblyVersion()
+        )
+    )
+);
+builder.Services.AddSingleton(releaseOptions);
+builder.Services.AddSingleton(ReleaseWatcher.CreateFetcher(releaseOptions));
+builder.Services.AddHostedService<ReleaseWatcher>();
 builder.Services.AddSingleton<ServerConnectionManager>();
 builder.Services.AddSingleton<IServerRegistry>(new InMemoryServerRegistry(stunServers, bus));
 builder.Services.AddSingleton<SignalingRelay>();
@@ -88,6 +107,23 @@ app.UseLobbyWeb();
 // "wivuu-sim" so an endpoint accidentally pointed here can't be mistaken for a game server by the
 // reachability probe.
 app.MapGet("/health", () => Results.Text("public-lobby"));
+
+// What this lobby believes the latest release is, and why. Anonymous: it is public knowledge (the
+// GitHub releases page says the same), and it lets an operator - or a tool that is not connected to
+// either stream - ask the one watcher instead of GitHub. `latest` is what game servers are told,
+// `confirmed` what game clients are told (see ReleaseState).
+app.MapGet(
+    "/release",
+    (ReleaseState releases) =>
+        Results.Json(
+            new
+            {
+                latest = releases.Latest,
+                confirmed = releases.Confirmed,
+                baked = releases.Baked,
+            }
+        )
+);
 app.MapOrleansHealth();
 app.MapAuthEndpoints();
 app.MapDevWebLogin();
@@ -201,7 +237,9 @@ app.MapPost(
 // Game servers open this WS after registering. While it's open they're considered alive (its
 // pings keep LastSeen fresh). They push state updates (player count / game state) only when values
 // change; the lobby fans those out to SSE subscribers immediately. WebRTC offers are pushed back
-// down the same channel so the server can stop long-polling /pending.
+// down the same channel so the server can stop long-polling /pending, and so are Release Adverts
+// ({"type":"release","version":"…"}): one right after "ok" on every (re)connect, one more whenever a
+// newer release appears. A server running older code ignores the frame.
 // Route must be declared before /servers/{sessionId} so the literal "ws" segment wins routing.
 app.MapGet(
     "/servers/ws",
@@ -242,19 +280,19 @@ app.MapGet(
         var verifiedGameServerId = listing is { Verified: true, GameServerId: { } gsid } ? gsid : (Guid?)null;
         await WsSendJsonAsync(ws, new { type = "ok" }, ct);
 
-        var offerReader = connMgr.Register(sessionId);
+        var pushReader = connMgr.Register(sessionId);
         try
         {
             using var pair = CancellationTokenSource.CreateLinkedTokenSource(ct);
             var recvTask = WsRecvServerUpdates(ws, sessionId, registry, verifiedGameServerId, grains, clock, pair.Token);
-            var sendTask = WsSendOffers(ws, offerReader, pair.Token);
+            var sendTask = WsSendPushes(ws, pushReader, pair.Token);
             await Task.WhenAny(recvTask, sendTask);
             pair.Cancel();
             await Task.WhenAll(recvTask, sendTask);
         }
         finally
         {
-            connMgr.Unregister(sessionId); // completes offer channel → send loop exits
+            connMgr.Unregister(sessionId); // completes the push channel → send loop exits
             registry.Remove(sessionId); // fires SSE "removed" (no-op if DELETE already ran)
             if (ws.State == WebSocketState.Open)
                 await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye", default);
@@ -301,12 +339,18 @@ app.MapDelete(
 // full snapshot of active servers, then incremental registered/updated/removed events as they
 // happen. A keepalive comment is sent every 20 s to keep proxies and NAT alive. Player bearer
 // required, same as GET /servers.
+//
+// The stream also carries `release` events ({"version":"…"}): one after the snapshot when a
+// confirmed release is known, one more whenever a newer one is confirmed. They bypass the protocol
+// filter on purpose - a client whose stale protocol leaves it an EMPTY list is exactly the one that
+// has to be told to update. Older clients ignore event names they do not know.
 app.MapGet(
         "/servers/events",
         async (
             HttpContext ctx,
             IServerRegistry registry,
             LobbyEventBus bus,
+            ReleaseState releases,
             IGrainFactory grains,
             TimeProvider clock,
             int? protocol,
@@ -323,6 +367,10 @@ app.MapGet(
             // Initial full snapshot filtered to the client's protocol (same FilterProtocol as GET /servers).
             var snap = FilterProtocol(registry.ListActive(), protocol);
             await WriteSseEvent(ctx.Response.Body, "snapshot", SseJson(snap), ct);
+            // Subscribed BEFORE this read, so a release confirmed in between arrives as a bus event
+            // too: the client may see the same version twice, never miss one.
+            if (releases.Confirmed is { } confirmed)
+                await WriteSseEvent(ctx.Response.Body, "release", SseJson(new { version = confirmed }), ct);
 
             // Keepalive comment lines run concurrently with the event loop. This request
             // authenticated ONCE and then stays open indefinitely, so the keepalive tick doubles as
@@ -335,6 +383,12 @@ app.MapGet(
             {
                 await foreach (var evt in reader.ReadAllAsync(kaCts.Token))
                 {
+                    if (evt.Kind == LobbyEventKind.Release)
+                    {
+                        await WriteSseEvent(ctx.Response.Body, "release", SseJson(new { version = evt.Version }), ct);
+                        continue;
+                    }
+
                     // Drop events for protocols this subscriber isn't watching.
                     if (protocol is > 0 && evt.Kind != LobbyEventKind.Removed && evt.Entry?.ProtocolVersion != protocol)
                         continue;
@@ -581,24 +635,27 @@ static async Task WsRecvServerUpdates(
     catch { }
 }
 
-static async Task WsSendOffers(WebSocket ws, ChannelReader<PendingOffer> reader, CancellationToken ct)
+static async Task WsSendPushes(WebSocket ws, ChannelReader<ServerPush> reader, CancellationToken ct)
 {
     try
     {
-        await foreach (var offer in reader.ReadAllAsync(ct))
+        await foreach (var push in reader.ReadAllAsync(ct))
         {
             if (ws.State != WebSocketState.Open)
                 return;
-            await WsSendJsonAsync(
-                ws,
-                new
+            // Anonymous shapes = the wire format; member order is the JSON order older servers bind.
+            object payload = push switch
+            {
+                OfferPush offer => new
                 {
                     type = "offer",
-                    ticket = offer.Ticket,
-                    sdpOffer = offer.SdpOffer,
+                    ticket = offer.Offer.Ticket,
+                    sdpOffer = offer.Offer.SdpOffer,
                 },
-                ct
-            );
+                ReleasePush release => new { type = "release", version = release.Version },
+                _ => throw new InvalidOperationException($"unhandled server push {push.GetType().Name}"),
+            };
+            await WsSendJsonAsync(ws, payload, ct);
         }
     }
     catch (OperationCanceledException) { }

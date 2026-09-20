@@ -182,6 +182,7 @@ public static class RailwayExtensions
             "STUN_URL" => p.StunUrl,
             "LOBBY_ADMINS" => p.LobbyAdmins,
             "RANKED_RESULTS" => p.RankedResults,
+            "LOBBY_RELEASE_VERSION" => p.LobbyReleaseVersion,
             "AUTH_GITHUB_CLIENT_ID" => p.AuthGithubClientId,
             "AUTH_GITHUB_CLIENT_SECRET" => p.AuthGithubClientSecret,
             "AUTH_GOOGLE_CLIENT_ID" => p.AuthGoogleClientId,

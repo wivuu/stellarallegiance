@@ -44,6 +44,11 @@ var lobby = builder
     .WithEnvironment("LOBBY_ADMINS", p.LobbyAdmins)
     .WithEnvironment("STUN_URL", p.StunUrl)
     .WithEnvironment("RANKED_RESULTS", p.RankedResults)
+    // Release Advert knobs: a fixed version and/or a local feed file make the lobby -> server/client
+    // "update available" path testable without publishing anything.
+    .WithEnvironment("LOBBY_RELEASE_VERSION", p.LobbyReleaseVersion)
+    .WithEnvironment("LOBBY_RELEASE_FEED_URL", p.LobbyReleaseFeedUrl)
+    .WithEnvironment("LOBBY_RELEASE_POLL_SECONDS", p.LobbyReleasePollSeconds)
     .WithEnvironment("AUTH_GITHUB_CLIENT_ID", p.AuthGithubClientId)
     .WithEnvironment("AUTH_GITHUB_CLIENT_SECRET", p.AuthGithubClientSecret)
     .WithEnvironment("AUTH_GOOGLE_CLIENT_ID", p.AuthGoogleClientId)

@@ -63,6 +63,14 @@ static class LobbyHostFixture
     static WebApplicationFactory<Program>? _factory;
     static bool _attempted;
 
+    // The version the suite's host is "deployed" with (LOBBY_RELEASE_VERSION): ReleaseTests asserts that
+    // every game server connecting to /servers/ws is told it.
+    public const string BakedRelease = "1.2.3";
+
+    // In-memory WebSocket client for /servers/ws (TestServer speaks WebSockets without a real socket).
+    public static Microsoft.AspNetCore.TestHost.WebSocketClient CreateWebSocketClient() =>
+        (_factory ?? throw new InvalidOperationException("the lobby host is not running")).Server.CreateWebSocketClient();
+
     // A second in-memory client that keeps cookies and does NOT follow redirects, for the
     // cookie-authenticated web pages (/login/dev, /me, /device). Null when the host is unavailable.
     public static HttpClient? CreateCookieClient() =>
@@ -96,6 +104,10 @@ static class LobbyHostFixture
         // grant_type=dev (plan §6 item 1) is how the suite gets a real player session without a
         // browser; AuthTests also proves it is refused when this is unset.
         Environment.SetEnvironmentVariable("AUTH_DEV_LOGIN", "true");
+        // Release Adverts: a fixed baked version, and NO polling - the suite must never reach GitHub.
+        // ReleaseTests drives a watcher round by hand with a fake feed instead.
+        Environment.SetEnvironmentVariable("LOBBY_RELEASE_VERSION", BakedRelease);
+        Environment.SetEnvironmentVariable("LOBBY_RELEASE_POLL_SECONDS", "0");
 
         var factory = new LobbyWebApplicationFactory();
         // Force the host to actually start now (rather than lazily on first CreateClient/request)
