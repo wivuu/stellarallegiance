@@ -40,6 +40,17 @@ with hard containment/corridor/reachability validations and a deterministic (byt
 re-bake) output. See [`collision-hull/README.md`](collision-hull/README.md) and the
 `base-collision` / `collision-hull-generator` skills.
 
+### `collision-sidecars/` — the packaged client's collision data
+`dotnet run -c Release --project tools/collision-sidecars -- client/assets` writes `<name>.glb.simmodel`
+beside every base / ship / asteroid GLB: that model's BUILT collision model (merged hull planes, hardpoints,
+compound `COL_` sub-hulls) in the shared `.simmodel` format (`shared/Collision/SimModelCodec.cs` — the same
+bytes as the server's hull cache). A packaged client has no raw `.glb` to build from — Godot's exporter ships
+an imported GLB as its imported scene only — so these ~270 KiB are the collision data of every release; the
+export presets' `include_filter="*.simmodel"` ships them. References only `shared/`, so what ships is
+bit-identical to what the server resolves. Idempotent (a sidecar whose key matches its GLB is left alone),
+removes sidecars whose GLB is gone, gitignored. Run by `scripts/package-clients.ps1` and
+`scripts/export-clients.ps1` right before the Godot export — never by hand for a release.
+
 ### `launcher-stubgame/` — stand-in game for launcher tests
 A few-hundred-KB console app that lands where the real game sits inside a Velopack package, records how it
 was started (args + the launcher's env vars) and exits with a scripted code. Used only by
