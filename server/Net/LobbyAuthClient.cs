@@ -23,10 +23,11 @@ public sealed class LobbyAuthClient
         using var resp = await _http.PostAsJsonAsync(
             $"{_lobbyBase}/auth/device",
             new DeviceAuthRequest(LobbyClientKind.SimServer, serverName),
+            LobbyHttpJson.Default.DeviceAuthRequest,
             ct
         );
         resp.EnsureSuccessStatusCode();
-        var body = await resp.Content.ReadFromJsonAsync<DeviceAuthResponse>(cancellationToken: ct);
+        var body = await resp.Content.ReadFromJsonAsync(LobbyHttpJson.Default.DeviceAuthResponse, ct);
         return body ?? throw new InvalidOperationException("POST /auth/device returned an empty body");
     }
 
@@ -38,14 +39,19 @@ public sealed class LobbyAuthClient
 
     async Task<LobbyTokenOutcome> PostTokenAsync(TokenRequest req, CancellationToken ct)
     {
-        using var resp = await _http.PostAsJsonAsync($"{_lobbyBase}/auth/token", req, ct);
+        using var resp = await _http.PostAsJsonAsync(
+            $"{_lobbyBase}/auth/token",
+            req,
+            LobbyHttpJson.Default.TokenRequest,
+            ct
+        );
         if (resp.IsSuccessStatusCode)
         {
-            var token = await resp.Content.ReadFromJsonAsync<TokenResponse>(cancellationToken: ct);
+            var token = await resp.Content.ReadFromJsonAsync(LobbyHttpJson.Default.TokenResponse, ct);
             return token is null ? LobbyTokenOutcome.Failed(LobbyTokenError.InvalidGrant) : LobbyTokenOutcome.Ok(token);
         }
 
-        var err = await resp.Content.ReadFromJsonAsync<TokenErrorResponse>(cancellationToken: ct);
+        var err = await resp.Content.ReadFromJsonAsync(LobbyHttpJson.Default.TokenErrorResponse, ct);
         return LobbyTokenOutcome.Failed(err?.Error ?? "unknown_error");
     }
 }

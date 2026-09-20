@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.HttpOverrides;
 using SimServer;
 using SimServer.Assets;
@@ -11,7 +12,7 @@ using StellarAllegiance.Shared;
 // Maintenance flag: build + cache the convex-hull/hardpoint SimModel for the base and EVERY
 // asteroid variant (not just the ones a given seed rolls), then exit. Run after editing an art
 // GLB so the committed assets/sim-cache/ stays complete; the hash-keyed cache makes it a no-op
-// when nothing changed. Usage: dotnet SimServer.dll --pregen-assets
+// when nothing changed. Usage: SimServer --pregen-assets   (from source: dotnet run --project server -- --pregen-assets)
 if (args.Contains("--pregen-assets"))
 {
     int ok = SimAssets.TryLoad("bases/garrison.glb", CollisionConfig.BaseModelRotation) is not null ? 1 : 0;
@@ -26,7 +27,7 @@ if (args.Contains("--pregen-assets"))
 }
 
 // Self-test for the server-side collision pipeline (ConvexHull/QuickHull queries + World GLB
-// models). Usage: dotnet SimServer.dll --selftest  → prints PASS/FAIL, exits non-zero on failure.
+// models). Usage: SimServer --selftest  → prints PASS/FAIL, exits non-zero on failure.
 // (The tests/CollisionTest project is the same checks for CI; this flag runs them without a
 // separate project restore.)
 if (args.Contains("--selftest"))
@@ -35,28 +36,47 @@ if (args.Contains("--selftest"))
 // Emit JSON schemas (draft 2020-12) for every YAML content root — the factions Core/Faction/Manifest
 // plus the server-only WorldDef/MapDef — via System.Text.Json's JsonSchemaExporter (GetJsonSchemaAsNode).
 // Kebab-case keys match CoreSerializer's YAML so the VS Code YAML extension validates the authored
-// content. Usage: dotnet SimServer.dll --gen-schemas [<outdir>]   (default outdir: schemas/)
+// content. Usage: dotnet run --project server -- --gen-schemas [<outdir>]   (default outdir: schemas/)
 if (args.Contains("--gen-schemas"))
 {
-    int gi = Array.IndexOf(args, "--gen-schemas");
-    string outDir = gi + 1 < args.Length && !args[gi + 1].StartsWith("--") ? args[gi + 1] : "schemas";
-    Directory.CreateDirectory(outDir);
-
-    (string file, Type type)[] roots =
-    [
-        ("allegiance-core.schema.json", typeof(Allegiance.Factions.Model.Core)),
-        ("allegiance-faction.schema.json", typeof(Allegiance.Factions.Model.Faction)),
-        ("allegiance-manifest.schema.json", typeof(Allegiance.Factions.Serialization.Manifest)),
-        ("world.schema.json", typeof(WorldDef)),
-        ("map.schema.json", typeof(MapDef)),
-    ];
-    foreach (var (file, type) in roots)
-    {
-        string path = Path.Combine(outDir, file);
-        File.WriteAllText(path, Allegiance.Factions.Schema.YamlJsonSchema.Generate(type));
-        Console.WriteLine($"[SimServer] gen-schemas: wrote {path}");
-    }
+    Environment.Exit(GenSchemas(args));
     return;
+}
+
+// Authoring-time tooling that REFLECTS over the content model, so it exists only in an untrimmed (JIT)
+// build. SchemaTooling.IsSupported is a feature guard: the AOT compiler hard-wires it to false and
+// drops the reflection branch, so the published server refuses the flag with a pointer to the source
+// build instead of reflecting over trimmed types.
+static int GenSchemas(string[] args)
+{
+    if (SchemaTooling.IsSupported)
+    {
+        int gi = Array.IndexOf(args, "--gen-schemas");
+        string outDir = gi + 1 < args.Length && !args[gi + 1].StartsWith("--") ? args[gi + 1] : "schemas";
+        Directory.CreateDirectory(outDir);
+
+        (string file, Type type)[] roots =
+        [
+            ("allegiance-core.schema.json", typeof(Allegiance.Factions.Model.Core)),
+            ("allegiance-faction.schema.json", typeof(Allegiance.Factions.Model.Faction)),
+            ("allegiance-manifest.schema.json", typeof(Allegiance.Factions.Serialization.Manifest)),
+            ("world.schema.json", typeof(WorldDef)),
+            ("map.schema.json", typeof(MapDef)),
+        ];
+        foreach (var (file, type) in roots)
+        {
+            string path = Path.Combine(outDir, file);
+            File.WriteAllText(path, Allegiance.Factions.Schema.YamlJsonSchema.Generate(type));
+            Console.WriteLine($"[SimServer] gen-schemas: wrote {path}");
+        }
+        return 0;
+    }
+
+    Console.Error.WriteLine(
+        "[SimServer] --gen-schemas is authoring-time tooling and is not part of the NativeAOT build. "
+            + "Run it from source: dotnet run --project server -- --gen-schemas [<outdir>]"
+    );
+    return 2;
 }
 
 // Standalone sim server entry point: Kestrel hosts one WebSocket endpoint (/game); a
@@ -458,4 +478,24 @@ if (matchReporter is not null)
 {
     matchReporter.DrainAsync(TimeSpan.FromSeconds(3)).GetAwaiter().GetResult();
     matchReporter.DisposeAsync().AsTask().GetAwaiter().GetResult();
+}
+
+// Feature switch for reflection-only tooling (--gen-schemas). NOT RuntimeFeature.IsDynamicCodeSupported:
+// with PublishAot in the csproj the SDK writes that switch as false into the JIT build's runtimeconfig
+// too (dev runs deliberately mimic the AOT feature set), so it cannot tell `dotnet run` from the native
+// binary. This one is given the value `false` only inside the native link (SimServer.csproj, target
+// ConfigureNativeLink): the AOT compiler then folds the getter to false and drops the guarded branch;
+// everywhere else the switch is unset and the tooling is available.
+static class SchemaTooling
+{
+    // IL4000: the analyzer cannot see the csproj, so it cannot prove "false whenever trimmed". The
+    // compiler can: if the switch were ever missing from the link, the guarded call would fail the
+    // publish with IL2026/IL3050 rather than ship.
+#pragma warning disable IL4000
+    [FeatureSwitchDefinition("SimServer.SchemaTooling.IsSupported")]
+    [FeatureGuard(typeof(RequiresUnreferencedCodeAttribute))]
+    [FeatureGuard(typeof(RequiresDynamicCodeAttribute))]
+    public static bool IsSupported =>
+        AppContext.TryGetSwitch("SimServer.SchemaTooling.IsSupported", out bool enabled) ? enabled : true;
+#pragma warning restore IL4000
 }

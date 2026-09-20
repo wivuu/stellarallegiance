@@ -121,7 +121,11 @@ brimstone header for exact fallbacks). `environment:` carries the look:
   fails schema validation and boots as a null/default.
 - Colors are `[r, g, b]` floats ~`0..1`, not 0–255.
 - Changing `MapDef`/`SectorEnvDef` fields means: update the XML doc comment, then rerun
-  `--gen-schemas`, then update `brimstone-gambit.yaml`'s header reference.
+  `--gen-schemas`, then update `brimstone-gambit.yaml`'s header reference. A brand-new block
+  **class** also needs a `[YamlSerializable(typeof(X))]` line in `server/Content/ServerYaml.cs`
+  (build error `YDNG001` if missing) — map YAML is read through a source-generated context.
+  `--gen-schemas` runs from source only (`dotnet run --project server -- …`); the published
+  NativeAOT binary refuses it.
 - Maps are geometry only — no ship/weapon/price/tech values live here (that's
   `tech-tree-content`). A map may override world `sector-scale` / `asteroid-density` /
   `sector-radius`, nothing else gameplay-balance.

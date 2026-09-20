@@ -25,6 +25,7 @@ public record Faction
     /// <summary>Starting / bonus money.</summary>
     public double BonusMoney { get; set; }
 
+#pragma warning disable YDNG001 // read by ModelCollectionConverters, not the static context
     /// <summary>Capability gates the faction starts the match with — the seed of its tech tree.</summary>
     public CapabilitySet BaseCapabilities { get; set; } = new();
 
@@ -36,6 +37,7 @@ public record Faction
 
     /// <summary>Baseline team-wide stat multipliers before any research.</summary>
     public AttributeModifiers BaseAttributes { get; set; } = new();
+#pragma warning restore YDNG001
 
     /// <summary>The hull a pilot ejects into; references a hull <c>id</c>.</summary>
     public string LifepodHullId { get; set; } = "";

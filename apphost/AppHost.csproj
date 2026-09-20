@@ -25,7 +25,11 @@
 
   <ItemGroup>
     <!-- Aspire project resources (generate Projects.PublicLobby / Projects.SimServer). The Godot client
-         is NOT referenced: it is a Godot.NET.Sdk project launched by the Godot binary (executable resource). -->
+         is NOT referenced: it is a Godot.NET.Sdk project launched by the Godot binary (executable resource).
+         The Game Launcher (launcher/App/StellarLauncher.csproj) is NOT referenced either: it is an
+         executable resource that runs its own BUILT BINARY, built via `dotnet build` in
+         OnBeforeResourceStarted (see Hosting/GameLauncher.cs), so a launcher compile error only fails
+         that one resource, with the build output in its console log. -->
     <ProjectReference Include="../public-lobby/PublicLobby.csproj" />
     <ProjectReference Include="../server/SimServer.csproj" />
   </ItemGroup>

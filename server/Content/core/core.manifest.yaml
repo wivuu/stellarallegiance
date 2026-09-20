@@ -8,8 +8,8 @@
 #  same shared ShipClassDef/WeaponDef/BaseDef/WorldConfig the sim runs on and the wire streams —
 #  so the client and wire are unchanged. To customize a server, edit these files, or copy the
 #  bundle and point the server at your manifest:
-#      dotnet SimServer.dll --content path/to/your/core.manifest.yaml
-#      CONTENT_PATH=path/to/your/core.manifest.yaml dotnet SimServer.dll
+#      SimServer --content path/to/your/core.manifest.yaml
+#      CONTENT_PATH=path/to/your/core.manifest.yaml SimServer
 #
 #  This bundle reproduces the legacy server/Content/stock.yaml numbers EXACTLY (Scout/Fighter/
 #  Bomber/Pod + Garrison). Keys and enum values are kebab-case. Runtime-only fields

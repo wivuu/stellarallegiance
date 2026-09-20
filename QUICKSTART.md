@@ -33,6 +33,9 @@ launches Godot on the local lobby's server browser (parameter `client-mode`, def
 `direct` skips the browser and dials `localhost:8090`, which only works while the server is
 unapproved or private). Equivalently: `aspire resource client start`.
 
+(To review the Game Launcher's UI instead of playing, start the `launcher` resource — see
+`launcher/README.md`.)
+
 ### 5. Play
 Pick **BLUE** or **RED**, click **Ready**, and the match starts once everyone in the lobby is
 ready. Fly with `W/S` throttle, mouse aim, `Shift` afterburner, click/`Space` to fire. AI drones

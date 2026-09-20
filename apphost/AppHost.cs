@@ -1,9 +1,10 @@
 // Stellar Allegiance local-dev AppHost. `aspire run` from the repo root boots, in order:
 //   postgres (container, persistent volume) -> lobby-migrate (one-shot `--migrate`) -> lobby (:8091)
-//   -> server (:8090, registered on the local lobby) ; `client` (Godot) is explicit-start.
+//   -> server (:8090, registered on the local lobby) ; `client` (Godot) and `launcher` (Game Launcher,
+//   UI review only) are explicit-start.
 // Config: every KEY in the root .env is a parameter (see Hosting/DotEnv.cs + Hosting/AppParameters.cs);
-// unresolved parameters are prompted for in the dashboard. Commands: client `launch`, lobby
-// `approve-device-code`, lobby/server `deploy-railway`; CLI `aspire do deploy-lobby|deploy-server`.
+// unresolved parameters are prompted for in the dashboard. Commands: client `launch`, launcher `show`,
+// lobby `approve-device-code`, lobby/server `deploy-railway`; CLI `aspire do deploy-lobby|deploy-server`.
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using StellarAllegiance.AppHost.Hosting;
@@ -73,6 +74,9 @@ var server = builder
 // ---- Godot client (explicit start) + `launch` command for extra instances.
 var godot = GodotLocator.Resolve(builder.Configuration);
 builder.AddGodotClient("client", new GodotClientOptions(repo, godot, lobbyHttp, server.GetEndpoint("http"), p));
+
+// ---- Game Launcher (explicit start, UI review only - it never needs to start the game) + `show` command.
+builder.AddGameLauncher("launcher", new GameLauncherOptions(repo, lobbyHttp, p));
 
 builder.AddRailwayPipelineSteps(repo, p);
 

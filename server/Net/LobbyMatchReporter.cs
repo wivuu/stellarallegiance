@@ -19,8 +19,6 @@ public sealed class LobbyMatchReporter : IMatchResultSink, IAsyncDisposable
 {
     public const string SpoolEnvVar = "SIM_REPORT_SPOOL";
 
-    static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-
     readonly HttpClient _http;
     readonly string _spoolDir;
     readonly ILogger _log;
@@ -124,7 +122,7 @@ public sealed class LobbyMatchReporter : IMatchResultSink, IAsyncDisposable
         var name = $"{DateTime.UtcNow:yyyyMMddHHmmssfff}-{id:N}.{item.Kind}.json";
         var path = Path.Combine(_spoolDir, name);
         var tmp = path + ".tmp";
-        File.WriteAllText(tmp, JsonSerializer.Serialize(item, Json));
+        File.WriteAllText(tmp, JsonSerializer.Serialize(item, LobbyHttpJson.Default.SpoolItem));
         File.Move(tmp, path, overwrite: true);
         Log.MatchReportSpooled(_log, item.Kind, id);
         Enqueue(path);
@@ -170,7 +168,7 @@ public sealed class LobbyMatchReporter : IMatchResultSink, IAsyncDisposable
         SpoolItem? item;
         try
         {
-            item = JsonSerializer.Deserialize<SpoolItem>(await File.ReadAllTextAsync(path, ct), Json);
+            item = JsonSerializer.Deserialize(await File.ReadAllTextAsync(path, ct), LobbyHttpJson.Default.SpoolItem);
         }
         catch (Exception e)
         {
@@ -272,7 +270,10 @@ public sealed class LobbyMatchReporter : IMatchResultSink, IAsyncDisposable
         if (item.Start is { } s)
             return new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/matches")
             {
-                Content = JsonContent.Create(new MatchStartRequest(s.MatchId, s.ListingId!, s.Map, s.StartedAt)),
+                Content = JsonContent.Create(
+                    new MatchStartRequest(s.MatchId, s.ListingId!, s.Map, s.StartedAt),
+                    LobbyHttpJson.Default.MatchStartRequest
+                ),
             };
         var r = item.Result!;
         var report = new MatchResultReport(
@@ -289,7 +290,7 @@ public sealed class LobbyMatchReporter : IMatchResultSink, IAsyncDisposable
         );
         return new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/matches/{r.MatchId}/result")
         {
-            Content = JsonContent.Create(report),
+            Content = JsonContent.Create(report, LobbyHttpJson.Default.MatchResultReport),
         };
     }
 

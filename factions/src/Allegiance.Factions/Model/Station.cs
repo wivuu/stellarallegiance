@@ -30,11 +30,13 @@ public record Station : Buildable
     /// <summary>Functional category of this station (garrison, shipyard, mining, etc).</summary>
     public StationClass Class { get; set; }
 
+#pragma warning disable YDNG001 // read by ModelCollectionConverters, not the static context
     /// <summary>
     /// Techs granted only locally (while/where this station exists), distinct from the global
     /// <see cref="Buildable.GrantedTechs"/>. Mirrors the C++ <c>ttbmLocal</c>.
     /// </summary>
     public TechSet LocalTechs { get; set; } = new();
+#pragma warning restore YDNG001
 
     /// <summary>Station upgrade target; references another station <c>id</c>.</summary>
     public string? SuccessorStationId { get; set; }

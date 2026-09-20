@@ -6,6 +6,8 @@ The live roadmap: what is shipped (one line each, with a pointer to the real doc
 
 **Next to incorporate into the plan**
 - Nebula looks different for the same sector on two different clients
+- Warning on server when lobby drops/reconnects and its a new version - warning to update the gameserver?
+  - What would auto update look like?
 
 **What else lives in `.PLAN/`**
 
@@ -56,9 +58,10 @@ Condensed outcomes. Each line names where the detail now lives.
   [`docs/LOBBY-ACCOUNTS-AND-RANKING.md`](../docs/LOBBY-ACCOUNTS-AND-RANKING.md) · language:
   `public-lobby/CONTEXT.md` · decisions: `docs/adr/0001`, `0002` · recipes: the `/public-lobby` skill.
 - ✅ **[S] Local dev orchestration (Aspire)** — `aspire run` boots postgres → `lobby-migrate` →
-  lobby:8091 → server:8090 with the Godot `client` as explicit-start; root `.env` keys are parameters;
-  `aspire do deploy-lobby|deploy-server` replaces the deploy pwsh scripts. See `apphost/` and the
-  `aspire` skill. `scripts/run-server.ps1` / `run-client.ps1` target the *hosted* lobby.
+  lobby:8091 → server:8090 with the Godot `client` and the Game Launcher `launcher` (UI review only) as
+  explicit-start; root `.env` keys are parameters; `aspire do deploy-lobby|deploy-server` replaces the
+  deploy pwsh scripts. See `apphost/` and the `aspire` skill. `scripts/run-server.ps1` / `run-client.ps1`
+  target the *hosted* lobby.
 - ✅ **[S] Spatial audio, first pass** — `SfxManager`, collision thuds (asteroids and bases, client-side
   interception against the shared convex hulls), per-bus volume sliders persisted via `UserPrefs`.
 

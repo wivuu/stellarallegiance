@@ -127,5 +127,8 @@ failures += await JoinTokenVerifierTests.RunAsync();
 // ---- Server auth on boot (WP2.1): credential file + device-code/refresh boot flow. ----
 failures += await LobbyAuthTests.RunAsync();
 
+// ---- Source-generated JSON (NativeAOT server): every lobby wire shape is byte-identical to before. ----
+failures += WireJsonTests.Run();
+
 Console.WriteLine(failures == 0 ? "ALL PASS" : $"{failures} FAILURE(S)");
 return failures == 0 ? 0 : 1;

@@ -1,0 +1,17 @@
+<!--
+  NativeAOT/trimmer roots: types a DEPENDENCY reflects over without telling the trimmer. Our own code
+  needs nothing here (JSON and YAML are source-generated) - add an entry only for third-party reflection,
+  and say what breaks without it.
+-->
+<linker>
+  <assembly fullname="SIPSorcery">
+    <!--
+      SIPSorcery serializes the SCTP handshake's state cookie (INIT ACK -> COOKIE ECHO) with its bundled
+      reflection JSON helper (TinyJson). Trimmed, the cookie round-trips as "{}", its HMAC check fails
+      and the association is aborted: ICE and DTLS still report "connected", but the WebRTC data channel
+      never opens - so every NAT-mode (lobby-relayed) join would silently time out. WebSocket joins are
+      unaffected, which is what makes this easy to miss.
+    -->
+    <type fullname="SIPSorcery.Net.SctpTransportCookie" preserve="all" />
+  </assembly>
+</linker>

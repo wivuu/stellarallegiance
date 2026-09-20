@@ -54,6 +54,11 @@ dotnet run --project launcher/App -- --launcher-showcase             # every por
 dotnet run --project launcher/App -- --launcher-fake=available        # any state, no install/feed/game needed
 ```
 
+To review the UI against the local lobby instead of running from source directly: `aspire resource
+launcher start` (dashboard **Start** on the `launcher` resource) opens the real flow, and `aspire
+resource launcher show --view showcase` (dashboard **Show launcher view…**) opens the showcase or any
+fake state — see `apphost/Hosting/GameLauncher.cs`.
+
 Everything that is not `--launcher-*` is passed to the game verbatim (including a bare `--` and its tail).
 
 | Flag | Purpose |

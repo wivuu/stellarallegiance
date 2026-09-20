@@ -35,6 +35,7 @@ public abstract record Buildable
     /// <summary>Optional grouping id used to bucket related items in the build UI.</summary>
     public string? Group { get; set; }
 
+#pragma warning disable YDNG001 // read by ModelCollectionConverters, not the static context
     /// <summary>Capability gates that must all be enabled before this can be built/bought.</summary>
     public CapabilitySet RequiredCapabilities { get; set; } = new();
 
@@ -54,6 +55,7 @@ public abstract record Buildable
     /// set. Serialized kebab-case as <c>obsoleted-by-techs</c>; omitted when empty.
     /// </summary>
     public TechSet ObsoletedByTechs { get; set; } = new();
+#pragma warning restore YDNG001
 
     /// <summary>
     /// Lowercase-kebab label naming this buildable's concrete kind (e.g. "hull", "ammo-pack"),

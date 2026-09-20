@@ -706,10 +706,10 @@ Check(
 );
 
 // The raw world.yaml parse: the tuning blocks parse from their kebab-case keys onto the NULLABLE
-// WorldDef fields (CoreSerializer ignores unmatched properties, so a key mismatch would SILENTLY
+// WorldDef fields (the deserializer ignores unmatched properties, so a key mismatch would SILENTLY
 // fall back to stock at projection — the authored values equal stock, making that invisible above).
 // Asserting the parsed nullables are non-null catches it; one tricky key per block.
-var worldDef = Allegiance.Factions.Serialization.CoreSerializer.Deserialize<WorldDef>(File.ReadAllText(worldPath));
+var worldDef = ServerYaml.Deserialize<WorldDef>(File.ReadAllText(worldPath));
 Check(
     worldDef is { Id: 0, SectorScale: 2.25, AsteroidDensity: 1.0 }
         && worldDef.Ai is { BrainHz: 5, MaxPigsPerTeam: 5, AimWobbleMaxRad: 0.05 }
@@ -1369,6 +1369,69 @@ Check(
     "validator flags a zero-length hardpoint direction",
     "validator missed a zero-length hardpoint direction"
 );
+
+// ---- Static (source-generated) YAML reader == YamlDotNet's reflection reader, for EVERY stock file ----
+// The server reads YAML through the static contexts (FactionsYamlContext / ServerYamlContext) because
+// the NativeAOT build has no reflection deserializer. The generator is simpler than the reflection
+// path (it knows List/Dictionary by name, walks base types itself, strips nullability...), so pin that
+// it reads each shipped file to the SAME object graph: deserialize both ways, write both back out with
+// the (reflection) serializer, compare the text. A model shape the generator mishandles - or a
+// converter-backed collection that drifts - fails here, on the JIT, not in a published server.
+{
+    var reflectionReader = new YamlDotNet.Serialization.DeserializerBuilder()
+        .WithNamingConvention(YamlDotNet.Serialization.NamingConventions.HyphenatedNamingConvention.Instance)
+        .WithEnumNamingConvention(YamlDotNet.Serialization.NamingConventions.HyphenatedNamingConvention.Instance)
+        .IgnoreUnmatchedProperties()
+        .Build();
+    string contentRoot = Path.Combine(AppContext.BaseDirectory, "content");
+
+    void SameGraph<T>(string file, Func<string, T> staticRead)
+        where T : new()
+    {
+        string yaml = File.ReadAllText(file);
+        string viaStatic = Allegiance.Factions.Serialization.CoreSerializer.Serialize(staticRead(yaml));
+        string viaReflection = Allegiance.Factions.Serialization.CoreSerializer.Serialize(
+            reflectionReader.Deserialize<T>(yaml) ?? new T()
+        );
+        string rel = Path.GetRelativePath(contentRoot, file);
+        Check(
+            viaStatic == viaReflection && viaStatic.Trim().Length > 2,
+            $"static YAML reader matches the reflection reader: {rel} ({viaStatic.Length} chars)",
+            $"static YAML reader DIVERGES from the reflection reader on {rel}"
+        );
+    }
+
+    var manifest = Allegiance.Factions.Serialization.CoreSerializer.Deserialize<Allegiance.Factions.Serialization.Manifest>(
+        File.ReadAllText(stockPath)
+    );
+    string coreDir = Path.GetDirectoryName(stockPath)!;
+    SameGraph(
+        stockPath,
+        Allegiance.Factions.Serialization.CoreSerializer.Deserialize<Allegiance.Factions.Serialization.Manifest>
+    );
+    foreach (var fragment in manifest.Catalog)
+        SameGraph(
+            Path.Combine(coreDir, fragment),
+            Allegiance.Factions.Serialization.CoreSerializer.Deserialize<Factions.Core>
+        );
+    foreach (var faction in manifest.Factions)
+        SameGraph(
+            Path.Combine(coreDir, faction),
+            Allegiance.Factions.Serialization.CoreSerializer.Deserialize<Factions.Faction>
+        );
+    SameGraph(worldPath, ServerYaml.Deserialize<WorldDef>);
+    var mapFiles = Directory
+        .GetFiles(Path.Combine(contentRoot, "maps"), "*.yaml")
+        .OrderBy(f => f, StringComparer.Ordinal)
+        .ToArray();
+    Check(
+        mapFiles.Length > 0,
+        $"stock maps found for the reader comparison ({mapFiles.Length})",
+        "no stock maps next to the test binary"
+    );
+    foreach (var map in mapFiles)
+        SameGraph(map, ServerYaml.Deserialize<MapDef>);
+}
 
 Console.WriteLine(failures == 0 ? "\nALL CONTENT TESTS PASSED" : $"\n{failures} CONTENT TEST(S) FAILED");
 return failures == 0 ? 0 : 1;
