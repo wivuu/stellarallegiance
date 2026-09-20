@@ -31,10 +31,19 @@ public static class LauncherHandoff
     // started that way, hand the same command line to the launcher and step aside.
     //
     // Returns true when the redirect was started (the caller should quit). Never fires in the editor, in
-    // dev runs, or when SA_NO_LAUNCHER_REDIRECT=1 (the escape hatch for debugging the packaged binary).
+    // dev runs, when SA_NO_LAUNCHER_REDIRECT=1 (the escape hatch for debugging the packaged binary), or
+    // under `--verify-assets`: that run is the packaging gate asking THIS binary about ITS OWN files, from
+    // inside the package stage — which looks exactly like a Dock-icon start. Redirecting there opened the
+    // staged launcher's window on the build machine (against the developer's real launcher state) while
+    // the check it was supposed to be ran to completion beside it.
     public static bool TryRedirectToLauncher()
     {
-        if (UnderLauncher || OS.HasFeature("editor") || OS.GetEnvironment(LauncherContract.EnvNoRedirect) == "1")
+        if (
+            UnderLauncher
+            || OS.HasFeature("editor")
+            || AssetVerify.Requested
+            || OS.GetEnvironment(LauncherContract.EnvNoRedirect) == "1"
+        )
             return false;
 
         string exe = OS.GetExecutablePath().Replace('\\', '/');

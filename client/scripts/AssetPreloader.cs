@@ -19,9 +19,10 @@ using StellarAllegiance.Shared;
 //    Phase A (Godot's threaded loader): every asteroid-variant, base, and ship GLB scene, so a
 //            later GD.Load is a cache hit.
 //    Phase B (worker Task): the shared collision SimModels (GlbReader + QuickHull, pure C#)
-//            for those same GLBs, consumed by CollisionWorld.LoadGlb. Base models bake the
-//            SAME pre-rotation CollisionWorld.BaseModel passes (the path-keyed cache must hold
-//            the rotated hull, or prediction would collide against an unrotated station).
+//            for those same GLBs, through CollisionModels.Load — the one loader, which also owns
+//            the cache and the fault ledger. Base models bake the SAME pre-rotation
+//            CollisionWorld.BaseModel passes (the path-keyed cache must hold the rotated hull, or
+//            prediction would collide against an unrotated station).
 //    Phase C (main thread, ONE item per frame): per-mesh readbacks + shadow-occluder extremes
 //            + trace BVHs (WarmAsteroidVariant / EnvironmentRenderer.WarmModelScene) — sliced
 //            so even the warm itself never hitches.
@@ -37,15 +38,6 @@ using StellarAllegiance.Shared;
 // =====================================================================
 public partial class AssetPreloader : Node
 {
-    // Collision SimModels keyed by res:// path, built off-thread here and/or stored back by
-    // CollisionWorld.LoadGlb. A null entry = unreadable GLB (sphere fallback), cached so nobody
-    // retries. ConcurrentDictionary: the worker Task writes while the main thread reads.
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, SimModel?> _simModels = new();
-
-    public static bool TryGetSimModel(string resPath, out SimModel? model) => _simModels.TryGetValue(resPath, out model);
-
-    public static void StoreSimModel(string resPath, SimModel? model) => _simModels[resPath] = model;
-
     private readonly List<string> _pendingScenes = new(); // threaded-load requests in flight
     private readonly Queue<string> _finishQueue = new(); // loaded scenes awaiting main-thread finishing
     private bool _done;
@@ -74,8 +66,18 @@ public partial class AssetPreloader : Node
         paths.AddRange(basePaths);
         paths.AddRange(shipPaths);
         paths.AddRange(partPaths);
+        var asteroidPaths = new List<string>();
         foreach (string v in AsteroidShapes.Variants)
-            paths.Add($"res://assets/asteroids/{v}.glb");
+            asteroidPaths.Add($"res://assets/asteroids/{v}.glb");
+        paths.AddRange(asteroidPaths);
+
+        // `--verify-assets`: judge this build's models and exit (AssetVerify) — nothing else to warm.
+        if (AssetVerify.Requested)
+        {
+            SetProcess(false);
+            GetTree().Quit(AssetVerify.Run(basePaths, shipPaths, asteroidPaths));
+            return;
+        }
 
         foreach (string path in paths)
             if (ResourceLoader.Exists(path) && ResourceLoader.LoadThreadedRequest(path) == Error.Ok)
@@ -94,25 +96,16 @@ public partial class AssetPreloader : Node
                 hulls.Add((path, basePaths.Contains(path) ? CollisionConfig.BaseModelRotation : default));
         System.Threading.Tasks.Task.Run(() =>
         {
+            // A model that cannot be built is a FAULT, not a shrug: CollisionModels logs it as an error
+            // and keeps it in the ledger the server browser and the HUD read (a hit is a no-op, so
+            // gameplay beating us to a path costs nothing).
             foreach (var (path, pre) in hulls)
-            {
-                if (_simModels.ContainsKey(path))
-                    continue; // gameplay beat us to it
-                SimModel? model = null;
-                byte[] bytes = FileAccess.GetFileAsBytes(path);
-                if (bytes is { Length: > 0 })
-                    try
-                    {
-                        model = SimModel.FromGlb(bytes, path, pre);
-                    }
-                    catch (System.Exception e)
-                    {
-                        Log.Warn($"[AssetPreloader] hull build failed for {path}: {e.Message}");
-                    }
-                else
-                    Log.Warn($"[AssetPreloader] could not read {path}");
-                _simModels[path] = model;
-            }
+                CollisionModels.Load(path, pre);
+            if (CollisionModels.Faults.Count > 0)
+                Log.Error(
+                    $"[Collision] {CollisionModels.Summary()} This build will mispredict collisions — "
+                        + "see the FAULT lines above; `--verify-assets` reproduces the check."
+                );
         });
 
         // Phase D: effect shaders that used to compile at first in-world spawn.
@@ -124,23 +117,45 @@ public partial class AssetPreloader : Node
     // Every .glb under a res:// folder. Export builds list imported files as "<name>.glb.remap"
     // (or leave only the ".import" sidecar), so suffixes are normalized and deduped; a missing
     // folder just yields an empty list.
+    //
+    // Running from SOURCE the folder is the working tree, where a sidecar can outlive its GLB:
+    // ".import" files are gitignored, so deleting or reverting a model leaves its sidecar (and its
+    // imported scene) behind. Such an orphan is not a model this build has — listing it would warm a
+    // ghost and then report a collision fault for a file that simply is not there any more. They are
+    // named once and skipped. (In a package there is no raw .glb to compare against, and no orphans
+    // either: the exporter only ships sidecars of files it exported.)
     private static List<string> GlbsIn(string dir)
     {
         var found = new List<string>();
         using var d = DirAccess.Open(dir);
         if (d == null)
             return found;
+        var raw = new HashSet<string>();
+        var listed = new List<string>();
         var seen = new HashSet<string>();
         foreach (string f in d.GetFiles())
         {
             string name = f;
+            if (name.EndsWith(".glb"))
+                raw.Add(name);
             if (name.EndsWith(".remap"))
                 name = name.Substring(0, name.Length - ".remap".Length);
             if (name.EndsWith(".import"))
                 name = name.Substring(0, name.Length - ".import".Length);
             if (name.EndsWith(".glb") && seen.Add(name))
-                found.Add($"{dir}/{name}");
+                listed.Add(name);
         }
+        var orphans = new List<string>();
+        foreach (string name in listed)
+            if (OS.HasFeature("editor") && !raw.Contains(name))
+                orphans.Add(name);
+            else
+                found.Add($"{dir}/{name}");
+        if (orphans.Count > 0)
+            Log.Print(
+                $"[AssetPreloader] {dir}: skipping {orphans.Count} orphaned import sidecar(s) whose .glb is gone "
+                    + $"({string.Join(", ", orphans)}) — delete the stale *.import files to tidy up"
+            );
         return found;
     }
 

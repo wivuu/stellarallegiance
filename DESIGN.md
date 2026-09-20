@@ -106,6 +106,12 @@ subclasses** for anything needing custom `_Draw` or per-frame state.
 - **Game Lobby server-notice strip** — a standing `AlertBox` (Warn tone) in a chrome `BarPanel`, inserted
   between the status bar and the body (`Lobby.BuildNoticeStrip`), hidden unless the server has a pending
   auto-update notice to show. No new component — existing parts only.
+- **Collision-fault alerts** — a standing `AlertBox` (Danger tone) wherever a [Collision Model Fault](GLOSSARY.md)
+  must be seen: full-width under the server browser's header (`ServerLobbyOverlay`, the whole ledger, before a
+  join), and top-right on the flight HUD (`Hud`, only what the server fielded in this match) on a `PanelSolid`
+  backing — an `AlertBox`'s own 10% wash is unreadable over a sunlit sky. Both poll `CollisionModels.Version`
+  and call `Configure` only when it moves. No new component — existing parts only; never clickable.
+  `SA_FAULT_COLLISION_MODELS=all` shows both from a dev run.
 - **Backgrounds** — `NebulaBackground` (animated warm/blue gas-cloud fill from the `Nebula.dc.html`
   spec; a single `canvas_item` shader — drifting screen-blended clouds, Void vignette, star-dot
   grid, scanlines; `Intensity` 0..1). Use it behind full-screen menu overlays whose backdrop is

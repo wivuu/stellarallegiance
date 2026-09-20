@@ -92,6 +92,12 @@ public partial class ServerLobbyOverlay : Control
     private HBoxContainer _updateRow = null!;
     private AlertBox _updateAlert = null!;
 
+    // "This install cannot build its collision models" — a standing Danger alert above the list, so a
+    // broken build says so BEFORE anyone joins a match with it (CollisionModels; polled by version
+    // because the ledger is written from AssetPreloader's worker thread).
+    private AlertBox _faultAlert = null!;
+    private int _faultVersion = -1;
+
     // Selection state. The rendered ServerDto instance is remembered so RenderServers can skip
     // rebuilding the detail panel when the selected entry didn't change (SSE events replace
     // instances, so a reference compare is exactly "did an update arrive for this server").
@@ -131,6 +137,10 @@ public partial class ServerLobbyOverlay : Control
         margin.AddChild(col);
 
         BuildTopBar(col);
+
+        // First under the header: a broken install outranks an update nudge (and usually shares its cure).
+        _faultAlert = new AlertBox { Visible = false, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        col.AddChild(_faultAlert);
 
         _updateBanner = new RichTextLabel
         {
@@ -516,6 +526,28 @@ public partial class ServerLobbyOverlay : Control
     }
 
     private void HideConnectModal() => _modal.Visible = false;
+
+    // ---- Collision-model faults -------------------------------------------------
+
+    // The startup warm (AssetPreloader) builds every collision model in the background; whatever it
+    // could not build lands in the CollisionModels ledger. One int compare per frame; Configure (which
+    // rebuilds the box's style) only when the ledger actually moved.
+    public override void _Process(double delta)
+    {
+        if (_faultVersion == CollisionModels.Version)
+            return;
+        _faultVersion = CollisionModels.Version;
+        string summary = CollisionModels.Summary();
+        _faultAlert.Visible = summary.Length > 0;
+        if (summary.Length == 0)
+            return;
+        _faultAlert.Configure(
+            "⚠ THIS INSTALL IS MISSING COLLISION DATA",
+            $"{summary} Your ship will rubber-band near them: this client cannot predict the collisions the "
+                + "server resolves. Update or reinstall the game.",
+            StatusPill.Kind.Danger
+        );
+    }
 
     // ---- Update check --------------------------------------------------------
 
