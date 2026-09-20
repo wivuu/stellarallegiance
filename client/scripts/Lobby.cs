@@ -56,6 +56,10 @@ public partial class Lobby : Control
     // Header / status bar.
     private Label _online = null!;
     private StatusPill _phasePill = null!;
+
+    // The server's standing notice strip (BuildNoticeStrip) - hidden unless the server has one.
+    private VBoxContainer _noticeStrip = null!;
+    private AlertBox _noticeAlert = null!;
     private Label _clock = null!;
     private Label _matchTitle = null!;
     private Label _matchSub = null!; // "{mode} · {sector} · {n} GARRISONS" — driven by the selected map
@@ -157,6 +161,7 @@ public partial class Lobby : Control
         root.AddChild(RosterCells.Hairline());
         root.AddChild(BuildStatusBar());
         root.AddChild(RosterCells.Hairline());
+        root.AddChild(BuildNoticeStrip());
         root.AddChild(BuildBody());
         root.AddChild(RosterCells.Hairline());
         root.AddChild(BuildComms());
@@ -165,10 +170,12 @@ public partial class Lobby : Control
         _net.MapListChanged += OnLobbyChanged; // catalog arrival refreshes the sector pane too
         _net.DefsReceived += OnLobbyChanged; // defs carry the faction name; refresh the intel pane
         _net.MatchStatsChanged += OnLobbyChanged; // scoreboard ledger feeds the K/D/EJ/PTS cells
+        _net.ServerNoticeChanged += RefreshServerNotice;
         _net.ChatReceived += OnChat;
 
         UpdateChannelButtons();
         RebuildComms();
+        RefreshServerNotice(); // the notice may have arrived before this overlay existed
     }
 
     public override void _ExitTree()
@@ -177,6 +184,7 @@ public partial class Lobby : Control
         _net.MapListChanged -= OnLobbyChanged;
         _net.DefsReceived -= OnLobbyChanged;
         _net.MatchStatsChanged -= OnLobbyChanged;
+        _net.ServerNoticeChanged -= RefreshServerNotice;
         _net.ChatReceived -= OnChat;
     }
 
@@ -223,6 +231,39 @@ public partial class Lobby : Control
         right.AddChild(leave);
         row.AddChild(right);
         return bar;
+    }
+
+    // The server's standing notice (MsgServerNotice): a full-width strip between the status bar and the
+    // body, collapsed unless there is something to say. Today that is one thing - the server has a newer
+    // release staged and will restart onto it as soon as it has been EMPTY for a while. It never forces
+    // anyone out, so the banner is how the players who are keeping it alive find out why they might want
+    // to wrap up. Built from existing parts only (chrome bar + AlertBox, Warn tone) - no new component.
+    private Control BuildNoticeStrip()
+    {
+        _noticeStrip = new VBoxContainer { Visible = false };
+        _noticeStrip.AddThemeConstantOverride("separation", 0);
+        var bar = RosterCells.BarPanel(26, 10, ChromeBar);
+        _noticeAlert = new AlertBox { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        bar.AddChild(_noticeAlert);
+        _noticeStrip.AddChild(bar);
+        _noticeStrip.AddChild(RosterCells.Hairline());
+        return _noticeStrip;
+    }
+
+    // Driven by the ServerNoticeChanged event (and once at Init) - NOT from the per-frame status-bar
+    // refresh: Configure rebuilds the box's style.
+    private void RefreshServerNotice()
+    {
+        var notice = _net.ServerNotice;
+        _noticeStrip.Visible = notice.IsUpdatePending;
+        if (!notice.IsUpdatePending)
+            return;
+        string version = notice.Version.Length > 0 ? $" · v{notice.Version}" : "";
+        _noticeAlert.Configure(
+            $"⚠ SERVER UPDATE PENDING{version}",
+            "This server restarts to update once everyone has left. Rejoin from the server browser afterwards.",
+            StatusPill.Kind.Warn
+        );
     }
 
     // Status bar: phase pill + clock + match title on the left, score in the middle, JOIN/LAUNCH right.

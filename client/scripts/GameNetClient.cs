@@ -65,6 +65,10 @@ public partial class GameNetClient : Node, INetClientHost
     public string TeamNameOf(byte team) => _frames.TeamNameOf(team);
 
     public int HostId => _frames.HostId;
+
+    // The server's standing notice (today: "an update is staged, this server restarts once everyone has
+    // left"). ServerNotice.None when there is nothing to show.
+    public ServerNotice ServerNotice => _frames.ServerNotice;
     public bool IsHost => HostId >= 0 && HostId == LocalClientId;
     public string SelectedMap => _frames.SelectedMap;
 
@@ -125,6 +129,9 @@ public partial class GameNetClient : Node, INetClientHost
     // Reliable and only sent on change, so listeners can simply mark themselves dirty.
     public event Action? MatchStatsChanged;
     public event Action? MapListChanged;
+
+    // ServerNoticeChanged = the server's standing notice appeared, changed or was withdrawn (ServerNotice).
+    public event Action? ServerNoticeChanged;
     public event Action<ChatLine>? ChatReceived;
     public event Action<uint>? Pong;
 
@@ -159,6 +166,8 @@ public partial class GameNetClient : Node, INetClientHost
 
     void INetClientHost.RaiseMapListChanged() => MapListChanged?.Invoke();
 
+    void INetClientHost.RaiseServerNoticeChanged() => ServerNoticeChanged?.Invoke();
+
     void INetClientHost.RaiseChat(ChatLine line) => ChatReceived?.Invoke(line);
 
     void INetClientHost.RaisePong(uint nonce) => Pong?.Invoke(nonce);
@@ -190,19 +199,31 @@ public partial class GameNetClient : Node, INetClientHost
     // close carries no reason); OnSocketClosed falls back to it when the transport gives no reason.
     private volatile string _rejectReason = "";
 
-    // MsgReject code → the message the UI shows (server/Net/Protocol.cs MsgReject): 1 = the
+    // MsgReject code → the reason the UI keys on (shared/Net/Messages.cs RejectMessage): 1 = the
     // shared-secret password was wrong; 2 = a Verified listing wanted a lobby join token we did
-    // not present (not signed in) or refused the one we did (expired/reused — fetch a fresh one).
-    public const string RejectBadSecret = "bad secret";
-    public const string RejectJoinToken = "join token rejected";
+    // not present (not signed in) or refused the one we did (expired/reused — fetch a fresh one);
+    // 3 = the server is restarting onto a new release (seconds) — just try again.
+    //
+    // The strings are SHARED with the server on purpose: a WebSocket close also carries the reason as
+    // text, and OnSocketClosed prefers that text over the code. They used to be typed out on each side
+    // and had drifted apart ("join token required" there, "join token rejected" here), so a token-less
+    // join to a Verified server showed a generic failure instead of the sign-in prompt.
+    public const string RejectBadSecret = RejectMessage.ReasonBadSecret;
+    public const string RejectJoinToken = RejectMessage.ReasonJoinTokenRejected;
+    public const string RejectJoinTokenRequired = RejectMessage.ReasonJoinTokenRequired;
+    public const string RejectUpdating = RejectMessage.ReasonUpdating;
 
     private static string RejectReasonOf(byte code) =>
         code switch
         {
-            1 => RejectBadSecret,
-            2 => RejectJoinToken,
+            RejectMessage.CodeBadSecret => RejectBadSecret,
+            RejectMessage.CodeJoinToken => RejectJoinToken,
+            RejectMessage.CodeUpdating => RejectUpdating,
             _ => "rejected",
         };
+
+    // Both spellings of "this server wants a join token": none presented, or the one presented was refused.
+    public static bool IsJoinTokenReason(string reason) => reason is RejectJoinToken or RejectJoinTokenRequired;
 
     public override void _Ready()
     {

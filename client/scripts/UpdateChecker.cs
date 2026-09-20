@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Threading.Tasks;
+using StellarAllegiance.Shared;
 // The BCL HttpClient (Godot ships its own); same choice as ServerLobbyOverlay's lobby fetch.
 using HttpClient = System.Net.Http.HttpClient;
 
@@ -19,6 +20,7 @@ public static class UpdateChecker
     // User-Agent or it 403s, so the client carries one. (Canonical path: the repo was transferred
     // from onionhammer/stellarallegiance, which still 301s here — we point at the live name directly.)
     private const string LatestReleaseUrl = "https://api.github.com/repos/wivuu/stellarallegiance/releases/latest";
+    private const string ReleasesPage = "https://github.com/wivuu/stellarallegiance/releases";
 
     private static readonly HttpClient Http = CreateClient();
 
@@ -34,11 +36,34 @@ public static class UpdateChecker
     // release page to open.
     public sealed record UpdateInfo(string Version, string Url);
 
+    // Which release THIS build is, or null when it cannot say. A dev/unstamped build ("0.0.0-dev") has no
+    // meaningful version to compare, so it stays quiet - unless SA_BUILD_VERSION names one, which is how
+    // a build run from source can be shown the update row (verification, UI work).
+    public static string? ThisBuildVersion()
+    {
+        if (!BuildInfo.Version.Contains("dev", StringComparison.OrdinalIgnoreCase))
+            return BuildInfo.Version;
+        var fromEnv = System.Environment.GetEnvironmentVariable("SA_BUILD_VERSION");
+        return string.IsNullOrWhiteSpace(fromEnv) ? null : fromEnv.Trim();
+    }
+
+    // The public lobby told us which release is the latest (a `release` event on the server-list
+    // stream - the lobby is the one watcher of the release feed). Newer than this build = something to
+    // offer; otherwise null. Same comparison as everywhere else: shared/ReleaseVersion.
+    public static UpdateInfo? FromAdvertised(string? version)
+    {
+        if (!ReleaseVersion.TryParse(version, out var advertised))
+            return null;
+        if (!ReleaseVersion.IsNewer(ThisBuildVersion(), advertised.ToString()))
+            return null;
+        return new UpdateInfo(advertised.ToString(), $"{ReleasesPage}/tag/v{advertised}");
+    }
+
     // Returns the newer release when one exists, else null (already current, dev build, or any error).
     public static async Task<UpdateInfo?> CheckAsync()
     {
         // Dev/unstamped builds have no meaningful version to compare — stay quiet.
-        if (BuildInfo.Version.Contains("dev", StringComparison.OrdinalIgnoreCase))
+        if (ThisBuildVersion() is not { } current)
             return null;
 
         try
@@ -56,33 +81,15 @@ public static class UpdateChecker
             if (root.TryGetProperty("prerelease", out var pre) && pre.ValueKind == JsonValueKind.True)
                 return null;
 
-            return IsNewer(BuildInfo.Version, tag) ? new UpdateInfo(StripV(tag), url!) : null;
+            // Semantic-version ordering (shared/ReleaseVersion): a rehearsal build (0.0.14-ci.2) IS older
+            // than the final 0.0.14; an unparseable side is never "newer".
+            return ReleaseVersion.IsNewer(current, tag) && ReleaseVersion.TryParse(tag, out var latest)
+                ? new UpdateInfo(latest.ToString(), url!)
+                : null;
         }
         catch
         {
             return null; // offline / rate-limited / malformed — never surface an error for this.
         }
-    }
-
-    // True when `latest` is a strictly higher release than `current`. Compares only the numeric core
-    // (drops a leading "v" and any "-prerelease" suffix); unparseable either side => not newer.
-    private static bool IsNewer(string current, string latest)
-    {
-        return TryParseCore(current, out var cur) && TryParseCore(latest, out var lat) && lat > cur;
-    }
-
-    private static bool TryParseCore(string s, out Version version)
-    {
-        var core = StripV(s);
-        int dash = core.IndexOf('-');
-        if (dash >= 0)
-            core = core[..dash];
-        return Version.TryParse(core, out version!);
-    }
-
-    private static string StripV(string s)
-    {
-        s = s.Trim();
-        return s.StartsWith("v", StringComparison.OrdinalIgnoreCase) ? s[1..] : s;
     }
 }

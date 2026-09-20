@@ -24,6 +24,7 @@ public interface INetClientHost
     void RaiseLobbyChanged();
     void RaiseMatchStatsChanged();
     void RaiseMapListChanged();
+    void RaiseServerNoticeChanged();
     void RaiseChat(ChatLine line);
     void RaisePong(uint nonce);
 }
@@ -98,6 +99,11 @@ public sealed class FrameApplier
     public int CommanderIdOf(byte team) => team < Teams.Count ? Teams[team].Commander : -1;
 
     public int HostId { get; private set; } = -1;
+
+    // The server's standing notice (MsgServerNotice). Per CONNECTION, not per Welcome: the server
+    // re-Welcomes mid-session (match start, a fog team change) without re-sending it, so it must survive
+    // those - it is cleared only when a new connection attempt starts or the session is torn down.
+    public ServerNotice ServerNotice { get; private set; } = ServerNotice.None;
     public string SelectedMap { get; private set; } = "";
 
     // Available maps (from MsgMapList, sent once after Defs). Read by the Lobby sector pane + map
@@ -204,6 +210,7 @@ public sealed class FrameApplier
     {
         LocalShipId = 0;
         ClearEntityCaches();
+        ClearServerNotice(); // a reconnect to the same server is told again right after it joins
     }
 
     // Shared teardown for Abort/Disconnect: drop every per-connection value, including the roster,
@@ -218,6 +225,15 @@ public sealed class FrameApplier
         LobbyPlayers = Array.Empty<LobbyPlayer>();
         HostId = -1;
         Maps = Array.Empty<MapInfo>();
+        ClearServerNotice();
+    }
+
+    private void ClearServerNotice()
+    {
+        if (ServerNotice == ServerNotice.None)
+            return;
+        ServerNotice = ServerNotice.None;
+        _host.RaiseServerNoticeChanged();
     }
 
     // Abandon the ship the server may still be holding for us (clear the reconnect token) and drop the
@@ -287,6 +303,13 @@ public sealed class FrameApplier
             case LobbyStateMessage.MsgId:
                 ApplyLobbyState(LobbyStateMessage.Parse(f));
                 break;
+            case ServerNoticeMessage.MsgId:
+            {
+                var m = ServerNoticeMessage.Parse(f);
+                ServerNotice = new ServerNotice(m.Kind, m.Version ?? "");
+                _host.RaiseServerNoticeChanged();
+                break;
+            }
             case ChatRelayMessage.MsgId:
             {
                 var m = ChatRelayMessage.Parse(f);

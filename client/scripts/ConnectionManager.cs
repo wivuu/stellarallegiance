@@ -71,6 +71,10 @@ public partial class ConnectionManager : Node
     // token (MsgReject code 2). RETRY asks JoinTokenProvider for a fresh one before redialing.
     public bool JoinTokenRejected { get; private set; }
 
+    // The server refused the join because it is restarting onto a new release (MsgReject code 3): it
+    // was empty, swapped its package in, and is back within seconds. Nothing is wrong - just retry.
+    public bool ServerUpdating { get; private set; }
+
     // Set by the server browser when joining a Verified listing: mints a fresh single-use join
     // token (POST /servers/{id}/join) for every (re)dial — reconnects present a new one too, since
     // every Hello on a Verified listing is gated. Null for direct / Unverified joins.
@@ -364,6 +368,7 @@ public partial class ConnectionManager : Node
         FailReason = "";
         AuthRejected = false;
         JoinTokenRejected = false;
+        ServerUpdating = false;
         _stages[0].State = StageState.Active;
         _stages[0].StartMs = Time.GetTicksMsec();
         CurrentStage = ConnectStage.Locate;
@@ -437,8 +442,9 @@ public partial class ConnectionManager : Node
     public void NotifyFailed(string reason)
     {
         FailReason = reason;
-        AuthRejected = reason == "bad secret";
-        JoinTokenRejected = reason == GameNetClient.RejectJoinToken;
+        AuthRejected = reason == GameNetClient.RejectBadSecret;
+        JoinTokenRejected = GameNetClient.IsJoinTokenReason(reason);
+        ServerUpdating = reason == GameNetClient.RejectUpdating;
         Log.Err($"[ConnectionManager] connect failed: {reason}");
         // A failed redial while auto-reconnecting settles the attempt and lets the _Process
         // driver pace the next one — same as NotifyDisconnected's Reconnecting branch.
@@ -485,8 +491,9 @@ public partial class ConnectionManager : Node
         // it re-prompt for the password rather than showing a generic drop.
         if (!string.IsNullOrEmpty(reason))
             FailReason = reason;
-        AuthRejected = reason == "bad secret";
-        JoinTokenRejected = reason == GameNetClient.RejectJoinToken;
+        AuthRejected = reason == GameNetClient.RejectBadSecret;
+        JoinTokenRejected = GameNetClient.IsJoinTokenReason(reason);
+        ServerUpdating = reason == GameNetClient.RejectUpdating;
         State = ConnState.Failed;
         FailCurrentStage();
     }

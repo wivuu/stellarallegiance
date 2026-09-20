@@ -319,6 +319,24 @@ namespace StellarAllegiance.Net
         StellarAllegiance.Ui.SectorMapPreview.MapModel Layout
     );
 
+    // The server's standing notice (MsgServerNotice, v43). Today: "a newer release is staged and this
+    // server will restart onto it once everyone has left" - the Game Lobby shows it as a banner. None
+    // (the default) = nothing to show.
+    public readonly record struct ServerNotice(byte Kind, string Version)
+    {
+        public static readonly ServerNotice None = new(ServerNoticeMessageKinds.None, "");
+
+        public bool IsUpdatePending => Kind == ServerNoticeMessageKinds.UpdatePending;
+    }
+
+    // Aliases of the shared wire constants (StellarAllegiance.Shared.Net.ServerNoticeMessage), so UI code
+    // reading a ServerNotice does not need the wire namespace.
+    public static class ServerNoticeMessageKinds
+    {
+        public const byte None = StellarAllegiance.Shared.Net.ServerNoticeMessage.KindNone;
+        public const byte UpdatePending = StellarAllegiance.Shared.Net.ServerNoticeMessage.KindUpdatePending;
+    }
+
     // One chat line, decoded from MsgChatRelay (scope 0 = all, 1 = team).
     public readonly struct ChatLine
     {
