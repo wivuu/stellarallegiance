@@ -930,6 +930,29 @@ Client-side extrapolation of ship state between server snapshots to reduce perce
 - **Related:** [[Flight Model]], [[Held-Input Replay]], [[MsgSnapshot]], [[MotionInterpolator]]
 - **Notes:** Never blocks authority; server snapshot always wins. Remote poses lag by the interp delay, so a hard ship bump may still reconcile — the spring absorbs it; the win is never visibly interpenetrating another ship.
 
+### Collision Sidecar (`.glb.simmodel`)
+A GLB's BUILT collision model — merged hull planes, hardpoints and compound `COL_` sub-hulls — stored beside it as `<name>.glb.simmodel` in the shared `.simmodel` format. It is the ONLY collision data a packaged client has: Godot's exporter replaces an imported `.glb` by its imported scene (only importer `keep` ships the raw file), so the bytes `SimModel.FromGlb` needs are never in a package. The sidecar stores the face planes `ConvexHull.Build` produced, float for float, so a decoded model resolves contacts bit-identically to one built from the GLB — and to the server, whose own hull cache is the same format (for the same GLB the two files are byte-identical).
+- **Frequency:** Domain-specific (packaging / prediction parity)
+- **Key Files:**
+  - `shared/Collision/SimModelCodec.cs` — the byte format (`Write` / `TryRead` / `KeyHash`; key = SHA-256 of the GLB + a non-identity pre-rotation)
+  - `tools/collision-sidecars/` — the generator (folder → pre-rotation table: bases get `CollisionConfig.BaseModelRotation`); run by `package-clients.ps1` / `export-clients.ps1` before the Godot export
+  - `client/export_presets.cfg` — `include_filter="*.simmodel"` (an unknown extension ships as a plain file); `client/.gitignore` — generated, never tracked
+  - `client/scripts/CollisionModels.cs` — `FromSidecar` / `FromRaw`: a package reads the sidecar; a run from source reads the raw `.glb` (the truth on disk — a sidecar there may predate an edit)
+  - `server/Assets/SimModel.cs` — `SimModelCache`, the same codec as a disk cache; `tests/CollisionTest` — bit-exact round trip over every collidable GLB
+- **Related:** [[Collision Model Fault]], [[Asset Verification (`--verify-assets`)]], [[Compound Base Hull (COL_ parts)]], [[Client Prediction]]
+- **Notes:** `SA_COLLISION_SIDECARS=only` makes a run from source load models the way a package does (fly the shipped path, or `--verify-assets` the sidecars, without exporting). ~270 KiB for all 31 models, against 193 MB of raw GLBs that are 83% embedded textures.
+
+### Collision Model Fault
+A collision model the client could NOT build for a GLB (`CollisionModels.Load` returned null: neither its [[Collision Sidecar (`.glb.simmodel`)]] nor its raw `.glb` is readable, the sidecar does not decode, the hull build threw, or the geometry is degenerate). Nothing crashes — the caller stands a sphere in for the body — and that is the danger: the server still resolves the real hull, so every contact near that body is a mispredict and a reconcile. A base is the worst case (`BaseSphere` of the def radius with no docking doors: the ship LAUNCHES inside it). A fault is therefore never quiet: an `ERROR` in the log per model, a standing Danger `AlertBox` on the server browser (the whole ledger, before anyone joins), and — for a **fielded** fault, a model the SERVER actually put in this match — a standing alert on the flight HUD.
+- **Frequency:** Rare (it means a broken build or install)
+- **Key Files:**
+  - `client/scripts/CollisionModels.cs` — the ONE loader + cache + fault ledger (`Faults`, `FieldedFaults`, polled by `Version`; written from `AssetPreloader`'s worker, so no events)
+  - `client/scripts/CollisionWorld.cs` — `Fielded(…)` at each sphere fallback (base / named asteroid variant / ship hull)
+  - `client/scripts/ServerLobbyOverlay.cs`, `client/scripts/Hud.cs` — the two alerts
+  - `client/scripts/AssetPreloader.cs` — `GlbsIn` skips ORPHANED `.import` sidecars when run from source (a gitignored sidecar outlives a deleted GLB; it is not a fault)
+- **Related:** [[Client Prediction]], [[Compound Base Hull (COL_ parts)]], [[Collision Sidecar (`.glb.simmodel`)]], [[Asset Verification (`--verify-assets`)]]
+- **Notes:** v0.0.13 and v0.0.14 shipped with EVERY model faulted: Godot's exporter replaces an imported `.glb` by its imported scene (only importer `keep` ships the raw file), so `include_filter="*.glb"` never put the bytes the reader needs into a package, and nothing else did either. It read as server lag. Collision sidecars are the fix; the fault reporting is what keeps it fixed. Test hook: `SA_FAULT_COLLISION_MODELS=all|<path fragment>[,…]` forces faults from a dev run (where the raw files are always readable) to see the alerts and the reconcile storm.
+
 ### MotionInterpolator
 Reusable snapshot-smoothing engine for any server-controlled streamed entity (remote ships today; missiles etc. can adopt it). Samples are stamped on the server-tick timeline and rendered behind an adaptive delay sized to each entity's smoothed inter-arrival gap (full-rate ships ~100 ms, coarse-AOI ~1.5× their gap): cubic HERMITE interpolation between samples using the RAW wire velocities as tangents (an EMA-smoothed tangent lagged the heading on turns and bent every 50 ms segment — a constant ~0.15 u/frame kink at 150 u/s), bounded velocity/angular-velocity dead-reckoning past the newest sample, and error-blend correction (a late authoritative sample glides in over ~100 ms instead of snapping; a teleport-sized error snaps). It owns NO clock: `Evaluate(serverNowMs)` takes the client-wide [[Render Timeline]] and subtracts this entity's delay. The remote-ship jerk that survived every earlier smoothing pass was the clock and the wire, not the curve — see [[Render Timeline]] and the `tests/InterpTest` table.
 - **Frequency:** Domain-specific
@@ -986,14 +1009,15 @@ How the client absorbs a heavy sector (dense belt + dust) without dropping frame
 - **Notes:** Commit ONLY the .glb (embeds textures); .import sidecars are gitignored; run `godot --headless --import` for Godot import cache
 
 ### SimModel
-Server-side collision representation: convex hulls and docking hardpoints extracted from GLB.
+The collision representation of one GLB on BOTH peers: merged convex hull, compound sub-hulls and docking hardpoints, in authored units. Built from the raw GLB bytes (`SimModel.FromGlb`) or decoded from its stored form (`.simmodel`).
 - **Frequency:** Common
 - **Key Files:**
   - `shared/Collision/SimModel.cs` — hull + docking geometry
-  - `server/Assets/SimAssets.cs` — cached .simmodel loading
+  - `shared/Collision/SimModelCodec.cs` — the `.simmodel` byte format, shared by the server's cache and the client's [[Collision Sidecar (`.glb.simmodel`)]]
+  - `server/Assets/SimAssets.cs` — cached .simmodel loading (`SimModelCache`)
   - `shared/Collision/ConvexHull.cs` — QuickHull hull generation
-- **Related:** [[GLB]], [[Collision]], [[Hull]]
-- **Notes:** Uncommitted .simmodel cache in `<binary>/sim-cache/`; ships exit via DockingExit
+- **Related:** [[GLB]], [[Collision]], [[Hull]], [[Collision Sidecar (`.glb.simmodel`)]]
+- **Notes:** Uncommitted server cache in `<binary>/sim-cache/` (`<name>.simmodel`); the client's sidecars sit beside each GLB (`<name>.glb.simmodel`), generated at export time. Ships exit via DockingExit
 
 ### Client-Side Hit Sparks
 Visual hit feedback: spawned client-side on projectile collision, not server-driven.
@@ -1451,6 +1475,16 @@ see it too.
 - **Notes:** Cleared only in `BeginConnect()`/`ResetSession()`, never on a mid-session Welcome — a notice must
   not silently vanish just because a match started or fog reassigned a team. No new UI component: the Game
   Lobby's notice strip reuses `AlertBox`'s existing Warn tone (see DESIGN.md).
+
+### Asset Verification (`--verify-assets`)
+`<game> --headless --verify-assets=<report file>`: the game builds every base, ship and catalog asteroid model through the real loaders — imported scene present AND collision model built ([[Collision Model Fault]]) — writes a report whose first line is `ASSET_VERIFY: OK …` (with how many models came from collision sidecars vs raw `.glb` — all sidecars, in a package) or `ASSET_VERIFY: FAIL …` (one line per model, with the reason), and quits (exit 0 / 1) before any menu, account or network code matters (`AuthSession` stands down so an abandoned token rotation can never sign the developer out). It is the release gate: `scripts/verify-game-assets.ps1` (`Test-GameAssets`) runs the STAGED, already re-signed game with it, and `package-clients.ps1` / `export-clients.ps1` refuse to package a build that fails.
+- **Frequency:** Domain-specific (packaging / CI)
+- **Key Files:**
+  - `client/scripts/AssetVerify.cs` — flag parsing, the check, the report
+  - `scripts/verify-game-assets.ps1` — `Test-GameAssets`; the REPORT is the verdict, not the exit code (headless Godot .NET can die in shutdown after doing its job)
+  - `scripts/package-clients.ps1` (step 3b), `scripts/export-clients.ps1` (`Assert-GameAssets`)
+- **Related:** [[Collision Model Fault]], [[Game Launcher]], [[Update Feed / Channel]]
+- **Notes:** It runs the ARTIFACT on purpose — this class of failure does not exist from source (res:// is the project folder, every raw file is on disk). `-FakeGame` packages skip it (a stub has no models). A game flag, so it goes before any `--`.
 
 ## Tools & Utilities
 
