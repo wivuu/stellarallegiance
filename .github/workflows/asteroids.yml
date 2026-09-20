@@ -16,7 +16,7 @@ jobs:
       run:
         working-directory: tools/asteroid-gen
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Build generator image
         run: docker build -t asteroid-gen .
@@ -27,7 +27,7 @@ jobs:
           docker run --rm -v "$PWD/build:/out" asteroid-gen
 
       - name: Upload asteroid assets
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: asteroids
           path: tools/asteroid-gen/build/
