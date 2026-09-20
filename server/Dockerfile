@@ -20,6 +20,11 @@ WORKDIR /src
 # references the wire-format source generator (tools/wire-gen) as an ANALYZER: leave it out and
 # MSBuild only warns ("Skipping project ... not found"), no codec is generated, and the server
 # then fails to compile with CS0117 on every ShipRecord.Size / XMessage.MsgId.
+# Central Package Management: EVERY PackageReference in this repo is versionless, so restore
+# cannot resolve a single package without the root Directory.Packages.props. It must be copied
+# with the .csproj files, into the restore layer, or restore fails with NU1010 on every package.
+COPY global.json .
+COPY Directory.Packages.props .
 COPY shared/Shared.csproj shared/
 COPY tools/wire-gen/WireGen.csproj tools/wire-gen/
 COPY server/SimServer.csproj server/

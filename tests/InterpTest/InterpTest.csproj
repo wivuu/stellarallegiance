@@ -12,8 +12,20 @@
          Integrate the server runs and pushed through the same PackPos/PackQuat/PackHalf the wire uses. -->
     <ProjectReference Include="../../shared/Shared.csproj" />
     <!-- GodotSharp's managed math types (Vector3/Quaternion/Mathf) are plain structs that need no
-         engine; this lets the suite compile the client's interpolator UNMODIFIED, headless. -->
-    <PackageReference Include="GodotSharp" Version="4.7.0" />
+         engine; this lets the suite compile the client's interpolator UNMODIFIED, headless.
+
+         PINNED to 4.7.2 to match the client's `Godot.NET.Sdk/4.7.2`, the GODOT_VERSION the release
+         and build-godot-client workflows install, and the 4.7.2 editor/export templates. The
+         Compile Include list below pulls in the PRODUCTION interpolator, so the suite is only
+         honest while its Vector3/Quaternion/Mathf are the ones that actually ship. Never bump this
+         on its own because `dotnet outdated` offers a newer GodotSharp: that would silently test
+         the client against a different math library than the game runs. Move it only together with
+         the client SDK, the workflows and the installed engine.
+
+         It is a VersionOverride, not a Directory.Packages.props entry, because Godot.NET.Sdk
+         defines GodotSharp IMPLICITLY for the client and CPM rejects a central version for an
+         implicit reference (NU1009). -->
+    <PackageReference Include="GodotSharp" VersionOverride="4.7.2" />
   </ItemGroup>
 
   <ItemGroup>

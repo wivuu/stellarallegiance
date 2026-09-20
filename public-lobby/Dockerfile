@@ -8,6 +8,10 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Restore against the project files first so the restore layer caches across source-only changes.
+# Central Package Management: PackageReferences are versionless repo-wide, so restore needs the
+# root Directory.Packages.props in the restore layer or it fails with NU1010 on every package.
+COPY global.json .
+COPY Directory.Packages.props .
 COPY public-lobby/PublicLobby.csproj public-lobby/
 COPY public-lobby-data/PublicLobby.Data.csproj public-lobby-data/
 COPY shared/Shared.csproj shared/

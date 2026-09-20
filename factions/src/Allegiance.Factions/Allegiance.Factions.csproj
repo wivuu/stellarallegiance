@@ -20,11 +20,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="YamlDotNet" Version="18.1.0" />
+    <PackageReference Include="YamlDotNet" />
     <!-- YamlDotNet's source generator: emits the reflection-free type inspector / object factory
          behind FactionsYamlContext (Serialization/FactionsYamlContext.cs). Deserialization ALWAYS
          goes through it - JIT and NativeAOT alike - so tests exercise the path the native server
          runs. Keep the version in lockstep with YamlDotNet. Compile-time only. -->
-    <PackageReference Include="Vecc.YamlDotNet.Analyzers.StaticGenerator" Version="18.1.0" PrivateAssets="all" />
+    <PackageReference Include="Vecc.YamlDotNet.Analyzers.StaticGenerator" PrivateAssets="all" />
   </ItemGroup>
 </Project>

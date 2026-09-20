@@ -11,6 +11,13 @@
          every consumer); match RootNamespace so analyzers don't flag a mismatch. -->
     <RootNamespace>StellarAllegiance.Shared</RootNamespace>
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <!-- CS9057 = "analyzer references a NEWER compiler than the running one", i.e. the wire
+         generator got silently DISABLED because the SDK is too old. Left as a warning it is
+         near-invisible: this project still reports "Build succeeded" with zero generated files, and
+         the damage surfaces far away as ~30 bogus CS0117s ("ShipRecord does not contain a
+         definition for Size") in server/Net/Protocol.cs. Promote it to an error so an
+         under-SDK'd build fails HERE, naming the real cause. See tools/wire-gen/WireGen.csproj. -->
+    <WarningsAsErrors>$(WarningsAsErrors);CS9057</WarningsAsErrors>
     <!-- No RID here on purpose: this is portable managed IL. The consuming
          project (e.g. the wasi-wasm module) supplies the RID and recompiles. -->
   </PropertyGroup>

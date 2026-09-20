@@ -6,7 +6,7 @@ Get a match running locally in five steps.
 - **.NET 10 SDK** — verify with `dotnet --version` (≥ 10).
 - **Aspire CLI** — `dotnet tool install -g Aspire.Cli` or `curl -sSL https://aspire.dev/install.sh | bash`.
 - **Docker** — runs the local Postgres container for the public lobby.
-- **Godot 4.7, Mono/.NET build** — auto-detected from the `GODOT` env var, the
+- **Godot 4.7.2, Mono/.NET build** — auto-detected from the `GODOT` env var, the
   `godot.executablePath` user secret, PATH, or standard install locations. If none of those
   resolve, the Aspire dashboard prompts you for the path when you start the `client` resource.
 
@@ -86,7 +86,7 @@ aspire stop
 ### Trouble?
 - **"Server offline" on the client** — confirm the `server` resource in the dashboard is Running
   and the address/port match. Retry returns you to the address screen.
-- **Godot not found / dashboard prompts for a path** — install the Mono/.NET build of Godot 4.7
+- **Godot not found / dashboard prompts for a path** — install the Mono/.NET build of Godot 4.7.2
   and either put it on PATH, set the `GODOT` env var, or enter the path when the dashboard asks
   (it saves to the `godot.executablePath` user secret).
 - **Protocol mismatch warning** — the client and server were built from different revisions;

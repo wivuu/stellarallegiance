@@ -4,8 +4,21 @@
        [WireMessage]/[WireRecord] gets Measure/Write/Read/TryParse generated from its field list, so
        the server writer, the Godot client reader, the test suites and simbot share ONE layout with
        no hand-mirrored codec. Generators must target netstandard2.0 and load into the compiler
-       process, hence the pinned Microsoft.CodeAnalysis version (a generator built against 4.x
-       runs unchanged on the newer Roslyn shipped with the .NET 10 SDK). -->
+       process, so the Microsoft.CodeAnalysis version below is a FLOOR ON THE SDK, not a normal
+       dependency: a generator may not reference a Roslyn newer than the compiler that loads it.
+
+       2026-09-20: moved 4.8.0 -> 5.9.0 to match the Roslyn in SDK 10.0.401, which root global.json
+       now requires. That floor is what makes this safe. Measured on 10.0.302 (Roslyn 5.6.0): the compiler emits CS9057, a
+       WARNING, and quietly drops the generator — Shared.csproj then "succeeds" with zero generated
+       files and consumers explode with unrelated CS0117s. Shared.csproj therefore promotes CS9057
+       to an error so that failure is loud and local. Emitted codecs are byte-identical between 4.8
+       and 5.9 — verified by building both from a CLEAN obj on one SDK (sha256 fb13f1a7, 100 files).
+       Compare only from a clean obj: EmitCompilerGeneratedFiles never deletes orphans, so a renamed
+       record leaves a stale .g.cs behind and fakes a difference. This bump is currency, not behaviour.
+
+       These are VersionOverrides rather than Directory.Packages.props entries on purpose: a central
+       entry would apply this floor to EVERY project (transitive pinning is on) and collide with
+       what Microsoft.EntityFrameworkCore.Design and Microsoft.Orleans.Server resolve -> NU1109. -->
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <LangVersion>latest</LangVersion>
@@ -18,7 +31,7 @@
     <NoWarn>$(NoWarn);RS2008</NoWarn>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="5.9.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" VersionOverride="5.9.0" PrivateAssets="all" />
   </ItemGroup>
 </Project>

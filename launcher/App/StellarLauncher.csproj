@@ -33,12 +33,12 @@
     <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="12.1.2" />
-    <PackageReference Include="Avalonia.Desktop" Version="12.1.2" />
-    <PackageReference Include="Avalonia.Themes.Simple" Version="12.1.2" />
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Simple" />
     <!-- Only used by the launcher-shot flag: renders the window off-screen with the real Skia renderer, so
          screenshots work on display-less CI runners (and on a Mac whose display is asleep). -->
-    <PackageReference Include="Avalonia.Headless" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Headless" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../Core/StellarLauncher.Core.csproj" />

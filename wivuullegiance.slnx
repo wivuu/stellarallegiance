@@ -41,6 +41,7 @@
     <Project Path="tests/FlightModelTest/FlightModelTest.csproj" />
     <Project Path="tests/FogTest/FogTest.csproj" />
     <Project Path="tests/FuelPodTest/FuelPodTest.csproj" />
+    <Project Path="tests/InterpTest/InterpTest.csproj" />
     <Project Path="tests/LoadoutTest/LoadoutTest.csproj" />
     <Project Path="tests/LobbyTest/LobbyTest.csproj" />
     <Project Path="tests/MatchStatsStoreTest/MatchStatsStoreTest.csproj" />

@@ -53,7 +53,9 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 10.0.x
+          # Single source of truth for the SDK: root global.json (>= 10.0.401, which is the
+          # Roslyn 5.9.0 floor tools/wire-gen needs). Bump it there, not here.
+          global-json-file: global.json
 
       # vpk needs a system zstd for delta packages (without it, it silently writes bsdiff deltas that the
       # updater rejects — package-clients.ps1 refuses to run in that state) and mksquashfs for the AppImage.

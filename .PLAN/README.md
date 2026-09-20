@@ -5,8 +5,9 @@ The live roadmap: what is shipped (one line each, with a pointer to the real doc
 [`GLOSSARY.md`](../GLOSSARY.md) and the per-feature docs are the authority for how things work.
 
 **Next to incorporate into the plan**
-- Warning on server when lobby drops/reconnects and its a new version - warning to update the gameserver?
-  - What would auto update look like?
+- Auto-update for game servers using velopack; put behind a flag, on by default for docker deployments, warn by default for other deployments
+  - ONLY deploy when server has no players on it
+  - WARN players that are on the server (in game lobby) that an update is available and the server wants to restart
 
 **What else lives in `.PLAN/`**
 
@@ -18,7 +19,7 @@ The live roadmap: what is shipped (one line each, with a pointer to the real doc
 | [`tech-tree-README.md`](tech-tree-README.md) + `tech-tree-*.yaml` | Flattened content dumps for handing to an LLM/human as context. |
 | [`TechPathsFromMemory.md`](TechPathsFromMemory.md) | Original brief for the Iron Coalition tech port — executed (see `archive/tech-paths/`). |
 | [`code-review-sweep-2026-07-18.md`](code-review-sweep-2026-07-18.md) | One-off review sweep log. Historical. |
-| [`archive/`](archive/README.md) | Completed handoff notes (prototype build order, base-building, tech-paths A–D). History only. |
+| [`archive/`](archive/README.md) | Completed handoff notes (prototype build order, base-building, tech-paths A-D). History only. |
 
 ---
 
@@ -37,7 +38,7 @@ gap is binary assets: closing it (see *Runtime asset streaming* in the deep back
 
 Condensed outcomes. Each line names where the detail now lives.
 
-- ✅ **Phase 1 + Stages 0–2 — data-driven content, YAML pipeline, strategy spine** (2026-06-28).
+- ✅ **Phase 1 + Stages 0-2 — data-driven content, YAML pipeline, strategy spine** (2026-06-28).
   Hulls/weapons/bases/tech/costs and the mechanics knobs are per-server YAML under
   `server/Content/core/` (`world.yaml` holds the sim tuning, including the once-deferred
   `launch-speed` / `dock-radius-frac` / `pod-eject-*`), streamed to clients over `MsgDefs`. Authoring
