@@ -10,7 +10,7 @@ rather than built from source. Installed clients and listed game servers then up
 ```
 prepare ──┬─► package (linux | macos | windows) ─────────────────┐
           └─► package-server (x64 | arm64) ──┬────────────────────┼─► publish
-                                              └─► server-image ───┘
+server-e2e (x64 | arm64) ─────────────────────┴─► server-image ───┘
 ```
 
 ## Cutting a release

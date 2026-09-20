@@ -12,11 +12,16 @@ name: Server update dry-run (server e2e)
 # graceful, and SIM_AUTO_UPDATE=warn only logs. Two native runners (not QEMU) because NativeAOT cannot
 # cross-compile — see scripts/package-server.ps1.
 #
-# Triggers: by hand, and on pull requests that touch the update path or its packaging. The PR trigger
-# is what makes this usable BEFORE a merge — GitHub only offers "Run workflow" for workflow files that
-# already exist on the default branch. The path filter keeps ordinary gameplay PRs free of it.
+# Triggers: by hand, on pull requests that touch the update path or its packaging, and from EVERY release
+# (release.yml calls this file as its `server-e2e` job, which gates the GHCR image and the publish). The PR
+# trigger is what makes this usable BEFORE a merge — GitHub only offers "Run workflow" for workflow files
+# that already exist on the default branch. The path filter keeps ordinary gameplay PRs free of it — which
+# is exactly why a release runs it again: a change OUTSIDE those paths (server/Program.cs, the hub, shared/)
+# can break the update path too, and a server that cannot update itself stays on that version until its
+# operator steps in.
 on:
   workflow_dispatch:
+  workflow_call:
   pull_request:
     paths:
       - 'server/Update/**'
