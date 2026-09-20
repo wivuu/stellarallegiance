@@ -140,6 +140,10 @@ public partial class ConnectionManager : Node
         _net = GetNode<GameNetClient>("../GameNetClient");
 
         UiCursor.Apply(); // custom cursor from the first visible screen (address input) on
+        // ...and handed back when the TREE goes away, whatever asked for the quit (QuitGracefully, a
+        // harness's bare Quit()). The root leaves the tree only then — never on a scene change, so the
+        // standalone --ui-showcase keeps the cursor. Why it must be handed back: UiCursor.Clear.
+        GetTree().Root.TreeExiting += UiCursor.Clear;
 
         // Window close (and macOS Cmd+Q) no longer kills the process outright — it raises
         // NotificationWMCloseRequest instead, which routes through QuitGracefully so the MsgBye
