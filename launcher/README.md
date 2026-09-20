@@ -71,6 +71,12 @@ Everything that is not `--launcher-*` is passed to the game verbatim (including 
 | `--launcher-selftest=update\|play` | **Headless** scripted run of the real flow (no Avalonia init — works on display-less CI). Emits `LAUNCHER_E2E_STATE:` markers. |
 | `--launcher-showcase` / `--launcher-fake=<state>` / `--launcher-shot=<png>` | Component gallery / any state without a flow / render off-screen to a PNG and exit (the counterpart of the game's `--ui-showcase` / `--ui-shot`). States: see `Views/FakeViews.cs`. |
 
+**No display, no window.** Avalonia cannot start on a Mac whose display is asleep (native error `-6661`) —
+the relaunch after an update nobody stayed to watch, a remote session, a script. The launcher then writes
+`the launcher window could not run` plus the exception to `logs/launcher.log` and exits `1`; an exception
+that escapes `Main` would instead be an `abort()`, i.e. a "quit unexpectedly" dialog and an empty log.
+Anything scripted should use `--launcher-selftest` or `--launcher-shot`: neither needs a display.
+
 ## Look
 
 All colours and sizes come from the **game's own** `client/scripts/ui/DesignTokens.cs`, compiled into

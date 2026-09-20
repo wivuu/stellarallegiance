@@ -18,6 +18,9 @@ internal static class Program
     internal static LauncherServices Services { get; private set; } = null!;
     internal static SingleInstance Instance { get; private set; } = null!;
 
+    // The window could not run (0 = a normal close; SelfTestRunner owns 2-6 for the headless self-test).
+    private const int ExitUiFailed = 1;
+
     // THE ORDER BELOW IS LOAD-BEARING. Do not "tidy" it.
     //
     // (1) Velopack hooks first. On Windows, Setup.exe / Update.exe run this exe with
@@ -45,6 +48,12 @@ internal static class Program
         log.Info($"launcher start args=[{string.Join(' ', args)}] dir={AppContext.BaseDirectory}");
         foreach (var unknown in parsed.Unknown)
             log.Warn($"ignoring unknown launcher flag {unknown}");
+
+        // Last words. An exception nobody handles ends the process whatever we do here, and the runtime
+        // ends it with abort() — but it used to go without a line in OUR log, the one place anyone
+        // looks (OPEN LOG FOLDER). The UI thread never gets this far; see the catch around the window.
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            log.Error("unhandled exception - the launcher is going down", e.ExceptionObject as Exception);
 
         using var instance = new SingleInstance(paths.LockFile);
         if (!instance.TryAcquire())
@@ -83,7 +92,21 @@ internal static class Program
                 .UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .LogToTrace();
-        return builder.StartWithClassicDesktopLifetime(args);
+        try
+        {
+            return builder.StartWithClassicDesktopLifetime(args);
+        }
+        catch (Exception ex)
+        {
+            // Whatever escapes the UI loop - or, far more often, never lets it start. Avalonia cannot open
+            // its render timer while a Mac's DISPLAY IS ASLEEP (native error -6661), and that is exactly
+            // how the launcher comes up after an update nobody stayed to watch, over a remote session, or
+            // from a script. Unhandled, this is abort(): a "quit unexpectedly" dialog waiting for the
+            // player when the screen wakes, and nothing in our log to say why. There is no window to put
+            // an error in and nobody in front of it, so say why and leave with a failure code.
+            log.Error("the launcher window could not run", ex);
+            return ExitUiFailed;
+        }
     }
 
     // Also used by the XAML previewer — keep the name and shape.
