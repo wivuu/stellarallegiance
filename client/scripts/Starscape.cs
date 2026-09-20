@@ -5,8 +5,9 @@ using Godot;
 // camera's ROTATION moves it). Every visual is driven by a per-sector seed, so a
 // sector looks the same for every player (the seed comes only from the sector id)
 // yet each sector looks distinctly different — different nebula hues, cloud
-// shapes, and star placement. WorldRenderer calls SetSector as the local ship
-// warps; we recompute the shader uniforms only when the sector actually changes.
+// shapes, and star placement. WorldRenderer calls SetSector whenever the viewed
+// sector (or that sector's streamed row) changes; we push the shader uniforms only
+// when the resolved look actually differs from what is already painted.
 public partial class Starscape : Node3D
 {
     // Home/battlefield sector — applied at startup so the pre-spawn overview already
@@ -15,7 +16,12 @@ public partial class Starscape : Node3D
 
     private ShaderMaterial _mat = null!;
     private Godot.Environment _env = null!;
-    private uint _currentSector = uint.MaxValue; // forces the first SetSector to apply
+
+    // The look last pushed to the shader; null until the first paint. SetSector dedupes on THIS — the
+    // resolved output — rather than on the sector id: the same id can resolve to a different look (its
+    // streamed row landing after the first paint, a world rebuild onto another map), and an id-keyed
+    // no-op either missed that or had to re-push every authored sector on every call.
+    private (Vector3 Offset, Color A, Color B, float Intensity)? _painted;
 
     public override void _Ready()
     {
@@ -39,6 +45,12 @@ public partial class Starscape : Node3D
         // procedural sky supplies all ambient and AmbientLightColor/Energy are ignored.
         // Zero it so our per-sector colour + energy below actually drive the ambient.
         _env.AmbientLightSkyContribution = 0f;
+        // Baseline fill ENERGY, written once: SectorEnvironment (a later sibling, so its _Ready reads this)
+        // takes it as the no-override default and owns the per-sector value from then on (`sun.ambient`).
+        // SetSector must never write it — a same-sector repaint would stomp the authored ambient, and
+        // SectorEnvironment's own same-sector no-op would never put it back. Well above the scene's old
+        // 0.2 so the world no longer reads as dim.
+        _env.AmbientLightEnergy = 0.25f;
 
         SetSector(HomeSector);
     }
@@ -61,15 +73,11 @@ public partial class Starscape : Node3D
 
     // Repaint the backdrop for a sector. Deterministic in the sector id alone (so the same sector
     // renders identically for every player) UNLESS the map authored a nebula override in `env`, which
-    // wins over the procedural hues/intensity/seed. No-op only when the sector is unchanged AND carries
-    // no override (an override always re-applies so late-arriving env still takes effect).
+    // wins over the procedural hues/intensity/seed. Safe to call again for the same sector: the look is
+    // a pure function of (sectorId, env), and an unchanged look is a no-op (see _painted), while an env
+    // that arrived late — or went away on a world rebuild — repaints.
     public void SetSector(uint sectorId, StellarAllegiance.Net.SectorEnv? env = null)
     {
-        bool hasOverride = env is { HasNebula: true };
-        if (sectorId == _currentSector && !hasOverride)
-            return;
-        _currentSector = sectorId;
-
         ulong seed = env is { HasNebulaSeed: true } ? env.NebulaSeed : SeedFor(sectorId);
         var rng = new RandomNumberGenerator { Seed = seed };
 
@@ -98,20 +106,23 @@ public partial class Starscape : Node3D
                 intensity = env.NebulaIntensity;
         }
 
+        var look = (offset, colorA, colorB, intensity);
+        if (_painted == look)
+            return;
+        _painted = look;
+
         _mat.SetShaderParameter("seed_offset", offset);
         _mat.SetShaderParameter("nebula_color_a", colorA);
         _mat.SetShaderParameter("nebula_color_b", colorB);
         _mat.SetShaderParameter("nebula_intensity", intensity);
 
-        // Baseline ambient that matches the sector's nebula hue (the mean of its two
+        // Baseline ambient COLOUR that matches the sector's nebula hue (the mean of its two
         // colours) but lifted toward white so it lights the scene without over-saturating
-        // the shadowed sides of ships and asteroids. Energy is well above the old 0.2 so
-        // the world no longer reads as dim.
+        // the shadowed sides of ships and asteroids. The ENERGY is not ours: see _Ready.
         // Lifted well toward white so a SATURATED nebula (e.g. a red brimstone sector) doesn't flood
         // every surface with its own hue — that flattens ships/asteroids into monochrome silhouettes
         // with no fill/key contrast. A mostly-neutral fill lets the directional sun's warm/cool key read.
         _env.AmbientLightColor = colorA.Lerp(colorB, 0.5f).Lerp(Colors.White, 0.65f);
-        _env.AmbientLightEnergy = 0.25f;
     }
 
     // Deterministic ulong seed from a sector id (splitmix64 finalizer over a mixed id).
