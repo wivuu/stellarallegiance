@@ -104,13 +104,13 @@ function New-Package([string]$Version) {
     }
 }
 
-# The names of the binary patches inside a version's delta package (empty when there is no delta).
-function Get-DeltaPatches([string]$Version) {
+# The size in bytes of every zstd patch inside a version's delta package (empty when there is no delta).
+function Get-DeltaPatchSizes([string]$Version) {
     $delta = Get-ChildItem -LiteralPath $Feed -Filter "$PackId-$Version-*delta.nupkg" | Select-Object -First 1
     if (-not $delta) { return @() }
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $zip = [System.IO.Compression.ZipFile]::OpenRead($delta.FullName)
-    try { return @($zip.Entries.FullName | Where-Object { $_ -like '*.zsdiff' }) }
+    try { return @($zip.Entries | Where-Object { $_.FullName -like '*.zsdiff' } | ForEach-Object { $_.Length }) }
     finally { $zip.Dispose() }
 }
 
@@ -242,9 +242,13 @@ try {
     Step "packing $v2 ..."
     New-Package $v2
     # With one launcher publish behind all three versions, the launcher no longer differs between them. The
-    # delta must still be a real one — a binary the updater has to patch, not just the version text.
-    $patches = Get-DeltaPatches $v2
-    Assert ([bool]($patches -like '*e2e-payload.bin.zsdiff')) "the $v2 delta carries a real binary patch ($($patches.Count) zstd patch(es))"
+    # delta must still be a real one — a binary the updater has to patch, not just the version text. By
+    # SIZE, not by name: the fake game's payload changes by 256 KiB of incompressible bytes per version, and
+    # where that lands depends on the OS (a patch of its own on Windows and macOS; on Linux the package is
+    # one AppImage, so it is inside the patch for that).
+    $patchSizes = @(Get-DeltaPatchSizes $v2)
+    $largest = if ($patchSizes.Count) { ($patchSizes | Measure-Object -Maximum).Maximum } else { 0 }
+    Assert ($largest -ge 200KB) "the $v2 delta carries a real binary patch ($($patchSizes.Count) zstd patch(es), largest $([math]::Round($largest / 1KB)) KiB)"
 
     Step "pass 2: selftest=play, the game asks for the update with exit code 85 ($v1 → $v2) ..."
     $skip = (Get-Markers).Count

@@ -239,7 +239,7 @@ else { 'linux-x64' }
 # also ships a few MiB of "game data" that is mostly identical between versions and partly this version's
 # own — the shape of a real release — and every delta still has to carry, and the updater still has to
 # apply, a real binary patch (the thing that silently degrades to a full download when it breaks).
-# scripts/launcher-e2e.ps1 asserts on it by name.
+# scripts/launcher-e2e.ps1 asserts that the delta it applies carries it.
 function New-FakeGamePayload([string]$Path) {
     $bytes = [byte[]]::new(4MB)
     [System.Random]::new(20260920).NextBytes($bytes) # the part every version shares
