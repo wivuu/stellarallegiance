@@ -122,8 +122,9 @@ public partial class ConnectionManager : Node
     private GameNetClient _net = null!;
     private ServerLobbyOverlay? _input;
 
-    // Set once QuitGracefully has started — a second close request (impatient re-click of the
-    // window ✕, Cmd+Q spam) must not restart the Bye drain or double-Quit.
+    // Set once QuitGracefully has started, and TERMINAL: a second close request (impatient re-click of
+    // the window ✕, Cmd+Q spam) must not restart the Bye drain or double-Quit, and nothing the dying
+    // link reports may start a redial — the process is leaving, there is nobody to reconnect for.
     private bool _quitting;
 
     public override void _Ready()
@@ -139,6 +140,10 @@ public partial class ConnectionManager : Node
         _net = GetNode<GameNetClient>("../GameNetClient");
 
         UiCursor.Apply(); // custom cursor from the first visible screen (address input) on
+        // ...and handed back when the TREE goes away, whatever asked for the quit (QuitGracefully, a
+        // harness's bare Quit()). The root leaves the tree only then — never on a scene change, so the
+        // standalone --ui-showcase keeps the cursor. Why it must be handed back: UiCursor.Clear.
+        GetTree().Root.TreeExiting += UiCursor.Clear;
 
         // Window close (and macOS Cmd+Q) no longer kills the process outright — it raises
         // NotificationWMCloseRequest instead, which routes through QuitGracefully so the MsgBye
@@ -203,33 +208,40 @@ public partial class ConnectionManager : Node
 
     // Redial through the join-token provider when one is set: fetch off the main thread, then
     // dial on it. Without a provider (direct/Unverified) dial immediately, exactly as before.
-    private void DialWithFreshJoinToken(Action dial)
+    //
+    // The way BACK to the main thread is the await — Godot's synchronization context, a managed queue
+    // the main loop drains. It must not be a Callable pushed from the pool thread: that is a native
+    // call, and this fetch is a round trip to the lobby that can land after the engine is gone. A
+    // lambda callable has no owner object for Godot to find dead, so it reaches for the C# script
+    // host that teardown already freed: a segfault on the way out, and the launcher reports a crash
+    // (exit code 139) for what was a clean quit. A continuation queued behind a finished main loop is
+    // simply never run.
+    private async void DialWithFreshJoinToken(Action dial)
     {
+        if (_quitting)
+            return;
         var provider = JoinTokenProvider;
         if (provider is null)
         {
             dial();
             return;
         }
-        _ = Task.Run(async () =>
+        var asked = State;
+        string? token = null;
+        try
         {
-            string? token = null;
-            try
-            {
-                token = await provider();
-            }
-            catch (Exception e)
-            {
-                Log.Err($"[ConnectionManager] join token refresh failed: {e.Message}");
-            }
-            Callable
-                .From(() =>
-                {
-                    _net.SetJoinToken(token);
-                    dial();
-                })
-                .CallDeferred();
-        });
+            token = await Task.Run(provider);
+        }
+        catch (Exception e)
+        {
+            Log.Err($"[ConnectionManager] join token refresh failed: {e.Message}");
+        }
+        // The world can move on while the lobby is answering: a quit, a Cancel/Back on the modal, the
+        // reconnect window running out. A dial nobody is waiting for any more must not happen.
+        if (_quitting || !IsInstanceValid(this) || State != asked)
+            return;
+        _net.SetJoinToken(token);
+        dial();
     }
 
     private void DialCurrent()
@@ -441,6 +453,8 @@ public partial class ConnectionManager : Node
 
     public void NotifyFailed(string reason)
     {
+        if (_quitting)
+            return;
         FailReason = reason;
         AuthRejected = reason == GameNetClient.RejectBadSecret;
         JoinTokenRejected = GameNetClient.IsJoinTokenReason(reason);
@@ -460,6 +474,10 @@ public partial class ConnectionManager : Node
 
     public void NotifyDisconnected(string reason = "")
     {
+        // Quitting is terminal (see _quitting). GameNetClient no longer reports a link it hung up on
+        // itself, so this is the second lock on that door, not the first.
+        if (_quitting)
+            return;
         // An intentional Leave() already returned us to the address screen and tore the socket
         // down; the resulting (deferred) socket-closed callback must NOT flip us to a "Server
         // offline"/"Connection lost" error overlay. Only a drop we didn't ask for counts.
@@ -503,7 +521,8 @@ public partial class ConnectionManager : Node
     // manual "Connection lost" overlay.
     public override void _Process(double delta)
     {
-        if (State != ConnState.Reconnecting)
+        // _quitting: a quit asked for DURING a reconnect must not fire one more redial in the drain.
+        if (_quitting || State != ConnState.Reconnecting)
             return;
 
         _reconnectElapsed += delta;

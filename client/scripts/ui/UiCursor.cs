@@ -15,4 +15,15 @@ public static class UiCursor
         if (ibeam != null)
             Input.SetCustomMouseCursor(ibeam, Input.CursorShape.Ibeam, new Vector2(16, 16));
     }
+
+    // Hands the OS cursors back. The display server keeps a reference to every custom cursor image, and
+    // Godot tears the display server down AFTER the rendering server — so an image still installed at
+    // quit is freed with no renderer left to free it into: two "RenderingServer::get_singleton() is
+    // null" errors from ~CompressedTexture2D plus leaked-texture-RID lines on EVERY exit, clean or not.
+    // Run it as the scene tree goes away: both servers are still alive then.
+    public static void Clear()
+    {
+        Input.SetCustomMouseCursor(null, Input.CursorShape.Arrow);
+        Input.SetCustomMouseCursor(null, Input.CursorShape.Ibeam);
+    }
 }

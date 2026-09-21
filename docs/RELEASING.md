@@ -126,17 +126,20 @@ scripts/server-update-e2e.ps1                                # prove a packaged 
 
 Host-OS only: macOS packages need `codesign`/`pkgbuild`, and the launcher is NativeAOT on Windows + macOS
 (no cross-OS AOT). Before touching `launcher/`, the package script or the Velopack version, run the
-**Package dry-run** workflow — it runs on any pull request that touches those paths (and by hand once it
-is on the default branch), runs the e2e on all three OSes, publishes nothing,
-and is the only way Windows gets verified without a Windows machine.
+**Package dry-run** workflow — it runs on any pull request that touches those paths (a docs-only change
+to `launcher/` aside; and by hand once it is on the default branch), runs the e2e on all three OSes,
+publishes nothing, and is the only way Windows gets verified without a Windows machine. A newer push to
+the same pull request cancels the run it supersedes.
 
 The two server scripts run on **any** Docker host, macOS included — the actual `dotnet publish` happens
 inside the SDK image (`server/Dockerfile`'s `publish-output` stage), so the produced `.AppImage` always
 matches the Docker *daemon's* architecture, not the host script's. Both need Docker plus `zstd` and
 `mksquashfs` (`brew install zstd squashfs` / `apt-get install zstd squashfs-tools`); without a system
 `zstd`, `vpk` silently falls back to deltas the updater rejects. The **server update dry-run** workflow
-(`.github/workflows/server-update-dryrun.yml`) is `server-update-e2e.ps1`'s CI equivalent, on native x64
-and arm64 runners.
+(`.github/workflows/server-update-dryrun.yml`) is `server-update-e2e.ps1`'s CI equivalent on native
+runners: x64 on a pull request, x64 **and arm64** when run by hand and in every release — both legs run
+the same scenario, and what is arm64's own (its AOT build, its AppImage, its image layer) is what a
+release ships.
 
 ## Rehearsing the pipeline
 

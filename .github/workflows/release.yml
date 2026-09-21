@@ -322,7 +322,8 @@ jobs:
   # ships without it: it gates the image push (which moves :latest) and, through that, the publish.
   # Its own job, not a step of package-server: it runs beside the packaging instead of in front of it
   # (about 8 minutes, inside what the desktop legs take anyway), and it is the SAME definition the
-  # pull-request dry-run uses - one file, called from here.
+  # pull-request dry-run uses - one file, called from here. Called from a release it runs x64 AND arm64
+  # (a pull request runs x64 only): this is where the arm64 AppImage and image layer are proven.
   # ---------------------------------------------------------------------------------------------
   server-e2e:
     name: Server update e2e

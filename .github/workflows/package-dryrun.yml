@@ -12,12 +12,15 @@ name: Package dry-run (launcher e2e)
 #
 # Triggers: by hand, and on pull requests that touch the launcher or its packaging. The PR trigger is
 # what makes this usable BEFORE a merge — GitHub only offers "Run workflow" for workflow files that
-# already exist on the default branch. The path filter keeps ordinary gameplay PRs free of it.
+# already exist on the default branch. The path filter keeps ordinary gameplay PRs free of it, and a
+# PR that only edits the launcher's docs too (the `!` line: a negation must FOLLOW the pattern it carves
+# out of, and only excludes — a PR that also touches launcher code still matches `launcher/**`).
 on:
   workflow_dispatch:
   pull_request:
     paths:
       - 'launcher/**'
+      - '!launcher/**/*.md'
       - 'shared/LauncherContract.cs'
       - 'tools/launcher-stubgame/**'
       - 'scripts/package-clients.ps1'
@@ -27,6 +30,13 @@ on:
 
 permissions:
   contents: read
+
+# A newer push to the same pull request makes the older run's answer worthless: cancel it instead of
+# letting two three-OS matrices run side by side. Anything else (a run by hand) gets a group of its own
+# and is never cancelled.
+concurrency:
+  group: launcher-e2e-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   DOTNET_NOLOGO: true

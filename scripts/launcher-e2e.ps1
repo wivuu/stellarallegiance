@@ -7,7 +7,14 @@
 #
 # It packs three versions of the launcher around the stub game (tools/launcher-stubgame) into a local
 # folder feed, installs the first the way a player would, then drives the installed launcher HEADLESS
-# (`--launcher-selftest=…`, no window, works on display-less runners):
+# (`--launcher-selftest=…`, no window, works on display-less runners).
+#
+# The launcher is PUBLISHED ONCE, with the first version, and packed three times: it takes its version
+# from Velopack's sq.version, which vpk writes at pack time, never from its own binary. (Publishing per
+# version was 90-96 % of this script's run time — a NativeAOT compile each on Windows and macOS — to
+# change nothing but a version stamp.) What differs between the versions is the fake game's payload,
+# so every delta still carries a real binary patch; see package-clients.ps1 -LauncherDir / -FakeGame.
+#
 #
 #   pass 1  selftest=update   1.0.0 → 1.0.1   first update of a fresh install (full package on macOS/Linux)
 #   pass 2  selftest=play     1.0.1 → 1.0.2   the game exits 85 ("UPDATE NOW" pressed in-game) → the launcher
@@ -38,6 +45,7 @@ $Feed = Join-Path $Root 'feed'
 $Install = Join-Path $Root 'install'
 $Data = Join-Path $Root 'data'
 $Report = Join-Path $Root 'stub-report.txt'
+$LauncherPublish = Join-Path $Root 'launcher-publish' # the one launcher publish, kept for the later packs
 $Log = Join-Path $Data 'logs/launcher.log'
 $Failures = [System.Collections.Generic.List[string]]::new()
 if ($Versions.Count -ne 3) { throw '-Versions takes exactly three versions, oldest first' }
@@ -84,9 +92,26 @@ function Clear-VelopackState {
 function New-Package([string]$Version) {
     $notes = Join-Path $Root "notes-$Version.md"
     "# Stellar Allegiance $Version`n`n* e2e build **$Version**`n" | Set-Content -LiteralPath $notes
+    # The first pack publishes the launcher; the others are handed that publish (see the header).
+    $reuse = @{}
+    if (Test-Path -LiteralPath $LauncherPublish) { $reuse.LauncherDir = $LauncherPublish }
     & (Join-Path $RepoRoot 'scripts/package-clients.ps1') -Version $Version -FakeGame -HostArchOnly `
-        -PackId $PackId -PackTitle $PackTitle -OutputDir $Feed -ReleaseNotes $notes | Out-Host
+        -PackId $PackId -PackTitle $PackTitle -OutputDir $Feed -ReleaseNotes $notes @reuse | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "packaging $Version failed" }
+    if (-not $reuse.Count) {
+        # Out of the package script's work folder, which it wipes at the start of every run.
+        Copy-Item -LiteralPath (Join-Path $RepoRoot "build/package/$Channel/launcher") -Destination $LauncherPublish -Recurse
+    }
+}
+
+# The size in bytes of every zstd patch inside a version's delta package (empty when there is no delta).
+function Get-DeltaPatchSizes([string]$Version) {
+    $delta = Get-ChildItem -LiteralPath $Feed -Filter "$PackId-$Version-*delta.nupkg" | Select-Object -First 1
+    if (-not $delta) { return @() }
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($delta.FullName)
+    try { return @($zip.Entries | Where-Object { $_.FullName -like '*.zsdiff' } | ForEach-Object { $_.Length }) }
+    finally { $zip.Dispose() }
 }
 
 # Returns the installed launcher's path.
@@ -216,6 +241,14 @@ try {
 
     Step "packing $v2 ..."
     New-Package $v2
+    # With one launcher publish behind all three versions, the launcher no longer differs between them. The
+    # delta must still be a real one — a binary the updater has to patch, not just the version text. By
+    # SIZE, not by name: the fake game's payload changes by 256 KiB of incompressible bytes per version, and
+    # where that lands depends on the OS (a patch of its own on Windows and macOS; on Linux the package is
+    # one AppImage, so it is inside the patch for that).
+    $patchSizes = @(Get-DeltaPatchSizes $v2)
+    $largest = if ($patchSizes.Count) { ($patchSizes | Measure-Object -Maximum).Maximum } else { 0 }
+    Assert ($largest -ge 200KB) "the $v2 delta carries a real binary patch ($($patchSizes.Count) zstd patch(es), largest $([math]::Round($largest / 1KB)) KiB)"
 
     Step "pass 2: selftest=play, the game asks for the update with exit code 85 ($v1 → $v2) ..."
     $skip = (Get-Markers).Count

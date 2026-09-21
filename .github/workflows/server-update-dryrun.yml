@@ -1,8 +1,12 @@
 name: Server update dry-run (server e2e)
 
-# Proves, on native x64 and arm64 Linux runners, that the sim-server RELEASE IMAGE (server/Dockerfile.release)
+# Proves, on native Linux runners, that the sim-server RELEASE IMAGE (server/Dockerfile.release)
 # self-updates through Velopack the way the auto-update contract promises — WITHOUT waiting for a real
 # release tag. Run it by hand before touching the update path, or let the path filter below catch it.
+#
+# A pull request runs the x64 leg only; a release and a run by hand run x64 AND arm64. Both legs run the
+# identical scenario, and what is arm64's own — its NativeAOT build, its AppImage, the image layer built
+# from it — is what a release ships and therefore what a release proves.
 #
 # scripts/server-update-e2e.ps1 does all the work: it packs three versions of the sim server under a
 # throwaway package id, seeds a local feed with only the first, boots the release image against that
@@ -39,6 +43,14 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same pull request makes the older run's answer worthless: cancel it. Everything
+# else gets a group of its own (the run id) and is never cancelled or made to wait — above all a RELEASE,
+# which calls this file: the group must never be able to equal release.yml's own `release-<ref>` (group
+# names are case-insensitive, and a called workflow waiting on its caller's group never starts).
+concurrency:
+  group: server-update-e2e-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   DOTNET_NOLOGO: true
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
@@ -57,9 +69,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { name: x64, os: ubuntu-latest }
-          - { name: arm64, os: ubuntu-24.04-arm }
+        # x64 on a pull request, x64 + arm64 otherwise (see the header). When release.yml calls this file,
+        # github.event_name is the CALLER's event (`push`), so a release always gets both.
+        include: ${{ fromJSON(github.event_name == 'pull_request' && '[{"name":"x64","os":"ubuntu-latest"}]' || '[{"name":"x64","os":"ubuntu-latest"},{"name":"arm64","os":"ubuntu-24.04-arm"}]') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6

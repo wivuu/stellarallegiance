@@ -40,6 +40,13 @@ the comma-list / bare `--` forms silently drop the flags (tell: `0 sectors`, no 
   any existing session file). Or un-pair by deleting `apphost/.local/server/lobby-auth.json`.
 - `--ui-shot` saves a PNG after the delay then quits cleanly — this also finalizes
   `--write-movie`. Extract frames: `ffmpeg -ss <t> -i smoke.avi -frames:v 1 f.png`.
+- `--ui-quit=graceful` (after `--`, with `--ui-shot`) leaves the way a PLAYER does —
+  `ConnectionManager.QuitGracefully` (MsgBye, the 0.3 s drain, then the quit) instead of the harness's
+  bare `Quit()`. Use it for anything about the exit path. A clean one prints NOTHING after
+  `[ConnectionManager] quitting to desktop`, exits 0, and the server logs `bye=True, clean leave`.
+  The exit bugs only show over WebRTC (disposing a peer connection fires close events; a cancelled
+  WebSocket is silent): register a server the lobby cannot probe — `SIM_PUBLIC_PORT=9` on a hand-run
+  server — and join it with `--join-listing`.
 - Expect in the client log: `defs received`, `local ship N spawned`, `UI_SHOT_SAVED:`.
   Grep for `SCRIPT ERROR|Exception`. `Reconciles: 0` on the HUD = client prediction and
   server sim agree (strong signal for sim/geometry changes).
