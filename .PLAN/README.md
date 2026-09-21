@@ -87,7 +87,7 @@ Condensed outcomes. Each line names where the detail now lives.
   - ☐ Later: Developer ID + notarization, Azure Trusted Signing (switched on by secrets —
     `docs/RELEASING.md`); REPAIR INSTALL in the launcher (today it links to the releases page).
 
-- ◐ **[L] Game server auto-update (Velopack)** (2026-09-20, branch `server-auto-update`).
+- ✅ **[L] Game server auto-update (Velopack)** (2026-09-20, branch `server-auto-update`).
   A game server updates itself the same way the desktop client does — Velopack — but gated by the public
   lobby telling it a release exists and only ever while it has no players: no update work while anyone is
   connected, the swap happens behind a closed drain once the server has been empty for a while, and it
@@ -120,7 +120,7 @@ Condensed outcomes. Each line names where the detail now lives.
     needs `fuse3`, not `libfuse2`, and gained `SuccessExitStatus=85`) and hand-run. The hand-run RELAUNCH
     was broken in two quiet ways through Velopack's `UpdateNix start` (working directory inside the old
     mount; one more dead mount per update) → `server/Update/Relauncher.cs`, and a hand-run server in the e2e.
-  - ☐ The first real release — older images need one manual `docker compose pull && docker compose up -d`.
+  - ✅ The first real release — older images need one manual `docker compose pull && docker compose up -d`.
 
 ### Stage 3 — Combat feel & depth
 
