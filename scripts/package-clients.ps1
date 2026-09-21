@@ -7,6 +7,7 @@
 #
 #   scripts/package-clients.ps1 -Version 0.0.13                      # real Godot export + launcher
 #   scripts/package-clients.ps1 -Version 1.0.0 -FakeGame             # stub game (seconds, not minutes)
+#   scripts/package-clients.ps1 -Version 1.0.1 -FakeGame -LauncherDir <dir>   # …and no launcher publish either
 #   scripts/package-clients.ps1 -Version 0.0.13 -GameDir build/mac/"Stellar Allegiance.app"
 #
 # Host-OS only, by necessity: macOS packages need codesign/pkgbuild, and the launcher is NativeAOT on
@@ -44,6 +45,14 @@ param(
     [string]$PackTitle = 'Stellar Allegiance',
     # macOS only: build the launcher for the host architecture only (halves the AOT time for local e2e).
     [switch]$HostArchOnly,
+    # -FakeGame only: a launcher published EARLIER — a copy of what a previous run left in
+    # build/package/<channel>/launcher (on macOS: one folder per RID inside it). Skips the launcher publish,
+    # which is nearly all of a -FakeGame run (NativeAOT on Windows + macOS). One publish can be packed under
+    # several versions because the launcher takes its version from Velopack's sq.version, which vpk writes at
+    # pack time, never from its own binary — the same reasoning as package-server.ps1 -PublishDir.
+    # scripts/launcher-e2e.ps1 packs its second and third version this way. A real package always publishes:
+    # it stamps the version into the launcher's file properties.
+    [string]$LauncherDir,
     # CI mode: never answer vpk's "this version already exists — overwrite?" prompt with yes.
     [switch]$Ci
 )
@@ -197,6 +206,16 @@ function Export-Game {
 # ---------------------------------------------------------------------------------------------------
 Set-Location $RepoRoot
 if ($FakeGame -and $GameDir) { Fail '-FakeGame and -GameDir are mutually exclusive' }
+if ($LauncherDir) {
+    if (-not $FakeGame) { Fail '-LauncherDir is for -FakeGame test packages only: a real package stamps its version into the launcher' }
+    if (-not (Test-Path -LiteralPath $LauncherDir -PathType Container)) { Fail "launcher directory not found: $LauncherDir" }
+    $LauncherDir = (Resolve-Path -LiteralPath $LauncherDir).Path
+    # $Work is wiped a few lines down — a launcher kept in there would be gone before it is used.
+    $workFull = [System.IO.Path]::GetFullPath($Work) + [System.IO.Path]::DirectorySeparatorChar
+    if (($LauncherDir + [System.IO.Path]::DirectorySeparatorChar).StartsWith($workFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+        Fail "-LauncherDir must not be inside $Work (that folder is wiped at the start of every run) — copy it out first"
+    }
+}
 if ($ReleaseNotes -and -not (Test-Path -LiteralPath $ReleaseNotes)) { Fail "release notes file not found: $ReleaseNotes" }
 
 Step "version $Version · channel $Channel · packId $PackId"
@@ -215,6 +234,22 @@ $hostRid = if ($IsWindows) { 'win-x64' }
 elseif ($IsMacOS) { if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'osx-arm64' } else { 'osx-x64' } }
 else { 'linux-x64' }
 
+# The stub is the same bytes in every version, and with -LauncherDir so is the launcher: nothing in the
+# package would change but the version text, and a delta would patch no binary at all. So the fake game
+# also ships a few MiB of "game data" that is mostly identical between versions and partly this version's
+# own — the shape of a real release — and every delta still has to carry, and the updater still has to
+# apply, a real binary patch (the thing that silently degrades to a full download when it breaks).
+# scripts/launcher-e2e.ps1 asserts on it by name.
+function New-FakeGamePayload([string]$Path) {
+    $bytes = [byte[]]::new(4MB)
+    [System.Random]::new(20260920).NextBytes($bytes) # the part every version shares
+    $seed = [System.BitConverter]::ToInt32([System.Security.Cryptography.SHA256]::HashData([System.Text.Encoding]::UTF8.GetBytes($Version)), 0)
+    $own = [byte[]]::new(256KB)
+    [System.Random]::new($seed).NextBytes($own) # the part that is this version's
+    [System.Array]::Copy($own, 0, $bytes, 1MB, $own.Length)
+    [System.IO.File]::WriteAllBytes($Path, $bytes)
+}
+
 $gameSource = $null
 if ($FakeGame) {
     $stubOut = Join-Path $Work 'stub'
@@ -222,8 +257,10 @@ if ($FakeGame) {
     if ($IsMacOS) {
         # A minimal stand-in for the Godot .app, at the same nested path and with the game's bundle id.
         $gameSource = Join-Path $Work "fake/$MacGameBundle"
-        New-Item -ItemType Directory -Force -Path (Join-Path $gameSource 'Contents/MacOS') | Out-Null
+        New-Item -ItemType Directory -Force -Path (Join-Path $gameSource 'Contents/MacOS'), (Join-Path $gameSource 'Contents/Resources') | Out-Null
         Copy-Item -LiteralPath (Join-Path $stubOut $GameExeBase) -Destination (Join-Path $gameSource "Contents/MacOS/$GameExeBase")
+        # Resources, not MacOS: Contents/MacOS may hold Mach-O files only (see the launcher bundle below).
+        New-FakeGamePayload (Join-Path $gameSource 'Contents/Resources/e2e-payload.bin')
         @"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -243,6 +280,7 @@ if ($FakeGame) {
         $stubName = if ($IsWindows) { "$GameExeBase.exe" } else { $GameExeBase }
         $gameName = if ($IsWindows) { "$GameExeBase.exe" } else { "$GameExeBase.x86_64" }
         Copy-Item -LiteralPath (Join-Path $stubOut $stubName) -Destination (Join-Path $gameSource $gameName)
+        New-FakeGamePayload (Join-Path $gameSource 'e2e-payload.bin')
     }
 }
 elseif ($GameDir) {
@@ -259,6 +297,10 @@ if ($gameSource -isnot [string] -or -not (Test-Path -LiteralPath $gameSource)) {
 }
 
 # ---- 2. the launcher + 3. assemble ---------------------------------------------------------------------
+# One folder per RID on macOS, one folder elsewhere: published now, or handed in with -LauncherDir.
+$launcherRoot = if ($LauncherDir) { $LauncherDir } else { Join-Path $Work 'launcher' }
+if ($LauncherDir) { Step "using the pre-published launcher at $launcherRoot" }
+
 if ($IsMacOS) {
     $app = Join-Path $Stage "$PackTitle.app"
     $macosDir = Join-Path $app 'Contents/MacOS'
@@ -268,8 +310,11 @@ if ($IsMacOS) {
 
     # [string[]]: an `if` EXPRESSION unrolls a one-element array into a bare string, and `$rids[0]` would then be 'o'.
     [string[]]$rids = if ($HostArchOnly) { @($hostRid) } else { @('osx-arm64', 'osx-x64') }
-    foreach ($rid in $rids) { Publish-Launcher $rid (Join-Path $Work "launcher/$rid") }
-    $first = Join-Path $Work "launcher/$($rids[0])"
+    foreach ($rid in $rids) {
+        if (-not $LauncherDir) { Publish-Launcher $rid (Join-Path $launcherRoot $rid) }
+        if (-not (Test-Path -LiteralPath (Join-Path $launcherRoot "$rid/StellarLauncher"))) { Fail "no launcher for $rid at $launcherRoot" }
+    }
+    $first = Join-Path $launcherRoot $rids[0]
     # The Skia / HarfBuzz / AvaloniaNative dylibs from NuGet are already universal and identical in both
     # publishes, so only the launcher binary itself needs lipo. Everything else is copied from the first.
     # Contents/MacOS must end up holding ONLY Mach-O files: vpk's nupkg does not preserve the xattr-based
@@ -277,7 +322,7 @@ if ($IsMacOS) {
     Get-ChildItem -LiteralPath $first -File | Where-Object { $_.Name -ne 'StellarLauncher' } |
         ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $macosDir }
     if ($rids.Count -gt 1) {
-        lipo -create (Join-Path $Work 'launcher/osx-arm64/StellarLauncher') (Join-Path $Work 'launcher/osx-x64/StellarLauncher') -output (Join-Path $macosDir 'StellarLauncher')
+        lipo -create (Join-Path $launcherRoot 'osx-arm64/StellarLauncher') (Join-Path $launcherRoot 'osx-x64/StellarLauncher') -output (Join-Path $macosDir 'StellarLauncher')
     }
     else {
         Copy-Item -LiteralPath (Join-Path $first 'StellarLauncher') -Destination $macosDir
@@ -319,8 +364,10 @@ if ($IsMacOS) {
     $mainExe = 'StellarLauncher'
 }
 else {
-    Publish-Launcher $hostRid (Join-Path $Work 'launcher')
-    Copy-Item -Path (Join-Path $Work 'launcher/*') -Destination $Stage -Recurse
+    if (-not $LauncherDir) { Publish-Launcher $hostRid $launcherRoot }
+    $mainExe = if ($IsWindows) { 'StellarLauncher.exe' } else { 'StellarLauncher' }
+    if (-not (Test-Path -LiteralPath (Join-Path $launcherRoot $mainExe))) { Fail "no launcher ($mainExe) at $launcherRoot" }
+    Copy-Item -Path (Join-Path $launcherRoot '*') -Destination $Stage -Recurse
     $gameStage = Join-Path $Stage 'game'
     New-Item -ItemType Directory -Force -Path $gameStage | Out-Null
     Copy-Item -Path (Join-Path $gameSource '*') -Destination $gameStage -Recurse
@@ -330,7 +377,6 @@ else {
         chmod +x (Join-Path $gameStage "$GameExeBase.x86_64")
     }
     $packDir = $Stage
-    $mainExe = if ($IsWindows) { 'StellarLauncher.exe' } else { 'StellarLauncher' }
 }
 
 # ---- 3b. the gate: can the STAGED game render and collide with every model? --------------------------------
