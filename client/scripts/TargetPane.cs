@@ -17,7 +17,7 @@ using StellarAllegiance.Ui;
 // while the pane is closed.
 public partial class TargetPane : Control
 {
-    private const float PanelW = 340f;
+    private const float PanelW = 310f; // right column 156px: bars ~92px wide, telemetry columns 52px
     private const float Gap = 12f; // space between the Minimap and this pane
     private const float Pad = 10f;
     private const float HeaderH = 14f;
