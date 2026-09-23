@@ -72,6 +72,13 @@ subclasses** for anything needing custom `_Draw` or per-frame state.
 - **Game elements** — `LoadoutSlot`, `ContactChip`, `ResourceReadout`, `RadarFrame`, `GunnerStrip`
   (the top-centre HUD strip a crew gunner sees while riding a captain's turret station — built from
   `RosterCells`; `SetMock(…)` renders it standalone in the gallery).
+- **Target pane** — `TargetPane` (flight HUD, bottom-left, docked right of the `Minimap` at exactly its
+  height): opens while a SHIP is Tab-focused. A private-world SubViewport renders the target's real model
+  zoomed to fill the well and turned as it faces the main camera (aspect angle + magnification captions),
+  beside pilot name, class, segmented HULL/SHLD bars (held off as "AWAITING CLASS DEF" until the def
+  streams — no baked fallback), RNG/SPD/CLOSE telemetry and, for an enemy in the pilot's seat, lock
+  progress. `PanelSolid` body (small text over the live scene); faction colour for identity and the rim
+  light, cyan only for chrome/shield/lock. Hidden under the F3 overview.
 - **Crew gunner HUD** — a gunner has NO HUD of its own beyond the `GunnerStrip`. A turret seat is a
   pilot's seat minus the controls, so it reuses the pilot's flight HUD verbatim: one aim reticle
   (`MarkerDraw.AimReticle`, drawn by `TargetMarkers` on the turret's real firing line — never a

@@ -134,6 +134,9 @@ public partial class RemoteShip : Node3D
 
     private string _pilotName = "";
 
+    // The resolved pilot name ("" for a PIG/pod or before the roster lands) — read by the TargetPane.
+    public string PilotName => _pilotName;
+
     // No per-frame visibility drive here (unlike PredictionController's own nameplate), so a
     // (re)assigned non-empty name always sets Visible = true.
     public void SetPilotName(string name) =>

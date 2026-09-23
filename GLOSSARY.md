@@ -490,6 +490,19 @@ Warning that an enemy missile-armed ship is locking you: `ShipSim.ThreatLockStat
   - `client/scripts/GameNetClient.cs` — decodes flags → `Ship.ThreatLock` / `LocalThreatLock`
 - **Related:** [[Target Lock]], [[Missile]]
 
+### Target Pane
+Flight-HUD inspector for the Tab-focused SHIP, docked right of the minimap at its height (issue #97): a
+private-world SubViewport renders the target's real model turned as it faces the main camera, auto-fit
+to the well, with aspect angle (0° = nose-on to you) + magnification captions, beside pilot/class,
+HULL/SHLD bars (held off until the class def streams), RNG/SPD/CLOSE and enemy lock progress.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `client/scripts/TargetPane.cs` — the pane (reads `TargetMarkers.FocusedId` + `HudSubject`)
+  - `client/scripts/Hud.cs` — wiring; `--ui-open=target` focuses the nearest ship for a `--ui-shot`
+- **Related:** [[Target Lock]]
+- **Notes:** hidden for a focused base/asteroid and under the F3 overview; the SubViewport's update mode
+  is Disabled while closed, so it costs nothing when no ship is focused.
+
 ### Dock Refund
 Voluntary dock at your own base refunds the ship's `PaidCost` to team credits (relaunch pays again →
 net-free rearm/repair); death refunds nothing (pods don't inherit PaidCost).

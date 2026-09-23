@@ -14,9 +14,9 @@ using StellarAllegiance.Ui;
 // draws. It never touches authoritative state. Created and wired up by the Hud.
 public partial class Minimap : Control
 {
-    private const float PanelW = 196f;
-    private const float PanelH = 176f;
-    private const float Margin = 16f; // inset from the viewport's bottom-left corner
+    internal const float PanelW = 196f;
+    internal const float PanelH = 176f;
+    internal const float Margin = 16f; // inset from the viewport's bottom-left corner
     private const float NodeRadius = 13f;
     private const float HaloRadius = 18f; // current-sector highlight ring
     private const float LayoutRadius = 50f; // radius of the ring the sector nodes sit on
