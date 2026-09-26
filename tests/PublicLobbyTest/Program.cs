@@ -30,6 +30,7 @@ static partial class Suite
             await RunAdminModerationTestsAsync();
             await RunDataProtectionTestsAsync();
             await RunHomeTestsAsync();
+            await RunPushTestsAsync();
         }
         finally
         {
