@@ -110,6 +110,10 @@ public static class GlbLoader
     // child hull carries the scale/rotation, not the hull alone; see ShipModelLoader.Build).
     public static Vector3 MeshWorldSize(Node3D root) => MeshAabb(root).Size;
 
+    // The full local-space box (position + size) from the same walk, for framing that needs the
+    // centre too (the TargetPane rotates a hull about its visual centre, not its pivot).
+    public static Aabb MeshLocalAabb(Node3D root) => MeshAabb(root);
+
     // Combined AABB of every mesh in the subtree, in `root`'s local space (root's own transform
     // is ignored — it's the freshly-instantiated, not-yet-scaled hull node). Walks the tree
     // accumulating each node's transform and expands over each mesh AABB's 8 corners.

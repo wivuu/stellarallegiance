@@ -561,31 +561,13 @@ public partial class ShipLoadout : Control
             flying ? "IN FLIGHT"
             : _launchPending ? "LAUNCHING…"
             : gate == TeamStateStore.SpawnGate.Locked ? "⚿ LOCKED"
-            : gate == TeamStateStore.SpawnGate.WrongBase ? $"⚿ {LaunchMaskLabel(classId)}"
+            : gate == TeamStateStore.SpawnGate.WrongBase ? $"⚿ {_defs.LaunchMaskLabel(classId)}"
             : noBay ? "NO LAUNCH BAY"
             : overCap ? "OVER CAPACITY"
             : "◆ LAUNCH";
         _launchHint.Visible = hint != null;
         if (hint != null)
             _launchHint.Text = hint;
-    }
-
-    // "SHIPYARD ONLY" / "SHIPYARD/ORDNANCE ONLY" — names the hull's allowed station classes from
-    // its LaunchClassMask bits ("" for an unrestricted hull).
-    private string LaunchMaskLabel(byte classId)
-    {
-        ushort mask = _defs.LaunchClassMask(classId);
-        if (mask == 0)
-            return "";
-        var names = new List<string>();
-        for (int bit = 0; bit < 16; bit++)
-            if ((mask & (1 << bit)) != 0)
-                names.Add(
-                    bit <= (int)StationClassId.Electronics
-                        ? ((StationClassId)bit).ToString().ToUpperInvariant()
-                        : $"CLASS {bit}"
-                );
-        return string.Join("/", names) + " ONLY";
     }
 
     // Per-base launch hints for the sidebar: why the SELECTED hull can't launch from a given base
@@ -603,7 +585,7 @@ public partial class ShipLoadout : Control
                 continue;
             string? hint =
                 !_defs.BaseLaunchCapable(typeId) ? "NO LAUNCH BAY"
-                : !_defs.HullMayLaunchFrom(classId, typeId) ? LaunchMaskLabel(classId)
+                : !_defs.HullMayLaunchFrom(classId, typeId) ? _defs.LaunchMaskLabel(classId)
                 : null;
             if (hint != null)
                 (hints ??= new Dictionary<ulong, string>())[id] = hint;

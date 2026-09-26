@@ -102,6 +102,25 @@ public partial class DefRegistry : Node, IShipCostSource
     public bool HullMayLaunchFrom(byte classId, byte baseTypeId) =>
         DockRules.ClassAllowed(LaunchClassMask(classId), StationClassOfBaseType(baseTypeId));
 
+    // "SHIPYARD ONLY" / "SHIPYARD/ORDNANCE ONLY" — names the hull's allowed station classes from
+    // its LaunchClassMask bits ("" for an unrestricted hull). The hangar's launch gate and the
+    // TargetPane's DOCK row both word the restriction with it.
+    public string LaunchMaskLabel(byte classId)
+    {
+        ushort mask = LaunchClassMask(classId);
+        if (mask == 0)
+            return "";
+        var names = new List<string>();
+        for (int bit = 0; bit < 16; bit++)
+            if ((mask & (1 << bit)) != 0)
+                names.Add(
+                    bit <= (int)StationClassId.Electronics
+                        ? ((StationClassId)bit).ToString().ToUpperInvariant()
+                        : $"CLASS {bit}"
+                );
+        return string.Join("/", names) + " ONLY";
+    }
+
     // Does a base of this type have a launch bay at all? A streamed BaseDef with a model but no
     // DockingExit hardpoint can't launch anything (the sim rejects; the hangar greys LAUNCH).
     // No def / model-less types stay launch-capable — mirrors World.BaseLaunchCapableOf's legacy

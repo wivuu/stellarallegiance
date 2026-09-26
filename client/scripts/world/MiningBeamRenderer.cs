@@ -37,6 +37,16 @@ public sealed class MiningBeamRenderer
     public bool IsMinerHarvesting(ulong shipId, ulong rockId) =>
         _minerTargetRock.TryGetValue(shipId, out ulong target) && target == rockId;
 
+    // How many miners MsgMinerTargets says are harvesting this rock right now (the TargetPane's MINERS row).
+    public int MinersOn(ulong rockId)
+    {
+        int n = 0;
+        foreach (ulong target in _minerTargetRock.Values)
+            if (target == rockId)
+                n++;
+        return n;
+    }
+
     // Per-frame: drive/create a beam for each actively-mining visible ship, then prune the rest. `camPos`
     // is the shadow/camera reference the beam's debris chips ray from.
     public void Tick(Vector3 camPos)

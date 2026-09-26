@@ -493,8 +493,9 @@ public partial class TargetMarkers : Control
     // base as a Tab-cycle lock target. Pods carry no weapons. Mirrors Hud.cs's local-missile-def
     // resolution (WeaponDef? via DefRegistry.MissileMount), which picks the ship's first
     // effective Missile-kind slot the same way the server's ship-aware MissileMountFor does.
-    private bool HasSiegeCapability(PredictionController local) =>
-        !local.IsPod && _defs.MissileMount((byte)local.Class, local.LoadoutIds) is { CanDamageBase: true };
+    // Shared with the TargetPane's base LOCK row.
+    internal static bool HasSiegeCapability(DefRegistry defs, PredictionController local) =>
+        !local.IsPod && defs.MissileMount((byte)local.Class, local.LoadoutIds) is { CanDamageBase: true };
 
     // The enemy closest to the shooter, or null if there are none. Used to pick a
     // fresh focus when the current target dies — nearest is the most useful next threat.
@@ -734,7 +735,7 @@ public partial class TargetMarkers : Control
             DrawFocusTag(view, fp, FocusTint(focusedBaseTeam), rangeFrom);
             // Lock arc ONLY for an enemy base the local hull can actually siege — never for a friendly
             // base (a dock destination), which focuses for navigation but can't be locked/damaged.
-            if (focusedBaseEnemy && _world.Ships.LocalShip is { } ls && HasSiegeCapability(ls))
+            if (focusedBaseEnemy && _world.Ships.LocalShip is { } ls && HasSiegeCapability(_defs, ls))
                 DrawLockArc(fp, focusedBaseTeam);
         }
 
@@ -1355,10 +1356,10 @@ public partial class TargetMarkers : Control
     // The four "special"/high-value resource classes that earn a HUD glyph (and an always-on F3
     // label); Regolith and Ice are commons. Single definition shared by the near/F3 label predicate
     // and the glyph draw sites so "special" is defined in exactly one place.
-    private static bool IsSpecialRock(byte cls) =>
+    internal static bool IsSpecialRock(byte cls) =>
         (RockClass)cls is RockClass.Helium3 or RockClass.Uranium or RockClass.Silicon or RockClass.Carbonaceous;
 
-    private static string RockClassName(byte cls) =>
+    internal static string RockClassName(byte cls) =>
         (RockClass)cls switch
         {
             RockClass.Helium3 => "Helium-3",
