@@ -237,6 +237,9 @@ public sealed class PlayerGrain(IDbContextFactory<LobbyDbContext> dbFactory) : G
         // pilot in a result needs (MatchGrain.Complete), and one missing row rejects the whole
         // result — deleting a player mid-match would cost everyone else in it the game.
         await db.Sessions.Where(x => x.SubjectKind == SubjectKind.Player && x.SubjectId == id).ExecuteDeleteAsync();
+        // Web Push rows only ever meant "notify THIS player"; both are Restrict FKs onto players.
+        await db.PushSubscriptions.Where(s => s.PlayerId == id).ExecuteDeleteAsync();
+        await db.NotificationPreferences.Where(p => p.PlayerId == id).ExecuteDeleteAsync();
         // players before asp_net_users: players.id is a Restrict FK onto it. Identity's own child
         // tables (logins, passkeys, claims, roles, tokens) cascade from asp_net_users in the DB.
         await db.Players.Where(p => p.Id == id).ExecuteDeleteAsync();

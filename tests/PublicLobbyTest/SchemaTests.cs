@@ -34,6 +34,8 @@ static partial class Suite
         "asp_net_user_tokens",
         "asp_net_user_passkeys",
         "data_protection_keys",
+        "push_subscriptions",
+        "notification_preferences",
     ];
 
     static async Task RunSchemaTestsAsync()
