@@ -1,7 +1,10 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Orleans;
+using PublicLobby.Data;
 using PublicLobby.Grains;
+using PublicLobby.Notifications;
 
 namespace PublicLobby.Pages;
 
@@ -18,13 +21,41 @@ namespace PublicLobby.Pages;
 // The strip is server-rendered here for the first paint and then re-rendered by htmx through
 // OnGetStrip whenever GET /servers/live announces a change (wwwroot/lobby-live.js) — so a visitor
 // watching the page sees players join and matches start.
-public sealed class IndexModel(IGrainFactory grains, IServerRegistry registry) : PageModel
+//
+// Above the strip sits the ranked-match notifications prompt (Pages/Shared/_PushPrompt.cshtml, issue
+// #98), rendered only when this lobby has VAPID keys and revealed by wwwroot/push.js.
+public sealed class IndexModel(
+    IGrainFactory grains,
+    IServerRegistry registry,
+    UserManager<LobbyUser> userManager,
+    PushOptions pushOptions,
+    PushSubscriptions pushSubscriptions
+) : PageModel
 {
     public const int LadderTop = 10;
 
     public LadderPage Ladder { get; private set; } = new([], 0, 1, LadderTop);
 
     public PublicServerStrip Strip { get; private set; } = PublicServerStrip.Empty;
+
+    // Null when this lobby has no VAPID keys: no prompt at all.
+    public PushPromptView? PushPrompt =>
+        pushOptions.Enabled
+            ? new PushPromptView(pushOptions.PublicKey!, User.Identity?.IsAuthenticated == true, Done: false)
+            : null;
+
+    // The subscription push.js posts from the prompt's hidden form (same field names as /me's).
+    [BindProperty]
+    public string? PushEndpoint { get; set; }
+
+    [BindProperty]
+    public string? PushP256dh { get; set; }
+
+    [BindProperty]
+    public string? PushAuth { get; set; }
+
+    [BindProperty]
+    public bool PushStandalone { get; set; }
 
     public async Task OnGetAsync()
     {
@@ -39,4 +70,29 @@ public sealed class IndexModel(IGrainFactory grains, IServerRegistry registry) :
         Strip = PublicServerStrip.From(registry.ListActive(), PublicServerStrip.Shown);
         return Partial("_ServerStrip", Strip);
     }
+
+    // "Turn on" in the prompt: turns this browser on AND the ranked-match event, since that is the one
+    // thing the prompt offered (a pilot who muted it earlier is opting back in). Answers with the
+    // prompt in its Done state. The page is anonymous, so the sign-in check is here.
+    public async Task<IActionResult> OnPostPushSubscribeAsync()
+    {
+        if (!pushOptions.Enabled)
+            return NotFound();
+        if (User.Identity?.IsAuthenticated != true || !Guid.TryParse(userManager.GetUserId(User), out var playerId))
+            return Unauthorized();
+        var outcome = await pushSubscriptions.UpsertAsync(
+            playerId,
+            PushEndpoint,
+            PushP256dh,
+            PushAuth,
+            PushLabels.FromUserAgent(Request.Headers.UserAgent, PushStandalone)
+        );
+        if (outcome != SubscribeOutcome.Saved)
+            return BadRequest();
+        await pushSubscriptions.SetPreferenceAsync(playerId, NotificationEvent.RankedMatchStarted, enabled: true);
+        return Partial("_PushPrompt", new PushPromptView(pushOptions.PublicKey!, SignedIn: true, Done: true));
+    }
 }
+
+// Model of Pages/Shared/_PushPrompt.cshtml.
+public sealed record PushPromptView(string VapidPublicKey, bool SignedIn, bool Done);

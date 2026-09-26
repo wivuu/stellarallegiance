@@ -39,13 +39,13 @@ public sealed record PushOptions(string? PublicKey, string? PrivateKey, string S
         var options = new PushOptions(publicKey, privateKey, subject);
         if (options.Enabled)
         {
-            // Fail the boot on a mistyped key rather than on the first send: the library checks the
-            // key lengths and the subject's scheme when they are set.
+            // Fail the boot on a mistyped key rather than on the first send: the library decodes the
+            // keys (FormatException) and checks their lengths and the subject's scheme (ArgumentException).
             try
             {
                 using var _ = options.CreateAuthentication();
             }
-            catch (ArgumentException e)
+            catch (Exception e) when (e is ArgumentException or FormatException)
             {
                 throw new InvalidOperationException($"LOBBY_VAPID_* is invalid: {e.Message}", e);
             }
