@@ -192,7 +192,7 @@ public partial class BuildTab : Control
 
     // A structure that actually builds today (has a runtime base projection). Placeholders (-1) are
     // display-only until their type is authored.
-    private static bool IsConstructible(StationCatalogDef s) => s.BaseTypeId >= 1;
+    internal static bool IsConstructible(StationCatalogDef s) => s.BaseTypeId >= 1;
 
     public override void _Process(double delta)
     {
@@ -371,14 +371,12 @@ public partial class BuildTab : Control
 
     // ---- status resolution (client-side, streamed data only) --------------
 
-    private bool IsAvailable(StationCatalogDef s)
-    {
-        if (_world == null)
-            return false;
-        byte team = Team;
-        bool obsoleted = s.ObsoletedByTechIdx.Any(t => _world.TeamState.OwnsTech(team, t));
-        return !obsoleted && _world.TeamState.HasAll(team, s.RequiredTechIdx, s.RequiredCaps);
-    }
+    private bool IsAvailable(StationCatalogDef s) => _world != null && IsAvailable(_world.TeamState, Team, s);
+
+    // Can `team` build this station now — every prerequisite owned and nothing it owns obsoletes it.
+    // Shared with the TargetPane's asteroid SITE row.
+    internal static bool IsAvailable(TeamStateStore ts, byte team, StationCatalogDef s) =>
+        !s.ObsoletedByTechIdx.Any(t => ts.OwnsTech(team, t)) && ts.HasAll(team, s.RequiredTechIdx, s.RequiredCaps);
 
     // Rock-discovery gate predictor: a constructor base stays locked until the team's fog of war has
     // revealed at least one asteroid of its build class (mirrors the server's TryBuyConstructor gate

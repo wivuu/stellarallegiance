@@ -491,17 +491,23 @@ Warning that an enemy missile-armed ship is locking you: `ShipSim.ThreatLockStat
 - **Related:** [[Target Lock]], [[Missile]]
 
 ### Target Pane
-Flight-HUD inspector for the Tab-focused SHIP, docked right of the minimap at its height (issue #97): a
-private-world SubViewport renders the target's real model turned as it faces the main camera, auto-fit
-to the well, with aspect angle (0° = nose-on to you) + magnification captions, beside pilot/class,
-HULL/SHLD bars (held off until the class def streams), RNG/SPD/CLOSE and enemy lock progress.
+Flight-HUD inspector for the Tab-focused target, docked right of the minimap at its height (issue #97): a
+private-world SubViewport renders the target's real model seen down the line of sight from your hull
+with the screen's up (so your own yaw/pitch never turns it; roll does, as on screen), auto-fit to the
+well, with a magnification caption, beside a per-kind readout. SHIP: pilot/class, HULL/SHLD bars
+(held off until the class def streams), RNG/SPD/CLOSE, enemy lock progress, aspect-angle caption (0° =
+nose-on to you). BASE: station/owner (+HQ), HULL, friendly DOCK clearance or enemy siege LOCK,
+RNG/CLOSE/ETA, diameter caption. ASTEROID: resource class, He3 ORE bar + YIELD or buildable SITE
+stations, RNG/CLOSE/ETA, MINERS harvesting it, diameter caption.
 - **Frequency:** Domain-specific
 - **Key Files:**
   - `client/scripts/TargetPane.cs` — the pane (reads `TargetMarkers.FocusedId` + `HudSubject`)
-  - `client/scripts/Hud.cs` — wiring; `--ui-open=target` focuses the nearest ship for a `--ui-shot`
+  - `client/scripts/Hud.cs` — wiring; `--ui-open=target|target-base|target-rock|target-he3` focuses the
+    nearest ship / base / rock / He3 rock for a `--ui-shot`
 - **Related:** [[Target Lock]]
-- **Notes:** hidden for a focused base/asteroid and under the F3 overview; the SubViewport's update mode
-  is Disabled while closed, so it costs nothing when no ship is focused.
+- **Notes:** hidden under the F3 overview; while closed the SubViewport neither renders nor processes
+  (a previewed base's beacons), so it costs nothing when nothing is focused. A rock preview shares the
+  world rock's mesh/material and follows its mining shrink.
 
 ### Dock Refund
 Voluntary dock at your own base refunds the ship's `PaidCost` to team credits (relaunch pays again →

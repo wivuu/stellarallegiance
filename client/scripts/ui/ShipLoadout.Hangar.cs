@@ -179,7 +179,7 @@ public partial class ShipLoadout
             bool wrongBase = haveBase && !_defs.HullMayLaunchFrom(classId, selBaseType);
             var gate = _world.TeamState.CheckSpawnGate(team, classId, wrongBase);
             card.Visible = gate != TeamStateStore.SpawnGate.Locked;
-            card.SetGate(gate, gate == TeamStateStore.SpawnGate.WrongBase ? LaunchMaskLabel(classId) : null);
+            card.SetGate(gate, gate == TeamStateStore.SpawnGate.WrongBase ? _defs.LaunchMaskLabel(classId) : null);
         }
 
         // The selected hull can go hidden under us (a persisted last-ship pick landing before the

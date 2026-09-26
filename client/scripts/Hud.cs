@@ -257,9 +257,10 @@ public partial class Hud : CanvasLayer
 
     // `--ui-shot=<path>` (without --ui-showcase) screenshots the live game UI after a short
     // settle and quits — used to verify the migrated screens render with the design system.
-    // `--ui-open=scoreboard-live|scoreboard-post|target` raises that overlay just before the shot, the way
-    // the showcase's own --ui-open does for its modals: overlays behind a hotkey can't otherwise be
-    // captured, and the scoreboard's two modes are the ones with no other way in.
+    // `--ui-open=scoreboard-live|scoreboard-post|target|target-base|target-rock|target-he3` raises that
+    // overlay just before the shot, the way the showcase's own --ui-open does for its modals: overlays
+    // behind a hotkey can't otherwise be captured, and the scoreboard's two modes are the ones with no
+    // other way in. The target-* forms Tab-focus the nearest ship / base / rock / He3 rock for the pane.
     // `--ui-quit=graceful` leaves the way a PLAYER does — ConnectionManager.QuitGracefully (MsgBye, the
     // drain, then the quit) instead of the bare Quit() below. That is the only unattended way to run the
     // real exit path while connected, which is where the exit bugs have lived.
@@ -295,6 +296,10 @@ public partial class Hud : CanvasLayer
                 _scoreboard?.Open(Scoreboard.Mode.PostMatch);
             else if (openOverlay == "target")
                 FocusNearestShipForShot();
+            else if (openOverlay == "target-base")
+                FocusNearestBaseForShot();
+            else if (openOverlay is "target-rock" or "target-he3")
+                FocusNearestRockForShot(he3Only: openOverlay == "target-he3");
             // One more frame so the overlay lays out before the grab.
             var shot = GetTree().CreateTimer(0.2);
             shot.Timeout += () =>
@@ -335,6 +340,50 @@ public partial class Hud : CanvasLayer
             }
             return pick;
         }
+    }
+
+    // `--ui-open=target-base`: Tab-focus the nearest visible base (any team — at spawn that is usually
+    // our own garrison, which shows the friendly DOCK row).
+    private void FocusNearestBaseForShot()
+    {
+        if (HudSubject.Resolve(_world, _defs) is not { } me)
+            return;
+        ulong best = 0;
+        float bestD2 = float.MaxValue;
+        foreach (var (id, pos, _) in _world.Bases.AllVisible())
+        {
+            float d2 = pos.DistanceSquaredTo(me.Origin);
+            if (d2 < bestD2)
+            {
+                best = id;
+                bestD2 = d2;
+            }
+        }
+        if (best != 0)
+            TargetMarkers.SetFocus(GameContent.BaseLockId(best));
+    }
+
+    // `--ui-open=target-rock|target-he3`: Tab-focus the nearest in-view asteroid (only He3 ones for the
+    // ore-bar variant).
+    private void FocusNearestRockForShot(bool he3Only)
+    {
+        if (HudSubject.Resolve(_world, _defs) is not { } me)
+            return;
+        ulong best = 0;
+        float bestD2 = float.MaxValue;
+        foreach (var (id, node) in _world.Asteroids.InView())
+        {
+            if (he3Only && _world.Asteroids.GetAsteroid(id)?.RockClass != (byte)RockClass.Helium3)
+                continue;
+            float d2 = node.GlobalPosition.DistanceSquaredTo(me.Origin);
+            if (d2 < bestD2)
+            {
+                best = id;
+                bestD2 = d2;
+            }
+        }
+        if (best != 0)
+            TargetMarkers.SetFocus(GameContent.AsteroidFocusId(best));
     }
 
     // F9 toggles the design-system gallery as a live overlay, for eyeballing the shared

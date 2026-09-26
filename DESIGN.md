@@ -73,12 +73,25 @@ subclasses** for anything needing custom `_Draw` or per-frame state.
   (the top-centre HUD strip a crew gunner sees while riding a captain's turret station — built from
   `RosterCells`; `SetMock(…)` renders it standalone in the gallery).
 - **Target pane** — `TargetPane` (flight HUD, bottom-left, docked right of the `Minimap` at exactly its
-  height): opens while a SHIP is Tab-focused. A private-world SubViewport renders the target's real model
-  zoomed to fill the well and turned as it faces the main camera (aspect angle + magnification captions),
-  beside pilot name, class, segmented HULL/SHLD bars (held off as "AWAITING CLASS DEF" until the def
-  streams — no baked fallback), RNG/SPD/CLOSE telemetry and, for an enemy in the pilot's seat, lock
-  progress. `PanelSolid` body (small text over the live scene); faction colour for identity and the rim
-  light, cyan only for chrome/shield/lock. Hidden under the F3 overview.
+  height): opens while anything is Tab-focused. A private-world SubViewport renders the target's real model
+  zoomed to fill the well, seen down the line of sight from your hull with the screen's up (yawing/pitching
+  your own ship leaves it still; it turns with the target, as you move round it, or as you roll — never by
+  the camera's whole attitude, and never world-up, which reads upside down when you fly inverted),
+  magnification caption top-right, beside a readout that differs by kind — one grid (identity + caption, a
+  two-row status block, a telemetry strip, a footer row):
+  - **Ship** — pilot / class, segmented HULL/SHLD bars (held off as "AWAITING CLASS DEF" until the def
+    streams — no baked fallback), RNG/SPD/CLOSE, and for an enemy in the pilot's seat LOCK progress; the
+    well captions the aspect angle.
+  - **Base** — station name / owner team (`· HQ` on a win-condition base), HULL bar ("AWAITING STATION
+    DEF" until its def lands); a friendly base adds DOCK (`CLEARED`, or the hangar's `SHIPYARD ONLY`
+    wording for a class-restricted hull), an enemy one a siege LOCK footer only for a hull mounting
+    `CanDamageBase` ordnance; RNG/CLOSE/ETA (to the surface); the well captions its diameter.
+  - **Asteroid** — resource class (its HUD rock glyph) / ASTEROID; He3 shows an ORE bar + YIELD
+    remaining/capacity, any other class the SITE stations your team can raise on it now (unresearched
+    ones left out — hidden-not-greyed); RNG/CLOSE/ETA; a MINERS footer while drones harvest it; header
+    reads NEUTRAL in `Data`.
+  `PanelSolid` body (small text over the live scene); faction colour (a rock: its resource tint) for
+  identity and the rim light, cyan only for chrome/shield/lock. Hidden under the F3 overview.
 - **Crew gunner HUD** — a gunner has NO HUD of its own beyond the `GunnerStrip`. A turret seat is a
   pilot's seat minus the controls, so it reuses the pilot's flight HUD verbatim: one aim reticle
   (`MarkerDraw.AimReticle`, drawn by `TargetMarkers` on the turret's real firing line — never a

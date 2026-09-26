@@ -268,6 +268,21 @@ public sealed class BaseRenderer
         return _pickScratch;
     }
 
+    // One base's live view for the TargetPane: its node, team, type id and 0..1 hull fraction (1 until its
+    // first health frame lands). Null for an unknown id.
+    public (Node3D Node, byte Team, byte TypeId, float HealthFrac)? Info(ulong baseId)
+    {
+        foreach (var (node, team, id, _) in _list)
+            if (id == baseId)
+                return (
+                    node,
+                    team,
+                    _type.TryGetValue(id, out byte t) ? t : DefaultBaseTypeId,
+                    _healthFrac.TryGetValue(id, out float frac) ? frac : 1f
+                );
+        return null;
+    }
+
     // Damaged bases in the visible sector, as (world pos, 0..1 fraction), for the screen-space damage bar.
     // Full-health and out-of-sector bases are skipped; under fog, stale-dead ones too. Shared scratch.
     public IReadOnlyList<(Vector3 Pos, float Frac)> VisibleHealth()
