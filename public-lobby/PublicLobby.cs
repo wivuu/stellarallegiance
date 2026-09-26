@@ -13,6 +13,7 @@ using PublicLobby.Auth;
 using PublicLobby.Data;
 using PublicLobby.Grains;
 using PublicLobby.Hosting;
+using PublicLobby.Notifications;
 using PublicLobby.ReleaseAdverts;
 
 // Public lobby + WebRTC signaling box. Player-run game servers register here (name + port) and
@@ -32,6 +33,18 @@ using PublicLobby.ReleaseAdverts;
 //                space-separate several for redundancy. Default stun:stun.cloudflare.com:3478.
 //   LOBBY_RELEASE_VERSION / LOBBY_RELEASE_FEED_URL / LOBBY_RELEASE_POLL_SECONDS
 //                the Release Advert: which game release is the latest (ReleaseAdverts/ReleaseWatcher.cs).
+//   LOBBY_VAPID_PUBLIC_KEY / LOBBY_VAPID_PRIVATE_KEY / LOBBY_VAPID_SUBJECT
+//                Web Push notifications, off unless both keys are set (Notifications/PushOptions.cs).
+
+// `--gen-vapid-keys`: print a fresh VAPID key pair for LOBBY_VAPID_* and exit - before anything is
+// built, so it needs no database.
+if (args.Contains("--gen-vapid-keys"))
+{
+    var (vapidPublic, vapidPrivate) = PushOptions.GenerateKeys();
+    Console.WriteLine($"LOBBY_VAPID_PUBLIC_KEY={vapidPublic}");
+    Console.WriteLine($"LOBBY_VAPID_PRIVATE_KEY={vapidPrivate}");
+    return;
+}
 
 // Listen port: PORT (PaaS like Railway inject it and route their HTTPS edge to it) wins, then
 // SHARE_PORT (compose/self-host), else the 8091 default.
@@ -73,6 +86,7 @@ builder.AddLobbyPersistence();
 builder.AddLobbyOrleans();
 builder.AddLobbyWeb();
 builder.AddLobbyBearerAuth();
+builder.AddLobbyNotifications();
 
 var app = builder.Build();
 
@@ -131,6 +145,7 @@ app.MapProfileApi();
 app.MapJwks();
 app.MapJoin();
 app.MapMatchApi();
+app.MapPushApi();
 
 // ---- Registry: server discovery -------------------------------------------
 

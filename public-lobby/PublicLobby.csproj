@@ -50,6 +50,11 @@
     <PackageReference Include="AspNet.Security.OpenId.Steam" />
   </ItemGroup>
 
+  <!-- Web Push notifications (Notifications/, issue #98): VAPID + aes128gcm delivery to browsers. -->
+  <ItemGroup>
+    <PackageReference Include="Lib.Net.Http.WebPush" />
+  </ItemGroup>
+
   <!-- Tailwind CSS (standalone CLI, no Node/npm) for Pages/Shared/_Layout.cshtml + friends. Downloads
        the pinned binary for the current OS/CPU into tools/tailwind/ (repo-root-relative, gitignored;
        absent in the Dockerfile's build context, so MakeDir below must (and does) create it) and runs it
