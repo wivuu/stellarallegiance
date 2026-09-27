@@ -70,7 +70,8 @@ win, unless someone kills a base.
 dotnet run --project tests/PublicLobbyTest     # needs Docker (Testcontainers postgres:17); boots the REAL host
 dotnet run --project tests/LobbyTest           # server-side: HelloFrame, JoinTokenVerifier, LobbyAuth, MatchReporter
 ```
-Suite sections: Schema, Orleans, Auth, Profile, JoinToken, Listings, Matches, Admin. New section =
+Suite sections: ConnectionString, Schema, Orleans, Auth, Profile, JoinToken, Listings, Release, Matches,
+Admin, AdminModeration, DataProtection, Home, Push. New section =
 `static partial class Suite` file + one `await RunXAsync();` line in `Program.cs`. Host via
 `LobbyHostFixture.GetAsync()` (`(HttpClient, IServiceProvider)`), cookie client via
 `LobbyHostFixture.CreateCookieClient()`, grains via `services.GetRequiredService<IGrainFactory>()`.
@@ -78,6 +79,8 @@ Gotchas: `QueryGrain` lists cache 5 s (sleep 5.2 s after seeding); raw-seeded Id
 security stamp — never sign in as a name a schema test inserted; env-var policies
 (`AUTH_DEV_LOGIN`, `ALLOW_UNVERIFIED_SERVERS`, `RANKED_RESULTS`, `LOBBY_ADMINS`) are read per request,
 so tests flip them with `Environment.SetEnvironmentVariable`; `DbCommandCounter` counts SQL.
+Web Push: the fixture sets a throwaway VAPID pair and swaps `IPushSender` for `FakePushSender`
+(PushTests.cs); match-start alerts are dispatched in the background, so poll `WaitForTagAsync`.
 
 ## Schema changes
 

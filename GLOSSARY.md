@@ -1319,6 +1319,21 @@ WebRTC SDP offer/answer relay: matches peers for connection negotiation.
 - **Related:** [[WebRTC]], [[DIRECT-FIRST]]
 - **Notes:** Stateless relay; no TURN fallback in current design
 
+### Web Push Notifications (lobby)
+Browser notifications from the public lobby (issue #98). Event choices are per ACCOUNT (a
+Notification Preference; a missing row = the event's default), delivery is per BROWSER (one Push
+Subscription each) — see `public-lobby/CONTEXT.md`. The only event, `ranked.match-started`, fires on
+the FIRST `POST /matches` of a match id from a Ranked server whose Verified listing has ≥ 2 pilots,
+to every opted-in account not on that roster (TTL 10 min, tag/topic = match id).
+- **Frequency:** Occasional
+- **Key Files:**
+  - `public-lobby/Notifications/` — `PushOptions` (VAPID env, `--gen-vapid-keys`), `PushSubscriptions` (the tables + push-host allowlist), `PushNotifier` (trigger, outbox, dispatcher), `WebPushSender` (Lib.Net.Http.WebPush)
+  - `public-lobby/Api/MatchEndpoints.cs` — where `ranked.match-started` is queued
+  - `public-lobby/Pages/Shared/_Notifications.cshtml` (/me) + `_PushPrompt.cshtml` (home) + `wwwroot/push.js` (browser half) + `wwwroot/sw.js` (service worker)
+  - `tests/PublicLobbyTest/PushTests.cs` — `FakePushSender`
+- **Related:** [[Ranked]], [[Verified Listing]], [[Public Lobby]]
+- **Notes:** Off unless `LOBBY_VAPID_PUBLIC_KEY`/`LOBBY_VAPID_PRIVATE_KEY` are set; never rotate the public key (it strands every subscription). Apple's push service only accepts aes128gcm — the `WebPush` NuGet package (legacy aesgcm) cannot reach iOS. iOS delivers only to a Home Screen web app, hence `wwwroot/manifest.webmanifest`.
+
 ---
 
 ## Testing & Validation

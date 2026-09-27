@@ -108,6 +108,24 @@ _Avoid_: report, score sheet, ledger
 The final state of a match whose game server disappeared before delivering a result.
 _Avoid_: cancelled, void, timed out
 
+## Notifications
+
+**Notification Event**:
+Something in the public lobby a player can ask to be told about in their browser; today only a ranked
+match starting with two or more pilots (`ranked.match-started`).
+_Avoid_: alert type, topic, channel
+
+**Notification Preference**:
+A player's own on/off choice for one notification event. It belongs to the account, so it follows the
+player to every browser; a player who never chose gets the event's default.
+_Avoid_: subscription, setting, opt-in (as a noun)
+
+**Push Subscription**:
+One browser a player has turned notifications on in. Delivery is per browser: turning one off never
+touches the others or the player's preferences. A browser belongs to whichever player turned it on
+last.
+_Avoid_: device, endpoint, registration
+
 ## Standing
 
 **Ladder**:
