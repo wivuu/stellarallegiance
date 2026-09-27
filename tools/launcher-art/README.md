@@ -23,6 +23,9 @@ Outputs:
 - `launcher/App/Assets/app.ico` — multi-resolution Windows icon, 16/20/24/32/40/48/64/128/256 px
 - `launcher/App/Assets/icon-256.png` — 256x256 RGBA, the window icon and Linux AppImage icon
 - `launcher/App/Assets/logo-680.png` — `logo.png` downscaled (LANCZOS, alpha kept, aspect kept) to 680px wide
+- `client/assets/ui/app_icon.ico` — a byte-identical copy of `app.ico` for the Godot Windows export
+  preset (`application/icon`), so the game exe's icon is the same pixels as the launcher's (Godot keeps
+  only its 16/32/48/64/128/256 sizes)
 
 SVG rasterisation uses **resvg-py** (Rust `resvg` via a prebuilt wheel — no
 system libraries needed; verified working on this machine). `cairosvg` is

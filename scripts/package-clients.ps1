@@ -113,6 +113,25 @@ function Remove-DebugFiles([string]$Dir) {
         Remove-Item -Recurse -Force
 }
 
+# True when a Windows PE image carries an icon: an RT_GROUP_ICON (14) entry at the root of its resource
+# tree. Shortcuts, Explorer and a pinned taskbar entry all draw the TARGET exe's embedded icon; without
+# one, Windows shows its generic executable icon.
+function Test-PeHasIcon([byte[]]$Bytes) {
+    $pe = [System.Reflection.PortableExecutable.PEReader]::new([System.IO.MemoryStream]::new($Bytes))
+    try {
+        $offset = 0
+        if (-not $pe.PEHeaders.TryGetDirectoryOffset($pe.PEHeaders.PEHeader.ResourceTableDirectory, [ref]$offset)) { return $false }
+        # IMAGE_RESOURCE_DIRECTORY: named/id entry counts at +12/+14, then 8-byte entries, named ones first.
+        $named = [BitConverter]::ToUInt16($Bytes, $offset + 12)
+        $ids = [BitConverter]::ToUInt16($Bytes, $offset + 14)
+        for ($i = $named; $i -lt $named + $ids; $i++) {
+            if ([BitConverter]::ToUInt32($Bytes, $offset + 16 + 8 * $i) -eq 14) { return $true }
+        }
+        return $false
+    }
+    finally { $pe.Dispose() }
+}
+
 function Publish-Launcher([string]$Rid, [string]$OutDir) {
     Step "publishing launcher for $Rid ..."
     $publishArgs = @('publish', $LauncherProj, '-c', 'Release', '-r', $Rid, '-o', $OutDir, "-p:Version=$Version", '--nologo', '-v', 'q')
@@ -446,6 +465,26 @@ if ($delta) {
         Step "delta ok: $([math]::Round($delta.Length / 1MB, 2)) MiB, $zs zstd patch(es)"
     }
     finally { $zip.Dispose() }
+}
+
+if ($IsWindows) {
+    # Every exe a player sees must carry the game icon. The launcher's comes from <ApplicationIcon>, the
+    # execution stub copies the launcher's resources at pack time, the game's comes from its export preset.
+    $exes = @("lib/app/$mainExe", "lib/app/$([IO.Path]::GetFileNameWithoutExtension($mainExe))_ExecutionStub.exe")
+    if (-not $FakeGame) { $exes += "lib/app/game/$GameExeBase.exe" }
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($full.FullName)
+    try {
+        foreach ($name in $exes) {
+            $entry = $zip.GetEntry($name)
+            if (-not $entry) { Fail "$name is missing from $($full.Name)" }
+            $buffer = [System.IO.MemoryStream]::new()
+            $stream = $entry.Open()
+            try { $stream.CopyTo($buffer) } finally { $stream.Dispose() }
+            if (-not (Test-PeHasIcon $buffer.ToArray())) { Fail "$name has no embedded icon - Windows would show the generic exe icon for it" }
+        }
+    }
+    finally { $zip.Dispose() }
+    Step "icons ok: $($exes -join ', ')"
 }
 
 if ($IsMacOS) {
