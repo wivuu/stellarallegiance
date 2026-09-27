@@ -21,11 +21,12 @@
 # item: expendables.yaml keeps exactly one tier-neutral cargo row per line (cargo-ids stay 2/3/4,
 # carried ONLY by the tier-1 expendable) and the fired tier resolves from owned techs at spawn.
 #
-# D3 (deliberate, tested behavior): IGC hull magazine partMasks — which hull can mount which rack —
-# are NOT enforced here. Our schema has no per-mount compatibility mask; LoadoutTest exercises
-# mounting a rack on a hull IGC never paired it with (e.g. a Quickfire rack on the Scout) as a
-# FEATURE of the open mount model. Payload budgets (hulls.yaml payload-capacity) make abuse costly
-# without a hardcoded mask.
+# D3 (current behavior, slated to change): IGC hull magazine partMasks — which hull can mount which
+# rack — are NOT enforced yet. The schema has no per-mount compatibility mask, so any rack fits any
+# missile-typed mount and payload-capacity is the only brake; LoadoutTest scenario 2 pins this (a
+# Quickfire rack on the Scout, a pairing IGC never allowed). That is too open: nothing stops a Scout
+# mounting the SRM Anti-Base rack below (mass 4 inside its 5 free payload). Per-ship restrictions
+# authored in YAML are planned — .PLAN/README.md → *Per-ship part restrictions*.
 launchers:
   # ---- MRM Seeker 1/2/3 (weapon-ids 3/18/19) ----
   - id: seeker-rack-1

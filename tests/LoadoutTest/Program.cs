@@ -30,6 +30,8 @@
 // Scenarios:
 //   1. Leave-empty (the motivating bug): scout with hp0 emptied never fires a bolt.
 //   2. Rack mount, no tech: scout's empty hp1 gets a quickfire rack; ammo/launch use the quickfire def.
+//      Pins today's open mount model (IGC never pairs Quickfire with the Scout) — expect it to flip
+//      to a reject once per-ship part restrictions land (.PLAN/README.md).
 //   3. Tech gate: Gat Gun 2 (weapon-id 1) without gat-2 -> whole-request revert to authored; with the
 //      tech seeded -> accepted (MountWeaponIds echo + emptied mount seeds nothing).
 //   4. Whole-request reject: bad hpIndex / dispenser weapon id / payload overflow — each reverts

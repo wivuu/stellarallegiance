@@ -37,7 +37,10 @@
 #   loadout slot at all: hidden in the hangar, rejected by the server. To expose an EMPTY assignable
 #   mount, author an entry with `mount: gun|missile|any` and no weapon-id (the mesh node carries no
 #   gun/missile distinction, so its type must be authored). `mount:` on a bound entry overrides the
-#   derivation; CoreValidator refuses a `mount:` that contradicts the bound weapon.
+#   derivation; CoreValidator refuses a `mount:` that contradicts the bound weapon. The category is
+#   the ONLY gate today: any gun fits any gun-typed mount and any rack any missile-typed mount, on
+#   every hull (IGC's partMasks are not enforced). Per-ship restrictions authored in YAML are
+#   planned — .PLAN/README.md → *Per-ship part restrictions*.
 #   Shield (optional, all keys omitted = no shield): shield-capacity is a regenerating energy pool that
 #   absorbs incoming damage BEFORE the hull (overflow from a shield-popping hit spills into the hull the
 #   same tick); shield-recharge is points/second, resuming shield-delay seconds after the last shield hit.

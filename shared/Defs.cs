@@ -93,7 +93,10 @@ namespace StellarAllegiance.Shared
         // server's ResolveLoadout accept exactly the same swaps: dispensers never mount on a
         // hardpoint (they ride cargo — D8), a NonMountable mount takes nothing at all (it isn't a
         // loadout slot), and a typed mount only takes its own category. A missile on a gun mount
-        // (or a gun on a missile mount) is rejected on both sides.
+        // (or a gun on a missile mount) is rejected on both sides. CATEGORY is the only gate today:
+        // any gun fits any gun mount and any rack any missile mount, on every hull (IGC's partMasks
+        // are not modelled). YAML-authored per-ship restrictions are planned (.PLAN/README.md →
+        // Per-ship part restrictions) and belong HERE, so the hangar and the server keep agreeing.
         public static bool MountAccepts(WeaponMountKind mount, WeaponKind kind) =>
             (kind == WeaponKind.Bolt || kind == WeaponKind.Missile)
             && mount switch

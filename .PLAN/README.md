@@ -191,13 +191,98 @@ YAML, so it lands in the existing seams without rework.
   - Show a visual flash as the user leaves and enters the sector via teleport/ripcord.
   - *Ripcord is warp-with-a-countdown-and-an-interrupt, and `Simulation.Warp.cs` has no dedicated
     suite — a warp-transition suite is the natural precursor.*
+- ☐ **[M] Per-ship part restrictions** — let YAML flexibly restrict which guns, missile racks and
+  (later) equipment fit which ships, e.g. scouts can't carry bomber missiles and the nanite is
+  scout-only. Today the weapon's CATEGORY is the only gate (`HardpointDef.MountAccepts`,
+  `shared/Defs.cs:97`: any gun fits any gun mount, any rack any missile mount), so a Scout can mount
+  the SRM Anti-Base rack (mass 4 inside its 5 free payload, no tech) and fly the match-ending
+  ordnance on the fastest hull, and any gun-mounted hull can carry the nanite.
+  - Suggested shape: named **mount families**, Allegiance's part masks with names instead of bits.
+    In IGC a gun fits a hardpoint when `weapon.partMask & hardpoint.partMask` is non-zero, and racks
+    and other equipment are gated per hull by `pmEquipment` (`igc-format` skill). Here each part
+    lists `families:`, a hull lists what its mounts `accept:` (a hull-wide default plus
+    per-hardpoint overrides), and a part fits when the two intersect. Unauthored = today's open
+    behaviour, so hulls opt in one at a time; stock values come from the IGC (`weapons.yaml` already
+    records each gun's mask).
+  - One rule for every consumer: the hangar (`LoadoutState.Compatible`), `ResolveLoadout`, salvage
+    pickup (a gun needs a *compatible* empty mount), turret stations (`ResolveTurretWeapon`), and
+    ContentValidator (refuse a tier successor that drops a family its predecessor had, or an
+    authored default that doesn't fit its own mount). Families ride `MsgDefs` (one protocol bump).
+  - Also covers the parts *Shields & afterburners as equipment* and *Stealth fighters & bombers*
+    add (cloaks only on stealth hulls, large shields only on heavy ones).
+  - *Replaces the open mount model (`launchers.yaml` note D3, reworded 2026-09-27); LoadoutTest
+    scenario 2 (a Quickfire rack on the Scout) pins today's behaviour and flips to a reject. The
+    factions model also has an unused per-hull `allowed-parts` whitelist of part ids (`Hull.cs:92`,
+    IGC's `pmEquipment` replacement): explicit, but every new part would need adding to every
+    hull's list.*
+- ☐ **[L] Shields & afterburners as equipment** — make the shield and the afterburner hangar
+  choices, as in Allegiance, instead of fixed hull stats: a hull declares which part classes it
+  accepts, the pilot picks the part (Iron: Sm/Med/Lrg Shield 1-3; Booster 1-3, Lt/Hvy/Cruise/Retro
+  Booster) and research tiers upgrade it.
+  - Tiers ride the shipped weapon-tier seam (`obsoleted-by-techs` + `successor-part-id`).
+  - Comes before *In-flight loadout management* (dequipping a shield) and *Stealth fighters &
+    bombers* (the cloak is a third part in the same family).
+  - *Today both are hull stats in `hulls.yaml` (`shield-capacity`/`-recharge`/`-delay`, and the
+    `ab-*` + `max-fuel` block that `shared/FlightModel.cs` integrates). The factions model
+    (`factions/src/Allegiance.Factions/Model/Parts/`) already mirrors the IGC parts (`Shield.cs`,
+    `Afterburner.cs`, `Cloak.cs`, `AmmoPack.cs`), but nothing authors or projects them. The picks
+    need a tail on `MsgSpawn` and `MsgShipLoadout` (one protocol bump), and the client must predict
+    with the equipped booster exactly as the server integrates it. Part meshes are converted in
+    `pick-assets/` (`acs30`/`acs39`/`acs34` shields, `acs48` booster, `acs38` cloak).*
 - ☐ **In-flight loadout management** — equip and dequip slots, manage inventory, etc. while flying.
   - Some equipped items should have a signature modifier (e.g. shields add to the ship's signature)
     and can be dequipped.
   - Some equipped items can have special in-flight effects when activated (cloak).
-  - Ship 'energy' concept; cloak uses energy.
+  - Ship 'energy' concept; cloak uses energy — now tracked as *Ammo & energy* and *Stealth fighters
+    & bombers* below.
   - *Half-plumbed already: `ShipSim.SigBias` exists as the live per-ship equipment/loadout/ability
     seam and already feeds fog/vision, so the signature-modifier half has a home.*
+- ☐ **[L] Ammo & energy** — the resource pressure behind Allegiance's sortie → dock → rearm rhythm:
+  projectile (PW) guns spend ammo from a hull magazine, energy (EW) guns, the ER Nanite and the
+  cloak drain a recharging energy pool, and ammo packs ride the cargo hold the way fuel pods do.
+  - Hull `max-ammo` / `max-energy` / `energy-recharge` and weapon `ammo-per-shot` /
+    `energy-per-shot`, as the IGC authors them (`Allegiance/src/Igc/igc.h:1781-1786`,
+    `:1837-1839`); Iron's `max-energy` ×1.2 goes live.
+  - The ER Nanite (shipped; heals for free today) costs 30 energy a shot at 4 shots/s in PCore014,
+    against the Scout's 1200-point pool recharging 60/s: about 20 s of flat-out healing, then half
+    rate. Its base-repair half is under *Station shields + repair* (Stage 4).
+  - HUD ammo and energy readouts; PIGs learn to go home and rearm.
+  - *Guns fire forever today (`weapons.yaml:6`: "infinite ammo") and there is no energy model
+    (`max-energy` is INERT, `iron-coalition.yaml:23`). The factions model
+    (`factions/src/Allegiance.Factions/Model/`) already carries every field (`Hull.cs:47/50/59`,
+    `Parts/Weapon.cs:13/19`), unauthored and unprojected. The local client predicts its own fire,
+    so the gate needs a prediction mirror like the fuel pod's `ConsumeFuelPod`, and the counts must
+    ride the ship record (a protocol bump). The dock refund already makes the rearm trip net-free.*
+- ☐ **[L] Stealth fighters & bombers** — Iron's Stealth Fighter → Adv Stl Fighter and the Stealth
+  Bomber (`wc_icsf`, converted in `pick-assets/wc_icsf.glb`), flying a cloak (Sig Cloak 1-3, Hvy
+  Cloak 1-2) and the EW Sniper / EW Utl Cannon guns.
+  - The Allegiance cloak (`Allegiance/src/Igc/cloakIGC.cpp:59`): toggled in flight, it ramps at its
+    on/off rates up to `max-cloaking`, scales the ship's signature by (1 − cloaking), burns energy
+    every second (and weakens when energy runs short), and drops while ripcording.
+  - Needs *Ammo & energy* (the cloak's drain, the EW guns) and *Shields & afterburners as
+    equipment* (the cloak slot), plus a `toggle_cloak` binding, HUD state, and a cloak shimmer for
+    the pilot and teammates.
+  - Decide the gate: in IGC these are Tactical-path ships, and the Tactical base isn't ported (the
+    Silicon and Uranium special rocks it could build on are seeded but unused).
+  - *`ShipSim.SigBias` / `SignatureModel.Compute` is the seam the glossary already reserves for "a
+    future loadout/cloak system". Vision multiplies each target's captured signature
+    (`Simulation.Vision.cs:569`), so fog decides who sees a cloaked ship without new vision code —
+    check that the eyeball tier (mesh without radar) honours it too. Firing already spikes
+    signature (`fire-signature-boost`); decide how that interacts with an engaged cloak.*
+- ☐ **[M] Damage types vs armor classes** — Allegiance's damage model: every bolt, missile and mine
+  carries a damage type, every hull, shield and station a defense type, and a damage-constant table
+  (up to 20 × 20) scales each hit (`GetDamageConstant`, `Allegiance/src/Igc/igc.h:2751`). The table
+  is how Allegiance tunes who can hurt what: anti-base ordnance vs stations, light guns vs heavy
+  hulls, how much a nanite bolt repairs.
+  - Import the table from `PCore014.igc`'s constants record, and each item's damage/defense type
+    with its part data; one lookup in `ApplyDamage` (`Simulation.cs:157`) and `ApplyBaseDamage`
+    (`Simulation.Firing.cs:339`).
+  - Precursor to capital ships, carriers and *Base capture*'s Troop Transports balancing sanely.
+  - *The fields exist on the factions model (`DamageType`: `Projectile.cs:28`,
+    `Expendables/Missile.cs:46`, `Expendables/Mine.cs:16`; `DefenseType`: `Hull.cs:71`,
+    `Parts/Shield.cs:13`, `Station.cs:45/48`), but no YAML sets them and the sim reads none. Base
+    damage is a `can-damage-base` bool (`shared/Defs.cs:236`) and the shield interaction a
+    per-weapon `shield-damage-multiplier`; both would fall out of the table.*
 - ✅ **[XS] Name the focused target** (2026-09-26, issue #97, PR #99) — shipped as the richer panel
   rather than the one-label fix: the **Target Pane**, docked right of the minimap, renders the
   Tab-focused target's real model beside a per-kind readout — a ship's pilot, class, hull/shield bars,
@@ -224,6 +309,59 @@ YAML, so it lands in the existing seams without rework.
 The economic + RTS loop. Largely sequential; each item builds on the shipped money + gating and the
 YAML pipeline.
 
+- ☐ **[M] Station shields + repair** — stations get a regenerating shield over their hull, plus
+  hull regeneration and nanite repair, as in Allegiance (per-station `armorRegeneration` /
+  `shieldRegeneration`, `Allegiance/src/Igc/igc.h:2654-2655`; a nanite bolt heals a station through
+  negative damage, `Allegiance/src/Igc/stationIGC.cpp:147`). The precursor to *Base capture*, whose
+  gate is a downed shield.
+  - Per-station `max-shield` / `shield-regen` / `hull-regen` in `stations.yaml`; Iron's
+    `max-shield-station` ×1.15 goes live.
+  - The Target Pane's base readout and the base markers gain a SHLD bar beside HULL.
+  - **Nanite on bases** — a friendly ER Nanite bolt repairs a station's hull (Allegiance exempts
+    repair from its station friendly-fire guard, `Allegiance/src/Igc/stationIGC.cpp:128`). It
+    needs no station shield and no wire change (base health already streams), so it can ship
+    first. Today bolts consider bases only for `can-damage-base` weapons and only ENEMY ones
+    (`Simulation.Firing.cs:128-133`), so a healing bolt needs a same-team base branch plus a base
+    heal, clamped to max hull, beside `ApplyHeal` (`Simulation.cs:190`).
+  - *Today `max-shield-station` is resolved but INERT (`iron-coalition.yaml:21`). Base hull only
+    changes on damage, match reset and upgrade rescale (`Simulation.Firing.cs:343`, `World.cs:1300`,
+    `Simulation.Research.cs:460`). `ApplyBaseDamage` (`Simulation.Firing.cs:339`) needs the
+    shield-first split `ApplyDamage` already does for ships, and the base row on the wire needs a
+    shield value (one protocol bump).*
+- ☐ **[L] Base capture (Troop Transports)** — Allegiance's comeback route: a hull with the `board`
+  capability that docks at an ENEMY station whose shield is below the core's downed-shield constant
+  takes that station for its team (`Allegiance/src/Igc/shipIGC.cpp:849`; the ownership flip is
+  `FedSrv/fsship.cpp:577`). Iron's boarders are the Troop Transport → Hvy Troop Transport
+  (`utl27b`, converted in `pick-assets/utl27b.glb`).
+  - Needs *Station shields + repair*: with no station shield, nothing is ever "downed".
+  - Decide: whether the garrison is capturable (in IGC it is), whether taking a team's last
+    garrison ends the match (the win check `TeamHasAliveWinBase`, `Simulation.Firing.cs:320`, keys
+    on team + health, so it would), and the Troop Transport's research gate (IGC: Expansion, which
+    isn't ported).
+  - A captures column on the scoreboard and a notice to both teams.
+  - *Every forward base already authors `capture` (`stations.yaml:76`, `:97`, `:121`, `:162`; the
+    garrison authors only `start`/`restart`), but nothing reads it. Enemy bases are fully solid
+    today (the dock-face test only skips your OWN base, `shared/Collision/Collide.cs`), so a boarder
+    needs an enemy-door path. `BaseSite` is an immutable record (`World.cs:89`): replace it in place
+    so the append-only base indices hold, and move research-by-base, queued constructors, launch
+    sites and both teams' fog reveal with it.*
+- ☐ **[M] Stat-boost research** — developments that carry team-wide stat multipliers instead of
+  (or as well as) tech unlocks: Allegiance's "GA:" research. Iron has 36 across Expansion, Tactical
+  and Supremacy — ship speed, acceleration, agility, hull, shield, sensors, signature and energy;
+  PW/EW range and damage; missile tracking and damage; He3 yield and mining speed; station hull and
+  shield; ripcord time. The ported Supremacy's set (Ship Hull, Ship Shield, Ship Sensors, Missile
+  Damage) is the natural first slice.
+  - Each boost needs a consumer: 6 of the 25 `GameAttribute`s have one today (gun and missile
+    damage, station armor, signature, mining rate and capacity); `MaxShieldStation` and
+    `MaxEnergy` resolve but are unconsumed; the other 17 have nothing.
+  - Flight boosts (MaxSpeed, Thrust, TurnRate, TurnTorque) change `shared/FlightModel.cs` inputs,
+    so the client's prediction must apply the same multiplier or every boosted ship rubber-bands.
+  - *Half the pipeline exists: `RecomputeTeamAttributes` (`Simulation.cs:1428`) resolves faction ×
+    completed developments into `World.TeamAttr` at match start and on every research completion;
+    `DevelopmentDef.Attributes` already streams (`shared/Defs.cs:505`) and the Research tab renders
+    it as ±% (`ResearchTab.cs:651`). Gotcha: "completed" is inferred from owned techs
+    (`Simulation.cs:1439`, `GrantedTechs.Count > 0`), so a pure stat development that grants no
+    tech would never count. Track completed developments explicitly, in the sim and on the client.*
 - ☐ **[L] Update plan to include multiple teams** — each map only supports a certain number of
   teams, so this is a constraint that must be reflected in the plan. Plan should include a richer
   'game lobby' (as opposed to server lobby) experience; allowing users to select or join teams before
@@ -250,6 +388,35 @@ Slice 1 is shipped (see above). Open, in plan-§1.6 order:
   than one replica (both are per-process today; a 2-replica scale test passed only on IPv6
   advertising and was scaled back to 1); Apple login; loadout persistence (needs a per-server content
   fingerprint — separate design).
+
+### Team comms
+
+In-game communication beyond free-text chat, which today is all or team only (`ChatMessage.Scope`,
+`shared/Net/Messages.cs:131`). Independent of the stages.
+
+- ☐ **[M] Quick-chat macros** — Allegiance's quick-chat: a hotkey opens a menu tree of canned calls
+  (cover me, need rescue, defend base, found enemy miner, base under attack …) that sends the line
+  plus its radio voice clip and can attach a target — the sender's current target, the enemy
+  damaging them most, or the sender themself — so a call doubles as a ping or a light order
+  (`Allegiance/src/WinTrek/console.cpp:1534`, `SendQuickChat`).
+  - A new client→server frame (macro id + attached target) relayed to the team or everyone; the
+    server checks the attached target against the sender's team fog, as `MsgOrder` does (no
+    wallhack).
+  - Shown as a chat line plus a short-lived HUD / F3 marker on the attached target; a `quick_chat`
+    action in `InputBindings.cs`.
+  - Voice second: the clips are catalogued (`audio-index.md` → *Player & comms voice-over (radio
+    callouts)*, 236 of them), but shipping them waits on #105's voice-line decision and the LICENSE
+    item under *Cross-cutting*. Text + marker first.
+- ☐ **[S] `@user` direct messages (whispers)** — `@name text` in the chat box reaches one pilot
+  (Allegiance's `CHAT_INDIVIDUAL`, `Allegiance/src/Igc/igc.h:2733`), with name completion from the
+  roster (`GameNetClient.LobbyPlayers`), a distinct whisper style, and `/r` to reply to the last
+  sender.
+  - Server: parse the `@` prefix beside the existing `/` intercept (`server/Net/ClientHub.cs:901`),
+    resolve the name against the roster (unknown or ambiguous → a system notice), then deliver to
+    the target and echo to the sender. `ChatRelayMessage.Scope` gains a direct value (today 0 all /
+    1 team / 2 commander directive, `shared/Net/Messages.cs:351`): one protocol bump.
+  - Decide whether whispers may cross teams, and whether NOAT pilots can whisper players.
+  - The same addressing later serves fireteam channels (deep backlog, *Fireteam support*).
 
 ### Engineering safety net
 

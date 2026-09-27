@@ -14,6 +14,8 @@
 #   PW Gat Gun 1/2/3   = weapon-ids 0/1/2   (partMask 0x1, wep09)  — the all-round gun
 #   PW Mini-Gun 1/2/3  = weapon-ids 9/10/11 (partMask 0x8, wep16)  — rapid-fire, homed at the Garrison
 #   PW AutoCan 1/2/3   = weapon-ids 12/13/14 (partMask 0x4000)     — heavy assault gun (Bomber)
+# The partMasks are provenance only: nothing enforces them yet, so any gun fits any gun-typed mount
+# on any hull. Per-ship restrictions are planned — .PLAN/README.md → *Per-ship part restrictions*.
 # fire-interval-ticks = round(dtimeBurst × 40): Gat 0.100→4, Mini-Gun 0.080→3, AutoCan 0.083→3.
 # All gun masses are 1.0 (IGC). Tier 2/3 gate on the same-named research tech. can-damage-base stays
 # OFF for every gun — the bomber's anti-base torpedo (weapon-id 5, launchers.yaml) is the match-ender.
@@ -146,8 +148,9 @@ weapons:
 
   # ---- ER Nanite 1/2/3 (weapon-ids 15/16/17) — the HEALING gun (IGC partMask 0x2, wep18) ----
   # is-healing: a bolt striking a SAME-team ship restores hull only (clamp to max, shields untouched);
-  # an enemy hit is a no-op. IGC mass 2, dtimeBurst 0.25 → fire-interval-ticks 10. Fits the Scout's
-  # 0x3 mount (loadout swap; the Scout's authored default keeps the Gat gun). Tier 2/3 gate on research.
+  # an enemy hit is a no-op. IGC mass 2, dtimeBurst 0.25 → fire-interval-ticks 10. IGC fits it only
+  # on scout mounts (0x3); here ANY gun-typed mount takes it until per-ship restrictions land (the
+  # Scout's authored default keeps the Gat gun). Tier 2/3 gate on research.
   - id: nanite-1
     name: ER Nanite 1
     weapon-id: 15
