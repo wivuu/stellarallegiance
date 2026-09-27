@@ -3,8 +3,8 @@
     The home page's ranked-match opt-in (issue #98), above the server strip - outside it, because the
     strip replaces itself on every live update. Rendered HIDDEN: wwwroot/push.js reveals it only while
     this browser could turn notifications on and hasn't (supported, permission not "denied", no
-    subscription yet) and "Not now" hasn't hidden it (30 days, localStorage). Signed out, it is a
-    sign-in link that lands on /me's Notifications section.
+    subscription yet) and "Not now" hasn't hidden it (30 days, localStorage) - the same rule signed in
+    or out. Signed out, it is a sign-in link that lands on /me's Notifications section.
 
     Signed in, "Turn on" posts the subscription to IndexModel.OnPostPushSubscribeAsync, which also
     turns the ranked-match event on (this prompt is about exactly that) and answers with this partial
@@ -13,8 +13,6 @@
 <div id="push-prompt"
      data-push-surface="prompt"
      data-vapid-key="@Model.VapidPublicKey"
-     data-signed-in="@(Model.SignedIn ? "true" : "false")"
-     data-push-done="@Model.Done"
      hidden="@(!Model.Done)"
      hx-target="#push-prompt"
      hx-swap="outerHTML"

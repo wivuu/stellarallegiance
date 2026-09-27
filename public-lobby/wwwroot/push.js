@@ -159,14 +159,11 @@
     // Shown only while this browser could turn notifications on and hasn't: supported, not blocked,
     // no subscription yet, and not snoozed with "Not now".
     async function maybeShowPrompt(surface) {
-        if (!supported || snoozed()) return;
-        if (surface.dataset.signedIn === "true") {
-            if (Notification.permission === "denied") return;
-            try {
-                if (await existingSubscription()) return;
-            } catch {
-                /* show it */
-            }
+        if (!supported || snoozed() || Notification.permission === "denied") return;
+        try {
+            if (await existingSubscription()) return;
+        } catch {
+            /* show it */
         }
         surface.hidden = false;
     }
@@ -195,6 +192,7 @@
 
     document.addEventListener("DOMContentLoaded", function () {
         document.querySelectorAll('[data-push-surface="settings"]').forEach(probe);
-        document.querySelectorAll('[data-push-surface="prompt"]:not([data-push-done])').forEach(maybeShowPrompt);
+        // Only a prompt still waiting to be offered starts hidden; its done state renders visible.
+        document.querySelectorAll('[data-push-surface="prompt"][hidden]').forEach(maybeShowPrompt);
     });
 })();
