@@ -1,0 +1,141 @@
+using System;
+
+// Edge detection for the one-shot cockpit cues whose trigger is a LEVEL the HUD samples every frame —
+// the hull we fly or ride, the match phase, the team balance. Played straight off the per-frame read,
+// each would replay its sound every frame, so the latches live here. Pure (no Godot): SystemRing and
+// Hud feed them and play what they return, and tests/CockpitCuesTest drives them headlessly.
+
+// Shield down / shield back / hull critical, for the hull the HUD is about (HudSubject).
+public sealed class HullCues
+{
+    [Flags]
+    public enum Cue
+    {
+        None = 0,
+        ShieldDown = 1 << 0,
+        ShieldUp = 1 << 1,
+        HullCritical = 1 << 2,
+    }
+
+    // The hull alarm sounds on crossing down to HullCriticalFrac of max, once, and re-arms only once the
+    // hull is back above HullRearmFrac — a nanite heal nudging it back and forth across the line must not
+    // replay it.
+    public const float HullCriticalFrac = 0.25f;
+    public const float HullRearmFrac = 0.35f;
+
+    // At or under this fraction of its capacity a shield is DOWN. The server floors a popped shield at
+    // exactly 0; the slack only absorbs float noise. The first recharge tick lifts it clear (8 pts/s on a
+    // 60-point shield is 0.4 points a tick), so "back up" means "recharging again", not "full".
+    public const float ShieldDownFrac = 0.005f;
+
+    private object? _hull;
+    private bool _seeded;
+    private bool _hullArmed;
+    private bool _shieldDown;
+
+    // `hull` is the identity of the hull the numbers describe — our own, or the captain's we ride — or
+    // null when there is none. A different hull (launch, respawn, the escape pod, boarding a crew seat)
+    // re-seeds every latch silently: a fresh hull is not an event, whatever its numbers. So does a hull
+    // whose max is still unknown (the class def hasn't streamed): nothing is judged until it is.
+    public Cue Observe(object? hull, float health, float maxHealth, float shield, float maxShield)
+    {
+        if (!ReferenceEquals(hull, _hull))
+        {
+            _hull = hull;
+            _seeded = false;
+        }
+        if (hull is null || maxHealth <= 0f)
+            return Cue.None;
+
+        float hullFrac = health / maxHealth;
+        bool hasShield = maxShield > 0f;
+        bool shieldDown = hasShield && shield <= maxShield * ShieldDownFrac;
+        if (!_seeded)
+        {
+            _seeded = true;
+            _hullArmed = hullFrac > HullCriticalFrac;
+            _shieldDown = shieldDown;
+            return Cue.None;
+        }
+
+        // A hull at 0 is dying, and the explosion speaks for that — no alarm on the killing blow.
+        bool alive = health > 0f;
+        var cue = Cue.None;
+        if (shieldDown != _shieldDown)
+        {
+            if (shieldDown && alive)
+                cue |= Cue.ShieldDown;
+            else if (!shieldDown)
+                cue |= Cue.ShieldUp;
+            _shieldDown = shieldDown;
+        }
+        if (_hullArmed && hullFrac <= HullCriticalFrac)
+        {
+            _hullArmed = false;
+            if (alive)
+                cue |= Cue.HullCritical;
+        }
+        else if (!_hullArmed && hullFrac > HullRearmFrac)
+            _hullArmed = true;
+        return cue;
+    }
+}
+
+// Match start + payday, for the local player's match and team.
+public sealed class MatchCues
+{
+    [Flags]
+    public enum Cue
+    {
+        None = 0,
+        MatchStart = 1 << 0,
+        Payday = 1 << 1,
+    }
+
+    // Income lands in bursts — the paycheck, plus every miner that offloads — so at most one payday
+    // chime per this many seconds.
+    public const double PaydayMinGapSec = 10.0;
+
+    private bool? _live;
+    private byte _team;
+    private int? _credits;
+    private double _lastPayday = double.NegativeInfinity;
+
+    // Whether the phase a snapshot just reported is Active. Only a change BETWEEN two reported phases is
+    // an edge, so the first report after Forget — a fresh join, or a reconnect into a match already under
+    // way — seeds silently, while a Lobby→Active flip observed on this connection sounds the start.
+    public Cue Phase(bool live)
+    {
+        var cue = _live == false && live ? Cue.MatchStart : Cue.None;
+        _live = live;
+        return cue;
+    }
+
+    // Our team's balance, or null when there is none to read (outside a live match, no team, no team
+    // state yet). Null — or a different team — drops the baseline, so the opening balance of a match
+    // seeds rather than chiming; only a RISE against a baseline pays out.
+    public Cue Credits(double nowSec, byte team, int? balance)
+    {
+        if (balance is not int now || team != _team)
+        {
+            _team = team;
+            _credits = balance;
+            return Cue.None;
+        }
+        var cue = Cue.None;
+        if (_credits is int was && now > was && nowSec - _lastPayday >= PaydayMinGapSec)
+        {
+            cue = Cue.Payday;
+            _lastPayday = nowSec;
+        }
+        _credits = now;
+        return cue;
+    }
+
+    // No connection to trust a phase from (a drop, a leave, a connect in flight): forget it.
+    public void Forget()
+    {
+        _live = null;
+        _credits = null;
+    }
+}

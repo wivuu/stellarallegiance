@@ -715,6 +715,7 @@ public partial class WorldRenderer
         _warpSettling = false;
         _warpCoverAtSec = Time.GetTicksMsec() / 1000.0 + WarpCoverDelay;
         Warped?.Invoke(); // raise (and HOLD) the flash; released once the destination loads
+        SfxManager.Instance?.PlayCockpit(SfxManager.SfxId.Warp); // Allegiance's jump, with the flash
         Log.Print($"[WorldRenderer] warp → sector {destSector} (old hidden, swap deferred under flash)");
     }
 

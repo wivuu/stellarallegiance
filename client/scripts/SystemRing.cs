@@ -37,6 +37,11 @@ public partial class SystemRing : Control
     // the draw can never disagree about which hull they are reading.
     private HudSubject? _subject;
 
+    // The gauges' audible side: shield down / back up and the hull-critical alarm, edge-detected off the
+    // same subject the arcs draw (so a gunner hears the hull they ride). Runs whether or not the ring
+    // is drawn — the F3 map or the zoom scope hiding the gauges doesn't make the hull any safer.
+    private readonly HullCues _cues = new();
+
     // Match TargetMarkers: project through the F3 overview camera while the sector map is
     // open, otherwise the flight chase camera. Resolved per-access so it follows the toggle.
     private Camera3D Cam => SectorOverview.ActiveCamera ?? _camera;
@@ -55,9 +60,24 @@ public partial class SystemRing : Control
     public override void _Process(double delta)
     {
         _subject = HudSubject.Resolve(_world, _defs);
+        PlayHullCues();
         Visible = _subject is not null && !ZoomView.Active && !SectorOverview.Active; // scope circle or F3 map replaces these gauges
         if (Visible)
             QueueRedraw();
+    }
+
+    private void PlayHullCues()
+    {
+        var s = _subject;
+        var cue = _cues.Observe(s?.Node, s?.Health ?? 0f, s?.MaxHealth ?? 0f, s?.Shield ?? 0f, s?.MaxShield ?? 0f);
+        if (cue == HullCues.Cue.None || SfxManager.Instance is not { } sfx)
+            return;
+        if ((cue & HullCues.Cue.ShieldDown) != 0)
+            sfx.PlayCockpit(SfxManager.SfxId.ShieldDown);
+        if ((cue & HullCues.Cue.ShieldUp) != 0)
+            sfx.PlayCockpit(SfxManager.SfxId.ShieldUp);
+        if ((cue & HullCues.Cue.HullCritical) != 0)
+            sfx.PlayUi(SfxManager.SfxId.HullCritical);
     }
 
     public override void _Draw()

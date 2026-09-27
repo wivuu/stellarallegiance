@@ -417,6 +417,9 @@ public partial class ConnectionManager : Node
     // The active stage is where the link died — freeze it as Failed for the error modal.
     private void FailCurrentStage()
     {
+        // Every terminal connect failure funnels through here — a refused join, a connect that never
+        // came up, an auto-reconnect that gave up — just as its error overlay goes up.
+        SfxManager.Instance?.PlayUi(SfxManager.SfxId.ActionDenied);
         ulong now = Time.GetTicksMsec();
         foreach (var rec in _stages)
             if (rec.State == StageState.Active)

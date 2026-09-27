@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Link the client's pure cockpit-cue edge detectors directly: they depend only on the BCL, NOT on
+         Godot, so this suite runs the real production latches headlessly. Same idiom as
+         tests/TeamStateStoreTest. -->
+    <Compile Include="../../client/scripts/CockpitCues.cs" Link="CockpitCues.cs" />
+  </ItemGroup>
+</Project>

@@ -108,7 +108,28 @@ public partial class Chat : Control
         Render();
     }
 
-    private void OnChat(ChatLine line) => Push(line, system: false);
+    private void OnChat(ChatLine line)
+    {
+        Push(line, system: false);
+        // Chime for what someone ELSE said — one subscriber, so one chime on every screen (the Lobby's
+        // comms panel renders the same line silently). Our own lines echo back through the relay, and the
+        // server's "★" lines are mostly the fallout of our own commands or routine traffic (every miner
+        // offload posts one), so neither sounds.
+        if (line.Name != ServerSender && line.Name != OwnName())
+            SfxManager.Instance?.PlayUi(SfxManager.SfxId.ChatReceived);
+    }
+
+    // The sender name the server's system lines carry (ClientHub.SystemTo / SystemToTeam).
+    private const string ServerSender = "★";
+
+    // Our name as the relay stamps it: the roster and the relay both read the server's player table.
+    private string? OwnName()
+    {
+        foreach (var p in _net.LobbyPlayers)
+            if (p.Id == _net.LocalClientId)
+                return p.Name;
+        return null;
+    }
 
     // A locally-generated system line (slash-command output, never relayed to the server).
     private void AddSystemLine(string text) => Push(new ChatLine(0, 0, "", text), system: true);

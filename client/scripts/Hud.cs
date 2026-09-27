@@ -84,9 +84,14 @@ public partial class Hud : CanvasLayer
     // persistent Main.tscn node, so this has the same session lifetime the instance field had.
     public static bool DeployRequested { get; private set; }
 
-    // Previous-frame visibility, so UI sounds fire once on the transition (the sector
-    // warning first appearing) rather than every frame.
-    private bool _warnWasVisible;
+    // Out of bounds: Allegiance looped its boundary alarm for as long as the ship stayed out
+    // (outOfBoundsLoopSound), so it re-sounds every BoundsAlarmSec — the clip's length — while the
+    // sector warning is up, from the first frame outside. 0 = sound on the next frame out.
+    private const double BoundsAlarmSec = 2.2;
+    private double _boundsAlarmCd;
+
+    // The match-start horn and the payday chime, edge-detected off the phase and our team's balance.
+    private readonly MatchCues _matchCues = new();
 
     public override void _Ready()
     {
@@ -647,9 +652,29 @@ public partial class Hud : CanvasLayer
 
         // Running team balance (server-authoritative; accrues on the paycheck cadence). Same team
         // source as the buy menu so the balance shown matches what gates the buttons.
+        byte creditTeam = _world.LocalTeam ?? _net.MyTeam;
         _credits.Visible = inMatch;
         if (inMatch)
-            _credits.Text = $"Credits: {_world.TeamState.Credits(_world.LocalTeam ?? _net.MyTeam)}";
+            _credits.Text = $"Credits: {_world.TeamState.Credits(creditTeam)}";
+
+        // Match-start horn + payday chime. Unlike _prevPhase above, a phase only counts here once a
+        // snapshot has reported it: ServerTick reads 0 after a Welcome rebuild (the server re-Welcomes
+        // everyone AT match start) and before a fresh join's first snapshot, and Phase then holds a
+        // placeholder Lobby that must not pass for the "before" of a Lobby→Active flip — else joining
+        // or reconnecting into a live match would sound the start.
+        if (_cm.State != ConnectionManager.ConnState.Connected)
+            _matchCues.Forget();
+        else if (_world.ServerTick > 0)
+        {
+            int? balance = inMatch && _world.TeamState.HasState(creditTeam) ? _world.TeamState.Credits(creditTeam) : null;
+            var cue =
+                _matchCues.Phase(_world.Phase == MatchPhase.Active)
+                | _matchCues.Credits(Time.GetTicksMsec() / 1000.0, creditTeam, balance);
+            if ((cue & MatchCues.Cue.MatchStart) != 0)
+                SfxManager.Instance?.PlayUi(SfxManager.SfxId.MatchStart);
+            if ((cue & MatchCues.Cue.Payday) != 0)
+                SfxManager.Instance?.PlayUi(SfxManager.SfxId.Payday);
+        }
 
         // Missile launcher presence gates the empty-rack blip below. The live ammo/lock readout now
         // lives in the bottom-right WeaponsPanel; MissileMount() returns null for hulls with no rack
@@ -721,9 +746,13 @@ public partial class Hud : CanvasLayer
         {
             _warning.Visible = false;
         }
-        if (_warning.Visible && !_warnWasVisible)
-            SfxManager.Instance?.PlayUi(SfxManager.SfxId.UiNotify);
-        _warnWasVisible = _warning.Visible;
+        if (!_warning.Visible)
+            _boundsAlarmCd = 0;
+        else if ((_boundsAlarmCd -= delta) <= 0)
+        {
+            SfxManager.Instance?.PlayUi(SfxManager.SfxId.OutOfBounds);
+            _boundsAlarmCd = BoundsAlarmSec;
+        }
         // Top-left readout: the live flight stats while flying; nothing otherwise (the
         // hangar owns the pre-spawn screen, the lobby overlay everything outside a match).
         // Hidden in the F3 sector map — telemetry is ship-centric combat chrome, not a map aid.
