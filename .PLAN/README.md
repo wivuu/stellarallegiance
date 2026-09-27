@@ -199,18 +199,13 @@ YAML, so it lands in the existing seams without rework.
   - Ship 'energy' concept; cloak uses energy.
   - *Half-plumbed already: `ShipSim.SigBias` exists as the live per-ship equipment/loadout/ability
     seam and already feeds fog/vision, so the signature-modifier half has a home.*
-- ☐ **[XS] Name the focused target** — *most of this bullet already ships.* A Tab-focused target
-  already draws its hull fraction and shield band (`TargetMarkers.DrawTargetHealthArc:1243`), a
-  `TARGET` tag with range (`DrawFocusTag:1339`), lock progress, a MINER/CONSTRUCTOR role tag and a
-  lead circle. The one missing piece of the plan's "health, type, distance" triple is **type**, and
-  it is missing on purpose: the type caption is gated `if (f3 && !focused)` at `TargetMarkers.cs:1049`
-  and `:1060`, so the focused ship is the one ship that never gets named. Un-gating that label is the
-  work. A richer panel (and the same readout inside the F3 map) is a separate, larger ask — decide
-  whether it is still wanted once the label is there.
-  *No wire work either way: `ShipRecord` carries `Health`/`Shield` for every AOI'd ship
-  (`Frames.cs:31-32`), mirrored at `RemoteShip.cs:194-195` with maxima from the class def.
-  Note `HudSubject` is **not** a seam for this — it resolves who the HUD is *about* (your hull, or
-  the captain's you ride), never a target.*
+- ✅ **[XS] Name the focused target** (2026-09-26, issue #97, PR #99) — shipped as the richer panel
+  rather than the one-label fix: the **Target Pane**, docked right of the minimap, renders the
+  Tab-focused target's real model beside a per-kind readout — a ship's pilot, class, hull/shield bars,
+  range/speed/closing rate and lock progress; a base's owner, hull and dock clearance or siege lock; an
+  asteroid's resource, ore and miners. Detail: [`GLOSSARY.md` → *Target Pane*](../GLOSSARY.md). Not
+  done, and only if still wanted: the F3 map, where the pane hides and the focused contact is still the
+  one ship without a type caption (`if (f3 && !focused)`, `TargetMarkers.cs:1050` and `:1061`).
 - ☐ **[S] Different gun effects** — per-weapon bolt looks (today `projectiles.yaml` only sets
   `bolt-radius` / `bolt-length`).
   - i.e. minigun green, different looking bolt
