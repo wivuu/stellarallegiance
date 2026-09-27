@@ -15,6 +15,11 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- The Win32 icon resource in StellarLauncher.exe, which NativeAOT carries over like the manifest.
+         Velopack's shortcuts point at this exe (and its execution stub copies this exe's resources), so
+         this is what the Start menu, desktop, Explorer and a pinned taskbar entry draw. vpk's icon option
+         only brands Setup.exe/Update.exe. The window's title-bar icon is MainWindow.LoadIcon. -->
+    <ApplicationIcon>Assets/app.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
     <!-- LibraryImport source-generated P/Invoke (Platform/MacInterop.cs, WinInterop.cs). -->

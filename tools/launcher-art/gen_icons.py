@@ -16,6 +16,10 @@ Outputs (launcher/App/Assets/):
   - logo-680.png      logo.png downscaled to 680px wide (keeps alpha + aspect ratio;
                       the launcher shows it at ~340 DIP, so 680px covers 2x displays)
 
+Plus client/assets/ui/app_icon.ico, a byte-identical copy of app.ico for the
+Godot Windows export preset (application/icon), so the game exe's icon is the
+same pixels as the launcher's (Godot keeps only its 16/32/48/64/128/256 sizes).
+
 SVG rasterisation: this script needs a pure-Python/uv-installable SVG
 rasteriser with no system libraries (cairosvg needs a system libcairo, which
 this Mac does not have by default). In order of preference:
@@ -52,6 +56,7 @@ Or, without uv:
 
 import io
 import os
+import shutil
 import sys
 
 import numpy as np
@@ -67,6 +72,7 @@ OUT_DIR = os.path.join(REPO, "launcher/App/Assets")
 ICO_OUT = os.path.join(OUT_DIR, "app.ico")
 PNG256_OUT = os.path.join(OUT_DIR, "icon-256.png")
 LOGO_OUT = os.path.join(OUT_DIR, "logo-680.png")
+GAME_ICO_OUT = os.path.join(REPO, "client/assets/ui/app_icon.ico")
 
 MASTER_SIZE = 1024  # == the SVG's own intrinsic width/height; no upscaling needed
 ICO_SIZES = [16, 20, 24, 32, 40, 48, 64, 128, 256]
@@ -157,6 +163,9 @@ def make_icons():
     if contained != expected:
         print(f"FAIL: expected {expected}", file=sys.stderr)
         sys.exit(1)
+
+    shutil.copyfile(ICO_OUT, GAME_ICO_OUT)
+    print(f"wrote {GAME_ICO_OUT}  (copy of app.ico, for the Godot Windows export)")
 
 
 def make_logo():

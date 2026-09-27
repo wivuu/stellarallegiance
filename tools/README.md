@@ -30,7 +30,8 @@ a second `wdth` axis — and JetBrains Mono 400/500). Deterministic; outputs are
 `gen_icons.py` rasterises `client/assets/ui/app_icon.svg` into `app.ico` / `icon-256.png` and downsizes the
 logo; `gen_nebula.py` evaluates the game's `NebulaBackground` shader maths at a fixed time into
 `nebula-clouds.png` (scanlines + star dots are drawn live by the launcher, in device pixels). Deterministic;
-outputs are committed under `launcher/App/Assets/`. See [`launcher-art/README.md`](launcher-art/README.md).
+outputs are committed under `launcher/App/Assets/` (plus a copy of `app.ico` at
+`client/assets/ui/app_icon.ico` for the Windows game export). See [`launcher-art/README.md`](launcher-art/README.md).
 
 ### `collision-hull/` — compound collision baker
 Generates and bakes compound `COL_` convex collision parts into any mesh GLB from its visual
