@@ -828,8 +828,8 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
                     : null
                 );
             // Fresh launch gets the establishing cinematic; a reconnect reclaim of a ship already in flight
-            // does not (NetPromoteLocal tagged it). A hull leaving the bay also gets Allegiance's undock
-            // spin-up — but not an escape pod, which is flung from a wreck, not launched.
+            // does not (NetPromoteLocal tagged it). A hull leaving the bay also gets the launch cue — but
+            // not an escape pod, which is flung from a wreck, not launched.
             if (_reclaimedShipId == row.ShipId)
                 _reclaimedShipId = null;
             else

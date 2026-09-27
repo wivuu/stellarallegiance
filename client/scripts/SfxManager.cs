@@ -105,7 +105,8 @@ public partial class SfxManager : Node
         // Own-ship moments and cockpit alerts (issue #105). The comment on each names the Allegiance
         // sound it is: file in pick-assets/sound-effects = logical sound in sounddef.mdl.
         { SfxId.Dock, "dock.ogg" }, // landed = dockedSound
-        { SfxId.Launch, "launch.ogg" }, // pwrup = undockSound (an ~18 s spin-up swell)
+        // SfxId.Launch: no sound selected yet, so its hook (ShipRenderer.InsertShip) plays nothing until an
+        // entry lands here. Allegiance's own undock cue (pwrup = undockSound) was tried: an ~18 s swell.
         { SfxId.Warp, "warp.ogg" }, // jumpin = jumpSound / personalJumpSound
         { SfxId.ShieldDown, "shield_down.ogg" }, // noshld = fastShieldDeactivate
         { SfxId.ShieldUp, "shield_up.ogg" }, // shieldup = fastShieldActivate
@@ -253,15 +254,15 @@ public partial class SfxManager : Node
     public void PlayUi(SfxId id, float pitch = 1f) => Play2D(_poolUi, ref _nextUi, id, pitch);
 
     // Non-positional sound for an event on our own hull, mixed with the world effects (SFX bus) rather
-    // than the interface — so turning the UI slider down doesn't mute docking, launching or warping.
+    // than the interface — so turning the UI slider down doesn't mute docking or warping.
     public void PlayCockpit(SfxId id, float pitch = 1f) => Play2D(_poolCockpit, ref _nextCockpit, id, pitch);
 
     private void Play2D(List<AudioStreamPlayer> pool, ref int next, SfxId id, float pitch)
     {
         if (!_streams.TryGetValue(id, out var stream))
             return;
-        // Prefer an idle player, oldest-first from the cursor, so a long cue (the launch swell runs
-        // ~18 s) isn't cut short while another player sits free; only a full pool steals.
+        // Prefer an idle player, oldest-first from the cursor, so a multi-second cue (a shield
+        // recharge, a warp) isn't cut short while another player sits free; only a full pool steals.
         int pick = next;
         for (int i = 0; i < pool.Count; i++)
         {

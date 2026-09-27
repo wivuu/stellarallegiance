@@ -301,9 +301,10 @@ Not stage-bound — done when convenient or when a stage needs them.
   Ambient/UI and none of `SfxManager`'s 27 `SfxId`s is musical.
 - ☐ **[S] Improve asteroid texture mapping** — reduce stretching via better UVs or tri-planar
   mapping; explore baking and in-engine parallax/height maps.
-- ◐ **[S] Spatial audio polish** (issue #105) — twelve cues are in, each Allegiance's own sound for
-  the event: dock, launch, warp, shield down/up, hull critical, out-of-bounds alarm, target pick, chat,
-  payday, action denied, match start. Open, with hook anchors on #105: victory/defeat (no asset), own
+- ◐ **[S] Spatial audio polish** (issue #105) — eleven cues are in, each Allegiance's own sound for
+  the event: dock, warp, shield down/up, hull critical, out-of-bounds alarm, target pick, chat, payday,
+  action denied, match start. Launch is hooked but has no sound selected (Allegiance's 18 s undock
+  swell was dropped). Open, with hook anchors on #105: a launch sound, victory/defeat (no asset), own
   death / pod eject / base and miner losses (Allegiance voiced these — decide whether the client gets
   SAL voice lines), and finer mix tuning. Asset catalogue: [`audio-index.md`](../audio-index.md);
   how a cue is wired: [`GLOSSARY.md` → *Cockpit Cue*](../GLOSSARY.md).
