@@ -828,11 +828,16 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
                     : null
                 );
             // Fresh launch gets the establishing cinematic; a reconnect reclaim of a ship already in flight
-            // does not (NetPromoteLocal tagged it).
+            // does not (NetPromoteLocal tagged it). A hull leaving the bay also gets Allegiance's undock
+            // spin-up — but not an escape pod, which is flung from a wreck, not launched.
             if (_reclaimedShipId == row.ShipId)
                 _reclaimedShipId = null;
             else
+            {
                 pc.SetMeta("Launched", true);
+                if (!row.IsPod)
+                    SfxManager.Instance?.PlayCockpit(SfxManager.SfxId.Launch);
+            }
             // Predict collisions against the local sector's hulls (sector follows the ship on warp) ...
             pc.SetCollisionProvider(() => _collision.BodiesIn(_sectors.LocalSector, _clock.Seconds));
             // ... and against the other SHIPS in the local sector (interpolated remote poses), with this
@@ -970,6 +975,11 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
                 : 0.9f;
             SfxManager.Instance?.PlayAt(SfxManager.SfxId.Explosion, deathPos, pitch: boomPitch);
         }
+
+        // Home: our hull docked, our pod was rescued (which lands us back at base just the same), or the
+        // captain's hull we ride docked with its crew still seated.
+        if (reason == GoneClean && (local || _ridingShipId == row.ShipId))
+            SfxManager.Instance?.PlayCockpit(SfxManager.SfxId.Dock);
 
         if (local)
         {

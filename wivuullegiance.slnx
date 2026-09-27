@@ -30,6 +30,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/AlephTest/AlephTest.csproj" />
     <Project Path="tests/AutopilotTest/AutopilotTest.csproj" />
+    <Project Path="tests/CockpitCuesTest/CockpitCuesTest.csproj" />
     <Project Path="tests/CollisionTest/CollisionTest.csproj" />
     <Project Path="tests/CommanderTest/CommanderTest.csproj" />
     <Project Path="tests/ConstructorTest/ConstructorTest.csproj" />

@@ -172,10 +172,16 @@ public partial class TargetMarkers : Control
 
     public static void SetFocus(ulong encodedId)
     {
+        if (encodedId != 0 && encodedId != FocusedId)
+            PlayRetargetCue();
         FocusedId = encodedId;
         if (_instance != null)
             _instance._focused = encodedId == 0 ? (ulong?)null : encodedId;
     }
+
+    // Allegiance's new-target tick, for a focus the PLAYER picked (Tab, or an F3 map pick) — not for the
+    // automatic hand-off when a focused ship dies, and not for clearing focus.
+    private static void PlayRetargetCue() => SfxManager.Instance?.PlayUi(SfxManager.SfxId.TargetCycle);
 
     // Scratch for the focus cycle: visible targets, each with a GROUP RANK (0 enemy ships, 1 enemy
     // bases, 2 friendly bases, 3 friendly ships, 4 asteroids) and their distance (px²) from the AIM
@@ -425,10 +431,13 @@ public partial class TargetMarkers : Control
         if (_focused != nearest)
         {
             _focused = nearest;
+            PlayRetargetCue();
             return;
         }
         int idx = VisibleIndexOf(nearest);
         _focused = idx + 1 < _visible.Count ? _visible[idx + 1].Id : (ulong?)null;
+        if (_focused != null)
+            PlayRetargetCue(); // stepped outward; wrapping past the last to "none" stays quiet
     }
 
     // Index of a ShipId within the aim-distance-sorted _visible list, or -1.

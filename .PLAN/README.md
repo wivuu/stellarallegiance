@@ -10,7 +10,6 @@ The live roadmap: what is shipped (one line each, with a pointer to the real doc
 | --- | --- |
 | [`LobbyRankingService.md`](LobbyRankingService.md) | Public-lobby identity + ranking design; §1.6 slices, §8 what was built and what bit. |
 | [`ship_movement/`](ship_movement/README.md) | Allegiance flight-model reference (constants, integration loop, rotation math). **Live reference, not archived.** |
-| [`sfx-gaps.md`](sfx-gaps.md) | Audit of gameplay events that still play no sound (feeds the spatial-audio item below). |
 | [`tech-tree-README.md`](tech-tree-README.md) + `tech-tree-*.yaml` | Flattened content dumps for handing to an LLM/human as context. |
 | [`TechPathsFromMemory.md`](TechPathsFromMemory.md) | Original brief for the Iron Coalition tech port — executed (see `archive/tech-paths/`). |
 | [`code-review-sweep-2026-07-18.md`](code-review-sweep-2026-07-18.md) | One-off review sweep log. Historical. |
@@ -302,12 +301,12 @@ Not stage-bound — done when convenient or when a stage needs them.
   Ambient/UI and none of `SfxManager`'s 27 `SfxId`s is musical.
 - ☐ **[S] Improve asteroid texture mapping** — reduce stretching via better UVs or tri-planar
   mapping; explore baking and in-engine parallax/height maps.
-- ☐ **[S] Spatial audio polish** — finer mix tuning / more event coverage; the missing-sound audit is
-  [`sfx-gaps.md`](sfx-gaps.md), the asset catalogue is [`audio-index.md`](../audio-index.md).
-  ⚠️ **Re-anchor `sfx-gaps.md` first** — its substance is still right (none of its 21 proposed
-  `SfxId`s exist; only `PickupPart` has been added since), but every hook anchor it cites is dead
-  after the M24/M27 `WorldRenderer` decomposition. The hooks now live in
-  `client/scripts/world/ShipRenderer.cs`.
+- ◐ **[S] Spatial audio polish** (issue #105) — twelve cues are in, each Allegiance's own sound for
+  the event: dock, launch, warp, shield down/up, hull critical, out-of-bounds alarm, target pick, chat,
+  payday, action denied, match start. Open, with hook anchors on #105: victory/defeat (no asset), own
+  death / pod eject / base and miner losses (Allegiance voiced these — decide whether the client gets
+  SAL voice lines), and finer mix tuning. Asset catalogue: [`audio-index.md`](../audio-index.md);
+  how a cue is wired: [`GLOSSARY.md` → *Cockpit Cue*](../GLOSSARY.md).
 - ☐ **[S] The nebula differs between machines** — each sector's nebula is generated in-shader from
   `fract(sin(...))` float hashing (`client/scripts/Starscape.cs:158`), which is not stable across GPU
   vendors and drivers, so two players in the same sector can see different clouds. The sector

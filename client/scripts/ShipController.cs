@@ -643,11 +643,15 @@ public partial class ShipController : Node
             }
             else
             {
-                SpawnHint =
+                string hint =
                     gate == TeamStateStore.SpawnGate.Locked ? $"{cls} is locked"
                     : gate == TeamStateStore.SpawnGate.WrongBase ? $"{cls} can't launch from the selected base"
                     : noBay ? "Selected base has no launch bay"
                     : $"Not enough credits for {cls}";
+                // The request stays queued and this re-evaluates every frame; buzz once per new refusal.
+                if (hint != SpawnHint)
+                    SfxManager.Instance?.PlayUi(SfxManager.SfxId.ActionDenied);
+                SpawnHint = hint;
             }
         }
     }

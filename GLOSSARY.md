@@ -1530,11 +1530,24 @@ YAML-to-GLB pipeline: converts modular hull part definitions into 3D models with
 3D sound positioning: plays effects anchored to world position, pans and attenuates based on listener.
 - **Frequency:** Common
 - **Key Files:**
-  - `client/scripts/SfxManager.cs` — PlayAt/PlayUi API
-  - `client/scripts/VFX.cs` — effect hooks
-  - `tools/sfx-gen/` — synthetic placeholder generation
+  - `client/scripts/SfxManager.cs` — `SfxId` → `.ogg` contract; `PlayAt` (3D), `PlayCockpit` (own-hull, SFX bus), `PlayUi` (UI bus)
+  - `client/scripts/CockpitCues.cs` — edge latches for cues read off per-frame levels (see Cockpit Cue)
+  - `client/assets/audio/` — the streams, mostly Allegiance originals from `pick-assets/sound-effects`
+  - `audio-index.md` — every Allegiance sound file → the engine event it played; a new cue uses the file Allegiance bound to that event, copied verbatim under the `SfxId`'s name
 - **Related:** [[VFX]], [[Client-Side Hit Sparks]]
-- **Notes:** Hooked into AddBolt/DeleteShip/CheckBoltImpacts/EngineGlow; collisions+settings-UI deferred
+- **Notes:** Per-ship engine/booster loops live on EngineGlow; volume per bus (Master/SFX/Engines/Ambient/UI) in Settings → AUDIO
+
+### Cockpit Cue
+A one-shot sound for something happening to the player's OWN hull or match — dock, launch, warp,
+shield down/up, hull critical, payday, match start. Plays non-positionally (`SfxManager.PlayCockpit`
+for hull events on the SFX bus, `PlayUi` for alerts), because the event has no stable world point: the
+ship docks, teleports, or is the listener.
+- **Frequency:** Occasional
+- **Key Files:**
+  - `client/scripts/CockpitCues.cs` — `HullCues` (fed by `SystemRing` from `HudSubject`, so a gunner hears the hull they ride) and `MatchCues` (fed by `Hud`)
+  - `tests/CockpitCuesTest` — the latch rules: silent re-seed on a new hull or connection, once per edge, no alarm on the killing blow
+- **Related:** [[Spatial Audio]]
+- **Notes:** A cue whose trigger is a level (hull, shield, phase, credits) must be edge-detected there, or it replays every frame
 
 ### Aspire AppHost (`apphost/`)
 The .NET Aspire distributed-application host that orchestrates the local dev stack and replaced
