@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Orleans;
 using PublicLobby;
@@ -250,7 +251,11 @@ static partial class Suite
         var cal = (await PostTokenAsync(http, new TokenRequest(LobbyGrantType.Dev, DisplayName: "Watcher Cal"))).Token!;
         var dee = (await PostTokenAsync(http, new TokenRequest(LobbyGrantType.Dev, DisplayName: "Watcher Dee"))).Token!;
         var eve = (await PostTokenAsync(http, new TokenRequest(LobbyGrantType.Dev, DisplayName: "Watcher Eve"))).Token!;
-        foreach (var (who, tag) in new[] { (ann, "ann"), (cal, "cal"), (dee, "dee"), (eve, "eve") })
+        var fay = (await PostTokenAsync(http, new TokenRequest(LobbyGrantType.Dev, DisplayName: "Watcher Fay"))).Token!;
+        var gus = (await PostTokenAsync(http, new TokenRequest(LobbyGrantType.Dev, DisplayName: "Watcher Gus"))).Token!;
+        foreach (
+            var (who, tag) in new[] { (ann, "ann"), (cal, "cal"), (dee, "dee"), (eve, "eve"), (fay, "fay"), (gus, "gus") }
+        )
             await subscriptions.UpsertAsync(who.Subject.Id, FcmEndpoint(tag), P256dh(), AuthSecret(), "Chrome · Linux");
         await subscriptions.SetPreferenceAsync(dee.Subject.Id, NotificationEvent.RankedMatchStarted, enabled: false);
         var now = DateTimeOffset.UtcNow;
@@ -277,6 +282,59 @@ static partial class Suite
             .Server
             .SessionId;
 
+        // Already in the game = skipped (Grains/PlayerPresenceGrain.cs): Gus sits on another (unranked)
+        // server's roster, as its /servers/ws update frame reports, and Fay's game client has the server
+        // list open (its /servers/events stream).
+        async Task<bool> InGame(TokenResponse who) =>
+            await grains.GetGrain<IPlayerPresenceGrain>(who.Subject.Id).InGame(DateTimeOffset.UtcNow);
+        async Task<bool> Eventually(Func<Task<bool>> condition)
+        {
+            for (var i = 0; i < 100; i++)
+            {
+                if (await condition())
+                    return true;
+                await Task.Delay(50);
+            }
+            return false;
+        }
+        var (plainBearer, _) = await DevServerTokenAsync(http, grains, "Plain Ops", "Plain Arena");
+        var plainRegistered = (
+            await PostServerAsync(
+                http,
+                new RegisterRequest(Name: "Plain Arena", Port: 19122, PublicEndpoint: null),
+                plainBearer
+            )
+        ).Body!;
+        var plainListing = plainRegistered.Server.SessionId;
+        using var plainSocket = await OpenServerSocketAsync(plainListing, plainRegistered.Secret);
+        LobbyRosterEntry[] plainRoster = [.. twoPilots, new("Watcher Gus", 0, PlayerId: gus.Subject.Id)];
+        await SendServerFrameAsync(
+            plainSocket,
+            new
+            {
+                type = "update",
+                players = 3,
+                maxPlayers = 16,
+                state = "lobby",
+                roster = plainRoster,
+            }
+        );
+        using var fayStreamReq = new HttpRequestMessage(HttpMethod.Get, "/servers/events");
+        fayStreamReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer",
+            fay.AccessToken
+        );
+        var fayStream = await http.SendAsync(fayStreamReq, HttpCompletionOption.ResponseHeadersRead);
+        Check(await InGame(fay), "an open game-client stream counts as in game");
+        Check(await Eventually(() => InGame(gus)), "a pilot on a live roster (server update frame) counts as in game");
+        Check(
+            !await grains
+                .GetGrain<IPlayerPresenceGrain>(gus.Subject.Id)
+                .InGame(DateTimeOffset.UtcNow + PlayerPresenceGrain.Lease + TimeSpan.FromSeconds(1)),
+            "…on a lease: it lapses if the refreshes stop (a silo died)"
+        );
+        Check(!await InGame(cal), "Cal is not in the game");
+
         fake.Reset();
         var matchId = Guid.NewGuid();
         var start = new MatchStartRequest(matchId, rankedListing, "Brimstone Gambit", DateTimeOffset.UtcNow);
@@ -289,6 +347,10 @@ static partial class Suite
         Check(
             !sent.Any(s => s.To.Endpoint == FcmEndpoint("ann")),
             "a pilot on the roster is skipped; opted-out and banned accounts too"
+        );
+        Check(
+            !sent.Any(s => s.To.Endpoint == FcmEndpoint("fay") || s.To.Endpoint == FcmEndpoint("gus")),
+            "players already in the game are skipped"
         );
         var alert = sent.FirstOrDefault();
         Eq("Ranked match starting", alert?.Payload.Title, "notification title");
@@ -306,18 +368,29 @@ static partial class Suite
         await Task.Delay(700);
         Eq(1, fake.Sent.Count(s => s.Payload.Tag == matchId.ToString()), "…and no second notification (once per match)");
 
+        // Fay closes the server list; the stream's end takes her presence with it.
+        fayStream.Dispose();
+        Check(await Eventually(async () => !await InGame(fay)), "closing the stream leaves the game");
+
+        // The cap: Cal was just alerted, so another ranked match today reaches only Fay (now out of the
+        // game); Gus is still on a roster.
+        var capMatch = Guid.NewGuid();
+        await PostAsync(
+            http,
+            "/matches",
+            new MatchStartRequest(capMatch, rankedListing, "Brimstone Gambit", DateTimeOffset.UtcNow),
+            rankedBearer
+        );
+        await fake.WaitForTagAsync(capMatch.ToString(), TimeSpan.FromSeconds(10));
+        await Task.Delay(300);
+        Check(
+            fake.Sent.Where(s => s.Payload.Tag == capMatch.ToString())
+                .Select(s => s.To.Endpoint)
+                .SequenceEqual([FcmEndpoint("fay")]),
+            "at most one alert a day: Cal is capped, Fay (out of the game now) gets this one"
+        );
+
         // An unranked server, and a ranked one with a single pilot: no alert.
-        var (plainBearer, _) = await DevServerTokenAsync(http, grains, "Plain Ops", "Plain Arena");
-        var plainListing = (
-            await PostServerAsync(
-                http,
-                new RegisterRequest(Name: "Plain Arena", Port: 19122, PublicEndpoint: null, Roster: twoPilots),
-                plainBearer
-            )
-        )
-            .Body!
-            .Server
-            .SessionId;
         var plainMatch = Guid.NewGuid();
         await PostAsync(
             http,
@@ -348,7 +421,20 @@ static partial class Suite
         Eq(0, fake.Sent.Count(s => s.Payload.Tag == plainMatch.ToString()), "unranked server: no notification");
         Eq(0, fake.Sent.Count(s => s.Payload.Tag == soloMatch.ToString()), "one pilot: no notification");
 
-        // A push service answering 410 during a fan-out prunes that browser.
+        // A day later Cal is due again - and a push service answering 410 during that fan-out prunes the
+        // browser (Fay is still capped from the last match).
+        await using (var scope = services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<LobbyDbContext>();
+            Eq(
+                1,
+                await db.NotificationDeliveries.CountAsync(d => d.PlayerId == cal.Subject.Id),
+                "a delivered alert starts the account's cap"
+            );
+            await db
+                .NotificationDeliveries.Where(d => d.PlayerId == cal.Subject.Id)
+                .ExecuteUpdateAsync(set => set.SetProperty(d => d.LastSentAt, d => d.LastSentAt.AddHours(-25)));
+        }
         fake.MarkGone(FcmEndpoint("cal"));
         var goneMatch = Guid.NewGuid();
         await PostAsync(
@@ -360,7 +446,27 @@ static partial class Suite
         await fake.WaitForTagAsync(goneMatch.ToString(), TimeSpan.FromSeconds(10));
         await Task.Delay(300);
         fake.ClearGone();
+        Check(
+            fake.Sent.Where(s => s.Payload.Tag == goneMatch.ToString())
+                .Select(s => s.To.Endpoint)
+                .SequenceEqual([FcmEndpoint("cal")]),
+            "25 h later Cal is due again; Fay is still capped"
+        );
         Eq(0, (await subscriptions.ListAsync(cal.Subject.Id)).Count, "410 during fan-out prunes the browser");
+
+        // Gus leaves that server: the next update frame no longer lists him.
+        await SendServerFrameAsync(
+            plainSocket,
+            new
+            {
+                type = "update",
+                players = 2,
+                maxPlayers = 16,
+                state = "lobby",
+                roster = twoPilots,
+            }
+        );
+        Check(await Eventually(async () => !await InGame(gus)), "dropped from the roster = out of the game");
 
         // ---- "Mute these" from the service worker ----
         await subscriptions.SetPreferenceAsync(pia.Subject.Id, NotificationEvent.RankedMatchStarted, enabled: true);
@@ -400,6 +506,15 @@ static partial class Suite
         {
             var db = scope.ServiceProvider.GetRequiredService<LobbyDbContext>();
             Eq(0, db.NotificationPreferences.Count(p => p.PlayerId == dee.Subject.Id), "…and her notification preferences");
+        }
+        Check(
+            await grains.GetGrain<IPlayerGrain>(fay.Subject.Id).Delete(PlayerDeleteMode.ErasePilots, DateTimeOffset.UtcNow),
+            "delete Fay"
+        );
+        await using (var scope = services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<LobbyDbContext>();
+            Eq(0, db.NotificationDeliveries.Count(d => d.PlayerId == fay.Subject.Id), "…and her notification cap row");
         }
     }
 
@@ -457,7 +572,17 @@ static partial class Suite
             };
         var local = PushOptions.FromEnv(n => Env(n, "http://localhost:8091"));
         Check(local.Enabled, "generated keys: push is on");
-        Eq(PushOptions.DevSubject, local.Subject, "…subject falls back to a mailto: off https");
+        Eq(PushOptions.FallbackSubject, local.Subject, "…subject off https falls back to the repo URL, never localhost");
+        Check(!local.SubjectRejectedByApple, "…which Apple accepts");
+        Check(
+            PushOptions
+                .FromEnv(n => n == "LOBBY_VAPID_SUBJECT" ? "mailto:lobby@localhost" : Env(n, null))
+                .SubjectRejectedByApple
+                && PushOptions
+                    .FromEnv(n => n == "LOBBY_VAPID_SUBJECT" ? "https://localhost:8091" : Env(n, null))
+                    .SubjectRejectedByApple,
+            "a localhost subject is flagged (Apple answers 403 BadJwtToken)"
+        );
         Eq(
             "https://lobby.example",
             PushOptions.FromEnv(n => Env(n, "https://lobby.example/")).Subject,
@@ -530,6 +655,32 @@ static partial class Suite
             "payload JSON is what sw.js reads (camelCase title/body/tag/url/event)"
         );
     }
+
+    // A game server's /servers/ws connection, authenticated with its listing's secret.
+    static async Task<System.Net.WebSockets.WebSocket> OpenServerSocketAsync(string sessionId, string secret)
+    {
+        var ws = await LobbyHostFixture.CreateWebSocketClient().ConnectAsync(new Uri("ws://localhost/servers/ws"), default);
+        await SendServerFrameAsync(
+            ws,
+            new
+            {
+                type = "auth",
+                sessionId,
+                secret,
+            }
+        );
+        var buf = new byte[4096];
+        await ws.ReceiveAsync(buf, default); // {"type":"ok"}
+        return ws;
+    }
+
+    static Task SendServerFrameAsync(System.Net.WebSockets.WebSocket ws, object frame) =>
+        ws.SendAsync(
+            JsonSerializer.SerializeToUtf8Bytes(frame, JsonSerializerOptions.Web),
+            System.Net.WebSockets.WebSocketMessageType.Text,
+            true,
+            default
+        );
 
     static string FcmEndpoint(string id) => $"https://fcm.googleapis.com/fcm/send/test-{id}";
 

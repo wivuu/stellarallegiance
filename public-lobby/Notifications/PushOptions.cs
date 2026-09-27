@@ -10,13 +10,15 @@ namespace PublicLobby.Notifications;
 //                            existing subscription, so it is set once per deployment.
 //   LOBBY_VAPID_PRIVATE_KEY  its private scalar, base64url (43 chars). A secret.
 //   LOBBY_VAPID_SUBJECT      the contact push services may use (mailto: or https:). Default: LOBBY_PUBLIC_URL
-//                            when that is https, else a placeholder mailto: good enough for a dev box.
+//                            when that is https, else the project's repository URL. Never a localhost
+//                            address: Apple's push service refuses the whole JWT for one (403
+//                            BadJwtToken), which is what a dev box's http://localhost lobby would produce.
 // Both keys set = notifications on. Either missing = off: no /me section, no home prompt, /push/* 404 -
 // the same "absent config means the feature is not offered" rule as the AUTH_* providers.
 // `dotnet PublicLobby.dll --gen-vapid-keys` prints a fresh pair.
 public sealed record PushOptions(string? PublicKey, string? PrivateKey, string Subject)
 {
-    public const string DevSubject = "mailto:lobby@localhost";
+    public const string FallbackSubject = "https://github.com/wivuu/stellarallegiance";
 
     public bool Enabled => PublicKey is not null && PrivateKey is not null;
 
@@ -33,7 +35,7 @@ public sealed record PushOptions(string? PublicKey, string? PrivateKey, string S
             subject =
                 publicUrl is not null && publicUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
                     ? publicUrl.TrimEnd('/')
-                    : DevSubject;
+                    : FallbackSubject;
         }
 
         var options = new PushOptions(publicKey, privateKey, subject);
@@ -51,6 +53,24 @@ public sealed record PushOptions(string? PublicKey, string? PrivateKey, string S
             }
         }
         return options;
+    }
+
+    // An explicitly configured subject Apple will refuse (a localhost / .local contact): the lobby still
+    // boots - Chrome and Firefox accept it - but every Safari subscriber silently gets nothing.
+    public bool SubjectRejectedByApple
+    {
+        get
+        {
+            var host =
+                Subject.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase) ? Subject[(Subject.LastIndexOf('@') + 1)..]
+                : Uri.TryCreate(Subject, UriKind.Absolute, out var uri) ? uri.Host
+                : "";
+            return host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+                || host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase)
+                || host.EndsWith(".local", StringComparison.OrdinalIgnoreCase)
+                || host == "127.0.0.1"
+                || host == "[::1]";
+        }
     }
 
     public VapidAuthentication CreateAuthentication() =>

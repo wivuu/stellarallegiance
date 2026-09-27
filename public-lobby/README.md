@@ -100,7 +100,7 @@ Environment variables (see [`PublicLobby.cs`](PublicLobby.cs)):
 | `LOBBY_RELEASE_FEED_URL` | the project's own GitHub "latest release" server feed | Feed the lobby polls for the *confirmed* version: an `http(s)` URL, or a local file path (dev / verification). Empty = the default. |
 | `LOBBY_RELEASE_POLL_SECONDS` | `300` (min `5`) | Poll cadence. `0` disables polling — baked-only, and game clients then hear nothing (they're only ever told the *confirmed* version, never the baked one — see "Release Adverts" below). |
 | `LOBBY_VAPID_PUBLIC_KEY` / `LOBBY_VAPID_PRIVATE_KEY` | unset (notifications off) | Web Push VAPID key pair (base64url). Both set = browser notifications on (see "Notifications (Web Push)" below); a malformed key fails startup. Generate once with `--gen-vapid-keys` and never rotate the public key: every existing browser subscription is bound to it. The private key is a secret. |
-| `LOBBY_VAPID_SUBJECT` | `LOBBY_PUBLIC_URL` when https, else `mailto:lobby@localhost` | Contact the push services may use (`mailto:` or `https:`). |
+| `LOBBY_VAPID_SUBJECT` | `LOBBY_PUBLIC_URL` when https, else `https://github.com/wivuu/stellarallegiance` | Contact the push services may use (`mailto:` or `https:`). Never a localhost address: Apple's push service answers `403 BadJwtToken` to the whole request (logged at startup as a warning). |
 
 A public STUN server is fine — there's nothing to host for it. The live server registry and
 signaling relay still hold everything in memory (registry entries expire 30 s after the last
@@ -465,6 +465,8 @@ Notification Preference / Push Subscription):
 - `push_subscriptions` holds one row per browser (the PushManager endpoint + keys, a User-Agent
   label, created / last-sent). The endpoint is unique: a browser belongs to whichever account turned
   it on last. "Turn off" deletes only that row; at most 10 browsers per account.
+- `notification_deliveries` holds when each account was last actually sent each event — the
+  Notification Cap (at most one per account per rolling 24 h). Test sends never count.
 - No anonymous subscriptions and no master switch — a new event is one more row under "Notify me when".
 
 **`ranked.match-started` delivery rules** (`Notifications/PushNotifier.cs`, queued from `Api/MatchEndpoints.cs`):
@@ -472,7 +474,9 @@ Notification Preference / Push Subscription):
 | | |
 |---|---|
 | Fires when | `POST /matches` answers Started (the FIRST start of that match id) for a Ranked server — the admin flag, or every authenticated server under `RANKED_RESULTS=authenticated`, the same test the result is ranked by — on a Verified live listing whose roster has ≥ 2 distinct player ids |
-| Recipients | Accounts opted in with ≥ 1 browser, minus that roster's pilots, minus accounts under a ban |
+| Recipients | Accounts opted in with ≥ 1 browser, minus that roster's pilots, minus accounts under a ban, minus anyone **in the game** (below), minus anyone already alerted in the last 24 h |
+| In the game | A game client signed in with its server list open (the `/servers/events` stream), or a pilot on any live listing's roster — leased in `Grains/PlayerPresenceGrain.cs` (60 s, refreshed by the stream keepalive and the game server's `/servers/ws` update/ping frames), so it is cluster-wide and lapses on its own if a silo dies. An open lobby web page does not count |
+| Cap | At most one per account per rolling 24 h (`notification_deliveries`), started only when one of its browsers took the message |
 | Dedupe | Once per match id (a spool re-send answers AlreadyStarted); notification `tag` and push `Topic` = match id, so a re-send replaces rather than stacks |
 | TTL | 10 minutes — a device offline longer gets nothing stale |
 | Click | Focus an open lobby tab (moved to `/#servers`), else open `/#servers` |

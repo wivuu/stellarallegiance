@@ -65,4 +65,11 @@ internal static partial class Log
     // 404/410 never get here - they are the normal "subscription gone" answer and prune the row.
     [LoggerMessage(EventId = 10, Level = LogLevel.Warning, Message = "push to {Host} refused: {Status} {Reason}")]
     public static partial void PushRejected(ILogger logger, string host, int status, string reason);
+
+    [LoggerMessage(
+        EventId = 11,
+        Level = LogLevel.Warning,
+        Message = "LOBBY_VAPID_SUBJECT {Subject} is a localhost contact: Apple's push service refuses it (403 BadJwtToken), so Safari subscribers get nothing"
+    )]
+    public static partial void PushSubjectRejectedByApple(ILogger logger, string subject);
 }

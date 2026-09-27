@@ -120,6 +120,17 @@ A player's own on/off choice for one notification event. It belongs to the accou
 player to every browser; a player who never chose gets the event's default.
 _Avoid_: subscription, setting, opt-in (as a noun)
 
+**Notification Cap**:
+The most one account is sent of one notification event: once per rolling day, however many ranked
+matches start. Only a message a browser actually took counts; a test never does.
+_Avoid_: rate limit, throttle, quota
+
+**In the Game**:
+A player whose game client is signed in with the server list open, or who is on a live listing's roster.
+They are never sent notifications about matches they can already see. An open lobby web page doesn't
+count.
+_Avoid_: online, active, connected
+
 **Push Subscription**:
 One browser a player has turned notifications on in. Delivery is per browser: turning one off never
 touches the others or the player's preferences. A browser belongs to whichever player turned it on

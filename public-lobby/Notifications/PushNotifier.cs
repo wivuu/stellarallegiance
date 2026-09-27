@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
+using Orleans;
 using PublicLobby.Data;
 using PublicLobby.Data.Entities;
 using PublicLobby.Grains;
@@ -64,12 +65,17 @@ public sealed class PushOutbox(PushOptions options)
 public sealed class PushNotifier(
     PushSubscriptions subscriptions,
     IPushSender sender,
+    IGrainFactory grains,
     TimeProvider clock,
     ILogger<PushNotifier> log
 )
 {
     // A device that stays offline longer than this gets nothing - the match is well under way by then.
     public static readonly TimeSpan MatchStartTtl = TimeSpan.FromMinutes(10);
+
+    // The Notification Cap: an account hears about ranked matches starting at most once per this window,
+    // however many start (a rolling day, so no timezone to guess).
+    public static readonly TimeSpan MatchStartCap = TimeSpan.FromDays(1);
     static readonly TimeSpan TestTtl = TimeSpan.FromMinutes(5);
     const int Parallelism = 8;
 
@@ -91,15 +97,24 @@ public sealed class PushNotifier(
 
     public async Task SendAsync(RankedMatchStarted alert, CancellationToken ct)
     {
-        var recipients = await subscriptions.RecipientsAsync(
+        var now = clock.GetUtcNow();
+        var candidates = await subscriptions.RecipientsAsync(
             NotificationEvent.RankedMatchStarted,
             [.. alert.Pilots],
-            clock.GetUtcNow()
+            now,
+            MatchStartCap
         );
+        // Nobody already in the game - on any server's roster, or with the game's server list open -
+        // they can see the match for themselves. One presence grain per candidate account, in parallel.
+        var accounts = candidates.Select(c => c.PlayerId).Distinct().ToArray();
+        var inGame = await Task.WhenAll(accounts.Select(id => grains.GetGrain<IPlayerPresenceGrain>(id).InGame(now)));
+        HashSet<Guid> playing = [.. accounts.Where((_, i) => inGame[i])];
+        var recipients = candidates.Where(c => !playing.Contains(c.PlayerId)).ToList();
         var payload = alert.ToPayload();
         // The topic makes the push service replace a still-undelivered copy instead of queueing two.
         var topic = alert.MatchId.ToString("N");
         ConcurrentBag<Guid> delivered = [];
+        ConcurrentBag<Guid> reached = [];
         ConcurrentBag<Guid> gone = [];
         var failed = 0;
         await Parallel.ForEachAsync(
@@ -111,6 +126,7 @@ public sealed class PushNotifier(
                 {
                     case PushSendOutcome.Delivered:
                         delivered.Add(to.Id);
+                        reached.Add(to.PlayerId);
                         break;
                     case PushSendOutcome.Gone:
                         gone.Add(to.Id);
@@ -123,6 +139,9 @@ public sealed class PushNotifier(
         );
         await subscriptions.MarkSentAsync([.. delivered]);
         await subscriptions.PruneAsync([.. gone]);
+        // Only accounts a browser actually took it for start their cap: one whose every browser failed
+        // can still hear about the next match.
+        await subscriptions.RecordDeliveredAsync([.. reached], NotificationEvent.RankedMatchStarted, now);
         Log.MatchStartPushed(log, alert.MatchId, recipients.Count, delivered.Count, gone.Count, failed);
     }
 
@@ -148,6 +167,8 @@ public sealed class PushDispatcher(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         Log.PushConfigured(log, options.Enabled, options.Enabled ? options.Subject : "-");
+        if (options.Enabled && options.SubjectRejectedByApple)
+            Log.PushSubjectRejectedByApple(log, options.Subject);
         if (!options.Enabled)
             return;
         try

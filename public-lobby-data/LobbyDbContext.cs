@@ -48,6 +48,7 @@ public class LobbyDbContext(DbContextOptions<LobbyDbContext> options)
     public DbSet<MatchPilot> MatchPilots => Set<MatchPilot>();
     public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
     public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
+    public DbSet<NotificationDelivery> NotificationDeliveries => Set<NotificationDelivery>();
 
     // ASP.NET DataProtection key ring (IDataProtectionKeyContext), table data_protection_keys —
     // persisted here so cookies and passkey/external-login state survive container redeploys
@@ -176,8 +177,8 @@ public class LobbyDbContext(DbContextOptions<LobbyDbContext> options)
         // Web Push (issue #98). The one exception to "grains are the single writers": no grain holds
         // these rows in memory, every write is a single-statement upsert/delete, and the dispatcher
         // reads them set-wise across players — so public-lobby/Notifications/PushSubscriptions.cs
-        // writes them directly and nothing can go stale. Both FKs are Restrict like every other
-        // app table; PlayerGrain.Delete removes both before the players row.
+        // writes them directly and nothing can go stale. The FKs are Restrict like every other app
+        // table; PlayerGrain.Delete removes all three tables' rows before the players row.
         builder.Entity<PushSubscription>(e =>
         {
             e.ToTable("push_subscriptions");
@@ -194,6 +195,15 @@ public class LobbyDbContext(DbContextOptions<LobbyDbContext> options)
             e.Property(p => p.Event)
                 .HasConversion(new EnumTextConverter<NotificationEvent>(EnumTextMaps.NotificationEventText));
             e.HasOne<Player>().WithMany().HasForeignKey(p => p.PlayerId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<NotificationDelivery>(e =>
+        {
+            e.ToTable("notification_deliveries");
+            e.HasKey(d => new { d.PlayerId, d.Event });
+            e.Property(d => d.Event)
+                .HasConversion(new EnumTextConverter<NotificationEvent>(EnumTextMaps.NotificationEventText));
+            e.HasOne<Player>().WithMany().HasForeignKey(d => d.PlayerId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

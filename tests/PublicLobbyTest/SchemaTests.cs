@@ -36,6 +36,7 @@ static partial class Suite
         "data_protection_keys",
         "push_subscriptions",
         "notification_preferences",
+        "notification_deliveries",
     ];
 
     static async Task RunSchemaTestsAsync()

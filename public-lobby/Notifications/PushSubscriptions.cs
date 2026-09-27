@@ -224,20 +224,24 @@ public sealed class PushSubscriptions(IDbContextFactory<LobbyDbContext> dbFactor
     }
 
     // Who a Notification Event reaches: every browser of every account whose effective choice for it
-    // is on, except the listed players (the match's own pilots) and accounts under a ban in force
-    // (mirrors Bans.InForce).
+    // is on, except the listed players (in the match, or otherwise in the game - see InGamePlayers),
+    // accounts under a ban in force (mirrors Bans.InForce), and accounts already sent this event within
+    // `cap` (the Notification Cap: at most one per account per window, whatever the number of matches).
     public async Task<IReadOnlyList<PushSubscription>> RecipientsAsync(
         NotificationEvent evt,
         IReadOnlyCollection<Guid> exceptPlayers,
-        DateTimeOffset now
+        DateTimeOffset now,
+        TimeSpan cap
     )
     {
+        var capStart = now - cap;
         await using var db = await dbFactory.CreateDbContextAsync();
         var candidates =
             from s in db.PushSubscriptions.AsNoTracking()
             join p in db.Players on s.PlayerId equals p.Id
             where !exceptPlayers.Contains(s.PlayerId)
             where p.BannedAt == null || (p.BanExpiresAt != null && p.BanExpiresAt <= now)
+            where !db.NotificationDeliveries.Any(d => d.PlayerId == s.PlayerId && d.Event == evt && d.LastSentAt > capStart)
             select s;
         // A missing preference row means the event's default, so only the rows that DIFFER from the
         // default matter: opt-outs for a default-on event, opt-ins for a default-off one.
@@ -249,5 +253,22 @@ public sealed class PushSubscriptions(IDbContextFactory<LobbyDbContext> dbFactor
                 db.NotificationPreferences.Any(n => n.PlayerId == s.PlayerId && n.Event == evt && n.Enabled)
             );
         return await candidates.ToListAsync();
+    }
+
+    // These accounts were just sent `evt` (at least one of their browsers took it): starts their cap.
+    public async Task RecordDeliveredAsync(IReadOnlyCollection<Guid> playerIds, NotificationEvent evt, DateTimeOffset at)
+    {
+        if (playerIds.Count == 0)
+            return;
+        Guid[] ids = [.. playerIds.Distinct()];
+        var key = NotificationEvents.Key(evt);
+        await using var db = await dbFactory.CreateDbContextAsync();
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            INSERT INTO notification_deliveries (player_id, event, last_sent_at)
+            SELECT id, {key}, {at} FROM unnest({ids}) AS id
+            ON CONFLICT (player_id, event) DO UPDATE SET last_sent_at = excluded.last_sent_at
+            """
+        );
     }
 }
