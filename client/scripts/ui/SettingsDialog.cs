@@ -227,6 +227,16 @@ public partial class SettingsDialog : Control
         AddTab(rail, host, "AUDIO", BuildAudioPage());
         AddTab(rail, host, "CONTROLS", BuildControlsPage());
         AddTab(rail, host, "PILOT", BuildPilotPage());
+
+        // Which build this is, pinned to the foot of the rail — the one place a player can read it off
+        // for a bug report. Inset to line up with the tab titles.
+        rail.AddChild(new Control { SizeFlagsVertical = SizeFlags.ExpandFill });
+        var build = UiKit.MakeLabel(BuildInfo.Display, UiKit.TextStyle.Data, DesignTokens.TextDim);
+        build.AddThemeFontSizeOverride("font_size", DesignTokens.CaptionSize);
+        var inset = new MarginContainer();
+        inset.AddThemeConstantOverride("margin_left", 14);
+        inset.AddChild(build);
+        rail.AddChild(inset);
     }
 
     private void AddTab(VBoxContainer rail, VBoxContainer host, string title, Control page)

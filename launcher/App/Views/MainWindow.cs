@@ -437,9 +437,15 @@ public sealed class MainWindow : Window
         );
         rows.Children.Add(folders);
 
+        // Which build this is (the footer's line), beside CLOSE.
+        var build = Sa.Text(_view.Footer, TextStyle.Data, DesignTokens.TextDim, DesignTokens.CaptionSize);
+        build.VerticalAlignment = VerticalAlignment.Center;
         var close = Button("CLOSE", ButtonVariant.Primary, () => ShowSettings(false));
-        close.HorizontalAlignment = HorizontalAlignment.Right;
-        rows.Children.Add(close);
+        var bottom = new DockPanel();
+        DockPanel.SetDock(close, Dock.Right);
+        bottom.Children.Add(close);
+        bottom.Children.Add(build);
+        rows.Children.Add(bottom);
 
         var panel = new BracketPanel
         {

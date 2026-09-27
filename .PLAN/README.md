@@ -297,9 +297,9 @@ is the cheapest possible moment to lock the baseline in.
 
 Not stage-bound — done when convenient or when a stage needs them.
 
-- ☐ **[XS] The client never shows its own version** — `BuildInfo.Version` is referenced in exactly one
-  place, `UpdateChecker.cs:44-45`, purely to compare against the feed. On an auto-updating fleet a
-  player cannot tell which build they are on or put one in a bug report.
+- ✅ **[XS] The client shows its own version** (2026-09-27) — `BuildInfo.Display` ("v0.0.15 ·
+  osx-arm64" / "DEV BUILD · …") sits at the foot of the in-game settings dialog's tab rail; the
+  launcher's settings overlay repeats its footer line beside CLOSE.
 - ☐ **[XS] The repo is PUBLIC with no LICENSE** — `gh repo view` reports `licenseInfo: null` and there
   is no `LICENSE*` file, while the project ships public binaries. Also the gate on any decision about
   redistributing sourced audio assets.

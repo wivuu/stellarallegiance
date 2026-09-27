@@ -41,7 +41,7 @@ public static class UpdateChecker
     // a build run from source can be shown the update row (verification, UI work).
     public static string? ThisBuildVersion()
     {
-        if (!BuildInfo.Version.Contains("dev", StringComparison.OrdinalIgnoreCase))
+        if (!BuildInfo.IsDev)
             return BuildInfo.Version;
         var fromEnv = System.Environment.GetEnvironmentVariable("SA_BUILD_VERSION");
         return string.IsNullOrWhiteSpace(fromEnv) ? null : fromEnv.Trim();
