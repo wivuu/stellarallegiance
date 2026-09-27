@@ -145,6 +145,10 @@ public partial class ConnectionManager : Node
         // standalone --ui-showcase keeps the cursor. Why it must be handed back: UiCursor.Clear.
         GetTree().Root.TreeExiting += UiCursor.Clear;
 
+        // Saved window mode / vsync / frame cap / render + UI scale, before the first frame draws.
+        // Headless and harness runs keep the project window (UserPrefs.IsPlayerLaunch).
+        UserPrefs.ApplyDisplayPrefs();
+
         // Window close (and macOS Cmd+Q) no longer kills the process outright — it raises
         // NotificationWMCloseRequest instead, which routes through QuitGracefully so the MsgBye
         // gets flushed to the server before we exit. Explicit GetTree().Quit() calls (--ui-shot,

@@ -862,8 +862,10 @@ public partial class ShipController : Node
     // mouse-transparent, and must leave flight input exactly as it was.
     public override void _Input(InputEvent @event)
     {
+        // ScreenRelative, not Relative: Relative is divided by the UI scale (ContentScaleFactor), which
+        // would make mouse-look slower the bigger the HUD is set.
         if (@event is InputEventMouseMotion mm && Input.MouseMode == Input.MouseModeEnum.Captured)
-            _mouseDelta += mm.Relative;
+            _mouseDelta += mm.ScreenRelative;
 
         if (
             _autoFly

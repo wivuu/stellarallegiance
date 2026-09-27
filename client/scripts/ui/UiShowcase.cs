@@ -84,7 +84,7 @@ public partial class UiShowcase : Control
             if (openModal == "settings")
                 SettingsDialog.Open(this);
             else if (openModal == "controls")
-                SettingsDialog.Open(this, 1); // CONTROLS tab — for verifying the rebind list
+                SettingsDialog.Open(this, 2); // CONTROLS tab — for verifying the rebind list
             else if (openModal == "escape")
                 EscapeMenu.Open(this, EscapeMenu.Context.Browser);
             else if (openModal == "password")

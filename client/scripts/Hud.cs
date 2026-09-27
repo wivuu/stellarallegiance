@@ -257,10 +257,12 @@ public partial class Hud : CanvasLayer
 
     // `--ui-shot=<path>` (without --ui-showcase) screenshots the live game UI after a short
     // settle and quits — used to verify the migrated screens render with the design system.
-    // `--ui-open=scoreboard-live|scoreboard-post|target|target-base|target-rock|target-he3` raises that
+    // `--ui-open=scoreboard-live|scoreboard-post|target|target-base|target-rock|target-he3|settings` raises that
     // overlay just before the shot, the way the showcase's own --ui-open does for its modals: overlays
     // behind a hotkey can't otherwise be captured, and the scoreboard's two modes are the ones with no
     // other way in. The target-* forms Tab-focus the nearest ship / base / rock / He3 rock for the pane.
+    // `--ui-open=settings` opens the settings dialog; with SA_DISPLAY_PREFS=1 the shot runs at the saved
+    // UI scale (harness runs otherwise skip the display prefs — UserPrefs.ApplyDisplayPrefs).
     // `--ui-quit=graceful` leaves the way a PLAYER does — ConnectionManager.QuitGracefully (MsgBye, the
     // drain, then the quit) instead of the bare Quit() below. That is the only unattended way to run the
     // real exit path while connected, which is where the exit bugs have lived.
@@ -300,6 +302,8 @@ public partial class Hud : CanvasLayer
                 FocusNearestBaseForShot();
             else if (openOverlay is "target-rock" or "target-he3")
                 FocusNearestRockForShot(he3Only: openOverlay == "target-he3");
+            else if (openOverlay == "settings")
+                SettingsDialog.Open(this); // over the live screen — with SA_DISPLAY_PREFS=1, at the saved UI scale
             // One more frame so the overlay lays out before the grab.
             var shot = GetTree().CreateTimer(0.2);
             shot.Timeout += () =>

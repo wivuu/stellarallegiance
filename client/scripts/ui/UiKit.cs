@@ -59,9 +59,10 @@ public static class UiKit
 
     // "<label>  [====slider====]  NN%" — writes through onChanged live; the optional mono
     // readout shows the value as a percentage of its range (matching the spec), or via a
-    // custom formatter when one is supplied (e.g. "1.25×" for a multiplier).
+    // custom formatter when one is supplied (e.g. "1.25×" for a multiplier). A null label leaves the
+    // title to the caller's own layout (the settings VIDEO tab's label column).
     public static HBoxContainer MakeSliderRow(
-        string label,
+        string? label,
         double min,
         double max,
         double step,
@@ -73,7 +74,8 @@ public static class UiKit
     {
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 10);
-        row.AddChild(MakeLabel(label, TextStyle.Label).With(l => l.CustomMinimumSize = new Vector2(80, 0)));
+        if (label != null)
+            row.AddChild(MakeLabel(label, TextStyle.Label).With(l => l.CustomMinimumSize = new Vector2(80, 0)));
 
         var slider = new HSlider
         {
@@ -122,28 +124,20 @@ public static class UiKit
     }
 
     // A segmented control: one button per option, the active one rendered Primary.
-    public static HBoxContainer MakeSegmented(string[] options, int selected, Action<int>? onSelect)
+    public static SegmentedRow MakeSegmented(string[] options, int selected, Action<int>? onSelect)
     {
-        var row = new HBoxContainer();
+        var row = new SegmentedRow();
         row.AddThemeConstantOverride("separation", 2);
-        var buttons = new ChamferButton[options.Length];
         for (int i = 0; i < options.Length; i++)
         {
             int idx = i;
             var b = MakeButton(options[i], null, i == selected ? ButtonVariant.Primary : ButtonVariant.Secondary);
             b.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-            b.Pressed += () =>
-            {
-                for (int j = 0; j < buttons.Length; j++)
-                {
-                    buttons[j].Variant = j == idx ? ButtonVariant.Primary : ButtonVariant.Secondary;
-                    buttons[j].QueueRedraw();
-                }
-                onSelect?.Invoke(idx);
-            };
-            buttons[i] = b;
+            b.Pressed += () => row.Select(idx);
+            row.Buttons.Add(b);
             row.AddChild(b);
         }
+        row.OnSelect = onSelect;
         return row;
     }
 
@@ -219,5 +213,23 @@ public static class UiKit
     {
         double f = max > min ? (v - min) / (max - min) : 0;
         return $"{Mathf.RoundToInt((float)(f * 100))}%";
+    }
+}
+
+// UiKit.MakeSegmented's row. Select restyles the buttons and fires OnSelect exactly as a click does
+// (minus the click sound), so code can drive it too: the settings dialog's RESTORE DEFAULTS.
+public partial class SegmentedRow : HBoxContainer
+{
+    public readonly System.Collections.Generic.List<ChamferButton> Buttons = new();
+    public Action<int>? OnSelect;
+
+    public void Select(int idx)
+    {
+        for (int j = 0; j < Buttons.Count; j++)
+        {
+            Buttons[j].Variant = j == idx ? ButtonVariant.Primary : ButtonVariant.Secondary;
+            Buttons[j].QueueRedraw();
+        }
+        OnSelect?.Invoke(idx);
     }
 }

@@ -59,6 +59,11 @@ Condensed outcomes. Each line names where the detail now lives.
   target the *hosted* lobby.
 - ✅ **[S] Spatial audio, first pass** — `SfxManager`, collision thuds (asteroids and bases, client-side
   interception against the shared convex hulls), per-bus volume sliders persisted via `UserPrefs`.
+- ✅ **[M] Settings VIDEO tab** (2026-09-27, issue #96). Window mode (windowed / borderless / exclusive
+  fullscreen), vsync, max FPS, 3D render scale (FSR 1.0 below 100%) and UI scale (root
+  `ContentScaleFactor`, AUTO against the 1440p design reference, capped to a 1920×1080 logical canvas),
+  persisted in `settings.cfg [display]` and restored at boot on player launches only (harness runs keep
+  the project window; `SA_DISPLAY_PREFS=1` forces). Detail: [`GLOSSARY.md` → *Display Prefs*](../GLOSSARY.md).
 - ✅ **[L] Distribution — installer, auto-update, release pipeline** (2026-09-19 → 2026-09-21, PRs #85,
   #89, #90, #92, #93; shipped through **v0.0.15**). A themed Avalonia launcher (`launcher/`) is the
   Velopack main executable on macOS, Windows and Linux — installer, delta updates from GitHub Releases,
@@ -292,19 +297,6 @@ is the cheapest possible moment to lock the baseline in.
 
 Not stage-bound — done when convenient or when a stage needs them.
 
-- ☐ **[M] There are no display settings at all** — `SettingsDialog` registers exactly three tabs:
-  `AUDIO`, `CONTROLS`, `PILOT` (`SettingsDialog.cs:201-203`). There is no VIDEO tab, and the client
-  makes no display calls of any kind — the only `DisplayServer.*` call in all 144 client files is
-  `SignInDialog.cs:154 ClipboardSet`. `client/project.godot`'s `[display]` section is two lines
-  (`viewport_width=2560`, `viewport_height=1440`): no window mode, no stretch mode, no resizable flag,
-  and `UserPrefs` has no display section. So on Windows and Linux there is **no in-product way to go
-  fullscreen or borderless**, no resolution or render-scale control for a GPU that cannot drive
-  2560×1440, and — because Godot's default stretch mode is `disabled` — the HUD lays out in raw
-  viewport pixels and is physically tiny on a 4K panel with no UI-scale slider. Wanted: a VIDEO tab
-  (window mode / resolution or render scale / vsync / UI scale) persisted in a `[display]` section of
-  `settings.cfg` and applied at boot. Copy the live-write-through + snapshot-revert shape from
-  `BuildAudioPage`, and guard every `DisplayServer` call so `--headless` (UiShowcase, `--ui-shot`)
-  never touches window mode.
 - ☐ **[XS] The client never shows its own version** — `BuildInfo.Version` is referenced in exactly one
   place, `UpdateChecker.cs:44-45`, purely to compare against the feed. On an auto-updating fleet a
   player cannot tell which build they are on or put one in a bug report.

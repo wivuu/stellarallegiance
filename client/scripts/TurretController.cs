@@ -242,11 +242,12 @@ public partial class TurretController : Node
     }
 
     // Raw motion only while the cursor is captured — a visible cursor means a menu owns it, and a
-    // gunner nudging a button must not swing the gun.
+    // gunner nudging a button must not swing the gun. ScreenRelative (physical pixels), not Relative:
+    // aim is tuned in degrees per pixel, and Relative shrinks with the UI scale.
     public override void _Input(InputEvent @event)
     {
         if (@event is InputEventMouseMotion mm && Input.MouseMode == Input.MouseModeEnum.Captured)
-            _mouseDelta += mm.Relative;
+            _mouseDelta += mm.ScreenRelative;
     }
 
     public override void _Process(double delta)

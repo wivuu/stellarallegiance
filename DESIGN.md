@@ -60,7 +60,8 @@ subclasses** for anything needing custom `_Draw` or per-frame state.
   `Disabled`; optional `AccentOverride` for faction-colored buttons). Bakes in the UI click SFX
   and hover glow. Use `UiKit.MakeButton(text, onPressed, variant)`.
 - **Controls** (`UiKit`) — `MakeSliderRow`, `MakeToggle`, `MakeCheckbox`, `MakeSegmented`,
-  `MakeStepper`, `MakeSelect`.
+  `MakeStepper`, `MakeSelect`. `MakeSegmented` returns a `SegmentedRow` whose `Select(idx)` drives it
+  from code (restyle + callback, no click sound), e.g. the settings dialog's RESTORE DEFAULTS.
 - **KeybindRow** — a rebindable-control row (action label + binding button that captures a new
   key/mouse/gamepad event) for the settings CONTROLS tab; reads/writes via `InputBindings`.
 - **Surfaces** — `BracketPanel` (corner brackets, high-priority frames), `HairlinePanel`
@@ -157,6 +158,10 @@ subclasses** for anything needing custom `_Draw` or per-frame state.
 - **Custom-draw nodes read fonts from `UiFonts`** (not the cascaded Theme) so they render
   standalone and survive a cold import cache.
 - **Per-frame redraw discipline:** call `QueueRedraw()` only on change in gauges/bars/button-glow.
+- **UI scale** (settings VIDEO tab) is the root window's `ContentScaleFactor`, capped so the logical
+  canvas never drops below **1920×1080** — lay screens out to fit that. Size and position from
+  `GetViewportRect()` / `GetVisibleRect()` (logical), never `GetWindow().Size` (physical pixels), and
+  read captured-mouse aim from `ScreenRelative`, not `Relative`. See GLOSSARY "Display Prefs".
 - **Fonts need import:** `.import` sidecars are gitignored (same convention as the GLBs); run
   `godot --headless --import` after pulling new fonts. `UiFonts` falls back to the engine font if
   the import cache is cold.

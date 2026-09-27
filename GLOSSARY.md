@@ -1098,6 +1098,16 @@ Overlay layer manager: manages z-order for menus, dialogs, settings.
 - **Related:** [[UI Components]], [[DesignTokens]]
 - **Notes:** Layer 200 for modals; SettingsDialog uses live write-through + snapshot revert
 
+### Display Prefs (UI Scale / Render Scale)
+The settings VIDEO tab's `[display]` section of `settings.cfg`: window mode (windowed / borderless = Godot `Fullscreen` / fullscreen = `ExclusiveFullscreen`), vsync, max FPS (`Engine.MaxFps`), **render scale** (the root viewport's `Scaling3DScale`, FSR 1.0 below 100% — the GPU-cost lever, since Godot never changes the display's video mode), and **UI scale** (the root's `ContentScaleFactor`; stretch mode stays `disabled`). UI scale AUTO = window height / 1440 in 25% steps, never below 100%; any pick is capped so the logical canvas stays ≥ 1920×1080, and re-resolved on every root `SizeChanged`.
+- **Frequency:** Occasional
+- **Key Files:**
+  - `client/scripts/UserPrefs.cs` — the prefs, `ApplyDisplayPrefs` (boot), `IsPlayerLaunch` (harness guard), UI-scale cap/AUTO math
+  - `client/scripts/ui/SettingsDialog.cs` — `BuildVideoPage`
+  - `client/scripts/ConnectionManager.cs` — boot call in `_Ready`
+- **Related:** [[ModalHost]], [[UserPrefs]]
+- **Notes:** Boot apply runs only on a PLAYER launch (no args beyond `--host`/`--lobby`/`--join-listing`/`--anonymous`, nothing after `--`, no `--write-movie`) and never headless, so harness captures keep the project window; `SA_DISPLAY_PREFS=1` opts a harness run back in. Captured-mouse aim reads `InputEventMouseMotion.ScreenRelative` — `Relative` shrinks with the UI scale.
+
 ### Theme
 Per-overlay Godot UI theme application; not global.
 - **Frequency:** Common

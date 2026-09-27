@@ -6,16 +6,17 @@ namespace StellarAllegiance.Ui;
 
 // The settings modal (the Claude Design "CONFIGURATION / SETTINGS" mockup): dim scrim,
 // centred 1080×840 bracket panel, header with an ✕ close, a left tab rail
-// (AUDIO / CONTROLS / PILOT) beside the scrollable content, and a footer bar with
+// (VIDEO / AUDIO / CONTROLS / PILOT) beside the scrollable content, and a footer bar with
 // RESTORE DEFAULTS · CANCEL · DONE. Opened from the screen gears, the escape menu, or the
 // showcase; it mounts last on ModalHost's shared layer, so it draws and receives input
 // above any EscapeMenu still open underneath.
 //
 // Apply semantics: every control writes through to UserPrefs IMMEDIATELY (volume drags are
 // audible live, sensitivity is feelable), and a snapshot taken on open makes it revertable —
-// CANCEL / ✕ / Esc re-apply the snapshot through the same setters. DONE just commits the
-// pending callsign text and closes. RESTORE DEFAULTS resets audio + controls (never the
-// callsign) and stays revertable by CANCEL, whose snapshot predates it.
+// CANCEL / ✕ / Esc re-apply the snapshot through the same setters (display values only where they
+// changed — a fullscreen transition is slow and visible). DONE just commits the pending callsign
+// text and closes. RESTORE DEFAULTS resets video + audio + controls (never the callsign) and stays
+// revertable by CANCEL, whose snapshot predates it.
 public partial class SettingsDialog : Control
 {
     public static bool Active { get; private set; }
@@ -27,10 +28,16 @@ public partial class SettingsDialog : Control
         ModalHost.Ensure(context).AddChild(new SettingsDialog { _startTab = startTab });
     }
 
-    // Which tab (0 AUDIO / 1 CONTROLS / 2 PILOT) to show on open; set by Open before _Ready.
+    // Which tab (0 VIDEO / 1 AUDIO / 2 CONTROLS / 3 PILOT) to show on open; set by Open before _Ready.
     private int _startTab;
 
-    // Snapshot taken on open — what CANCEL reverts to.
+    // Snapshot taken on open — what CANCEL reverts to. The window mode is the LIVE one, not the pref
+    // (see UserPrefs.CurrentDisplayMode).
+    private UserPrefs.DisplayMode _modeSnapshot;
+    private UserPrefs.VsyncMode _vsyncSnapshot;
+    private int _fpsSnapshot;
+    private float _renderSnapshot;
+    private float _uiScaleSnapshot;
     private readonly Dictionary<string, float> _busSnapshot = new();
     private float _sensSnapshot;
     private bool _invertSnapshot;
@@ -38,6 +45,12 @@ public partial class SettingsDialog : Control
 
     // Live control refs so RESTORE DEFAULTS can drive what's on screen (their change
     // handlers write through to UserPrefs, so control state and prefs never diverge).
+    private SegmentedRow _modeRow = null!;
+    private SegmentedRow _vsyncRow = null!;
+    private SegmentedRow _fpsRow = null!;
+    private HSlider _renderSlider = null!;
+    private SegmentedRow _uiScaleRow = null!;
+    private Label _uiScaleNote = null!;
     private readonly Dictionary<string, HSlider> _busSliders = new();
     private HSlider _sensSlider = null!;
     private CheckButton _invert = null!;
@@ -55,10 +68,19 @@ public partial class SettingsDialog : Control
 
     public override void _EnterTree() => Active = true;
 
-    public override void _ExitTree() => Active = false;
+    public override void _ExitTree()
+    {
+        Active = false;
+        GetTree().Root.SizeChanged -= RefreshUiScaleNote;
+    }
 
     public override void _Ready()
     {
+        _modeSnapshot = UserPrefs.CurrentDisplayMode;
+        _vsyncSnapshot = UserPrefs.Vsync;
+        _fpsSnapshot = UserPrefs.MaxFps;
+        _renderSnapshot = UserPrefs.RenderScale;
+        _uiScaleSnapshot = UserPrefs.UiScale;
         foreach (string bus in UserPrefs.AudioBuses)
             _busSnapshot[bus] = UserPrefs.GetBusVolume(bus);
         _sensSnapshot = UserPrefs.MouseSensMultiplier;
@@ -67,6 +89,9 @@ public partial class SettingsDialog : Control
         _bindSnapshot = InputBindings.SnapshotOverrides();
 
         BuildUi();
+        // A window resize / mode switch re-resolves the applied UI scale (AUTO, the cap) — keep the
+        // VIDEO tab's caption honest. Unhooked in _ExitTree.
+        GetTree().Root.SizeChanged += RefreshUiScaleNote;
         SfxManager.Instance?.PlayUi(SfxManager.SfxId.MenuOpen);
     }
 
@@ -198,6 +223,7 @@ public partial class SettingsDialog : Control
         var host = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         pad.AddChild(host);
 
+        AddTab(rail, host, "VIDEO", BuildVideoPage());
         AddTab(rail, host, "AUDIO", BuildAudioPage());
         AddTab(rail, host, "CONTROLS", BuildControlsPage());
         AddTab(rail, host, "PILOT", BuildPilotPage());
@@ -244,6 +270,109 @@ public partial class SettingsDialog : Control
     }
 
     // ---- Tab pages -----------------------------------------------------------
+
+    private Control BuildVideoPage()
+    {
+        var page = MakePage();
+
+        // Two-column grid (title + dim sub-caption | control) so every control lines up behind the
+        // widest title.
+        var grid = new GridContainer { Columns = 2, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        grid.AddThemeConstantOverride("h_separation", 24);
+        grid.AddThemeConstantOverride("v_separation", 20);
+        page.AddChild(grid);
+
+        _modeRow = MakeVideoSegmented(
+            ["WINDOWED", "BORDERLESS", "FULLSCREEN"],
+            (int)UserPrefs.CurrentDisplayMode,
+            i => UserPrefs.SetDisplayMode((UserPrefs.DisplayMode)i)
+        );
+        AddVideoRow(grid, "WINDOW MODE", MakeSubCaption("desktop resolution"), _modeRow);
+
+        _vsyncRow = MakeVideoSegmented(
+            ["OFF", "ON", "ADAPTIVE"],
+            (int)UserPrefs.Vsync,
+            i => UserPrefs.SetVsync((UserPrefs.VsyncMode)i)
+        );
+        AddVideoRow(grid, "VSYNC", MakeSubCaption("sync to the display"), _vsyncRow);
+
+        _fpsRow = MakeVideoSegmented(
+            Array.ConvertAll(UserPrefs.MaxFpsOptions, f => f == 0 ? "OFF" : f.ToString()),
+            Array.IndexOf(UserPrefs.MaxFpsOptions, UserPrefs.MaxFps),
+            i => UserPrefs.SetMaxFps(UserPrefs.MaxFpsOptions[i])
+        );
+        AddVideoRow(grid, "MAX FPS", MakeSubCaption("GPU cap with vsync off"), _fpsRow);
+
+        // Percent units so the slider steps land on whole 5% values.
+        var renderRow = UiKit.MakeSliderRow(
+            null,
+            UserPrefs.MinRenderScale * 100,
+            100,
+            5,
+            UserPrefs.RenderScale * 100,
+            v => UserPrefs.SetRenderScale((float)v / 100f),
+            readout: true,
+            format: v => $"{v:0}%"
+        );
+        _renderSlider = FindSlider(renderRow);
+        AddVideoRow(grid, "RENDER SCALE", MakeSubCaption("3D only · UI stays sharp"), renderRow);
+
+        // Discrete steps, not a slider: rescaling the UI mid-drag would move the slider under the cursor.
+        _uiScaleRow = MakeVideoSegmented(
+            Array.ConvertAll(UserPrefs.UiScaleOptions, s => s <= 0f ? "AUTO" : Pct(s)),
+            Array.FindIndex(UserPrefs.UiScaleOptions, s => Mathf.IsEqualApprox(s, UserPrefs.UiScale)),
+            i =>
+            {
+                UserPrefs.SetUiScale(UserPrefs.UiScaleOptions[i]);
+                RefreshUiScaleNote(); // the caption depends on the pick even when the applied scale holds
+            }
+        );
+        _uiScaleNote = MakeSubCaption("");
+        AddVideoRow(grid, "UI SCALE", _uiScaleNote, _uiScaleRow);
+        RefreshUiScaleNote();
+
+        return page;
+    }
+
+    // MakeSegmented with a caption-width floor: the stock 130px button would push five or six
+    // options past the panel.
+    private static SegmentedRow MakeVideoSegmented(string[] options, int selected, Action<int> onSelect)
+    {
+        var row = UiKit.MakeSegmented(options, selected, onSelect);
+        foreach (var b in row.Buttons)
+            b.CustomMinimumSize = new Vector2(0, 38);
+        return row;
+    }
+
+    private static Label MakeSubCaption(string text) => UiKit.MakeLabel(text, UiKit.TextStyle.Data, DesignTokens.TextDim);
+
+    private static void AddVideoRow(GridContainer grid, string title, Label sub, Control control)
+    {
+        var text = new VBoxContainer { SizeFlagsVertical = SizeFlags.ShrinkCenter };
+        text.AddThemeConstantOverride("separation", 1);
+        text.AddChild(UiKit.MakeLabel(title, UiKit.TextStyle.Label, DesignTokens.TextHi));
+        text.AddChild(sub);
+        grid.AddChild(text);
+        control.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        control.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+        grid.AddChild(control);
+    }
+
+    // What the UI scale resolved to: AUTO's pick for this window, or the cap when the window is too
+    // small for the chosen scale (UserPrefs.UiScaleCap).
+    private void RefreshUiScaleNote()
+    {
+        float pref = UserPrefs.UiScale;
+        float applied = UserPrefs.AppliedUiScale;
+        bool capped = pref > 0f && applied < pref - 0.001f;
+        _uiScaleNote.Text =
+            pref <= 0f ? $"auto · {Pct(applied)} for this window"
+            : capped ? $"window caps it at {Pct(applied)}"
+            : "menus and HUD";
+        _uiScaleNote.AddThemeColorOverride("font_color", capped ? DesignTokens.Warn : DesignTokens.TextDim);
+    }
+
+    private static string Pct(float scale) => $"{scale * 100f:0}%";
 
     private Control BuildAudioPage()
     {
@@ -423,6 +552,18 @@ public partial class SettingsDialog : Control
             return;
         _capturingRow?.SetCapturing(false);
         _capturingRow = null;
+        // Display values revert only where they changed: re-asserting an untouched window mode would
+        // yank the window out of a fullscreen the OS entered on its own (macOS's green button).
+        if (UserPrefs.CurrentDisplayMode != _modeSnapshot)
+            UserPrefs.SetDisplayMode(_modeSnapshot);
+        if (UserPrefs.Vsync != _vsyncSnapshot)
+            UserPrefs.SetVsync(_vsyncSnapshot);
+        if (UserPrefs.MaxFps != _fpsSnapshot)
+            UserPrefs.SetMaxFps(_fpsSnapshot);
+        if (!Mathf.IsEqualApprox(UserPrefs.RenderScale, _renderSnapshot))
+            UserPrefs.SetRenderScale(_renderSnapshot);
+        if (!Mathf.IsEqualApprox(UserPrefs.UiScale, _uiScaleSnapshot))
+            UserPrefs.SetUiScale(_uiScaleSnapshot);
         foreach (var (bus, v) in _busSnapshot)
             UserPrefs.SetBusVolume(bus, v);
         UserPrefs.SetMouseSensMultiplier(_sensSnapshot);
@@ -437,6 +578,11 @@ public partial class SettingsDialog : Control
     // callsign alone, and CANCEL still reverts this — the snapshot predates it.
     private void RestoreDefaults()
     {
+        _modeRow.Select((int)UserPrefs.DefaultDisplayMode);
+        _vsyncRow.Select((int)UserPrefs.DefaultVsync);
+        _fpsRow.Select(Array.IndexOf(UserPrefs.MaxFpsOptions, UserPrefs.DefaultMaxFps));
+        _renderSlider.Value = UserPrefs.DefaultRenderScale * 100;
+        _uiScaleRow.Select(Array.IndexOf(UserPrefs.UiScaleOptions, UserPrefs.DefaultUiScale));
         foreach (string bus in UserPrefs.AudioBuses)
             _busSliders[bus].Value = UserPrefs.DefaultBusVolume(bus);
         _sensSlider.Value = UserPrefs.DefaultMouseSensMultiplier;
