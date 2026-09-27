@@ -38,7 +38,7 @@ public interface IPlayerGrain : IGrainWithGuidKey
     /// </summary>
     Task<bool> Delete(PlayerDeleteMode mode, DateTimeOffset now);
 
-    /// <summary>Change the display name (plan §1.1: 3–24 chars, unique case-insensitively).</summary>
+    /// <summary>Change the display name (plan §1.1: 3-24 chars, unique case-insensitively).</summary>
     Task<RenameOutcome> Rename(string newDisplayName);
 
     /// <summary>
