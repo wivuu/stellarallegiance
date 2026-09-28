@@ -107,9 +107,10 @@ subclasses** for anything needing custom `_Draw` or per-frame state.
   once the pool is critically low; under FUEL, the fuel-pod reserve (`+N`) or its own `LOAD nn%` sweep
   while a pod is loading. `CLK nn%` sits centred below the ring (only with a cloak equipped),
   `TeamAccent`, pulsing while engaged or still ramping down, `Danger` when the feeding energy pool is
-  starved. A crew gunner reads the ring the same way, centred on the turret aim, over the RIDDEN hull —
-  own-hull-only extras (the pod reserve/LOAD, the ammo-pack LOAD) stay pilot-only, since a gunner has
-  no way to predict either loader on a hull that isn't theirs to fly. `SystemRing.RingReadout` +
+  starved. A crew gunner reads the ring the same way, centred on the turret aim, over the RIDDEN hull.
+  The ammo-pack LOAD shows there too, off the ridden hull's row (`ShipPools.AmmoLoadLeft`, stepped at
+  the row rate rather than predicted); the fuel-pod reserve/LOAD stays pilot-only, since nothing streams
+  that loader for a hull that isn't the gunner's to fly. `SystemRing.RingReadout` +
   `SetMock(readout)` render it standalone in the gallery (see 06 — GAME ELEMENTS).
 - **Weapons panel** (`WeaponsPanel`) — the bottom-right "◀ WEAPONS" readout. Per-gun state now reads
   the resource gate ahead of cadence: `NO ENRG` / `NO AMMO` (`Danger`) or `LOADING` (`Warn`) whenever a

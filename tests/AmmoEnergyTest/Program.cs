@@ -23,7 +23,7 @@
 //   5. Dock refill: a drained ship flies home on autopilot, docks, and relaunches with full pools.
 //   6. PIG rearm: a dry drone flies home and DOCKS (GoneClean), and its slot relaunches a fresh drone
 //      with a full magazine; controls: a drone with ammo, and a dry one with AmmoEnabled off, never go
-//      home.
+//      home. A docked BOMBER's slot waits out the bomber relaunch cooldown like a lost one.
 //   7. The derivation invariant (the remote-bolt contract): replaying a ship record's Pools through
 //      the shared fire gate + a cadence shadow at every row with LastFireTick == LastInputTick
 //      reproduces MountLastFire EXACTLY — including ticks where one mount fired and a later one was
@@ -595,6 +595,69 @@ Simulation.ShipSim WaitForPig(Simulation sim)
         !off.docked && off.pig.Alive,
         $"control: with AmmoEnabled off a dry drone never goes home ({control} ticks)",
         $"a drone rearmed with AmmoEnabled off (after {off.ticks} ticks)"
+    );
+}
+
+// The bomber slot keeps its relaunch cooldown across a rearm dock: docking must never relaunch a
+// bomber sooner than losing it would (world.yaml ai.bomber-respawn-seconds). Only team-1 drones die
+// here, so team 0's squad stays fielded — the bomber slot relaunches only while its squad is up.
+{
+    var sim = BootSim(61, pigs: true);
+    Spawn(sim, 1, 0, ClassScout);
+    uint baseSector = sim.World.Bases.First(b => b.Team == 0).SectorId;
+    var bait = Spawn(sim, 99, 1, ClassScout, park: false);
+    bait.SectorId = baseSector;
+    bait.State.Pos = new Vec3(0f, 800f, 0f);
+    uint cooldown = (uint)MathF.Round(sim.Content.World.Ai.BomberRespawnSeconds * Simulation.TickHz);
+
+    void StepKillEnemies()
+    {
+        foreach (var x in sim.Ships)
+            if (x.IsPig && x.Team == 1)
+                x.Health = 0f;
+        sim.Step();
+    }
+    Simulation.ShipSim? LiveBomber() =>
+        sim.Ships.FirstOrDefault(x => x.IsPig && !x.IsPod && x.Team == 0 && x.Class == FlightModel.ClassBomber && x.Alive);
+
+    var bomber = LiveBomber();
+    for (int i = 0; i < 400 && bomber is null; i++)
+    {
+        StepKillEnemies();
+        bomber = LiveBomber();
+    }
+    sim.EnqueueLeave(99);
+    bool docked = false;
+    int dockTicks = 0;
+    if (bomber is not null)
+    {
+        bomber.Pools.Ammo = 0;
+        bomber.Pools.AmmoPacks = 0;
+        bomber.MissileAmmo = 0;
+        for (; dockTicks < 3000 && !docked; dockTicks++)
+        {
+            StepKillEnemies();
+            foreach (var (id, reason) in sim.Events.Deaths)
+                if (id == bomber.ShipId)
+                    docked = reason == Simulation.GoneClean;
+        }
+    }
+    Check(
+        docked,
+        $"a dry PIG bomber flies home and docks ({dockTicks} ticks)",
+        $"the dry bomber never docked (spawned {bomber is not null}, alive {bomber?.Alive}, {dockTicks} ticks)"
+    );
+    int wait = 0;
+    Simulation.ShipSim? fresh = null;
+    for (; wait < cooldown + 200 && fresh is null && docked; wait++)
+    {
+        StepKillEnemies();
+        fresh = LiveBomber();
+    }
+    Check(
+        fresh is not null && wait >= cooldown,
+        $"its slot relaunches a fresh bomber only after the {cooldown}-tick bomber cooldown ({wait} ticks)",
+        $"bomber relaunch after {wait} ticks (cooldown {cooldown}, fresh {fresh?.ShipId})"
     );
 }
 

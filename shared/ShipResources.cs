@@ -29,7 +29,7 @@ namespace StellarAllegiance.Shared;
 // A ship's resource pools. ONE struct for every holder: the server ShipSim's live pools, the ship
 // record on the wire (ShipRecord.Pools = the pools the FIRE PHASE of LastInputTick started with, i.e.
 // after that tick's AmmoStep) and the owner's prediction ring. A record struct so a resync compares
-// two snapshots exactly (==). 9 bytes on the wire.
+// two snapshots exactly (==). 11 bytes on the wire.
 [WireRecord]
 public partial record struct ShipPools
 {
@@ -37,6 +37,13 @@ public partial record struct ShipPools
     public ushort Ammo; // the magazine every ammo gun (WeaponDef.AmmoPerShot) draws on
     public byte AmmoPacks; // ammo-pack charges left in the hold (packs × ChargesPerPack)
     public ushort Cloak; // cloak level 0..ShipResources.CloakFull — an integer ramp both peers step alike
+
+    // Ticks until the pending ammo-pack load lands (0 = nothing loading), as of the last AmmoStep —
+    // which alone writes it (loadEndTick − tick). It makes the load EXACT on the wire: a load a
+    // gunner's shots or a salvaged pack started, which the pilot's prediction never saw commit, is
+    // read straight off the row (loadEndTick = LastInputTick + AmmoLoadLeft). ContentValidator caps
+    // a pack's load at 1200 ticks, so a u16 always holds it.
+    public ushort AmmoLoadLeft;
 }
 
 // Everything the rule needs to know about ONE ship, resolved by each peer from identical inputs (the
@@ -141,12 +148,12 @@ public static class ShipResources
 
     // (a) AMMO STEP — the FIRST thing each tick, before the snapshot. `loadEndTick` is the tick the
     // pending pack load completes on (0 = nothing loading; tick 0 never runs a step, so 0 is a safe
-    // sentinel). It is per-ship state that never crosses the wire (FuelLoadEndTick precedent): each
-    // peer derives it from the same pools, because the commit below reads no input.
+    // sentinel), per-ship state beside the pools; it crosses the wire as p.AmmoLoadLeft, written here.
     //   1. A pending load whose end tick has arrived completes: Ammo = min(MaxAmmo, Ammo + AmmoPerCharge).
     //   2. Commit a new load when the magazine can't afford the cheapest ammo gun, a pack is aboard and
     //      nothing is loading: the charge is spent at once and its ammo arrives AmmoReloadTicks later
     //      (the ammo guns stay dry meanwhile); a 0-tick load completes in this same call.
+    //   3. p.AmmoLoadLeft = loadEndTick − tick (0 = none) — so the snapshot taken next carries the load.
     // INPUT-INDEPENDENT, so the pilot's client predicts it even while a gunner drains the magazine.
     // ammoEnabled false (the test kill-switch) never commits; a load already pending still completes.
     public static void AmmoStep(ref ShipPools p, ref uint loadEndTick, uint tick, in ShipResourceStats rs, bool ammoEnabled)
@@ -171,6 +178,9 @@ public static class ShipResources
             else
                 loadEndTick = tick + rs.AmmoReloadTicks;
         }
+        // A pending end is always ahead of `tick` here (a due one completed above).
+        uint left = loadEndTick == 0 ? 0u : loadEndTick - tick;
+        p.AmmoLoadLeft = (ushort)(left < ushort.MaxValue ? left : ushort.MaxValue);
     }
 
     private static void Refill(ref ShipPools p, in ShipResourceStats rs)

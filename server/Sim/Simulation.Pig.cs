@@ -481,18 +481,20 @@ public sealed partial class Simulation
         _toAdd.Add(pod);
     }
 
-    // Free the slot tracking a resolved PIG pod. respawnAtTick==tick+1 = immediate respawn
-    // (docked/rescued); ==0 = leave free to join the next squad wave (pod destroyed). A lost
-    // bomber instead waits out a relaunch cooldown so the team never fields two in quick succession.
-    private void FreePigPodSlot(ShipSim pod, uint respawnAtTick, uint tick)
+    // Free the slot tracking a resolved PIG ship (its pod, or a combat drone that docked to rearm).
+    // respawnAtTick==tick+1 = immediate respawn (docked/rescued); ==0 = leave free to join the next
+    // squad wave (pod destroyed). The bomber slot instead waits out a relaunch cooldown after a loss
+    // AND after a rearm dock (the bomber itself docking, not its pod), so the team never fields two
+    // in quick succession and a dock never relaunches a bomber sooner than losing it would.
+    private void FreePigPodSlot(ShipSim ship, uint respawnAtTick, uint tick)
     {
-        _pigDecisions.Remove(pod.ShipId);
+        _pigDecisions.Remove(ship.ShipId);
         foreach (var slot in _pigs)
-            if (ReferenceEquals(slot.Ship, pod))
+            if (ReferenceEquals(slot.Ship, ship))
             {
                 slot.Ship = null;
                 slot.RespawnAtTick =
-                    (slot.IsBomberSlot && respawnAtTick == 0) ? tick + PigBomberRespawnTicks : respawnAtTick;
+                    slot.IsBomberSlot && (respawnAtTick == 0 || !ship.IsPod) ? tick + PigBomberRespawnTicks : respawnAtTick;
                 slot.State = PigState.Idle;
                 slot.TargetShipId = null;
                 break;
@@ -689,9 +691,10 @@ public sealed partial class Simulation
     }
 
     // Goal: out of ammo — fly home and dock (PigKindRearm). DockShip frees the slot for an immediate
-    // relaunch, and the relaunched drone is a fresh hull with full pools, so the dock IS the rearm
-    // (Allegiance's sortie → dock → rearm rhythm, for drones). The commander order a drone was
-    // obeying is keyed by its ShipId, so it dies with the docked hull — the relaunch starts fresh.
+    // relaunch (the bomber slot: after its relaunch cooldown), and the relaunched drone is a fresh
+    // hull with full pools, so the dock IS the rearm (Allegiance's sortie → dock → rearm rhythm, for
+    // drones). The commander order a drone was obeying is keyed by its ShipId, so it dies with the
+    // docked hull — the relaunch starts fresh.
     // No friendly base it may dock at (all lost / unreachable): stay in the fight, dry.
     private PigPlan? TryRearm(in PigContext ctx)
     {

@@ -43,6 +43,7 @@ namespace StellarAllegiance.Shared
             // Cargo items a dispenser-kind weapon / a hull default-cargo entry can reference.
             var cargoIds = new HashSet<uint>();
             var cargoById = new Dictionary<uint, CargoItemDef>();
+            CargoItemDef? ammoLine = null;
             if (cargoItems is not null)
                 foreach (var c in cargoItems)
                 {
@@ -62,6 +63,18 @@ namespace StellarAllegiance.Shared
                         errors.Add(
                             $"cargo item {c.CargoId} (\"{c.Name}\") has ReloadTicks {c.ReloadTicks} (> 60 s) — check the authored load-time"
                         );
+                    // ONE ammo-pack line: every ammo line's charges pool into ShipPools.AmmoPacks, but
+                    // both peers load them at the FIRST line's AmmoPerCharge and load time
+                    // (Simulation._ammoPackItem / DefRegistry.AmmoCargoItem), so a second line would
+                    // silently load at the first one's numbers.
+                    if (c.AmmoPerCharge > 0)
+                    {
+                        if (ammoLine is not null)
+                            errors.Add(
+                                $"cargo item {c.CargoId} (\"{c.Name}\") is a second ammo-pack line (after {ammoLine.CargoId} \"{ammoLine.Name}\") — the resource rule loads one ammo pack kind"
+                            );
+                        ammoLine ??= c;
+                    }
                 }
 
             var weaponIds = new HashSet<uint>();

@@ -790,7 +790,7 @@ public sealed partial class Simulation
             if (c.AmmoPerCharge > 0)
             {
                 _ammoCargoIds.Add(c.CargoId); // ammo cargo — no dispenser WeaponDef either
-                _ammoPackItem ??= c; // THE ammo-pack line the resource rule loads from (first in list order)
+                _ammoPackItem ??= c; // THE ammo-pack line the resource rule loads from (ContentValidator: only one)
             }
         }
 
@@ -1615,8 +1615,11 @@ public sealed partial class Simulation
         s.Shield = ShieldsEnabled ? ShieldCapacityFor(s) : 0f; // full shield at spawn; relaunch = full recharge
         s.ShieldDamageTick = 0;
         s.MountWeaponIds = mountIds;
-        if (mountIds is not null || equipIds is not null)
-            Events.LoadoutsChanged = true; // MsgShipLoadout table gains a row this step
+        // EVERY spawn re-sends the MsgShipLoadout table this step, row or not: the spawn-tick frame is
+        // the owner's authoritative loadout echo, and a ship WITHOUT a row (its defaults, or a hangar
+        // pick ResolveLoadout just rejected) needs it as much — the omission is what corrects the
+        // owner's prediction (ShipRenderer's omission-race fix) before the coarse keepalive would.
+        Events.LoadoutsChanged = true;
 
         if (MissileMountFor(s) is (_, WeaponDef mw)) // full magazine at spawn (no rearm yet); an emptied rack seeds 0
             s.MissileAmmo = mw.MagazineSize;
@@ -1648,9 +1651,7 @@ public sealed partial class Simulation
             if (_crewByCaptain.TryGetValue(clientId, out var stale) && stale.ClassId != cls)
                 ClearCrewOf(clientId, "Your captain launched a different hull — the crew was dissolved.");
             _crewByCaptain.TryGetValue(clientId, out var crew);
-            s.TurretWeaponIds = ResolveTurretLoadout(team, cls, crew?.SeatWeaponIds);
-            if (s.TurretWeaponIds is not null)
-                Events.LoadoutsChanged = true; // MsgShipLoadout table gains a row this step
+            s.TurretWeaponIds = ResolveTurretLoadout(team, cls, crew?.SeatWeaponIds); // rides this step's table
             if (crew is not null)
             {
                 crew.Ship = s;
@@ -2943,7 +2944,8 @@ public sealed partial class Simulation
         _toRemove.Add(s);
         // EVERY AI drone frees its slot for an immediate relaunch: a PIG pod that flew home, and a PIG
         // combat drone back from a rearm run (PigKindRearm) — the relaunch is a fresh hull with full
-        // pools. (A combat drone docking used to leave slot.Ship pointing at a removed hull.)
+        // pools. The bomber slot takes its relaunch cooldown instead (FreePigPodSlot). (A combat drone
+        // docking used to leave slot.Ship pointing at a removed hull.)
         if (s.IsPig)
             FreePigPodSlot(s, tick + 1u, tick);
         else if (s.OwnerClientId >= 0)

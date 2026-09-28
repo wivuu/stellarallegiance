@@ -474,6 +474,31 @@ Check(
     "loader projected the ammo pack (cargo-id 6: AmmoPerCharge 1000, mass 1, 40-tick load, acs29) and left the rest at 0",
     $"ammo pack wrong (ammo {ammoPack.AmmoPerCharge}, fuel {ammoPack.FuelPerCharge}, mass {ammoPack.Mass}, load {ammoPack.ReloadTicks}, glyph '{ammoPack.Glyph}', model {ammoPack.ModelName})"
 );
+
+// A second ammo-pack line is refused: both peers load every ammo charge at the FIRST line's numbers.
+var secondAmmo = new CargoItemDef
+{
+    CargoId = 99,
+    Name = "Ammo Pack II",
+    AmmoPerCharge = 500,
+    Mass = 1f,
+    ChargesPerPack = 1,
+};
+var secondAmmoErrors = ContentValidator.Validate(
+    stock.Ships,
+    stock.Weapons,
+    stock.Bases,
+    stock.CargoItems.Append(secondAmmo).ToList(),
+    stock.Techs,
+    stock.Developments,
+    stock.StationCatalog,
+    stock.Equipment
+);
+Check(
+    secondAmmoErrors.Count == 1 && secondAmmoErrors[0].Contains("second ammo-pack line"),
+    "ContentValidator refuses a second ammo-pack line (one pack kind loads the magazine)",
+    $"second ammo line not refused exactly once: [{string.Join("; ", secondAmmoErrors)}]"
+);
 Check(
     stock.Ships.All(s => !s.DefaultCargo.Any(l => l.CargoId == 6)),
     "no stock hull carries ammo packs in its default cargo (pilots stock them in the hangar)",

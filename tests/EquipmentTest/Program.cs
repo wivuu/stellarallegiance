@@ -18,7 +18,8 @@
 //      explicit empty is accepted; research tier-migrates a default and makes a loadout row; a
 //      listed part's successor is implicitly allowed; an equipment-only request means an empty hold;
 //      ammo cargo is accepted like fuel and refused on a hull with no magazine.
-//   4. MsgShipLoadout rows: omission = the defaults, an equipment-only row, pruning on death/leave.
+//   4. MsgShipLoadout rows: omission = the defaults, an equipment-only row, a rejected pick still
+//      re-sends the table at spawn, pruning on death/leave.
 //   5. The cloak (THE shared ShipResources rule, driven by the sim): the level ramps by OnStep per
 //      tick to MaxCloaking, drains energy net of recharge, KEEPS draining while it ramps down, a
 //      starved pool scales the target by (energy/need)², no part = no level and no drain, autopilot
@@ -437,6 +438,19 @@ void Own(Simulation sim, byte team, ushort[] techIdx)
         "an equipment-only ship streams a row: its effective equipment by slot + the AUTHORED guns (LoadoutsChanged at spawn)",
         $"equipment-only row wrong (flagged {spawnFlagged}, row ids {Ids(row.EquipmentIds)})"
     );
+
+    // A hangar pick the server rejects (a shield on the shieldless Lt Interceptor) flies the defaults
+    // with NO row — and the spawn still re-sends the table: that omission is the owner's correction.
+    var rejected = Spawn(sim, 4, 0, ClassInterceptor, equipment: [(SlotShield, Part(sim, "Sm Shield 1").EquipmentId)]);
+    Check(
+        sim.Events.LoadoutsChanged
+            && rejected.EquipmentIds is null
+            && !Frames.ShipLoadouts(sim).Ships.Any(r => r.ShipId == rejected.ShipId),
+        "a REJECTED hangar pick streams no row but still raises LoadoutsChanged at spawn (the omission corrects the owner)",
+        $"rejected pick: flagged {sim.Events.LoadoutsChanged}, equipment {Ids(rejected.EquipmentIds)}"
+    );
+    sim.EnqueueLeave(4);
+    sim.Step();
 
     var doomed = Spawn(sim, 3, 0, ClassScout, equipment: [(SlotShield, NoEq)]);
     doomed.Health = 0f;

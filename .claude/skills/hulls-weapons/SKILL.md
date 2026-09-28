@@ -16,7 +16,7 @@ is the hands-on reference for the content files that define what a ship *is* and
 | `hulls.yaml` | playable ships + escape pod: flight stats, payload, hardpoint bindings, default cargo, equipment slots (`allowed-parts`/`preferred-parts`), energy/ammo pools | `class-id` |
 | `weapons.yaml` | guns (cannons): damage via projectile, cadence, spread, mass, `shield-damage-multiplier`, `ammo-per-shot`/`energy-per-shot` | `weapon-id` |
 | `launchers.yaml` | missile racks + chaff/mine/probe dispensers: magazine (`amount`), cadence, mounted `mass`, referenced expendable | `weapon-id` |
-| `expendables.yaml` | the payloads a launcher fires: missiles/mines/decoys/probes — ballistics, `mass`, `cargo-id`, `can-damage-base` — plus `fuels:` (fuel pods) and `ammo-packs:` (both pure cargo, no launcher; auto-load into the tank/magazine when it runs dry) | `cargo-id` (dispensed kinds) |
+| `expendables.yaml` | the payloads a launcher fires: missiles/mines/decoys/probes — ballistics, `mass`, `cargo-id`, `can-damage-base` — plus `fuels:` (fuel pods) and `ammo-packs:` (both pure cargo, no launcher; auto-load into the tank/magazine when it runs dry; at most ONE ammo-pack entry — ContentValidator refuses a second) | `cargo-id` (dispensed kinds) |
 | `equipment.yaml` | the shield/afterburner/cloak PARTS a hull's `allowed-parts` may pick from — one per-ship slot each, no payload cost | `EquipmentDef.EquipmentId` (catalog position) |
 | `stations.yaml` | bases/garrisons (`base-type-id`) — see `hardpoints` skill for their docking nodes | `base-type-id` |
 

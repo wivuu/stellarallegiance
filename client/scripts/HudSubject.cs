@@ -65,8 +65,8 @@ public readonly record struct HudSubject
     // ---- Resource pools (equipment PR): energy, magazine, ammo packs, cloak. Pilot reads the
     // predicted mirror; gunner reads the captain's last snapshotted row (ShipRenderer.TryLastRow),
     // maxima from the captain's equipment × team attribute — the same "own-hull-only prediction"
-    // split as Fuel/AbPower above (AmmoLoading/AmmoLoadFrac are PILOT-only: nothing streams a
-    // gunner enough to predict the captain's pack-load timer, matching the fuel-pod LOAD sweep). ----
+    // split as Fuel/AbPower above. The pack load rides the row (ShipPools.AmmoLoadLeft), so a gunner
+    // sees the captain's LOAD sweep too, stepped at the row rate instead of predicted. ----
     public float Energy { get; init; }
     public float MaxEnergy { get; init; }
 
@@ -92,8 +92,7 @@ public readonly record struct HudSubject
     // Why a shot of `w` would be refused right now (None = affordable) — the per-gun WeaponsPanel
     // readout (NO ENRG / NO AMMO / LOADING). Pilot: the predictor's live per-gun check (re-resolved
     // every frame, not just while the trigger is held). Gunner: the same shared gate over the ridden
-    // hull's last snapshotted pools — approximate (a pack mid-load on the captain's hull reads as NO
-    // AMMO here, not LOADING, since AmmoLoading is pilot-only above; corrects itself within one ack).
+    // hull's last snapshotted pools and pack load (one row behind the server, never predicted).
     public GateBlock GateBlockFor(WeaponDef w) =>
         Pilot is { } p
             ? p.GateBlockFor(w)
@@ -218,6 +217,8 @@ public readonly record struct HudSubject
         // other, and is 0 until the def streams (client-no-baked-tuning-fallback).
         bool hasRow = world.Ships.TryLastRow(seat.ShipId, out var row);
         float maxFuel = defs.TryGetShipDef(cls, out var def) ? def.MaxFuel : 0f;
+        ushort loadLeft = hasRow ? row.Pools.AmmoLoadLeft : (ushort)0;
+        uint reloadTicks = defs.AmmoCargoItem()?.ReloadTicks ?? 0;
 
         return new HudSubject
         {
@@ -248,10 +249,9 @@ public readonly record struct HudSubject
             MaxAmmo = hull?.MaxAmmo ?? 0,
             AmmoPacks = hasRow ? row.AmmoPacks : 0,
             ShowAmmo = seat.Gun?.AmmoPerShot > 0,
-            // AmmoLoading/AmmoLoadFrac: own-hull-only prediction, like the fuel-pod LOAD sweep — a
-            // gunner has no way to time the captain's pack loader, so it always reads "not loading".
-            AmmoLoading = false,
-            AmmoLoadFrac = 0f,
+            // The captain's pack load, off the row: exact as of its tick, stepped at the row rate.
+            AmmoLoading = loadLeft > 0,
+            AmmoLoadFrac = loadLeft == 0 || reloadTicks == 0 ? 0f : Mathf.Clamp(1f - (float)loadLeft / reloadTicks, 0f, 1f),
             CloakLevel = hasRow ? row.CloakLevel : 0f,
             // No latch bit rides the wire for a ridden hull; the level itself is the only tell (it
             // only moves while engaged or ramping down), so "above zero" is the closest live read.

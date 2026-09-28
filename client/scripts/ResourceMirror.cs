@@ -30,9 +30,9 @@ using StellarAllegiance.Shared;
 //  recorded tick after it from the authoritative pools with the recorded inputs, re-deriving the
 //  cadence stamps on the way. So the prediction converges within that one ack, and a trigger press
 //  the server took a tick late cannot leave the cadence a tick out of phase (and the pools
-//  mismatching every volley) for the rest of the burst. The pending ammo-pack load never crosses
-//  the wire; a replay keeps the predicted one, corrected by what the authoritative pools imply
-//  (InferLoad).
+//  mismatching every volley) for the rest of the burst. The pending ammo-pack load rides the row
+//  too (ShipPools.AmmoLoadLeft), so a replay restarts it exactly — including a load a gunner's
+//  shots or a salvaged pack committed, which this prediction never saw happen (LoadEndOf).
 //
 //  Godot-free on purpose: tests/ResourcePredictTest links this file and steps it tick for tick
 //  against the real Simulation.
@@ -99,14 +99,13 @@ public sealed class ResourceMirror
     // reconcile can still use has its resource entry too.
     public const int RingSize = 64;
 
-    // One predicted tick. PreFire is what the server's record for this tick will carry; LoadEnd the
-    // pending pack load after the ammo step (client-only); Firing/Cloak the inputs the tick ran on;
-    // Fired whether a pilot mount fired (the row's LastFireTick == LastInputTick).
+    // One predicted tick. PreFire is what the server's record for this tick will carry (the pending
+    // pack load included, as AmmoLoadLeft); Firing/Cloak the inputs the tick ran on; Fired whether a
+    // pilot mount fired (the row's LastFireTick == LastInputTick).
     private struct Entry
     {
         public uint Tick; // 0 = empty (tick 0 never runs a step)
         public ShipPools PreFire;
-        public uint LoadEnd;
         public bool Firing;
         public bool Cloak;
         public bool Fired;
@@ -163,7 +162,7 @@ public sealed class ResourceMirror
     public void Seed(in ShipPools auth, uint authTick)
     {
         Pools = auth;
-        LoadEndTick = InferLoad(in auth, LoadEndTick, authTick);
+        LoadEndTick = LoadEndOf(in auth, authTick);
         Seeded = true;
         ClearRing();
     }
@@ -198,7 +197,6 @@ public sealed class ResourceMirror
         {
             Tick = tick,
             PreFire = Pools,
-            LoadEnd = LoadEndTick,
             Firing = firing,
             Cloak = cloakHeld,
         };
@@ -315,19 +313,34 @@ public sealed class ResourceMirror
         ref Entry e = ref _ring[slot];
         uint tick = e.Tick;
         var pools = auth;
-        uint loadEnd = InferLoad(in auth, e.LoadEnd, tick);
+        uint loadEnd = LoadEndOf(in auth, tick);
         Array.Copy(_stampRing, slot * _mounts, _scratch, 0, _mounts);
         e.PreFire = auth;
-        e.LoadEnd = loadEnd;
         e.Fired = authFired;
 
         // The acked tick's fire phase. WHETHER a pilot mount fired is known (the row stamps
         // LastFireTick), so it is forced to match — a trigger the server took a tick late fires
         // nothing here. WHICH mounts, the shared gate derives from the row's pools the way a remote
-        // replay does; if the cadence stamps say none were ready (exactly the phase slip this replay
-        // may be repairing), every mount the pools allow.
+        // replay does. If the recorded stamps say none was ready, that is the phase slip this replay
+        // is repairing: our own shot a tick EARLY (a press the server took a tick late, whose ack was
+        // lost) stamped them. So retry on the stamps from before that shot — the previous recorded
+        // tick's — and only if those show nothing ready either, fire every mount the pools allow
+        // (which would put a still-cycling mount of a mixed-cadence loadout out of phase).
         if (authFired && SelectBarrels(slots, _scratch, tick, ref pools, null, true, true, loadEnd != 0, out _) == 0)
-            SelectBarrels(slots, _scratch, tick, ref pools, null, false, true, loadEnd != 0, out _);
+        {
+            bool derived = false;
+            uint prevTick = tick - 1;
+            int prevSlot = (int)(prevTick % RingSize);
+            if (prevTick >= _first && _ring[prevSlot].Tick == prevTick)
+            {
+                Array.Copy(_stampRing, prevSlot * _mounts, _scratch, 0, _mounts);
+                derived = SelectBarrels(slots, _scratch, tick, ref pools, null, true, true, loadEnd != 0, out _) > 0;
+                if (!derived)
+                    Array.Copy(_stampRing, slot * _mounts, _scratch, 0, _mounts); // back to this tick's
+            }
+            if (!derived)
+                SelectBarrels(slots, _scratch, tick, ref pools, null, false, true, loadEnd != 0, out _);
+        }
         ShipResources.EnergyStep(ref pools, in Stats, e.Cloak, energyEnabled: true);
 
         // Every later predicted tick, from its own recorded inputs (the history is contiguous but a
@@ -340,7 +353,6 @@ public sealed class ResourceMirror
                 continue;
             ShipResources.AmmoStep(ref pools, ref loadEnd, t, in Stats, ammoEnabled: true);
             ej.PreFire = pools;
-            ej.LoadEnd = loadEnd;
             Array.Copy(_scratch, 0, _stampRing, s * _mounts, _mounts);
             ej.Fired = ej.Firing && SelectBarrels(slots, _scratch, t, ref pools, null, true, true, loadEnd != 0, out _) > 0;
             ShipResources.EnergyStep(ref pools, in Stats, ej.Cloak, energyEnabled: true);
@@ -351,25 +363,9 @@ public sealed class ResourceMirror
         Array.Copy(_scratch, stamps, Math.Min(_mounts, stamps.Length));
     }
 
-    // The pending pack load implied by authoritative pools taken after that tick's ammo step. The load
-    // never crosses the wire, but the rule pins it down: ammo only FALLS while a load is pending, so a
-    // magazine that covers the cheapest ammo gun has none; one below it with a charge aboard must have
-    // one (the ammo step would have committed it) — keep the predicted end if it is a consistent one,
-    // else assume the latest the server's can be (the refill lands on the HUD a little late and the
-    // next ack corrects it). Below the cheapest shot with NO charge aboard is ambiguous (the last
-    // charge may be loading), so the prediction stands.
-    private uint InferLoad(in ShipPools p, uint predicted, uint atTick)
-    {
-        if (Stats.MinAmmoPerShot == 0 || Stats.AmmoPerCharge == 0 || Stats.AmmoReloadTicks == 0)
-            return 0; // no ammo gun or no pack line: nothing loads (a 0-tick load lands within its own step)
-        if (p.Ammo >= Stats.MinAmmoPerShot)
-            return 0;
-        if (p.AmmoPacks > 0)
-            return predicted > atTick && predicted - atTick <= Stats.AmmoReloadTicks
-                ? predicted
-                : atTick + Stats.AmmoReloadTicks;
-        return predicted;
-    }
+    // The pending pack load's end tick, read off authoritative pools taken after `atTick`'s ammo step
+    // (ShipRecord.Pools at its LastInputTick): AmmoStep stamps AmmoLoadLeft = end − tick, so it is exact.
+    private static uint LoadEndOf(in ShipPools p, uint atTick) => p.AmmoLoadLeft == 0 ? 0u : atTick + p.AmmoLoadLeft;
 
     // THE fire gate over one ship's pilot barrels — shared by this mirror (own ship), its replay and
     // BoltRenderer's remote replay, so every client derives the same fired set from the same row.

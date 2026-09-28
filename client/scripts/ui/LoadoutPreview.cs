@@ -79,9 +79,14 @@ public partial class LoadoutPreview : SubViewportContainer
     // `_cloakPreviewMax` is the picked part's MaxCloaking (the fraction it would actually hide at full
     // cloak) — null stops the animation and returns the model to opaque.
     private const float CloakPreviewRateRad = 1.1f; // rad/s — a slow, readable breathe, not a strobe
+
+    // The breathe is quantized to this level step and CloakFx re-applied only when the step changes —
+    // ~15 walks of the model's meshes a second instead of one every frame, invisibly coarse.
+    private const float CloakPreviewStep = 1f / 64f;
     private float? _cloakPreviewMax;
     private Color _cloakPreviewTint;
     private double _cloakPreviewT;
+    private float _cloakPreviewApplied = -1f; // the level last applied to _model (-1 = none yet)
 
     public override void _Ready()
     {
@@ -154,6 +159,7 @@ public partial class LoadoutPreview : SubViewportContainer
         };
         _model = ShipModelLoader.Build(defs, (ShipClass)classId, isPod: false, mat);
         _viewport.AddChild(_model);
+        _cloakPreviewApplied = -1f; // a fresh model: the next preview frame applies whatever level
 
         // Frame the orbit camera off the hull's authored silhouette length (the same
         // ShipClassDef.ModelLength the model loader normalizes the GLB to); DefaultModelLength
@@ -214,6 +220,7 @@ public partial class LoadoutPreview : SubViewportContainer
     {
         _cloakPreviewMax = maxLevel;
         _cloakPreviewTint = tint;
+        _cloakPreviewApplied = -1f; // a new part / tint re-applies on the next frame
     }
 
     // Screen-space position of a mount in THIS control's local coords (1:1 with viewport
@@ -298,7 +305,8 @@ public partial class LoadoutPreview : SubViewportContainer
     // Drive the cloak-preview shimmer: a slow sine breathing between fully visible and the picked
     // part's own MaxCloaking, so the pilot sees the SAME shimmer their chase cam would show in flight
     // (CloakFx.Apply, capped at the own-ship transparency) rather than a made-up preview effect.
-    // Idempotent when nothing changed, and returns the model to opaque exactly once when stopped.
+    // Applies only when the quantized level moves, and returns the model to opaque exactly once when
+    // stopped.
     private void UpdateCloakPreview(double delta)
     {
         if (_model is null)
@@ -308,12 +316,17 @@ public partial class LoadoutPreview : SubViewportContainer
             if (_cloakPreviewT != 0)
             {
                 _cloakPreviewT = 0;
+                _cloakPreviewApplied = -1f;
                 CloakFx.Apply(_model, 0f, CloakFx.OwnMaxTransparency, _cloakPreviewTint);
             }
             return;
         }
         _cloakPreviewT += delta;
         float level = max * (0.5f + 0.5f * Mathf.Sin((float)_cloakPreviewT * CloakPreviewRateRad));
+        level = Mathf.Round(level / CloakPreviewStep) * CloakPreviewStep;
+        if (level == _cloakPreviewApplied)
+            return;
+        _cloakPreviewApplied = level;
         CloakFx.Apply(_model, level, CloakFx.OwnMaxTransparency, _cloakPreviewTint);
     }
 

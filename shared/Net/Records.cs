@@ -42,7 +42,7 @@ public static class InputFlags
     public const byte Cloak = 64; // cloak engaged: a held LEVEL (the toggle latch), sent every tick; bit 128 is free
 }
 
-// One ship snapshot record (76 bytes). Position is raw f32 and rotation a 20-bit smallest-three
+// One ship snapshot record (78 bytes). Position is raw f32 and rotation a 20-bit smallest-three
 // quaternion (exact enough to render a remote hull off directly — see the Pos comment below);
 // rates/power/health are f16 (WireQuant), whose budget only feeds interpolation tangents and HUD;
 // the resource pools are exact (see Pools).
@@ -96,7 +96,8 @@ public partial struct ShipRecord
     // The pools the FIRE PHASE of LastInputTick started with (after that tick's ammo step) — not the
     // end-of-tick pools (ShipResources' tick order). The owner reconciles its prediction ring against
     // them, and a remote row with LastFireTick == LastInputTick replays that tick's fire gate on them
-    // to know exactly which mounts fired. Exact on the wire: f32 energy, u16 ammo, u8 packs, u16 cloak.
+    // to know exactly which mounts fired. Exact on the wire: f32 energy, u16 ammo, u8 packs, u16 cloak,
+    // u16 ticks left on the pending ammo-pack load.
     public ShipPools Pools;
 
     // ---- Flag decoders shared by every reader (client rows, tests, bots) ----

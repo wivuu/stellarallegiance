@@ -32,9 +32,9 @@ public sealed partial class Simulation
     private readonly EquipmentDef?[] _equipDefs;
 
     // Ammo cargo: every cargo id whose item restores AmmoPerCharge > 0 (the fuel-pod twin of
-    // _fuelPerCharge), and THE ammo-pack line — the first such item — that feeds the resource rule
-    // (ShipResources.StatsFor's ammoPack: per-charge refill + load time). One line in stock content;
-    // the client's AmmoCargoItem() picks the same first line, so both peers load packs identically.
+    // _fuelPerCharge), and THE ammo-pack line that feeds the resource rule (ShipResources.StatsFor's
+    // ammoPack: per-charge refill + load time). ContentValidator allows only one such line, and the
+    // client's AmmoCargoItem() picks the same one, so both peers load packs identically.
     private readonly HashSet<uint> _ammoCargoIds = new();
     private readonly CargoItemDef? _ammoPackItem;
 

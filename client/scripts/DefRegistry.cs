@@ -38,9 +38,9 @@ public partial class DefRegistry : Node, IShipCostSource
     private readonly Dictionary<ushort, EquipmentDef> _equipment = new();
     private readonly List<EquipmentDef> _equipmentById = new(); // AllEquipment(), ascending EquipmentId
 
-    // THE ammo-pack line the resource rule loads from: the FIRST cargo item (streamed catalog order)
-    // with AmmoPerCharge > 0 — the same pick as Simulation's _ammoPackItem, so both peers load the
-    // same per-charge refill and load time. Null until the defs arrive (or content with no pack).
+    // THE ammo-pack line the resource rule loads from: the cargo item with AmmoPerCharge > 0
+    // (ContentValidator allows one) — the same pick as Simulation's _ammoPackItem, so both peers load
+    // the same per-charge refill and load time. Null until the defs arrive (or content with no pack).
     private CargoItemDef? _ammoPackItem;
 
     // Derived ShipStats memo keyed by (def id, equipped afterburner id): ShipStats.Create runs an
@@ -99,7 +99,7 @@ public partial class DefRegistry : Node, IShipCostSource
         {
             _cargo[c.CargoId] = c;
             if (c.AmmoPerCharge > 0)
-                _ammoPackItem ??= c; // first in the streamed (= content catalog) order, like the sim
+                _ammoPackItem ??= c; // the one ammo line (first in catalog order, like the sim)
         }
         if (equipment is not null)
             foreach (var e in equipment)

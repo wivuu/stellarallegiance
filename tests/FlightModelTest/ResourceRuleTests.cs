@@ -213,20 +213,24 @@ static class ResourceRuleTests
         uint load = 0;
         ShipResources.AmmoStep(ref p, ref load, 100, in rs, ammoEnabled: true);
         Check(
-            p.AmmoPacks == 2 && load == 140 && p.Ammo == 1,
-            "AmmoStep: magazine below the cheapest shot + a pack aboard → one charge commits, its ammo due ReloadTicks later",
+            p.AmmoPacks == 2 && load == 140 && p.Ammo == 1 && p.AmmoLoadLeft == 40,
+            "AmmoStep: magazine below the cheapest shot + a pack aboard → one charge commits, its ammo due ReloadTicks later (AmmoLoadLeft 40)",
             $"AmmoStep commit: {p}, load {load}"
         );
         bool pending = true;
         for (uint t = 101; t < 140; t++)
         {
             ShipResources.AmmoStep(ref p, ref load, t, in rs, true);
-            pending &= p.AmmoPacks == 2 && load == 140 && p.Ammo == 1;
+            pending &= p.AmmoPacks == 2 && load == 140 && p.Ammo == 1 && p.AmmoLoadLeft == 140 - t;
         }
-        Check(pending, "AmmoStep: no second commit while the load is pending", $"AmmoStep pending: {p}, load {load}");
+        Check(
+            pending,
+            "AmmoStep: no second commit while the load is pending, and AmmoLoadLeft counts down to it (end − tick)",
+            $"AmmoStep pending: {p}, load {load}"
+        );
         ShipResources.AmmoStep(ref p, ref load, 140, in rs, true);
         Check(
-            p.Ammo == 720 && load == 0 && p.AmmoPacks == 2,
+            p.Ammo == 720 && load == 0 && p.AmmoPacks == 2 && p.AmmoLoadLeft == 0,
             "AmmoStep: the load completes ON its end tick, clamped to MaxAmmo (1 + 1000 → 720), and nothing re-commits",
             $"AmmoStep complete: {p}, load {load}"
         );

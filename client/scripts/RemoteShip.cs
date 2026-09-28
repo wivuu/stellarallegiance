@@ -221,6 +221,10 @@ public partial class RemoteShip : Node3D
         _burnCooldown = (float)GD.RandRange(1.0, 3.0); // stagger drones' first burst roll
         _interp.StatsId = row.ShipId; // fidelity-instrumentation bucket key (no-op unless InterpStats.Enabled)
         Push(row, clock.ServerTick);
+        // A ship first seen (or back in AOI) already cloaked appears at its level with no fade-in and
+        // no CloakOn cue: only a level change watched on THIS node is an audible edge.
+        _cloakShown = ShipResources.CloakFraction(row.Pools.Cloak);
+        _cloakAudible = _cloakShown > 0f;
     }
 
     public void OnAuthoritative(Ship row, uint serverTick) => Push(row, serverTick);

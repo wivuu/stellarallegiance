@@ -31,6 +31,13 @@
 //      ResourceMirror.SelectBarrels on the record's Pools (BoltRenderer.SpawnBoltFor's path)
 //      reproduces MountLastFire exactly, including fired-and-starved ticks a cadence-only replay gets
 //      wrong.
+//   9. A pack load the pilot never saw commit (a pack salvaged into a dry hold, server-side only): the
+//      record's AmmoLoadLeft hands the client the exact load — one replay, then LOADING (not NO AMMO)
+//      until the refill lands on the server's tick.
+//  10. A late press whose ack is LOST, on a mixed-cadence loadout (two ER Nanites + a Gat) with the
+//      Nanites still cycling: the replay re-derives which mounts the server fired from the stamps
+//      before the client's early shot (the Gat alone), not every mount the pools allow — one replay,
+//      then exact for the rest of the burst.
 //
 // Content facts (server/Content/core, Iron Coalition — team attributes ON, so MaxEnergy is ×1.2): Scout
 // (cls 0) one PW Gat Gun (2 ammo/shot every 4 ticks), MaxAmmo 960, energy 1200 +60/s, a cloak slot
@@ -234,7 +241,8 @@ Trace Drive(
     Func<uint, ShipInputState> clientInput,
     Func<uint, ShipInputState>? serverInput = null,
     Action<uint>? beforeServerStep = null,
-    Action<uint>? afterServerStep = null
+    Action<uint>? afterServerStep = null,
+    Func<uint, bool>? dropAck = null
 )
 {
     var (mirror, teams, stamps) = client;
@@ -251,7 +259,10 @@ Trace Drive(
         fired.Clear();
         trace.Fires += mirror.FireStep(slots, stamps, next, fired);
         if (input.Firing)
+        {
             trace.Blocks.Add(mirror.LastBlock);
+            trace.BlockLog.Add(mirror.LastBlock);
+        }
         mirror.EndTick();
         next++;
     }
@@ -268,6 +279,8 @@ Trace Drive(
         afterServerStep?.Invoke(t);
 
         var rec = ShipRecord.Parse(Frames.ShipRecordOf(s).ToBytes());
+        if (dropAck?.Invoke(rec.LastInputTick) == true)
+            continue; // a lost snapshot: the client never sees this record
         trace.Acks++;
         if (!mirror.TryGetPredicted(rec.LastInputTick, out var pred) || pred != rec.Pools)
             trace.PredMismatches++;
@@ -633,6 +646,91 @@ foreach (int lead in new[] { 0, 5 })
     );
 }
 
+// ---- 9. A pack load the pilot's prediction never saw commit -------------------------------------------
+// A pack salvaged into a dry hold lands on the server only (injected before its step); the ammo step
+// commits it at once. The client learns of it from the record alone — its AmmoLoadLeft gives the load
+// exactly, so the one replay on that ack restarts it on the server's end tick.
+{
+    var sim = BootSim(9);
+    var pack = AmmoPack(sim);
+    var s = Spawn(sim, 1, 0, ClassScout);
+    s.Pools.Ammo = 1; // below the Gat's 2 ammo a shot, and nothing aboard: dry
+    s.Pools.AmmoPacks = 0;
+    var client = NewClient(sim, s);
+    int dryTicks = 5;
+    uint salvage = sim.Tick + (uint)dryTicks;
+    bool loadMatched = false;
+    var t = Drive(
+        sim,
+        s,
+        client,
+        ticks: (int)pack.ReloadTicks + 30,
+        lead: 0,
+        clientInput: _ => Fire(),
+        beforeServerStep: tick =>
+        {
+            if (tick == salvage)
+                s.Pools.AmmoPacks = 1; // the pickup, server-side only
+        },
+        afterServerStep: tick =>
+        {
+            if (tick == salvage + 1)
+                loadMatched = s.AmmoLoadEndTick != 0 && client.mirror.LoadEndTick == s.AmmoLoadEndTick;
+        }
+    );
+    int loading = t.BlockLog.Count(b => b == GateBlock.Loading);
+    int noAmmo = t.BlockLog.Count(b => b == GateBlock.NoAmmo);
+    Check(
+        t.ResyncTicks.SequenceEqual(new[] { salvage }) && t.PredMismatches == 1 && loadMatched && t.Fires > 0,
+        $"a load committed server-side only: ONE replay at its ack, the client's load ends on the server's tick, and the refill fires in lockstep ({Describe(t)})",
+        $"unseen load not adopted (load matched {loadMatched}; {Describe(t)})"
+    );
+    Check(
+        noAmmo == dryTicks && loading == (int)pack.ReloadTicks - 1,
+        $"…NO AMMO only on the {dryTicks} ticks before the record told it, then LOADING for the rest of the load ({loading} ticks)",
+        $"gate states wrong (NO AMMO {noAmmo}, LOADING {loading}; expected {dryTicks} and {pack.ReloadTicks - 1})"
+    );
+}
+
+// ---- 10. A late press with its ack lost, on a mixed-cadence loadout ---------------------------------
+// Two ER Nanites (every 10 ticks) and a Gat (every 4). A tap fires all three; the next press comes 6
+// ticks later — the Gat is ready again, the Nanites are still cycling — and the server takes it a tick
+// late. The client's early Gat shot stamped its mount, and the ack that would have replayed it is lost,
+// so the next ack's recorded stamps say NOTHING was ready on the tick the server fired. The replay
+// must fire the Gat alone (the stamps from before that early shot), not every mount the pools allow:
+// a spurious Nanite shot would leave their cadence out of phase with the server's for the whole burst.
+{
+    var sim = BootSim(10);
+    var s = Spawn(sim, 1, 0, ClassFighter, mounts: [(0, Nanite1), (1, Nanite1)]);
+    var client = NewClient(sim, s);
+    uint tap = sim.Tick + 10;
+    uint press = tap + 6;
+    uint release = press + 60; // both sides release together, so the stamps settle before the end
+    var t = Drive(
+        sim,
+        s,
+        client,
+        ticks: 120,
+        lead: 3,
+        clientInput: tick => new ShipInputState { Firing = tick == tap || (tick >= press && tick < release) },
+        serverInput: tick => new ShipInputState { Firing = tick == tap || (tick >= press + 1 && tick < release) },
+        dropAck: tick => tick == press
+    );
+    Check(
+        t.ResyncTicks.SequenceEqual(new[] { press + 1 }) && t.PredMismatches == 1,
+        $"one replay, at the first ack after the lost one, and every later ack matched ({Describe(t)})",
+        $"the lost-ack replay didn't converge ({Describe(t)}; expected one resync at {press + 1})"
+    );
+    bool predicted = client.mirror.TryGetPredicted(sim.Tick, out var atServerTick);
+    Check(
+        client.stamps.AsSpan().SequenceEqual(s.MountLastFire ?? Array.Empty<uint>())
+            && predicted
+            && atServerTick == s.PoolsAtFire,
+        "…the Nanites' cadence and the energy pool stayed on the server's (no spurious Nanite shot in the replay)",
+        $"cadence/pools off (client [{string.Join(",", client.stamps)}] vs server [{string.Join(",", s.MountLastFire ?? Array.Empty<uint>())}], energy {atServerTick.Energy} vs {s.PoolsAtFire.Energy})"
+    );
+}
+
 Console.WriteLine(
     failures == 0 ? "\nALL RESOURCE PREDICTION TESTS PASSED" : $"\n{failures} RESOURCE PREDICTION TEST(S) FAILED"
 );
@@ -649,6 +747,7 @@ sealed class Trace
         Fires;
     public readonly List<uint> ResyncTicks = new();
     public readonly HashSet<GateBlock> Blocks = new();
+    public readonly List<GateBlock> BlockLog = new(); // the same, one entry per held tick, in order
     public float MinEnergy = float.MaxValue;
     public int PeakCloak;
     public ushort LastCloak;

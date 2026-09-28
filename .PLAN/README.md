@@ -279,9 +279,10 @@ YAML, so it lands in the existing seams without rework.
   - Still open: the Stealth Fighter / Adv Stl Fighter / Stealth Bomber hulls themselves, the EW
     Sniper / EW Utl Cannon guns, Sig Cloak 2/3 and Hvy Cloak 1/2 (all gated on the Tactical base,
     which isn't ported — the Silicon and Uranium special rocks it could build on are seeded but
-    unused), and deciding the Tactical gate itself. Audio (an SFX cue, and any Allegiance voice
-    line, for cloak engage/disengage) is also not wired yet — tracked with the existing voice-line
-    decision under *Spatial audio polish* (#105) below.
+    unused), and deciding the Tactical gate itself. The cloak's SFX cues are wired (`SfxManager`
+    `CloakOn`/`CloakOff`: the pilot's own off the toggle latch in `Hud.cs`, everyone else's
+    positional off `RemoteShip`'s level edges); any Allegiance voice line for engage/disengage is
+    tracked with the existing voice-line decision under *Spatial audio polish* (#105) below.
   - *`ShipSim.SigBias` is no longer a seam reserved for later — `Simulation.Equipment.cs`'s
     `ApplyEquipment` now re-seeds it live from the hull + every equipped part's signature every time
     a ship (re)equips. Vision multiplies each target's captured signature

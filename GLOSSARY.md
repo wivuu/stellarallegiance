@@ -685,6 +685,8 @@ charge — **input-independent**, so it runs even when a gunner (not the pilot) 
 charge is spent at once (`AmmoPacks--`) and its ammo lands `AmmoReloadTicks` later, during which the
 ammo guns stay dry (energy guns are unaffected — they never touch this pool). Refused as cargo on a
 0-`MaxAmmo` hull. 0 `MaxAmmo` (unarmed hulls, and hulls with only energy guns) = no magazine, ever.
+`ContentValidator` allows ONE ammo-pack line: every line's charges would pool into `AmmoPacks` but load
+at a single line's per-charge refill and load time.
 - **Frequency:** Domain-specific
 - **Key Files:**
   - `server/Content/core/hulls.yaml` — `max-ammo` per hull; `server/Content/core/weapons.yaml` — `ammo-per-shot` per gun
@@ -699,8 +701,8 @@ ammo guns stay dry (energy guns are unaffected — they never touch this pool). 
 - **Notes:** Protocol 44. `weapons.yaml`'s old "infinite ammo" header is gone — see
   [[Reload (load-from-hold)]]. Ammo rides the wire as an exact `u16` (`ShipPools.Ammo`), packs as a `u8`.
   `AmmoEnabled=false` disables the gate outright (no gun spends, no pack ever commits, no PIG flies
-  home to rearm — see [[PIG Rearm]]); suites with a long firing scenario flip it off so a gun can't run
-  dry mid-assertion.
+  home to rearm — see [[PIG Rearm]]). Only `tests/AmmoEnergyTest` flips it, to prove the kill-switch
+  itself and as the PIG-rearm control; every other suite runs with both gates live.
 
 ### Cloak
 The optional third equipment slot (`EquipmentDef.SlotCloak`): `toggle_cloak` (default **K**, pad
@@ -738,7 +740,7 @@ Stealth Fighter can) — the slot holds the spot until a stealth hull lands.
 
 ### Resource Rule (`ShipResources`)
 THE single per-tick rule for a ship's energy, ammo, ammo-pack and cloak pools (`ShipPools`: `float
-Energy; ushort Ammo; byte AmmoPacks; ushort Cloak` — 9 B), called identically by every peer that steps
+Energy; ushort Ammo; byte AmmoPacks; ushort Cloak; ushort AmmoLoadLeft` — 11 B), called identically by every peer that steps
 a ship so the pools can never drift (the [[Flight Model]]/`FireCadence`/`WeaponTier` single-rule
 pattern, now shared by the server's Pass A, the owner's client-side
 [[Resource Mirror (client prediction)]], and a remote's replay in `BoltRenderer`). Tick order,
@@ -746,7 +748,8 @@ exactly, on every peer:
 1. **Ammo step** (`ShipResources.AmmoStep`, input-independent) — land a finished pack load
    (`Ammo = min(MaxAmmo, Ammo + AmmoPerCharge)`), then commit a new one when the magazine can't afford
    the cheapest ammo gun over the ship's EFFECTIVE mounts, a pack is aboard, and nothing is already
-   loading. Runs even when a gunner (not the pilot) is the one draining the shared magazine.
+   loading. Runs even when a gunner (not the pilot) is the one draining the shared magazine. It then
+   stamps `AmmoLoadLeft` (ticks until the pending load lands), so the snapshot carries the load too.
 2. **Snapshot** — the pools right now become `PoolsAtFire` (`ShipSim.PoolsAtFire`): what
    `ShipRecord.Pools` streams for `LastInputTick`, i.e. the pools the FIRE PHASE below will spend
    from, not the tick's end state. A remote row whose `LastFireTick == LastInputTick` replays step 4 on
@@ -768,10 +771,10 @@ The pools entering tick T+1 are exactly the pools leaving tick T. Deterministic 
   - `server/Sim/Simulation.Firing.cs` — `TryFire`/`TryFireTurrets` gate each mount through `TrySpendShot`
   - `client/scripts/ResourceMirror.cs` — the client mirror (see [[Resource Mirror (client prediction)]])
   - `client/scripts/world/BoltRenderer.cs` — remote replay of step 4 off a row's `Pools`
-  - `shared/Net/Records.cs` — `ShipRecord.Pools` (the snapshot from step 2, 76-byte record)
+  - `shared/Net/Records.cs` — `ShipRecord.Pools` (the snapshot from step 2, 78-byte record)
   - `tests/AmmoEnergyTest`, `tests/ResourcePredictTest` — the determinism + derivation-invariant guards
 - **Related:** [[Energy Pool]], [[Ammo Pool & Ammo Pack]], [[Cloak]], [[Resource Mirror (client prediction)]], [[Flight Model]], [[Held-Input Replay]], [[Per-Ship Weapon Loadout (mount overrides)]]
-- **Notes:** Protocol 44 (`ShipRecord` 67 → 76 B). Shields are NOT in `ShipPools` — they're a separate,
+- **Notes:** Protocol 44 (`ShipRecord` 67 → 78 B). Shields are NOT in `ShipPools` — they're a separate,
   simpler per-ship value (see [[Shield]]); this rule only ever covers energy/ammo/cloak. Two test
   kill-switches, `AmmoEnabled`/`EnergyEnabled` (default on, the `ShieldsEnabled` precedent), let a
   PIG-heavy or long-firing suite disable one gate without disabling the other.
@@ -786,8 +789,13 @@ than the flight reconcile buffer) plus each tick's per-mount cadence stamps, so 
 can REPLAY every recorded tick after a divergent one from the authoritative pools with the SAME
 recorded inputs, re-deriving cadence stamps on the way — a trigger the server applied a tick late
 converges within one ack instead of leaving the cadence out of phase (and the pools mismatching) for
-the rest of a burst. A pending ammo-pack load never crosses the wire, so a replay infers it
-(`InferLoad`) from what the authoritative pools imply. `SelectBarrels` — the actual fire-gate loop
+the rest of a burst. The pending ammo-pack load rides the row too (`ShipPools.AmmoLoadLeft`), so a
+replay restarts it exactly — even a load a gunner's shots or a salvaged pack committed, which the
+prediction never saw happen. When the acked tick's recorded stamps show no mount ready although the
+server fired (a press it took a tick late, whose ack was lost), the replay re-derives WHICH mounts from
+the previous tick's stamps (before the client's early shot), and only then falls back to every mount
+the pools allow — which would put a mixed-cadence loadout's still-cycling mount out of phase.
+`SelectBarrels` — the actual fire-gate loop
 (cadence AND resources) — is a `static` method shared verbatim by this mirror, its own replay, AND
 `BoltRenderer`'s remote replay, so every client derives the same fired set from the same row.
 `PredictionController` wraps the mirror with the HUD-ready seams: `Energy`/`MaxEnergy`/`Ammo`/
@@ -804,8 +812,10 @@ same live team-attribute function [[Shield]] uses.
   - `tests/ResourcePredictTest` — links this file + references SimServer directly (`FuelPodTest`'s
     pattern), asserting tick-exact pools under identical inputs
 - **Related:** [[Resource Rule (`ShipResources`)]], [[Client Prediction]], [[Held-Input Replay]], [[Fuel Pod]]
-- **Notes:** `[predict-stats]` logs `res_resync=` — the count of reconciles since the last seed; ≈0
-  during ordinary flight is the smoke-test signal (see `--combat-test --interp-stats`). Crewed ships:
+- **Notes:** `[predict-stats]` logs `res_resync=` — the resource-mirror replays within that stats
+  window (the delta of the static `PredictionController.ResourceResyncs`, summed over every local ship;
+  `[cloak-test]` prints the running total); ≈0 during ordinary flight is the smoke-test signal (see
+  `--combat-test --interp-stats`). Crewed ships:
   the captain's client can't predict a GUNNER's spend, so a turret shot is an expected, bounded
   one-round-trip resync, not a bug.
 
@@ -1482,6 +1492,9 @@ a downed teammate still outranks going home, but a dry drone outranks every offe
 chase, an attack run): it can't shoot, so nothing else it could be told to do is useful. `DockShip`
 frees the PIG's slot the instant it docks (`FreePigPodSlot(s, tick + 1, tick)`) so the slot relaunches
 immediately as a FRESH hull with full pools — the dock itself IS the rearm, no separate refill logic.
+The team's lone BOMBER slot is the exception: a docked bomber (not its pod) waits out
+`ai.bomber-respawn-seconds` exactly as a lost one does, so docking never relaunches a bomber sooner
+than losing it would.
 `AmmoEnabled = false` (the test kill-switch) disables the whole goal.
 - **Frequency:** Domain-specific (only while `AmmoEnabled` and a PIG's guns can run dry)
 - **Key Files:**
@@ -1489,9 +1502,10 @@ immediately as a FRESH hull with full pools — the dock itself IS the rearm, no
   - `server/Sim/Simulation.cs` — `DockShip`'s `FreePigPodSlot` call (every PIG kind, not just rearm — this also fixes a pre-existing dangling `slot.Ship` on any PIG dock)
   - `shared/ShipResources.cs` — the pool `TryRearm` reads (`s.Pools`, `s.AmmoLoadEndTick`)
 - **Related:** [[PigBrain]], [[Ammo Pool & Ammo Pack]], [[Commander Order]], [[Miner (AI ore drone)]], [[Dock Refund]]
-- **Notes:** No suite drives `Simulation.Pig.cs` directly (every existing suite sets `PigsEnabled=false`
-  for determinism, per `.PLAN/README.md` → *Engineering safety net*); rearm behavior is exercised
-  through `tests/AmmoEnergyTest`'s dock-refill + relaunch scenario instead. A commander order a
+- **Notes:** `tests/AmmoEnergyTest` §6 drives REAL drones (`PigsEnabled = true`, pinned RNG,
+  CommanderTest's `WaitForPig` idiom): a drained drone flies home and docks (`GoneClean`) and its slot
+  relaunches a full one; a drone with ammo, and a dry one with `AmmoEnabled` off, never go home; a
+  drained bomber's slot relaunches only after the bomber cooldown. A commander order a
   rearming drone was obeying dies with the docked hull (keyed by `ShipId`) — the relaunch starts
   fresh, not mid-order.
 

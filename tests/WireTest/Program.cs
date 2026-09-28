@@ -95,8 +95,8 @@ string mapsDir = Path.Combine(AppContext.BaseDirectory, "content", "maps");
 Console.WriteLine("---- 1. fixed sizes + message ids ----");
 var sizePins = new (string, int, int)[]
 {
-    ("ShipRecord", ShipRecord.Size, 76),
-    ("ShipPools", ShipPools.Size, 9),
+    ("ShipRecord", ShipRecord.Size, 78),
+    ("ShipPools", ShipPools.Size, 11),
     ("EquipmentOverrideRecord", EquipmentOverrideRecord.Size, 3),
     ("MissileRecord", MissileRecord.Size, 35),
     ("MinefieldRecord", MinefieldRecord.Size, 41),
@@ -357,9 +357,9 @@ foreach (var s in ships)
     );
 }
 
-// The resource pools (equipment PR) ride the record EXACT, as its last 9 bytes in field order: raw f32
+// The resource pools (equipment PR) ride the record EXACT, as its last 11 bytes in field order: raw f32
 // energy (1234.567 has no Half — a quantized pool would flip the fire gate at fractional energy), u16
-// ammo, u8 packs, u16 cloak level.
+// ammo, u8 packs, u16 cloak level, u16 ticks left on the pending ammo-pack load.
 {
     var rec = Frames.ShipRecordOf(ships[0]);
     var pools = new ShipPools
@@ -368,6 +368,7 @@ foreach (var s in ships)
         Ammo = ushort.MaxValue,
         AmmoPacks = 7,
         Cloak = 40959,
+        AmmoLoadLeft = 1200,
     };
     rec.Pools = pools;
     var buf = rec.ToBytes();
@@ -382,15 +383,16 @@ foreach (var s in ships)
             && BitConverter.ToUInt16(buf, at + 4) == ushort.MaxValue
             && buf[at + 6] == 7
             && BitConverter.ToUInt16(buf, at + 7) == 40959
+            && BitConverter.ToUInt16(buf, at + 9) == 1200
             && back.ShipId == rec.ShipId
             && back.LastInputTick == rec.LastInputTick
             && back.FuelPodAmmo == rec.FuelPodAmmo,
-        "ShipRecord.Pools: bit-exact f32 energy (not a Half), u16 ammo 65535, u8 packs, u16 cloak — the record's last 9 bytes",
+        "ShipRecord.Pools: bit-exact f32 energy (not a Half), u16 ammo 65535, u8 packs, u16 cloak, u16 load left — the record's last 11 bytes",
         "ShipRecord.Pools did not survive exactly"
     );
     Check(
         ShipPools.Parse(pools.ToBytes()) == pools && pools.ToBytes().Length == ShipPools.Size,
-        "ShipPools: standalone 9-byte round-trip is exact (record-struct ==)",
+        "ShipPools: standalone 11-byte round-trip is exact (record-struct ==)",
         "ShipPools round-trip"
     );
 }
@@ -1990,6 +1992,7 @@ synthShips[0].Pools = new ShipPools
     Ammo = 960,
     AmmoPacks = 2,
     Cloak = 819,
+    AmmoLoadLeft = 17,
 };
 var synthSnapshot = new SnapshotMessage
 {
@@ -3032,13 +3035,13 @@ static class Goldens
     public static readonly Dictionary<string, string> Table = new()
     {
         ["ShipRecord.hex"] =
-            "887766554433221100010007000000C84200007AC300803B45767B0BDB5A2729C9404A80C2191400B8003D0040003A2A507855204A40E2010008E2010006AA0302010425529A44C003023303",
+            "887766554433221100010007000000C84200007AC300803B45767B0BDB5A2729C9404A80C2191400B8003D0040003A2A507855204A40E2010008E2010006AA0302010425529A44C0030233031100",
         ["MissileRecord.hex"] = "1807F6E5D4C3B2A103000000010C003EED84009D0FB05C00CD80459900000000000000",
         ["Input.hex"] = "02090300000000403F0000000000000000000080BF0000000000000000210807060504030201",
         ["Spawn.hex"] = "04030BB00000000000000102000000030101FFFFFFFF01021000",
         ["Hello.hex"] = "010173016E017401006A",
         ["Welcome.sha"] = "7F14443FC9C31349AEB7EE1FAD7EC40374C31124D7580A03B1D32FC3A8F10C01",
-        ["Snapshot.sha"] = "02289C1D54DBBEF44E080F6630685B96E15AEA3712C5CA6C5713EF8C5F463349",
+        ["Snapshot.sha"] = "70900E9C55E5DF5914807D40C2D09E220D107C73038BEAD27244FD5A61FF335C",
         ["Defs.sha"] = "892EF9A20BAAEC43656EAE947EB16C47A7554EDDA958F9E5D3BE3799CD5FE7E6",
         ["TeamState.sha"] = "A7556A65E310C2F0D26F2FF7BD03EF7A03E9B4FFD75BE0CAF81D2CF2F1C85FF1",
         ["MapList.sha"] = "F769D835423E744FA13F3CDC7D3D9EC75F04237A3D22D015A5C95724EB7986E1",
