@@ -33,12 +33,19 @@ server/Content/core/*.yaml            authored bundle (manifest-driven, kebab-ca
   `factions/iron-coalition.yaml` (all listed in the manifest `catalog:`/`factions:`).
   `factions/sample-data/` is a second worked example (tech.yaml, developments.yaml).
 - **Runtime entry with a wire id = streamed def**: `class-id` (hull), `weapon-id` (weapon),
-  `base-type-id` (station), `cargo-id` (expendable). Catalog entries without one are
-  tech-tree/catalog-only and never reach the wire.
+  `base-type-id` (station), `cargo-id` (expendable), `EquipmentDef.EquipmentId` (a shield/
+  afterburner/cloak part in `equipment.yaml` — the id IS the part's position in the streamed
+  catalog, grouped shields → afterburners → cloaks; append within a section, never reorder).
+  Catalog entries without one are tech-tree/catalog-only and never reach the wire.
 - **Tech gating today**: `Simulation.ResolveTeamUnlocks` (server/Sim/Simulation.cs) resolves
   buildable hull classes per team from the catalog (`BuildableResolver`). The stat-modifier
   system (`AttributeResolver`, developments' `attributes:`) is now wired into the sim
   (`Simulation.cs`, gated by an `AttributesEnabled` kill-switch for tests).
+- **Development `group:`** is a free-text cluster label the Research tab groups nodes by — not
+  wire data, purely a client display grouping. Stock values: `SHIPS`, `UPGRADES`, `WEAPONS`, and
+  `EQUIPMENT` (the shield/afterburner/cloak research lines in `developments.yaml`, each `tech-only:
+  true` granting one same-named tech that `EquipmentDef.RequiredTechIdx`/`ObsoletedByTechIdx`
+  reference — see the `hulls-weapons` skill's *Equipment slots* section for the authoring side).
 
 ## Iron rules
 

@@ -24,7 +24,9 @@ public sealed class TeamStateStore
 
     // One team's economy/research snapshot decoded from MsgTeamState. Bundles what Apply consumes so the
     // wire decoder builds a named record instead of threading ten positional args. OwnedTechs/OwnedCaps
-    // null == "none this frame"; DiscoveredRockClasses defaults to all-known.
+    // null == "none this frame"; DiscoveredRockClasses defaults to all-known. Attributes = the team's
+    // resolved stat multipliers as (GameAttribute byte, multiplier) — the record's non-neutral entries,
+    // exact f32; null == none (every attribute neutral).
     public readonly record struct TeamStateSnapshot(
         byte Team,
         int Credits,
@@ -35,7 +37,8 @@ public sealed class TeamStateStore
         byte DiscoveredRockClasses = 0xFF,
         int MinerCount = 0,
         int MinerCap = 0,
-        int BuildQueueLimit = 0
+        int BuildQueueLimit = 0,
+        (byte Attr, float Mult)[]? Attributes = null
     );
 
     // Per-base research orders at OUR team's bases (MsgResearchState reconciles by omission — an absent
@@ -131,7 +134,39 @@ public sealed class TeamStateStore
         if (s.OwnedCaps is not null)
             foreach (byte c in s.OwnedCaps)
                 capSet.Add(c);
+        // The attribute vector is a full replace too: an attribute the frame leaves out is back to neutral.
+        if (!_teamAttrs.TryGetValue(s.Team, out var attrs))
+            _teamAttrs[s.Team] = attrs = new float[AttrSlots];
+        Array.Fill(attrs, 1f);
+        if (s.Attributes is not null)
+            foreach (var (attr, mult) in s.Attributes)
+                attrs[attr] = mult;
     }
+
+    // ---- Team attribute vector (equipment PR) --------------------------------------------------
+
+    // GameAttribute wire bytes the client resolves effective maxima from. They mirror the factions
+    // library's GameAttribute enum ids (APPEND-ONLY there, so these never move); shared/AttrMod carries
+    // the byte, and ResearchTab.AttrName names the same ids.
+    public const byte AttrMaxShieldShip = 9;
+    public const byte AttrShieldRegenerationShip = 10;
+    public const byte AttrMaxEnergy = 13;
+
+    // One dense multiplier table per team (every byte an AttrMod can carry), 1.0 = neutral. A float
+    // array rather than a dictionary: the own-ship predictor reads it every tick.
+    private const int AttrSlots = 256;
+    private readonly Dictionary<byte, float[]> _teamAttrs = new();
+
+    // True once a MsgTeamState has carried this team's attribute vector. The resource predictor waits
+    // on this rather than assuming neutral: a guessed ×1.0 MaxEnergy would gate shots the server
+    // refuses (or allow ones it gates) until the first frame corrected it.
+    public bool HasAttributes(byte team) => _teamAttrs.ContainsKey(team);
+
+    // The team's resolved multiplier for one attribute — the EXACT f32 the sim stores, so a maximum the
+    // client derives through the shared rules matches the server's bit for bit. 1.0 (neutral) for an
+    // attribute the team doesn't modify or a team with no frame yet (callers that must not guess check
+    // HasAttributes first).
+    public float TeamAttr(byte team, byte attr) => _teamAttrs.TryGetValue(team, out var a) ? a[attr] : 1f;
 
     // Miners the team currently fields / the per-team cap (server-authoritative, from MsgTeamState).
     public int MinerCount(byte team) => _teamMiners.TryGetValue(team, out var m) ? m.Count : 0;

@@ -4,7 +4,8 @@
 // (the match tick) and IShipCostSource (hull cost), both faked here — so the real production logic runs
 // with no Godot runtime. Covers: unknown-team defaults, Apply reconcile semantics, tech/cap/unlock
 // ownership, rock-class discovery gating, miner counts, research round-trip + progress clamp, constructor
-// build-pipeline counting + progress, ClearConstructorStates (roster drops, economy persists), spawn gate.
+// build-pipeline counting + progress, ClearConstructorStates (roster drops, economy persists), spawn gate,
+// and the team attribute vector (known/unknown, exact multipliers, full-replace semantics).
 
 int failures = 0;
 void Check(bool cond, string label)
@@ -137,6 +138,61 @@ s.Apply(new TeamStateStore.TeamStateSnapshot(2, 500, 0, new byte[] { 5 }));
 Check(s.CheckSpawnGate(2, 5) == TeamStateStore.SpawnGate.Allow, "spawn gate Allow (500 >= 300)");
 s.Apply(new TeamStateStore.TeamStateSnapshot(2, 500, 0, Array.Empty<byte>()));
 Check(s.CheckSpawnGate(2, 5) == TeamStateStore.SpawnGate.Locked, "spawn gate Locked (hull not unlocked)");
+
+// ---- Team attribute vector (equipment PR: exact multipliers the predictor derives maxima from) ------
+// The attribute ids mirror the factions library's GameAttribute enum bytes.
+Check(
+    TeamStateStore.AttrMaxShieldShip == 9
+        && TeamStateStore.AttrShieldRegenerationShip == 10
+        && TeamStateStore.AttrMaxEnergy == 13,
+    "attribute ids mirror GameAttribute (MaxShieldShip 9, ShieldRegenerationShip 10, MaxEnergy 13)"
+);
+Check(!s.HasAttributes(3), "unknown team HasAttributes false (the predictor waits instead of assuming ×1)");
+Check(s.TeamAttr(3, TeamStateStore.AttrMaxEnergy) == 1f, "unknown team attribute reads neutral 1.0");
+
+// Earlier snapshots carried no vector (null) — still a received frame: known, every attribute neutral.
+Check(
+    s.HasAttributes(0) && s.TeamAttr(0, TeamStateStore.AttrMaxEnergy) == 1f,
+    "a frame with no attributes = known + neutral"
+);
+float ironEnergy = 1.2f; // the exact f32 the sim streams (a float literal, not a double rounded late)
+s.Apply(
+    new TeamStateStore.TeamStateSnapshot(
+        3,
+        0,
+        0,
+        Array.Empty<byte>(),
+        Attributes: new (byte, float)[]
+        {
+            (TeamStateStore.AttrMaxShieldShip, 1.15f),
+            (TeamStateStore.AttrMaxEnergy, ironEnergy),
+        }
+    )
+);
+Check(s.HasAttributes(3), "HasAttributes true after the first frame");
+Check(
+    BitConverter.SingleToInt32Bits(s.TeamAttr(3, TeamStateStore.AttrMaxEnergy))
+        == BitConverter.SingleToInt32Bits(ironEnergy),
+    "MaxEnergy multiplier stored bit-exact"
+);
+Check(s.TeamAttr(3, TeamStateStore.AttrMaxShieldShip) == 1.15f, "MaxShieldShip multiplier applied");
+Check(s.TeamAttr(3, TeamStateStore.AttrShieldRegenerationShip) == 1f, "an attribute the frame omits reads neutral");
+Check(s.TeamAttr(4, TeamStateStore.AttrMaxEnergy) == 1f, "other teams are unaffected");
+
+// Full replace: the next frame drops MaxShieldShip back to neutral and keeps only what it carries.
+s.Apply(
+    new TeamStateStore.TeamStateSnapshot(
+        3,
+        0,
+        0,
+        Array.Empty<byte>(),
+        Attributes: new (byte, float)[] { (TeamStateStore.AttrMaxEnergy, 0.9f) }
+    )
+);
+Check(
+    s.TeamAttr(3, TeamStateStore.AttrMaxShieldShip) == 1f && s.TeamAttr(3, TeamStateStore.AttrMaxEnergy) == 0.9f,
+    "re-Apply replaces the vector wholesale (a dropped entry returns to neutral, a lowered one applies)"
+);
 
 Console.WriteLine(failures == 0 ? "ALL PASS" : $"{failures} FAILURE(S)");
 return failures == 0 ? 0 : 1;

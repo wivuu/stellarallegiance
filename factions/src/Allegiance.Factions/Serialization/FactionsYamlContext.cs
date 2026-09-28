@@ -36,7 +36,6 @@ namespace Allegiance.Factions.Serialization;
 [YamlSerializable(typeof(Shield))]
 [YamlSerializable(typeof(Cloak))]
 [YamlSerializable(typeof(Afterburner))]
-[YamlSerializable(typeof(AmmoPack))]
 [YamlSerializable(typeof(Launcher))]
 [YamlSerializable(typeof(Station))]
 [YamlSerializable(typeof(Development))]
@@ -46,6 +45,7 @@ namespace Allegiance.Factions.Serialization;
 [YamlSerializable(typeof(Chaff))]
 [YamlSerializable(typeof(Probe))]
 [YamlSerializable(typeof(FuelPod))]
+[YamlSerializable(typeof(AmmoPack))]
 [YamlSerializable(typeof(Projectile))]
 // ---- tech-tree report (the CLI's dump; read back by its round-trip test) ----
 [YamlSerializable(typeof(TechTreeDump))]

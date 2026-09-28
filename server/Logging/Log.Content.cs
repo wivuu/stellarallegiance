@@ -9,12 +9,13 @@ internal static partial class Log
     public static partial void UnparsableGlbNode(ILogger logger, string ctx, string node);
 
     // A WARN, never a refusal: a model-less droppable still drops and is still collectable — the
-    // client just renders it as a placeholder puff. Operators running custom content need to know
-    // which defs will look wrong, not to be locked out of booting.
+    // client just renders it as a placeholder puff (and a model-less equipment part still works).
+    // Operators running custom content need to know which defs will look wrong, not to be locked
+    // out of booting.
     [LoggerMessage(
         EventId = 1602,
         Level = LogLevel.Warning,
-        Message = "salvage: {Count} droppable def(s) have no model-name (dropped items show a placeholder): {Defs}"
+        Message = "content: {Count} droppable/equipment def(s) have no model-name (they render as a placeholder): {Defs}"
     )]
     public static partial void SalvageDefsWithoutModel(ILogger logger, int count, string defs);
 }

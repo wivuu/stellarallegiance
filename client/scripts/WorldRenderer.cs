@@ -457,6 +457,7 @@ public partial class WorldRenderer
         _shipRenderer = new ShipRenderer(
             _ships,
             _defs,
+            TeamState, // attribute vector → per-ship shield / energy maxima + the predictor's gate
             (team, pig) => pig ? (team == 0 ? _pigTeam0Mat : _pigTeam1Mat) : (team == 0 ? _team0Mat : _team1Mat),
             _sectorView,
             _player,

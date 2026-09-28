@@ -39,11 +39,13 @@ public static class InputFlags
     public const byte DropChaff = 8;
     public const byte DropMine = 16;
     public const byte DropProbe = 32;
+    public const byte Cloak = 64; // cloak engaged: a held LEVEL (the toggle latch), sent every tick; bit 128 is free
 }
 
-// One ship snapshot record (67 bytes). Position is raw f32 and rotation a 20-bit smallest-three
+// One ship snapshot record (76 bytes). Position is raw f32 and rotation a 20-bit smallest-three
 // quaternion (exact enough to render a remote hull off directly — see the Pos comment below);
-// rates/power/health are f16 (WireQuant), whose budget only feeds interpolation tangents and HUD.
+// rates/power/health are f16 (WireQuant), whose budget only feeds interpolation tangents and HUD;
+// the resource pools are exact (see Pools).
 [WireRecord]
 public partial struct ShipRecord
 {
@@ -90,6 +92,12 @@ public partial struct ShipRecord
     public byte MineAmmo;
     public byte ProbeAmmo;
     public byte FuelPodAmmo;
+
+    // The pools the FIRE PHASE of LastInputTick started with (after that tick's ammo step) — not the
+    // end-of-tick pools (ShipResources' tick order). The owner reconciles its prediction ring against
+    // them, and a remote row with LastFireTick == LastInputTick replays that tick's fire gate on them
+    // to know exactly which mounts fired. Exact on the wire: f32 energy, u16 ammo, u8 packs, u16 cloak.
+    public ShipPools Pools;
 
     // ---- Flag decoders shared by every reader (client rows, tests, bots) ----
     public bool IsPig => (Flags & ShipFlags.Pig) != 0;
@@ -300,7 +308,7 @@ public partial struct HoldItemRecord
 }
 
 // One ship's effective loadout: per-barrel weapon ids in hardpoint declaration order + hold +
-// the crew-served turret guns.
+// the crew-served turret guns + the equipment in each slot.
 [WireRecord]
 public partial struct ShipLoadoutRecord
 {
@@ -312,6 +320,11 @@ public partial struct ShipLoadoutRecord
     // has no stations). REQUIRED, not [WireOptional]: an optional tail reads "absent" as
     // "nothing left in the reader", which inside an array element would swallow the rows after it.
     public uint[] TurretWeaponIds;
+
+    // The EFFECTIVE equipment, indexed by slot (EquipmentDef.Slot*: shield, afterburner, cloak) —
+    // EquipmentDef.SlotCount entries; NoEquipment = the slot is empty. REQUIRED for the same reason
+    // as TurretWeaponIds.
+    public ushort[] EquipmentIds;
 }
 
 // One team's low-rate economy / research state.
@@ -331,6 +344,12 @@ public partial struct TeamStateRecord
     public byte MinerCount;
     public byte MinerCap;
     public byte BuildQueueLimit;
+
+    // The team's resolved team-wide stat multipliers (faction base × completed developments): only
+    // the NON-NEUTRAL entries (!= 1.0), sorted by attribute byte, exact f32 as the sim stores them —
+    // so the client resolves every effective maximum (MaxEnergy, ship shields) from the sim's bits.
+    // Empty until the match seeds them. REQUIRED, not [WireOptional]: this record is an array element.
+    public AttrMod[] Attributes;
 }
 
 // One lobby roster row.
@@ -437,6 +456,14 @@ public partial struct MountOverrideRecord
 {
     public byte HpIndex;
     public uint WeaponId; // uint.MaxValue = leave the slot empty
+}
+
+// One hangar equipment-slot override on MsgSpawn (3 bytes): the part picked for one slot.
+[WireRecord]
+public partial struct EquipmentOverrideRecord
+{
+    public byte Slot; // EquipmentDef.Slot* (shield, afterburner, cloak)
+    public ushort EquipmentId; // EquipmentDef.NoEquipment (0xFFFF) = launch with the slot explicitly EMPTY
 }
 
 // One crew-served TURRET STATION on a captain's ship (9 bytes): which gun it mounts and who mans

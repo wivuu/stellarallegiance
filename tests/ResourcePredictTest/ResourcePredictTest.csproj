@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Same seam as FuelPodTest: SimServer brings Simulation/World/ContentLoader/Frames; the shared
+         def records and the resource rule (ShipResources) come transitively. Its Main is never invoked. -->
+    <ProjectReference Include="../../shared/Shared.csproj" />
+    <ProjectReference Include="../../server/SimServer.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The client's Godot-free resource predictor and team-attribute store, linked directly (the
+         TeamStateStoreTest idiom): this suite steps the REAL production ResourceMirror tick for tick
+         against the real Simulation, fed through the real wire records. -->
+    <Compile Include="../../client/scripts/ResourceMirror.cs" Link="client/ResourceMirror.cs" />
+    <!-- GateBlock (ResourceMirror's per-shot refusal reason) is declared in CockpitCues.cs, not here —
+         see ResourceMirror.cs's header note — so link it too; it depends only on the BCL. -->
+    <Compile Include="../../client/scripts/CockpitCues.cs" Link="client/CockpitCues.cs" />
+    <Compile Include="../../client/scripts/world/TeamStateStore.cs" Link="client/TeamStateStore.cs" />
+    <Compile Include="../../client/scripts/world/ITickSource.cs" Link="client/ITickSource.cs" />
+    <Compile Include="../../client/scripts/world/IShipCostSource.cs" Link="client/IShipCostSource.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The stock bundle under test, copied next to the test binary (mirrors FuelPodTest). -->
+    <Content
+      Include="../../server/content/core/**/*.yaml"
+      Link="content/core/%(RecursiveDir)%(Filename)%(Extension)"
+      CopyToOutputDirectory="PreserveNewest"
+    />
+  </ItemGroup>
+</Project>

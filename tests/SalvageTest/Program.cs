@@ -15,7 +15,8 @@
 //   Seeker rack 1:    weapon-id 3 (Missile, rack mass 4, magazine 6, round mass 4)
 //   Quickfire rack 1: weapon-id 4 (Missile, rack mass 2, magazine 6, round mass 3)
 //   Cargo ids: 2 prox-mine (mass 1, 1 charge/pack), 3 counter (mass 1, 8 charges/pack),
-//              4 ews-probe (mass 2, 2 charges/pack), 5 fuel-pod (mass 1, 1 charge/pack).
+//              4 ews-probe (mass 2, 2 charges/pack), 5 fuel-pod (mass 1, 1 charge/pack),
+//              6 ammo-pack (mass 1, 1 charge/pack; the scout's magazine is 960, the interceptor's 540).
 //   Dispensers: chaff weapon-id 6, mine 7, probe 8 (tier 1); probe tier 2 = 31 behind tech probe-2.
 //
 // Scenarios (WP5 1-11 + 14; 12-13 are wire/hub and land with phase 3):
@@ -49,6 +50,10 @@
 //  15. Cargo hold (cargo-capacity): a stowed gun re-drops as a part, the hold fills to capacity
 //      then refuses once with 'hold full', a same-id consumable stack merges without a slot, and
 //      hold contents never touch PayloadUsed (a stowed item leaves the payload budget untouched).
+//  16. Ammo packs (equipment PR): the drop candidate is appended AFTER fuel, so every earlier roll is
+//      unchanged by carrying packs; a hull with a magazine loads a salvaged pack into its pack
+//      reserve, one with no magazine stows it ('no ammo bay') or bounces it; carried packs count
+//      against the payload budget.
 
 using System.Text;
 using SimServer.Content;
@@ -85,6 +90,7 @@ const uint MineCargo = 2;
 const uint ChaffCargo = 3;
 const uint ProbeCargo = 4;
 const uint FuelCargo = 5;
+const uint AmmoCargo = 6;
 
 // Boot a fresh Simulation the way SimServer's Program.cs does, PIGs/miners/shields/fog off so
 // nothing but the ships under test moves (FuelPodTest's idiom). `tune` mutates the world.yaml
@@ -991,12 +997,14 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
     );
 
     // Hand-parse the frame: [28][u8 rows] then rows x (u64 shipId, u8 nSlots, nSlots x u32, u8
-    // nHold, nHold x (u8 kind, u32 itemId, u8 count), u8 nTurrets, nTurrets x u32) — the v41 tail
-    // is the ship's crew-served turret-station guns (the bomber's two authored stations).
+    // nHold, nHold x (u8 kind, u32 itemId, u8 count), u8 nTurrets, nTurrets x u32, u8 nEquip,
+    // nEquip x u16) — the v41 tail is the ship's crew-served turret-station guns (the bomber's two
+    // authored stations), the v44 tail its equipment by slot (the bomber's defaults).
     byte[] frame = Protocol.BuildShipLoadouts(sim);
     var ids = new List<uint>();
     var stowed = new List<(byte kind, uint itemId, byte count)>();
     var turrets = new List<uint>();
+    var equipment = new List<ushort>();
     bool found = false;
     {
         int o = 2;
@@ -1025,12 +1033,20 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
                 rowTurrets.Add(BitConverter.ToUInt32(frame, o));
                 o += 4;
             }
+            int nEquip = frame[o++];
+            var rowEquipment = new List<ushort>();
+            for (int s = 0; s < nEquip; s++)
+            {
+                rowEquipment.Add(BitConverter.ToUInt16(frame, o));
+                o += 2;
+            }
             if (shipId != bomber.ShipId)
                 continue;
             found = true;
             ids.AddRange(rowIds);
             stowed.AddRange(rowStowed);
             turrets.AddRange(rowTurrets);
+            equipment.AddRange(rowEquipment);
         }
         Check(
             o == frame.Length,
@@ -1042,9 +1058,10 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
         found
             && ids is [GatGun1, 12u, 12u, GatGun1, 5u]
             && stowed is [(2, QuickfireRack1, 2)]
-            && turrets is [GatGun1, GatGun1],
-        "a hold-only ship rides MsgShipLoadout with its AUTHORED ids + turret stations plus the hold entry (kind, id, count)",
-        $"loadout row wrong (found {found}, ids [{string.Join(",", ids)}], hold [{string.Join(",", stowed.Select(s => $"k{s.kind}:{s.itemId}x{s.count}"))}], turrets [{string.Join(",", turrets)}])"
+            && turrets is [GatGun1, GatGun1]
+            && equipment.SequenceEqual(sim.Content.Ships.First(d => d.ClassId == 2).DefaultEquipment),
+        "a hold-only ship rides MsgShipLoadout with its AUTHORED ids + turret stations + default equipment plus the hold entry (kind, id, count)",
+        $"loadout row wrong (found {found}, ids [{string.Join(",", ids)}], hold [{string.Join(",", stowed.Select(s => $"k{s.kind}:{s.itemId}x{s.count}"))}], turrets [{string.Join(",", turrets)}], equipment [{string.Join(",", equipment)}])"
     );
 }
 
@@ -1446,6 +1463,115 @@ List<string> PressItemOnShip(Simulation sim, Simulation.SalvageSim it, Simulatio
         s0.Hold is null && n0 is ["Can't carry PW Gat Gun 1: no free mount"],
         "cargo-capacity 0: the equip reason is the rejection ('no free mount'), never 'hold full'",
         $"no-hold notice wrong: {string.Join(" | ", n0)}"
+    );
+}
+
+// ---- 16. Ammo packs: appended last in the roll order, loaded, stowed, weighed ---------------------
+{
+    // The replay contract: the same wreck with and without ammo packs rolls every EARLIER candidate
+    // identically (same seed, same outcomes, same fling draws) — the ammo candidate comes last.
+    List<(byte kind, uint id, byte count, Vec3 vel)> Wreck(int rngSeed, (uint, byte)[] cargo)
+    {
+        var sim = BootSim(rngSeed: rngSeed, tune: t => t.DropChance = 0.5f);
+        Kill(sim, Spawn(sim, 1, team: 0, cls: ClassInterceptor, cargo: cargo));
+        return sim.Salvage.Select(i => (i.Kind, i.ItemId, i.Count, i.Vel)).ToList();
+    }
+    // Swept over several seeds so the 0.5 coin flips cover dropped AND skipped earlier candidates.
+    int compared = 0,
+        ammoDrops = 0;
+    bool unshifted = true;
+    for (int seed = 1; seed <= 12; seed++)
+    {
+        var without = Wreck(seed, [(FuelCargo, 2)]);
+        var with = Wreck(seed, [(FuelCargo, 2), (AmmoCargo, 2)]);
+        var earlier = with.Where(i => i.kind != 1 || i.id != AmmoCargo).ToList();
+        unshifted &= earlier.SequenceEqual(without) && with.Count - earlier.Count <= 1;
+        compared += without.Count;
+        ammoDrops += with.Count - earlier.Count;
+    }
+    Check(
+        unshifted && compared >= 6 && ammoDrops >= 1,
+        $"carrying ammo packs changes no earlier roll: over 12 seeds the same {compared} other items drop with the same flings ({ammoDrops} ammo drops appended)",
+        $"the ammo candidate shifted the RNG (unshifted {unshifted}, compared {compared}, ammo drops {ammoDrops})"
+    );
+
+    var sim = BootSim();
+    Kill(sim, Spawn(sim, 1, team: 0, cls: ClassInterceptor, cargo: [(FuelCargo, 2), (AmmoCargo, 2)]));
+    var items = sim.Salvage.ToList();
+    Check(
+        items.Count >= 2
+            && items[^2] is { Kind: 1, ItemId: FuelCargo, Count: 2 }
+            && items[^1] is { Kind: 1, ItemId: AmmoCargo, Count: 2 },
+        "a full dump drops the ammo packs LAST, right after the fuel pods (Kind 1, their pack charges)",
+        $"drop order wrong ([{string.Join(",", items.Select(i => $"k{i.Kind}:{i.ItemId}x{i.Count}"))}])"
+    );
+
+    // A scout (magazine 960) loads the salvaged packs into its pack reserve.
+    var scout = Spawn(sim, 2, team: 0, cls: ClassScout);
+    var pack = items[^1];
+    IsolateItem(sim, pack);
+    var notices = PressItemOnShip(sim, pack, scout, 2);
+    Check(
+        !sim.Salvage.Contains(pack)
+            && scout.Pools.AmmoPacks == 2
+            && scout.Hold is null
+            && notices.Any(n => n.StartsWith("Salvaged: ")),
+        "a hull with a magazine collects a dropped ammo pack into its pack reserve (Pools.AmmoPacks +2)",
+        $"ammo pickup wrong (alive {sim.Salvage.Contains(pack)}, packs {scout.Pools.AmmoPacks}, notices {string.Join(" | ", notices)})"
+    );
+}
+{
+    // No magazine: a hull with a hold STOWS the pack ('no ammo bay'); a hold-less one bounces it.
+    (Simulation sim, Simulation.SalvageSim pack, Simulation.ShipSim ammoless) Setup(int? hold)
+    {
+        var sim = BootSim(hold: hold);
+        var ammoless = Spawn(sim, 1, team: 0, cls: ClassScout);
+        sim.Content.Ships.First(d => d.ClassId == ClassScout).MaxAmmo = 0; // AFTER the spawn: the pickup reads the def live
+        Kill(sim, Spawn(sim, 2, team: 0, cls: ClassInterceptor, cargo: [(AmmoCargo, 1)]));
+        var pack = sim.Salvage.First(i => i.Kind == 1 && i.ItemId == AmmoCargo);
+        IsolateItem(sim, pack);
+        return (sim, pack, ammoless);
+    }
+    var (sim, pack, ship) = Setup(hold: null);
+    var stowed = PressItemOnShip(sim, pack, ship, 2);
+    Check(
+        !sim.Salvage.Contains(pack) && ship.Hold is [(1, AmmoCargo, 1)] && ship.Pools.AmmoPacks == 0,
+        "an ammo pack on a hull with no magazine but a hold is STOWED inert (no reserve is ever loaded)",
+        $"ammoless stow wrong (alive {sim.Salvage.Contains(pack)}, hold {ship.Hold?.Count}, packs {ship.Pools.AmmoPacks})"
+    );
+    Check(
+        stowed.Count == 1 && stowed[0].Contains("no ammo bay"),
+        "the stow notice names the reason ('no ammo bay')",
+        $"ammoless notice wrong ({string.Join(" | ", stowed)})"
+    );
+    var (sim0, pack0, ship0) = Setup(hold: 0);
+    var bounced = PressItemOnShip(sim0, pack0, ship0, 4);
+    Check(
+        sim0.Salvage.Contains(pack0) && bounced.Count(n => n.Contains("no ammo bay")) == 1,
+        "a hold-less hull with no magazine bounces the pack ('no ammo bay', said once)",
+        $"ammoless bounce wrong (alive {sim0.Salvage.Contains(pack0)}, notices {string.Join(" | ", bounced)})"
+    );
+}
+{
+    // Carried ammo packs weigh on the payload: 1 (gat) + 4 mine + 1 chaff + 2 probe + 4 ammo = 12 of
+    // 12, so even a 1-mass mine pack is refused on a hold-less world (without the packs it's 8/12).
+    var sim = BootSim(hold: 0);
+    var packed = Spawn(
+        sim,
+        1,
+        team: 0,
+        cls: ClassScout,
+        cargo: [(MineCargo, 4), (ChaffCargo, 1), (ProbeCargo, 1), (AmmoCargo, 4)]
+    );
+    Kill(sim, Spawn(sim, 2, team: 0, cls: ClassScout));
+    var mine = sim.Salvage.First(i => i.Kind == 1 && i.ItemId == MineCargo);
+    IsolateItem(sim, mine);
+    mine.Count = 1;
+    var notices = PressItemOnShip(sim, mine, packed, 5);
+    Check(
+        packed.Pools.AmmoPacks == 4 && packed.MineAmmo == 4 && notices.Count(n => n.Contains("payload full")) == 1,
+        "carried ammo packs count against the payload budget (a hull full with 4 packs refuses a 1-mass mine pack)",
+        $"ammo packs not weighed (packs {packed.Pools.AmmoPacks}, mines {packed.MineAmmo}, notices {string.Join(" | ", notices)})"
     );
 }
 

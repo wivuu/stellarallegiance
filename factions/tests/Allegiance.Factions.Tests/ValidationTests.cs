@@ -381,75 +381,410 @@ public class ValidationTests
         Assert.Contains(result.Errors, e => e.Contains("cargo-id") && e.Contains("n1"));
     }
 
-    // Booster fuel: ab-accel and max-fuel are authored as a pair, and the drain/recharge rates
-    // must actually behave like a gauge (never net-zero, never negative).
+    // Booster fuel: the tank belongs to the afterburner SLOT. A hull that allows an afterburner needs
+    // max-fuel, max-fuel without the slot is dead data, and the in-flight recharge must lag the drain
+    // of every allowed booster (the most frugal one decides) — else the gauge never net-depletes.
     [Fact]
-    public void AfterburnerWithoutMaxFuel_IsReported()
+    public void AfterburnerSlotWithoutMaxFuel_IsReported()
     {
-        var core = MakeFuelHullCore(abAccel: 5, maxFuel: 0, fuelDrain: 0, fuelRecharge: 0);
+        var core = MakeFuelHullCore(maxFuel: 0, fuelRecharge: 0);
 
         var result = CoreValidator.Validate(core);
 
         Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, e => e.Contains("no max-fuel"));
+        Assert.Contains(result.Errors, e => e.Contains("afterburner slot") && e.Contains("no max-fuel"));
     }
 
     [Fact]
-    public void MaxFuelWithoutAfterburner_IsReported()
+    public void MaxFuelWithoutAfterburnerSlot_IsReported()
     {
-        var core = MakeFuelHullCore(abAccel: 0, maxFuel: 10, fuelDrain: 3, fuelRecharge: 0.5);
+        var core = MakeFuelHullCore(maxFuel: 10, fuelRecharge: 0, allowBooster: false);
 
         var result = CoreValidator.Validate(core);
 
         Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, e => e.Contains("no afterburner"));
+        Assert.Contains(result.Errors, e => e.Contains("max-fuel but no afterburner slot"));
     }
 
     [Fact]
-    public void MaxFuelWithoutFuelDrain_IsReported()
+    public void AfterburnerWithoutFuelConsumption_IsReported()
     {
-        var core = MakeFuelHullCore(abAccel: 5, maxFuel: 10, fuelDrain: 0, fuelRecharge: 0);
+        var core = MakeFuelHullCore(maxFuel: 10, fuelRecharge: 0);
+        core.Afterburners[0].FuelConsumption = 0;
 
         var result = CoreValidator.Validate(core);
 
         Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, e => e.Contains("no ab-fuel-drain"));
+        Assert.Contains(result.Errors, e => e.Contains("afterburner 'booster'") && e.Contains("fuel-consumption > 0"));
     }
 
     [Fact]
     public void FuelRechargeAtOrAboveDrain_IsReported()
     {
-        var core = MakeFuelHullCore(abAccel: 5, maxFuel: 10, fuelDrain: 3, fuelRecharge: 3);
+        var core = MakeFuelHullCore(maxFuel: 10, fuelRecharge: 1.2);
 
         var result = CoreValidator.Validate(core);
 
         Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, e => e.Contains("ab-fuel-recharge >= ab-fuel-drain"));
+        Assert.Contains(result.Errors, e => e.Contains("ab-fuel-recharge") && e.Contains("never net-depletes"));
+    }
+
+    // The recharge must lag EVERY allowed booster: 0.5/s lags the thirsty booster (1.2/s) but not a
+    // frugal light booster (0.2/s) the hull also allows — refused, naming the frugal one.
+    [Fact]
+    public void FuelRechargeAboveTheMostFrugalAllowedBooster_IsReported()
+    {
+        var core = MakeFuelHullCore(maxFuel: 10, fuelRecharge: 0.5);
+        core.Afterburners.Add(ValidBooster("lt-booster", fuelConsumption: 0.2));
+        core.Hulls[0].AllowedParts[EquipmentSlot.Afterburner].Add("lt-booster");
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("never net-depletes") && e.Contains("lt-booster"));
     }
 
     [Fact]
-    public void NegativeFuelDrainOrRecharge_IsReported()
+    public void NegativeFuelRecharge_IsReported()
     {
-        var negativeDrain = MakeFuelHullCore(abAccel: 5, maxFuel: 10, fuelDrain: -1, fuelRecharge: 0.5);
-        var negativeRecharge = MakeFuelHullCore(abAccel: 5, maxFuel: 10, fuelDrain: 3, fuelRecharge: -0.5);
+        var core = MakeFuelHullCore(maxFuel: 10, fuelRecharge: -0.5);
 
-        var drainResult = CoreValidator.Validate(negativeDrain);
-        var rechargeResult = CoreValidator.Validate(negativeRecharge);
+        var result = CoreValidator.Validate(core);
 
-        Assert.False(drainResult.IsValid);
-        Assert.Contains(drainResult.Errors, e => e.Contains("negative ab-fuel-drain"));
-        Assert.False(rechargeResult.IsValid);
-        Assert.Contains(rechargeResult.Errors, e => e.Contains("negative ab-fuel-recharge"));
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("negative ab-fuel-recharge"));
     }
 
     [Fact]
     public void CorrectlyAuthoredFueledHull_IsValid()
     {
-        var core = MakeFuelHullCore(abAccel: 5, maxFuel: 10, fuelDrain: 3, fuelRecharge: 0.5);
+        var core = MakeFuelHullCore(maxFuel: 13, fuelRecharge: 0);
 
         var result = CoreValidator.Validate(core);
 
         Assert.True(result.IsValid, string.Join("\n", result.Errors));
+    }
+
+    // ---- Equipment slots (allowed-parts / preferred-parts) -------------------------------------
+
+    // A part's KIND decides the slot it fits: an afterburner listed under `shield` could never be
+    // equipped there.
+    [Fact]
+    public void AllowedPartsKindMismatch_IsReported()
+    {
+        var core = MakeFuelHullCore(maxFuel: 10, fuelRecharge: 0);
+        core.Hulls[0].AllowedParts[EquipmentSlot.Shield] = ["booster"];
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(
+            result.Errors,
+            e => e.Contains("allowed-parts[shield]") && e.Contains("afterburner 'booster'") && e.Contains("shields")
+        );
+    }
+
+    // Packs are hold cargo (ammo-packs: / fuels:), never a mountable slot.
+    [Fact]
+    public void PackKeyInAllowedParts_IsReported()
+    {
+        var core = MakeFuelHullCore(maxFuel: 10, fuelRecharge: 0);
+        core.Hulls[0].AllowedParts[EquipmentSlot.Pack] = ["booster"];
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("allowed-parts[pack]") && e.Contains("cargo"));
+    }
+
+    // A preferred shield/afterburner/cloak is its slot's default candidate — one the hull doesn't allow
+    // could never be equipped.
+    [Fact]
+    public void PreferredEquipmentNotAllowed_IsReported()
+    {
+        var core = MakeFuelHullCore(maxFuel: 10, fuelRecharge: 0);
+        core.Shields.Add(ValidShield("sm-shield"));
+        core.Hulls[0].PreferredParts = ["sm-shield", "booster"];
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(
+            result.Errors,
+            e => e.Contains("preferred-parts") && e.Contains("shield 'sm-shield'") && e.Contains("allowed-parts[shield]")
+        );
+        Assert.DoesNotContain(result.Errors, e => e.Contains("preferred-parts") && e.Contains("'booster'"));
+    }
+
+    // A preferred part reached only through a listed part's successor chain IS allowed.
+    [Fact]
+    public void PreferredEquipmentReachedThroughSuccessorChain_IsValid()
+    {
+        var core = MakeFuelHullCore(maxFuel: 10, fuelRecharge: 0);
+        var tier2 = ValidBooster("booster-2");
+        core.Afterburners[0].SuccessorPartId = "booster-2";
+        core.Afterburners.Add(tier2);
+        core.Hulls[0].PreferredParts = ["booster-2"];
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.True(result.IsValid, string.Join("\n", result.Errors));
+    }
+
+    // A successor is the next TIER of the same part — tier migration swaps it in place.
+    [Fact]
+    public void SuccessorOfDifferentKind_IsReported()
+    {
+        var core = MakeFuelHullCore(maxFuel: 10, fuelRecharge: 0);
+        core.Shields.Add(ValidShield("sm-shield"));
+        core.Afterburners[0].SuccessorPartId = "sm-shield";
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(
+            result.Errors,
+            e => e.Contains("afterburner 'booster' successor-part-id") && e.Contains("same kind")
+        );
+    }
+
+    [Fact]
+    public void SuccessorCycle_IsReported()
+    {
+        var core = MakeFuelHullCore(maxFuel: 10, fuelRecharge: 0);
+        core.Afterburners.Add(ValidBooster("booster-2"));
+        core.Afterburners[0].SuccessorPartId = "booster-2";
+        core.Afterburners[1].SuccessorPartId = "booster";
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("afterburner 'booster'") && e.Contains("loops back to itself"));
+    }
+
+    // ---- Equipment stats ------------------------------------------------------------------------
+
+    [Fact]
+    public void ShieldWithoutRegen_IsReported()
+    {
+        var core = new Core { Shields = { ValidShield("sm-shield") } };
+        core.Shields[0].RegenRate = 0;
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("shield 'sm-shield'") && e.Contains("regen-rate > 0"));
+    }
+
+    [Fact]
+    public void NegativeShieldRechargeDelay_IsReported()
+    {
+        var core = new Core { Shields = { ValidShield("sm-shield") } };
+        core.Shields[0].RechargeDelay = -1;
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("shield 'sm-shield'") && e.Contains("negative recharge-delay"));
+    }
+
+    [Fact]
+    public void AfterburnerWithZeroOnRate_IsReported()
+    {
+        var core = new Core { Afterburners = { ValidBooster("booster") } };
+        core.Afterburners[0].OnRate = 0;
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("afterburner 'booster'") && e.Contains("on-rate > 0"));
+    }
+
+    // Allegiance's Retro Booster (negative thrust) is not supported.
+    [Fact]
+    public void NegativeThrustBooster_IsReported()
+    {
+        var core = new Core { Afterburners = { ValidBooster("retro") } };
+        core.Afterburners[0].MaxThrust = -58.3;
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("afterburner 'retro'") && e.Contains("max-thrust > 0"));
+    }
+
+    // A full (1.0) cloak would make the ship permanently undetectable — strictly below 1.
+    [Fact]
+    public void FullCloak_IsReported()
+    {
+        var core = new Core { Cloaks = { ValidCloak("sig-cloak") } };
+        core.Cloaks[0].MaxCloaking = 1.0;
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("cloak 'sig-cloak'") && e.Contains("max-cloaking"));
+    }
+
+    // ---- Energy / ammo pools on runtime hulls ----------------------------------------------------
+
+    [Fact]
+    public void CloakSlotWithoutEnergy_IsReported()
+    {
+        var core = MakeFuelHullCore(maxFuel: 10, fuelRecharge: 0);
+        core.Cloaks.Add(ValidCloak("sig-cloak"));
+        core.Hulls[0].AllowedParts[EquipmentSlot.Cloak] = ["sig-cloak"];
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("cloak slot") && e.Contains("no max-energy"));
+
+        core.Hulls[0].MaxEnergy = 1200;
+        Assert.True(CoreValidator.Validate(core).IsValid, string.Join("\n", CoreValidator.Validate(core).Errors));
+    }
+
+    // A default gun whose single shot costs more than the pool could never fire.
+    [Fact]
+    public void EnergyGunWithoutEnergy_IsReported()
+    {
+        var core = MakeArmedHullCore(payloadCapacity: 10);
+        core.Weapons[0].EnergyPerShot = 60;
+        core.Hulls[0].MaxEnergy = 50;
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(
+            result.Errors,
+            e => e.Contains("weapon 'cannon'") && e.Contains("energy-per-shot 60") && e.Contains("never fire")
+        );
+    }
+
+    [Fact]
+    public void AmmoGunWithoutAmmo_IsReported()
+    {
+        var core = MakeArmedHullCore(payloadCapacity: 10);
+        core.Weapons[0].AmmoPerShot = 2;
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("ammo-per-shot 2") && e.Contains("max-ammo is 0"));
+
+        core.Hulls[0].MaxAmmo = 960;
+        Assert.True(CoreValidator.Validate(core).IsValid, string.Join("\n", CoreValidator.Validate(core).Errors));
+    }
+
+    [Fact]
+    public void MaxAmmoOutsideUShortRange_IsReported()
+    {
+        var core = MakeArmedHullCore(payloadCapacity: 10);
+        core.Hulls[0].MaxAmmo = 70000;
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("max-ammo 70000") && e.Contains("0..65535"));
+    }
+
+    // ---- Ammo packs (pure cargo, the fuel pod's twin) -------------------------------------------
+
+    [Fact]
+    public void AmmoPackWithoutCargoIdOrAmmoPerCharge_IsReported()
+    {
+        var core = new Core
+        {
+            AmmoPacks =
+            {
+                new AmmoPack { Id = "ammo", Name = "Ammo" },
+            },
+        };
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("ammo pack 'ammo'") && e.Contains("ammo-per-charge"));
+        Assert.Contains(result.Errors, e => e.Contains("ammo pack 'ammo'") && e.Contains("cargo-id"));
+    }
+
+    [Fact]
+    public void AmmoPackInDefaultCargoWithoutMagazine_IsReported()
+    {
+        var core = MakeFuelHullCore(maxFuel: 10, fuelRecharge: 0);
+        core.AmmoPacks.Add(ValidAmmoPack());
+        core.Hulls[0].PayloadCapacity = 5;
+        core.Hulls[0].DefaultCargo.Add(new CargoLoad { Item = "ammo-pack", Count = 1 });
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("ammo packs ('ammo-pack')") && e.Contains("no magazine"));
+
+        core.Hulls[0].MaxAmmo = 500;
+        Assert.True(CoreValidator.Validate(core).IsValid, string.Join("\n", CoreValidator.Validate(core).Errors));
+    }
+
+    // ---- Tombstones: the hull keys that moved onto the equipment parts ---------------------------
+
+    // The YAML reader ignores unknown keys, so a bundle still authoring the old shield/boost keys would
+    // otherwise boot with no shield and no boost, silently. Every one is refused, by name.
+    [Fact]
+    public void MovedHullKeys_AreRefused()
+    {
+        var hull = CoreSerializer.Deserialize<Hull>(
+            """
+            id: legacy
+            name: Legacy
+            ab-accel: 10
+            ab-on-rate: 2
+            ab-off-rate: 1
+            ab-fuel-drain: 3
+            shield-capacity: 60
+            shield-recharge: 8
+            shield-delay: 3
+            """
+        );
+        var core = new Core { Hulls = { hull } };
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.False(result.IsValid);
+        foreach (
+            var key in new[]
+            {
+                "ab-accel",
+                "ab-on-rate",
+                "ab-off-rate",
+                "ab-fuel-drain",
+                "shield-capacity",
+                "shield-recharge",
+                "shield-delay",
+            }
+        )
+            Assert.Contains(result.Errors, e => e.Contains($"hull 'legacy' authors {key}") && e.Contains("equipment.yaml"));
+    }
+
+    // Even an explicit 0 is refused: any authored value means the bundle predates the equipment move.
+    [Fact]
+    public void MovedHullKeyAuthoredAsZero_IsRefused()
+    {
+        var core = new Core
+        {
+            Hulls =
+            {
+                new Hull
+                {
+                    Id = "legacy",
+                    Name = "Legacy",
+                    AbAccel = 0,
+                },
+            },
+        };
+
+        var result = CoreValidator.Validate(core);
+
+        Assert.Contains(result.Errors, e => e.Contains("authors ab-accel"));
     }
 
     // A launcher carrying a weapon-id projects to a Missile / Mine / Chaff / Probe WeaponDef
@@ -937,22 +1272,72 @@ public class ValidationTests
             ModelName = "acs64",
         };
 
-    private static Core MakeFuelHullCore(double abAccel, double maxFuel, double fuelDrain, double fuelRecharge) =>
+    // A runtime hull (class-id 0) with an afterburner slot allowing one valid booster (fuel-consumption
+    // 1.2/s) — or no afterburner slot at all when allowBooster is false.
+    private static Core MakeFuelHullCore(double maxFuel, double fuelRecharge, bool allowBooster = true)
+    {
+        var hull = new Hull
+        {
+            Id = "scout",
+            Name = "Scout",
+            ClassId = 0,
+            MaxFuel = maxFuel,
+            AbFuelRecharge = fuelRecharge,
+        };
+        if (allowBooster)
+        {
+            hull.AllowedParts[EquipmentSlot.Afterburner] = ["booster"];
+            hull.PreferredParts = ["booster"];
+        }
+        return new Core { Hulls = { hull }, Afterburners = { ValidBooster("booster") } };
+    }
+
+    // An afterburner with live stats (IGC Booster 1 translated).
+    private static Afterburner ValidBooster(string id, double fuelConsumption = 1.2) =>
         new()
         {
-            Hulls =
-            {
-                new Hull
-                {
-                    Id = "scout",
-                    Name = "Scout",
-                    ClassId = 0,
-                    AbAccel = abAccel,
-                    MaxFuel = maxFuel,
-                    AbFuelDrain = fuelDrain,
-                    AbFuelRecharge = fuelRecharge,
-                },
-            },
+            Id = id,
+            Name = id,
+            MaxThrust = 36.6667,
+            FuelConsumption = fuelConsumption,
+            OnRate = 0.5,
+            OffRate = 2,
+            Mass = 2,
+        };
+
+    // A shield with live stats (IGC Sm Shield 1 translated).
+    private static Shield ValidShield(string id) =>
+        new()
+        {
+            Id = id,
+            Name = id,
+            MaxStrength = 51.4286,
+            RegenRate = 0.6857,
+            Mass = 2,
+        };
+
+    // A cloak with live stats (IGC Sig Cloak 1).
+    private static Cloak ValidCloak(string id) =>
+        new()
+        {
+            Id = id,
+            Name = id,
+            EnergyConsumption = 115,
+            MaxCloaking = 0.625,
+            OnRate = 0.25,
+            OffRate = 0.25,
+            Mass = 3,
+        };
+
+    // An ammo pack with the two cargo requirements (cargo-id + ammo-per-charge).
+    private static AmmoPack ValidAmmoPack() =>
+        new()
+        {
+            Id = "ammo-pack",
+            Name = "Ammo Pack",
+            CargoId = 6,
+            Mass = 1,
+            AmmoPerCharge = 1000,
         };
 
     private static Core MakeArmedHullCore(double payloadCapacity) =>

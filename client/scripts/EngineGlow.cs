@@ -124,6 +124,14 @@ public partial class EngineGlow : Node3D
     // way up (riding the existing spool-up ramp) but eases independently on the way down, since
     // _shownBoost itself snaps straight to 0 (EaseToward cuts down instantly for the visual flame).
 
+    // Cloaked fraction of the ship's signature (0 = visible), fed every frame by the ship node beside
+    // SetThrottle (equipment PR). The plume/smoke meshes fade with the rest of the model through
+    // CloakFx's per-instance Transparency; the engine-wash LIGHT is no mesh, so it dims here — a
+    // cloaked hull must not keep lighting up the rocks around it.
+    public void SetCloak(float cloakLevel) => _cloakDim = 1f - Mathf.Clamp(cloakLevel, 0f, 1f);
+
+    private float _cloakDim = 1f; // wash-light multiplier, 1 = uncloaked
+
     // Feed the current drive each frame. throttle (0..1) is forward thrust and
     // always glows the engines; boost (0..1) is the afterburner — a SEPARATE input
     // (the local pilot's afterburner key, a PIG's turn-burst, a remote ship near
@@ -544,7 +552,7 @@ public partial class EngineGlow : Node3D
         }
 
         _light.LightColor = plumeColor;
-        _light.LightEnergy = (0.4f + 2.6f * throttle + 1.5f * boost) * flick * glow;
+        _light.LightEnergy = (0.4f + 2.6f * throttle + 1.5f * boost) * flick * glow * _cloakDim;
         _light.OmniRange = LightRange * (0.7f + 0.3f * throttle);
     }
 

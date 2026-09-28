@@ -65,9 +65,10 @@ public static class ContentLoader
     // placeholder puff, which looks like a bug rather than authoring the operator forgot. WARN, do
     // not refuse: the item is still fully functional, and custom content shouldn't be unbootable
     // over cosmetics. Droppable = what DropSalvage can actually emit — Bolt guns (Kind 0 items) and
-    // the launcher-less pure cargo, i.e. the fuel pods (FuelPerCharge > 0). A DISPENSER item's mesh
-    // comes from its WeaponDef (already authored for the deployed mine/chaff/probe), so cargo rows
-    // with no fuel value are deliberately not listed here.
+    // the launcher-less pure cargo, i.e. the fuel pods (FuelPerCharge > 0) and ammo packs
+    // (AmmoPerCharge > 0). A DISPENSER item's mesh comes from its WeaponDef (already authored for the
+    // deployed mine/chaff/probe), so other cargo rows are deliberately not listed here. Equipment
+    // parts are listed too: each names the part mesh the client draws it as, the same authoring slip.
     private static void WarnDroppablesWithoutModel(ContentSet set)
     {
         var missing = new List<string>();
@@ -78,8 +79,13 @@ public static class ContentLoader
         }
         foreach (var c in set.CargoItems)
         {
-            if (c.FuelPerCharge > 0f && string.IsNullOrEmpty(c.ModelName))
+            if ((c.FuelPerCharge > 0f || c.AmmoPerCharge > 0) && string.IsNullOrEmpty(c.ModelName))
                 missing.Add($"cargo {c.CargoId} '{c.Name}'");
+        }
+        foreach (var e in set.Equipment)
+        {
+            if (string.IsNullOrEmpty(e.ModelName))
+                missing.Add($"equipment {e.EquipmentId} '{e.Name}'");
         }
         if (missing.Count > 0)
             Log.SalvageDefsWithoutModel(Logger, missing.Count, string.Join(", ", missing));

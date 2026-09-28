@@ -5,10 +5,13 @@ namespace SimServer.Sim;
 // Simulation/World references so it unit-tests standalone (tests/FogTest):
 //
 //   effSig = clamp( (base + bias) × fireMult × boostMult × shieldMult × dustMult,
-//                   (base + bias) × MinMult, (base + bias) × MaxMult )
+//                   (base + bias) × MinMult, (base + bias) × MaxMult ) × (1 − cloaking)
 //
-// Neutral-by-default invariant: every knob at 1.0 (bias 0) reproduces the pre-pipeline
-// fire-boost-only behavior byte-identically — only authoring a knob changes detection.
+// Neutral-by-default invariant: every knob at 1.0 (bias 0, no cloak) reproduces the pre-pipeline
+// fire-boost-only behavior byte-identically — only authoring a knob changes detection. The cloak is
+// applied AFTER the clamp on purpose (equipment PR): a cloaked ship may drop below MinMult — the
+// rails bound the loudness terms, not the cloak — and firing does not break it (Allegiance,
+// shipIGC.h:270: signature = hull signature × (1 − cloaking)); it only multiplies what's left.
 // Consumed at CaptureVisionInput time on the sim thread (the vision worker only ever reads the
 // value-copied TargetSnap.Sig), so every input here is a plain value read from the live ShipSim.
 
@@ -25,8 +28,9 @@ public readonly record struct SignatureKnobs(
     float MaxMult
 );
 
-// One ship's per-tick contributor values. BaseSig/Bias come from the class def (bias re-seeded per
-// ship at spawn — the live equipment/ability seam); the rest are live sim state at capture time.
+// One ship's per-tick contributor values. BaseSig comes from the class def and Bias from the ship
+// (hull bias + its equipped parts' signatures, seeded at spawn — the live equipment/ability seam);
+// the rest are live sim state at capture time.
 public readonly record struct SignatureInputs(
     float BaseSig, // ShipClassDef.RadarSignature (authored ≤ 0 resolves to 1, the projection rule)
     float Bias, // ShipSim.SigBias — additive equipment/loadout/ability bias
@@ -34,8 +38,9 @@ public readonly record struct SignatureInputs(
     uint LastFireTick, // last gun shot (0 = never)
     uint LastMissileTick, // last missile launch (0 = never)
     float AbPower, // afterburner ramp 0..1 (FlightModel)
-    bool HasShield, // a shield is EQUIPPED (capacity > 0), regardless of the current pool
-    float DustCoverage // 0..1 dust density at the ship's position (0 = clear space)
+    bool HasShield, // a shield part is EQUIPPED (capacity > 0), regardless of the current pool
+    float DustCoverage, // 0..1 dust density at the ship's position (0 = clear space)
+    float Cloaking = 0f // 0..1 fraction the cloak hides (ShipResources.CloakFraction of the live level)
 );
 
 public static class SignatureModel
@@ -63,13 +68,18 @@ public static class SignatureModel
         // Afterburner: ramped by AbPower so loudness follows the actual burn, not the input edge.
         float boostMult = 1f + (k.BoostMult - 1f) * Math.Clamp(i.AbPower, 0f, 1f);
 
-        // An equipped shield radiates: static per class, expressed as a pipeline term for tuning.
+        // An equipped shield part radiates: per ship (an emptied slot flies quieter), static for the
+        // sortie, expressed as a pipeline term for tuning.
         float shieldMult = i.HasShield ? k.ShieldMult : 1f;
 
         // Dust cover: scaled by local density (<1 knob = hiding in a cloud makes you quieter).
         float dustMult = 1f + (k.DustMult - 1f) * Math.Clamp(i.DustCoverage, 0f, 1f);
 
         float sig = baseSig * fireMult * boostMult * shieldMult * dustMult;
-        return Math.Clamp(sig, baseSig * k.MinMult, baseSig * k.MaxMult);
+        float clamped = Math.Clamp(sig, baseSig * k.MinMult, baseSig * k.MaxMult);
+
+        // The cloak hides a fraction of whatever the rails let through (content keeps MaxCloaking
+        // below 1, so a cloaked ship stays detectable at SOME range).
+        return clamped * (1f - Math.Clamp(i.Cloaking, 0f, 1f));
     }
 }

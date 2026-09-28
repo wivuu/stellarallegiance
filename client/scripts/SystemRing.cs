@@ -1,24 +1,25 @@
 using Godot;
 using StellarAllegiance.Ui;
 
-// HUD system ring: the HULL + SHIELD + FUEL/BOOST gauges from the "Stellar Allegiance" Game-HUD
-// design. Segmented arc gauges framing the aim reticle (centre of screen space) — on the right
-// span, HULL as segmented blocks (inner) with the regenerating SHIELD as a solid arc wrapping it
-// (outer); FUEL (or legacy BOOST) on the left span. Top and bottom are left open so vertical aim
-// stays clear. The SHLD arc only draws on hulls that actually carry a shield (MaxShield > 0).
-//
-// The left gauge reads FUEL (Fuel/MaxFuel) on hulls with a modeled tank (MaxFuel > 0); on
-// legacy hulls (MaxFuel <= 0, fuel unmodeled) it falls back to the old AbPower ramp so those
-// classes keep a BOOST readout instead of a meaningless empty gauge.
+// HUD system ring: the HULL + SHIELD + ENRG/FUEL + AMMO/BOOST gauges from the "Stellar Allegiance"
+// Game-HUD design. Segmented arc gauges framing the aim reticle (centre of screen space) — on the
+// right span, HULL as segmented blocks (inner) with the regenerating SHIELD as a solid arc wrapping
+// it (outer) and the AMMO magazine tag underneath; on the left span, FUEL/BOOST (inner) with the
+// draining ENRG pool as a solid arc wrapping it (outer). Top and bottom are left open so vertical aim
+// stays clear. Each gauge only draws when the hull actually carries the thing it reads: SHLD needs a
+// shield part, FUEL needs an EQUIPPED afterburner (not just a tank), ENRG/AMMO need something that
+// actually spends them (a cloak, or an energy-/ammo-costing gun), CLK needs a cloak part.
 //
 // A crew GUNNER gets the same ring, reading the hull they RIDE and centred on their turret's aim
 // (v42 crews slice 2c) — the captain's hull is the one that can kill them, so it is the one their
-// gauges have to show. Both seats resolve through HudSubject; the own-hull-only extras below the
-// FUEL tag (pod reserve, the load sweep) are gated on actually being the pilot.
+// gauges have to show. Both seats resolve through HudSubject; the own-hull-only extras (the fuel-pod
+// reserve/LOAD sweep, the ammo-pack LOAD sweep) are gated on actually being the pilot — a gunner has
+// no way to time either loader on a hull that isn't theirs to fly.
 //
-// Pure overlay: reads the subject's authoritative-derived state (Health/MaxHealth, Fuel/
-// MaxFuel, the synced afterburner ramp AbPower) and the active camera, and draws. Never
-// touches authoritative state. Created and wired up by the Hud, like the other combat overlays.
+// Pure overlay: reads the subject's authoritative-derived state and the active camera, and draws.
+// Never touches authoritative state. Factored onto a `RingReadout` snapshot (`FromSubject` in the
+// live path, `SetMock` for the gallery) so `_Draw` never has to know which world it came from.
+// Created and wired up by the Hud, like the other combat overlays.
 public partial class SystemRing : Control
 {
     private const float Radius = 82f; // arc radius (px) — frames the reticle/lead circle
@@ -26,8 +27,10 @@ public partial class SystemRing : Control
     private const int Blocks = 10; // segments per gauge
     private const float SpanDeg = 130f; // angular sweep of each gauge
     private const float GapDeg = 2.4f; // dead space between blocks
-    private const float ShieldRadius = Radius + 8f; // SHLD solid arc wraps just outside the HULL blocks
+    private const float ShieldRadius = Radius + 8f; // SHLD/ENRG solid arc wraps just outside the HULL/FUEL blocks
     private const float ShieldWidth = 5f; // thinner than the hull blocks (design: solid outer band)
+    private const float InnerRadius = Radius - 9f; // fuel-pod / ammo-pack LOAD sweeps: an inner accent ring, clear of the HULL/FUEL blocks
+    private const float EnergyStarvedFrac = 0.10f; // at/under this fraction the ENRG arc + CLK tag read Danger, not Data
 
     private WorldRenderer _world = null!;
     private Camera3D _camera = null!;
@@ -37,6 +40,9 @@ public partial class SystemRing : Control
     // the draw can never disagree about which hull they are reading.
     private HudSubject? _subject;
 
+    // Showcase fixture: when set, _Draw reads this fixed snapshot and never consults a world.
+    private RingReadout? _mock;
+
     // The gauges' audible side: shield down / back up and the hull-critical alarm, edge-detected off the
     // same subject the arcs draw (so a gunner hears the hull they ride). Runs whether or not the ring
     // is drawn — the F3 map or the zoom scope hiding the gauges doesn't make the hull any safer.
@@ -45,6 +51,34 @@ public partial class SystemRing : Control
     // Match TargetMarkers: project through the F3 overview camera while the sector map is
     // open, otherwise the flight chase camera. Resolved per-access so it follows the toggle.
     private Camera3D Cam => SectorOverview.ActiveCamera ?? _camera;
+
+    // A fully-resolved snapshot of everything the ring draws — the live path derives one from the HUD
+    // subject each frame (FromSubject); the gallery hands one straight in via SetMock, so the drawing
+    // code never has to know whether a live world exists.
+    public readonly record struct RingReadout(
+        float Health,
+        float MaxHealth,
+        float Shield,
+        float MaxShield,
+        float Fuel,
+        float MaxFuel,
+        bool HasAfterburner,
+        bool FuelLoading,
+        float FuelLoadFrac,
+        int FuelPods,
+        bool ShowEnergy,
+        float Energy,
+        float MaxEnergy,
+        bool ShowAmmo,
+        int Ammo,
+        int MaxAmmo,
+        int AmmoPacks,
+        bool AmmoLoading,
+        float AmmoLoadFrac,
+        bool HasCloak,
+        float CloakLevel,
+        bool CloakEngaged
+    );
 
     // Wired up by the Hud (which already resolves these siblings).
     public void Init(WorldRenderer world, Camera3D camera, DefRegistry defs)
@@ -57,8 +91,26 @@ public partial class SystemRing : Control
         UiFonts.EnsureLoaded(); // custom-draw node reads fonts directly, not via a Theme
     }
 
+    // Render standalone from a fixed readout (UiShowcase). No world, no camera, no defs — Init is
+    // never called on this path, so load fonts here instead (this custom-draw node reads them
+    // directly, not via a Theme).
+    public void SetMock(RingReadout readout)
+    {
+        UiFonts.EnsureLoaded();
+        MouseFilter = MouseFilterEnum.Ignore;
+        _mock = readout;
+        Visible = true;
+        // Unlike the live path (which re-queues every _Process frame), a mock never ticks — so a
+        // later resize (the gallery's container settling into its final layout, a window resize)
+        // needs its own trigger to redraw at the new centre.
+        Resized += QueueRedraw;
+        QueueRedraw();
+    }
+
     public override void _Process(double delta)
     {
+        if (_mock is not null)
+            return; // showcase fixture: fixed readout, always visible
         _subject = HudSubject.Resolve(_world, _defs);
         PlayHullCues();
         Visible = _subject is not null && !ZoomView.Active && !SectorOverview.Active; // scope circle or F3 map replaces these gauges
@@ -80,18 +132,57 @@ public partial class SystemRing : Control
             sfx.PlayUi(SfxManager.SfxId.HullCritical);
     }
 
+    // The live path's HudSubject -> RingReadout projection. Own-hull-only fields (fuel-pod reserve/
+    // LOAD, ammo-pack LOAD) come straight off HudSubject, which already zeroes them for a gunner.
+    private static RingReadout FromSubject(in HudSubject s) =>
+        new(
+            s.Health,
+            s.MaxHealth,
+            s.Shield,
+            s.MaxShield,
+            s.Fuel,
+            s.MaxFuel,
+            s.HasAfterburner,
+            s.Pilot?.FuelLoading ?? false,
+            s.Pilot?.FuelLoadFrac ?? 0f,
+            s.Pilot?.FuelPods ?? 0,
+            s.ShowEnergy,
+            s.Energy,
+            s.MaxEnergy,
+            s.ShowAmmo,
+            s.Ammo,
+            s.MaxAmmo,
+            s.AmmoPacks,
+            s.AmmoLoading,
+            s.AmmoLoadFrac,
+            s.HasCloak,
+            s.CloakLevel,
+            s.CloakEngaged
+        );
+
     public override void _Draw()
     {
-        if (_subject is not { } local)
+        RingReadout local;
+        if (_mock is { } mock)
+            local = mock;
+        else if (_subject is { } s)
+            local = FromSubject(s);
+        else
             return;
 
         // Centre on the aim reticle so the ring hugs the crosshair the player is already looking at —
         // HudSubject.AimPoint is the very point TargetMarkers draws that reticle on, in either seat;
-        // fall back to screen centre when it is behind the camera.
-        Camera3D cam = Cam;
-        Vector2 c = cam.IsPositionBehind(local.AimPoint)
-            ? GetViewportRect().Size * 0.5f
-            : cam.UnprojectPosition(local.AimPoint);
+        // fall back to this control's own centre when it is behind the camera, or there is no live
+        // subject at all (the showcase mock has no aim point to project — it just centres on its own
+        // box). Size, not GetViewportRect(): in flight this control fills the viewport (FullRect), so
+        // the two agree, but the gallery embeds it as a small boxed component, not a full overlay.
+        Vector2 c = Size * 0.5f;
+        if (_mock is null && _subject is { } sub)
+        {
+            Camera3D cam = Cam;
+            if (!cam.IsPositionBehind(sub.AimPoint))
+                c = cam.UnprojectPosition(sub.AimPoint);
+        }
 
         Color track = DesignTokens.BorderLo;
 
@@ -108,20 +199,29 @@ public partial class SystemRing : Control
         if (hasShield)
             SolidArc(c, ShieldRadius, 0f, shieldFrac, DesignTokens.TeamAccent, track, ShieldWidth);
 
-        // FUEL — left span (centre 180°), on hulls with a modeled tank. Legacy hulls
-        // (MaxFuel <= 0) keep the old BOOST/AbPower ramp instead; a subject that exposes neither
-        // (a ridden hull whose first snapshot hasn't landed) gets a bare track rather than a lie.
-        bool hasFuel = local.MaxFuel > 0f;
-        float? ab = local.AbPower;
-        float leftFrac =
-            hasFuel ? Mathf.Clamp(local.Fuel / local.MaxFuel, 0f, 1f)
-            : ab is float p ? Mathf.Clamp(p, 0f, 1f)
-            : 0f;
-        Color leftColor = hasFuel ? FuelColor(leftFrac) : DesignTokens.Warn;
-        SegmentedArc(c, 180f, leftFrac, leftColor, track, litFromEnd: false);
+        // ENRG — the left span's outer arc, mirroring SHLD, only when something aboard actually spends
+        // energy (HudSubject.ShowEnergy: a cloak or an energy-costing gun). Data normally, Danger once
+        // the pool is critically low (EnergyStarvedFrac) — CLK below the ring shares the same tint.
+        bool showEnergy = local.ShowEnergy && local.MaxEnergy > 0f;
+        float energyFrac = showEnergy ? Mathf.Clamp(local.Energy / local.MaxEnergy, 0f, 1f) : 0f;
+        bool energyStarved = showEnergy && energyFrac <= EnergyStarvedFrac;
+        Color energyColor = energyStarved ? DesignTokens.Danger : DesignTokens.Data;
+        if (showEnergy)
+            SolidArc(c, ShieldRadius, 180f, energyFrac, energyColor, track, ShieldWidth);
 
-        // Mono labels just outside each gauge: tag in the token colour, value in TextHi. SHLD sits
-        // above HULL on the right (design order), only when this hull carries a shield.
+        // FUEL — left span's inner (block) arc, on hulls with an EQUIPPED afterburner AND a modeled
+        // tank. A hull with neither shows nothing at all on this side (no legacy BOOST-ramp fallback —
+        // every equipped afterburner pairs with a tank in this content, so there is nothing left to
+        // read when HasAfterburner is false).
+        bool hasFuel = local.HasAfterburner && local.MaxFuel > 0f;
+        float fuelFrac = hasFuel ? Mathf.Clamp(local.Fuel / local.MaxFuel, 0f, 1f) : 0f;
+        if (hasFuel)
+            SegmentedArc(c, 180f, fuelFrac, FuelColor(fuelFrac), track, litFromEnd: false);
+
+        // Mono labels just outside each gauge, top-to-bottom mirrored on both sides: the shield-like
+        // outer arc's tag (SHLD right / ENRG left), the primary block arc's tag (HULL right / FUEL
+        // left), then a bottom-row status tag (AMMO right / FUEL-POD or LOAD left) that only earns its
+        // slot when there is something to say.
         if (hasShield)
             DrawTagValue(
                 c + new Vector2(Radius + 12f, -14f),
@@ -130,6 +230,8 @@ public partial class SystemRing : Control
                 DesignTokens.TeamAccent,
                 rightAlign: false
             );
+        if (showEnergy)
+            DrawTagValue(c + new Vector2(-(Radius + 12f), -14f), "ENRG", $"{local.Energy:0}", energyColor, rightAlign: true);
         DrawTagValue(
             c + new Vector2(Radius + 12f, 4f),
             "HULL",
@@ -137,38 +239,84 @@ public partial class SystemRing : Control
             HealthColor(hullFrac),
             rightAlign: false
         );
-        if (hasFuel || ab is not null)
+        if (hasFuel)
             DrawTagValue(
                 c + new Vector2(-(Radius + 12f), 4f),
-                hasFuel ? "FUEL" : "BST",
-                $"{leftFrac * 100f:0}",
-                leftColor,
+                "FUEL",
+                $"{fuelFrac * 100f:0}",
+                FuelColor(fuelFrac),
                 rightAlign: true
             );
+
+        // AMMO (right, under HULL): the shared magazine — NOT gated on hasFuel/hasShield, since the
+        // ammo pool is independent of either. LOADING replaces it in the same slot while a pack is
+        // inbound, mirroring the FUEL side's LOAD/POD swap below. Danger when the mag is dry, Warn
+        // while a pack is loading it back up.
+        if (local.ShowAmmo && local.MaxAmmo > 0)
+        {
+            if (local.AmmoLoading)
+            {
+                SolidArc(c, InnerRadius, 0f, local.AmmoLoadFrac, DesignTokens.Warn, track, ShieldWidth);
+                DrawTagValue(
+                    c + new Vector2(Radius + 12f, 22f),
+                    "LOAD",
+                    $"{local.AmmoLoadFrac * 100f:0}%",
+                    DesignTokens.Warn,
+                    rightAlign: false
+                );
+            }
+            else
+            {
+                bool ammoEmpty = local.Ammo <= 0;
+                string val = local.AmmoPacks > 0 ? $"{local.Ammo} +{local.AmmoPacks}" : $"{local.Ammo}";
+                DrawTagValue(
+                    c + new Vector2(Radius + 12f, 22f),
+                    "AMMO",
+                    val,
+                    ammoEmpty ? DesignTokens.Danger : DesignTokens.Data,
+                    rightAlign: false
+                );
+            }
+        }
+
+        // CLK, centred below the ring (the open bottom gap between the two spans) — only on a hull
+        // that carries a cloak part. Pulses while the level is doing anything (engaged, or still
+        // ramping down after release); Danger whenever the energy pool that feeds it is starved.
+        if (local.HasCloak)
+        {
+            bool ramping = local.CloakEngaged || local.CloakLevel > 0f;
+            Color clkColor = energyStarved ? DesignTokens.Danger : DesignTokens.TeamAccent;
+            DrawCentered(
+                c + new Vector2(0f, ShieldRadius + 26f),
+                $"CLK {Mathf.RoundToInt(local.CloakLevel * 100f)}%",
+                ramping ? Pulsed(clkColor) : clkColor
+            );
+        }
+
         // Fuel-pod reserve under the FUEL tag (predicted count — drops the instant one is committed
         // to the loader). Hidden at zero so the legacy layout is untouched without pods. While a pod
         // is LOADING the tank is dead, so the line becomes a load readout in the danger tone with a
-        // sweep arc wrapping the FUEL blocks (mirroring the SHLD band on the right) — the pilot can
-        // see how long the afterburner stays out. PREDICTED own-hull state, so pilot-only: a gunner
-        // rides the captain's tank but has no say over it and no prediction of it.
-        if (!hasFuel || local.Pilot is not { } pilot)
+        // sweep arc on the inner ring (mirroring the ammo-pack sweep on the right) — the pilot can see
+        // how long the afterburner stays out. PREDICTED own-hull state, so gated on HasAfterburner
+        // already covering the pilot-only fields (a gunner's FuelLoading/FuelPods read false/0).
+        if (!hasFuel)
             return;
-        if (pilot.FuelLoading)
+        if (local.FuelLoading)
         {
-            SolidArc(c, ShieldRadius, 180f, pilot.FuelLoadFrac, DesignTokens.Danger, track, ShieldWidth);
+            SolidArc(c, InnerRadius, 180f, local.FuelLoadFrac, DesignTokens.Danger, track, ShieldWidth);
             DrawTagValue(
                 c + new Vector2(-(Radius + 12f), 22f),
                 "LOAD",
-                $"{pilot.FuelLoadFrac * 100f:0}%",
+                $"{local.FuelLoadFrac * 100f:0}%",
                 DesignTokens.Danger,
                 rightAlign: true
             );
         }
-        else if (pilot.FuelPods > 0)
+        else if (local.FuelPods > 0)
             DrawTagValue(
                 c + new Vector2(-(Radius + 12f), 22f),
                 "POD",
-                $"+{pilot.FuelPods}",
+                $"+{local.FuelPods}",
                 DesignTokens.Warn,
                 rightAlign: true
             );
@@ -195,7 +343,8 @@ public partial class SystemRing : Control
     // half the block gap so the arc caps exactly at the hull blocks' outer edges (the first block
     // starts at start+GapDeg/2, the last ends at start+SpanDeg-GapDeg/2) instead of overflowing past
     // them. The dim track spans that capped range; the lit fill grows from the high-angle (bottom)
-    // end so the shield drains the same direction the hull blocks do. Used for the SHLD wrap arc.
+    // end so the shield drains the same direction the hull blocks do. Used for the SHLD/ENRG wrap arcs
+    // and, at InnerRadius, for the fuel-pod/ammo-pack LOAD sweeps.
     private void SolidArc(Vector2 c, float radius, float centerDeg, float value, Color lit, Color track, float width)
     {
         float half = SpanDeg * 0.5f - GapDeg * 0.5f; // cap to the hull's lit extent, not the full span
@@ -223,6 +372,23 @@ public partial class SystemRing : Control
         }
         DrawString(font, pos, tag, HorizontalAlignment.Left, -1, size, tagColor);
         DrawString(font, pos + new Vector2(tagW, 0f), value, HorizontalAlignment.Left, -1, size, DesignTokens.TextHi);
+    }
+
+    // Centre-aligned mono string (the CLK tag below the ring — no left/right anchor to hang off).
+    private void DrawCentered(Vector2 center, string text, Color color)
+    {
+        const int size = 12;
+        Font font = UiFonts.Mono;
+        float w = font.GetStringSize(text, HorizontalAlignment.Left, -1, size).X;
+        DrawString(font, center - new Vector2(w * 0.5f, 0f), text, HorizontalAlignment.Left, -1, size, color);
+    }
+
+    // The design's saPulse: dip alpha on a ~0.7s cycle. Time-driven (not a per-frame accumulator) so
+    // it needs no extra per-instance state — matches HardpointMarkerOverlay's Pulse().
+    private static Color Pulsed(Color c)
+    {
+        float a = 0.55f + 0.45f * (0.5f + 0.5f * Mathf.Sin(Time.GetTicksMsec() / 220f));
+        return new Color(c, a);
     }
 
     // Green at full hull, amber at half, red near death — matches the design's HP arc ramp

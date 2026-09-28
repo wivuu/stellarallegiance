@@ -444,27 +444,40 @@ public partial class GameNetClient : Node, INetClientHost
     // sidebar's launch base (0 = server default; the server validates friendly+alive and silently
     // falls back). The mount tail carries ONLY overridden slots (weaponId u32.Max = leave the slot
     // empty); the server validates (mountable kind, tech owned, payload fits) and falls back to the
-    // authored loadout — the accepted result echoes back on MsgShipLoadout.
+    // authored loadout — the accepted result echoes back on MsgShipLoadout. The equipment tail is the
+    // same shape for the shield / afterburner / cloak slots (LoadoutState.EquipmentPicksFor): ONLY
+    // overridden slots, EquipmentDef.NoEquipment (0xFFFF) = launch with that slot empty; the server
+    // validates (slot kind, allowed on the hull, tech owned), tier-migrates, and echoes the effective
+    // parts on the same MsgShipLoadout row whenever they differ from the hull's defaults.
     public void RequestSpawn(
         byte shipClass,
         (uint cargoId, byte count)[]? cargo = null,
         ulong launchBaseId = 0,
-        (byte hpIndex, uint weaponId)[]? mounts = null
+        (byte hpIndex, uint weaponId)[]? mounts = null,
+        (byte slot, ushort equipmentId)[]? equipment = null
     )
     {
         cargo ??= Array.Empty<(uint, byte)>();
         mounts ??= Array.Empty<(byte, uint)>();
+        equipment ??= Array.Empty<(byte, ushort)>();
         var spawn = new SpawnMessage
         {
             ShipClass = shipClass,
             LaunchBaseId = launchBaseId,
             Cargo = new CargoLoadDef[cargo.Length],
             Mounts = new MountOverrideRecord[mounts.Length],
+            Equipment = new EquipmentOverrideRecord[equipment.Length],
         };
         for (int i = 0; i < cargo.Length; i++)
             spawn.Cargo[i] = new CargoLoadDef { CargoId = cargo[i].cargoId, Count = cargo[i].count };
         for (int i = 0; i < mounts.Length; i++)
             spawn.Mounts[i] = new MountOverrideRecord { HpIndex = mounts[i].hpIndex, WeaponId = mounts[i].weaponId };
+        for (int i = 0; i < equipment.Length; i++)
+            spawn.Equipment[i] = new EquipmentOverrideRecord
+            {
+                Slot = equipment[i].slot,
+                EquipmentId = equipment[i].equipmentId,
+            };
         _tx.Writer.TryWrite(spawn.ToBytes());
     }
 

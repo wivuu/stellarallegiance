@@ -545,9 +545,10 @@ public sealed partial class Simulation
             );
             // Effective per-tick signature — the composable pipeline (SignatureModel): authored
             // base + per-ship equipment bias, boosted by recent fire / afterburner / an equipped
-            // shield, quieted by dust cover. Captured on the sim thread from the live ShipSim, so
-            // none of the inputs need extra plumbing; a change reaches enemy radar at the next
-            // vision boundary (<= 500 ms, by design).
+            // shield part, quieted by dust cover, then hidden by the cloak's live level (after the
+            // clamp). Captured on the sim thread from the live ShipSim, so none of the inputs need
+            // extra plumbing; a change reaches enemy radar at the next vision boundary (<= 500 ms,
+            // by design).
             float sig = SignatureModel.Compute(
                 new SignatureInputs(
                     def.RadarSignature,
@@ -558,8 +559,9 @@ public sealed partial class Simulation
                     Math.Max(s.LastFireTick, s.LastTurretFireTick),
                     s.LastMissileTick,
                     s.State.AbPower,
-                    ShieldsEnabled && ShieldCapacityFor(s) > 0f,
-                    DustCoverageAt(s.SectorId, s.State.Pos)
+                    ShieldsEnabled && ShieldCapacityFor(s) > 0f, // per ship: an emptied slot flies quieter
+                    DustCoverageAt(s.SectorId, s.State.Pos),
+                    ShipResources.CloakFraction(s.Pools.Cloak) // the pools entering this tick
                 ),
                 _sigKnobs
             );
@@ -1467,8 +1469,8 @@ public sealed partial class Simulation
         }
     }
 
-    // The class def whose vision fields a ship reads (pods fly the Pod def), mirroring ShieldDefFor.
-    private ShipClassDef VisionDefFor(ShipSim s) => ShieldDefFor(s);
+    // The class def whose vision fields a ship reads (pods fly the Pod def) — the hull def.
+    private ShipClassDef VisionDefFor(ShipSim s) => HullDefFor(s);
 
     // cos(VisionConeAngleDeg) for `def`, memoized in _coneCosCache so IsPointVisibleToTeam's
     // per-viewer loop pays the transcendental once per distinct def instead of once per call.

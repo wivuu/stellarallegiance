@@ -68,7 +68,7 @@ public sealed class WorldDef
     public double? BoostSignatureMult { get; set; }
 
     /// <summary>
-    /// Radar-signature multiplier while a hull has an EQUIPPED shield (ShieldCapacity &gt; 0),
+    /// Radar-signature multiplier while a ship has a shield part EQUIPPED (effective capacity &gt; 0),
     /// regardless of the current pool. Null/omitted -&gt; 1.0 (neutral). Server-side only.
     /// </summary>
     public double? ShieldSignatureMult { get; set; }

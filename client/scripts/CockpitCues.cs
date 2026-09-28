@@ -81,6 +81,56 @@ public sealed class HullCues
     }
 }
 
+// Why the resource gate refused a cadence-ready gun shot — the HUD's NO ENRG / NO AMMO / LOADING.
+// Declared here (not in ResourceMirror.cs, its main consumer) because it is a plain, dependency-free
+// byte enum: keeping it in this file lets tests/CockpitCuesTest link ONE file for full ResourceCues
+// coverage instead of pulling in ResourceMirror's whole EquipmentSet/ShipPools dependency chain.
+public enum GateBlock : byte
+{
+    None,
+    NoEnergy, // the energy pool can't cover the gun's EnergyPerShot
+    NoAmmo, // the magazine can't cover its AmmoPerShot and no ammo pack is loading
+    Loading, // the magazine can't cover it, but an ammo pack is loading into it
+}
+
+// Ammo/energy dry-fire and ammo-pack load start, for the LOCAL pilot's own resource gate
+// (PredictionController.LastGateBlock / AmmoLoading — own-hull-only, like the fuel pod's LOAD sweep;
+// a gunner shares the magazine but not the prediction, so Hud only feeds this the pilot's numbers).
+// Pure level/edge read: `block` already only reads non-None WHILE the trigger is actively held and
+// refused (ResourceMirror.FireStep resets it to None the instant firing stops), so returning the same
+// cue on every blocked tick — rather than tracking its own repeat clock — is what turns "dry fire on
+// press" into "running dry while held" once the caller gates playback through its own cooldown (Hud's
+// existing 0.5s _emptyClickCd, the same one the dispenser EmptyBlip repeats on).
+public sealed class ResourceCues
+{
+    [Flags]
+    public enum Cue
+    {
+        None = 0,
+        DryFireEnergy = 1 << 0, // the held gate refused for lack of energy
+        DryFireAmmo = 1 << 1, // the held gate refused for lack of ammo (not while a pack is loading)
+        PackLoadStart = 1 << 2, // an ammo pack just started loading into the magazine
+    }
+
+    private bool _ammoLoadingHeld;
+
+    public Cue Observe(GateBlock block, bool ammoLoading)
+    {
+        var cue = block switch
+        {
+            GateBlock.NoEnergy => Cue.DryFireEnergy,
+            GateBlock.NoAmmo => Cue.DryFireAmmo,
+            // None / Loading: a pack already inbound has said its piece via PackLoadStart — no
+            // separate "you're dry" click while it's on the way.
+            _ => Cue.None,
+        };
+        if (ammoLoading && !_ammoLoadingHeld)
+            cue |= Cue.PackLoadStart;
+        _ammoLoadingHeld = ammoLoading;
+        return cue;
+    }
+}
+
 // Match start + payday, for the local player's match and team.
 public sealed class MatchCues
 {

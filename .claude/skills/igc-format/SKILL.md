@@ -21,6 +21,7 @@ python3 igc_parser.py <core.igc>                     # version, object counts, c
 python3 igc_parser.py <core.igc> --dump hulls        # hulls|parts|stations|devs|drones|civs|missiles|mines|chaff|probes
 python3 igc_parser.py <core.igc> --faction "Iron Coalition"   # resolve that faction's buildable roster
 python3 igc_parser.py <core.igc> --iron-slice                 # raw + anchor-translated combat-stat report
+python3 igc_parser.py <core.igc> --iron-equipment              # shield/cloak/afterburner/pack/gun + hull-slot cross-check
 ```
 
 **Combat stats** (added 2026-07-16). `parse_hull` now also decodes `mass/signature/speed/maxTurnRates[3]/
@@ -36,6 +37,48 @@ picks with RAW IGC values plus anchor-translated core-bundle YAML fields (Enh Fi
 `fighter-cannon`, Garrison armor 20000↔2000, price ×0.06). Two gotchas surfaced: sustained fire cadence is
 `dtimeBurst` (weaponIGC.cpp:310), not the uniform-0.25 `dtimeReady`; and ER Nanite projectiles carry **negative
 power** (the heal, later modeled as an explicit `is-healing` flag).
+
+**Equipment** (added 2026-09-27). `parse_part` now decodes `signature` (+4, `BUY+4`) for every non-launcher
+part, plus a subtype tail for `equipmentType` 4/5/6/7 — same **+32** anchor the weapon tail already used:
+Shield (`rateRegen@+32/maxStrength@+36/defenseType(byte)@+40/activateSound@+42/deactivateSound@+44`), Cloak
+(`energyConsumption@+32/maxCloaking@+36/onRate@+40/offRate@+44/engageSound@+48/disengageSound@+50`), Pack
+(`packType(byte)@+32/amount@+34` — `packType` 0=ammo, 1=fuel), Afterburner (`fuelConsumption@+32/maxThrust@+36/
+onRate@+40/offRate@+44/interiorSound@+48/exteriorSound@+50`). Each tail is guarded by a `size >= BUY+N` check,
+same pattern as the weapon tail. `parse_hull` adds `preferred`, the hull's 14-entry `preferredPartsTypes`
+(`PartID[14]` at **+102**, immediately before the already-anchored `habm@+130` — 14×2 bytes lands exactly on
+it), with unset slots (`-1`) dropped. `--dump parts` now prints each part's decoded tail inline (same line,
+appended fields).
+
+New **`--iron-equipment`** mode resolves the Iron Coalition roster and prints a compact cross-check for YAML
+authoring: Shields/Cloaks/Afterburners/Packs (raw values, translated where a rule exists — see below), Guns
+(the Gat Gun/Mini-Gun/AutoCan/Nanite/Sniper/Utl Can families, raw + translated per-shot cost), and Hulls (the
+combat/build hulls named in the report plus any other Iron hull that mounts a weapon: `maxEnergy`/`rechargeRate`/
+`maxAmmo`/`maxFuel`, `pmEquipment` for the Shield/Cloak/Afterburner slots in hex, which of *Iron's own* resolved
+parts fit each slot via `part.partMask & hull.pmEquipment[slot] != 0`, and the hull's `preferred` parts resolved
+to names via a global partID→name map).
+
+Translation rules used by `--iron-equipment` (content-author picks for a slice with no existing our-side item
+to anchor against, unlike the HULL/GUN/STATION anchors in `_A` above — eyeball/adjust per line):
+- **shield**: yaml `regen`/`max` = raw `rateRegen`/`maxStrength` × **0.342857** (same multiplier, both fields).
+- **afterburner**: yaml `max-thrust` = `maxThrust` ÷ **30**; yaml `fuel-consumption` = `fuelConsumption` ×
+  `maxThrust` (recovers fuel burned per second at full burn, since IGC's `fuelConsumption` is a fuel/thrust
+  ratio). A **negative** `maxThrust` (reverse/retro thrust, e.g. "Retro Booster") has no our-side analogue —
+  flagged `NOT PORTED` rather than translated.
+- **gun cost-per-shot**: `fire_interval_ticks = round(dtimeBurst × 40)`; `cost_per_shot = IGC_cost ×
+  fire_interval_ticks / (20 × dtimeBurst)`, applied once with `IGC_cost = energyPerShot` and once with
+  `IGC_cost = cAmmoPerShot`. Ammo must land on a whole unit, so both the exact value and its `ceil()` are
+  printed; energy is left fractional.
+- **cloak / pack / on-off rates**: no translation rule defined yet — raw values only.
+
+**Gotcha**: several factions define a hull *or part* with the exact same display name but different stats —
+their own tuned tier of it (mirrors the "Iron = station ids 1xx" duplication noted below, for hulls/parts too).
+E.g. some factions' "Scout" carries 800 ammo where Iron's `hullID 410` "Scout" carries 960. `resolve_faction`
+already gates this correctly (a faction's own seed tech-bit gates its own hull/part records), so always look
+hulls/parts up through the **resolved** roster (`resolve_faction(data, civ)`'s `r['hulls']`/`r['parts']`) —
+never by scanning `data['hulls']`/`data['parts']` by name directly, which walks *every* faction's records and
+can silently return the wrong one. `--iron-equipment` also dedupes both rosters by id (`_by_id`, not the
+name-keyed `_dedup`) since a legitimate same-name-different-id duplicate exists in at least one core (two
+distinct "Retro Booster" partIDs).
 
 **Ordnance** (added 2026-07-18). `parse_missile/mine/chaff/probe` fully decode `DataExpendableTypeIGC`-family
 records (ObjectType 23/24/25/26): shared launcher-buyable fields (price/model/name/req/eff, embedded LauncherDef
@@ -88,12 +131,20 @@ float32** (100 bytes), each a multiplier defaulting to 1.0.
 
 **Derived structs start at offset 364** — MSVC does *not* pack derived members into the base's
 tail padding. Key derived offsets (relative to 364), all validated:
-- **Hull** (+82 hullID, +84 successor, +86 maxWeapons, +87 maxFixed, +130 habm, +146 pmEquipment[8]).
+- **Hull** (+82 hullID, +84 successor, +86 maxWeapons, +87 maxFixed, +102 preferredPartsTypes[14]
+  (`PartID` i16 each, `-1` = unset — this is `parse_hull`'s `preferred`), +130 habm, +146 pmEquipment[8]).
   A variable **`HardpointData[]` tail follows the 540-byte struct**, 30 bytes each, `PartMask` at
   +26, `bFixed` at +28. Hardpoint count == maxWeapons; a weapon fits a hardpoint when
-  `weapon.partMask & hardpoint.partMask`. (`pmEquipment[ET_Weapon]` is *not* how guns attach.)
-- **Part** (+0 mass, +8 partID, +10 successor, +12 equipmentType, +14 partMask). Magazines &
+  `weapon.partMask & hardpoint.partMask`. (`pmEquipment[ET_Weapon]` is *not* how guns attach; the
+  Shield/Cloak/Afterburner slots — `pmEquipment[4]`/`[5]`/`[7]` — are how those equipment types attach,
+  via `part.partMask & pmEquipment[slot]`.)
+- **Part** (+0 mass, +4 signature, +8 partID, +10 successor, +12 equipmentType, +14 partMask). Magazines &
   dispensers are instead tiny `DataLauncherTypeIGC` (~24 B, **no** buyable base) — detect by `size<100`.
+  Equipment subtype tails all start at the same **+32** the weapon tail uses (`DataPartTypeIGC` derived
+  sizeof is 32): Shield (equipmentType 4) `rateRegen/maxStrength/defenseType/activateSound/deactivateSound`;
+  Cloak (5) `energyConsumption/maxCloaking/onRate/offRate/engageSound/disengageSound`; Pack (6)
+  `packType/amount` (0=ammo, 1=fuel); Afterburner (7) `fuelConsumption/maxThrust/onRate/offRate/
+  interiorSound/exteriorSound`.
 - **Station** (+24 income, +32 ttbmLocal[50], +82 stationID, +84 successor, +88 sabm, +90 aabm,
   +92 classID, +94 constructionDrone).
 - **Development** (+0 gas[25], +100 devID). `techOnly` is derived, not stored: true iff all 25 gas

@@ -1,0 +1,250 @@
+# Equipment — the per-ship SLOTS: one shield, one afterburner and one cloak per ship, picked in the
+# hangar. A hull's `allowed-parts` (hulls.yaml, keys shield / afterburner / cloak) decides which
+# slots it has and what fits them; a listed part implicitly allows its whole successor chain, so a
+# hull allowed Sm Shield 1 carries Sm Shield 2/3 once researched. Its `preferred-parts` pick each
+# slot's default: the first listed part the slot allows whose required-techs the hull itself already
+# requires (Allegiance's TryToBuyParts rule — a research-locked part is never handed out free).
+# Equipment costs NO payload and does not change flight mass; `mass` is display-only. Each part
+# projects to a runtime EquipmentDef whose id is its position in this file's order — shields, then
+# afterburners, then cloaks (0-8, 9-15, 16) — so APPEND within a section, never reorder.
+#
+# Iron Coalition equipment (PCore014.igc), translated with the rules the hulls and guns already use:
+#   - shields: max-strength AND regen-rate = IGC maxStrength / regeneration × 0.342857 (= 12/35, the
+#     hull-point factor: our Enh Fighter's 120 armor / the IGC Enh Fighter's 350), so shields keep
+#     their IGC share of a ship's toughness. No recharge-delay is authored: 0 = Allegiance's
+#     continuous regen (the shield recovers even under fire).
+#   - afterburners: max-thrust = IGC maxThrust ÷ 30 — the SAME rule that gives hull `thrust` (IGC
+#     thrust ÷ 30), so boosted top speed = speed × (1 + max-thrust ÷ thrust) keeps Allegiance's
+#     ratio (shipIGC.cpp:2940-2990). fuel-consumption = the IGC fuelConsumption coefficient × IGC
+#     maxThrust = fuel/second at full burn; tanks (hulls.yaml max-fuel) are raw IGC values.
+#   - cloak: energy-consumption and max-cloaking are raw IGC values (the hull energy pools are raw
+#     too). Signature × (1 − cloaking) at full cloak.
+# Values are the exact parsed IGC floats through those rules, rounded to 4 decimals.
+#
+# `signature` is deliberately left out of every part. Allegiance authors part signatures (Booster 1
+# 2.0, Sm Shield 0.5, …) but never applies them — a ship's signature is its hull's × (1 − cloaking),
+# shipIGC.h:270. Authoring one here would make it live (an additive per-ship bias).
+#
+# Not ported:
+#   - Retro Booster: negative thrust; CoreValidator refuses max-thrust <= 0.
+#   - Sig Cloak 2 (110/s, 0.70) and 3 (105/s, 0.76): researched at the Tactical base, which the
+#     game doesn't have yet — so Sig Cloak 1 is the top tier here.
+#   - Hvy Cloak 1/2 (200 and 180/s, 0.90): stealth hulls only (unported).
+# The Scout's cloak slot is a deliberate stand-in: in PCore014 no ported Iron hull can cloak (only the
+# unported Stealth Fighter can), so the Scout carries Sig Cloak 1 until the stealth hulls land.
+#
+# Tier succession mirrors the gun lines: each non-top tier carries obsoleted-by-techs (the next tier's
+# tech — once owned the hangar hides this tier) + successor-part-id (what an equipped tier migrates
+# to). Research lives in developments.yaml (group EQUIPMENT).
+shields:
+  # ---- Sm Shield 1/2/3 (ids 0-2) — small-ship shields (Scout, Enh/Adv Fighter). IGC regen/max
+  # 2/150, 3/180, 3.75/225. Tier 2/3 research at the Supremacy. ----
+  - id: sm-shield-1
+    name: Sm Shield 1
+    description: "A small-ship mounted shield protection system."
+    model-name: acs30
+    mass: 2
+    max-strength: 51.4286   # IGC 150 × 0.342857
+    regen-rate: 0.6857      # IGC 2 × 0.342857 (~75 s empty → full)
+    required-capabilities: [base]
+    obsoleted-by-techs: [sm-shield-2]
+    successor-part-id: sm-shield-2
+  - id: sm-shield-2
+    name: Sm Shield 2
+    description: "A small-ship mounted shield protection system."
+    model-name: acs30
+    mass: 2
+    max-strength: 61.7143   # IGC 180 × 0.342857
+    regen-rate: 1.0286      # IGC 3 × 0.342857
+    required-capabilities: [base]
+    required-techs: [sm-shield-2]
+    obsoleted-by-techs: [sm-shield-3]
+    successor-part-id: sm-shield-3
+  - id: sm-shield-3
+    name: Sm Shield 3
+    description: "A small-ship mounted shield protection system."
+    model-name: acs30
+    mass: 2
+    max-strength: 77.1429   # IGC 225 × 0.342857
+    regen-rate: 1.2857      # IGC 3.75 × 0.342857
+    required-capabilities: [base]
+    required-techs: [sm-shield-3]
+
+  # ---- Med Shield 1/2/3 (ids 3-5) — medium-ship shields (Bomber, Miner, Constructor). IGC regen/max
+  # 5/300, 7/400, 10/500. Tier 2/3 research at the Garrison. ----
+  - id: med-shield-1
+    name: Med Shield 1
+    description: "A medium-ship mounted shield protection system."
+    model-name: acs39
+    mass: 4
+    max-strength: 102.8571  # IGC 300 × 0.342857
+    regen-rate: 1.7143      # IGC 5 × 0.342857
+    required-capabilities: [base]
+    obsoleted-by-techs: [med-shield-2]
+    successor-part-id: med-shield-2
+  - id: med-shield-2
+    name: Med Shield 2
+    description: "A medium-ship mounted shield protection system."
+    model-name: acs39
+    mass: 4
+    max-strength: 137.1429  # IGC 400 × 0.342857
+    regen-rate: 2.4         # IGC 7 × 0.342857
+    required-capabilities: [base]
+    required-techs: [med-shield-2]
+    obsoleted-by-techs: [med-shield-3]
+    successor-part-id: med-shield-3
+  - id: med-shield-3
+    name: Med Shield 3
+    description: "A medium-ship mounted shield protection system."
+    model-name: acs39
+    mass: 4
+    max-strength: 171.4286  # IGC 500 × 0.342857
+    regen-rate: 3.4286      # IGC 10 × 0.342857
+    required-capabilities: [base]
+    required-techs: [med-shield-3]
+
+  # ---- Lrg Shield 1/2/3 (ids 6-8) — capital shields (Devastator). IGC regen/max 30/3000, 35/3750,
+  # 40/4687. Tier 1 needs a Shipyard; tier 2/3 research there. ----
+  - id: lrg-shield-1
+    name: Lrg Shield 1
+    description: "A large-ship mounted shield protection system."
+    model-name: acs34
+    mass: 50
+    max-strength: 1028.5714 # IGC 3000 × 0.342857
+    regen-rate: 10.2857     # IGC 30 × 0.342857
+    required-capabilities: [base]
+    required-techs: [shipyard-1]
+    obsoleted-by-techs: [lrg-shield-2]
+    successor-part-id: lrg-shield-2
+  - id: lrg-shield-2
+    name: Lrg Shield 2
+    description: "A large-ship mounted shield protection system."
+    model-name: acs34
+    mass: 50
+    max-strength: 1285.7143 # IGC 3750 × 0.342857
+    regen-rate: 12          # IGC 35 × 0.342857
+    required-capabilities: [base]
+    required-techs: [lrg-shield-2]
+    obsoleted-by-techs: [lrg-shield-3]
+    successor-part-id: lrg-shield-3
+  - id: lrg-shield-3
+    name: Lrg Shield 3
+    description: "A large-ship mounted shield protection system."
+    model-name: acs34
+    mass: 50
+    max-strength: 1606.9714 # IGC 4687 × 0.342857
+    regen-rate: 13.7143     # IGC 40 × 0.342857
+    required-capabilities: [base]
+    required-techs: [lrg-shield-3]
+
+afterburners:
+  # ---- Booster 1/2/3 (ids 9-11) — the all-round booster. IGC maxThrust 1100/1200/1300, fuel
+  # coefficient 0.001111 / 0.0008888 / 0.00072215. Booster 1 is an Iron starting tech; tier 2/3
+  # research at the Supremacy. ----
+  - id: booster-1
+    name: Booster 1
+    description: "A fuel based booster rocket with medium efficiency and medium thrust."
+    model-name: acs48
+    mass: 2
+    max-thrust: 36.6667        # IGC 1100 ÷ 30
+    fuel-consumption: 1.2221   # 0.001111 × 1100 fuel/s
+    on-rate: 0.5
+    off-rate: 2
+    required-capabilities: [base]
+    obsoleted-by-techs: [booster-2]
+    successor-part-id: booster-2
+  - id: booster-2
+    name: Booster 2
+    description: "A fuel based booster rocket 20% more efficient than Booster 1."
+    model-name: acs48
+    mass: 2
+    max-thrust: 40             # IGC 1200 ÷ 30
+    fuel-consumption: 1.0666   # 0.0008888 × 1200 fuel/s
+    on-rate: 0.5
+    off-rate: 2
+    required-capabilities: [base]
+    required-techs: [booster-2]
+    obsoleted-by-techs: [booster-3]
+    successor-part-id: booster-3
+  - id: booster-3
+    name: Booster 3
+    description: "A fuel based booster rocket 35% more efficient than Booster 1."
+    model-name: acs48
+    mass: 2
+    max-thrust: 43.3333        # IGC 1300 ÷ 30
+    fuel-consumption: 0.9388   # 0.00072215 × 1300 fuel/s
+    on-rate: 0.5
+    off-rate: 2
+    required-capabilities: [base]
+    required-techs: [booster-3]
+
+  # ---- Lt Booster 1/2 (ids 12-13) — the frugal light booster. IGC maxThrust 550/650, fuel
+  # coefficient 0.0004 / 0.0003. Both research at the Garrison. ----
+  - id: lt-booster-1
+    name: Lt Booster 1
+    description: "A fuel based booster rocket with high efficiency, medium acceleration and low thrust."
+    model-name: dn_ptaftlgt
+    mass: 2
+    max-thrust: 18.3333        # IGC 550 ÷ 30
+    fuel-consumption: 0.22     # 0.0004 × 550 fuel/s
+    on-rate: 0.5
+    off-rate: 2
+    required-capabilities: [base]
+    required-techs: [lt-booster-1]
+    obsoleted-by-techs: [lt-booster-2]
+    successor-part-id: lt-booster-2
+  - id: lt-booster-2
+    name: Lt Booster 2
+    description: "A fuel based booster rocket with more efficiency and thrust than the Lt Booster 1."
+    model-name: dn_ptaftlgt
+    mass: 2
+    max-thrust: 21.6667        # IGC 650 ÷ 30
+    fuel-consumption: 0.195    # 0.0003 × 650 fuel/s
+    on-rate: 0.5
+    off-rate: 2
+    required-capabilities: [base]
+    required-techs: [lt-booster-2]
+
+  # ---- Crs Booster (id 14) — the long-haul cruise booster: slow spool (on-rate 0.25). IGC
+  # maxThrust 750, coefficient 0.0004. Researched at the Supremacy after Lt Booster 1. ----
+  - id: crs-booster
+    name: Crs Booster
+    description: "A fuel based booster rocket with high efficiency, low acceleration and medium thrust."
+    model-name: dn_ptaftcrs
+    mass: 2
+    max-thrust: 25             # IGC 750 ÷ 30
+    fuel-consumption: 0.3      # 0.0004 × 750 fuel/s
+    on-rate: 0.25
+    off-rate: 2
+    required-capabilities: [base]
+    required-techs: [crs-booster]
+
+  # ---- Hvy Booster (id 15) — the sprint booster: huge thrust, a thirsty burn. IGC maxThrust 2000,
+  # coefficient 0.0014. Researched at the Supremacy (Adv) after Lt Booster 1 and Booster 3; the Adv
+  # Fighter prefers it but launches with Booster 1 until it is researched. ----
+  - id: hvy-booster
+    name: Hvy Booster
+    description: "A fuel based booster rocket with 50% more thrust than Booster 1."
+    model-name: dn_ptafthvy
+    mass: 2
+    max-thrust: 66.6667        # IGC 2000 ÷ 30
+    fuel-consumption: 2.8      # 0.0014 × 2000 fuel/s
+    on-rate: 1
+    off-rate: 2
+    required-capabilities: [base]
+    required-techs: [hvy-booster]
+
+cloaks:
+  # ---- Sig Cloak 1 (id 16) — an Iron starting tech. Top tier here (Sig Cloak 2/3 not ported, see
+  # the header). A full 1440-energy Scout pool (1200 × Iron's 1.2) lasts ~26 s cloaked against its
+  # 60/s recharge. ----
+  - id: sig-cloak-1
+    name: Sig Cloak 1
+    description: "Cloaking device"
+    model-name: acs38
+    mass: 3
+    energy-consumption: 115    # energy/s while engaged (IGC)
+    max-cloaking: 0.625        # signature × (1 − 0.625) at full cloak (IGC)
+    on-rate: 0.25              # full cloak in 4 s
+    off-rate: 0.25
+    required-capabilities: [base]

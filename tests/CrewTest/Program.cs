@@ -57,6 +57,9 @@
 //       nobody aboard, or with no ship at all, it dissolves exactly as before.
 //   21. Hub level: the promoted gunner gets a MsgYouAre naming the crewed ship and a MsgCrew that
 //       names it captain.
+//   22. Equipment PR: a turret shot spends the SHIP's pools (the one magazine every gun draws on);
+//       a dry magazine stops the stations without stamping them, and a pack in the hold commits on
+//       the input-independent ammo step even though the pilot never pulled a trigger.
 
 using System.Linq;
 using SimServer.Content;
@@ -1946,6 +1949,59 @@ void TurretIn(Simulation sim, int gunner, Vec3 aim, bool firing) =>
     );
 
     gunCts.Cancel();
+}
+
+// ---- 22. Turrets draw on the SHARED pools ---------------------------------------------------------
+{
+    var (sim, ship) = CrewedLaunch(22);
+    var gat = sim.Content.Weapons.First(w => w.WeaponId == GatGun1);
+    var zenith = sim.TurretZenithOf(Bomber, 0);
+    ushort before = ship.Pools.Ammo;
+    TurretIn(sim, 2, zenith, firing: true);
+    Park(ship, new Vec3(0f, 0f, 0f));
+    sim.Step();
+    Check(
+        ship.TurretLastFire![0] == sim.Tick && ship.Pools.Ammo == before - gat.AmmoPerShot && ship.LastFireTick == 0,
+        $"a turret shot spends the SHIP's magazine ({before} -> {ship.Pools.Ammo}, AmmoPerShot {gat.AmmoPerShot}) — the pilot never fired",
+        $"turret shot did not draw on the shared pool (stamp {ship.TurretLastFire![0]}, ammo {ship.Pools.Ammo})"
+    );
+
+    // Dry: the station is blocked on every cadence tick and never stamps.
+    ship.Pools.Ammo = 1;
+    ship.Pools.AmmoPacks = 0;
+    uint stamp = ship.TurretLastFire![0];
+    for (int i = 0; i < 12; i++)
+    {
+        Park(ship, new Vec3(0f, 0f, 0f));
+        sim.Step();
+    }
+    Check(
+        ship.TurretLastFire![0] == stamp && ship.LastTurretFireTick == stamp && ship.Pools.Ammo == 1,
+        "a dry magazine stops the crewed turret too: no shot, no stamp, the remainder untouched",
+        $"a dry turret fired (stamp {ship.TurretLastFire![0]} vs {stamp}, ammo {ship.Pools.Ammo})"
+    );
+
+    // A pack in the hold commits on the next ammo step — input-independent, so it happens although
+    // only the GUNNER is shooting — and once the load lands the station fires again.
+    ship.Pools.AmmoPacks = 1;
+    Park(ship, new Vec3(0f, 0f, 0f));
+    sim.Step();
+    uint loadEnd = ship.AmmoLoadEndTick;
+    Check(
+        ship.Pools.AmmoPacks == 0 && loadEnd > sim.Tick,
+        $"the dry magazine commits the hold's pack on the next tick (loading until tick {loadEnd})",
+        $"no pack committed (packs {ship.Pools.AmmoPacks}, load end {loadEnd})"
+    );
+    while (sim.Tick < loadEnd)
+    {
+        Park(ship, new Vec3(0f, 0f, 0f));
+        sim.Step();
+    }
+    Check(
+        ship.TurretLastFire![0] == loadEnd && ship.Pools.Ammo > 1,
+        "the station fires again the tick the pack's load lands",
+        $"the turret did not resume after the load (stamp {ship.TurretLastFire![0]}, load end {loadEnd}, ammo {ship.Pools.Ammo})"
+    );
 }
 
 Console.WriteLine(failures == 0 ? "ALL CREW TESTS PASSED" : $"{failures} CREW TEST(S) FAILED");

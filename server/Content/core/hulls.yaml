@@ -1,12 +1,14 @@
 # Hulls — the playable ships + the escape pod. Flight stats derive onto the runtime ShipClassDef:
 #   mass→mass, speed→max-speed, thrust→accel, max-turn-rates→rate-*-deg, armor-hit-points→max-hull,
-#   strafe/reverse-thrust-multiplier→side/back-mult. class-id, drift-*-deg, ab-*, and hardpoints are
-#   explicit runtime extensions.
+#   strafe/reverse-thrust-multiplier→side/back-mult. class-id, drift-*-deg, ab-fuel-recharge, and
+#   hardpoints are explicit runtime extensions.
 #
 #   Iron Coalition combat roster (Phase 2, PCore014.igc). Flight stats are the --iron-slice
 #   anchor-translation (plan Adaptation §3): IGC Enh Fighter ↔ our fighter (mass ×1.2, speed ×0.8333,
-#   thrust ×0.03333, hitPoints ×0.342857). side/back-mult come straight from IGC. Fields the IGC
-#   doesn't cover (drift-*, ab-*, shield-*, vision-*) are kept from the closest current hull.
+#   thrust ×0.03333, hitPoints ×0.342857). side/back-mult come straight from IGC. The resource pools —
+#   max-energy / energy-recharge-rate / max-ammo / max-fuel — are raw IGC values (the per-shot gun costs
+#   and the booster drains are translated instead, see weapons.yaml / equipment.yaml). Fields the IGC
+#   doesn't cover (drift-*, vision-*) are kept from the closest current hull.
 #   model-length scales fighter's 5.5 by the IGC length ratio (Enh Fighter 14.9 = anchor).
 #   Ship GLBs (fig13/wc_ic*) DO carry HP_ nodes, so weapon/booster/light geometry comes from the
 #   mesh via HardpointGeometryMerge — YAML binds weapon-ids + authors the cockpit (no HP_Cockpit node)
@@ -41,19 +43,27 @@
 #   the ONLY gate today: any gun fits any gun-typed mount and any rack any missile-typed mount, on
 #   every hull (IGC's partMasks are not enforced). Per-ship restrictions authored in YAML are
 #   planned — .PLAN/README.md → *Per-ship part restrictions*.
-#   Shield (optional, all keys omitted = no shield): shield-capacity is a regenerating energy pool that
-#   absorbs incoming damage BEFORE the hull (overflow from a shield-popping hit spills into the hull the
-#   same tick); shield-recharge is points/second, resuming shield-delay seconds after the last shield hit.
-#   A hull authoring shield-capacity MUST author a positive shield-recharge (else it never comes back) —
-#   ContentValidator refuses to boot otherwise.
-#   Afterburner fuel (optional, gauges the afterburner): max-fuel is the tank size; ab-fuel-drain is
-#   burned per second while the afterburner is engaged; ab-fuel-recharge trickles back per second
-#   while the boost input is released. A hull authoring ab-accel > 0 MUST also author max-fuel (and vice versa) —
-#   CoreValidator refuses to boot on a mismatched pair. ab-fuel-recharge: 0 is a valid, deliberate
-#   convention meaning "dock-only": the tank never refills in flight, only on relaunch (spawn-time
-#   init refuels — see Simulation.SpawnCombatShip).
+#   Equipment (shield / afterburner / cloak) lives on the PARTS in equipment.yaml, one per slot, picked
+#   per ship in the hangar. A hull has a slot only if its `allowed-parts` lists that key (shield /
+#   afterburner / cloak — IGC pmEquipment); a listed part also allows its successor tiers. Its
+#   `preferred-parts` (IGC preferredPartsTypes, equipment entries only) picks each slot's default: the
+#   first listed part the slot allows whose required-techs the hull itself requires. No shield part = no
+#   shield. The old hull keys shield-capacity / -recharge / -delay and ab-accel / -on-rate / -off-rate /
+#   -fuel-drain are GONE — CoreValidator refuses a bundle that still authors them.
+#   Energy + ammo: max-energy is the pool energy guns (ER Nanite) and the cloak draw from, refilled at
+#   energy-recharge-rate per second and in full at dock; the faction's max-energy attribute scales it
+#   (Iron ×1.2). max-ammo is the magazine every ammo gun (Gat / Mini-Gun / AutoCan) shares, refilled at
+#   dock and by ammo packs carried as cargo. A cloak slot needs an energy pool, and every default gun
+#   must afford one shot from a full pool — CoreValidator refuses to boot otherwise.
+#   Afterburner fuel: max-fuel is the tank the equipped afterburner burns (its fuel-consumption per
+#   second while engaged). A hull with an afterburner slot MUST author max-fuel, and a hull without one
+#   must not — CoreValidator refuses a mismatch. ab-fuel-recharge trickles back per second while the
+#   boost is released; it is 0 on every hull ("dock-only", Allegiance's rule: the tank refills only on
+#   relaunch and from fuel pods — any in-flight recharge at or above the Lt Booster's 0.195/s drain
+#   would be free boost, and CoreValidator refuses one at or above an allowed booster's drain).
 #   Signature (optional): radar-signature scales every viewer's fog detection range against this
-#   hull; signature is an ADDITIVE per-hull bias on top of it (radar-signature units, default 0).
+#   hull; signature is an ADDITIVE per-hull bias on top of it (radar-signature units, default 0). An
+#   equipped part's own signature would add per ship; stock parts author none.
 hulls:
   # Scout (class-id 0, fig13): fastest hull, one PW Gat Gun. IGC 1×0x3 mount.
   - id: scout
@@ -72,13 +82,15 @@ hulls:
     reverse-thrust-multiplier: 0.25 # IGC backMult
     drift-yaw-deg: 5
     drift-pitch-deg: 5
-    ab-accel: 0
-    ab-on-rate: 2.0
-    ab-off-rate: 1.0
     armor-hit-points: 69
-    shield-capacity: 60   # regenerating shield absorbed before hull
-    shield-recharge: 8    # points/sec once the quiet delay elapses (~7.5 s to full)
-    shield-delay: 3       # seconds after the last shield hit before recharge resumes
+    # No afterburner slot and so no tank: IGC fits only the Retro Booster here (not ported; IGC maxFuel 4).
+    max-energy: 1200            # IGC; ×1.2 Iron = 1440 — feeds an ER Nanite and the cloak
+    energy-recharge-rate: 60    # IGC, per second
+    max-ammo: 960               # IGC; the Gat Gun draws 2 per shot (~96 s of fire)
+    allowed-parts:
+      shield: [sm-shield-1]     # IGC pmEquipment shield 0x1 (the Sm Shield line)
+      cloak: [sig-cloak-1]      # NOT IGC (Iron Scout pmEquipment cloak 0): the cloak stand-in until the stealth hulls land
+    preferred-parts: [sm-shield-1]  # default: Sm Shield 1; the cloak slot starts EMPTY (fit it in the hangar)
     vision-cone-length: 2400
     vision-cone-angle-deg: 30
     vision-sphere-radius: 1080  # 900 x1.2 — scout's omnidirectional radar bubble
@@ -117,16 +129,15 @@ hulls:
     reverse-thrust-multiplier: 1.0  # IGC backMult
     drift-yaw-deg: 5
     drift-pitch-deg: 5
-    ab-accel: 14
-    ab-on-rate: 2.5
-    ab-off-rate: 1.5
-    max-fuel: 60          # ~15 s burn at drain 4 — the booster hull carries a serious tank
-    ab-fuel-drain: 4.0    # per second while the afterburner is engaged
+    max-fuel: 13          # IGC; 13 ÷ 1.2221 ≈ 10.6 s on Booster 1 (≈ 59 s on the frugal Lt Booster 1)
     ab-fuel-recharge: 0   # dock-only: no in-flight regen — spent tank reloads from fuel pods or relaunch
     armor-hit-points: 206
-    shield-capacity: 60
-    shield-recharge: 8
-    shield-delay: 3
+    max-energy: 600             # IGC
+    energy-recharge-rate: 50    # IGC, per second
+    max-ammo: 540               # IGC; twin Mini-Guns draw 2 per shot each (~20 s of fire)
+    allowed-parts:
+      afterburner: [booster-1, lt-booster-1]  # IGC pmEquipment afterburner 0x3; NO shield slot (IGC 0)
+    preferred-parts: [booster-1]
     vision-cone-length: 1200
     vision-cone-angle-deg: 20
     vision-sphere-radius: 450
@@ -165,16 +176,16 @@ hulls:
     reverse-thrust-multiplier: 0.5  # fighter-family value
     drift-yaw-deg: 5
     drift-pitch-deg: 5
-    ab-accel: 10
-    ab-on-rate: 2.0
-    ab-off-rate: 1.0
-    max-fuel: 15          # burn time = max-fuel / ab-fuel-drain = 5 s
-    ab-fuel-drain: 3.0    # per second while the afterburner is engaged
-    ab-fuel-recharge: 0.5 # per second while boost is released (~30 s to full)
+    max-fuel: 17          # IGC; 17 ÷ 1.2221 ≈ 13.9 s on Booster 1
+    ab-fuel-recharge: 0   # dock-only (Allegiance never refuels in flight)
     armor-hit-points: 120
-    shield-capacity: 60
-    shield-recharge: 8
-    shield-delay: 3
+    max-energy: 1200            # IGC
+    energy-recharge-rate: 60    # IGC, per second
+    max-ammo: 720               # IGC; three Gats draw 2 per shot each (~24 s of fire)
+    allowed-parts:
+      shield: [sm-shield-1]                           # IGC pmEquipment shield 0x1
+      afterburner: [booster-1, lt-booster-1, crs-booster]  # IGC pmEquipment afterburner 0x7
+    preferred-parts: [booster-1, sm-shield-1]
     vision-cone-length: 1200
     vision-cone-angle-deg: 20
     vision-sphere-radius: 450
@@ -218,16 +229,18 @@ hulls:
     reverse-thrust-multiplier: 0.5  # fighter-family value
     drift-yaw-deg: 5
     drift-pitch-deg: 5
-    ab-accel: 12
-    ab-on-rate: 2.0
-    ab-off-rate: 1.0
-    max-fuel: 20          # IGC maxFuel 20
-    ab-fuel-drain: 3.0
-    ab-fuel-recharge: 0.5
+    max-fuel: 20          # IGC; 20 ÷ 1.2221 ≈ 16.4 s on Booster 1 (≈ 7.1 s on the Hvy Booster)
+    ab-fuel-recharge: 0   # dock-only (Allegiance never refuels in flight)
     armor-hit-points: 154
-    shield-capacity: 60
-    shield-recharge: 8
-    shield-delay: 3
+    max-energy: 1500            # IGC
+    energy-recharge-rate: 90    # IGC, per second
+    max-ammo: 1020              # IGC; three Gats draw 2 per shot each (~34 s of fire)
+    allowed-parts:
+      shield: [sm-shield-1]                                        # IGC pmEquipment shield 0x1
+      afterburner: [booster-1, lt-booster-1, crs-booster, hvy-booster]  # IGC pmEquipment afterburner 0xf
+    # IGC order. The Hvy Booster is research-locked (hvy-booster tech, which the hull doesn't require),
+    # so the default rule skips it: the hull launches with Booster 1 until the Hvy Booster is researched.
+    preferred-parts: [hvy-booster, booster-1, sm-shield-1]
     vision-cone-length: 1200
     vision-cone-angle-deg: 20
     vision-sphere-radius: 450
@@ -271,13 +284,14 @@ hulls:
     reverse-thrust-multiplier: 0.5  # IGC backMult
     drift-yaw-deg: 8
     drift-pitch-deg: 8
-    ab-accel: 0
-    ab-on-rate: 2.0
-    ab-off-rate: 1.0
     armor-hit-points: 274
-    shield-capacity: 100  # the heavy hull carries the largest shield
-    shield-recharge: 6    # points/sec once the quiet delay elapses (~16.7 s to full)
-    shield-delay: 4       # seconds after the last shield hit before recharge resumes
+    # No afterburner slot (IGC pmEquipment afterburner 0) and so no tank (IGC maxFuel 5 is dead data).
+    max-energy: 1500            # IGC
+    energy-recharge-rate: 90    # IGC, per second
+    max-ammo: 1440              # IGC; shared by the Gats, the AutoCans and the two turret Gats
+    allowed-parts:
+      shield: [med-shield-1]    # IGC pmEquipment shield 0x2 (the Med Shield line)
+    preferred-parts: [med-shield-1]
     vision-cone-length: 1000
     vision-cone-angle-deg: 18
     vision-sphere-radius: 400
@@ -337,13 +351,14 @@ hulls:
     reverse-thrust-multiplier: 0.5  # IGC backMult
     drift-yaw-deg: 10
     drift-pitch-deg: 10
-    ab-accel: 0
-    ab-on-rate: 2.0
-    ab-off-rate: 1.0
     armor-hit-points: 1200
-    shield-capacity: 200  # the capital hull carries the fleet's largest shield
-    shield-recharge: 5    # points/sec once the quiet delay elapses (~40 s to full)
-    shield-delay: 5       # seconds after the last shield hit before recharge resumes
+    # No afterburner slot (IGC pmEquipment afterburner 0) and so no tank (IGC maxFuel 5 is dead data).
+    max-energy: 2500            # IGC
+    energy-recharge-rate: 100   # IGC, per second
+    max-ammo: 3600              # IGC; shared by the four hull AutoCans and the four turret AutoCans
+    allowed-parts:
+      shield: [lrg-shield-1]    # IGC pmEquipment shield 0x4 (the Lrg Shield line, needs a Shipyard)
+    preferred-parts: [lrg-shield-1]
     vision-cone-length: 1000
     vision-cone-angle-deg: 16
     vision-sphere-radius: 500
@@ -395,13 +410,11 @@ hulls:
     reverse-thrust-multiplier: 0.5
     drift-yaw-deg: 8
     drift-pitch-deg: 8
-    ab-accel: 0
-    ab-on-rate: 1.0
-    ab-off-rate: 1.0
     armor-hit-points: 500  # tougher than a fighter (120) — it soaks hits it can't shoot back at
-    shield-capacity: 40    # a modest regenerating shield over the hull
-    shield-recharge: 6     # points/sec once the quiet delay elapses (~6.7 s to full)
-    shield-delay: 3        # seconds after the last shield hit before recharge resumes
+    # Unarmed: no energy pool, magazine or tank (IGC 0 / 0 / 0). A medium shield over the hull.
+    allowed-parts:
+      shield: [med-shield-1]  # IGC pmEquipment shield 0x2
+    preferred-parts: [med-shield-1]
     # Fog-of-war vision: scout-ish reach so a miner discovers new He3 rocks as it flies, but it reads
     # loud on radar — a slow industrial hull is seen from far off.
     vision-cone-length: 2000
@@ -440,13 +453,11 @@ hulls:
     reverse-thrust-multiplier: 0.5
     drift-yaw-deg: 8
     drift-pitch-deg: 8
-    ab-accel: 0
-    ab-on-rate: 1.0
-    ab-off-rate: 1.0
     armor-hit-points: 500
-    shield-capacity: 40
-    shield-recharge: 6
-    shield-delay: 3
+    # Unarmed like the miner: no energy pool, magazine or tank. A medium shield over the hull.
+    allowed-parts:
+      shield: [med-shield-1]
+    preferred-parts: [med-shield-1]
     vision-cone-length: 2000
     vision-cone-angle-deg: 28
     vision-sphere-radius: 1000
@@ -471,10 +482,8 @@ hulls:
     reverse-thrust-multiplier: 1.0
     drift-yaw-deg: 8
     drift-pitch-deg: 8
-    ab-accel: 0
-    ab-on-rate: 2.0
-    ab-off-rate: 1.0
     armor-hit-points: 20
+    # No equipment slots, pools or tank: a bare lifeboat.
     vision-sphere-radius: 250 # no cone — a lifepod has no forward sensor, just a short proximity bubble
     radar-signature: 0.35     # tiny lifeboat — hard to spot fleeing a wreck
     abilities: [is-lifepod, no-ripcord]

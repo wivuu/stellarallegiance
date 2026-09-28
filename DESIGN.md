@@ -70,7 +70,11 @@ subclasses** for anything needing custom `_Draw` or per-frame state.
   `StatReadout`, `DataTable`, `ToastHost`.
 - **Connect feedback** — `LinkRadar` (rotating dashed radar ring with centred link %),
   `ProgressSweepBar` (continuous fill + sweeping highlight while indeterminate).
-- **Game elements** — `LoadoutSlot`, `ContactChip`, `ResourceReadout`, `RadarFrame`, `GunnerStrip`
+- **Game elements** — `LoadoutSlot` (also the hangar's EQUIPMENT rows — one per shield/afterburner/
+  cloak slot the hull actually has, tagged `E1 · SHIELD` / `E2 · AFTERBURNER` / `E3 · CLOAK`, the
+  migrated part name or `— EMPTY —` plus a stat line, e.g. `STR 51 · REGEN 0.69/s · DELAY 0s`,
+  `THRUST +36.7 · FUEL 1.22/s`, `CLOAK 62% · DRAIN 115/s`; hidden — not greyed — when the hull has no
+  slot of that kind at all), `ContactChip`, `ResourceReadout`, `RadarFrame`, `GunnerStrip`
   (the top-centre HUD strip a crew gunner sees while riding a captain's turret station — built from
   `RosterCells`; `SetMock(…)` renders it standalone in the gallery).
 - **Target pane** — `TargetPane` (flight HUD, bottom-left, docked right of the `Minimap` at exactly its
@@ -93,6 +97,26 @@ subclasses** for anything needing custom `_Draw` or per-frame state.
     reads NEUTRAL in `Data`.
   `PanelSolid` body (small text over the live scene); faction colour (a rock: its resource tint) for
   identity and the rim light, cyan only for chrome/shield/lock. Hidden under the F3 overview.
+- **System ring** (`SystemRing`) — the concentric arc gauges framing the aim reticle. Right span: HULL
+  (segmented blocks, tiered green/amber/red) with SHLD (a solid arc wrapping it, only on a hull that
+  carries a shield part) and an AMMO tag underneath (only when a mounted gun costs ammo) reading the
+  shared magazine — `AMMO nnn +P` (pack count), or `LOAD nn%` in the same slot with an inner sweep arc
+  while a pack is loading it back up. Left span, mirrored: FUEL (blocks; only with an EQUIPPED
+  afterburner AND a tank — no legacy fallback) with ENRG wrapping it (only when a cloak or an
+  energy-costing gun draws on the pool) tagged `ENRG nnnn`, `DesignTokens.Data` normally and `Danger`
+  once the pool is critically low; under FUEL, the fuel-pod reserve (`+N`) or its own `LOAD nn%` sweep
+  while a pod is loading. `CLK nn%` sits centred below the ring (only with a cloak equipped),
+  `TeamAccent`, pulsing while engaged or still ramping down, `Danger` when the feeding energy pool is
+  starved. A crew gunner reads the ring the same way, centred on the turret aim, over the RIDDEN hull —
+  own-hull-only extras (the pod reserve/LOAD, the ammo-pack LOAD) stay pilot-only, since a gunner has
+  no way to predict either loader on a hull that isn't theirs to fly. `SystemRing.RingReadout` +
+  `SetMock(readout)` render it standalone in the gallery (see 06 — GAME ELEMENTS).
+- **Weapons panel** (`WeaponsPanel`) — the bottom-right "◀ WEAPONS" readout. Per-gun state now reads
+  the resource gate ahead of cadence: `NO ENRG` / `NO AMMO` (`Danger`) or `LOADING` (`Warn`) whenever a
+  cadence-ready mount can't actually fire, on both the primary slot and every secondary bolt row; the
+  primary's own CYCLE line also carries its pool count (ammo or energy, whichever it costs). A
+  dedicated AMMO row (modelled on the dispenser rows: pool count, pack pips, a `LOADING` state with the
+  load line, `EMPTY`) appears whenever something aboard spends ammo.
 - **Crew gunner HUD** — a gunner has NO HUD of its own beyond the `GunnerStrip`. A turret seat is a
   pilot's seat minus the controls, so it reuses the pilot's flight HUD verbatim: one aim reticle
   (`MarkerDraw.AimReticle`, drawn by `TargetMarkers` on the turret's real firing line — never a
@@ -107,6 +131,16 @@ subclasses** for anything needing custom `_Draw` or per-frame state.
   barrel on a low mount, sized off the hull's model length and tinted with the faction colour
   (`DesignTokens.Faction`, never the cyan chrome accent), swung onto the gunner's live aim. An
   unmanned station shows nothing at all.
+- **Cloak shimmer** (`CloakFx`) — how a cloaking ship looks, to EVERY viewer that receives it (fog
+  decides whether an enemy is streamed at all — this is only the look). The whole external model goes
+  translucent (per-instance `Transparency`, capped so the owner's own chase cam still reads the hull —
+  `CloakFx.OwnMaxTransparency` 0.75 vs `OtherMaxTransparency` 0.85 for everyone else), and the hull
+  meshes get an additive fresnel rim with slow drifting bands, tinted with the ship's **faction**
+  colour (`DesignTokens.Faction` — same TurretBarrelView rule, never the cyan chrome accent) — a
+  cloaked hull reads as bent light, not a faded one. Level 0 puts everything back to opaque. The
+  hangar's arsenal previews an equipped cloak the same way: `LoadoutPreview.SetCloakPreview(maxLevel,
+  tint)` oscillates the shimmer between visible and the part's own `MaxCloaking` while its row is
+  selected.
 - **Crew / turret stations** — `TurretStationRow` (a captain's ▶ TURRET STATIONS row: ◣ tile,
   seat id + MANNED/OPEN, gun, gunner — selectable into the arsenal frame), `CrewManifestRow`
   (a gunner's read-only ▶ TURRET MANIFEST row: ◆ pip tile, seat id + gun, YOU / name / OPEN), and

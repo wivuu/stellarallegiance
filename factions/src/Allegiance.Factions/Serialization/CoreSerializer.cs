@@ -146,7 +146,6 @@ public static class CoreSerializer
                 Shields = core.Shields,
                 Cloaks = core.Cloaks,
                 Afterburners = core.Afterburners,
-                AmmoPacks = core.AmmoPacks,
                 Launchers = core.Launchers,
             }
         );
@@ -164,6 +163,7 @@ public static class CoreSerializer
                 Chaffs = core.Chaffs,
                 Probes = core.Probes,
                 Fuels = core.Fuels,
+                AmmoPacks = core.AmmoPacks,
                 Projectiles = core.Projectiles,
             }
         );

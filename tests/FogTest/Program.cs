@@ -69,15 +69,33 @@ SignatureKnobs Knobs(ContentSet c) =>
         c.World.SignatureMaxMult
     );
 
-// Effective AT-REST radar signature of a hull under the loaded knobs — the composed pipeline with
-// the dynamic terms quiet (no fire, no afterburner, no dust): (base + bias) × shield-mult, clamped.
-// Detection-range assertions scale by THIS rather than raw RadarSignature, so retuning the YAML —
-// including the signature knobs — never breaks them (the file's standing idiom).
+// The per-ship signature bias a DEFAULT-equipped ship of this hull flies — the hull's own bias plus
+// each default part's EquipmentDef.Signature in slot order (Simulation.ApplyEquipment's sum; stock
+// parts author none). withShield false = the same hull with its shield slot emptied.
+float DefaultBias(ContentSet c, ShipClassDef d, bool withShield = true)
+{
+    float bias = d.SignatureBias;
+    for (byte slot = 0; slot < EquipmentDef.SlotCount; slot++)
+    {
+        ushort id = d.DefaultEquipmentFor(slot);
+        if (id != EquipmentDef.NoEquipment && (withShield || slot != EquipmentDef.SlotShield))
+            bias += c.Equipment[id].Signature;
+    }
+    return bias;
+}
+
+// Whether the hull LAUNCHES with a shield part (the shield-signature term is per equipped part).
+bool HasDefaultShield(ShipClassDef d) => d.DefaultEquipmentFor(EquipmentDef.SlotShield) != EquipmentDef.NoEquipment;
+
+// Effective AT-REST radar signature of a default-equipped hull under the loaded knobs — the composed
+// pipeline with the dynamic terms quiet (no fire, no afterburner, no dust, no cloak): (base + bias) ×
+// shield-mult, clamped. Detection-range assertions scale by THIS rather than raw RadarSignature, so
+// retuning the YAML — including the signature knobs — never breaks them (the file's standing idiom).
 float EffSig(ContentSet c, byte cls)
 {
     var d = c.Ships.First(x => x.ClassId == cls);
     return SignatureModel.Compute(
-        new SignatureInputs(d.RadarSignature, d.SignatureBias, 0, 0, 0, 0f, d.ShieldCapacity > 0f, 0f),
+        new SignatureInputs(d.RadarSignature, DefaultBias(c, d), 0, 0, 0, 0f, HasDefaultShield(d), 0f),
         Knobs(c)
     );
 }
@@ -177,7 +195,7 @@ Vec3 AtAngle(float dist, float angleDeg)
 // ================================================================================================
 // 0. SignatureModel unit tests — the pure signature pipeline, no sim. Neutral knobs must reproduce
 //    the fire-boost-only behavior byte-identically; each term applies exactly its multiplier; the
-//    clamp rails bound extreme stacking.
+//    clamp rails bound extreme stacking; the cloak hides its fraction AFTER the rails.
 // ================================================================================================
 {
     bool Close(float a, float b) => MathF.Abs(a - b) < 1e-4f;
@@ -196,7 +214,8 @@ Vec3 AtAngle(float dist, float angleDeg)
         uint missile = 0,
         float ab = 0f,
         bool shield = false,
-        float dust = 0f
+        float dust = 0f,
+        float cloak = 0f
     ) =>
         new(
             BaseSig: 2f,
@@ -206,7 +225,8 @@ Vec3 AtAngle(float dist, float angleDeg)
             LastMissileTick: missile,
             AbPower: ab,
             HasShield: shield,
-            DustCoverage: dust
+            DustCoverage: dust,
+            Cloaking: cloak
         );
 
     Check(
@@ -292,6 +312,36 @@ Vec3 AtAngle(float dist, float angleDeg)
         Close(SignatureModel.Compute(At(dust: 1f), rails), 2f * 0.5f),
         "extreme quieting clamps at base × MinMult",
         "the min clamp rail did not hold"
+    );
+
+    // The cloak (equipment PR): signature × (1 − cloaking), applied AFTER the rails. So a cloaked,
+    // dust-buried ship drops BELOW the MinMult floor (the rails bound the loudness terms, not the
+    // cloak), a full-cloak level hides exactly its fraction, and firing does not break the cloak — the
+    // fire boost still multiplies, the cloak then hides its share of the louder signature.
+    const float cloakMax = 0.625f; // Sig Cloak 1's max-cloaking (any 0 < c < 1 would do)
+    Check(
+        Close(SignatureModel.Compute(At(cloak: cloakMax), neutral), 2f * (1f - cloakMax)),
+        "a full cloak hides exactly its fraction of the signature",
+        "cloak term wrong"
+    );
+    Check(
+        Close(SignatureModel.Compute(At(dust: 1f, cloak: cloakMax), rails), 2f * 0.5f * (1f - cloakMax))
+            && SignatureModel.Compute(At(dust: 1f, cloak: cloakMax), rails) < 2f * rails.MinMult,
+        "the cloak applies AFTER the clamp — a cloaked ship in dust drops below the MinMult floor",
+        "the cloak was clamped by the MinMult rail (applied before the clamp?)"
+    );
+    Check(
+        Close(SignatureModel.Compute(At(fire: 1000, cloak: cloakMax), neutral), 2f * 2.5f * (1f - cloakMax)),
+        "firing does not break the cloak: the fire boost multiplies, the cloak still hides its share",
+        "fire boost under the cloak wrong"
+    );
+    Check(
+        Close(
+            SignatureModel.Compute(At(fire: 1000, ab: 1f, shield: true, cloak: cloakMax), rails),
+            2f * 4f * (1f - cloakMax)
+        ),
+        "loud stacking under a cloak: MaxMult caps first, then the cloak hides its fraction",
+        "cloak vs MaxMult ordering wrong"
     );
 }
 
@@ -2768,8 +2818,13 @@ Vec3 AtAngle(float dist, float angleDeg)
             "the coasting ship was already detected (boost geometry is off)"
         );
 
-        // Hold the afterburner: AbPower ramps to 1 (fuel is full from spawn), the capture reads it
-        // live, and the boosted signature lands at the next applies.
+        // Hold the afterburner: AbPower ramps to 1 at the equipped booster's on-rate (fuel is full
+        // from spawn), the capture reads it live, and the boosted signature lands at the next applies.
+        // Hold for the whole spool PLUS the settle window, so the applies see a fully-lit burn.
+        var booster = sim.Content.Equipment[
+            Def(sim, FlightModel.ClassFighter).DefaultEquipmentFor(EquipmentDef.SlotAfterburner)
+        ];
+        int spool = (int)MathF.Ceiling(1f / (booster.AbOnRate * FlightModel.Dt));
         target.HeldInput = new ShipInputState { Boost = true };
         Run(
             sim,
@@ -2778,7 +2833,7 @@ Vec3 AtAngle(float dist, float angleDeg)
                 Park(viewer, EmptySector, new Vec3(0, 0, 0));
                 Park(target, EmptySector, spot);
             },
-            Settle
+            spool + Settle
         );
         Check(
             Vision(sim, 0).VisibleEnemyShips.Contains(target.ShipId),
@@ -2790,8 +2845,8 @@ Vec3 AtAngle(float dist, float angleDeg)
 }
 
 // (21b) Equipped shield: at a range between the bare-hull reach and the shielded reach, the stock
-// (shield-fitted) fighter is detected; stripping the shield from the loaded def (capacity 0 =
-// nothing equipped) drops the same geometry off radar. Pool level is irrelevant by design.
+// (shield-fitted) fighter is detected; emptying the hull's DEFAULT shield slot (nothing equipped)
+// drops the same geometry off radar. Pool level is irrelevant by design.
 {
     float shieldMult,
         sphere,
@@ -2804,7 +2859,7 @@ Vec3 AtAngle(float dist, float angleDeg)
         effShielded = EffSig(probe.Content, FlightModel.ClassFighter);
         var d = Def(probe, FlightModel.ClassFighter);
         effBare = SignatureModel.Compute(
-            new SignatureInputs(d.RadarSignature, d.SignatureBias, 0, 0, 0, 0f, false, 0f),
+            new SignatureInputs(d.RadarSignature, DefaultBias(probe.Content, d, withShield: false), 0, 0, 0, 0f, false, 0f),
             Knobs(probe.Content)
         );
     }
@@ -2818,11 +2873,13 @@ Vec3 AtAngle(float dist, float angleDeg)
             var sim = BootSim(211);
             if (stripShield)
             {
-                // Simulation.ShipDefs shares these def instances, so zeroing capacity BEFORE any
-                // spawn makes the hull genuinely shieldless (equipment AND pool).
+                // Simulation.ShipDefs shares these def instances and every spawn resolves the hull's
+                // DefaultEquipment then, so emptying the shield slot BEFORE any spawn launches the hull
+                // genuinely shieldless (no part: no pool, no shield-signature term).
                 var fd = sim.Content.Ships.First(x => x.ClassId == FlightModel.ClassFighter);
-                fd.ShieldCapacity = 0f;
-                fd.ShieldRecharge = 0f;
+                var stripped = (ushort[])fd.DefaultEquipment.Clone();
+                stripped[EquipmentDef.SlotShield] = EquipmentDef.NoEquipment;
+                fd.DefaultEquipment = stripped;
             }
             var v = Join(sim, 1, 0, FlightModel.ClassFighter);
             var t = Join(sim, 2, 1, FlightModel.ClassFighter);
@@ -2972,6 +3029,90 @@ Vec3 AtAngle(float dist, float angleDeg)
         "raising the ship's SigBias at runtime pulls it onto radar (the live loadout/ability seam)",
         "the biased ship was not detected — SigBias is not reaching the capture"
     );
+}
+
+// (21e) The cloak in the LIVE sim (equipment PR): two Scouts fitted with the cloak their slot takes
+// (hangar pick — the slot starts empty), identical in every other input; only one engages it (the held
+// Cloak input LEVEL) and ramps to its max-cloaking. Its signature is then the clamped pipeline ×
+// (1 − level): at a range where its UNCLOAKED twin is a radar contact the cloaked one is not, and at a
+// range where the twin is only an eyeball glimpse the cloaked one is not even that.
+{
+    var sim = BootSim(215);
+    var scoutDef = Def(sim, FlightModel.ClassScout);
+    var cloak = sim.Content.Equipment.FirstOrDefault(e =>
+        e.Slot == EquipmentDef.SlotCloak && scoutDef.AllowsEquipment(e.EquipmentId) && e.RequiredTechIdx.Length == 0
+    );
+    if (cloak is null)
+        Console.WriteLine("SKIP: no starting cloak part fits the scout — live cloak test skipped");
+    else
+    {
+        var viewer = Join(sim, 1, 0, FlightModel.ClassFighter);
+        (byte, ushort)[] fitCloak = { (EquipmentDef.SlotCloak, cloak.EquipmentId) };
+        sim.EnqueueJoin(2, 1, FlightModel.ClassScout, Array.Empty<(uint, byte)>(), 0, null, fitCloak);
+        sim.EnqueueJoin(3, 1, FlightModel.ClassScout, Array.Empty<(uint, byte)>(), 0, null, fitCloak);
+        sim.Step();
+        var cloaked = sim.Ships.First(s => s.OwnerClientId == 2);
+        var twin = sim.Ships.First(s => s.OwnerClientId == 3);
+        Check(
+            ReferenceEquals(cloaked.CloakPart, cloak) && ReferenceEquals(twin.CloakPart, cloak),
+            $"both scouts launch fitted with {cloak.Name} (hangar pick into the empty cloak slot)",
+            "the cloak pick did not reach the ships"
+        );
+
+        float sphere = Def(sim, FlightModel.ClassFighter).VisionSphereRadius; // the VIEWER's sphere
+        float eyeMult = sim.Content.World.FogEyeballMultiplier;
+        float eff = EffSig(sim.Content, FlightModel.ClassScout); // the twin, at rest
+        float hidden = 1f - cloak.MaxCloaking; // what a full cloak leaves
+        // Radar case: inside the twin's sphere reach, beyond BOTH cloaked reaches (sphere and eyeball).
+        float radarDist = sphere * eff * MathF.Max(0.8f, (1f + eyeMult * hidden) / 2f);
+        // Eyeball case: the twin's eyeball band (past its sphere reach, inside its eyeball reach).
+        float eyeDist = sphere * eff * (1f + eyeMult) / 2f;
+        Check(
+            radarDist < sphere * eff
+                && radarDist > sphere * eyeMult * eff * hidden
+                && eyeDist > sphere * eyeMult * eff * hidden,
+            "the cloak test ranges straddle the cloaked and uncloaked reaches (geometry pre-condition)",
+            $"cloak test geometry off (radar {radarDist:F0}, eye {eyeDist:F0}, sphere×eff {sphere * eff:F0})"
+        );
+
+        // Engage: hold the cloak until the level reaches the part's max (ramp at its on-rate), then
+        // hold a settle window so the 2 Hz applies read the cloaked signature.
+        uint fullLevel = (uint)(cloak.MaxCloaking * ShipResources.CloakFull);
+        int ramp = (int)MathF.Ceiling(cloak.MaxCloaking / (cloak.OnRate * FlightModel.Dt)) + 2;
+        void HoldAt(float dist)
+        {
+            Park(viewer, EmptySector, new Vec3(0, 0, 0));
+            Park(cloaked, EmptySector, new Vec3(dist, 0, 0));
+            Park(twin, EmptySector, new Vec3(-dist, 0, 0)); // the mirror spot: same range, out of the cone
+            cloaked.HeldInput = new ShipInputState { Cloak = true };
+            twin.HeldInput = new ShipInputState();
+        }
+        Run(sim, () => HoldAt(radarDist), ramp + Settle);
+        Check(
+            cloaked.Pools.Cloak == fullLevel && twin.Pools.Cloak == 0,
+            $"the engaged cloak ramps to its max level ({fullLevel}/{ShipResources.CloakFull}); the idle twin stays at 0",
+            $"cloak level wrong (cloaked {cloaked.Pools.Cloak}, twin {twin.Pools.Cloak}, want {fullLevel})"
+        );
+        var tv = Vision(sim, 0);
+        Check(
+            tv.VisibleEnemyShips.Contains(twin.ShipId)
+                && !tv.VisibleEnemyShips.Contains(cloaked.ShipId)
+                && !tv.EyeballShips.Contains(cloaked.ShipId),
+            "at a range where the uncloaked twin is a radar contact, the cloaked scout is neither radar nor eyeball",
+            $"cloak did not hide the scout from radar (twin radar {tv.VisibleEnemyShips.Contains(twin.ShipId)}, cloaked radar {tv.VisibleEnemyShips.Contains(cloaked.ShipId)}, cloaked eyeball {tv.EyeballShips.Contains(cloaked.ShipId)})"
+        );
+
+        Run(sim, () => HoldAt(eyeDist), Settle);
+        tv = Vision(sim, 0);
+        Check(
+            tv.EyeballShips.Contains(twin.ShipId)
+                && !tv.VisibleEnemyShips.Contains(twin.ShipId)
+                && !tv.EyeballShips.Contains(cloaked.ShipId)
+                && !tv.VisibleEnemyShips.Contains(cloaked.ShipId),
+            "the eyeball tier honours the cloak: where the twin is only glimpsed, the cloaked scout is not even that",
+            $"eyeball tier ignored the cloak (twin eye {tv.EyeballShips.Contains(twin.ShipId)}, cloaked eye {tv.EyeballShips.Contains(cloaked.ShipId)})"
+        );
+    }
 }
 
 Console.WriteLine(failures == 0 ? "\nALL FOG TESTS PASSED" : $"\n{failures} FOG TEST(S) FAILED");

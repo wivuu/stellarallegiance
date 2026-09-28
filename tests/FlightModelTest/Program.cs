@@ -12,6 +12,9 @@ using StellarAllegiance.Shared;
 //  - The five feel signatures of the Allegiance model hold (.PLAN/CONFIG.md M0):
 //    drag equilibrium, afterburner overspeed, drift overshoot, speed-dependent
 //    agility (TorqueMultiplier), weak strafe/reverse, and mass re-parameterization.
+//  - The shared rules the server and the client prediction both run beside the integrator
+//    (ResourceRuleTests.cs): the energy / ammo / cloak resource rule (ShipResources), equipment
+//    tier succession (EquipmentTier) and ShipStats.FromDef(hull, afterburner).
 
 static class Program
 {
@@ -612,6 +615,9 @@ static class Program
         // (Content single-source integrity now lives in tests/ContentTest, which loads the YAML
         // bundle and runs the shared ContentValidator — this test is purely the flight-model
         // determinism + feel guard and depends on nothing but the shared integrator + the fixtures.)
+
+        // 10-17. The resource rule, equipment tier succession and FromDef(hull, afterburner).
+        failures += ResourceRuleTests.Run();
 
         Console.WriteLine(failures == 0 ? "\nALL TESTS PASSED" : $"\n{failures} TEST(S) FAILED");
         return failures == 0 ? 0 : 1;

@@ -20,7 +20,7 @@ base-attributes:
   max-armor-station: 1.15   # bases 15% tougher
   max-shield-station: 1.15  # INERT — bases carry no shields (authored for fidelity, no consumer)
   signature: 0.85           # 15% harder to detect
-  max-energy: 1.2           # INERT — no ship energy model (authored for fidelity, no consumer)
+  max-energy: 1.2           # ×1.2 hull energy pools (Scout 1200 → 1440): energy guns + the cloak run longer
   mining-rate: 0.85         # mines 15% slower
   mining-capacity: 0.75     # 25% smaller ore holds
   gun-damage: 1.1           # +10% gun damage

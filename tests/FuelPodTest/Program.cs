@@ -7,10 +7,13 @@
 // ride an escape pod.
 //
 // Content facts this suite leans on (server/Content/core):
-//   Lt Interceptor (cls 3, payload 12): max-fuel 60, ab-fuel-drain 4.0 (0.2/tick at 20 Hz →
-//                                        300 ticks per tank), ab-fuel-recharge 0 (dock-only),
-//                                        ab-accel 14 / ab-on-rate 2.5 / ab-off-rate 1.5.
-//                                        default hold: 2 decoy + 2 fuel pod.
+//   Lt Interceptor (cls 3, payload 12): the hull owns the TANK (max-fuel, ab-fuel-recharge 0 =
+//                                        dock-only); its DEFAULT afterburner part (equipment PR:
+//                                        Booster 1) owns the burn — fuel-consumption per second and
+//                                        the on-rate spool. Every window below is DERIVED from those
+//                                        numbers (ticks per tank = ceil(max-fuel / (drain × Dt)),
+//                                        spool = ceil(1 / (on-rate × Dt))), so retuning either keeps
+//                                        the suite honest. default hold: 2 decoy + 2 fuel pod.
 //   fuel-pod-1: cargo-id 5, mass 1, charges-per-pack 1, fuel-per-charge 999 (≥ tank ⇒ full refill),
 //               load-time 2.0 s ⇒ FuelPodReloadTicks 40.
 //
@@ -83,10 +86,22 @@ Simulation.ShipSim Spawn(Simulation sim, int cid, byte team, byte cls, (uint car
     return s;
 }
 
+// The tank is the hull's; the burn is the default afterburner part's (the interceptor flies it
+// unless the hangar empties the slot). Windows derive from both.
 float maxFuel;
+int ticksPerTank, // held-boost ticks one full tank lasts (the tick that empties it still burns)
+    spoolTicks; // ticks for AbPower to ramp 0 → 1 at the booster's on-rate
 {
     var content = ContentLoader.Load(stockPath, worldPath);
-    maxFuel = content.Ships.First(s => s.ClassId == ClassInterceptor).MaxFuel;
+    var hull = content.Ships.First(s => s.ClassId == ClassInterceptor);
+    var booster = content.Equipment[hull.DefaultEquipmentFor(EquipmentDef.SlotAfterburner)];
+    maxFuel = hull.MaxFuel;
+    ticksPerTank = (int)MathF.Ceiling(maxFuel / (booster.FuelDrain * FlightModel.Dt));
+    spoolTicks = (int)MathF.Ceiling(1f / (booster.AbOnRate * FlightModel.Dt));
+    Console.WriteLine(
+        $"content: {hull.Name} tank {maxFuel} on {booster.Name} (drain {booster.FuelDrain}/s, on-rate {booster.AbOnRate}/s)"
+            + $" → {ticksPerTank} ticks per tank, {spoolTicks}-tick spool"
+    );
 }
 
 // ---- 1. Seed: requested pods land in FuelPodAmmo; duplicate lines accumulate --------------------
@@ -136,15 +151,15 @@ float maxFuel;
     // Drain the spawn tank dry (boost held). The consume gate reads pre-tick fuel, so the pods
     // stay untouched while any spawn fuel remains.
     int guard = 0;
-    while (ship.State.Fuel > 0f && guard++ < 400)
+    while (ship.State.Fuel > 0f && guard++ < ticksPerTank + 100)
     {
         ship.HeldInput = new ShipInputState { Boost = true };
         sim.Step();
     }
     Check(
-        ship.State.Fuel <= 0f && ship.FuelPodAmmo == 2,
-        $"spawn tank drains dry in ~300 held-boost ticks ({guard}) without touching the reserve",
-        $"drain wrong (fuel {ship.State.Fuel}, pods {ship.FuelPodAmmo}, ticks {guard})"
+        ship.State.Fuel <= 0f && ship.FuelPodAmmo == 2 && System.Math.Abs(guard - ticksPerTank) <= 1,
+        $"spawn tank drains dry in ~{ticksPerTank} held-boost ticks ({guard}) without touching the reserve",
+        $"drain wrong (fuel {ship.State.Fuel}, pods {ship.FuelPodAmmo}, ticks {guard} vs {ticksPerTank})"
     );
 
     // Boost released: an empty tank consumes nothing (and recharge-0 keeps it pinned at 0).
@@ -197,32 +212,36 @@ float maxFuel;
     var sim = BootSim(seed: 4);
     var ship = Spawn(sim, 1, team: 0, cls: ClassInterceptor, cargo: [(FuelPodCargoId, 2)]);
 
-    // 3 tanks (spawn + 2 pods) at 300 ticks each, plus a 40-tick load before each pod lands:
-    // 300 + 40 + 300 + 40 + 300 = 980 ticks of held boost before the ship is finally dry.
+    // 3 tanks (spawn + 2 pods) of ticksPerTank each, plus a LoadTicks load before each pod lands:
+    // tank + load + tank + load + tank ticks of held boost before the ship is finally dry. The
+    // mid-tank probes sit halfway through the 2nd and 3rd tanks — past the spool each relight needs.
+    int chainTicks = 3 * ticksPerTank + 2 * (int)LoadTicks;
+    int midSecond = ticksPerTank + (int)LoadTicks + ticksPerTank / 2,
+        midThird = 2 * (ticksPerTank + (int)LoadTicks) + ticksPerTank / 2;
     float minAb = float.MaxValue;
     float abMidSecondTank = -1f,
         abMidThirdTank = -1f;
     int dryTick = -1;
-    for (int i = 0; i < 1100; i++)
+    for (int i = 0; i < chainTicks + 120; i++)
     {
         ship.HeldInput = new ShipInputState { Boost = true };
         sim.Step();
         if (dryTick >= 0)
             continue;
-        if (i >= 30)
+        if (i >= spoolTicks)
             minAb = System.MathF.Min(minAb, ship.State.AbPower);
-        if (i == 500)
+        if (i == midSecond)
             abMidSecondTank = ship.State.AbPower;
-        if (i == 850)
+        if (i == midThird)
             abMidThirdTank = ship.State.AbPower;
         // Truly dry = reserve spent AND nothing left in the loader (mid-load the tank also reads 0).
         if (ship.FuelPodAmmo == 0 && ship.State.Fuel <= 0f && ship.FuelLoadEndTick == 0)
             dryTick = i;
     }
     Check(
-        dryTick > 950 && dryTick < 1010,
-        $"reserve chain sustains ~980 ticks of boost — 3 tanks plus two {LoadTicks}-tick loads (dry at {dryTick})",
-        $"chain length wrong (dry at {dryTick})"
+        dryTick > chainTicks - 30 && dryTick < chainTicks + 30,
+        $"reserve chain sustains ~{chainTicks} ticks of boost — 3 tanks plus two {LoadTicks}-tick loads (dry at {dryTick})",
+        $"chain length wrong (dry at {dryTick}, expected ~{chainTicks})"
     );
     Check(
         minAb < 0.1f,
@@ -247,13 +266,15 @@ float maxFuel;
     var ship = Spawn(sim, 1, team: 0, cls: ClassInterceptor, cargo: [(FuelPodCargoId, 1)]);
     ship.FuelPodReloadTicks = 0; // an expendable authoring no load-time (the pre-reload behavior)
 
+    // Measure AbPower only once the booster has fully spooled (its on-rate ramp), then across the
+    // swap: an instant load must never let it dip.
     float minAb = float.MaxValue;
     int guard = 0;
-    while (ship.FuelPodAmmo > 0 && guard++ < 400)
+    while (ship.FuelPodAmmo > 0 && guard++ < ticksPerTank + 100)
     {
         ship.HeldInput = new ShipInputState { Boost = true };
         sim.Step();
-        if (guard >= 30)
+        if (guard > spoolTicks)
             minAb = System.MathF.Min(minAb, ship.State.AbPower);
     }
     Check(

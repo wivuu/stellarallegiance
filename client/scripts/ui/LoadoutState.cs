@@ -7,13 +7,13 @@ namespace StellarAllegiance.Ui;
 // =====================================================================
 //  LoadoutState.cs — CLIENT-LOCAL HANGAR LOADOUT MODEL
 //
-//  Holds the hangar screen's weapon assignments and cargo counts — the request side of the
-//  loadout seam. RequestSpawn ships both halves on MsgSpawn (cargo counts + the weapon-slot
-//  override tail from WeaponOverridesFor); the server validates, spawns the ship with the
-//  accepted loadout, and echoes the effective per-barrel weapon ids back on MsgShipLoadout.
-//  ExpectedEffectiveIds seeds own-ship prediction optimistically until that echo lands (it
-//  matches unless the server rejected the request). Must never mutate DefRegistry (its
-//  mount caches feed prediction).
+//  Holds the hangar screen's weapon assignments, equipment picks and cargo counts — the request
+//  side of the loadout seam. RequestSpawn ships them on MsgSpawn (cargo counts + the weapon-slot
+//  override tail from WeaponOverridesFor + the equipment tail from EquipmentPicksFor); the server
+//  validates, spawns the ship with the accepted loadout, and echoes the effective per-barrel
+//  weapon ids and equipment back on MsgShipLoadout. ExpectedEffectiveIds / ExpectedEquipment seed
+//  own-ship prediction optimistically until that echo lands (they match unless the server rejected
+//  the request). Must never mutate DefRegistry (its mount caches feed prediction).
 // =====================================================================
 public sealed class LoadoutState
 {
@@ -48,6 +48,11 @@ public sealed class LoadoutState
     // budget (the Devastator ships 12/12 full before a single station is counted). One switch so the
     // decision is reversible in one line — PayloadUsed is the only reader.
     public const bool TurretGunsCountTowardPayload = false;
+
+    // classId -> (EquipmentDef.Slot* -> picked EquipmentId). An absent slot = the hull's
+    // DefaultEquipment; a null value = deliberately launched EMPTY (no shield / no booster / no
+    // cloak). Equipment costs no payload, so PayloadUsed never reads this.
+    private readonly Dictionary<byte, Dictionary<byte, ushort?>> _equipment = new();
 
     // Loadouts are PER-MATCH and never touch disk: a customization lives only in this process-wide
     // instance and is wiped at each match boundary via ResetAll (WorldRenderer.NetSetMatch on the
@@ -151,23 +156,104 @@ public sealed class LoadoutState
     public static bool TurretAccepts(HardpointDef hp, WeaponDef w) =>
         hp.Kind == HardpointKind.Turret && hp.Mount != WeaponMountKind.NonMountable && w.Kind == WeaponKind.Bolt;
 
-    // RESET one hull: back to the authored loadout and an empty hold (the hangar's per-hull reset).
+    // ---- Equipment (shield / afterburner / cloak slots; equipment PR) --------
+    // One part per slot, picked from the hull's AllowedEquipment. Picks ride MsgSpawn as an
+    // override tail (EquipmentPicksFor); the server validates, tier-migrates, and echoes the
+    // effective parts on MsgShipLoadout. Ids here are the PICKED tier — never migrated: the display
+    // runs DefRegistry.MigrateEquipmentTier, the spawn runs the server's (ExpectedEquipment mirrors it).
+
+    // The part currently picked for a slot: the pilot's pick if one exists (null = emptied), else the
+    // hull's default (null when the slot starts empty or the hull has no such slot).
+    public ushort? AssignedEquipment(byte classId, byte slot, ShipClassDef def)
+    {
+        if (_equipment.TryGetValue(classId, out var slots) && slots.TryGetValue(slot, out ushort? id))
+            return id;
+        ushort d = def.DefaultEquipmentFor(slot);
+        return d == EquipmentDef.NoEquipment ? null : d;
+    }
+
+    // Pick a part for a slot (null = launch with the slot empty).
+    public void AssignEquipment(byte classId, byte slot, ushort? equipmentId)
+    {
+        if (!_equipment.TryGetValue(classId, out var slots))
+            _equipment[classId] = slots = new Dictionary<byte, ushort?>();
+        slots[slot] = equipmentId;
+    }
+
+    // Drop a slot's pick — back to the hull's default part.
+    public void ClearEquipment(byte classId, byte slot)
+    {
+        if (_equipment.TryGetValue(classId, out var slots))
+            slots.Remove(slot);
+    }
+
+    // The MsgSpawn equipment tail for a class: ONLY the slots whose pick differs from the hull's
+    // default, as (slot, EquipmentId) pairs — an emptied slot rides as EquipmentDef.NoEquipment. A
+    // pristine hangar sends an empty tail and launches the (tier-migrated) defaults.
+    public (byte slot, ushort equipmentId)[] EquipmentPicksFor(byte classId, ShipClassDef def)
+    {
+        if (!_equipment.TryGetValue(classId, out var slots) || slots.Count == 0)
+            return Array.Empty<(byte, ushort)>();
+        List<(byte, ushort)>? list = null;
+        for (byte slot = 0; slot < EquipmentDef.SlotCount; slot++)
+        {
+            if (!slots.TryGetValue(slot, out ushort? pick))
+                continue;
+            ushort id = pick ?? EquipmentDef.NoEquipment;
+            if (id == def.DefaultEquipmentFor(slot))
+                continue; // back on the default — nothing to override
+            (list ??= new()).Add((slot, id));
+        }
+        return list?.ToArray() ?? Array.Empty<(byte, ushort)>();
+    }
+
+    // The effective equipment this hangar state EXPECTS the server to hand the ship — the client
+    // mirror of Simulation.TryResolveEquipment's accept path: each slot's pick (else the default),
+    // then THE shared tier succession (EquipmentTier.Migrate) against the team's techs. Null when it
+    // equals the hull's DefaultEquipment exactly — the server then streams no row, and prediction
+    // resolves the defaults the same way. Seeds own-ship prediction until the MsgShipLoadout echo (or
+    // the table's omission) lands; a rejected pick is corrected there.
+    public ushort[]? ExpectedEquipment(
+        byte classId,
+        ShipClassDef def,
+        Func<ushort, bool> ownsTech,
+        Func<ushort, EquipmentDef?> getEquipment
+    )
+    {
+        var ids = new ushort[EquipmentDef.SlotCount];
+        bool differs = false;
+        for (byte slot = 0; slot < ids.Length; slot++)
+        {
+            ushort id = AssignedEquipment(classId, slot, def) ?? EquipmentDef.NoEquipment;
+            if (id != EquipmentDef.NoEquipment)
+                id = EquipmentTier.Migrate(id, getEquipment, ownsTech);
+            ids[slot] = id;
+            differs |= id != def.DefaultEquipmentFor(slot);
+        }
+        return differs ? ids : null;
+    }
+
+    // RESET one hull: back to the authored loadout, the default equipment and an empty hold (the
+    // hangar's per-hull reset).
     public void ResetClass(byte classId)
     {
         _weaponOverrides.Remove(classId);
         _turretOverrides.Remove(classId);
+        _equipment.Remove(classId);
         _cargo.Remove(classId);
     }
 
-    // RESET everything back to authored defaults — every hull's weapon overrides, holds, the seeded
-    // marks, and the launch-base pick. Called at a match boundary (WorldRenderer.NetSetMatch, on the
-    // return-to-lobby transition) so a loadout customized last match doesn't carry into the next one.
-    // Clearing _seeded lets SeedDefaults re-seed each hull's authored hold when the hangar next shows
-    // it; a mid-match reconnect stays in the Active phase, so it never reaches this reset.
+    // RESET everything back to authored defaults — every hull's weapon overrides, equipment picks,
+    // holds, the seeded marks, and the launch-base pick. Called at a match boundary
+    // (WorldRenderer.NetSetMatch, on the return-to-lobby transition) so a loadout customized last
+    // match doesn't carry into the next one. Clearing _seeded lets SeedDefaults re-seed each hull's
+    // authored hold when the hangar next shows it; a mid-match reconnect stays in the Active phase, so
+    // it never reaches this reset.
     public void ResetAll()
     {
         _weaponOverrides.Clear();
         _turretOverrides.Clear();
+        _equipment.Clear();
         _cargo.Clear();
         _seeded.Clear();
         SelectedBaseId = 0;

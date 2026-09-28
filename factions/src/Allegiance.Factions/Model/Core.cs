@@ -19,17 +19,14 @@ public record Core
     /// <summary>The mountable weapon (gun) catalog.</summary>
     public List<Weapon> Weapons { get; set; } = [];
 
-    /// <summary>The mountable shield generator catalog.</summary>
+    /// <summary>The shield generator catalog (shield-slot equipment).</summary>
     public List<Shield> Shields { get; set; } = [];
 
-    /// <summary>The mountable cloaking device catalog.</summary>
+    /// <summary>The cloaking device catalog (cloak-slot equipment).</summary>
     public List<Cloak> Cloaks { get; set; } = [];
 
-    /// <summary>The mountable afterburner catalog.</summary>
+    /// <summary>The afterburner catalog (afterburner-slot equipment).</summary>
     public List<Afterburner> Afterburners { get; set; } = [];
-
-    /// <summary>The mountable ammo pack (magazine) catalog.</summary>
-    public List<AmmoPack> AmmoPacks { get; set; } = [];
 
     /// <summary>The mountable expendable-launcher catalog.</summary>
     public List<Launcher> Launchers { get; set; } = [];
@@ -58,6 +55,9 @@ public record Core
     /// <summary>The fuel-pod expendable catalog (reserve afterburner fuel carried as cargo).</summary>
     public List<FuelPod> Fuels { get; set; } = [];
 
+    /// <summary>The ammo-pack expendable catalog (a spare gun magazine carried as cargo).</summary>
+    public List<AmmoPack> AmmoPacks { get; set; } = [];
+
     /// <summary>The weapon-bolt/projectile definition catalog.</summary>
     public List<Projectile> Projectiles { get; set; } = [];
 
@@ -66,12 +66,21 @@ public record Core
 
     /// <summary>Every mountable part across all part collections.</summary>
     public IEnumerable<Part> AllParts() =>
-        Weapons.Cast<Part>().Concat(Shields).Concat(Cloaks).Concat(Afterburners).Concat(AmmoPacks).Concat(Launchers);
+        Weapons.Cast<Part>().Concat(Shields).Concat(Cloaks).Concat(Afterburners).Concat(Launchers);
 
-    /// <summary>Every expendable across all expendable collections. Fuels stays last so the
-    /// existing Missiles→Mines→Chaffs→Probes cargo-catalog order is unchanged.</summary>
+    /// <summary>
+    /// Every EQUIPMENT part — the per-ship shield / afterburner / cloak slots — in slot order:
+    /// Shields → Afterburners → Cloaks (the runtime slot bytes 0/1/2), each in list order. The
+    /// position in this sequence is the part's stable runtime equipment id, so it is append-only
+    /// within each collection.
+    /// </summary>
+    public IEnumerable<Part> AllEquipment() => Shields.Cast<Part>().Concat(Afterburners).Concat(Cloaks);
+
+    /// <summary>Every expendable across all expendable collections. New kinds append at the tail
+    /// (Fuels, then AmmoPacks) so the existing Missiles→Mines→Chaffs→Probes cargo-catalog order is
+    /// unchanged.</summary>
     public IEnumerable<Expendable> AllExpendables() =>
-        Missiles.Cast<Expendable>().Concat(Mines).Concat(Chaffs).Concat(Probes).Concat(Fuels);
+        Missiles.Cast<Expendable>().Concat(Mines).Concat(Chaffs).Concat(Probes).Concat(Fuels).Concat(AmmoPacks);
 
     /// <summary>Every buildable (anything carrying tech requirements/effects).</summary>
     public IEnumerable<Buildable> AllBuildables() =>
@@ -89,7 +98,6 @@ public record Core
         Shields.AddRange(other.Shields);
         Cloaks.AddRange(other.Cloaks);
         Afterburners.AddRange(other.Afterburners);
-        AmmoPacks.AddRange(other.AmmoPacks);
         Launchers.AddRange(other.Launchers);
         Stations.AddRange(other.Stations);
         Developments.AddRange(other.Developments);
@@ -99,6 +107,7 @@ public record Core
         Chaffs.AddRange(other.Chaffs);
         Probes.AddRange(other.Probes);
         Fuels.AddRange(other.Fuels);
+        AmmoPacks.AddRange(other.AmmoPacks);
         Projectiles.AddRange(other.Projectiles);
         Factions.AddRange(other.Factions);
     }

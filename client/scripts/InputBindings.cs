@@ -45,6 +45,7 @@ public static class InputBindings
         new("drop_chaff", "Drop Chaff", Category.Combat),
         new("drop_mine", "Drop Mine", Category.Combat),
         new("drop_probe", "Deploy Probe", Category.Combat),
+        new("toggle_cloak", "Toggle Cloak", Category.Combat),
         new("cycle_target", "Cycle Target", Category.Combat),
         new("engage_autopilot", "Engage Autopilot", Category.Combat),
         new("toggle_view", "Toggle View", Category.View),
@@ -377,6 +378,10 @@ public static class InputBindings
         Pad("drop_mine", JoyButton.X);
         K("drop_probe", Key.G);
         Pad("drop_probe", JoyButton.Y);
+        // Cloak: a TOGGLE (ShipController latches it and sends the level every tick). K and the left
+        // stick click (L3) were both unbound.
+        K("toggle_cloak", Key.K);
+        Pad("toggle_cloak", JoyButton.LeftStick);
         K("cycle_target", Key.Tab);
         Pad("cycle_target", JoyButton.RightStick);
         // Autopilot toggle: T on keyboard; D-pad Down on the pad (D-pad Up is Toggle View, the

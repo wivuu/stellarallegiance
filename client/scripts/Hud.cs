@@ -46,6 +46,7 @@ public partial class Hud : CanvasLayer
     // Only touched while InterpStats.Enabled.
     private int _lastReconcileCount;
     private int _lastLocalContacts;
+    private int _lastResourceResyncs;
 
     // Edge-detect the consumable keys so an empty-slot press plays its "no rounds" blip once per
     // press (not every held frame), and a short cooldown so mashing one doesn't machine-gun it. One
@@ -53,6 +54,10 @@ public partial class Hud : CanvasLayer
     private readonly bool[] _consumableHeld = new bool[4];
     private bool _fuelLoadingHeld; // rising edge of the fuel-pod auto-load (not a key — a sim event)
     private double _emptyClickCd;
+
+    // Ammo/energy dry-fire + pack-load-start (equipment PR), and the own-ship cloak toggle edge.
+    private readonly ResourceCues _resourceCues = new();
+    private bool _cloakEngagedHeld;
 
     // The design-system gallery overlay (F9), instantiated on demand.
     private Control? _showcase;
@@ -725,6 +730,31 @@ public partial class Hud : CanvasLayer
         }
         _fuelLoadingHeld = fuelLoading;
 
+        // Resource cues (equipment PR): the local pilot's own ammo/energy gate — dry fire (on press,
+        // then a periodic reminder while the trigger stays held, both via the shared _emptyClickCd
+        // cooldown above) and an ammo-pack committing to the loader. Own-hull PREDICTED state, so
+        // gated on flying like the fuel pod's cue; a docked/dead ship reads no gate and no load.
+        var resCue = _resourceCues.Observe(flying ? ship!.LastGateBlock : GateBlock.None, flying && ship!.AmmoLoading);
+        if (resCue != ResourceCues.Cue.None && _emptyClickCd <= 0)
+        {
+            if ((resCue & ResourceCues.Cue.PackLoadStart) != 0)
+                SfxManager.Instance?.PlayCockpit(SfxManager.SfxId.ReloadStart);
+            else if ((resCue & ResourceCues.Cue.DryFireEnergy) != 0)
+                SfxManager.Instance?.PlayUi(SfxManager.SfxId.MissileEmpty);
+            else if ((resCue & ResourceCues.Cue.DryFireAmmo) != 0)
+                SfxManager.Instance?.PlayUi(SfxManager.SfxId.OutOfAmmo);
+            _emptyClickCd = 0.5;
+        }
+
+        // Own-ship cloak edges: the latch flip (ShipController.TickCloak), not the eased level a
+        // remote viewer sees — the pilot pressed the key, so the cue is immediate and binary. A
+        // remote ship's cloak edges are RemoteShip's own concern (the level leaving/reaching 0),
+        // since nothing streams a latch bit for a hull that isn't ours to fly.
+        bool cloakEngaged = flying && ship!.CloakEngaged;
+        if (cloakEngaged != _cloakEngagedHeld)
+            SfxManager.Instance?.PlayCockpit(cloakEngaged ? SfxManager.SfxId.CloakOn : SfxManager.SfxId.CloakOff);
+        _cloakEngagedHeld = cloakEngaged;
+
         // Sector boundary: warn (and pulse) once the ship is past the radius, where the
         // server is eroding the hull. Distance is measured from the local sector center.
         float radius = _world.LocalSectorRadius;
@@ -847,9 +877,18 @@ public partial class Hud : CanvasLayer
         // the Phase-5 forward-rendering design note. sep_n = how many hits contributed.
         var (sepN, sepP50, sepP95) = InterpStats.DrainSepAtHit();
 
+        // res_resync: in-window resource-mirror replays (equipment PR) — a gunner's turret spend, an
+        // input the server applied a tick late, a salvaged pack, a research change. Monotonic counter
+        // across every local ship, windowed the same way reconciles is above.
+        int resNow = PredictionController.ResourceResyncs;
+        int resResyncs = resNow - _lastResourceResyncs;
+        if (resResyncs < 0)
+            resResyncs = 0;
+        _lastResourceResyncs = resNow;
+
         Log.Print(
             $"[predict-stats] reconciles={reconciles} rec_err_max={recErrMax:F1} local_hits={localHits} "
-                + $"sep_n={sepN} sep_at_hit_p50={sepP50:F1} sep_at_hit_p95={sepP95:F1}"
+                + $"res_resync={resResyncs} sep_n={sepN} sep_at_hit_p50={sepP50:F1} sep_at_hit_p95={sepP95:F1}"
         );
     }
 }

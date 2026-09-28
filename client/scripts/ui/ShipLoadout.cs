@@ -108,11 +108,13 @@ public partial class ShipLoadout : Control
 
     private byte? _classId;
 
-    // The selected mount in the right column. Weapon slot and turret station are MUTUALLY EXCLUSIVE
-    // (both index from 0, so only one may be set) — SelectSlot/SelectTurret keep that invariant and
-    // RefreshArsenal branches on which one is live.
+    // The selected mount in the right column. A weapon slot, a turret station, and an equipment slot
+    // are all MUTUALLY EXCLUSIVE (each indexes from 0, so only one field may be set) —
+    // SelectSlot/SelectTurret/SelectEquip keep that invariant and RefreshArsenal branches on whichever
+    // is live.
     private byte? _selectedHp;
     private byte? _selectedTurret;
+    private byte? _selectedEquip;
 
     // A LAUNCH was clicked and the spawn hasn't landed yet — the button holds
     // "LAUNCHING…" until the ship exists (Hud then closes us) or the gate refuses
@@ -619,6 +621,7 @@ public partial class ShipLoadout : Control
         _classId = classId;
         _selectedHp = null;
         _selectedTurret = null;
+        _selectedEquip = null;
         _state.SeedDefaults(classId, def); // open on the hull's authored default hold (once per class)
 
         foreach ((byte id, ShipCard card) in _shipCards)
@@ -693,11 +696,32 @@ public partial class ShipLoadout : Control
     {
         _selectedHp = hpIndex;
         _selectedTurret = null;
+        _selectedEquip = null;
         _preview.SelectedKey = new LoadoutPreview.MountKey(HardpointKind.Weapon, hpIndex);
         foreach ((byte idx, LoadoutSlot row) in _slotRows)
             row.Selected = idx == hpIndex;
         foreach ((byte _, TurretStationRow trow) in _turretRows)
             trow.Selected = false;
+        foreach ((byte _, LoadoutSlot erow) in _equipRows)
+            erow.Selected = false;
+        RefreshArsenal();
+    }
+
+    // Equipment-slot selection — the mirror of SelectSlot/SelectTurret (all three mutually exclusive).
+    // Has no hardpoint marker of its own (a slot, not a mount), so it just clears every marker
+    // selection instead of setting a new one.
+    private void SelectEquip(byte slot)
+    {
+        _selectedEquip = slot;
+        _selectedHp = null;
+        _selectedTurret = null;
+        _preview.SelectedKey = null;
+        foreach ((byte _, LoadoutSlot row) in _slotRows)
+            row.Selected = false;
+        foreach ((byte _, TurretStationRow trow) in _turretRows)
+            trow.Selected = false;
+        foreach ((byte s, LoadoutSlot erow) in _equipRows)
+            erow.Selected = s == slot;
         RefreshArsenal();
     }
 
@@ -741,6 +765,7 @@ public partial class ShipLoadout : Control
         _slotCount.Text = holdSlots > 0 ? $"{slots} SLOTS · HOLD {holdSlots}" : $"{slots} SLOTS";
 
         RefreshTurretStations();
+        RefreshEquipmentSection();
         RefreshPayload();
         RefreshArsenal();
     }
@@ -775,7 +800,23 @@ public partial class ShipLoadout : Control
         foreach (var child in _arsenalRows.GetChildren())
             child.QueueFree();
 
-        if (_classId is not byte classId || _defs.GetHardpoints(classId) is not List<HardpointDef> hps)
+        // Keep the 3D preview's cloak shimmer in sync with the CLOAK row + pick, whichever branch
+        // below actually runs (or none — switching away from CLOAK stops it too).
+        RefreshCloakPreview();
+
+        if (_classId is not byte classId || !_defs.TryGetShipDef(classId, out ShipClassDef shipDef))
+        {
+            _arsenalFrame.Visible = false;
+            return;
+        }
+        // An EQUIPMENT slot is selected: needs only the ShipClassDef, not the hardpoint list (a slot
+        // isn't a hardpoint). See ShipLoadout.Hangar.cs for BuildEquipmentSection/RefreshEquipmentSection.
+        if (_selectedEquip is byte equipSlot)
+        {
+            RefreshEquipmentArsenal(classId, shipDef, equipSlot);
+            return;
+        }
+        if (_defs.GetHardpoints(classId) is not List<HardpointDef> hps)
         {
             _arsenalFrame.Visible = false;
             return;
@@ -853,6 +894,87 @@ public partial class ShipLoadout : Control
             _arsenalRows.AddChild(row);
         }
         _arsenalFit.Text = $"{fit} FIT";
+    }
+
+    // The arsenal frame as an EQUIPMENT PICKER (equipment PR): a "LEAVE SLOT EMPTY" strip (equipment
+    // may launch deliberately empty, exactly like a weapon mount) plus every part the hull allows for
+    // this slot AND the team can currently see (DefRegistry.EquipmentVisible — the same
+    // hidden-not-greyed rule ArsenalVisible applies to weapons). Equipment costs no payload, so no
+    // PAYLOAD suffix on its rows (LoadoutState's own doc: "Equipment costs no payload").
+    private void RefreshEquipmentArsenal(byte classId, ShipClassDef def, byte slot)
+    {
+        StyleArsenalFrame(DesignTokens.TeamAccentBase, 0.08f);
+        _arsenalFrame.Visible = true;
+
+        (string tag, string kind) = slot switch
+        {
+            EquipmentDef.SlotShield => ("E1", "SHIELD"),
+            EquipmentDef.SlotAfterburner => ("E2", "AFTERBURNER"),
+            _ => ("E3", "CLOAKING DEVICE"),
+        };
+        _arsenalTitle.Text = $"[{tag}]  {kind}";
+
+        byte team = Team;
+        ushort? picked = _state.AssignedEquipment(classId, slot, def);
+        // Migrate the picked id up its tier chain so an obsoleted part (now hidden below) still marks
+        // its successor as EQUIPPED — the equipment mirror of RefreshArsenal's weapon `equipped`.
+        ushort? equipped = picked is ushort pid ? _defs.MigrateEquipmentTier(pid, team, _world.TeamState) : (ushort?)null;
+
+        var empty = new LoadoutSlot { Accent = DesignTokens.TextDim, Selected = picked == null };
+        empty.Configure("⊘", "LEAVE SLOT EMPTY", "");
+        empty.Pressed += () =>
+        {
+            _state.AssignEquipment(classId, slot, null);
+            RefreshLoadoutViews();
+        };
+        _arsenalRows.AddChild(empty);
+
+        int fit = 0;
+        foreach (EquipmentDef e in _defs.AllowedEquipment(classId, slot))
+        {
+            if (!_defs.EquipmentVisible(e, team, _world.TeamState))
+                continue;
+            fit++;
+            ushort equipmentId = e.EquipmentId;
+            bool isEquipped = equipped == equipmentId;
+            var row = new LoadoutSlot { Selected = isEquipped };
+            row.Configure(isEquipped ? "◆ EQUIPPED" : "+ EQUIP", e.Name.ToUpperInvariant(), EquipmentStatLine(e));
+            row.Pressed += () =>
+            {
+                _state.AssignEquipment(classId, slot, equipmentId);
+                RefreshLoadoutViews();
+            };
+            _arsenalRows.AddChild(row);
+        }
+        _arsenalFit.Text = $"{fit} FIT";
+    }
+
+    // The equipped-slot row's and arsenal row's stat line, one format per slot kind — e.g.
+    // "STR 51 · REGEN 0.69/s · DELAY 0s", "THRUST +36.7 · FUEL 1.22/s", "CLOAK 62% · DRAIN 115/s".
+    private static string EquipmentStatLine(EquipmentDef e) =>
+        e.Slot switch
+        {
+            EquipmentDef.SlotShield => $"STR {e.MaxStrength:0} · REGEN {e.RegenRate:0.##}/s · DELAY {e.RechargeDelaySec:0}s",
+            EquipmentDef.SlotAfterburner => $"THRUST +{e.AbAccel:0.#} · FUEL {e.FuelDrain:0.##}/s",
+            EquipmentDef.SlotCloak => $"CLOAK {Mathf.RoundToInt(e.MaxCloaking * 100f)}% · DRAIN {e.EnergyDrain:0}/s",
+            _ => "",
+        };
+
+    // Keep the 3D preview's cloak shimmer in sync with the CLOAK row's selection + pick — called from
+    // RefreshArsenal, which already runs after every state change that could move either (selection,
+    // equip/unequip, hull swap, reset).
+    private void RefreshCloakPreview()
+    {
+        if (
+            _selectedEquip == EquipmentDef.SlotCloak
+            && _classId is byte classId
+            && _defs.TryGetShipDef(classId, out ShipClassDef def)
+            && _state.AssignedEquipment(classId, EquipmentDef.SlotCloak, def) is ushort id
+            && _defs.GetEquipment(_defs.MigrateEquipmentTier(id, Team, _world.TeamState)) is { } cloak
+        )
+            _preview.SetCloakPreview(cloak.MaxCloaking, DesignTokens.Faction(Team));
+        else
+            _preview.SetCloakPreview(null);
     }
 
     // Whether a weapon is offered at all, for ANY mount (weapon slot or crew station). A tier the team

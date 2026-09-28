@@ -54,7 +54,7 @@
           },
           "signature": {
             "type": "number",
-            "description": "Base radar cross-section from the original Core model; the fog-of-war vision system instead uses radar-signature below."
+            "description": "Additive radar-signature bias on top of radar-signature below (radar-signature units, default 0 = neutral). Projected onto ShipClassDef.SignatureBias; the parts a ship has equipped add their own Signature per ship at runtime."
           },
           "speed": {
             "type": "number",
@@ -116,7 +116,7 @@
           },
           "max-fuel": {
             "type": "number",
-            "description": "Afterburner fuel tank size; pairs with ab-fuel-drain/ab-fuel-recharge below (0 = no afterburner fuel modeled)."
+            "description": "Afterburner fuel tank the equipped afterburner burns (IGC maxFuel, untranslated). A hull with an afterburner slot must author it (\u003E 0); a hull without one must not (0 = no fuel model \u2014 dead data otherwise). Refilled at dock and by fuel pods from the hold."
           },
           "ecm": {
             "type": "number",
@@ -128,11 +128,11 @@
           },
           "max-energy": {
             "type": "number",
-            "description": "Legacy Core energy-pool stat (not currently used by the runtime)."
+            "description": "Energy pool (IGC maxEnergy, untranslated) that energy guns (energy-per-shot) and the cloak draw from; full at launch and refilled at dock. Scaled by the team MaxEnergy multiplier. 0 = no pool: energy guns can\u0027t fire and a cloak slot is refused. Must be \u003E= 0."
           },
           "energy-recharge-rate": {
             "type": "number",
-            "description": "Legacy Core energy-regen stat (not currently used by the runtime)."
+            "description": "Energy regained per second, clamped to the pool (IGC rechargeRate, untranslated). Must be \u003E= 0."
           },
           "ripcord-speed": {
             "type": "number",
@@ -144,7 +144,7 @@
           },
           "max-ammo": {
             "type": "integer",
-            "description": "Legacy Core max carried ammo stat (not currently used by the runtime)."
+            "description": "Magazine shared by every ammo-costing gun the ship mounts (ammo-per-shot; IGC maxAmmo, untranslated). Full at launch, refilled at dock and by ammo packs loaded out of the hold. 0 = no magazine: ammo guns can\u0027t fire and ammo packs are refused as cargo. Must be in 0..65535 (the runtime carries it as a u16)."
           },
           "armor-hit-points": {
             "type": "number",
@@ -165,18 +165,6 @@
             ],
             "description": "Defense table id used to resolve incoming damage against armor."
           },
-          "magazine-capacity": {
-            "type": "integer",
-            "description": "Legacy Core magazine (missile rack) capacity stat (not currently used by the runtime)."
-          },
-          "dispenser-capacity": {
-            "type": "integer",
-            "description": "Legacy Core dispenser (mine/chaff pack) capacity stat (not currently used by the runtime)."
-          },
-          "chaff-launcher-capacity": {
-            "type": "integer",
-            "description": "Legacy Core chaff-launcher capacity stat (not currently used by the runtime)."
-          },
           "successor-hull-id": {
             "type": [
               "string",
@@ -192,7 +180,7 @@
                 "null"
               ]
             },
-            "description": "Suggested default loadout \u2014 references part ids."
+            "description": "The suggested default loadout by part id, in IGC order (Allegiance\u0027s preferredPartsTypes). The runtime reads its EQUIPMENT entries: per slot, the default part is the first entry the slot allows whose required-techs and required-capabilities the hull itself already requires, so a default is always buildable whenever the hull is (the rule Allegiance\u0027s TryToBuyParts applies, clintlib.h:1341); research tier succession then upgrades it. No such entry = the slot starts empty. Every shield/afterburner/cloak listed here must be allowed by AllowedParts. Default guns come from the hardpoints\u0027 weapon-id instead."
           },
           "allowed-parts": {
             "type": "object",
@@ -208,7 +196,7 @@
                 ]
               }
             },
-            "description": "Per-slot whitelist of mountable parts: for each EquipmentSlot, the part ids that may be mounted there. Replaces the C\u002B\u002B pmEquipment[ET_MAX] part-mask array."
+            "description": "Per-slot whitelist of mountable parts: for each EquipmentSlot key (kebab-case, e.g. shield), the part ids that may be mounted there. Replaces the C\u002B\u002B pmEquipment[ET_MAX] part-mask array. The runtime enforces the EQUIPMENT keys (shield / afterburner / cloak): a hull HAS an equipment slot only if it lists that key, and each listed part implicitly allows its whole successor chain (a hull allowed Sm Shield 1 may carry Sm Shield 2/3 once researched). Every listed part must be of the slot\u0027s kind, and the pack key is refused (packs are cargo). Weapon/launcher keys are catalog data; gun and rack mounts keep the hardpoint mount-type gate."
           },
           "abilities": {
             "type": "array",
@@ -284,37 +272,9 @@
             "type": "number",
             "description": "Pitch-axis drift (turn-rate slop) knob, in degrees; pairs with drift-yaw-deg above."
           },
-          "ab-accel": {
-            "type": "number",
-            "description": "Afterburner flight knobs (extra accel \u002B spool on/off rates); no clean Core source."
-          },
-          "ab-on-rate": {
-            "type": "number",
-            "description": "How fast the afterburner boost spools up to full extra accel once engaged (per second)."
-          },
-          "ab-off-rate": {
-            "type": "number",
-            "description": "How fast the afterburner boost spools back down once released (per second)."
-          },
-          "ab-fuel-drain": {
-            "type": "number",
-            "description": "Afterburner fuel drain/recharge (per second); pairs with the Core MaxFuel field above."
-          },
           "ab-fuel-recharge": {
             "type": "number",
-            "description": "Afterburner fuel regained per second while boost is released (0 = dock-only refill, no in-flight regen)."
-          },
-          "shield-capacity": {
-            "type": "number",
-            "description": "Regenerating energy shield layered over the raw hull. ShieldCapacity is the total shield pool (0 = this hull has NO shield). Incoming damage depletes the shield before the hull and overflows into the hull when the shield pops. ShieldRecharge is the regen rate in points/second, resuming ShieldDelay seconds after the last shield damage. All omit-when-default; projected onto the ShipClassDef shield fields."
-          },
-          "shield-recharge": {
-            "type": "number",
-            "description": "Shield regen rate, in points/second, once recharge resumes."
-          },
-          "shield-delay": {
-            "type": "number",
-            "description": "Seconds after the last shield hit before recharge resumes."
+            "description": "Afterburner fuel regained per second while the boost is released. 0 = dock-only refill (Allegiance never refuels in flight; the stock value). Must be \u003E= 0 and below the fuel-consumption of every afterburner the hull allows \u2014 else the gauge never net-drains."
           },
           "vision-cone-length": {
             "type": "number",
@@ -468,6 +428,55 @@
             },
             "description": "Station classes (kebab-case keywords, e.g. shipyard) this hull may LAUNCH from and DOCK at. Empty/omitted = any friendly base (stock behavior). Non-empty = the hull launches only from bases whose station Class is listed, docks only at such bases (every other friendly base is solid, like an enemy base), and must use the base\u0027s LARGEST docking door \u2014 side doors stay small-ship-only. Omit-when-empty. Projected onto ShipClassDef.LaunchClassMask."
           },
+          "ab-accel": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "REMOVED \u2014 boost moved to the afterburner part\u0027s max-thrust (equipment.yaml). Refused when set."
+          },
+          "ab-on-rate": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "REMOVED \u2014 moved to the afterburner part\u0027s on-rate (equipment.yaml). Refused when set."
+          },
+          "ab-off-rate": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "REMOVED \u2014 moved to the afterburner part\u0027s off-rate (equipment.yaml). Refused when set."
+          },
+          "ab-fuel-drain": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "REMOVED \u2014 moved to the afterburner part\u0027s fuel-consumption (equipment.yaml). Refused when set."
+          },
+          "shield-capacity": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "REMOVED \u2014 moved to the shield part\u0027s max-strength (equipment.yaml). Refused when set."
+          },
+          "shield-recharge": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "REMOVED \u2014 moved to the shield part\u0027s regen-rate (equipment.yaml). Refused when set."
+          },
+          "shield-delay": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "REMOVED \u2014 moved to the shield part\u0027s recharge-delay (equipment.yaml). Refused when set."
+          },
           "id": {
             "type": "string",
             "description": "Stable, unique id used for references (kebab-case by convention, e.g. \u0022heavy-fighter\u0022)."
@@ -594,7 +603,7 @@
           },
           "energy-per-shot": {
             "type": "number",
-            "description": "Energy consumed by the ship each time this weapon fires."
+            "description": "Energy drawn from the ship\u0027s MaxEnergy pool per shot; a shot the pool can\u0027t cover doesn\u0027t fire. 0 = free. Our guns fire at their own cadence, so the stock value keeps Allegiance\u0027s drain per SECOND: IGC energyPerShot \u00D7 fire-interval-ticks \u00F7 (20 \u00D7 IGC dtimeBurst). Must be \u003E= 0 and fit the pool of every hull that mounts it."
           },
           "dispersion": {
             "type": "number",
@@ -602,7 +611,7 @@
           },
           "ammo-per-shot": {
             "type": "integer",
-            "description": "Rounds of ammo consumed per shot."
+            "description": "Rounds drawn from the ship\u0027s MaxAmmo magazine per shot; a shot the magazine can\u0027t cover doesn\u0027t fire. 0 = no ammo. Same per-second rule as EnergyPerShot (IGC cAmmoPerShot \u00D7 fire-interval-ticks \u00F7 (20 \u00D7 dtimeBurst), rounded up to a whole round). Must be in 0..65535 and fit the magazine of every hull that mounts it."
           },
           "projectile-id": {
             "type": [
@@ -645,11 +654,11 @@
           },
           "mass": {
             "type": "number",
-            "description": "Mass this part adds when mounted, counted against the hull\u0027s payload capacity."
+            "description": "Mass of the part. A mounted gun or launcher counts it against the hull\u0027s payload capacity; for EQUIPMENT (shield / afterburner / cloak) it is display-only \u2014 equipment costs no payload and does not change flight mass."
           },
           "signature": {
             "type": "number",
-            "description": "Detectability this part adds to the mounting hull/station."
+            "description": "Additive radar-signature bias (radar-signature units) this part gives the ship while equipped. Stock content leaves it unset: Allegiance authors part signatures but never applies them (a ship\u0027s signature is its hull\u0027s \u00D7 (1 \u2212 cloaking), shipIGC.h:270)."
           },
           "slot": {
             "enum": [
@@ -662,14 +671,14 @@
               "pack",
               "afterburner"
             ],
-            "description": "Which hull slot this part occupies."
+            "description": "Which hull slot this part occupies. Informational: the runtime decides a part\u0027s slot by its catalog (a shields: entry fills the shield slot), and allowed-parts checks the part\u0027s kind, not this field."
           },
           "successor-part-id": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Part upgrade target; references another part id."
+            "description": "Part upgrade target; references another part id of the same kind (no cycles). A tier whose ObsoletedByTechs is owned migrates to it; a hull that allows a part implicitly allows its whole successor chain."
           },
           "shield-damage-multiplier": {
             "type": [
@@ -796,11 +805,11 @@
         "properties": {
           "regen-rate": {
             "type": "number",
-            "description": "How much shield strength regenerates per second."
+            "description": "Shield points regenerated per second (IGC regeneration). Must be \u003E 0 \u2014 a shield that never regenerates is refused."
           },
           "max-strength": {
             "type": "number",
-            "description": "Maximum shield strength this generator can hold."
+            "description": "Maximum shield strength this generator holds (IGC maxStrength). Incoming damage depletes the shield before the hull; the overflow of a hit that pops it spills into the hull. Must be \u003E 0."
           },
           "defense-type": {
             "type": [
@@ -809,13 +818,17 @@
             ],
             "description": "Defense table id used to resolve incoming damage against the shield."
           },
+          "recharge-delay": {
+            "type": "number",
+            "description": "Seconds after the last shield hit before regeneration resumes. 0 (the default, omitted) is Allegiance\u0027s continuous regen: the shield recovers even while it is being shot. Must be \u003E= 0. No IGC field; projected onto EquipmentDef.RechargeDelaySec."
+          },
           "mass": {
             "type": "number",
-            "description": "Mass this part adds when mounted, counted against the hull\u0027s payload capacity."
+            "description": "Mass of the part. A mounted gun or launcher counts it against the hull\u0027s payload capacity; for EQUIPMENT (shield / afterburner / cloak) it is display-only \u2014 equipment costs no payload and does not change flight mass."
           },
           "signature": {
             "type": "number",
-            "description": "Detectability this part adds to the mounting hull/station."
+            "description": "Additive radar-signature bias (radar-signature units) this part gives the ship while equipped. Stock content leaves it unset: Allegiance authors part signatures but never applies them (a ship\u0027s signature is its hull\u0027s \u00D7 (1 \u2212 cloaking), shipIGC.h:270)."
           },
           "slot": {
             "enum": [
@@ -828,14 +841,14 @@
               "pack",
               "afterburner"
             ],
-            "description": "Which hull slot this part occupies."
+            "description": "Which hull slot this part occupies. Informational: the runtime decides a part\u0027s slot by its catalog (a shields: entry fills the shield slot), and allowed-parts checks the part\u0027s kind, not this field."
           },
           "successor-part-id": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Part upgrade target; references another part id."
+            "description": "Part upgrade target; references another part id of the same kind (no cycles). A tier whose ObsoletedByTechs is owned migrates to it; a hull that allows a part implicitly allows its whole successor chain."
           },
           "shield-damage-multiplier": {
             "type": [
@@ -947,10 +960,10 @@
             "description": "Successor semantics: once the owning team possesses ANY of these techs, this item is no longer offered (e.g. a tier-2 gun\u0027s granted tech retires the tier-1 gun). Distinct from RequiredTechs (which gate availability) \u2014 this is a \u0022made obsolete by\u0022 retirement set. Serialized kebab-case as obsoleted-by-techs; omitted when empty."
           }
         },
-        "description": "A shield generator. Mirrors the C\u002B\u002B DataShieldTypeIGC (igc.h:1846).",
+        "description": "A shield generator \u2014 per-ship EQUIPMENT: one part fills a hull\u0027s shield slot (see AllowedParts), and the equipped part IS the ship\u0027s shield (no part = no shield). Mirrors the C\u002B\u002B DataShieldTypeIGC (igc.h:1846). The team MaxShieldShip / ShieldRegenerationShip multipliers scale MaxStrength / RegenRate at runtime.",
         "additionalProperties": false
       },
-      "description": "The mountable shield generator catalog."
+      "description": "The shield generator catalog (shield-slot equipment)."
     },
     "cloaks": {
       "type": "array",
@@ -962,27 +975,27 @@
         "properties": {
           "energy-consumption": {
             "type": "number",
-            "description": "Energy drained per second while the cloak is engaged."
+            "description": "Energy drained per second while the cloak is engaged (or still ramping down). Must be \u003E= 0."
           },
           "max-cloaking": {
             "type": "number",
-            "description": "Maximum cloaking strength (0..1 fraction of signature hidden)."
+            "description": "Fraction of the ship\u0027s signature hidden at full cloak: detection signature \u00D7 (1 \u2212 cloaking). Must be strictly between 0 and 1 \u2014 a full (1.0) cloak would make the ship permanently undetectable."
           },
           "on-rate": {
             "type": "number",
-            "description": "Rate the cloak engages, per second."
+            "description": "Cloak level ramp per second while engaged. Must be \u003E 0."
           },
           "off-rate": {
             "type": "number",
-            "description": "Rate the cloak disengages, per second."
+            "description": "Cloak level ramp per second back down once disengaged. Must be \u003E 0."
           },
           "mass": {
             "type": "number",
-            "description": "Mass this part adds when mounted, counted against the hull\u0027s payload capacity."
+            "description": "Mass of the part. A mounted gun or launcher counts it against the hull\u0027s payload capacity; for EQUIPMENT (shield / afterburner / cloak) it is display-only \u2014 equipment costs no payload and does not change flight mass."
           },
           "signature": {
             "type": "number",
-            "description": "Detectability this part adds to the mounting hull/station."
+            "description": "Additive radar-signature bias (radar-signature units) this part gives the ship while equipped. Stock content leaves it unset: Allegiance authors part signatures but never applies them (a ship\u0027s signature is its hull\u0027s \u00D7 (1 \u2212 cloaking), shipIGC.h:270)."
           },
           "slot": {
             "enum": [
@@ -995,14 +1008,14 @@
               "pack",
               "afterburner"
             ],
-            "description": "Which hull slot this part occupies."
+            "description": "Which hull slot this part occupies. Informational: the runtime decides a part\u0027s slot by its catalog (a shields: entry fills the shield slot), and allowed-parts checks the part\u0027s kind, not this field."
           },
           "successor-part-id": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Part upgrade target; references another part id."
+            "description": "Part upgrade target; references another part id of the same kind (no cycles). A tier whose ObsoletedByTechs is owned migrates to it; a hull that allows a part implicitly allows its whole successor chain."
           },
           "shield-damage-multiplier": {
             "type": [
@@ -1114,10 +1127,10 @@
             "description": "Successor semantics: once the owning team possesses ANY of these techs, this item is no longer offered (e.g. a tier-2 gun\u0027s granted tech retires the tier-1 gun). Distinct from RequiredTechs (which gate availability) \u2014 this is a \u0022made obsolete by\u0022 retirement set. Serialized kebab-case as obsoleted-by-techs; omitted when empty."
           }
         },
-        "description": "A cloaking device. Mirrors the C\u002B\u002B DataCloakTypeIGC (igc.h:1855).",
+        "description": "A cloaking device \u2014 per-ship EQUIPMENT: one part fills a hull\u0027s cloak slot (see AllowedParts) and runs off the hull\u0027s MaxEnergy pool, so a cloak slot needs an energy pool. Mirrors the C\u002B\u002B DataCloakTypeIGC (igc.h:1855).",
         "additionalProperties": false
       },
-      "description": "The mountable cloaking device catalog."
+      "description": "The cloaking device catalog (cloak-slot equipment)."
     },
     "afterburners": {
       "type": "array",
@@ -1129,27 +1142,27 @@
         "properties": {
           "fuel-consumption": {
             "type": "number",
-            "description": "Fuel drained per second while the afterburner is engaged."
+            "description": "Fuel burned per second while the afterburner is engaged (a flat drain \u2014 it does not scale with the spooled power). The IGC stores a coefficient; the stock value is that coefficient \u00D7 IGC maxThrust, Allegiance\u0027s fuel/second at full burn. Must be \u003E 0."
           },
           "max-thrust": {
             "type": "number",
-            "description": "Peak extra thrust multiplier the afterburner provides at full engagement."
+            "description": "Extra forward acceleration at full power, in u/s\u00B2 on the HULL-THRUST scale (IGC maxThrust \u00F7 30 \u2014 the same rule that turns IGC hull thrust into Thrust). Not a multiplier: boosted top speed = speed \u00D7 (1 \u002B max-thrust \u00F7 thrust), Allegiance\u0027s ratio (shipIGC.cpp:2940-2990). Must be \u003E 0 \u2014 a negative-thrust (retro) booster is refused."
           },
           "on-rate": {
             "type": "number",
-            "description": "Rate the afterburner engages toward max thrust, per second."
+            "description": "Power ramp per second while engaged (0 \u2192 full power in 1 \u00F7 on-rate seconds). Must be \u003E 0."
           },
           "off-rate": {
             "type": "number",
-            "description": "Rate the afterburner disengages back to normal thrust, per second."
+            "description": "Power ramp per second back down once the boost is released. Must be \u003E 0."
           },
           "mass": {
             "type": "number",
-            "description": "Mass this part adds when mounted, counted against the hull\u0027s payload capacity."
+            "description": "Mass of the part. A mounted gun or launcher counts it against the hull\u0027s payload capacity; for EQUIPMENT (shield / afterburner / cloak) it is display-only \u2014 equipment costs no payload and does not change flight mass."
           },
           "signature": {
             "type": "number",
-            "description": "Detectability this part adds to the mounting hull/station."
+            "description": "Additive radar-signature bias (radar-signature units) this part gives the ship while equipped. Stock content leaves it unset: Allegiance authors part signatures but never applies them (a ship\u0027s signature is its hull\u0027s \u00D7 (1 \u2212 cloaking), shipIGC.h:270)."
           },
           "slot": {
             "enum": [
@@ -1162,14 +1175,14 @@
               "pack",
               "afterburner"
             ],
-            "description": "Which hull slot this part occupies."
+            "description": "Which hull slot this part occupies. Informational: the runtime decides a part\u0027s slot by its catalog (a shields: entry fills the shield slot), and allowed-parts checks the part\u0027s kind, not this field."
           },
           "successor-part-id": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Part upgrade target; references another part id."
+            "description": "Part upgrade target; references another part id of the same kind (no cycles). A tier whose ObsoletedByTechs is owned migrates to it; a hull that allows a part implicitly allows its whole successor chain."
           },
           "shield-damage-multiplier": {
             "type": [
@@ -1281,169 +1294,10 @@
             "description": "Successor semantics: once the owning team possesses ANY of these techs, this item is no longer offered (e.g. a tier-2 gun\u0027s granted tech retires the tier-1 gun). Distinct from RequiredTechs (which gate availability) \u2014 this is a \u0022made obsolete by\u0022 retirement set. Serialized kebab-case as obsoleted-by-techs; omitted when empty."
           }
         },
-        "description": "An afterburner. Mirrors the C\u002B\u002B DataAfterburnerTypeIGC (igc.h:1865).",
+        "description": "An afterburner (booster) \u2014 per-ship EQUIPMENT: one part fills a hull\u0027s afterburner slot (see AllowedParts) and burns the hull\u0027s MaxFuel tank; a hull with no afterburner equipped cannot boost. Mirrors the C\u002B\u002B DataAfterburnerTypeIGC (igc.h:1865).",
         "additionalProperties": false
       },
-      "description": "The mountable afterburner catalog."
-    },
-    "ammo-packs": {
-      "type": "array",
-      "items": {
-        "type": [
-          "object",
-          "null"
-        ],
-        "properties": {
-          "pack-type": {
-            "type": "string",
-            "description": "What the pack replenishes/grants (e.g. \u0022energy\u0022, \u0022ammo\u0022, \u0022shield\u0022)."
-          },
-          "amount": {
-            "type": "integer",
-            "description": "How much of the pack\u0027s resource is granted when consumed."
-          },
-          "mass": {
-            "type": "number",
-            "description": "Mass this part adds when mounted, counted against the hull\u0027s payload capacity."
-          },
-          "signature": {
-            "type": "number",
-            "description": "Detectability this part adds to the mounting hull/station."
-          },
-          "slot": {
-            "enum": [
-              "chaff-launcher",
-              "weapon",
-              "magazine",
-              "dispenser",
-              "shield",
-              "cloak",
-              "pack",
-              "afterburner"
-            ],
-            "description": "Which hull slot this part occupies."
-          },
-          "successor-part-id": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Part upgrade target; references another part id."
-          },
-          "shield-damage-multiplier": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "description": "For a runtime WEAPON (a Weapon gun or a Launcher missile/mine): damage this weapon deals to an energy SHIELD relative to hull. 1.0 = equal; \u003E1 strong vs shields, \u003C1 weak. Null = default 1.0 (omit-when-default). Projected onto WeaponDef.ShieldMult; ignored for non-weapon parts."
-          },
-          "id": {
-            "type": "string",
-            "description": "Stable, unique id used for references (kebab-case by convention, e.g. \u0022heavy-fighter\u0022)."
-          },
-          "name": {
-            "type": "string",
-            "description": "Human-readable display name."
-          },
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Flavor/blurb text shown for this item in the build UI."
-          },
-          "model-name": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Art asset id for the 3D model (see GLB-AND-HARDPOINT-FORMAT.md)."
-          },
-          "icon-name": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Art asset id for the build-UI/HUD icon."
-          },
-          "price": {
-            "type": "integer",
-            "description": "Cost in team money to build/buy this item."
-          },
-          "build-time-seconds": {
-            "type": "integer",
-            "description": "Time to build/complete, in seconds."
-          },
-          "group": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Optional grouping id used to bucket related items in the build UI."
-          },
-          "required-capabilities": {
-            "type": "array",
-            "items": {
-              "enum": [
-                "base",
-                "shipyard-allowed",
-                "expansion-allowed",
-                "tactical-allowed",
-                "supremacy-allowed"
-              ],
-              "description": "A coarse, engine-checked permission gate. Unlike free-form research techs (see TechSet), capabilities are switched on by game logic \u2014 code asks \u0022is this enabled?\u0022 (e.g. may this team build shipyards, expand, or research tactical doctrine). Because code branches on them they are a closed, strongly-typed enum rather than authorable strings."
-            },
-            "description": "Capability gates that must all be enabled before this can be built/bought."
-          },
-          "granted-capabilities": {
-            "type": "array",
-            "items": {
-              "enum": [
-                "base",
-                "shipyard-allowed",
-                "expansion-allowed",
-                "tactical-allowed",
-                "supremacy-allowed"
-              ],
-              "description": "A coarse, engine-checked permission gate. Unlike free-form research techs (see TechSet), capabilities are switched on by game logic \u2014 code asks \u0022is this enabled?\u0022 (e.g. may this team build shipyards, expand, or research tactical doctrine). Because code branches on them they are a closed, strongly-typed enum rather than authorable strings."
-            },
-            "description": "Capability gates enabled for the team once this is owned/completed."
-          },
-          "required-techs": {
-            "type": "array",
-            "items": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "description": "Research techs that must all be owned before this can be built/bought."
-          },
-          "granted-techs": {
-            "type": "array",
-            "items": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "description": "Research techs granted to the team once this is owned/completed."
-          },
-          "obsoleted-by-techs": {
-            "type": "array",
-            "items": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "description": "Successor semantics: once the owning team possesses ANY of these techs, this item is no longer offered (e.g. a tier-2 gun\u0027s granted tech retires the tier-1 gun). Distinct from RequiredTechs (which gate availability) \u2014 this is a \u0022made obsolete by\u0022 retirement set. Serialized kebab-case as obsoleted-by-techs; omitted when empty."
-          }
-        },
-        "description": "A consumable booster pack. Mirrors the C\u002B\u002B DataPackTypeIGC (igc.h:1875).",
-        "additionalProperties": false
-      },
-      "description": "The mountable ammo pack (magazine) catalog."
+      "description": "The afterburner catalog (afterburner-slot equipment)."
     },
     "launchers": {
       "type": "array",
@@ -1481,11 +1335,11 @@
           },
           "mass": {
             "type": "number",
-            "description": "Mass this part adds when mounted, counted against the hull\u0027s payload capacity."
+            "description": "Mass of the part. A mounted gun or launcher counts it against the hull\u0027s payload capacity; for EQUIPMENT (shield / afterburner / cloak) it is display-only \u2014 equipment costs no payload and does not change flight mass."
           },
           "signature": {
             "type": "number",
-            "description": "Detectability this part adds to the mounting hull/station."
+            "description": "Additive radar-signature bias (radar-signature units) this part gives the ship while equipped. Stock content leaves it unset: Allegiance authors part signatures but never applies them (a ship\u0027s signature is its hull\u0027s \u00D7 (1 \u2212 cloaking), shipIGC.h:270)."
           },
           "slot": {
             "enum": [
@@ -1498,14 +1352,14 @@
               "pack",
               "afterburner"
             ],
-            "description": "Which hull slot this part occupies."
+            "description": "Which hull slot this part occupies. Informational: the runtime decides a part\u0027s slot by its catalog (a shields: entry fills the shield slot), and allowed-parts checks the part\u0027s kind, not this field."
           },
           "successor-part-id": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Part upgrade target; references another part id."
+            "description": "Part upgrade target; references another part id of the same kind (no cycles). A tier whose ObsoletedByTechs is owned migrates to it; a hull that allows a part implicitly allows its whole successor chain."
           },
           "shield-damage-multiplier": {
             "type": [
@@ -2375,7 +2229,7 @@
               "string",
               "null"
             ],
-            "description": "GLB model basename the client loads/instances from its per-kind assets folder (e.g. assets/missiles/, assets/mines/, assets/chaff/, assets/probes/; no extension); projected onto WeaponDef.ModelName. Shared by every expendable kind (a FuelPod inherits it too, though it is pure cargo and never renders one)."
+            "description": "GLB model basename the client loads/instances from its per-kind assets folder (e.g. assets/missiles/, assets/mines/, assets/chaff/, assets/probes/; no extension); projected onto WeaponDef.ModelName. Shared by every expendable kind \u2014 the pure-cargo packs (FuelPod, AmmoPack) are never fired, so theirs is the mesh a DROPPED pack is drawn as (assets/parts/, projected onto CargoItemDef.ModelName)."
           }
         },
         "description": "A guided missile. Mirrors the C\u002B\u002B DataMissileTypeIGC (igc.h:1960).",
@@ -2517,7 +2371,7 @@
               "string",
               "null"
             ],
-            "description": "GLB model basename the client loads/instances from its per-kind assets folder (e.g. assets/missiles/, assets/mines/, assets/chaff/, assets/probes/; no extension); projected onto WeaponDef.ModelName. Shared by every expendable kind (a FuelPod inherits it too, though it is pure cargo and never renders one)."
+            "description": "GLB model basename the client loads/instances from its per-kind assets folder (e.g. assets/missiles/, assets/mines/, assets/chaff/, assets/probes/; no extension); projected onto WeaponDef.ModelName. Shared by every expendable kind \u2014 the pure-cargo packs (FuelPod, AmmoPack) are never fired, so theirs is the mesh a DROPPED pack is drawn as (assets/parts/, projected onto CargoItemDef.ModelName)."
           }
         },
         "description": "A deployable mine. Mirrors the C\u002B\u002B DataMineTypeIGC (igc.h:1990).",
@@ -2636,7 +2490,7 @@
               "string",
               "null"
             ],
-            "description": "GLB model basename the client loads/instances from its per-kind assets folder (e.g. assets/missiles/, assets/mines/, assets/chaff/, assets/probes/; no extension); projected onto WeaponDef.ModelName. Shared by every expendable kind (a FuelPod inherits it too, though it is pure cargo and never renders one)."
+            "description": "GLB model basename the client loads/instances from its per-kind assets folder (e.g. assets/missiles/, assets/mines/, assets/chaff/, assets/probes/; no extension); projected onto WeaponDef.ModelName. Shared by every expendable kind \u2014 the pure-cargo packs (FuelPod, AmmoPack) are never fired, so theirs is the mesh a DROPPED pack is drawn as (assets/parts/, projected onto CargoItemDef.ModelName)."
           }
         },
         "description": "Countermeasure chaff. Mirrors the C\u002B\u002B DataChaffTypeIGC (igc.h:1998).",
@@ -2790,7 +2644,7 @@
               "string",
               "null"
             ],
-            "description": "GLB model basename the client loads/instances from its per-kind assets folder (e.g. assets/missiles/, assets/mines/, assets/chaff/, assets/probes/; no extension); projected onto WeaponDef.ModelName. Shared by every expendable kind (a FuelPod inherits it too, though it is pure cargo and never renders one)."
+            "description": "GLB model basename the client loads/instances from its per-kind assets folder (e.g. assets/missiles/, assets/mines/, assets/chaff/, assets/probes/; no extension); projected onto WeaponDef.ModelName. Shared by every expendable kind \u2014 the pure-cargo packs (FuelPod, AmmoPack) are never fired, so theirs is the mesh a DROPPED pack is drawn as (assets/parts/, projected onto CargoItemDef.ModelName)."
           }
         },
         "description": "A deployable sensor / turret probe. Mirrors the C\u002B\u002B DataProbeTypeIGC (igc.h:2003).",
@@ -2905,13 +2759,128 @@
               "string",
               "null"
             ],
-            "description": "GLB model basename the client loads/instances from its per-kind assets folder (e.g. assets/missiles/, assets/mines/, assets/chaff/, assets/probes/; no extension); projected onto WeaponDef.ModelName. Shared by every expendable kind (a FuelPod inherits it too, though it is pure cargo and never renders one)."
+            "description": "GLB model basename the client loads/instances from its per-kind assets folder (e.g. assets/missiles/, assets/mines/, assets/chaff/, assets/probes/; no extension); projected onto WeaponDef.ModelName. Shared by every expendable kind \u2014 the pure-cargo packs (FuelPod, AmmoPack) are never fired, so theirs is the mesh a DROPPED pack is drawn as (assets/parts/, projected onto CargoItemDef.ModelName)."
           }
         },
         "description": "Auxiliary afterburner fuel carried in the hold. Pure cargo \u2014 nothing is fired or deployed: when a fuel-modeled hull\u0027s tank hits 0 while boost is held, one charge auto-loads and the tank refills by FuelPerCharge. No C\u002B\u002B IGC equivalent (StellarAllegiance-only).",
         "additionalProperties": false
       },
       "description": "The fuel-pod expendable catalog (reserve afterburner fuel carried as cargo)."
+    },
+    "ammo-packs": {
+      "type": "array",
+      "items": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "ammo-per-charge": {
+            "type": "integer",
+            "description": "Ammo restored per consumed charge, clamped to the hull\u0027s MaxAmmo (overshoot is wasted \u2014 Allegiance\u0027s CpackIGC::SetAmount clamp, packigc.h:102-120). Must be in 1..65535 (the runtime carries ammo as a u16)."
+          },
+          "id": {
+            "type": "string",
+            "description": "Stable, unique id used for references (kebab-case by convention, e.g. \u0022seeker-missile\u0022)."
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable display name."
+          },
+          "icon-name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Art asset id for the HUD/cargo-list icon."
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Flavor/UI text shown for the expendable."
+          },
+          "mass": {
+            "type": "number",
+            "description": "Payload units one carried unit occupies in a hull\u0027s hold (see PayloadCapacity)."
+          },
+          "load-time": {
+            "type": "number",
+            "description": "Time to load/ready the expendable, in seconds."
+          },
+          "lifespan": {
+            "type": "number",
+            "description": "How long it lives once released, in seconds."
+          },
+          "signature": {
+            "type": "number",
+            "description": "Radar signature the expendable presents to enemy detection while active."
+          },
+          "hit-points": {
+            "type": "number",
+            "description": "Hit points before the expendable is destroyed; 0 = invulnerable."
+          },
+          "defense-type": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Damage-type category this expendable counts as when it deals or absorbs damage."
+          },
+          "abilities": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "capture",
+                "warp-bomb-dual",
+                "warp-bomb-single",
+                "quick-ready",
+                "ripcord",
+                "shoot-stations",
+                "shoot-ships",
+                "shoot-missiles",
+                "shoot-only-target",
+                "rescue",
+                "rescue-any"
+              ],
+              "description": "Capability flags for consumables (missiles, mines, etc.). Mirrors ExpendableAbilityBitMask (igc.h:770-782)."
+            },
+            "description": "Special capability flags granted to this expendable."
+          },
+          "cargo-id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Stable wire id for this expendable as a runtime cargo item the hangar can stock. Null = not a runtime cargo item. Authored explicitly, like ClassId / weapon ids."
+          },
+          "glyph": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Single-character UI glyph the hangar cargo list renders."
+          },
+          "charges-per-pack": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Charges dispensed from one loaded pack; the hangar loads a number of PACKS (each costing one Mass) and every press distributes one charge. Total charges = packs \u00D7 charges-per-pack. Null \u2192 1 (a pack is a single charge \u2014 legacy one-for-one behavior)."
+          },
+          "model-name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "GLB model basename the client loads/instances from its per-kind assets folder (e.g. assets/missiles/, assets/mines/, assets/chaff/, assets/probes/; no extension); projected onto WeaponDef.ModelName. Shared by every expendable kind \u2014 the pure-cargo packs (FuelPod, AmmoPack) are never fired, so theirs is the mesh a DROPPED pack is drawn as (assets/parts/, projected onto CargoItemDef.ModelName)."
+          }
+        },
+        "description": "A spare ammo magazine carried in the hold \u2014 the FuelPod\u0027s twin. Pure cargo: nothing is fired or deployed and no slot mounts it. When a ship\u0027s ammo runs below what its guns need per shot, one charge loads out of the hold and refills the magazine by AmmoPerCharge. Mirrors the ammo case of the C\u002B\u002B DataPackTypeIGC (igc.h:1875; packType 0), which Allegiance models as a part \u2014 here it lives in the expendables catalog (ammo-packs:) because a pack is carried, not mounted.",
+        "additionalProperties": false
+      },
+      "description": "The ammo-pack expendable catalog (a spare gun magazine carried as cargo)."
     },
     "projectiles": {
       "type": "array",

@@ -29,6 +29,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AlephTest/AlephTest.csproj" />
+    <Project Path="tests/AmmoEnergyTest/AmmoEnergyTest.csproj" />
     <Project Path="tests/AutopilotTest/AutopilotTest.csproj" />
     <Project Path="tests/CockpitCuesTest/CockpitCuesTest.csproj" />
     <Project Path="tests/CollisionTest/CollisionTest.csproj" />
@@ -38,6 +39,7 @@
     <Project Path="tests/CrewTest/CrewTest.csproj" />
     <Project Path="tests/CrewStoreTest/CrewStoreTest.csproj" />
     <Project Path="tests/CryptoTest/CryptoTest.csproj" />
+    <Project Path="tests/EquipmentTest/EquipmentTest.csproj" />
     <Project Path="tests/FactionsTest/FactionsTest.csproj" />
     <Project Path="tests/FlightModelTest/FlightModelTest.csproj" />
     <Project Path="tests/FogTest/FogTest.csproj" />
@@ -52,6 +54,7 @@
     <Project Path="tests/PublicLobbyTest/PublicLobbyTest.csproj" />
     <Project Path="tests/ReloadTest/ReloadTest.csproj" />
     <Project Path="tests/RescueTest/RescueTest.csproj" />
+    <Project Path="tests/ResourcePredictTest/ResourcePredictTest.csproj" />
     <Project Path="tests/SalvageTest/SalvageTest.csproj" />
     <Project Path="tests/ScoreboardTest/ScoreboardTest.csproj" />
     <Project Path="tests/ServerUpdateTest/ServerUpdateTest.csproj" />

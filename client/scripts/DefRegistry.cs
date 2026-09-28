@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Godot;
 using StellarAllegiance.Shared;
@@ -11,12 +12,18 @@ using StellarAllegiance.Shared;
 //  via Load(); there is no database and no compile-time fallback.
 //
 //  Determinism: TryGetStats rebuilds the SAME shared ShipStats the server derives
-//  (ShipStats.Create from the def's authored f32s), so the client's prediction and the
+//  (ShipStats.FromDef(hull, equipped afterburner)), so the client's prediction and the
 //  server's authority integrate bit-identically. There is deliberately NO compile-time
 //  tuning fallback: a def the client doesn't have yet makes the getter return false and the
 //  caller GUARDS (holds authority, doesn't predict) rather than flying stale baked numbers.
 //  The defs arrive once, right after Welcome and before any ship can spawn, so that window
 //  is momentary.
+//
+//  Equipment (equipment PR): a ship's shield / afterburner / cloak are PARTS in slots
+//  (EquipmentDef), not hull stats. Every per-ship answer — flight stats, shield maximum, the
+//  resource rule's inputs — takes the ship's EFFECTIVE equipment ids (its MsgShipLoadout row;
+//  null = the hull's DefaultEquipment, the wire's omission rule) and resolves them the way
+//  Simulation.ApplyEquipment does (EquipmentSet.TryResolve).
 // =====================================================================
 public partial class DefRegistry : Node, IShipCostSource
 {
@@ -28,12 +35,27 @@ public partial class DefRegistry : Node, IShipCostSource
     private readonly Dictionary<uint, WeaponDef> _weapons = new();
     private readonly Dictionary<byte, BaseDef> _bases = new();
     private readonly Dictionary<uint, CargoItemDef> _cargo = new();
+    private readonly Dictionary<ushort, EquipmentDef> _equipment = new();
+    private readonly List<EquipmentDef> _equipmentById = new(); // AllEquipment(), ascending EquipmentId
 
-    // Derived ShipStats memo keyed by ClassId (ShipStats.Create runs an Exp() — too costly to
-    // repeat per-ship per-tick). Pure function of the def, so it never breaks determinism;
-    // cleared whenever the defs are reloaded.
-    private readonly Dictionary<byte, ShipStats> _statsCache = [];
+    // THE ammo-pack line the resource rule loads from: the FIRST cargo item (streamed catalog order)
+    // with AmmoPerCharge > 0 — the same pick as Simulation's _ammoPackItem, so both peers load the
+    // same per-charge refill and load time. Null until the defs arrive (or content with no pack).
+    private CargoItemDef? _ammoPackItem;
+
+    // Derived ShipStats memo keyed by (def id, equipped afterburner id): ShipStats.Create runs an
+    // Exp() — too costly to repeat per-ship per-tick — and a match only ever sees a handful of
+    // hull × booster pairs (the server memoizes the same key). Pure function of the defs, so it
+    // never breaks determinism; cleared whenever the defs are reloaded.
+    private readonly Dictionary<(byte DefId, ushort Afterburner), ShipStats> _statsCache = [];
     private readonly Dictionary<byte, List<(HardpointDef hp, WeaponDef? weapon)>> _slotsCache = [];
+
+    // Cached method-group delegates for the shared rules' def lookups (a method group converts to a
+    // fresh delegate per call; these run on the per-tick prediction path).
+    private Func<ushort, EquipmentDef?>? _equipmentLookup;
+    private Func<uint, WeaponDef?>? _weaponLookup;
+    private Func<ushort, EquipmentDef?> EquipmentLookup => _equipmentLookup ??= GetEquipment;
+    private Func<uint, WeaponDef?> WeaponLookup => _weaponLookup ??= GetWeapon;
 
     // Latest streamed world config. Fog-of-war (server-authoritative per-server toggle) drives the
     // client's fog presentation: eyeball-only marker suppression + ghost rendering only apply when
@@ -53,7 +75,8 @@ public partial class DefRegistry : Node, IShipCostSource
         IReadOnlyList<DevelopmentDef>? developments = null,
         IReadOnlyList<StationCatalogDef>? stationCatalog = null,
         string factionName = "",
-        AttrMod[]? factionAttributes = null
+        AttrMod[]? factionAttributes = null,
+        IReadOnlyList<EquipmentDef>? equipment = null
     )
     {
         _world = world;
@@ -61,6 +84,9 @@ public partial class DefRegistry : Node, IShipCostSource
         _weapons.Clear();
         _bases.Clear();
         _cargo.Clear();
+        _equipment.Clear();
+        _equipmentById.Clear();
+        _ammoPackItem = null;
         _statsCache.Clear();
         _slotsCache.Clear();
         foreach (var s in ships)
@@ -70,7 +96,19 @@ public partial class DefRegistry : Node, IShipCostSource
         foreach (var b in bases)
             _bases[b.BaseTypeId] = b;
         foreach (var c in cargoItems)
+        {
             _cargo[c.CargoId] = c;
+            if (c.AmmoPerCharge > 0)
+                _ammoPackItem ??= c; // first in the streamed (= content catalog) order, like the sim
+        }
+        if (equipment is not null)
+            foreach (var e in equipment)
+                if (e.EquipmentId != EquipmentDef.NoEquipment)
+                {
+                    _equipment[e.EquipmentId] = e;
+                    _equipmentById.Add(e);
+                }
+        _equipmentById.Sort((a, b) => a.EquipmentId.CompareTo(b.EquipmentId));
         // Tech-path catalog (v36). LIST ORDER IS THE WIRE INDEX SPACE — never reorder.
         _techs = techs ?? System.Array.Empty<TechDef>();
         _developments = developments ?? System.Array.Empty<DevelopmentDef>();
@@ -166,22 +204,171 @@ public partial class DefRegistry : Node, IShipCostSource
 
     // ---- Ship flight stats ------------------------------------------------
 
-    // Build the shared ShipStats for a class from the def's authored f32s — bit-identical to the
-    // server's StatsFor, since both feed ShipStats.Create the same bits. A pod resolves to
-    // PodClassId. False until the def arrives (or for a class with no def) — the caller guards
-    // rather than flying baked defaults.
-    public bool TryGetStats(byte classId, bool isPod, out ShipStats stats)
+    // Build the shared ShipStats for one ship — its hull's authored flight block plus the
+    // afterburner part it actually CARRIES — bit-identical to the server's per-ship Stats, since
+    // both run ShipStats.FromDef(hull, afterburner) on the same bits. A pod resolves to PodClassId
+    // (no slots: no afterburner). `equipIds` = the ship's effective equipment by slot (null = the
+    // hull's DefaultEquipment — pass null for any ship absent from the loadout table). No default
+    // argument, like FromDef: every caller decides which parts the ship flies. False until the def
+    // arrives, or while an equipped part's def is missing — the caller guards rather than flying
+    // baked defaults.
+    public bool TryGetStats(byte classId, bool isPod, ushort[]? equipIds, out ShipStats stats)
     {
         byte defId = isPod ? PodClassId : classId;
-        if (_statsCache.TryGetValue(defId, out stats))
-            return true;
-        if (!_ships.TryGetValue(defId, out var d))
+        if (
+            !_ships.TryGetValue(defId, out var hull)
+            || !EquipmentSet.TryResolve(hull, isPod ? null : equipIds, EquipmentLookup, out var parts)
+        )
         {
             stats = default;
             return false;
         }
-        stats = ShipStats.FromDef(d);
-        _statsCache[defId] = stats;
+        var key = (defId, parts.Afterburner?.EquipmentId ?? EquipmentDef.NoEquipment);
+        if (!_statsCache.TryGetValue(key, out stats))
+            _statsCache[key] = stats = ShipStats.FromDef(hull, parts.Afterburner);
+        return true;
+    }
+
+    // A ship's flight MASS — the hull's authored Mass (pod-aware). Equipment is display-mass only
+    // (it never changes flight mass), so this is the same value every per-ship Stats carries; the
+    // snapshot row doesn't stream it. 0 until the def arrives.
+    public float HullMass(byte classId, bool isPod) =>
+        _ships.TryGetValue(isPod ? PodClassId : classId, out var d) ? d.Mass : 0f;
+
+    // ---- Equipment (equipment PR; empty until MsgDefs lands — callers guard) ----
+
+    public EquipmentDef? GetEquipment(ushort equipmentId) => _equipment.TryGetValue(equipmentId, out var e) ? e : null;
+
+    // Every streamed equipment part, ascending by EquipmentId (the catalog order: shields, then
+    // afterburners, then cloaks). Empty until the defs arrive.
+    public IReadOnlyList<EquipmentDef> AllEquipment() => _equipmentById;
+
+    // The parts a hull may carry in one slot (ShipClassDef.AllowedEquipment: the listed parts + their
+    // successor chains), ascending by id — the hangar's per-slot choice list before visibility.
+    public List<EquipmentDef> AllowedEquipment(byte classId, byte slot)
+    {
+        var list = new List<EquipmentDef>();
+        if (_ships.TryGetValue(classId, out var d))
+            foreach (ushort id in d.AllowedEquipment)
+                if (GetEquipment(id) is { } e && e.Slot == slot)
+                    list.Add(e);
+        return list;
+    }
+
+    // Whether a hull has the slot at all (it allows some part of that kind) — the hangar hides a
+    // slot row the hull doesn't have.
+    public bool HasEquipmentSlot(byte classId, byte slot)
+    {
+        if (_ships.TryGetValue(classId, out var d))
+            foreach (ushort id in d.AllowedEquipment)
+                if (GetEquipment(id) is { } e && e.Slot == slot)
+                    return true;
+        return false;
+    }
+
+    // The part a hull launches with in one slot (ShipClassDef.DefaultEquipment), NOT tier-migrated;
+    // EquipmentDef.NoEquipment = the slot starts empty (or the hull/def is unknown).
+    public ushort DefaultEquipmentId(byte classId, byte slot) =>
+        _ships.TryGetValue(classId, out var d) ? d.DefaultEquipmentFor(slot) : EquipmentDef.NoEquipment;
+
+    // The three parts a ship flies, resolved from its effective ids (null = DefaultEquipment; a pod
+    // resolves the Pod def — nothing). A part whose def hasn't streamed reads as empty here: this is
+    // the DISPLAY seam (readouts, plume gates); prediction goes through TryGetStats /
+    // TryResourceStats, which refuse instead.
+    public EquipmentSet EffectiveEquipment(byte classId, bool isPod, ushort[]? equipIds)
+    {
+        if (!_ships.TryGetValue(isPod ? PodClassId : classId, out var hull))
+            return default;
+        EquipmentSet.TryResolve(hull, isPod ? null : equipIds, EquipmentLookup, out var set);
+        return set;
+    }
+
+    // The ship's shield capacity: the EQUIPPED shield part's MaxStrength × the team's live
+    // MaxShieldShip attribute — the same f32 product as Simulation.ShieldCapacityFor. No part (an
+    // emptied slot, a shieldless hull, every pod) = no shield: 0. Neutral (×1) until the team's
+    // attributes stream in; the HUD only uses it for the arc's denominator.
+    public float MaxShield(byte team, byte classId, bool isPod, ushort[]? equipIds, TeamStateStore teams) =>
+        EffectiveEquipment(classId, isPod, equipIds).Shield is { } part
+            ? part.MaxStrength * teams.TeamAttr(team, TeamStateStore.AttrMaxShieldShip)
+            : 0f;
+
+    // The ship's energy-pool maximum through THE shared resolver (ShipResources.StatsFor): hull
+    // MaxEnergy × the team's live MaxEnergy attribute. 0 for a hull with no pool (or before its def).
+    public float MaxEnergy(byte team, byte classId, bool isPod, TeamStateStore teams) =>
+        _ships.TryGetValue(isPod ? PodClassId : classId, out var hull)
+            ? ShipResources.StatsFor(hull, null, teams.TeamAttr(team, TeamStateStore.AttrMaxEnergy), 0, null).MaxEnergy
+            : 0f;
+
+    // The hull's magazine (0 = no ammo guns can ever fire from it).
+    public ushort MaxAmmo(byte classId, bool isPod) =>
+        _ships.TryGetValue(isPod ? PodClassId : classId, out var d) ? d.MaxAmmo : (ushort)0;
+
+    // The cheapest AmmoPerShot over a ship's EFFECTIVE mounts (the pilot's barrels + the crew
+    // stations share one magazine) — what decides when an ammo pack loads. `barrelIds` / `turretIds`
+    // = the ship's loadout row (null = authored). A pod flies no guns: 0.
+    public ushort MinAmmoPerShot(byte classId, bool isPod, uint[]? barrelIds, uint[]? turretIds) =>
+        isPod || !_ships.TryGetValue(classId, out var d)
+            ? (ushort)0
+            : ResourceMirror.MinAmmoPerShot(d.Hardpoints, barrelIds, turretIds, WeaponLookup);
+
+    // One ship's resource-rule inputs through THE shared resolver (ShipResources.StatsFor), exactly as
+    // Simulation.ResourceStatsFor builds them: the effective hull (the Pod def for a pod), the
+    // EQUIPPED cloak, the team's exact MaxEnergy attribute, the cheapest ammo gun over the effective
+    // mounts, and THE ammo-pack line. False — the predictor then holds off — until the defs AND the
+    // team's attribute vector are known: a neutral guess would gate shots the server refuses.
+    public bool TryResourceStats(
+        byte team,
+        byte classId,
+        bool isPod,
+        uint[]? barrelIds,
+        uint[]? turretIds,
+        ushort[]? equipIds,
+        TeamStateStore teams,
+        out ShipResourceStats rs
+    )
+    {
+        rs = default;
+        if (
+            !teams.HasAttributes(team)
+            || !_ships.TryGetValue(isPod ? PodClassId : classId, out var hull)
+            || !EquipmentSet.TryResolve(hull, isPod ? null : equipIds, EquipmentLookup, out var parts)
+        )
+            return false;
+        rs = ShipResources.StatsFor(
+            hull,
+            parts.Cloak,
+            teams.TeamAttr(team, TeamStateStore.AttrMaxEnergy),
+            MinAmmoPerShot(classId, isPod, barrelIds, turretIds),
+            _ammoPackItem
+        );
+        return true;
+    }
+
+    // THE ammo-pack cargo line (AmmoPerCharge > 0, first in catalog order — the sim's pick), or null
+    // when the content has none / before the defs arrive. FuelCargoItem's twin.
+    public CargoItemDef? AmmoCargoItem() => _ammoPackItem;
+
+    // The DISPLAY application of the shared equipment-tier succession rule (shared/EquipmentTier.cs):
+    // a default or picked Sm Shield 1 reads as Sm Shield 2 once its obsoleting tech is owned, because
+    // that is what Simulation.MigrateEquipmentTier — the same rule — hands the ship at spawn.
+    public ushort MigrateEquipmentTier(ushort equipmentId, byte team, TeamStateStore teams)
+    {
+        bool Owns(ushort techIdx) => teams.OwnsTech(team, techIdx);
+
+        return EquipmentTier.Migrate(equipmentId, EquipmentLookup, Owns);
+    }
+
+    // Whether a part is offered at all — the ShipLoadout.ArsenalVisible rule for guns: a tier the team
+    // has outgrown (an owned tech obsoletes it) is retired, its successor carries the slot; a part
+    // gated behind tech the team hasn't fully researched is HIDDEN, not greyed.
+    public bool EquipmentVisible(EquipmentDef e, byte team, TeamStateStore teams)
+    {
+        foreach (ushort t in e.ObsoletedByTechIdx)
+            if (teams.OwnsTech(team, t))
+                return false;
+        foreach (ushort t in e.RequiredTechIdx)
+            if (!teams.OwnsTech(team, t))
+                return false;
         return true;
     }
 

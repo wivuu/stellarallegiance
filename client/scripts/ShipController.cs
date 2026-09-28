@@ -148,6 +148,7 @@ public partial class ShipController : Node
         && a.DropChaff == b.DropChaff
         && a.DropMine == b.DropMine
         && a.DropProbe == b.DropProbe
+        && a.Cloak == b.Cloak // else a toggle wouldn't send until the keepalive, a second late
         && a.LockTargetId == b.LockTargetId;
 
     private bool _autoFly;
@@ -161,7 +162,22 @@ public partial class ShipController : Node
     private bool _ramTest; // --ram-test: autofly chases + rams the nearest remote ship (ram-prediction measurement harness)
     private bool _strafeTest; // --strafe-test: pure lateral strafe + continuous fire (bolt-smoothness measurement harness)
     private bool _salvageTest; // --salvage-test: autofly until a wreck drops, then fly onto the nearest item (pickup smoke)
+    private bool _cloakTest; // --cloak-test: autofly a cloak-fitted hull, latch the cloak on, log predicted vs authoritative pools
     private ulong _ramTargetId; // committed ram target (survives frame-to-frame so the rammer doesn't orbit a cluster)
+
+    // The cloak TOGGLE (equipment PR). `toggle_cloak` flips a latch on its press, and the latched state
+    // rides EVERY MsgInput as the Cloak level bit — held-input replay forbids sending an edge (a
+    // one-tick press would be replayed forever or lost). Only a hull that carries a cloak part flips it
+    // (anything else buzzes ActionDenied); a gunner has no ship, so it never reaches this; a fresh
+    // ship starts it off.
+    private bool _cloakLatched;
+    private bool _cloakKeyHeld; // edge-detect the toggle key (the latch, not the key, is the input)
+
+    // --cloak-test bookkeeping: engage the cloak this long after spawn, then log the pools every 2 s.
+    private const double CloakTestEngageSec = 8.0;
+    private const double CloakTestLogSec = 2.0;
+    private bool _cloakTestEngaged;
+    private double _cloakTestLogAcc;
 
     // --salvage-test bookkeeping: the item label currently being chased and the step the chase was
     // last logged on, so the harness prints when the target CHANGES without spamming every frame.
@@ -258,6 +274,16 @@ public partial class ShipController : Node
             {
                 _autoFly = true;
                 _salvageTest = true;
+            }
+            // Cloak / resource-prediction harness: autofly the class (Scout by default) fitted with its
+            // first visible cloak and a couple of ammo packs, latch the cloak on after CloakTestEngageSec,
+            // and log the predicted pools against the authoritative row every CloakTestLogSec — the
+            // weave fires constantly, so the magazine drains and a pack loads while the cloak starves
+            // the energy pool. Pair with --interp-stats for the [predict-stats] reconcile window.
+            if (a == "--cloak-test")
+            {
+                _autoFly = true;
+                _cloakTest = true;
             }
             // Render stress-test knobs (see StressRender / the --stress-fighters server harness).
             // --render-stats alone just shows the counters; --stress-fx=<mode> also strips ship fx
@@ -498,12 +524,14 @@ public partial class ShipController : Node
             _hadShip = false;
             _acc = 0;
             ApEngagedLocal = false; // no ship (death / pre-spawn) → autopilot can't be engaged
+            _cloakLatched = false; // … and nothing to cloak
             return;
         }
         if (!_hadShip)
             AnchorFreshShip();
 
         TickAutopilotAndBoost(pc);
+        TickCloak(pc, delta);
 
         UpdateAdaptiveLead();
         if (Native)
@@ -624,8 +652,9 @@ public partial class ShipController : Node
                 // 3+1+2 = 6, exactly the scout's free payload alongside its cannon) so headless runs
                 // exercise the full MsgSpawn cargo path AND actually carry probes for the pinned
                 // DropProbe in AutoInput to deploy (cargo-ids: 2 mine, 3 decoy, 4 recon-probe).
-                var hold = _autoFly
-                    ? new (uint cargoId, byte count)[] { (2u, (byte)3), (3u, (byte)1), (4u, (byte)1) }
+                var hold =
+                    _cloakTest ? CloakTestHold()
+                    : _autoFly ? new (uint cargoId, byte count)[] { (2u, (byte)3), (3u, (byte)1), (4u, (byte)1) }
                     : LoadoutState.Shared.CargoFor((byte)cls);
                 // v36: carry the hangar sidebar's launch-base pick (0 = server default; the
                 // server validates friendly+alive and silently falls back). The weapon-slot
@@ -636,7 +665,17 @@ public partial class ShipController : Node
                     !_autoFly && _defs?.GetHardpoints((byte)cls) is { } hps
                         ? LoadoutState.Shared.WeaponOverridesFor((byte)cls, hps)
                         : null;
-                _net?.RequestSpawn((byte)cls, hold, LoadoutState.Shared.SelectedBaseId, mounts);
+                // The equipment tail (shield / afterburner / cloak picks, overridden slots only). Autofly
+                // flies the hull defaults, except --cloak-test, which fits the class's first visible
+                // cloak into the shared hangar state first — so the local insert predicts it too.
+                ShipClassDef? hullDef = _defs != null && _defs.TryGetShipDef((byte)cls, out var hd) ? hd : null;
+                if (_cloakTest && hullDef != null)
+                    FitCloakTestCloak((byte)cls, team);
+                var equipment =
+                    (!_autoFly || _cloakTest) && hullDef != null
+                        ? LoadoutState.Shared.EquipmentPicksFor((byte)cls, hullDef)
+                        : null;
+                _net?.RequestSpawn((byte)cls, hold, LoadoutState.Shared.SelectedBaseId, mounts, equipment);
                 _spawnPending = true;
                 _spawnRetry = 1.0;
                 SpawnHint = null;
@@ -656,6 +695,29 @@ public partial class ShipController : Node
         }
     }
 
+    // --cloak-test hold: two ammo packs (THE ammo-pack line from the defs — mass 1 each on stock
+    // content) so the constant autofly fire drains the magazine into a pack load mid-test. Empty
+    // before the defs / on content with no pack.
+    private (uint cargoId, byte count)[] CloakTestHold() =>
+        _defs?.AmmoCargoItem() is { } pack
+            ? new (uint cargoId, byte count)[] { (pack.CargoId, (byte)2) }
+            : System.Array.Empty<(uint, byte)>();
+
+    // --cloak-test: pick the class's first allowed cloak the team can see (tier-visible, researched)
+    // into the shared hangar state, exactly as the EQUIPMENT section would.
+    private void FitCloakTestCloak(byte cls, byte team)
+    {
+        if (_defs == null)
+            return;
+        foreach (var part in _defs.AllowedEquipment(cls, EquipmentDef.SlotCloak))
+            if (_defs.EquipmentVisible(part, team, _world.TeamState))
+            {
+                LoadoutState.Shared.AssignEquipment(cls, EquipmentDef.SlotCloak, part.EquipmentId);
+                return;
+            }
+        Log.Print($"[cloak-test] class {cls} has no visible cloak part — launching without one");
+    }
+
     private void AnchorFreshShip()
     {
         _predTick = _world.ServerTick; // anchor to authority; first reconcile aligns the rest
@@ -666,6 +728,9 @@ public partial class ShipController : Node
         _lastSentInput = default;
         _lastSentTick = 0;
         ApEngagedLocal = false; // a fresh launch starts hands-on
+        _cloakLatched = false; // … and uncloaked (the server launches every ship with the cloak off)
+        _cloakTestEngaged = false;
+        _cloakTestLogAcc = 0;
         // Launch locks the cursor to flight immediately — steering is captured relative mouse
         // motion (see _Input / ReadInput), so the pilot flies straight out of the hangar without
         // a click to capture first. ShipLoadout is deliberately NOT in the guard: the mandatory
@@ -725,6 +790,64 @@ public partial class ShipController : Node
             _input.DropMine = false;
             _input.DropProbe = false;
         }
+    }
+
+    // The cloak toggle, applied AFTER SampleInput like Boost: flip the latch on the key's press (only a
+    // hull that carries a cloak — anything else buzzes), then stamp the latched LEVEL into this frame's
+    // input, which every predicted tick sends and steps (ShipResources.EnergyStep reads it as held).
+    // Free-cursor command mode doesn't block it (a toggle is not stick input); a menu/chat owning the
+    // keyboard does. --cloak-test engages it itself and logs the pools.
+    private void TickCloak(PredictionController pc, double delta)
+    {
+        bool key = !_autoFly && InputGate.FlightInputFree && Input.IsActionPressed("toggle_cloak");
+        if (key && !_cloakKeyHeld)
+        {
+            if (pc.HasCloak)
+                _cloakLatched = !_cloakLatched;
+            else
+                SfxManager.Instance?.PlayUi(SfxManager.SfxId.ActionDenied);
+        }
+        _cloakKeyHeld = key;
+
+        if (_cloakTest)
+            TickCloakTest(pc, delta);
+
+        _input.Cloak = _cloakLatched && pc.HasCloak;
+        pc.CloakEngaged = _input.Cloak;
+    }
+
+    // --cloak-test: latch the cloak on CloakTestEngageSec after spawn, then every CloakTestLogSec print
+    // the newest authoritative pools beside what the mirror predicted for that SAME tick (they must be
+    // equal — `match`), the live predicted pools, and the replay count.
+    private void TickCloakTest(PredictionController pc, double delta)
+    {
+        if (!_cloakTestEngaged && _stepsSinceSpawn * FlightModel.Dt >= CloakTestEngageSec)
+        {
+            _cloakTestEngaged = true;
+            _cloakLatched = pc.HasCloak;
+            Log.Print(
+                pc.HasCloak
+                    ? $"[cloak-test] engaging {pc.Equipment.Cloak!.Name} at t={_stepsSinceSpawn * FlightModel.Dt:0.0}s"
+                    : "[cloak-test] this hull carries no cloak — nothing to engage"
+            );
+        }
+        _cloakTestLogAcc += delta;
+        if (_cloakTestLogAcc < CloakTestLogSec)
+            return;
+        _cloakTestLogAcc = 0;
+        var auth = pc.LastAuthPools;
+        string pred = pc.TryGetPredictedPools(pc.LastAuthTick, out var p) ? Pools(p) : "(not in history)";
+        bool match = pc.TryGetPredictedPools(pc.LastAuthTick, out var q) && q == auth;
+        Log.Print(
+            $"[cloak-test] t={_stepsSinceSpawn * FlightModel.Dt:0.0}s tick={pc.LastAuthTick} ready={pc.ResourcesReady} "
+                + $"latch={_cloakLatched} auth {Pools(auth)} pred {pred} match={match} "
+                + $"live E={pc.Energy:0.00}/{pc.MaxEnergy:0} A={pc.Ammo}/{pc.MaxAmmo} P={pc.AmmoPacks}"
+                + $"{(pc.AmmoLoading ? $" LOAD {pc.AmmoLoadFrac:P0}" : "")} CLK={pc.CloakLevel:P1} "
+                + $"gate={pc.LastGateBlock} res_resync={PredictionController.ResourceResyncs}"
+        );
+
+        static string Pools(in ShipPools s) =>
+            $"E={s.Energy:0.00} A={s.Ammo} P={s.AmmoPacks} CLK={ShipResources.CloakFraction(s.Cloak):P1}";
     }
 
     private void TickPing(double delta)

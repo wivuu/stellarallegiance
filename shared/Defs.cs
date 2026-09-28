@@ -143,22 +143,15 @@ namespace StellarAllegiance.Shared
             DriftPitchDeg;
         public float SideMult,
             BackMult;
-        public float AbAccel,
-            AbOnRate,
-            AbOffRate;
 
-        // 0 max-fuel = unmodeled (unlimited boost); 0 recharge = dock-only (relaunch refills).
+        // The afterburner's tank (IGC maxFuel): > 0 exactly when the hull has an afterburner slot.
+        // The boost itself (AbAccel / on-off rates / FuelDrain) comes from the EQUIPPED afterburner
+        // part (EquipmentDef) via ShipStats.FromDef(hull, afterburner); the shield likewise comes from
+        // the equipped shield part. 0 recharge = dock-only (relaunch refills) — the stock value everywhere.
         public float MaxFuel;
-        public float AbFuelDrain,
-            AbFuelRecharge;
+        public float AbFuelRecharge;
 
         public float MaxHull; // starting/spawn hull
-
-        // Regenerating energy shield layered over hull (all 0 = no shield). Depleted before hull;
-        // overflow spills to hull. Recharge (points/sec) resumes ShieldDelaySec after the last hit.
-        public float ShieldCapacity;
-        public float ShieldRecharge;
-        public float ShieldDelaySec;
 
         // Fog-of-war vision (all inert until a later WP wires up filtering): a long-range
         // directional cone (VisionConeLength/VisionConeAngleDeg, occluded by asteroids) plus an
@@ -170,9 +163,9 @@ namespace StellarAllegiance.Shared
         public float VisionSphereRadius;
         public float RadarSignature;
 
-        // Additive radar-signature bias projected from authored equipment (Hull.Signature + the
-        // default loadout's Part.Signature sum), in RadarSignature units (default 0 = neutral).
-        // Server-side fog input only — Protocol.BuildDefs deliberately does NOT write it (the
+        // Additive radar-signature bias of the HULL alone (Hull.Signature), in RadarSignature units
+        // (default 0 = neutral). The server adds each equipped part's EquipmentDef.Signature per
+        // ship. Server-side fog input only — Protocol.BuildDefs deliberately does NOT write it (the
         // client never reads signatures; FogEyeballMultiplier precedent).
         [WireIgnore]
         public float SignatureBias;
@@ -211,6 +204,35 @@ namespace StellarAllegiance.Shared
         // ship block (u8) after LaunchClassMask, mirrored by DefsApplier.
         [Wire(WireEnc.U8)]
         public int CargoCapacity;
+
+        // ---- Equipment, energy and ammo (equipment PR), streamed after CargoCapacity ----------------
+        // The energy pool energy guns (WeaponDef.EnergyPerShot) and the cloak draw from, and its
+        // regen per second — IGC values, untranslated, scaled by the team MaxEnergy attribute. 0 =
+        // no pool.
+        public float MaxEnergy;
+        public float EnergyRecharge;
+
+        // The magazine shared by every ammo-costing gun (WeaponDef.AmmoPerShot); refilled at dock and
+        // by ammo packs (CargoItemDef.AmmoPerCharge). 0 = no magazine.
+        public ushort MaxAmmo;
+
+        // Every EquipmentDef id this hull may carry (listed parts + their successor chains), SORTED
+        // ascending so AllowsEquipment can binary-search. A slot exists only if some id of that
+        // slot is here. u8 count (<= 255 entries, ContentValidator enforces).
+        public ushort[] AllowedEquipment = System.Array.Empty<ushort>();
+
+        // The part the hull launches with in each slot, indexed by slot byte (EquipmentDef.Slot*):
+        // length 0 (a hull with no equipment slots) or EquipmentDef.SlotCount; NoEquipment = the slot
+        // starts empty. Always buildable whenever the hull is (the projection's default rule);
+        // research tier succession upgrades it at runtime.
+        public ushort[] DefaultEquipment = System.Array.Empty<ushort>();
+
+        // The default part in `slot`, or EquipmentDef.NoEquipment (no default / no such slot).
+        public ushort DefaultEquipmentFor(byte slot) =>
+            slot < DefaultEquipment.Length ? DefaultEquipment[slot] : EquipmentDef.NoEquipment;
+
+        // Whether this hull may carry equipment `id` (AllowedEquipment is sorted).
+        public bool AllowsEquipment(ushort id) => System.Array.BinarySearch(AllowedEquipment, id) >= 0;
     }
 
     // How a weapon behaves when fired. A byte (wire-safe) and APPEND-ONLY, like HardpointKind.
@@ -343,6 +365,13 @@ namespace StellarAllegiance.Shared
         // magazine represents has to be knowable without the expendable catalog. Server-side today;
         // it starts streaming (appended LAST in the weapon record) in protocol 39 (salvage phase 3).
         public float RoundMass;
+
+        // Per-shot resource costs (equipment PR), streamed after RoundMass. A shot fires only if the
+        // ship's energy pool (ShipClassDef.MaxEnergy) and magazine (ShipClassDef.MaxAmmo) cover them.
+        // Bolt guns only — every other kind projects 0. Authored so the drain per SECOND matches
+        // Allegiance at our cadence: IGC cost × FireIntervalTicks ÷ (20 × IGC dtimeBurst).
+        public float EnergyPerShot;
+        public ushort AmmoPerShot;
     }
 
     // One entry in a hull's default consumable hold — an item id + a count. Mirrors the authored
@@ -356,8 +385,9 @@ namespace StellarAllegiance.Shared
 
     // One per runtime cargo item (an expendable the hangar can stock in a ship's hold).
     // CargoId is the stable wire id an authored expendable carries (Expendable.CargoId).
-    // Dispenser items are consumed through the per-kind ammo bytes (SeedDispenserAmmo);
-    // fuel items auto-consume when the tank empties mid-boost.
+    // Dispenser items are consumed through the per-kind ammo bytes (SeedDispenserAmmo); the two
+    // pure-cargo packs auto-load from the hold: fuel (FuelPerCharge > 0) when the tank empties
+    // mid-boost, ammo (AmmoPerCharge > 0) when the magazine runs below a shot.
     [WireRecord]
     public sealed partial class CargoItemDef
     {
@@ -382,6 +412,70 @@ namespace StellarAllegiance.Shared
         // Server-side today; it starts streaming (appended LAST in the cargo record) in protocol 39
         // (salvage phase 3).
         public string ModelName = "";
+
+        // Ammo restored per consumed charge, clamped to the hull's MaxAmmo (equipment PR); 0 = not
+        // an ammo item. Streamed after ModelName.
+        public ushort AmmoPerCharge;
+    }
+
+    // One per EQUIPMENT part (equipment PR): a shield, afterburner or cloak — the per-ship slots.
+    // EquipmentId is the part's position in the streamed list (projection order: shields, then
+    // afterburners, then cloaks, each in authored order), so it is only stable within one content
+    // bundle; loadouts are chosen per match. Only the block for this part's Slot is populated —
+    // the others stay 0.
+    [WireRecord]
+    public sealed partial class EquipmentDef
+    {
+        // Sentinel for "no part": an empty slot in ShipClassDef.DefaultEquipment / a loadout, and a
+        // top tier's SucceededById.
+        public const ushort NoEquipment = ushort.MaxValue;
+
+        // Slot bytes (EquipmentDef.Slot, the index into ShipClassDef.DefaultEquipment).
+        public const byte SlotShield = 0;
+        public const byte SlotAfterburner = 1;
+        public const byte SlotCloak = 2;
+        public const int SlotCount = 3;
+
+        public ushort EquipmentId;
+        public byte Slot;
+        public string Name = "";
+        public string Description = "";
+        public string ModelName = ""; // part GLB basename (assets/parts/<name>.glb); display only
+        public float Mass; // display only: equipment costs no payload and no flight mass
+
+        // Tech gating + succession, same shape as WeaponDef: RequiredTechIdx locks the part until
+        // owned, owning any ObsoletedByTechIdx retires it and a loadout migrates to SucceededById
+        // (same slot; NoEquipment = top tier).
+        public ushort[] RequiredTechIdx = System.Array.Empty<ushort>();
+        public ushort[] ObsoletedByTechIdx = System.Array.Empty<ushort>();
+        public ushort SucceededById = NoEquipment;
+
+        // --- Shield (SlotShield): the ship's shield IS the equipped part. Strength and regen are
+        // scaled by the team MaxShieldShip / ShieldRegenerationShip attributes; regen resumes
+        // RechargeDelaySec after the last shield hit (0 = continuous, Allegiance).
+        public float MaxStrength;
+        public float RegenRate; // points per second
+        public float RechargeDelaySec;
+
+        // --- Afterburner (SlotAfterburner): extra forward accel at full power on the hull Accel scale
+        // (boosted top speed = MaxSpeed × (1 + AbAccel / Accel)), the power ramps per second, and the
+        // fuel burned per second while engaged, from the hull's MaxFuel tank.
+        public float AbAccel;
+        public float AbOnRate;
+        public float AbOffRate;
+        public float FuelDrain;
+
+        // --- Cloak (SlotCloak): energy per second while engaged (or still ramping down), the
+        // fraction of signature hidden at full cloak (0 < MaxCloaking < 1) and the level ramps.
+        public float EnergyDrain;
+        public float MaxCloaking;
+        public float OnRate;
+        public float OffRate;
+
+        // Additive radar-signature bias while equipped (Part.Signature; stock leaves it 0). SERVER-
+        // ONLY and last — the client never reads signatures (ShipClassDef.SignatureBias precedent).
+        [WireIgnore]
+        public float Signature;
     }
 
     // One per base type.
@@ -764,8 +858,8 @@ namespace StellarAllegiance.Shared
         // NEUTRAL at 1.0 (the field initializers ARE the stock values, so an omitted knob keeps
         // fog behavior byte-identical to fire-boost-only):
         //  - BoostSignatureMult: full-afterburner loudness, ramped by AbPower (0..1).
-        //  - ShieldSignatureMult: applied while a hull has an EQUIPPED shield (ShieldCapacity > 0),
-        //    regardless of the current pool.
+        //  - ShieldSignatureMult: applied while the ship has a shield part EQUIPPED (its effective
+        //    capacity > 0), regardless of the current pool.
         //  - DustSignatureMult: applied scaled by dust coverage at the ship's position (<1 = hiding
         //    in a cloud makes you quieter; stacks with the DustVisionMult sightline attenuation).
         public float BoostSignatureMult = 1f;

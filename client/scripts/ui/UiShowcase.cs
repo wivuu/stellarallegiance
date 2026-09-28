@@ -472,6 +472,124 @@ public partial class UiShowcase : Control
             cardRow.AddChild(card);
         s.AddChild(cardRow);
 
+        // Docked-screen EQUIPMENT rows (equipment PR): the same LoadoutSlot component the weapon
+        // hardpoint rows use, tagged E1/E2/E3 — a shield and afterburner equipped, a cloak launched
+        // deliberately empty (hidden-not-greyed applies to the ROW, not this fixture: a hull with no
+        // slot at all just omits the row entirely, which the hangar's RefreshEquipmentSection does).
+        s.AddChild(UiKit.MakeLabel("// DOCKED SCREEN — EQUIPMENT ROWS", UiKit.TextStyle.Data, DesignTokens.TextDim));
+        var equipRow = new HBoxContainer();
+        equipRow.AddThemeConstantOverride("separation", 18);
+        var eq1 = new LoadoutSlot { CustomMinimumSize = new Vector2(220, 0) };
+        eq1.Configure("E1 · SHIELD", "SM SHIELD 1", "STR 51 · REGEN 0.69/s · DELAY 0s");
+        var eq2 = new LoadoutSlot { CustomMinimumSize = new Vector2(220, 0) };
+        eq2.Configure("E2 · AFTERBURNER", "BOOSTER 1", "THRUST +36.7 · FUEL 1.22/s");
+        var eq3 = new LoadoutSlot { CustomMinimumSize = new Vector2(220, 0), Accent = DesignTokens.TextDim };
+        eq3.Configure("E3 · CLOAK", "— EMPTY —", "");
+        foreach (var eq in new[] { eq1, eq2, eq3 })
+            equipRow.AddChild(eq);
+        s.AddChild(equipRow);
+
+        // HUD system ring (equipment PR): three fixed states via SetMock, since the live ring needs a
+        // world/camera/defs the gallery doesn't have — full pools; a cloak engaged and draining an
+        // energy pool near empty (ENRG arc + CLK tag both go Danger); a dry magazine with a pack
+        // mid-load (the AMMO slot reads LOAD nn% with the inner sweep arc, per the ring's design).
+        // One state per row (not side by side): the ring is a full-viewport overlay in flight, so its
+        // tag text is never clipped to a bounding box — cramming three into one row would spill each
+        // ring's tags into its neighbour's. A wide, tall box per row gives every tag clear room.
+        s.AddChild(UiKit.MakeLabel("// HUD — SYSTEM RING", UiKit.TextStyle.Data, DesignTokens.TextDim));
+
+        void RingDemo(string caption, SystemRing.RingReadout readout)
+        {
+            s.AddChild(UiKit.MakeLabel(caption, UiKit.TextStyle.Data, DesignTokens.Text2));
+            var ring = new SystemRing { CustomMinimumSize = new Vector2(520, 280) };
+            s.AddChild(ring);
+            ring.SetMock(readout);
+        }
+
+        RingDemo(
+            "FULL",
+            new SystemRing.RingReadout(
+                Health: 100f,
+                MaxHealth: 100f,
+                Shield: 60f,
+                MaxShield: 60f,
+                Fuel: 60f,
+                MaxFuel: 60f,
+                HasAfterburner: true,
+                FuelLoading: false,
+                FuelLoadFrac: 0f,
+                FuelPods: 2,
+                ShowEnergy: true,
+                Energy: 1200f,
+                MaxEnergy: 1200f,
+                ShowAmmo: true,
+                Ammo: 720,
+                MaxAmmo: 720,
+                AmmoPacks: 2,
+                AmmoLoading: false,
+                AmmoLoadFrac: 0f,
+                HasCloak: false,
+                CloakLevel: 0f,
+                CloakEngaged: false
+            )
+        );
+
+        RingDemo(
+            "CLOAKED AND DRAINING",
+            new SystemRing.RingReadout(
+                Health: 85f,
+                MaxHealth: 100f,
+                Shield: 30f,
+                MaxShield: 60f,
+                Fuel: 0f,
+                MaxFuel: 0f,
+                HasAfterburner: false,
+                FuelLoading: false,
+                FuelLoadFrac: 0f,
+                FuelPods: 0,
+                ShowEnergy: true,
+                Energy: 90f,
+                MaxEnergy: 1440f,
+                ShowAmmo: false,
+                Ammo: 0,
+                MaxAmmo: 0,
+                AmmoPacks: 0,
+                AmmoLoading: false,
+                AmmoLoadFrac: 0f,
+                HasCloak: true,
+                CloakLevel: 0.6f,
+                CloakEngaged: true
+            )
+        );
+
+        RingDemo(
+            "NO AMMO WITH LOAD",
+            new SystemRing.RingReadout(
+                Health: 100f,
+                MaxHealth: 100f,
+                Shield: 60f,
+                MaxShield: 60f,
+                Fuel: 40f,
+                MaxFuel: 60f,
+                HasAfterburner: true,
+                FuelLoading: false,
+                FuelLoadFrac: 0f,
+                FuelPods: 1,
+                ShowEnergy: false,
+                Energy: 0f,
+                MaxEnergy: 0f,
+                ShowAmmo: true,
+                Ammo: 0,
+                MaxAmmo: 720,
+                AmmoPacks: 1,
+                AmmoLoading: true,
+                AmmoLoadFrac: 0.4f,
+                HasCloak: false,
+                CloakLevel: 0f,
+                CloakEngaged: false
+            )
+        );
+
         // HUD crew-gunner strip (ride-along): shown top-centre in game while you man a teammate's
         // turret station. Rendered here from SetMock so the gallery needs no live world.
         s.AddChild(UiKit.MakeLabel("// HUD — CREW GUNNER STRIP", UiKit.TextStyle.Data, DesignTokens.TextDim));

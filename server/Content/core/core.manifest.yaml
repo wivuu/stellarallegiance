@@ -20,7 +20,7 @@
 #  loaded separately at boot (SIM_WORLD / --world overrides it).
 # =====================================================================
 
-version: "2026.07.16-tech-tree-p6"
+version: "2026.09.27-equipment"
 
 catalog:
   - hulls.yaml
@@ -28,6 +28,7 @@ catalog:
   - weapons.yaml
   - expendables.yaml
   - launchers.yaml
+  - equipment.yaml
   - stations.yaml
   - techs.yaml
   - developments.yaml

@@ -280,6 +280,12 @@ namespace StellarAllegiance.Shared
         // DropChaff/DropMine; the server's TryDeployProbe (Simulation.Probes.cs) reads it directly
         // with its own authoritative cadence gate.
         public bool DropProbe;
+
+        // Cloak engaged — a held LEVEL (the client's toggle latch, sent every tick), never an edge:
+        // held-input replay repeats the last input, so a one-tick press would be replayed or lost.
+        // Rides the input ring / HeldInput replay untouched by Integrate; ShipResources.EnergyStep
+        // reads it as cloakHeld on both peers.
+        public bool Cloak;
     }
 
     // A hull's flight feel: the human-authored "nine knobs + afterburner" (top block)
@@ -376,27 +382,32 @@ namespace StellarAllegiance.Shared
             };
         }
 
-        // Build the ShipStats from a ShipClassDef's authored f32s — the SINGLE path both server
-        // authority and client prediction take, so the YAML-authored def drives identical flight on
-        // both sides (the def, sourced from the content bundle, is the one source of truth).
-        public static ShipStats FromDef(ShipClassDef d) =>
+        // Build the ShipStats from a hull's authored flight block plus its EQUIPPED afterburner part —
+        // the SINGLE path both server authority and client prediction take, so identical defs and
+        // identical equipment drive identical flight on both sides (the content bundle is the one
+        // source of truth). The part supplies the boost: AbAccel (extra forward accel on the hull's
+        // Accel scale), its power ramps and the FuelDrain per second of burn. null = no afterburner
+        // (an emptied slot, or a hull without one): all four 0, so Integrate never boosts. The TANK
+        // stays the hull's (MaxFuel / AbFuelRecharge), so a hull whose slot is emptied keeps its fuel
+        // untouched. No default argument on purpose: every caller decides which part the ship carries.
+        public static ShipStats FromDef(ShipClassDef hull, EquipmentDef? afterburner) =>
             Create(
-                d.MaxSpeed,
-                d.Accel,
-                d.Mass,
-                d.RateYawDeg,
-                d.RatePitchDeg,
-                d.RateRollDeg,
-                d.DriftYawDeg,
-                d.DriftPitchDeg,
-                d.SideMult,
-                d.BackMult,
-                d.AbAccel,
-                d.AbOnRate,
-                d.AbOffRate,
-                d.MaxFuel,
-                d.AbFuelDrain,
-                d.AbFuelRecharge
+                hull.MaxSpeed,
+                hull.Accel,
+                hull.Mass,
+                hull.RateYawDeg,
+                hull.RatePitchDeg,
+                hull.RateRollDeg,
+                hull.DriftYawDeg,
+                hull.DriftPitchDeg,
+                hull.SideMult,
+                hull.BackMult,
+                afterburner?.AbAccel ?? 0f,
+                afterburner?.AbOnRate ?? 0f,
+                afterburner?.AbOffRate ?? 0f,
+                hull.MaxFuel,
+                afterburner?.FuelDrain ?? 0f,
+                hull.AbFuelRecharge
             );
     }
 

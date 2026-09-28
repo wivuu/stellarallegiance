@@ -518,18 +518,17 @@ public sealed class FrameApplier
         _host.RaiseMatchStatsChanged();
     }
 
-    // MsgShipLoadout: the full per-ship weapon-mount override table — effective per-barrel weapon
-    // ids (hardpoint declaration order; uint.MaxValue = emptied slot) plus the ship's INERT cargo
-    // hold (salvage kind byte 0 part / 1 cargo / 2 missiles, item def id, count) for every ship
-    // flying a NON-authored loadout or carrying anything in its hold (reconcile-by-omission: a ship
-    // absent from the frame flies its authored class loadout with an empty hold). Forward whole to
-    // WorldRenderer, which owns the render-side mirror (remote bolt mounts + own-ship prediction
-    // loadout + the owner's HOLD readout).
+    // MsgShipLoadout: the full per-ship loadout table — effective per-barrel weapon ids (hardpoint
+    // declaration order; uint.MaxValue = emptied slot), the ship's INERT cargo hold (salvage kind byte
+    // 0 part / 1 cargo / 2 missiles, item def id, count), its turret station guns and its effective
+    // EQUIPMENT by slot, for every ship flying anything non-authored (reconcile-by-omission: a ship
+    // absent from the frame flies its authored class loadout, default equipment and an empty hold).
+    // Forward whole to ShipRenderer, which owns the render-side mirror (remote bolt mounts + boost
+    // plume, own-ship prediction loadout/equipment + the owner's HOLD readout). The local ship id
+    // rides along: a table that leaves OUR ship out is the server's word that it flies the defaults.
     private void ApplyShipLoadout(ShipLoadoutMessage m)
     {
-        var table = new List<(ulong shipId, uint[] ids, (byte kind, uint itemId, byte count)[] hold, uint[] turretGuns)>(
-            m.Ships.Length
-        );
+        var table = new List<ShipRenderer.LoadoutRow>(m.Ships.Length);
         foreach (var s in m.Ships)
         {
             var hold =
@@ -538,9 +537,9 @@ public sealed class FrameApplier
                     : new (byte kind, uint itemId, byte count)[s.Hold.Length];
             for (int i = 0; i < s.Hold.Length; i++)
                 hold[i] = (s.Hold[i].Kind, s.Hold[i].ItemId, s.Hold[i].Count);
-            table.Add((s.ShipId, s.WeaponIds, hold, s.TurretWeaponIds));
+            table.Add(new ShipRenderer.LoadoutRow(s.ShipId, s.WeaponIds, hold, s.TurretWeaponIds, s.EquipmentIds));
         }
-        _world.Ships.NetShipLoadouts(table);
+        _world.Ships.NetShipLoadouts(table, LocalShipId);
     }
 
     // MsgConstructorState: PER-TEAM constructor roster (producing + launched) for the Build tab.
@@ -698,11 +697,16 @@ public sealed class FrameApplier
             _world.Minefields.NetMinefieldGone(id);
     }
 
-    // Per-team economy (credits/score) + owned techs/caps. Low-rate — the renderer holds the latest
-    // snapshot for the HUD and the chat slash-commands to read.
+    // Per-team economy (credits/score) + owned techs/caps + the resolved stat multipliers. Low-rate —
+    // the renderer holds the latest snapshot for the HUD, the chat slash-commands and the own-ship
+    // resource predictor (which derives its energy maximum from the exact attribute bits) to read.
     private void ApplyTeamState(TeamStateMessage m)
     {
         foreach (var t in m.Teams)
+        {
+            var attrs = new (byte Attr, float Mult)[t.Attributes.Length];
+            for (int i = 0; i < attrs.Length; i++)
+                attrs[i] = (t.Attributes[i].Attr, t.Attributes[i].Mult);
             _world.TeamState.Apply(
                 new TeamStateStore.TeamStateSnapshot(
                     t.Team,
@@ -714,9 +718,11 @@ public sealed class FrameApplier
                     t.DiscoveredRockClasses,
                     t.MinerCount,
                     t.MinerCap,
-                    t.BuildQueueLimit
+                    t.BuildQueueLimit,
+                    attrs
                 )
             );
+        }
     }
 
     // MsgResearchState: PER-TEAM research orders at our team's bases. Bases absent from the frame are
@@ -1125,6 +1131,7 @@ public sealed class FrameApplier
                 LastFireTick = rec.LastFireTick,
                 MissileAmmo = rec.MissileAmmo,
                 LockState = rec.LockState,
+                Pools = rec.Pools, // exact: the pools LastInputTick's fire phase started with
             };
             // Surface the LOCAL ship's authoritative missile/chaff/mine ammo + lock/threat state for the HUD.
             if (rec.ShipId == LocalShipId)
@@ -1147,9 +1154,10 @@ public sealed class FrameApplier
                 LocalThreatLock = rec.ThreatLock;
             }
             // Mass isn't on the wire: re-derive from the LOADED def (the same content the server
-            // seeds from), so a YAML-overridden mass matches server authority. No compile-time
-            // fallback — by the time ship snapshots arrive the MsgDefs frame has been applied.
-            row.Mass = _defs.TryGetStats((byte)row.Class, row.IsPod, out var massStats) ? massStats.Mass : 0f;
+            // seeds from), so a YAML-overridden mass matches server authority. Equipment never
+            // changes flight mass, so the hull's is every ship's. No compile-time fallback — by the
+            // time ship snapshots arrive the MsgDefs frame has been applied.
+            row.Mass = _defs.HullMass((byte)row.Class, row.IsPod);
 
             _seenThisSnapshot.Add(rec.ShipId);
             if (prev is null)

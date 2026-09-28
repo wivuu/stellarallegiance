@@ -4,8 +4,8 @@ using Factions = Allegiance.Factions.Model;
 
 namespace SimServer.Content;
 
-// The resolved content the server runs a match on and streams to clients: ship/weapon/base defs
-// plus the world-scale config. ONE source of truth — authored entirely in the YAML content bundle
+// The resolved content the server runs a match on and streams to clients: ship/weapon/base/
+// equipment defs plus the world-scale config. ONE source of truth — authored entirely in the YAML content bundle
 // and loaded at boot (ContentLoader); the sim resolves stats from it (Simulation) and the wire
 // encodes it verbatim (Protocol.BuildDefs), so server authority and client prediction never drift.
 // There are NO compile-in content defaults: the values come from YAML, never from code.
@@ -17,6 +17,10 @@ public sealed class ContentSet
     public IReadOnlyList<CargoItemDef> CargoItems { get; }
     public WorldConfig World { get; }
 
+    // The equipment catalog (shields → afterburners → cloaks; list index = EquipmentId), streamed
+    // in MsgDefs. ShipClassDef.AllowedEquipment / DefaultEquipment index into it.
+    public IReadOnlyList<EquipmentDef> Equipment { get; }
+
     // Stage-4 tech paths: the projected research catalog, streamed in MsgDefs (Protocol.BuildDefs)
     // and indexed by the sim's research engine (Simulation.Research). Tech WIRE INDICES are the
     // positions in Techs (authored Core list order — deterministic); TechIndexById maps the
@@ -27,8 +31,8 @@ public sealed class ContentSet
     public IReadOnlyDictionary<string, ushort> TechIndexById { get; }
 
     // Stage-2 strategy spine: the team's per-match STARTING state (credits/income + tech/capability
-    // seed) projected from the faction. Server-only — NOT part of the wire defs (Protocol.BuildDefs
-    // encodes only Ships/Weapons/CargoItems/Bases/World).
+    // seed) projected from the faction. Server-only — only its faction name + base attributes ride
+    // the wire defs (Frames.Defs).
     public FactionStart Start { get; }
 
     // The source catalog this set was projected from. Server-only (never streamed): the Stage-2
@@ -47,7 +51,8 @@ public sealed class ContentSet
         IReadOnlyList<TechDef>? techs = null,
         IReadOnlyList<DevelopmentDef>? developments = null,
         IReadOnlyList<StationCatalogDef>? stationCatalog = null,
-        IReadOnlyDictionary<string, ushort>? techIndexById = null
+        IReadOnlyDictionary<string, ushort>? techIndexById = null,
+        IReadOnlyList<EquipmentDef>? equipment = null
     )
     {
         Ships = ships;
@@ -61,5 +66,6 @@ public sealed class ContentSet
         Developments = developments ?? System.Array.Empty<DevelopmentDef>();
         StationCatalog = stationCatalog ?? System.Array.Empty<StationCatalogDef>();
         TechIndexById = techIndexById ?? new Dictionary<string, ushort>();
+        Equipment = equipment ?? System.Array.Empty<EquipmentDef>();
     }
 }

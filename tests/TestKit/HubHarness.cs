@@ -91,6 +91,38 @@ public static class HubFrames
             Mounts = Array.Empty<MountOverrideRecord>(),
         }.ToBytes();
 
+    // A hangar spawn with EQUIPMENT picks (the MsgSpawn equipment tail): overridden slots only, each
+    // (EquipmentDef.Slot*, part id); EquipmentDef.NoEquipment launches with that slot empty. `cargo`
+    // is the hold the hangar ships alongside — empty means a deliberately EMPTY hold (the hangar always
+    // sends its real cargo when it sends equipment).
+    public static byte[] Spawn(
+        byte shipClass,
+        (byte slot, ushort equipmentId)[] equipment,
+        ulong launchBaseId = 0,
+        (uint cargoId, byte count)[]? cargo = null
+    )
+    {
+        var picks = new EquipmentOverrideRecord[equipment.Length];
+        for (int i = 0; i < picks.Length; i++)
+            picks[i] = new EquipmentOverrideRecord { Slot = equipment[i].slot, EquipmentId = equipment[i].equipmentId };
+        var hold = new StellarAllegiance.Shared.CargoLoadDef[cargo?.Length ?? 0];
+        for (int i = 0; i < hold.Length; i++)
+            hold[i] = new StellarAllegiance.Shared.CargoLoadDef { CargoId = cargo![i].cargoId, Count = cargo[i].count };
+        return new SpawnMessage
+        {
+            ShipClass = shipClass,
+            LaunchBaseId = launchBaseId,
+            Cargo = hold,
+            Mounts = Array.Empty<MountOverrideRecord>(),
+            Equipment = picks,
+        }.ToBytes();
+    }
+
+    // A pilot's flight input, tick-stamped (0 = unstamped: the sim holds it from the next step).
+    // Every InputFlags bit — the cloak LEVEL included — rides through InputMessage.From.
+    public static byte[] Input(uint tick, in StellarAllegiance.Shared.ShipInputState input) =>
+        InputMessage.From(tick, input).ToBytes();
+
     // A docked captain's crew advertisement: the hull teammates may crew plus the FULL per-station
     // gun pick list (empty = every station keeps its authored gun). ClassId 0xFF retracts.
     public static byte[] HangarIntent(byte classId, params (byte hpIndex, uint weaponId)[] turrets)

@@ -278,6 +278,10 @@ public sealed class World
     public float TeamAttr(byte team, int attrId) =>
         _teamAttr.TryGetValue(team, out var a) && (uint)attrId < (uint)a.Length ? a[attrId] : 1f;
 
+    // The team's whole cached vector, indexed by attribute id (empty when unseeded = every attr 1.0) —
+    // what Frames.TeamState streams to the clients (its non-neutral entries).
+    public ReadOnlySpan<float> TeamAttributes(byte team) => _teamAttr.TryGetValue(team, out var a) ? a : default;
+
     public void SetTeamAttributes(byte team, float[] attrs) => _teamAttr[team] = attrs;
 
     public void ClearTeamAttributes() => _teamAttr.Clear();

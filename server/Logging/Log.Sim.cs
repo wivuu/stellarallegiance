@@ -3,8 +3,7 @@ using Microsoft.Extensions.Logging;
 namespace SimServer;
 
 // Sim-layer log messages: Simulation (1400–1409), World (1410), salvage (1411–1414), crew
-// (1415–1416). See
-// Log.Server.cs for the map.
+// (1415–1419), equipment + ammo spawn validation (1420–1422). See Log.Server.cs for the map.
 internal static partial class Log
 {
     [LoggerMessage(EventId = 1401, Level = LogLevel.Information, Message = "match started")]
@@ -137,4 +136,28 @@ internal static partial class Log
         Message = "[crew] captain {CaptainClientId} crew unbound from ship {ShipId}: {Reason}"
     )]
     public static partial void CrewUnbound(ILogger logger, int captainClientId, ulong shipId, string reason);
+
+    // ---- Equipment + ammo spawn validation (Simulation.Equipment.cs / ResolveLoadout) ----
+    // Warnings like the mount/cargo rejections above: only a hacked or buggy client sends these (the
+    // hangar gates slot, part, tech and hull before it sends), and each reverts the WHOLE loadout.
+    [LoggerMessage(
+        EventId = 1420,
+        Level = LogLevel.Warning,
+        Message = "spawn equipment slot {Slot} -> part {EquipmentId} is invalid for class {Cls} — using authored loadout"
+    )]
+    public static partial void SpawnEquipmentInvalid(ILogger logger, byte slot, ushort equipmentId, byte cls);
+
+    [LoggerMessage(
+        EventId = 1421,
+        Level = LogLevel.Warning,
+        Message = "spawn equipment part {EquipmentId} is tech-locked for team {Team} — using authored loadout"
+    )]
+    public static partial void SpawnEquipmentTechLocked(ILogger logger, ushort equipmentId, byte team);
+
+    [LoggerMessage(
+        EventId = 1422,
+        Level = LogLevel.Warning,
+        Message = "spawn cargo {CargoId} is ammo but class {Cls} has no magazine — using authored loadout"
+    )]
+    public static partial void SpawnAmmoCargoOnAmmolessHull(ILogger logger, uint cargoId, byte cls);
 }

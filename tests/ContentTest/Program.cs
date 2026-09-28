@@ -32,8 +32,17 @@ string stockPath = Path.Combine(AppContext.BaseDirectory, "content", "core", "co
 string worldPath = Path.Combine(AppContext.BaseDirectory, "content", "core", "world.yaml");
 var stock = ContentLoader.Load(stockPath, worldPath);
 
-// 1. The shipped bundle is valid content.
-var errors = ContentValidator.Validate(stock.Ships, stock.Weapons, stock.Bases, stock.CargoItems);
+// 1. The shipped bundle is valid content (every catalog the server's boot gate passes, Program.cs).
+var errors = ContentValidator.Validate(
+    stock.Ships,
+    stock.Weapons,
+    stock.Bases,
+    stock.CargoItems,
+    stock.Techs,
+    stock.Developments,
+    stock.StationCatalog,
+    stock.Equipment
+);
 Check(errors.Count == 0, "stock bundle passes ContentValidator", $"stock bundle invalid: {string.Join("; ", errors)}");
 
 // 2a. The loader maps fields correctly (guards a mis-mapped/swapped key).
@@ -423,17 +432,18 @@ Check(
 
 // Cargo items: the seeker lost its cargo-id (missiles aren't hold consumables — payload can't fit
 // mass-4 seekers), so the hold lists the real consumables — proximity-mine (2) + sensor-decoy
-// (3) + recon-probe (4) + fuel-pod (5, the fuels: section).
+// (3) + recon-probe (4) + fuel-pod (5, the fuels: section) + ammo pack (6, the ammo-packs: section,
+// appended after fuels so the cargo catalog order is stable).
 Check(
-    stock.CargoItems.Count == 4
-        && stock.CargoItems.Select(c => c.CargoId).OrderBy(id => id).SequenceEqual(new uint[] { 2, 3, 4, 5 })
+    stock.CargoItems.Count == 5
+        && stock.CargoItems.Select(c => c.CargoId).SequenceEqual(new uint[] { 2, 3, 4, 5, 6 })
         && stock.CargoItems.First(c => c.CargoId == 2).Mass == 1f
         && stock.CargoItems.First(c => c.CargoId == 3).Mass == 1f
         && stock.CargoItems.First(c => c.CargoId == 3).Glyph.Length > 0
         && stock.CargoItems.First(c => c.CargoId == 4).Mass == 2f
         && stock.CargoItems.First(c => c.CargoId == 4).ChargesPerPack == 2
         && stock.CargoItems.First(c => c.CargoId == 4).Glyph.Length > 0,
-    "loader projected cargo items from expendables (mine + decoy + probe + fuel pod)",
+    "loader projected cargo items from expendables in catalog order (mine + decoy + probe + fuel pod + ammo pack)",
     $"cargo items wrong (count {stock.CargoItems.Count}, ids {string.Join(",", stock.CargoItems.Select(c => c.CargoId).OrderBy(id => id))})"
 );
 
@@ -449,27 +459,56 @@ Check(
     $"fuel pod wrong (yield {stock.CargoItems.First(c => c.CargoId == 5).FuelPerCharge}, mass {stock.CargoItems.First(c => c.CargoId == 5).Mass})"
 );
 
-// Booster fuel: only the fighter is authored with a fuel gauge (max-fuel/ab-fuel-drain/
-// ab-fuel-recharge); the scout carries none (all-zero, unmodeled/unlimited boost).
-var fighter = stock.Ships.First(s => s.ClassId == FlightModel.ClassFighter);
+// Ammo pack (cargo-id 6): the fuel pod's twin — AmmoPerCharge 1000 (IGC amount) marks it an ammo
+// item, loads over 2 s (40 ticks) out of the hold; every other cargo item projects AmmoPerCharge 0.
+var ammoPack = stock.CargoItems.First(c => c.CargoId == 6);
 Check(
-    fighter.MaxFuel == 15f && fighter.AbFuelDrain == 3f && fighter.AbFuelRecharge == 0.5f,
-    "loader projected fighter booster-fuel stats",
-    $"fighter fuel wrong (max {fighter.MaxFuel}, drain {fighter.AbFuelDrain}, recharge {fighter.AbFuelRecharge})"
+    ammoPack.AmmoPerCharge == 1000
+        && ammoPack.FuelPerCharge == 0f
+        && ammoPack.Mass == 1f
+        && ammoPack.ChargesPerPack == 1
+        && ammoPack.ReloadTicks == 40
+        && ammoPack.Glyph == "◓"
+        && ammoPack.ModelName == "acs29"
+        && stock.CargoItems.Where(c => c.CargoId != 6).All(c => c.AmmoPerCharge == 0),
+    "loader projected the ammo pack (cargo-id 6: AmmoPerCharge 1000, mass 1, 40-tick load, acs29) and left the rest at 0",
+    $"ammo pack wrong (ammo {ammoPack.AmmoPerCharge}, fuel {ammoPack.FuelPerCharge}, mass {ammoPack.Mass}, load {ammoPack.ReloadTicks}, glyph '{ammoPack.Glyph}', model {ammoPack.ModelName})"
 );
 Check(
-    scout.MaxFuel == 0f && scout.AbFuelDrain == 0f && scout.AbFuelRecharge == 0f,
-    "loader projected scout as fuel-unmodeled (no afterburner)",
-    $"scout fuel wrong (max {scout.MaxFuel}, drain {scout.AbFuelDrain}, recharge {scout.AbFuelRecharge})"
+    stock.Ships.All(s => !s.DefaultCargo.Any(l => l.CargoId == 6)),
+    "no stock hull carries ammo packs in its default cargo (pilots stock them in the hangar)",
+    $"a default cargo carries ammo packs: [{string.Join(",", stock.Ships.Where(s => s.DefaultCargo.Any(l => l.CargoId == 6)).Select(s => s.Name))}]"
 );
 
-// Lt Interceptor (cls 3): the dock-only booster hull — big tank, no in-flight regen, and its
+// Booster fuel: the tank is a HULL stat (IGC maxFuel, dock-only everywhere), the drain belongs to the
+// equipped afterburner PART — the default here, Booster 1. Every booster-slot hull authors a tank; the
+// scout has no booster slot and so no tank.
+float DefaultBoosterDrain(ShipClassDef h) =>
+    h.DefaultEquipmentFor(EquipmentDef.SlotAfterburner) is var ab && ab != EquipmentDef.NoEquipment
+        ? stock.Equipment[ab].FuelDrain
+        : 0f;
+var fighter = stock.Ships.First(s => s.ClassId == FlightModel.ClassFighter);
+Check(
+    fighter.MaxFuel == 17f && fighter.AbFuelRecharge == 0f && DefaultBoosterDrain(fighter) == 1.2221f,
+    "loader projected fighter tank (IGC 17, dock-only) + default Booster 1 drain (1.2221/s)",
+    $"fighter fuel wrong (max {fighter.MaxFuel}, drain {DefaultBoosterDrain(fighter)}, recharge {fighter.AbFuelRecharge})"
+);
+Check(
+    scout.MaxFuel == 0f
+        && scout.AbFuelRecharge == 0f
+        && scout.DefaultEquipmentFor(EquipmentDef.SlotAfterburner) == EquipmentDef.NoEquipment
+        && !scout.AllowedEquipment.Any(id => stock.Equipment[id].Slot == EquipmentDef.SlotAfterburner),
+    "loader projected scout as fuel-unmodeled (no afterburner slot, no tank)",
+    $"scout fuel wrong (max {scout.MaxFuel}, recharge {scout.AbFuelRecharge}, default booster {scout.DefaultEquipmentFor(EquipmentDef.SlotAfterburner)})"
+);
+
+// Lt Interceptor (cls 3): the dock-only booster hull — IGC tank 13, no in-flight regen, and its
 // authored default hold carries the 2-pod fuel reserve (cargo-id 5) alongside the decoys.
 var interceptor = stock.Ships.First(s => s.ClassId == 3);
 Check(
-    interceptor.MaxFuel == 60f && interceptor.AbFuelDrain == 4f && interceptor.AbFuelRecharge == 0f,
-    "loader projected interceptor booster-fuel stats (60 / 4 / dock-only)",
-    $"interceptor fuel wrong (max {interceptor.MaxFuel}, drain {interceptor.AbFuelDrain}, recharge {interceptor.AbFuelRecharge})"
+    interceptor.MaxFuel == 13f && DefaultBoosterDrain(interceptor) == 1.2221f && interceptor.AbFuelRecharge == 0f,
+    "loader projected interceptor booster fuel (IGC tank 13 / Booster 1 drain 1.2221 / dock-only)",
+    $"interceptor fuel wrong (max {interceptor.MaxFuel}, drain {DefaultBoosterDrain(interceptor)}, recharge {interceptor.AbFuelRecharge})"
 );
 Check(
     interceptor.DefaultCargo.Any(l => l.CargoId == 5 && l.Count == 2),
@@ -728,8 +767,12 @@ Check(
 // and stream in MsgDefs. Tech references ride the wire as u16 INDICES into the tech list, so resolve
 // them via TechIndexById rather than hardcoding an index.
 Check(
-    stock.Techs.Count == 30 && stock.TechIndexById.Count == 30,
-    "loader projected 30 Iron Coalition + ordnance techs (TechIndexById has 30 entries; +14 Phase-6 ordnance techs appended at the tail, seeker-2 at index 16)",
+    stock.Techs.Count == 42
+        && stock.TechIndexById.Count == 42
+        && stock.TechIndexById["seeker-2"] == 16
+        && stock.TechIndexById["sm-shield-2"] == 30
+        && stock.TechIndexById["hvy-booster"] == 41,
+    "loader projected 42 Iron Coalition techs (+14 ordnance at 16-29, +12 equipment at 30-41: sm-shield-2 30 … hvy-booster 41)",
     $"tech count wrong (techs {stock.Techs.Count}, index {stock.TechIndexById.Count})"
 );
 
@@ -744,8 +787,8 @@ Check(
     $"dev-gat-2 required-tech wrong (idx [{string.Join(",", devGat2.RequiredTechIdx)}], supremacy-1 idx {supremacyIdx})"
 );
 Check(
-    stock.Developments.Count == 27 && stock.Developments.All(d => d.Price > 0 && d.BuildTimeSeconds > 0),
-    "loader projected 27 developments, all with positive price + build-time (+14 Phase-6 ordnance devs appended at the tail)",
+    stock.Developments.Count == 39 && stock.Developments.All(d => d.Price > 0 && d.BuildTimeSeconds > 0),
+    "loader projected 39 developments, all with positive price + build-time (+14 ordnance devs at 13-26, +12 equipment devs at 27-38)",
     $"development projection wrong (count {stock.Developments.Count}, "
         + $"nonpositive {stock.Developments.Count(d => d.Price <= 0 || d.BuildTimeSeconds <= 0)})"
 );
@@ -839,6 +882,229 @@ Check(
     $"nanite projection wrong (n1 heal {nanite1.IsHealing} dmg {nanite1.Damage} base {nanite1.CanDamageBase} tick {nanite1.FireIntervalTicks}, n3 techIdx [{string.Join(",", nanite3.RequiredTechIdx)}])"
 );
 
+// 2i. Equipment (equipment PR): every shield / afterburner / cloak projects into ONE catalog in
+// Core.AllEquipment() order — shields 0-8, afterburners 9-15, Sig Cloak 1 = 16 — whose list index IS
+// the EquipmentId every allowed/default/successor reference carries.
+const ushort NoEq = EquipmentDef.NoEquipment;
+const ushort CrsBooster = 14;
+var eq = stock.Equipment;
+string[] eqNames =
+{
+    "Sm Shield 1",
+    "Sm Shield 2",
+    "Sm Shield 3",
+    "Med Shield 1",
+    "Med Shield 2",
+    "Med Shield 3",
+    "Lrg Shield 1",
+    "Lrg Shield 2",
+    "Lrg Shield 3",
+    "Booster 1",
+    "Booster 2",
+    "Booster 3",
+    "Lt Booster 1",
+    "Lt Booster 2",
+    "Crs Booster",
+    "Hvy Booster",
+    "Sig Cloak 1",
+};
+Check(
+    eq.Count == 17
+        && eq.Select(e => e.Name).SequenceEqual(eqNames)
+        && eq.Select((e, i) => e.EquipmentId == i).All(idIsIndex => idIsIndex)
+        && eq.Take(9).All(e => e.Slot == EquipmentDef.SlotShield)
+        && eq.Skip(9).Take(7).All(e => e.Slot == EquipmentDef.SlotAfterburner)
+        && eq[16].Slot == EquipmentDef.SlotCloak,
+    "loader projected 17 equipment parts in catalog order (shields 0-8, afterburners 9-15, Sig Cloak 1 = 16), id == index",
+    $"equipment catalog wrong ({string.Join(", ", eq.Select(e => $"{e.EquipmentId}:{e.Name}/{e.Slot}"))})"
+);
+
+// Stats are the IGC floats through the hull/gun translation rules (equipment.yaml header): shields
+// strength AND regen × 12/35 (0.342857), boosters max-thrust = IGC ÷ 30 and fuel/s = coefficient ×
+// maxThrust, the cloak raw. Only the part's own slot block is populated.
+static bool Near(float actual, double expected) => Math.Abs(actual - expected) < 1e-3;
+var sm1 = eq[0];
+var lrg3 = eq[8];
+Check(
+    Near(sm1.MaxStrength, 150 * 12.0 / 35)
+        && Near(sm1.RegenRate, 2 * 12.0 / 35)
+        && sm1.RechargeDelaySec == 0f
+        && sm1.Mass == 2f
+        && sm1.ModelName == "acs30"
+        && Near(lrg3.MaxStrength, 4687 * 12.0 / 35)
+        && Near(lrg3.RegenRate, 40 * 12.0 / 35)
+        && eq.Take(9).All(e => e.AbAccel == 0f && e.FuelDrain == 0f && e.EnergyDrain == 0f && e.MaxCloaking == 0f),
+    "equipment shields = IGC × 0.342857 (Sm Shield 1 51.43 at 0.686/s, continuous regen; Lrg Shield 3 1606.97 at 13.71/s), other blocks 0",
+    $"shield stats wrong (sm1 {sm1.MaxStrength}/{sm1.RegenRate}/{sm1.RechargeDelaySec}, lrg3 {lrg3.MaxStrength}/{lrg3.RegenRate})"
+);
+var booster1 = eq[9];
+var hvyBooster = eq[15];
+Check(
+    Near(booster1.AbAccel, 1100 / 30.0)
+        && Near(booster1.FuelDrain, 0.001111 * 1100)
+        && booster1.AbOnRate == 0.5f
+        && booster1.AbOffRate == 2f
+        && booster1.ModelName == "acs48"
+        && Near(hvyBooster.AbAccel, 2000 / 30.0)
+        && Near(hvyBooster.FuelDrain, 0.0014 * 2000)
+        && hvyBooster.AbOnRate == 1f
+        && Near(eq[CrsBooster].AbAccel, 750 / 30.0)
+        && eq[CrsBooster].AbOnRate == 0.25f
+        && eq.Skip(9).Take(7).All(e => e.MaxStrength == 0f && e.RegenRate == 0f && e.EnergyDrain == 0f),
+    "equipment afterburners: max-thrust = IGC ÷ 30 (Booster 1 36.667, Hvy 66.667), fuel/s = IGC coefficient × maxThrust (1.222, 2.8), IGC spool rates",
+    $"booster stats wrong (b1 {booster1.AbAccel}/{booster1.FuelDrain}/{booster1.AbOnRate}/{booster1.AbOffRate}, hvy {hvyBooster.AbAccel}/{hvyBooster.FuelDrain})"
+);
+var sigCloak = eq[16];
+Check(
+    sigCloak.EnergyDrain == 115f
+        && sigCloak.MaxCloaking == 0.625f
+        && sigCloak.OnRate == 0.25f
+        && sigCloak.OffRate == 0.25f
+        && sigCloak.Mass == 3f
+        && sigCloak.ModelName == "acs38"
+        && sigCloak.RequiredTechIdx.Length == 0
+        && sigCloak.SucceededById == NoEq
+        && sigCloak.MaxStrength == 0f
+        && sigCloak.AbAccel == 0f,
+    "Sig Cloak 1: 115 energy/s, max-cloaking 0.625, 0.25/s ramps, mass 3, no tech gate, top tier",
+    $"cloak stats wrong (drain {sigCloak.EnergyDrain}, max {sigCloak.MaxCloaking}, on/off {sigCloak.OnRate}/{sigCloak.OffRate})"
+);
+Check(
+    eq.All(e => e.Signature == 0f),
+    "no stock equipment authors a signature (Allegiance authors part signatures but never applies them)",
+    $"stock equipment signature leaked ([{string.Join(",", eq.Where(e => e.Signature != 0f).Select(e => e.Name))}])"
+);
+
+// Tier chains + tech gates resolve to ids / indices (a saved tier migrates to SucceededById once any
+// ObsoletedByTechIdx is owned — same rule as the gun lines).
+ushort TechIdx(string id) => stock.TechIndexById[id];
+Check(
+    eq.Select(e => e.SucceededById)
+        .SequenceEqual(new ushort[] { 1, 2, NoEq, 4, 5, NoEq, 7, 8, NoEq, 10, 11, NoEq, 13, NoEq, NoEq, NoEq, NoEq }),
+    "equipment tier chains resolve to ids (Sm/Med/Lrg Shield 1→2→3, Booster 1→2→3, Lt Booster 1→2; Crs/Hvy Booster + Sig Cloak are top tiers)",
+    $"equipment successors wrong ([{string.Join(",", eq.Select(e => e.SucceededById))}])"
+);
+Check(
+    eq[0].RequiredTechIdx.Length == 0
+        && eq[0].ObsoletedByTechIdx.SequenceEqual(new[] { TechIdx("sm-shield-2") })
+        && eq[1].RequiredTechIdx.SequenceEqual(new[] { TechIdx("sm-shield-2") })
+        && eq[1].ObsoletedByTechIdx.SequenceEqual(new[] { TechIdx("sm-shield-3") })
+        && eq[3].RequiredTechIdx.Length == 0
+        && eq[6].RequiredTechIdx.SequenceEqual(new[] { TechIdx("shipyard-1") })
+        && eq[9].RequiredTechIdx.Length == 0
+        && eq[12].RequiredTechIdx.SequenceEqual(new[] { TechIdx("lt-booster-1") })
+        && eq[CrsBooster].RequiredTechIdx.SequenceEqual(new[] { TechIdx("crs-booster") })
+        && eq[15].RequiredTechIdx.SequenceEqual(new[] { TechIdx("hvy-booster") }),
+    "equipment tech gates resolve by index (Sm/Med Shield 1, Booster 1, Sig Cloak 1 free; Lrg Shield 1 on shipyard-1; Lt/Crs/Hvy Booster researched)",
+    $"equipment tech gates wrong (sm1 obs [{string.Join(",", eq[0].ObsoletedByTechIdx)}], lrg1 req [{string.Join(",", eq[6].RequiredTechIdx)}])"
+);
+
+// Per hull: the allowed set (listed parts + successor chains, sorted ids), the default per slot (first
+// preferred part the slot allows whose tech gates the hull already carries), the IGC energy / ammo
+// pools and the tank. SignatureBias is the HULL's own bias only (stock 0) — parts add per ship.
+string EqList(ushort[] ids) => string.Join(",", ids.Select(i => i == NoEq ? "-" : i.ToString()));
+void HullEquipment(
+    byte cls,
+    string name,
+    ushort[] allowed,
+    ushort[] defaults,
+    float energy,
+    float recharge,
+    ushort ammo,
+    float fuel
+)
+{
+    var h = stock.Ships.First(s => s.ClassId == cls);
+    Check(
+        h.Name == name
+            && h.AllowedEquipment.SequenceEqual(allowed)
+            && h.DefaultEquipment.SequenceEqual(defaults)
+            && h.MaxEnergy == energy
+            && h.EnergyRecharge == recharge
+            && h.MaxAmmo == ammo
+            && h.MaxFuel == fuel
+            && h.SignatureBias == 0f,
+        $"{name}: allowed [{EqList(allowed)}], default [{EqList(defaults)}], energy {energy} (+{recharge}/s), ammo {ammo}, tank {fuel}",
+        $"{name} equipment wrong (name {h.Name}, allowed [{EqList(h.AllowedEquipment)}], default [{EqList(h.DefaultEquipment)}], energy {h.MaxEnergy}/{h.EnergyRecharge}, ammo {h.MaxAmmo}, fuel {h.MaxFuel}, sigBias {h.SignatureBias})"
+    );
+}
+HullEquipment(0, "Scout", new ushort[] { 0, 1, 2, 16 }, new ushort[] { 0, NoEq, NoEq }, 1200f, 60f, 960, 0f);
+HullEquipment(3, "Lt Interceptor", new ushort[] { 9, 10, 11, 12, 13 }, new ushort[] { NoEq, 9, NoEq }, 600f, 50f, 540, 13f);
+HullEquipment(
+    1,
+    "Enh Fighter",
+    new ushort[] { 0, 1, 2, 9, 10, 11, 12, 13, 14 },
+    new ushort[] { 0, 9, NoEq },
+    1200f,
+    60f,
+    720,
+    17f
+);
+
+// The Adv Fighter PREFERS the Hvy Booster (IGC order) but that part is research-locked behind a tech
+// the hull doesn't require, so the default rule falls through to Booster 1.
+HullEquipment(
+    6,
+    "Adv Fighter",
+    new ushort[] { 0, 1, 2, 9, 10, 11, 12, 13, 14, 15 },
+    new ushort[] { 0, 9, NoEq },
+    1500f,
+    90f,
+    1020,
+    20f
+);
+HullEquipment(2, "Bomber", new ushort[] { 3, 4, 5 }, new ushort[] { 3, NoEq, NoEq }, 1500f, 90f, 1440, 0f);
+HullEquipment(7, "Devastator", new ushort[] { 6, 7, 8 }, new ushort[] { 6, NoEq, NoEq }, 2500f, 100f, 3600, 0f);
+HullEquipment(4, "Miner", new ushort[] { 3, 4, 5 }, new ushort[] { 3, NoEq, NoEq }, 0f, 0f, 0, 0f);
+HullEquipment(5, "Constructor", new ushort[] { 3, 4, 5 }, new ushort[] { 3, NoEq, NoEq }, 0f, 0f, 0, 0f);
+HullEquipment(255, "Pod", System.Array.Empty<ushort>(), System.Array.Empty<ushort>(), 0f, 0f, 0, 0f);
+
+// Gun per-shot costs (IGC drain per second at our cadence): the Gat / Mini-Gun / AutoCan lines draw 2
+// rounds per shot, the ER Nanite line 60 energy; racks and dispensers never draw either.
+Check(
+    new uint[] { 0, 1, 2, 9, 10, 11, 12, 13, 14 }.All(id =>
+        stock.Weapons.First(w => w.WeaponId == id) is { AmmoPerShot: 2, EnergyPerShot: 0f }
+    )
+        && new uint[] { 15, 16, 17 }.All(id =>
+            stock.Weapons.First(w => w.WeaponId == id) is { AmmoPerShot: 0, EnergyPerShot: 60f }
+        )
+        && stock.Weapons.Where(w => w.Kind != WeaponKind.Bolt).All(w => w.AmmoPerShot == 0 && w.EnergyPerShot == 0f),
+    "gun per-shot costs projected (Gat / Mini-Gun / AutoCan 2 ammo, ER Nanite 60 energy; launchers 0)",
+    $"per-shot costs wrong ([{string.Join(",", stock.Weapons.Select(w => $"{w.WeaponId}:{w.AmmoPerShot}a/{w.EnergyPerShot}e"))}])"
+);
+
+// Equipment research: 12 tech-only EQUIPMENT devs appended at 27-38, each granting its same-named
+// tech (Lrg Shields cost 300, the rest 150; build-time = price ÷ 5).
+var equipDevs = stock.Developments.Skip(27).ToList();
+string[] equipDevIds =
+{
+    "dev-sm-shield-2",
+    "dev-sm-shield-3",
+    "dev-med-shield-2",
+    "dev-med-shield-3",
+    "dev-lrg-shield-2",
+    "dev-lrg-shield-3",
+    "dev-booster-2",
+    "dev-booster-3",
+    "dev-lt-booster-1",
+    "dev-lt-booster-2",
+    "dev-crs-booster",
+    "dev-hvy-booster",
+};
+Check(
+    equipDevs.Select(d => d.Id).SequenceEqual(equipDevIds)
+        && equipDevs.All(d =>
+            d.Group == "EQUIPMENT"
+            && d.TechOnly
+            && d.BuildTimeSeconds * 5 == d.Price
+            && d.Price == (d.Id.StartsWith("dev-lrg-") ? 300 : 150)
+            && d.GrantedTechIdx.Length == 1
+            && stock.Techs[d.GrantedTechIdx[0]].Id == d.Id["dev-".Length..]
+        ),
+    "equipment research appended at dev 27-38 (group EQUIPMENT, tech-only, 150/30s — Large Shields 300/60s — each granting its same-named tech)",
+    $"equipment developments wrong ([{string.Join(",", equipDevs.Select(d => $"{d.Id}:{d.Price}/{d.BuildTimeSeconds}"))}])"
+);
+
 // 2b. The loader is deterministic: reloading yields byte-identical wire defs (the exact bytes the
 //     client receives). Guards loader nondeterminism / iteration-order drift.
 var bytesA = Protocol.BuildDefs(ContentLoader.Load(stockPath, worldPath));
@@ -918,9 +1184,55 @@ Check(
     $"validator wrongly flagged an at-capacity loadout: {string.Join("; ", atCapErrors)}"
 );
 
+// A minimal equipment catalog for the synthetic rules below: a shield (0), two afterburners (1 thirsty,
+// 2 frugal) and a cloak (3), every stat block live, no tiers.
+EquipmentDef[] SynthEquipment() =>
+    new[]
+    {
+        new EquipmentDef
+        {
+            EquipmentId = 0,
+            Slot = EquipmentDef.SlotShield,
+            Name = "Shield",
+            MaxStrength = 50f,
+            RegenRate = 1f,
+        },
+        new EquipmentDef
+        {
+            EquipmentId = 1,
+            Slot = EquipmentDef.SlotAfterburner,
+            Name = "Booster",
+            AbAccel = 30f,
+            AbOnRate = 0.5f,
+            AbOffRate = 2f,
+            FuelDrain = 1f,
+        },
+        new EquipmentDef
+        {
+            EquipmentId = 2,
+            Slot = EquipmentDef.SlotAfterburner,
+            Name = "Lt Booster",
+            AbAccel = 15f,
+            AbOnRate = 0.5f,
+            AbOffRate = 2f,
+            FuelDrain = 0.2f,
+        },
+        new EquipmentDef
+        {
+            EquipmentId = 3,
+            Slot = EquipmentDef.SlotCloak,
+            Name = "Cloak",
+            EnergyDrain = 100f,
+            MaxCloaking = 0.5f,
+            OnRate = 0.25f,
+            OffRate = 0.25f,
+        },
+    };
+var synthEquipment = SynthEquipment();
+
 // 3c1b. Fuel default-cargo on a hull with no fuel model: dead cargo the sim could never consume —
-// the boot gate that keeps ResolveLoadout's authored-fallback path safe. The SAME hull WITH a
-// tank passes (the rule keys on MaxFuel, not the cargo itself).
+// the boot gate that keeps ResolveLoadout's authored-fallback path safe. The SAME hull WITH a tank
+// (and the afterburner slot the tank belongs to) passes: the rule keys on MaxFuel, not the cargo.
 var fuelItem = new CargoItemDef
 {
     CargoId = 50,
@@ -940,30 +1252,73 @@ var fuellessShip = new ShipClassDef
         new CargoLoadDef { CargoId = 50, Count = 2 },
     },
 };
-var fuelCargoErrors = ContentValidator.Validate(
-    new[] { fuellessShip },
-    System.Array.Empty<WeaponDef>(),
-    new[] { okBase },
-    new[] { fuelItem }
-);
+List<string> CargoErrors(ShipClassDef ship, params CargoItemDef[] items) =>
+    ContentValidator.Validate(
+        new[] { ship },
+        System.Array.Empty<WeaponDef>(),
+        new[] { okBase },
+        items,
+        equipment: synthEquipment
+    );
+var fuelCargoErrors = CargoErrors(fuellessShip, fuelItem);
 Check(
     fuelCargoErrors.Any(e => e.Contains("no fuel model")),
     "validator flags fuel default-cargo on a hull with no fuel model",
     $"validator missed fuel cargo on a fuel-less hull: {string.Join("; ", fuelCargoErrors)}"
 );
 fuellessShip.MaxFuel = 20f;
-fuellessShip.AbAccel = 10f;
-fuellessShip.AbFuelDrain = 4f;
-var fuelOkErrors = ContentValidator.Validate(
-    new[] { fuellessShip },
-    System.Array.Empty<WeaponDef>(),
-    new[] { okBase },
-    new[] { fuelItem }
-);
+fuellessShip.AllowedEquipment = new ushort[] { 1 };
+var fuelOkErrors = CargoErrors(fuellessShip, fuelItem);
 Check(
-    !fuelOkErrors.Any(e => e.Contains("no fuel model")),
-    "validator accepts fuel default-cargo once the hull models fuel",
+    !fuelOkErrors.Any(e => e.Contains("no fuel model") || e.Contains("MaxFuel")),
+    "validator accepts fuel default-cargo once the hull has an afterburner slot and a tank",
     $"validator wrongly flagged fuel cargo on a fuel-modeled hull: {string.Join("; ", fuelOkErrors)}"
+);
+
+// ...and the ammo pack mirrors it: ammo cargo on a hull with no magazine is dead cargo, the same hull
+// with a magazine passes, and one item may not refill BOTH pools.
+var ammoItem = new CargoItemDef
+{
+    CargoId = 51,
+    Name = "Ammo",
+    Mass = 1f,
+    AmmoPerCharge = 1000,
+};
+var magazinelessShip = new ShipClassDef
+{
+    ClassId = 11,
+    Name = "Dry",
+    MaxHull = 50f,
+    RadarSignature = 1f,
+    PayloadCapacity = 10f,
+    DefaultCargo = new()
+    {
+        new CargoLoadDef { CargoId = 51, Count = 1 },
+    },
+};
+Check(
+    CargoErrors(magazinelessShip, ammoItem).Any(e => e.Contains("no magazine")),
+    "validator flags ammo default-cargo on a hull with no magazine (MaxAmmo 0)",
+    "validator missed ammo cargo on a magazine-less hull"
+);
+magazinelessShip.MaxAmmo = 500;
+Check(
+    !CargoErrors(magazinelessShip, ammoItem).Any(e => e.Contains("no magazine")),
+    "validator accepts ammo default-cargo once the hull has a magazine",
+    "validator wrongly flagged ammo cargo on a hull with a magazine"
+);
+var bothPoolsItem = new CargoItemDef
+{
+    CargoId = 52,
+    Name = "Both",
+    Mass = 1f,
+    FuelPerCharge = 10f,
+    AmmoPerCharge = 10,
+};
+Check(
+    CargoErrors(magazinelessShip, ammoItem, bothPoolsItem).Any(e => e.Contains("refills one pool")),
+    "validator flags a cargo item that refills both fuel and ammo",
+    "validator missed a cargo item that refills both pools"
 );
 
 // 3c2. Mount-type rules: the validator flags a hardpoint whose authored mount type contradicts
@@ -1023,56 +1378,49 @@ Check(
     $"validator missed the cross-kind successor: {string.Join("; ", crossKindErrors)}"
 );
 
-// 3d. Booster fuel authoring rules: ab-accel/max-fuel are authored as a pair, the drain must be
-// positive, and recharge must actually lag drain — otherwise the hull ships with a broken/free
-// fuel gauge. Mirrors factions/ CoreValidator's identical rules over the raw YAML hull.
-ShipClassDef FuelShip(byte classId, float abAccel, float maxFuel, float fuelDrain, float fuelRecharge) =>
+// 3d. Booster fuel authoring rules: the tank belongs to the afterburner SLOT (an allowed afterburner
+// in the equipment catalog). A slot needs a tank, a tank without a slot is dead data, and the in-flight
+// recharge must lag the drain of EVERY allowed booster — the most frugal one decides. Mirrors factions/
+// CoreValidator's identical rules over the raw YAML hull.
+ShipClassDef FuelShip(byte classId, float maxFuel, float fuelRecharge, params ushort[] allowed) =>
     new ShipClassDef
     {
         ClassId = classId,
         Name = $"Fuel{classId}",
         MaxHull = 50f,
         RadarSignature = 1f, // unrelated to the fuel rules under test; keep vision validation quiet
-        AbAccel = abAccel,
         MaxFuel = maxFuel,
-        AbFuelDrain = fuelDrain,
         AbFuelRecharge = fuelRecharge,
+        AllowedEquipment = allowed,
     };
 List<string> FuelErrors(ShipClassDef ship) =>
-    ContentValidator.Validate(new[] { ship }, System.Array.Empty<WeaponDef>(), new[] { okBase });
+    ContentValidator.Validate(new[] { ship }, System.Array.Empty<WeaponDef>(), new[] { okBase }, equipment: synthEquipment);
 
 Check(
-    FuelErrors(FuelShip(20, abAccel: 5f, maxFuel: 0f, fuelDrain: 0f, fuelRecharge: 0f)).Any(e => e.Contains("no MaxFuel")),
-    "validator flags an afterburner (AbAccel>0) with no MaxFuel",
-    "validator missed an afterburner with no MaxFuel"
+    FuelErrors(FuelShip(20, maxFuel: 0f, fuelRecharge: 0f, 1)).Any(e => e.Contains("afterburner slot but no MaxFuel")),
+    "validator flags an afterburner slot with no MaxFuel",
+    "validator missed an afterburner slot with no MaxFuel"
 );
 Check(
-    FuelErrors(FuelShip(21, abAccel: 0f, maxFuel: 10f, fuelDrain: 3f, fuelRecharge: 0.5f))
-        .Any(e => e.Contains("no afterburner")),
-    "validator flags MaxFuel with no afterburner (dead data)",
-    "validator missed MaxFuel with no afterburner"
+    FuelErrors(FuelShip(21, maxFuel: 10f, fuelRecharge: 0f)).Any(e => e.Contains("no afterburner slot")),
+    "validator flags MaxFuel with no afterburner slot (dead data)",
+    "validator missed MaxFuel with no afterburner slot"
 );
 Check(
-    FuelErrors(FuelShip(22, abAccel: 5f, maxFuel: 10f, fuelDrain: 0f, fuelRecharge: 0f))
-        .Any(e => e.Contains("no AbFuelDrain")),
-    "validator flags MaxFuel with no AbFuelDrain",
-    "validator missed MaxFuel with no AbFuelDrain"
+    FuelErrors(FuelShip(22, maxFuel: 10f, fuelRecharge: 1f, 1)).Any(e => e.Contains("never net-depletes")),
+    "validator flags AbFuelRecharge >= the allowed booster's FuelDrain (never net-depletes)",
+    "validator missed AbFuelRecharge >= FuelDrain"
+);
+
+// Recharge 0.5 lags the thirsty booster (1.0) but not the frugal one (0.2): still refused.
+var frugalErrors = FuelErrors(FuelShip(23, maxFuel: 10f, fuelRecharge: 0.5f, 1, 2));
+Check(
+    frugalErrors.Any(e => e.Contains("never net-depletes") && e.Contains("Lt Booster")),
+    "validator keys the recharge rule on the MOST FRUGAL allowed booster",
+    $"validator missed a recharge above the frugal booster's drain: {string.Join("; ", frugalErrors)}"
 );
 Check(
-    FuelErrors(FuelShip(23, abAccel: 5f, maxFuel: 10f, fuelDrain: 3f, fuelRecharge: 3f))
-        .Any(e => e.Contains("AbFuelRecharge >= AbFuelDrain")),
-    "validator flags AbFuelRecharge >= AbFuelDrain (never net-depletes)",
-    "validator missed AbFuelRecharge >= AbFuelDrain"
-);
-Check(
-    FuelErrors(FuelShip(24, abAccel: 5f, maxFuel: 10f, fuelDrain: -1f, fuelRecharge: 0.5f))
-        .Any(e => e.Contains("negative AbFuelDrain")),
-    "validator flags negative AbFuelDrain",
-    "validator missed negative AbFuelDrain"
-);
-Check(
-    FuelErrors(FuelShip(25, abAccel: 5f, maxFuel: 10f, fuelDrain: 3f, fuelRecharge: -0.5f))
-        .Any(e => e.Contains("negative AbFuelRecharge")),
+    FuelErrors(FuelShip(24, maxFuel: 10f, fuelRecharge: -0.5f, 1)).Any(e => e.Contains("negative AbFuelRecharge")),
     "validator flags negative AbFuelRecharge",
     "validator missed negative AbFuelRecharge"
 );
@@ -1080,7 +1428,7 @@ Check(
 // The winnability rule (3e below) requires SOME ship's default loadout to mount a can-damage-base
 // weapon, but this fixture's ship carries no weapons at all — mount a minimal siege weapon so this
 // otherwise-unrelated fuel-authoring check isn't tripped by the new rule.
-var goodFuelShip = FuelShip(26, abAccel: 5f, maxFuel: 10f, fuelDrain: 3f, fuelRecharge: 0.5f);
+var goodFuelShip = FuelShip(26, maxFuel: 10f, fuelRecharge: 0f, 1, 2);
 
 // DirZ=1 keeps this hand-built hardpoint valid under the new non-zero-direction check.
 goodFuelShip.Hardpoints.Add(
@@ -1097,7 +1445,12 @@ var siegeWeapon = new WeaponDef
     Name = "Siege",
     CanDamageBase = true,
 };
-var goodFuelErrors = ContentValidator.Validate(new[] { goodFuelShip }, new[] { siegeWeapon }, new[] { okBase });
+var goodFuelErrors = ContentValidator.Validate(
+    new[] { goodFuelShip },
+    new[] { siegeWeapon },
+    new[] { okBase },
+    equipment: synthEquipment
+);
 Check(
     goodFuelErrors.Count == 0,
     "validator accepts a correctly-authored fueled hull",
@@ -1368,6 +1721,249 @@ Check(
     zeroDirErrors.Any(e => e.Contains("zero-length direction")),
     "validator flags a zero-length hardpoint direction",
     "validator missed a zero-length hardpoint direction"
+);
+
+// 3h. Equipment rules (ContentValidator.ValidateEquipment / ValidateShipEquipment / ValidatePools /
+// the worst-case signature): the catalog's ids are list positions with live per-slot stats, tech
+// indices and same-slot, terminating succession; a ship's allowed set is sorted, resolving and
+// successor-closed, its defaults are one allowed part per slot that the hull's own tech gates cover, a
+// cloak slot needs energy, and every default gun can afford one shot from a full pool.
+List<string> EquipErrors(ShipClassDef[] ships, EquipmentDef[] catalog, params WeaponDef[] guns) =>
+    ContentValidator.Validate(
+        ships,
+        guns,
+        new[] { okBase },
+        techs: new[]
+        {
+            new TechDef { Id = "t0" },
+            new TechDef { Id = "t1" },
+        },
+        equipment: catalog
+    );
+bool Flags(List<string> errs, string text) => errs.Any(e => e.Contains(text));
+ShipClassDef EquipShip(byte classId) =>
+    new()
+    {
+        ClassId = classId,
+        Name = $"Equip{classId}",
+        MaxHull = 50f,
+        RadarSignature = 1f,
+        MaxEnergy = 200f,
+        EnergyRecharge = 10f,
+        MaxAmmo = 100,
+        MaxFuel = 10f,
+        AllowedEquipment = new ushort[] { 0, 1, 2, 3 },
+        DefaultEquipment = new ushort[] { 0, 1, EquipmentDef.NoEquipment },
+    };
+
+// (It mounts the zero-cost siege gun from 3d so the unrelated winnability rule stays quiet.)
+var legalEquipped = EquipShip(80);
+legalEquipped.Hardpoints.Add(
+    new HardpointDef
+    {
+        Kind = HardpointKind.Weapon,
+        WeaponId = 50,
+        Mount = WeaponMountKind.Gun,
+        DirZ = 1f,
+    }
+);
+var legalEquippedErrors = EquipErrors(new[] { legalEquipped }, SynthEquipment(), siegeWeapon);
+Check(
+    legalEquippedErrors.Count == 0,
+    "validator accepts a fully-equipped ship (allowed shield/boosters/cloak, defaults per slot, pools + tank)",
+    $"validator wrongly flagged a legal equipped ship: {string.Join("; ", legalEquippedErrors)}"
+);
+
+// Catalog rules.
+var badId = SynthEquipment();
+badId[1].EquipmentId = 7;
+Check(
+    Flags(EquipErrors(System.Array.Empty<ShipClassDef>(), badId), "list position"),
+    "validator flags an EquipmentId that is not its list position",
+    "validator missed a mis-numbered EquipmentId"
+);
+var badSlot = SynthEquipment();
+badSlot[3].Slot = 3;
+Check(
+    Flags(EquipErrors(System.Array.Empty<ShipClassDef>(), badSlot), "must be below 3"),
+    "validator flags an out-of-range equipment Slot",
+    "validator missed an out-of-range equipment Slot"
+);
+var deadShield = SynthEquipment();
+deadShield[0].RegenRate = 0f;
+Check(
+    Flags(EquipErrors(System.Array.Empty<ShipClassDef>(), deadShield), "never regenerate"),
+    "validator flags a shield with no regen",
+    "validator missed a shield with no regen"
+);
+var deadBooster = SynthEquipment();
+deadBooster[1].AbOnRate = 0f;
+Check(
+    Flags(EquipErrors(System.Array.Empty<ShipClassDef>(), deadBooster), "AbOnRate/AbOffRate"),
+    "validator flags an afterburner that never spools",
+    "validator missed an afterburner with on-rate 0"
+);
+var fullCloak = SynthEquipment();
+fullCloak[3].MaxCloaking = 1f;
+Check(
+    Flags(EquipErrors(System.Array.Empty<ShipClassDef>(), fullCloak), "outside (0, 1)"),
+    "validator flags a full (1.0) cloak",
+    "validator missed a full cloak"
+);
+var crossSlot = SynthEquipment();
+crossSlot[0].SucceededById = 1; // a shield succeeded by an afterburner
+Check(
+    Flags(EquipErrors(System.Array.Empty<ShipClassDef>(), crossSlot), "would change the slot"),
+    "validator flags a cross-slot equipment successor",
+    "validator missed a cross-slot successor"
+);
+var loop = SynthEquipment();
+loop[1].SucceededById = 2;
+loop[2].SucceededById = 1;
+Check(
+    Flags(EquipErrors(System.Array.Empty<ShipClassDef>(), loop), "chain loops"),
+    "validator flags an equipment succession loop",
+    "validator missed an equipment succession loop"
+);
+var badTech = SynthEquipment();
+badTech[0].RequiredTechIdx = new ushort[] { 9 };
+Check(
+    Flags(EquipErrors(System.Array.Empty<ShipClassDef>(), badTech), "outside the 2-entry tech catalog"),
+    "validator flags an equipment tech index outside the catalog",
+    "validator missed an out-of-range equipment tech index"
+);
+
+// Ship rules.
+var unsorted = EquipShip(81);
+unsorted.AllowedEquipment = new ushort[] { 1, 0, 2, 3 };
+Check(
+    Flags(EquipErrors(new[] { unsorted }, SynthEquipment()), "not sorted"),
+    "validator flags an unsorted AllowedEquipment",
+    "validator missed an unsorted AllowedEquipment"
+);
+var unknownPart = EquipShip(82);
+unknownPart.AllowedEquipment = new ushort[] { 0, 1, 2, 3, 40 };
+Check(
+    Flags(EquipErrors(new[] { unknownPart }, SynthEquipment()), "allows unknown equipment 40"),
+    "validator flags an allowed id with no EquipmentDef",
+    "validator missed an unknown allowed id"
+);
+var tiered = SynthEquipment();
+tiered[1].SucceededById = 2; // Booster → Lt Booster (same slot)
+var notClosed = EquipShip(83);
+notClosed.AllowedEquipment = new ushort[] { 0, 1 };
+Check(
+    Flags(EquipErrors(new[] { notClosed }, tiered), "but not its successor"),
+    "validator flags an allowed part whose successor is not allowed",
+    "validator missed a non-successor-closed allowed set"
+);
+var powerlessCloak = EquipShip(84);
+powerlessCloak.MaxEnergy = 0f;
+Check(
+    Flags(EquipErrors(new[] { powerlessCloak }, SynthEquipment()), "cloak slot but no MaxEnergy"),
+    "validator flags a cloak slot on a hull with no energy pool",
+    "validator missed a cloak slot without energy"
+);
+var shortDefaults = EquipShip(85);
+shortDefaults.DefaultEquipment = new ushort[] { 0, 1 };
+Check(
+    Flags(EquipErrors(new[] { shortDefaults }, SynthEquipment()), "must be 0 or 3"),
+    "validator flags a DefaultEquipment that is not one entry per slot",
+    "validator missed a malformed DefaultEquipment"
+);
+var wrongSlotDefault = EquipShip(86);
+wrongSlotDefault.DefaultEquipment = new ushort[] { 1, EquipmentDef.NoEquipment, EquipmentDef.NoEquipment };
+Check(
+    Flags(EquipErrors(new[] { wrongSlotDefault }, SynthEquipment()), "a slot-1 part"),
+    "validator flags a default in the wrong slot",
+    "validator missed a default in the wrong slot"
+);
+var unallowedDefault = EquipShip(87);
+unallowedDefault.AllowedEquipment = new ushort[] { 1, 2, 3 };
+Check(
+    Flags(EquipErrors(new[] { unallowedDefault }, SynthEquipment()), "does not allow"),
+    "validator flags a default the hull does not allow",
+    "validator missed an unallowed default"
+);
+var lockedCatalog = SynthEquipment();
+lockedCatalog[0].RequiredTechIdx = new ushort[] { 1 };
+var freebie = EquipShip(88);
+Check(
+    Flags(EquipErrors(new[] { freebie }, lockedCatalog), "does not require"),
+    "validator flags a research-locked default the hull's own gates don't cover",
+    "validator missed a research-locked default"
+);
+freebie.RequiredTechIdx = new ushort[] { 1 };
+Check(
+    !Flags(EquipErrors(new[] { freebie }, lockedCatalog), "does not require"),
+    "validator accepts that default once the hull itself requires the tech",
+    "validator wrongly flagged a tech-covered default"
+);
+
+// Pools: a default gun that can't afford one shot never fires; racks carry no per-shot cost.
+var thirstyGun = new WeaponDef
+{
+    WeaponId = 90,
+    Name = "Thirsty",
+    CanDamageBase = true,
+    EnergyPerShot = 250f,
+    AmmoPerShot = 150,
+};
+var brokeShip = EquipShip(89);
+brokeShip.Hardpoints.Add(
+    new HardpointDef
+    {
+        Kind = HardpointKind.Weapon,
+        WeaponId = 90,
+        Mount = WeaponMountKind.Gun,
+        DirZ = 1f,
+    }
+);
+var brokeErrors = EquipErrors(new[] { brokeShip }, SynthEquipment(), thirstyGun);
+Check(
+    brokeErrors.Count(e => e.Contains("could never fire")) == 2,
+    "validator flags a default gun whose energy AND ammo cost exceed the hull's pools",
+    $"validator missed a gun the pools can't fire: {string.Join("; ", brokeErrors)}"
+);
+var costlyRack = new WeaponDef
+{
+    WeaponId = 91,
+    Name = "Rack",
+    Kind = WeaponKind.Missile,
+    LockTicks = 1,
+    LockRange = 1f,
+    ProjectileSpeed = 1f,
+    MagazineSize = 1,
+    ProjectileLifeTicks = 1,
+    BlastPower = 1f,
+    BlastRadius = 1f,
+    DirectHitMult = 1f,
+    AmmoPerShot = 1,
+};
+Check(
+    Flags(
+        EquipErrors(System.Array.Empty<ShipClassDef>(), SynthEquipment(), costlyRack),
+        "only guns (Bolt) draw energy or ammo"
+    ),
+    "validator flags a per-shot cost on a non-Bolt weapon",
+    "validator missed a per-shot cost on a missile rack"
+);
+
+// Worst-case signature: equipped parts add their Signature per ship, so the stealthiest allowed part
+// per slot must still leave the ship detectable.
+var stealthCatalog = SynthEquipment();
+stealthCatalog[3].Signature = -0.6f;
+stealthCatalog[0].Signature = -0.5f;
+Check(
+    Flags(EquipErrors(new[] { EquipShip(92) }, stealthCatalog), "would be undetectable"),
+    "validator flags an allowed loadout whose part signatures take the ship to <= 0",
+    "validator missed an undetectable worst-case loadout"
+);
+stealthCatalog[0].Signature = -0.3f;
+Check(
+    !Flags(EquipErrors(new[] { EquipShip(93) }, stealthCatalog), "would be undetectable"),
+    "validator accepts negative part signatures that leave the worst loadout detectable",
+    "validator wrongly flagged a detectable worst-case loadout"
 );
 
 // ---- Static (source-generated) YAML reader == YamlDotNet's reflection reader, for EVERY stock file ----

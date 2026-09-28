@@ -1,10 +1,11 @@
 namespace Allegiance.Factions.Model;
 
 /// <summary>
-/// A consumable that ships carry and release: a missile, mine, chaff, or probe. Mirrors the C++
-/// <c>DataExpendableTypeIGC</c> (igc.h:1947). Expendables are not bought directly — they are
-/// carried by a <see cref="Launcher"/> or deployed by a <see cref="Drone"/> — so this is a
-/// standalone entity rather than a <see cref="Buildable"/>.
+/// A consumable that ships carry: a missile, mine, chaff, or probe they release, or a pure-cargo
+/// pack (<see cref="FuelPod"/>, <see cref="AmmoPack"/>) that refills the ship from its hold.
+/// Mirrors the C++ <c>DataExpendableTypeIGC</c> (igc.h:1947). Expendables are not bought directly
+/// — they are carried by a <see cref="Launcher"/>, stocked in a hull's hold, or deployed by a
+/// <see cref="Drone"/> — so this is a standalone entity rather than a <see cref="Buildable"/>.
 /// </summary>
 public abstract record Expendable
 {
@@ -62,8 +63,9 @@ public abstract record Expendable
     /// <summary>
     /// GLB model basename the client loads/instances from its per-kind assets folder (e.g.
     /// <c>assets/missiles/</c>, <c>assets/mines/</c>, <c>assets/chaff/</c>, <c>assets/probes/</c>;
-    /// no extension); projected onto WeaponDef.ModelName. Shared by every expendable kind (a
-    /// FuelPod inherits it too, though it is pure cargo and never renders one).
+    /// no extension); projected onto WeaponDef.ModelName. Shared by every expendable kind — the
+    /// pure-cargo packs (FuelPod, AmmoPack) are never fired, so theirs is the mesh a DROPPED pack is
+    /// drawn as (<c>assets/parts/</c>, projected onto CargoItemDef.ModelName).
     /// </summary>
     public string? ModelName { get; set; }
 }

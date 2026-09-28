@@ -59,7 +59,7 @@
         "number",
         "null"
       ],
-      "description": "Radar-signature multiplier while a hull has an EQUIPPED shield (ShieldCapacity \u003E 0), regardless of the current pool. Null/omitted -\u003E 1.0 (neutral). Server-side only."
+      "description": "Radar-signature multiplier while a ship has a shield part EQUIPPED (effective capacity \u003E 0), regardless of the current pool. Null/omitted -\u003E 1.0 (neutral). Server-side only."
     },
     "dust-signature-mult": {
       "type": [

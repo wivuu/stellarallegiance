@@ -780,9 +780,13 @@ public sealed partial class Simulation
             Alive = true,
         };
         PlaceAtBase(s, World.ShipRadius + 6f, tick, RelaunchBase(slot));
-        s.State.Mass = StatsFor(s.Class, false).Mass;
+        // The class's DefaultEquipment (no hangar, no tier migration): flight stats + signature bias.
+        // Drones launch with an empty shield pool that regenerates (MiningTest §29 relies on it) and
+        // with the hull's (empty) pools — they fly no guns.
+        ApplyEquipment(s, null);
+        s.State.Mass = s.Stats.Mass;
         s.Health = HullFor(s.Class);
-        s.SigBias = ShieldDefFor(s).SignatureBias;
+        FillPools(s);
         _ships[s.ShipId] = s;
         _order.Add(s);
         slot.Ship = s;
@@ -813,7 +817,7 @@ public sealed partial class Simulation
 
         Vec3 myPos = s.State.Pos;
         Quat myRot = s.State.Rot;
-        var stats = StatsFor(s.Class, false);
+        var stats = s.Stats;
         // Exclude the miner's current claim from avoidance: while flying at / mining a rock, avoiding
         // that same rock would deflect the nose off it (the "doesn't face the rock" bug). TargetRockId
         // is 0 while heading to base, so the offload leg avoids every rock normally. Base hulls join

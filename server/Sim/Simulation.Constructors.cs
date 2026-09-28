@@ -541,9 +541,13 @@ public sealed partial class Simulation
                 ? b
                 : ResolveConstructorLaunchBase(slot.Team, 0);
         PlaceAtBase(s, World.ShipRadius + 6f, tick, at);
-        s.State.Mass = StatsFor(s.Class, false).Mass;
+        // The class's DefaultEquipment (no hangar, no tier migration): flight stats + signature bias.
+        // Drones launch with an empty shield pool that regenerates (MiningTest §29 relies on it) and
+        // with the hull's (empty) pools — they fly no guns.
+        ApplyEquipment(s, null);
+        s.State.Mass = s.Stats.Mass;
         s.Health = HullFor(s.Class);
-        s.SigBias = ShieldDefFor(s).SignatureBias;
+        FillPools(s);
         _ships[s.ShipId] = s;
         _order.Add(s);
         slot.Ship = s;
@@ -805,7 +809,7 @@ public sealed partial class Simulation
 
         Vec3 myPos = s.State.Pos;
         Quat myRot = s.State.Rot;
-        var stats = StatsFor(s.Class, false);
+        var stats = s.Stats;
         // Rocks (minus the claimed build rock) + base hulls (see AvoidObstacles). avoidBaseId is set
         // by the Idle keep-station leg so the drone doesn't wander off its own station anchor.
         ulong avoidBaseId = 0;

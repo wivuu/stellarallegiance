@@ -48,11 +48,12 @@ public sealed partial class Simulation
 
     // Instance lookups built from Content in the ctor (were static-from-GameContent before the
     // Stage-1 content pipeline). WeaponDefs is keyed by WeaponId (a muzzle's hardpoint names the
-    // weapon it fires); ShipDefs by ClassId; _stats is the per-class flight profile derived from the
-    // loaded def, so a YAML-overridden ship flies the authored numbers on BOTH sides.
+    // weapon it fires); ShipDefs by ClassId; _stats memoizes the flight profile per (class, equipped
+    // afterburner) derived from the loaded defs, so a YAML-overridden ship flies the authored numbers
+    // on BOTH sides.
     private readonly Dictionary<uint, WeaponDef> WeaponDefs;
     private readonly Dictionary<byte, ShipClassDef> ShipDefs;
-    private readonly Dictionary<byte, ShipStats> _stats;
+    private readonly Dictionary<(byte cls, ushort afterburnerId), ShipStats> _stats = new();
 
     // A weapon muzzle in LOCAL ship space — the offset the bolt spawns at and the forward it
     // fires along. Single-sourced from the authored ShipClassDef hardpoints so the server's
@@ -127,19 +128,13 @@ public sealed partial class Simulation
     private float HullFor(byte cls) =>
         ShipDefs.TryGetValue(cls, out var d) ? d.MaxHull : ShipDefs[FlightModel.ClassScout].MaxHull;
 
-    // Shield knobs for a class, read straight from its def (0 capacity = the hull has no shield).
-    // Unknown class falls back to the Scout def, mirroring HullFor. A pod flies the Pod def (which
-    // authors no shield), so the shield rule uses the SAME effective-class resolution as StatsFor.
-    private ShipClassDef ShieldDefFor(byte cls) =>
-        ShipDefs.TryGetValue(cls, out var d) ? d : ShipDefs[FlightModel.ClassScout];
+    // The class def a ship's HULL stats come from — pools, vision, signature, default equipment, the
+    // flight block. Unknown class falls back to the Scout def, mirroring HullFor. A pod flies the Pod
+    // def (no slots, no pools), so every hull rule resolves the SAME effective class. The per-ship
+    // shield and afterburner come from the EQUIPPED parts instead (Simulation.Equipment.cs).
+    private ShipClassDef HullDefFor(byte cls) => ShipDefs.TryGetValue(cls, out var d) ? d : ShipDefs[FlightModel.ClassScout];
 
-    private ShipClassDef ShieldDefFor(ShipSim s) => ShieldDefFor(s.IsPod ? GameContent.PodClassId : s.Class);
-
-    private float ShieldCapacityFor(ShipSim s) => ShieldDefFor(s).ShieldCapacity;
-
-    private float ShieldRechargeFor(ShipSim s) => ShieldDefFor(s).ShieldRecharge;
-
-    private uint ShieldDelayTicksFor(ShipSim s) => (uint)MathF.Round(ShieldDefFor(s).ShieldDelaySec * TickHz);
+    private ShipClassDef HullDefFor(ShipSim s) => HullDefFor(s.IsPod ? GameContent.PodClassId : s.Class);
 
     // The single damage seam: every ship-damage site routes through here so the shield rule is
     // applied ONCE and consistently. The energy shield absorbs first — a hit scaled by the weapon's
@@ -238,14 +233,17 @@ public sealed partial class Simulation
         return null;
     }
 
-    // Flight stats for a class, derived from the LOADED def (authored in YAML) via the SAME path the
-    // client takes (ShipStats.FromDef) — so server authority and client prediction integrate
-    // bit-identically. A pod ignores its class and flies the Pod profile; an unknown class falls
-    // back to the Scout def. Precomputed in the ctor from the content set.
-    private ShipStats StatsFor(byte cls, bool isPod)
+    // Flight stats for a hull + its EQUIPPED afterburner (null = none), derived from the LOADED defs
+    // via the SAME path the client takes (ShipStats.FromDef(hull, afterburner)) — so server authority
+    // and client prediction integrate bit-identically. Memoized per (class, afterburner id): a
+    // handful of combinations per match. Read through ShipSim.Stats (set once by ApplyEquipment), so
+    // every consumer flies the ship's real booster, never the class default.
+    private ShipStats StatsFor(ShipClassDef hull, EquipmentDef? afterburner)
     {
-        byte defId = isPod ? GameContent.PodClassId : cls;
-        return _stats.TryGetValue(defId, out var s) ? s : _stats[FlightModel.ClassScout];
+        var key = (hull.ClassId, afterburner?.EquipmentId ?? EquipmentDef.NoEquipment);
+        if (!_stats.TryGetValue(key, out var st))
+            _stats[key] = st = ShipStats.FromDef(hull, afterburner);
+        return st;
     }
 
     // Everything this step reported to the hub (one-shot events, change flags, notices) — see
@@ -264,14 +262,47 @@ public sealed partial class Simulation
 
         // Regenerating energy shield layered over Health. Shield absorbs damage first (overflow spills
         // to hull); ShieldDamageTick stamps the last tick it took damage, gating the recharge delay.
-        // 0 capacity (per the class def) = no shield. Set full at spawn; recharged in the Step sweep.
+        // The capacity is the EQUIPPED shield part's (ShieldPart, × team attributes); no part = no
+        // shield. Set full at spawn (players); recharged in the Step sweep.
         public float Shield;
         public uint ShieldDamageTick;
 
         // Additive radar-signature bias (SignatureModel.Bias) — the per-ship equipment/loadout/
-        // ability seam a future fitting or cloak system mutates live. Seeded at spawn from the
-        // class def's projected SignatureBias (hull + default-loadout sum); 0 = neutral.
+        // ability seam. Seeded at spawn by ApplyEquipment: the hull's projected SignatureBias plus
+        // each equipped part's EquipmentDef.Signature; 0 = neutral.
         public float SigBias;
+
+        // ---- Equipment + resource pools (equipment PR; Simulation.Equipment.cs) ----
+        // EquipmentIds[slot] = the EFFECTIVE part in each equipment slot (EquipmentDef.Slot*;
+        // NoEquipment = deliberately empty), resolved at spawn by ResolveLoadout (validated + tier-
+        // migrated); null = the class's DefaultEquipment — every drone and pod, and any pilot who
+        // launched the defaults unmigrated (MountWeaponIds' "null = authored" fast path: no wire row).
+        // Fixed for the sortie. ShieldPart / AfterburnerPart / CloakPart are the resolved defs (null =
+        // empty slot) and Stats the per-ship flight profile, ShipStats.FromDef(hull, AfterburnerPart)
+        // — all set once by ApplyEquipment, so no consumer re-resolves the class default.
+        public ushort[]? EquipmentIds;
+        public EquipmentDef? ShieldPart;
+        public EquipmentDef? AfterburnerPart;
+        public EquipmentDef? CloakPart;
+        public ShipStats Stats;
+
+        // The live resource pools (energy, magazine, ammo-pack charges, cloak level), stepped in Pass A
+        // by THE shared rule (shared/ShipResources.cs). PoolsAtFire is the snapshot taken right after
+        // the tick's ammo step — the pools its fire phase started with — which ShipRecord.Pools
+        // carries for LastInputTick. Filled at spawn (FillPools); a pod carries none.
+        public ShipPools Pools;
+        public ShipPools PoolsAtFire;
+
+        // The cheapest AmmoPerShot over the effective barrels + turret stations (0 = no ammo gun, so
+        // no pack ever loads). Cached: RefreshMinAmmoPerShot re-derives it wherever the mounts are
+        // written (spawn, a salvaged gun).
+        public ushort MinAmmoPerShot;
+
+        // Tick the pending ammo-pack load completes on (0 = nothing loading) — FuelLoadEndTick's twin.
+        // The charge is already spent (Pools.AmmoPacks decremented) and the ammo guns stay dry until
+        // this tick. Never on the wire: each peer derives it from the same pools (the commit reads no
+        // input — ShipResources.AmmoStep).
+        public uint AmmoLoadEndTick;
         public uint LastInputTick;
         public uint LastFireTick;
 
@@ -324,11 +355,11 @@ public sealed partial class Simulation
 
         // The cargo HOLD (Simulation.Salvage.cs): salvage this hull flew over but could not equip —
         // a gun with no free mount, rounds for a rack it doesn't fly, a pack past the payload budget,
-        // a fuel pod with no tank. One entry per slot (ShipClassDef.CargoCapacity slots): a Part is
-        // one gun (Count 1, never merged), a Missiles/Cargo entry is one stack (same ItemId merges,
-        // capped at 255). Inert: costs NO payload, nothing fires or loads it, it re-drops on death
-        // and is lost on dock. Kind/ItemId follow the SalvageKind* wire encoding. null = empty (the
-        // common case).
+        // a fuel pod with no tank, an ammo pack with no magazine. One entry per slot
+        // (ShipClassDef.CargoCapacity slots): a Part is one gun (Count 1, never merged), a
+        // Missiles/Cargo entry is one stack (same ItemId merges, capped at 255). Inert: costs NO
+        // payload, nothing fires or loads it, it re-drops on death and is lost on dock. Kind/ItemId
+        // follow the SalvageKind* wire encoding. null = empty (the common case).
         public List<(byte Kind, uint ItemId, byte Count)>? Hold;
 
         public ShipInputState HeldInput; // replayed on ticks with no exact-stamped input
@@ -528,7 +559,8 @@ public sealed partial class Simulation
         byte cls,
         (uint cargoId, byte count)[] cargo,
         ulong launchBaseId,
-        (byte hpIndex, uint weaponId)[] mounts
+        (byte hpIndex, uint weaponId)[] mounts,
+        (byte slot, ushort equipmentId)[] equipment
     )> _joinQueue = new();
     private readonly Queue<int> _leaveQueue = new();
 
@@ -554,11 +586,18 @@ public sealed partial class Simulation
     // across combat->pod->respawn, so the hub re-sends YouAre whenever this ship flips.
     private readonly Dictionary<int, ShipSim> _byClient = new();
 
-    // Remembered join class/team/cargo/mounts per connected client, so a respawn re-creates the
-    // same ship with the same validated consumable hold AND weapon-slot overrides.
+    // Remembered join class/team/cargo/mounts/equipment per connected client, so a respawn re-creates
+    // the same ship with the same validated consumable hold, weapon-slot AND equipment overrides.
     private readonly Dictionary<
         int,
-        (byte team, byte cls, (uint cargoId, byte count)[] cargo, ulong launchBaseId, (byte hpIndex, uint weaponId)[] mounts)
+        (
+            byte team,
+            byte cls,
+            (uint cargoId, byte count)[] cargo,
+            ulong launchBaseId,
+            (byte hpIndex, uint weaponId)[] mounts,
+            (byte slot, ushort equipmentId)[] equipment
+        )
     > _clientInfo = new();
 
     // Chaff/mine dispenser WeaponDefs keyed by the cargo id they consume (D8 — dispensers are not
@@ -569,6 +608,9 @@ public sealed partial class Simulation
     private readonly Dictionary<uint, byte> _chargesPerPack = new(); // dispenser ammo = packs × this
     private readonly Dictionary<uint, float> _fuelPerCharge = new(); // fuel cargo: tank refill per charge
     private readonly Dictionary<uint, uint> _cargoReloadTicks = new(); // ticks a charge takes to load out of the hold
+
+    // Ammo cargo — the fuel pod's twin — is indexed beside the equipment lookups
+    // (Simulation.Equipment.cs: _ammoCargoIds, _ammoPackItem).
 
     // Clients with no live ship and a scheduled respawn tick (set when a player pod resolves).
     private readonly Dictionary<int, uint> _clientRespawn = new();
@@ -723,9 +765,7 @@ public sealed partial class Simulation
         }
         ClassTurretGuns = BuildTurretGuns(content.Ships, ClassMuzzles.Length);
         ClassTurretStations = BuildTurretStations(content.Ships, ClassMuzzles.Length); // Simulation.Crew.cs
-        _stats = new Dictionary<byte, ShipStats>(content.Ships.Count);
-        foreach (var d in content.Ships)
-            _stats[d.ClassId] = ShipStats.FromDef(d); // same path the client takes → identical flight
+        _equipDefs = BuildEquipmentTable(content.Equipment); // Simulation.Equipment.cs
 
         // BaseTypeId -> StationClassId byte, from the station catalog (which streams EVERY authored
         // station, tech-gated or not, so the map is complete on both peers). Unknown types (raw
@@ -747,6 +787,11 @@ public sealed partial class Simulation
             _cargoReloadTicks[c.CargoId] = c.ReloadTicks;
             if (c.FuelPerCharge > 0f)
                 _fuelPerCharge[c.CargoId] = c.FuelPerCharge; // fuel cargo — no dispenser WeaponDef
+            if (c.AmmoPerCharge > 0)
+            {
+                _ammoCargoIds.Add(c.CargoId); // ammo cargo — no dispenser WeaponDef either
+                _ammoPackItem ??= c; // THE ammo-pack line the resource rule loads from (first in list order)
+            }
         }
 
         // Salvage's reverse indexes (dispenser KIND -> tier-neutral cargo id, the fuel cargo id,
@@ -777,14 +822,17 @@ public sealed partial class Simulation
     // a pick that can't serve the hull (launch-station-classes / exitless model) DROPS the join
     // pre-charge (2026-07-21). `mounts` = the hangar's weapon-slot overrides ((hardpoint Index,
     // weaponId) pairs; weaponId HardpointDef.NoWeapon = deliberately empty); empty ⇒ the authored
-    // class loadout.
+    // class loadout. `equipment` = the hangar's equipment-slot overrides ((EquipmentDef.Slot*, part
+    // id) pairs, overridden slots only; EquipmentDef.NoEquipment = launch with the slot empty); empty
+    // ⇒ the hull's DefaultEquipment (tier-migrated).
     public void EnqueueJoin(
         int clientId,
         byte team,
         byte cls,
         (uint cargoId, byte count)[] cargo,
         ulong launchBaseId = 0,
-        (byte hpIndex, uint weaponId)[]? mounts = null
+        (byte hpIndex, uint weaponId)[]? mounts = null,
+        (byte slot, ushort equipmentId)[]? equipment = null
     )
     {
         lock (_qLock)
@@ -795,7 +843,8 @@ public sealed partial class Simulation
                     cls,
                     cargo ?? System.Array.Empty<(uint, byte)>(),
                     launchBaseId,
-                    mounts ?? System.Array.Empty<(byte, uint)>()
+                    mounts ?? System.Array.Empty<(byte, uint)>(),
+                    equipment ?? System.Array.Empty<(byte, ushort)>()
                 )
             );
     }
@@ -909,10 +958,23 @@ public sealed partial class Simulation
         // Pass A: integrate + fire + warp (mirrors module Pass A). Every ship in _order is
         // live (dead ships were removed at the end of the step that killed them); PIGs are
         // server-driven, players (incl. their pods) replay their held/exact-tick input.
+        //
+        // Resources follow THE shared tick order (shared/ShipResources.cs), which the owner's client
+        // replays identically: (a) the ammo step, (b) the PoolsAtFire snapshot the ship record
+        // carries, (c) fuel pod + Integrate, (d) the fire phase — pilot barrels, then turret
+        // stations — each shot gated by TrySpendShot, (e) the energy step (recharge, then the cloak).
+        // Nothing else in the loop reads or writes the pools.
         foreach (var s in _order)
         {
             var input = InputFor(s, tick);
-            var stats = StatsFor(s.Class, s.IsPod);
+            var stats = s.Stats; // per-ship: the hull + its EQUIPPED afterburner (ApplyEquipment)
+            var rs = ResourceStatsFor(s);
+            // (a) Ammo step: land a finished pack load, then commit the next one if the magazine can't
+            // afford the cheapest ammo gun — input-independent, so the owner's client predicts it
+            // even while a gunner is the one draining the magazine. (b) Snapshot what the fire phase
+            // starts with: the ship record's Pools for this LastInputTick.
+            ShipResources.AmmoStep(ref s.Pools, ref s.AmmoLoadEndTick, tick, in rs, AmmoEnabled);
+            s.PoolsAtFire = s.Pools;
             // Fuel-pod auto-load, resolved BETWEEN InputFor and Integrate: Integrate's afterburner
             // gate reads PRE-tick fuel (the tick that empties the tank still burns), so the tank is
             // topped up here rather than inside the flight model — FlightModel.Integrate stays
@@ -950,6 +1012,7 @@ public sealed partial class Simulation
                     TryFire(s, tick);
                 // Crew-served turrets fire off their GUNNERS' held input, not the captain's — so
                 // this runs unconditionally beside the pilot's own trigger (Simulation.Firing.cs).
+                // After the pilot's barrels: the stations draw on whatever the pilot left.
                 TryFireTurrets(s, tick);
                 if (input.Firing2)
                     TryFireMissile(s, tick);
@@ -960,6 +1023,9 @@ public sealed partial class Simulation
                 if (input.DropProbe)
                     TryDeployProbe(s, tick); // dispenser cadence-gated (Simulation.Probes.cs)
             }
+            // (e) Energy step LAST: the pools leaving this tick are the pools entering the next. The
+            // cloak reads the held input LEVEL (a toggle latch the client sends every tick).
+            ShipResources.EnergyStep(ref s.Pools, in rs, input.Cloak, EnergyEnabled);
             TryWarp(s);
         }
 
@@ -1027,13 +1093,20 @@ public sealed partial class Simulation
         ApplyStructural();
 
         // Shield recharge sweep (end-of-tick so every damage phase this tick has already stamped
-        // ShieldDamageTick — a ship hit this tick won't regen this tick). A shielded ship refills at
-        // its authored rate once the quiet delay since the last shield hit has elapsed.
+        // ShieldDamageTick). A shielded ship refills at its equipped part's rate (× the team's
+        // ShieldRegenerationShip) once the part's quiet delay since the last shield hit has elapsed —
+        // a stock part authors none, so it regenerates continuously, even on the tick of a hit. The
+        // maximum is read live: a pool a smaller MaxShieldShip no longer covers clamps DOWN here.
         foreach (var s in _order)
         {
             if (!ShieldsEnabled || !s.Alive)
                 continue;
             float cap = ShieldCapacityFor(s);
+            if (s.Shield > cap)
+            {
+                s.Shield = cap;
+                continue;
+            }
             if (cap <= 0f || s.Shield >= cap)
                 continue;
             if (tick - s.ShieldDamageTick < ShieldDelayTicksFor(s))
@@ -1179,13 +1252,13 @@ public sealed partial class Simulation
             DrainCrewQueues(tick); // Simulation.Crew.cs
             while (_joinQueue.Count > 0)
             {
-                var (cid, team, cls, cargo, launchBase, mounts) = _joinQueue.Dequeue();
+                var (cid, team, cls, cargo, launchBase, mounts, equipment) = _joinQueue.Dequeue();
                 // A gunner who asks for their own hull gives up their seat — a spawn is never
                 // rejected for it (the crew decision: MsgSpawn always wins over a claimed station).
                 VacateSeat(cid, null);
-                // Remember the slot (team/cls/hold/launch base/mount overrides) and spawn this
-                // very step (ProcessRespawns, tick now).
-                _clientInfo[cid] = (team, cls, cargo, launchBase, mounts);
+                // Remember the slot (team/cls/hold/launch base/mount + equipment overrides) and spawn
+                // this very step (ProcessRespawns, tick now).
+                _clientInfo[cid] = (team, cls, cargo, launchBase, mounts, equipment);
                 _clientRespawn[cid] = tick;
             }
             while (_leaveQueue.Count > 0)
@@ -1422,9 +1495,12 @@ public sealed partial class Simulation
     // development (a dev counts as completed when the team owns all its granted techs — the same proxy
     // MaybePreUpgradeSpawnedBase uses). Uses the library AttributeResolver so the multiplicative combine
     // has ONE implementation. Called at match start (fresh economy ⇒ faction-base only) and on research
-    // completion. INTENTIONALLY UNCONSUMED attrs resolved into the cache but with no sim consumer:
-    // MaxShieldStation + MaxEnergy (no station-shield / ship-energy model). A mid-match dev that changed
-    // MaxArmorStation would NOT retro-rescale live base health (slice devs carry no attributes — noted).
+    // completion. MaxEnergy / MaxShieldShip / ShieldRegenerationShip are read LIVE per ship (the
+    // equipment PR: ResourceStatsFor / ShieldCapacityFor), so a recompute reaches every flying ship on
+    // the next tick, and Frames.TeamState streams the cache so clients resolve the same maxima.
+    // INTENTIONALLY UNCONSUMED (resolved into the cache but no sim consumer): MaxShieldStation (no
+    // station-shield model). A mid-match dev that changed MaxArmorStation would NOT retro-rescale live
+    // base health (slice devs carry no attributes — noted).
     private void RecomputeTeamAttributes()
     {
         if (!AttributesEnabled)
@@ -1513,7 +1589,8 @@ public sealed partial class Simulation
         uint tick,
         (uint cargoId, byte count)[] cargo,
         World.BaseSite? launchSite = null,
-        (byte hpIndex, uint weaponId)[]? mounts = null
+        (byte hpIndex, uint weaponId)[]? mounts = null,
+        (byte slot, ushort equipmentId)[]? equipment = null
     )
     {
         var s = new ShipSim
@@ -1525,17 +1602,20 @@ public sealed partial class Simulation
             Alive = true,
         };
         PlaceAtBase(s, World.ShipRadius, tick, launchSite);
-        s.State.Mass = StatsFor(cls, false).Mass;
-        s.State.Fuel = StatsFor(cls, false).MaxFuel; // dock-refill: dock despawns, relaunch = full tank
+        // Validate the hangar's weapon-slot overrides + consumable hold + equipment picks as ONE
+        // loadout (the first two share PayloadCapacity); any invalid piece reverts ALL of them to the
+        // authored defaults (logged).
+        var (mountIds, hold, equipIds) = ResolveLoadout(team, cls, mounts, cargo, equipment);
+        // Equipment FIRST: the parts decide the flight stats (the afterburner), the shield and the
+        // signature bias every line below reads.
+        ApplyEquipment(s, equipIds);
+        s.State.Mass = s.Stats.Mass;
+        s.State.Fuel = s.Stats.MaxFuel; // dock-refill: dock despawns, relaunch = full tank
         s.Health = HullFor(cls);
         s.Shield = ShieldsEnabled ? ShieldCapacityFor(s) : 0f; // full shield at spawn; relaunch = full recharge
         s.ShieldDamageTick = 0;
-        s.SigBias = ShieldDefFor(s).SignatureBias; // projected default-loadout signature bias
-        // Validate the hangar's weapon-slot overrides + consumable hold as ONE loadout (they share
-        // PayloadCapacity); any invalid piece reverts BOTH to the authored defaults (logged).
-        var (mountIds, hold) = ResolveLoadout(team, cls, mounts, cargo);
         s.MountWeaponIds = mountIds;
-        if (mountIds is not null)
+        if (mountIds is not null || equipIds is not null)
             Events.LoadoutsChanged = true; // MsgShipLoadout table gains a row this step
 
         if (MissileMountFor(s) is (_, WeaponDef mw)) // full magazine at spawn (no rearm yet); an emptied rack seeds 0
@@ -1581,6 +1661,10 @@ public sealed partial class Simulation
                 Events.CrewChanged = true; // the roster flips from "joinable" to "in flight"
             }
         }
+        // Pools LAST: they read the hold's ammo-pack charges (SeedDispenserAmmo) and the effective
+        // barrels + turret stations resolved above (the cheapest ammo gun decides when a pack loads).
+        RefreshMinAmmoPerShot(s);
+        FillPools(s);
         return s;
     }
 
@@ -1645,6 +1729,15 @@ public sealed partial class Simulation
                 s.FuelPodReloadTicks = _cargoReloadTicks.TryGetValue(cargoId, out uint rt) ? rt : 0u;
                 continue;
             }
+            // Ammo packs are the fuel pod's twin: pure cargo seeding the pool's pack charges, loaded
+            // into the magazine by the resource rule's ammo step (per-charge refill + load time come
+            // from THE ammo-pack line, _ammoPackItem — the rule input both peers resolve alike).
+            if (_ammoCargoIds.Contains(cargoId))
+            {
+                byte ammoPackSize = _chargesPerPack.TryGetValue(cargoId, out var apk) ? apk : (byte)1;
+                s.Pools.AmmoPacks = (byte)System.Math.Min(255, s.Pools.AmmoPacks + count * ammoPackSize);
+                continue;
+            }
             if (!_dispenserByCargo.TryGetValue(cargoId, out var w))
                 continue;
             // Cargo stays one tier-neutral item per line (ids never change); the FIRED tier is the
@@ -1674,28 +1767,38 @@ public sealed partial class Simulation
         }
     }
 
-    // Resolve a spawn request's weapon-slot overrides + consumable hold into the loadout to seed.
-    // The two halves share PayloadCapacity, so they validate as ONE request: every override must
-    // name a real Weapon-kind hardpoint and either empty it (NoWeapon) or mount a team-tech-owned
-    // weapon the mount's TYPE accepts (HardpointDef.MountAccepts — a gun mount takes guns, a
-    // missile mount takes racks, an untyped mount takes either; dispensers never mount); every
-    // cargo id must be dispenser cargo; and the EFFECTIVE mount mass + hold mass must fit
-    // PayloadCapacity. Any failure rejects the whole request (logged) back to the authored loadout
-    // (null mounts = class default) — only a hacked/buggy client hits this, the hangar UI gates
-    // mount type, capacity and tech before sending.
-    private (uint[]? mountIds, (uint cargoId, byte count)[] cargo) ResolveLoadout(
+    // Resolve a spawn request's weapon-slot overrides + consumable hold + equipment picks into the
+    // loadout to seed. Mounts and hold share PayloadCapacity, so they validate as ONE request: every
+    // override must name a real Weapon-kind hardpoint and either empty it (NoWeapon) or mount a
+    // team-tech-owned weapon the mount's TYPE accepts (HardpointDef.MountAccepts — a gun mount takes
+    // guns, a missile mount takes racks, an untyped mount takes either; dispensers never mount); every
+    // cargo id must be dispenser, fuel or ammo cargo; and the EFFECTIVE mount mass + hold mass must fit
+    // PayloadCapacity. Equipment costs no payload but joins the same all-or-nothing policy
+    // (TryResolveEquipment). Any failure rejects the whole request (logged) back to the authored
+    // loadout (null mounts = class default guns, null equipment = the hull's DefaultEquipment) — only
+    // a hacked/buggy client hits this, the hangar UI gates mount type, capacity, part and tech before
+    // sending.
+    private (uint[]? mountIds, (uint cargoId, byte count)[] cargo, ushort[]? equipIds) ResolveLoadout(
         byte team,
         byte cls,
         (byte hpIndex, uint weaponId)[]? mounts,
-        (uint cargoId, byte count)[] requested
+        (uint cargoId, byte count)[] requested,
+        (byte slot, ushort equipmentId)[]? equipment = null
     )
     {
         ShipDefs.TryGetValue(cls, out var def);
         (uint, byte)[] fallbackCargo = DefaultCargoFor(cls);
         bool wantMounts = mounts is { Length: > 0 } && def is not null;
         bool wantCargo = requested is { Length: > 0 };
+        bool wantEquip = equipment is { Length: > 0 } && def is not null;
 
         World.TeamStates.TryGetValue(team, out var ts);
+
+        // Equipment (Simulation.Equipment.cs): validated first, then tier-migrated per slot — the
+        // default too, so a quick-launch also flies the researched tier. equipIds null = exactly the
+        // hull's DefaultEquipment (no MsgShipLoadout row needed for it).
+        if (!TryResolveEquipment(team, cls, def, ts, wantEquip ? equipment : null, out ushort[]? equipIds))
+            return (null, fallbackCargo, null);
 
         // Effective per-barrel weapon ids: authored muzzles, then overrides applied by hardpoint Index
         // (mapped to barrel = position among the class's Weapon-kind hardpoints — the same declaration
@@ -1723,7 +1826,7 @@ public sealed partial class Simulation
                 if (!barrelByIndex.TryGetValue(hpIndex, out int b))
                 {
                     Log.SpawnMountInvalid(_log, hpIndex, weaponId, cls);
-                    return (null, fallbackCargo);
+                    return (null, fallbackCargo, null);
                 }
                 if (weaponId == HardpointDef.NoWeapon)
                 {
@@ -1737,13 +1840,13 @@ public sealed partial class Simulation
                     // Unknown, a dispenser (D8: not mountable), or the wrong category for this
                     // mount's type (missile on a gun mount / gun on a missile mount).
                     Log.SpawnMountInvalid(_log, hpIndex, weaponId, cls);
-                    return (null, fallbackCargo);
+                    return (null, fallbackCargo, null);
                 }
                 foreach (ushort t in w.RequiredTechIdx)
                     if (ts is null || t >= Content.Techs.Count || !ts.OwnedTechs.Contains(Content.Techs[t].Id))
                     {
                         Log.SpawnMountTechLocked(_log, weaponId, team);
-                        return (null, fallbackCargo);
+                        return (null, fallbackCargo, null);
                     }
                 effective[b] = weaponId;
             }
@@ -1767,18 +1870,20 @@ public sealed partial class Simulation
         }
 
         // Cargo: an empty request normally means "hull default" (legacy quick-launch, no hangar
-        // visit) — but WITH mount overrides it means a deliberately EMPTY hold: overrides only
-        // come from the hangar, which always ships its real (possibly zero) hold counts, and
+        // visit) — but WITH mount or equipment overrides it means a deliberately EMPTY hold: overrides
+        // only come from the hangar, which always ships its real (possibly zero) hold counts, and
         // silently re-adding the default cargo could push a legal gun swap over PayloadCapacity.
         var cargo =
             wantCargo ? requested
-            : wantMounts ? System.Array.Empty<(uint, byte)>()
+            : wantMounts || wantEquip ? System.Array.Empty<(uint, byte)>()
             : fallbackCargo;
 
-        // Nothing customized AND no tier migrated AND default cargo ⇒ the pure authored spawn (already
-        // boot-validated to fit capacity): keep the null fast path so it flies ClassMuzzles with no row.
-        if (!wantMounts && !wantCargo && !migrated)
-            return (null, fallbackCargo);
+        // Nothing customized AND no gun tier migrated AND default cargo ⇒ the pure authored spawn
+        // (already boot-validated to fit capacity): keep the null fast path so it flies ClassMuzzles
+        // with no mount row. Equipment rides along untouched — a research-migrated default still
+        // returns its ids (and so a row).
+        if (!wantMounts && !wantCargo && !wantEquip && !migrated)
+            return (null, fallbackCargo, equipIds);
 
         float used = 0f;
         for (int i = 0; i < effective.Length; i++)
@@ -1787,17 +1892,25 @@ public sealed partial class Simulation
         foreach (var (cargoId, count) in cargo)
         {
             bool isFuel = _fuelPerCharge.ContainsKey(cargoId);
-            if (wantCargo && !isFuel && !_dispenserByCargo.ContainsKey(cargoId))
+            bool isAmmo = _ammoCargoIds.Contains(cargoId);
+            if (wantCargo && !isFuel && !isAmmo && !_dispenserByCargo.ContainsKey(cargoId))
             {
                 Log.SpawnCargoNotDispenser(_log, cargoId);
-                return (null, fallbackCargo);
+                return (null, fallbackCargo, null);
             }
             // Fuel pods on a hull with no fuel model would be dead cargo — reject like any other
             // invalid request (the hangar hides the row, so only a hacked/buggy client sends this).
             if (isFuel && count > 0 && (def is null || def.MaxFuel <= 0f))
             {
                 Log.SpawnFuelCargoOnFuellessHull(_log, cargoId, cls);
-                return (null, fallbackCargo);
+                return (null, fallbackCargo, null);
+            }
+            // Ammo packs likewise need a magazine to load into (the hangar hides the row on a
+            // MaxAmmo 0 hull).
+            if (isAmmo && count > 0 && (def is null || def.MaxAmmo == 0))
+            {
+                Log.SpawnAmmoCargoOnAmmolessHull(_log, cargoId, cls);
+                return (null, fallbackCargo, null);
             }
             used += count * (_cargoMass.TryGetValue(cargoId, out var m) ? m : 0f);
         }
@@ -1805,9 +1918,9 @@ public sealed partial class Simulation
         if (used > cap)
         {
             Log.SpawnLoadoutPayloadExceeds(_log, used, cap);
-            return (null, fallbackCargo);
+            return (null, fallbackCargo, null);
         }
-        return (effective, cargo);
+        return (effective, cargo, equipIds);
     }
 
     // The AUTHORITATIVE application of the shared weapon-tier succession rule (shared/WeaponTier.cs):
@@ -1891,6 +2004,7 @@ public sealed partial class Simulation
         s.LastFireTick = 0;
         s.MountLastFire = null; // per-mount cadence gates restart with the fresh LastFireTick
         s.FuelLoadEndTick = 0; // a pod half-loaded at the old sortie's end is not still loading
+        s.AmmoLoadEndTick = 0; // nor an ammo pack (FillPools resets it too; a fresh hull starts idle)
         s.LastInputTick = tick;
         s.Alive = true;
     }
@@ -1929,7 +2043,7 @@ public sealed partial class Simulation
             // re-spamming a request it can predict will fail.
             if (TryReserveSpawn(info.team, info.cls) != SpawnDecision.Allowed)
                 continue;
-            SpawnCombatShip(cid, info.team, info.cls, tick, info.cargo, launchSite, info.mounts);
+            SpawnCombatShip(cid, info.team, info.cls, tick, info.cargo, launchSite, info.mounts, info.equipment);
         }
     }
 
@@ -2052,7 +2166,8 @@ public sealed partial class Simulation
         // Player autopilot: byte-identical to the pre-autopilot path when disengaged. Cruise-control
         // style — a significant manual flight input on the CURRENT held stick disengages instantly and
         // hands control back. Otherwise the ship flies itself, but the pilot may still fire/lock/dispense
-        // (those flags copy through from the held input; firing never disengages).
+        // and keep the cloak engaged (those flags copy through from the held input; firing never
+        // disengages).
         if (!s.ApEngaged)
             return s.HeldInput;
         if (ManualOverride(s.HeldInput))
@@ -2067,6 +2182,7 @@ public sealed partial class Simulation
         ap.DropChaff = s.HeldInput.DropChaff;
         ap.DropMine = s.HeldInput.DropMine;
         ap.DropProbe = s.HeldInput.DropProbe;
+        ap.Cloak = s.HeldInput.Cloak; // the cloak latch is a held level — autopilot must not drop it
         return ap;
     }
 
@@ -2139,7 +2255,7 @@ public sealed partial class Simulation
         Vec3 myPos = s.State.Pos;
         Quat myRot = s.State.Rot;
         Vec3 myVel = s.State.Vel;
-        var stats = StatsFor(s.Class, s.IsPod);
+        var stats = s.Stats;
         // Rocks + base hulls (bases are solid to every ship — see AvoidObstacles). avoidBaseId is set
         // by the base leg (ApKind 1) below so avoidance never steers the nose off the very base being
         // flown at — the dock maneuver / arrival stop shell owns that base's clearance.
@@ -2767,8 +2883,6 @@ public sealed partial class Simulation
             IsPig = dead.IsPig,
             Alive = true,
             Health = HullFor(GameContent.PodClassId),
-            Shield = ShieldDefFor(GameContent.PodClassId).ShieldCapacity, // 0 unless a pod hull authors a shield
-            SigBias = ShieldDefFor(GameContent.PodClassId).SignatureBias, // pods fly the Pod def's bias
             LastInputTick = tick,
             State = new ShipState
             {
@@ -2776,11 +2890,17 @@ public sealed partial class Simulation
                 Vel = dead.State.Vel + dir * PodEjectSpeed,
                 Rot = dead.State.Rot,
                 AngVel = spin * PodEjectSpin,
-                Mass = StatsFor(dead.Class, true).Mass,
                 AbPower = 0f,
-                Fuel = StatsFor(dead.Class, true).MaxFuel, // 0 today; content-driven if pods ever get boost
             },
         };
+        // The Pod def's equipment (none — it has no slots): no shield, no booster, the Pod def's own
+        // signature bias and flight profile. Its pools are the Pod def's too — empty (no energy, no
+        // magazine, no packs: the wreck's hold never rides the pod).
+        ApplyEquipment(pod, null);
+        pod.State.Mass = pod.Stats.Mass;
+        pod.State.Fuel = pod.Stats.MaxFuel; // 0 today; content-driven if pods ever get boost
+        pod.Shield = ShieldCapacityFor(pod); // 0: the pod def carries no shield part
+        FillPools(pod);
         return pod;
     }
 
@@ -2795,10 +2915,10 @@ public sealed partial class Simulation
             ClearClientShip(pod.OwnerClientId); // player: wait for a manual relaunch (spawn menu)
     }
 
-    // A ship/pod reached its OWN base (voluntary dock, pod flew home, or rescue): a clean
+    // A ship/pod reached its OWN base (voluntary dock, pod flew home, rearm run, or rescue): a clean
     // resolution — no pod ejection. A player is returned to the spawn menu and relaunches on
-    // demand (no auto-respawn); a PIG pod frees its slot with an immediate respawn so the drone
-    // rejoins the wave.
+    // demand (no auto-respawn); a PIG pod or a PIG drone home to rearm frees its slot with an
+    // immediate respawn so a fresh, fully-stocked drone rejoins the wave.
     private void DockShip(ShipSim s, uint tick)
     {
         s.ApEngaged = false; // arriving home ends any autopilot leg
@@ -2821,7 +2941,10 @@ public sealed partial class Simulation
         // Clean exit (flew home / rescued) — the client despawns it silently, no death blast.
         s.GoneReason = GoneClean;
         _toRemove.Add(s);
-        if (s.IsPig && s.IsPod)
+        // EVERY AI drone frees its slot for an immediate relaunch: a PIG pod that flew home, and a PIG
+        // combat drone back from a rearm run (PigKindRearm) — the relaunch is a fresh hull with full
+        // pools. (A combat drone docking used to leave slot.Ship pointing at a removed hull.)
+        if (s.IsPig)
             FreePigPodSlot(s, tick + 1u, tick);
         else if (s.OwnerClientId >= 0)
             ClearClientShip(s.OwnerClientId); // player: wait for a manual relaunch (spawn menu)
@@ -2845,7 +2968,7 @@ public sealed partial class Simulation
         _ships.Remove(s.ShipId);
         _order.Remove(s);
         Events.Deaths.Add((s.ShipId, GoneDestroyed));
-        if (s.MountWeaponIds is not null || s.TurretWeaponIds is not null)
+        if (HasLoadoutRow(s))
             Events.LoadoutsChanged = true; // MsgShipLoadout table shrinks — reconcile-by-omission
     }
 
@@ -2896,7 +3019,7 @@ public sealed partial class Simulation
                 _ships.Remove(s.ShipId);
                 _order.Remove(s);
                 Events.Deaths.Add((s.ShipId, s.GoneReason));
-                if (s.MountWeaponIds is not null || s.TurretWeaponIds is not null)
+                if (HasLoadoutRow(s))
                     Events.LoadoutsChanged = true; // MsgShipLoadout table shrinks — reconcile-by-omission
             }
             _toRemove.Clear();

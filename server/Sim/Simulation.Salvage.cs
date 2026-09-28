@@ -108,7 +108,8 @@ public sealed partial class Simulation
     // BEFORE the kind dispatch, so the escape pod (built from the same wreck) inherits nothing.
     //
     // ROLL ORDER IS THE REPLAY CONTRACT: barrels in ClassMuzzles order, then the missile magazine,
-    // then each hold slot, then chaff/mine/probe, then fuel. Each candidate is fully qualified
+    // then each hold slot, then chaff/mine/probe, then fuel, then ammo packs (appended LAST by the
+    // equipment PR so every pre-existing draw keeps its position). Each candidate is fully qualified
     // (exists, non-empty, right kind) BEFORE its roll, so a hull with no rack consumes no draw.
     private void DropSalvage(ShipSim dead, uint tick)
     {
@@ -146,6 +147,10 @@ public sealed partial class Simulation
         DropCargo(dead.ProbeAmmo, WeaponKind.Probe);
         if (dead.FuelPodAmmo > 0 && _fuelCargoId != 0 && Roll())
             SpawnSalvage(dead, tick, SalvageKindCargo, _fuelCargoId, dead.FuelPodAmmo);
+        // The ammo-pack charges still in the hold (a pack already loading was spent; the magazine
+        // itself never drops — Allegiance scatters cargo, not a ship's loaded rounds).
+        if (dead.Pools.AmmoPacks > 0 && _ammoPackItem is { } ammoPack && Roll())
+            SpawnSalvage(dead, tick, SalvageKindCargo, ammoPack.CargoId, dead.Pools.AmmoPacks);
 
         void DropCargo(byte ammo, WeaponKind kind)
         {
@@ -519,6 +524,7 @@ public sealed partial class Simulation
         // loadout carries no override row, and a salvaged gun is exactly what makes one necessary.
         s.MountWeaponIds ??= EffectiveMountIds(s);
         s.MountWeaponIds[barrel] = w.WeaponId;
+        RefreshMinAmmoPerShot(s); // a new gun may be the magazine's cheapest — the pack trigger follows it
         Events.LoadoutsChanged = true;
         Events.PilotNotices.Add((s.OwnerClientId, $"Salvaged: {w.Name}"));
         return true;
@@ -550,7 +556,7 @@ public sealed partial class Simulation
         return true;
     }
 
-    // Kind 1 — a dispenser or fuel pack. The effect mirrors SeedDispenserAmmo so a salvaged pack
+    // Kind 1 — a dispenser, fuel or ammo pack. The effect mirrors SeedDispenserAmmo so a salvaged pack
     // behaves identically to one loaded in the hangar: charges accumulate, the kind's dispenser
     // weapon id is set only if the hull had none, and the tier is the team's researched successor.
     private bool EquipSalvageCargo(ShipSim s, ShipClassDef def, SalvageSim it, out string? reason)
@@ -562,7 +568,7 @@ public sealed partial class Simulation
         if (_fuelPerCharge.TryGetValue(cargoId, out float perCharge))
         {
             // A fuel pod on a hull with no tank is dead cargo — the same rule ResolveLoadout enforces.
-            if (StatsFor(s.Class, false).MaxFuel <= 0f)
+            if (s.Stats.MaxFuel <= 0f)
             {
                 reason = "no fuel tank";
                 return false;
@@ -584,9 +590,29 @@ public sealed partial class Simulation
             return true;
         }
 
+        if (_ammoCargoIds.Contains(cargoId))
+        {
+            // Ammo packs need a magazine to load into — the same rule ResolveLoadout enforces. The
+            // charges join the pool's reserve and the resource rule loads them when the magazine runs
+            // below a shot (THE ammo line's per-charge refill + load time, like the hangar's packs).
+            if (def.MaxAmmo == 0)
+            {
+                reason = "no ammo bay";
+                return false;
+            }
+            if (PayloadUsed(s) + packCost > def.PayloadCapacity)
+            {
+                reason = "payload full";
+                return false;
+            }
+            s.Pools.AmmoPacks = (byte)Math.Min(255, s.Pools.AmmoPacks + it.Count);
+            Events.PilotNotices.Add((s.OwnerClientId, $"Salvaged: {SalvageName(it)} ×{it.Count}"));
+            return true;
+        }
+
         if (!_dispenserByCargo.TryGetValue(cargoId, out var w))
         {
-            // Not dispenser cargo and not fuel: nothing on this hull consumes it, but it is still a
+            // Not dispenser, fuel or ammo cargo: nothing on this hull consumes it, but it is still a
             // real authored item — the hold can carry it.
             reason = _cargoNameById.ContainsKey(cargoId) ? "nothing uses it" : null;
             return false;
@@ -675,9 +701,9 @@ public sealed partial class Simulation
     }
 
     // The LIVE twin of ResolveLoadout's spawn-time payload sum: mounted gun/rack mass + the whole
-    // packs each dispenser hold still represents + fuel packs. Consumed charges free capacity, so a
-    // half-spent hold really can take salvage the full one couldn't. The cargo HOLD is deliberately
-    // absent: its slots are the budget for what it carries.
+    // packs each dispenser hold still represents + fuel packs + ammo packs. Consumed charges free
+    // capacity, so a half-spent hold really can take salvage the full one couldn't. The cargo HOLD is
+    // deliberately absent: its slots are the budget for what it carries.
     private float PayloadUsed(ShipSim s)
     {
         float used = 0f;
@@ -695,6 +721,8 @@ public sealed partial class Simulation
         used += HoldMass(s.ProbeAmmo, WeaponKind.Probe);
         if (s.FuelPodAmmo > 0 && _fuelCargoId != 0)
             used += PackMass(_fuelCargoId, s.FuelPodAmmo);
+        if (s.Pools.AmmoPacks > 0 && _ammoPackItem is { } ammoPack)
+            used += PackMass(ammoPack.CargoId, s.Pools.AmmoPacks);
 
         return used;
 

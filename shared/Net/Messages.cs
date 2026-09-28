@@ -69,6 +69,7 @@ public partial struct InputMessage
                 | (s.DropChaff ? InputFlags.DropChaff : 0)
                 | (s.DropMine ? InputFlags.DropMine : 0)
                 | (s.DropProbe ? InputFlags.DropProbe : 0)
+                | (s.Cloak ? InputFlags.Cloak : 0)
             ),
             LockTargetId = s.LockTargetId,
         };
@@ -88,6 +89,7 @@ public partial struct InputMessage
             DropChaff = (Flags & InputFlags.DropChaff) != 0,
             DropMine = (Flags & InputFlags.DropMine) != 0,
             DropProbe = (Flags & InputFlags.DropProbe) != 0,
+            Cloak = (Flags & InputFlags.Cloak) != 0,
             LockTargetId = LockTargetId,
         };
 }
@@ -98,8 +100,9 @@ public partial struct PingMessage
     public uint Nonce;
 }
 
-// Request to spawn a hull (honored only while Active). Both tails are optional: a bare frame
-// carries the hull default hold and the authored loadout; a malformed tail parses as absent.
+// Request to spawn a hull (honored only while Active). All three tails are optional: a bare frame
+// carries the hull default hold, the authored loadout and the hull's default equipment; a malformed
+// tail parses as absent.
 [WireMessage(4)]
 public partial struct SpawnMessage
 {
@@ -111,6 +114,9 @@ public partial struct SpawnMessage
 
     [WireOptional]
     public MountOverrideRecord[] Mounts; // only OVERRIDDEN slots
+
+    [WireOptional]
+    public EquipmentOverrideRecord[] Equipment; // only OVERRIDDEN equipment slots; absent = the hull default
 }
 
 [WireMessage(5)]
@@ -332,6 +338,12 @@ public partial struct DefsMessage
 
     public string FactionName;
     public AttrMod[] FactionAttributes; // sorted by attr byte
+
+    // The equipment catalog (shields, afterburners, cloaks); an entry's list position is its
+    // EquipmentId — what ShipClassDef.AllowedEquipment / DefaultEquipment reference. u16 count: the
+    // default u8 would silently cap the list.
+    [WireCount(WireWidth.U16)]
+    public IReadOnlyList<EquipmentDef> Equipment;
 }
 
 [WireMessage(8)]
@@ -522,7 +534,8 @@ public partial struct RockGoneMessage
     public ulong[] RockIds;
 }
 
-// Full per-ship loadout table, reconcile-by-omission (an absent ship flies its authored loadout).
+// Full per-ship loadout table, reconcile-by-omission (an absent ship flies its authored loadout and
+// its hull's DefaultEquipment).
 [WireMessage(28)]
 public partial struct ShipLoadoutMessage
 {

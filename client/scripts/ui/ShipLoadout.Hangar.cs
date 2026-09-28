@@ -21,6 +21,20 @@ public partial class ShipLoadout
     private const int ArsenalFitSize = 10; // "fits N" note beside the arsenal title
     private const int CargoNameSize = 12; // an arsenal row's item name
 
+    // -- right column: EQUIPMENT section (shield / afterburner / cloak slots) -----------------------
+    private Control _equipSection = null!;
+    private VBoxContainer _equipList = null!;
+    private readonly List<(byte Slot, LoadoutSlot Row)> _equipRows = new();
+
+    // Slot byte, hardpoint-style tag, and header word — one row order for BuildEquipmentSection,
+    // RefreshEquipmentArsenal (ShipLoadout.cs) and the UiShowcase fixture.
+    private static readonly (byte Slot, string Tag, string Kind)[] EquipmentSlots =
+    {
+        (EquipmentDef.SlotShield, "E1", "SHIELD"),
+        (EquipmentDef.SlotAfterburner, "E2", "AFTERBURNER"),
+        (EquipmentDef.SlotCloak, "E3", "CLOAK"),
+    };
+
     // Hangar tab content: [ center column (card strip + 3D preview + stats) | right column ].
     private Control BuildHangarContent()
     {
@@ -255,6 +269,10 @@ public partial class ShipLoadout
         // ▶ TURRET STATIONS — the crew-served stations of THIS hull (hidden on hulls with none).
         col.AddChild(BuildTurretSection());
 
+        // ▶ EQUIPMENT — the shield / afterburner / cloak slots this hull actually has (equipment PR;
+        // hidden-not-greyed on a slot the hull allows nothing for).
+        col.AddChild(BuildEquipmentSection());
+
         col.AddChild(new DiamondDivider());
 
         // Arsenal frame — tinted container listing what fits the selected slot.
@@ -320,15 +338,27 @@ public partial class ShipLoadout
 
         foreach (CargoItemDef item in items)
         {
-            // Fuel cargo only applies to hulls with a modeled tank — HIDDEN (not greyed) on the
-            // rest, per the repo's inapplicable/unresearched-content convention. SelectShip
-            // re-runs this refresh so the row set follows the hull pick.
+            // Fuel cargo only applies to a hull with a modeled tank AND an afterburner slot to spend
+            // it — HIDDEN (not greyed) on the rest, per the repo's inapplicable/unresearched-content
+            // convention. SelectShip re-runs this refresh so the row set follows the hull pick.
             if (
                 item.FuelPerCharge > 0f
                 && (
                     _classId is not byte fuelCls
                     || !_defs.TryGetShipDef(fuelCls, out ShipClassDef fuelDef)
                     || fuelDef.MaxFuel <= 0f
+                    || !_defs.HasEquipmentSlot(fuelCls, EquipmentDef.SlotAfterburner)
+                )
+            )
+                continue;
+            // Ammo packs (equipment PR) only apply to a hull with a magazine at all — same
+            // hidden-not-greyed rule as fuel above (a MaxAmmo 0 hull mounts no ammo-costing gun).
+            if (
+                item.AmmoPerCharge > 0
+                && (
+                    _classId is not byte ammoCls
+                    || !_defs.TryGetShipDef(ammoCls, out ShipClassDef ammoDef)
+                    || ammoDef.MaxAmmo <= 0
                 )
             )
                 continue;
@@ -385,6 +415,67 @@ public partial class ShipLoadout
             _cargoList.AddChild(row);
             _cargoCounts.Add((itemId, count));
         }
+    }
+
+    // ---- right: EQUIPMENT (shield / afterburner / cloak slots; equipment PR) --------------------
+
+    // The "▶ EQUIPMENT" block: like BuildTurretSection, an always-present wrapper RefreshEquipmentSection
+    // toggles Visible on/off (no equipment slot at all on a hull like the Miner shows nothing).
+    private Control BuildEquipmentSection()
+    {
+        var box = new VBoxContainer { Visible = false };
+        box.AddThemeConstantOverride("separation", 10);
+        _equipSection = box;
+
+        var head = new HBoxContainer();
+        var title = UiKit.MakeLabel("▶ EQUIPMENT", UiKit.TextStyle.Label, DesignTokens.TextDim);
+        title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        head.AddChild(title);
+        box.AddChild(head);
+
+        _equipList = new VBoxContainer();
+        _equipList.AddThemeConstantOverride("separation", 7);
+        box.AddChild(_equipList);
+        return box;
+    }
+
+    // Rebuild the equipment rows for the selected hull. Called from RefreshLoadoutViews (hull swap,
+    // equip/unequip, reset). One row per slot the hull actually allows something for — a slot the hull
+    // has none of (e.g. no shield at all) gets no row, hidden rather than greyed; a slot with nothing
+    // currently picked shows "— EMPTY —" (a launch-empty choice is not "nothing to show").
+    private void RefreshEquipmentSection()
+    {
+        foreach (Node child in _equipList.GetChildren())
+            child.QueueFree();
+        _equipRows.Clear();
+        _equipSection.Visible = false;
+
+        if (_classId is not byte classId || !_defs.TryGetShipDef(classId, out ShipClassDef def))
+            return;
+
+        byte team = Team;
+        bool any = false;
+        foreach (var (slot, tag, kind) in EquipmentSlots)
+        {
+            if (!_defs.HasEquipmentSlot(classId, slot))
+                continue;
+            any = true;
+            ushort? picked = _state.AssignedEquipment(classId, slot, def);
+            EquipmentDef? live = picked is ushort id
+                ? _defs.GetEquipment(_defs.MigrateEquipmentTier(id, team, _world.TeamState))
+                : null;
+            var row = new LoadoutSlot();
+            row.Configure(
+                $"{tag} · {kind}",
+                live?.Name.ToUpperInvariant() ?? "— EMPTY —",
+                live != null ? EquipmentStatLine(live) : ""
+            );
+            row.Selected = _selectedEquip == slot;
+            row.Pressed += () => SelectEquip(slot);
+            _equipList.AddChild(row);
+            _equipRows.Add((slot, row));
+        }
+        _equipSection.Visible = any;
     }
 
     private void StepCargo(uint itemId, int delta, Label count)
@@ -536,17 +627,66 @@ public partial class ShipLoadout
             case 31:
                 Snap("15-arsenal-bottom");
                 break;
+            // Equipment (equipment PR): switch to a hull with a cloak slot (Scout, found by content
+            // rather than a card index so a hull reorder can't silently pick the wrong one), select
+            // its CLOAK row, equip the one allowed part, then the SHIELD row — proving the arsenal's
+            // LEAVE SLOT EMPTY + EQUIP rows and the preview's oscillating shimmer all work.
             case 32:
+                ClickShipCardWithCloak();
+                break;
+            case 33:
+                ClickEquipRow(EquipmentDef.SlotCloak);
+                break;
+            case 34:
+                Snap("16-cloak-selected");
+                break;
+            case 35:
+                ClickArsenalRow();
+                break;
+            case 36:
+                Snap("17-cloak-equipped");
+                break;
+            case 37:
+                ClickEquipRow(EquipmentDef.SlotShield);
+                break;
+            case 38:
+                Snap("18-shield-selected");
+                break;
+            case 39:
                 _demoLaunched = true;
                 ClickAt(_launch.GetGlobalRect().GetCenter());
                 break;
             // Only reached if the spawn never landed — the ship spawning closes this
             // screen first and DemoAfterLaunch takes the final shot instead.
-            case 33:
-                Snap("17-launch-stuck");
+            case 40:
+                Snap("20-launch-stuck");
                 GetTree().Quit();
                 break;
         }
+    }
+
+    // The equipment demo needs a hull that actually carries a cloak slot — found by content (the
+    // Scout, in stock data) rather than a fixed card index, so the sequence survives a hull reorder.
+    private void ClickShipCardWithCloak()
+    {
+        foreach ((byte classId, ShipCard card) in _shipCards)
+            if (card.Visible && _defs.HasEquipmentSlot(classId, EquipmentDef.SlotCloak))
+            {
+                ClickAt(card.GetGlobalRect().GetCenter());
+                return;
+            }
+        GD.PrintErr("HANGAR_DEMO: no ship card with a cloak slot");
+    }
+
+    private void ClickEquipRow(byte slot)
+    {
+        foreach ((byte s, LoadoutSlot row) in _equipRows)
+            if (s == slot)
+            {
+                ClickAt(row.GetGlobalRect().GetCenter());
+                return;
+            }
+        GD.PrintErr($"HANGAR_DEMO: no equipment row for slot {slot}");
     }
 
     private void ClickBuildCard()
@@ -617,8 +757,8 @@ public partial class ShipLoadout
         SceneTreeTimer t = tree.CreateTimer(1.0);
         t.Timeout += () =>
         {
-            tree.Root.GetTexture().GetImage().SavePng($"{dir}/16-after-launch.png");
-            GD.Print("HANGAR_DEMO_SHOT:16-after-launch");
+            tree.Root.GetTexture().GetImage().SavePng($"{dir}/19-after-launch.png");
+            GD.Print("HANGAR_DEMO_SHOT:19-after-launch");
             if (_crewDemoRole != CrewDemoRole.Captain)
             {
                 tree.Quit();

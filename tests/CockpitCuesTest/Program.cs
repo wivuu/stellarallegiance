@@ -1,10 +1,13 @@
 // Headless unit tests for the cockpit-cue edge detectors (client/scripts/CockpitCues.cs): HullCues (shield
-// down / shield back / hull critical, fed by SystemRing) and MatchCues (match start / payday, fed by Hud).
-// Console PASS/FAIL in the repo's idiom; exits non-zero on any failure. Both are pure latches over a level
-// the HUD samples every frame, so what matters is WHEN they fire: once per real edge, never on a fresh
-// hull or a fresh connection, never on the killing blow.
+// down / shield back / hull critical, fed by SystemRing), MatchCues (match start / payday, fed by Hud) and
+// ResourceCues (ammo/energy dry-fire + pack-load-start, fed by Hud off the local pilot's resource gate).
+// Console PASS/FAIL in the repo's idiom; exits non-zero on any failure. All three are pure latches/levels
+// the HUD samples every frame, so what matters is WHEN they fire: once per real edge (or, for
+// ResourceCues' dry-fire, every tick the gate stays blocked — the caller's own cooldown turns that into
+// "once on press, then a periodic reminder while held").
 using HullCue = HullCues.Cue;
 using MatchCue = MatchCues.Cue;
+using ResourceCue = ResourceCues.Cue;
 
 int failures = 0;
 void Check(bool cond, string label)
@@ -158,6 +161,55 @@ const float MaxHull = 100f,
     m.Forget();
     Check(m.Credits(33.0, 1, 6000) == MatchCue.None, "after Forget the next balance seeds silently");
     Check(m.Credits(44.0, 1, 6500) == MatchCue.Payday, "and rises pay out again");
+}
+
+// ---- ResourceCues: dry fire on press, and again every tick it stays held+blocked -----------------------
+{
+    var c = new ResourceCues();
+    Check(c.Observe(GateBlock.None, false) == ResourceCue.None, "affordable and idle: nothing");
+    Check(c.Observe(GateBlock.NoEnergy, false) == ResourceCue.DryFireEnergy, "held against an empty energy pool");
+    Check(
+        c.Observe(GateBlock.NoEnergy, false) == ResourceCue.DryFireEnergy,
+        "…and again next tick (still held): the caller's own cooldown throttles the repeat, not this"
+    );
+    Check(c.Observe(GateBlock.None, false) == ResourceCue.None, "energy recovered: quiet");
+    Check(c.Observe(GateBlock.NoAmmo, false) == ResourceCue.DryFireAmmo, "held against an empty magazine, no pack aboard");
+}
+
+// ---- ResourceCues: a pack loading is quiet on the gate (it already said its piece once) ----------------
+{
+    var c = new ResourceCues();
+    Check(c.Observe(GateBlock.NoAmmo, false) == ResourceCue.DryFireAmmo, "dry, nothing loading yet");
+    Check(
+        c.Observe(GateBlock.Loading, true) == ResourceCue.PackLoadStart,
+        "a pack commits: PackLoadStart, not another dry click"
+    );
+    Check(c.Observe(GateBlock.Loading, true) == ResourceCue.None, "still loading: quiet (once only)");
+    Check(c.Observe(GateBlock.None, false) == ResourceCue.None, "the charge lands, gun affordable again: quiet");
+}
+
+// ---- ResourceCues: PackLoadStart fires standalone, even with the trigger released --------------------
+{
+    var c = new ResourceCues();
+    Check(c.Observe(GateBlock.None, false) == ResourceCue.None, "seed: not firing, nothing loading");
+    Check(
+        c.Observe(GateBlock.None, true) == ResourceCue.PackLoadStart,
+        "a pack starts loading (turret drained it): PackLoadStart alone"
+    );
+    Check(c.Observe(GateBlock.None, true) == ResourceCue.None, "still loading: once only");
+}
+
+// ---- ResourceCues: energy and ammo dry-fire never combine, and a fresh instance seeds quiet -----------
+{
+    var c = new ResourceCues();
+    Check(
+        c.Observe(GateBlock.NoEnergy, true) == (ResourceCue.DryFireEnergy | ResourceCue.PackLoadStart),
+        "an energy-starved cloak while a turret's ammo pack also commits: both cues, independent flags"
+    );
+    Check(
+        c.Observe(GateBlock.NoAmmo, true) == ResourceCue.DryFireAmmo,
+        "next tick: ammo dry (pack already latched loading=true so no repeat PackLoadStart)"
+    );
 }
 
 Console.WriteLine(failures == 0 ? "ALL PASS" : $"{failures} FAILURE(S)");

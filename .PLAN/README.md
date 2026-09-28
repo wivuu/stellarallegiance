@@ -189,18 +189,20 @@ YAML, so it lands in the existing seams without rework.
   - If the player interrupts the autopilot-ripcord (thrust, fire, steer etc), control is yielded
     back and the countdown cancels.
   - Show a visual flash as the user leaves and enters the sector via teleport/ripcord.
+  - Should server-force a decloak the instant a ship ripcords (Allegiance drops the cloak on
+    ripcord, `cloakIGC.cpp`) — not wired: the equipment PR (2026-09-27) shipped the cloak toggle
+    itself but not this interaction, since Ripcord doesn't exist yet either.
   - *Ripcord is warp-with-a-countdown-and-an-interrupt, and `Simulation.Warp.cs` has no dedicated
     suite — a warp-transition suite is the natural precursor.*
-- ☐ **[M] Per-ship part restrictions** — let YAML flexibly restrict which guns, missile racks and
-  (later) equipment fit which ships, e.g. scouts can't carry bomber missiles and the nanite is
-  scout-only. Today the weapon's CATEGORY is the only gate (`HardpointDef.MountAccepts`,
-  `shared/Defs.cs:97`: any gun fits any gun mount, any rack any missile mount), so a Scout can mount
-  the SRM Anti-Base rack (mass 4 inside its 5 free payload, no tech) and fly the match-ending
-  ordnance on the fastest hull, and any gun-mounted hull can carry the nanite.
+- ☐ **[M] Per-ship part restrictions** — let YAML flexibly restrict which guns and missile racks fit
+  which ships, e.g. scouts can't carry bomber missiles and the nanite is scout-only. Today the
+  weapon's CATEGORY is the only gate (`HardpointDef.MountAccepts`, `shared/Defs.cs:97`: any gun fits
+  any gun mount, any rack any missile mount), so a Scout can mount the SRM Anti-Base rack (mass 4
+  inside its 5 free payload, no tech) and fly the match-ending ordnance on the fastest hull, and any
+  gun-mounted hull can carry the nanite.
   - Suggested shape: named **mount families**, Allegiance's part masks with names instead of bits.
-    In IGC a gun fits a hardpoint when `weapon.partMask & hardpoint.partMask` is non-zero, and racks
-    and other equipment are gated per hull by `pmEquipment` (`igc-format` skill). Here each part
-    lists `families:`, a hull lists what its mounts `accept:` (a hull-wide default plus
+    In IGC a gun fits a hardpoint when `weapon.partMask & hardpoint.partMask` is non-zero. Here each
+    part lists `families:`, a hull lists what its mounts `accept:` (a hull-wide default plus
     per-hardpoint overrides), and a part fits when the two intersect. Unauthored = today's open
     behaviour, so hulls opt in one at a time; stock values come from the IGC (`weapons.yaml` already
     records each gun's mask).
@@ -208,67 +210,83 @@ YAML, so it lands in the existing seams without rework.
     pickup (a gun needs a *compatible* empty mount), turret stations (`ResolveTurretWeapon`), and
     ContentValidator (refuse a tier successor that drops a family its predecessor had, or an
     authored default that doesn't fit its own mount). Families ride `MsgDefs` (one protocol bump).
-  - Also covers the parts *Shields & afterburners as equipment* and *Stealth fighters & bombers*
-    add (cloaks only on stealth hulls, large shields only on heavy ones).
+  - ✅ **Equipment slots already got their own, narrower restriction** (2026-09-27, branch
+    equipment-energy-ammo — see *Shields & afterburners as equipment* above): a hull's
+    `allowed-parts` (keys `shield`/`afterburner`/`cloak`) lists exactly which parts each slot takes,
+    with a listed part's successor chain implicitly allowed. That is the same per-hull `pmEquipment`
+    replacement this item used to flag as unused (`Hull.cs`) — it is used now, but only for the
+    three equipment slots. Guns and missile racks are UNCHANGED: still gated by mount CATEGORY only,
+    still this item's open scope.
   - *Replaces the open mount model (`launchers.yaml` note D3, reworded 2026-09-27); LoadoutTest
-    scenario 2 (a Quickfire rack on the Scout) pins today's behaviour and flips to a reject. The
-    factions model also has an unused per-hull `allowed-parts` whitelist of part ids (`Hull.cs:92`,
-    IGC's `pmEquipment` replacement): explicit, but every new part would need adding to every
-    hull's list.*
-- ☐ **[L] Shields & afterburners as equipment** — make the shield and the afterburner hangar
-  choices, as in Allegiance, instead of fixed hull stats: a hull declares which part classes it
-  accepts, the pilot picks the part (Iron: Sm/Med/Lrg Shield 1-3; Booster 1-3, Lt/Hvy/Cruise/Retro
-  Booster) and research tiers upgrade it.
-  - Tiers ride the shipped weapon-tier seam (`obsoleted-by-techs` + `successor-part-id`).
-  - Comes before *In-flight loadout management* (dequipping a shield) and *Stealth fighters &
-    bombers* (the cloak is a third part in the same family).
-  - *Today both are hull stats in `hulls.yaml` (`shield-capacity`/`-recharge`/`-delay`, and the
-    `ab-*` + `max-fuel` block that `shared/FlightModel.cs` integrates). The factions model
-    (`factions/src/Allegiance.Factions/Model/Parts/`) already mirrors the IGC parts (`Shield.cs`,
-    `Afterburner.cs`, `Cloak.cs`, `AmmoPack.cs`), but nothing authors or projects them. The picks
-    need a tail on `MsgSpawn` and `MsgShipLoadout` (one protocol bump), and the client must predict
-    with the equipped booster exactly as the server integrates it. Part meshes are converted in
-    `pick-assets/` (`acs30`/`acs39`/`acs34` shields, `acs48` booster, `acs38` cloak).*
+    scenario 2 (a Quickfire rack on the Scout) pins today's behaviour and flips to a reject.*
+- ✅ **[L] Shields & afterburners as equipment** (2026-09-27, branch equipment-energy-ammo). Shield
+  and afterburner are per-ship equipment parts picked in the hangar, not fixed hull stats: a hull's
+  `allowed-parts` declares which slots it has (a listed part's successor tiers are implicitly
+  allowed) and `preferred-parts` sets each slot's buildable default. 12 new research lines — Sm/Med/
+  Lrg Shield 2 and 3, Booster 2 and 3, Lt Booster 1 and 2, Crs Booster, Hvy Booster — upgrade the
+  default live via the shipped weapon-tier seam (`shared/EquipmentTier.cs`, `obsoleted-by-techs` +
+  `successor-part-id`). Stock numbers are Allegiance-faithful (PCore014, Iron Coalition): shields are
+  smaller buffers with slow continuous regen (Sm Shield 1 = 51 at 0.69/s, replacing the old flat
+  60-at-8/s-after-3s); the Lt Interceptor has NO shield slot at all (IGC `pmEquipment` 0); boosters
+  are much stronger and now finite (Enh Fighter boosted top speed ~140 → ~247 u/s), with no in-flight
+  fuel regen (`ab-fuel-recharge: 0` everywhere — Allegiance never refuels in flight). Resolved
+  model/runtime mismatches: afterburner `max-thrust` = IGC maxThrust ÷ 30, the same scale as hull
+  `thrust`; `fuel-consumption` = fuel/second at full burn; the shield's `recharge-delay` is a runtime
+  extension (0 = Allegiance's continuous regen). Mechanics + file map:
+  [`GLOSSARY.md` → *Equipment (per-ship slots)*](../GLOSSARY.md), *Shield*.
+  - Not done: no hangar part-mesh preview yet (`ui/LoadoutPreview.cs` covers hulls/guns, not
+    equipment); PIGs/miners/constructors keep spawning with `Shield = 0` (unchanged — MiningTest
+    §29 depends on it); equipment doesn't drop as salvage (see *Salvage follow-ups* below).
 - ☐ **In-flight loadout management** — equip and dequip slots, manage inventory, etc. while flying.
   - Some equipped items should have a signature modifier (e.g. shields add to the ship's signature)
     and can be dequipped.
   - Some equipped items can have special in-flight effects when activated (cloak).
-  - Ship 'energy' concept; cloak uses energy — now tracked as *Ammo & energy* and *Stealth fighters
-    & bombers* below.
+  - ✅ Ship 'energy' concept; cloak uses energy (2026-09-27, branch equipment-energy-ammo — shipped
+    as part of *Ammo & energy* below: `max-energy`/`energy-recharge-rate` per hull, the cloak's own
+    drain/ramp). Still open here: EQUIPPING/DEQUIPPING a slot mid-flight — a pick is resolved once at
+    spawn; the cloak's in-flight TOGGLE shipped, but swapping which shield/afterburner/cloak is
+    mounted still means a re-dock.
   - *Half-plumbed already: `ShipSim.SigBias` exists as the live per-ship equipment/loadout/ability
-    seam and already feeds fog/vision, so the signature-modifier half has a home.*
-- ☐ **[L] Ammo & energy** — the resource pressure behind Allegiance's sortie → dock → rearm rhythm:
-  projectile (PW) guns spend ammo from a hull magazine, energy (EW) guns, the ER Nanite and the
-  cloak drain a recharging energy pool, and ammo packs ride the cargo hold the way fuel pods do.
-  - Hull `max-ammo` / `max-energy` / `energy-recharge` and weapon `ammo-per-shot` /
-    `energy-per-shot`, as the IGC authors them (`Allegiance/src/Igc/igc.h:1781-1786`,
-    `:1837-1839`); Iron's `max-energy` ×1.2 goes live.
-  - The ER Nanite (shipped; heals for free today) costs 30 energy a shot at 4 shots/s in PCore014,
-    against the Scout's 1200-point pool recharging 60/s: about 20 s of flat-out healing, then half
-    rate. Its base-repair half is under *Station shields + repair* (Stage 4).
-  - HUD ammo and energy readouts; PIGs learn to go home and rearm.
-  - *Guns fire forever today (`weapons.yaml:6`: "infinite ammo") and there is no energy model
-    (`max-energy` is INERT, `iron-coalition.yaml:23`). The factions model
-    (`factions/src/Allegiance.Factions/Model/`) already carries every field (`Hull.cs:47/50/59`,
-    `Parts/Weapon.cs:13/19`), unauthored and unprojected. The local client predicts its own fire,
-    so the gate needs a prediction mirror like the fuel pod's `ConsumeFuelPod`, and the counts must
-    ride the ship record (a protocol bump). The dock refund already makes the rearm trip net-free.*
+    seam and already feeds fog/vision (now re-seeded live on every equip/re-equip), so the
+    signature-modifier half has a home.*
+- ✅ **[L] Ammo & energy** (2026-09-27, branch equipment-energy-ammo). The resource pressure behind
+  Allegiance's sortie → dock → rearm rhythm: PW guns (Gat/Mini-Gun/AutoCan) spend ammo from a shared
+  hull magazine (`max-ammo`), the ER Nanite and an engaged cloak drain a recharging energy pool
+  (`max-energy`/`energy-recharge-rate`, Iron's ×1.2 now live), and ammo packs ride the cargo hold the
+  way fuel pods do (cargo-id 6, auto-load when the magazine runs dry). HUD ENRG/AMMO arcs and a
+  WeaponsPanel ammo row report NO ENRG / NO AMMO / LOADING; PIGs whose guns run dry fly home and dock
+  to rearm (`Simulation.Pig.cs`'s `TryRearm`/`PigKindRearm`) — the dock IS the rearm, since the
+  relaunched hull is fresh. Client prediction is EXACT: `shared/ShipResources.cs` is one shared rule
+  stepped identically by the server, the owner's `ResourceMirror`, and a remote's replay, with energy
+  on the wire as raw f32 so the fire gate never flips at a fractional value. The ER Nanite now costs
+  60 energy a shot at our cadence, against the Scout's 1440-point pool (Iron ×1.2) recharging 60/s:
+  about 24 s of flat-out healing, then half rate. Mechanics + file map:
+  [`GLOSSARY.md` → *Resource Rule (`ShipResources`)*](../GLOSSARY.md), *Energy Pool*,
+  *Ammo Pool & Ammo Pack*, *PIG Rearm*.
+  - Not done: the ER Nanite's BASE-repair half (healing a station, not just a ship) stays under
+    *Station shields + repair* below; EW-tagged guns (EW Sniper / EW Utl Cannon) are still unported
+    — see *Stealth fighters & bombers* next.
 - ☐ **[L] Stealth fighters & bombers** — Iron's Stealth Fighter → Adv Stl Fighter and the Stealth
-  Bomber (`wc_icsf`, converted in `pick-assets/wc_icsf.glb`), flying a cloak (Sig Cloak 1-3, Hvy
-  Cloak 1-2) and the EW Sniper / EW Utl Cannon guns.
-  - The Allegiance cloak (`Allegiance/src/Igc/cloakIGC.cpp:59`): toggled in flight, it ramps at its
-    on/off rates up to `max-cloaking`, scales the ship's signature by (1 − cloaking), burns energy
-    every second (and weakens when energy runs short), and drops while ripcording.
-  - Needs *Ammo & energy* (the cloak's drain, the EW guns) and *Shields & afterburners as
-    equipment* (the cloak slot), plus a `toggle_cloak` binding, HUD state, and a cloak shimmer for
-    the pilot and teammates.
-  - Decide the gate: in IGC these are Tactical-path ships, and the Tactical base isn't ported (the
-    Silicon and Uranium special rocks it could build on are seeded but unused).
-  - *`ShipSim.SigBias` / `SignatureModel.Compute` is the seam the glossary already reserves for "a
-    future loadout/cloak system". Vision multiplies each target's captured signature
-    (`Simulation.Vision.cs:569`), so fog decides who sees a cloaked ship without new vision code —
-    check that the eyeball tier (mesh without radar) honours it too. Firing already spikes
-    signature (`fire-signature-boost`); decide how that interacts with an engaged cloak.*
+  Bomber (`wc_icsf`, converted in `pick-assets/wc_icsf.glb`), flying the EW Sniper / EW Utl Cannon
+  guns and the higher cloak tiers.
+  - ✅ **The cloak mechanic itself shipped** (2026-09-27, branch equipment-energy-ammo, with *Ammo &
+    energy* above): toggle (`toggle_cloak`), ramp, energy drain, signature × (1 − cloaking) applied
+    after the fog clamp, and a shimmer for every viewer — see
+    [`GLOSSARY.md` → *Cloak*](../GLOSSARY.md). Carrier: **Sig Cloak 1 on the Scout**, a DELIBERATE
+    STAND-IN — verified against PCore014, no ported Iron combat hull can cloak (Iron Scout id 410
+    and Lt Interceptor id 415 both have `pmEquipment[Cloak] = 0`; only the unported Stealth Fighter
+    can), so the Scout holds the slot until a real stealth hull lands.
+  - Still open: the Stealth Fighter / Adv Stl Fighter / Stealth Bomber hulls themselves, the EW
+    Sniper / EW Utl Cannon guns, Sig Cloak 2/3 and Hvy Cloak 1/2 (all gated on the Tactical base,
+    which isn't ported — the Silicon and Uranium special rocks it could build on are seeded but
+    unused), and deciding the Tactical gate itself. Audio (an SFX cue, and any Allegiance voice
+    line, for cloak engage/disengage) is also not wired yet — tracked with the existing voice-line
+    decision under *Spatial audio polish* (#105) below.
+  - *`ShipSim.SigBias` is no longer a seam reserved for later — `Simulation.Equipment.cs`'s
+    `ApplyEquipment` now re-seeds it live from the hull + every equipped part's signature every time
+    a ship (re)equips. Vision multiplies each target's captured signature
+    (`Simulation.Vision.cs`), so fog decides who sees a cloaked ship without new vision code; the
+    equipment PR's `tests/FogTest` additions cover the eyeball tier and the cloaked-after-clamp case.*
 - ☐ **[M] Damage types vs armor classes** — Allegiance's damage model: every bolt, missile and mine
   carries a damage type, every hull, shield and station a defense type, and a damage-constant table
   (up to 20 × 20) scales each hit (`GetDamageConstant`, `Allegiance/src/Igc/igc.h:2751`). The table
@@ -302,7 +320,8 @@ YAML, so it lands in the existing seams without rework.
   magazine cap + auto-reload from stowed same-rack stacks; PIG pickup; shootable items; salvage
   economy (sell stowed rounds at dock); a `missile-pickup-match: rack|line` knob; promote the
   stow-only authored-id derivation (now the `AuthoredIds` local function in `server/Net/Frames.cs:637`,
-  not `Protocol.BuildShipLoadouts`) to a `Simulation` seam.
+  not `Protocol.BuildShipLoadouts`) to a `Simulation` seam; equipment (shields/afterburners/cloaks)
+  as salvage — a destroyed ship's equipped parts don't drop today, only its guns/racks/cargo do.
 
 ### Stage 4 — Strategy depth (Allegiance core)
 
@@ -351,17 +370,25 @@ YAML pipeline.
   PW/EW range and damage; missile tracking and damage; He3 yield and mining speed; station hull and
   shield; ripcord time. The ported Supremacy's set (Ship Hull, Ship Shield, Ship Sensors, Missile
   Damage) is the natural first slice.
-  - Each boost needs a consumer: 6 of the 25 `GameAttribute`s have one today (gun and missile
-    damage, station armor, signature, mining rate and capacity); `MaxShieldStation` and
-    `MaxEnergy` resolve but are unconsumed; the other 17 have nothing.
+  - Each boost needs a consumer: 9 of the 25 `GameAttribute`s have one today (gun and missile
+    damage, station armor, signature, mining rate and capacity, plus — as of 2026-09-27, branch
+    equipment-energy-ammo — `MaxEnergy`, `MaxShieldShip` and `ShieldRegenerationShip`, consumed by
+    the equipment PR's energy pool and per-ship shield). `MaxShieldStation` still resolves but is
+    unconsumed (no station-shield model — see *Station shields + repair* below); the other 14 have
+    nothing. Allegiance's own "GA: Ship Shield" research (a team-wide shield multiplier) belongs
+    here too: the multipliers are wired end-to-end, but no stock development grants them yet.
+  - Team attributes now STREAM to clients (`TeamStateRecord.Attributes`, protocol 44 — see
+    [`GLOSSARY.md` → *Team Attribute Vector*](../GLOSSARY.md)) generically, not just resolved
+    server-side, so any future consumed attribute reaches the client for free over the same wire.
   - Flight boosts (MaxSpeed, Thrust, TurnRate, TurnTorque) change `shared/FlightModel.cs` inputs,
     so the client's prediction must apply the same multiplier or every boosted ship rubber-bands.
-  - *Half the pipeline exists: `RecomputeTeamAttributes` (`Simulation.cs:1428`) resolves faction ×
+  - *Half the pipeline exists: `RecomputeTeamAttributes` (`Simulation.cs:1504`) resolves faction ×
     completed developments into `World.TeamAttr` at match start and on every research completion;
     `DevelopmentDef.Attributes` already streams (`shared/Defs.cs:505`) and the Research tab renders
-    it as ±% (`ResearchTab.cs:651`). Gotcha: "completed" is inferred from owned techs
-    (`Simulation.cs:1439`, `GrantedTechs.Count > 0`), so a pure stat development that grants no
-    tech would never count. Track completed developments explicitly, in the sim and on the client.*
+    it as ±% (`ResearchTab.cs:651`). Gotcha (still open): "completed" is inferred from owned techs
+    (`Simulation.cs:1516`, `GrantedTechs.Count > 0`), so a pure stat development that grants no tech
+    would never count — a stat-only development MUST also grant a marker tech. Track completed
+    developments explicitly, in the sim and on the client.*
 - ☐ **[L] Update plan to include multiple teams** — each map only supports a certain number of
   teams, so this is a constraint that must be reflected in the plan. Plan should include a richer
   'game lobby' (as opposed to server lobby) experience; allowing users to select or join teams before

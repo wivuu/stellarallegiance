@@ -15,14 +15,16 @@ surface you actually call.
 only `YamlDotNet`). It owns:
 
 - **The data model** — a `Core` (the complete static dataset) holding catalogs of `Hull`, `Part`
-  subtypes (`Weapon`/`Shield`/`Cloak`/`Afterburner`/`AmmoPack`/`Launcher`), `Station`, `Development`,
-  `Drone`, `Expendable` subtypes (`Missile`/`Mine`/`Chaff`/`Probe`), `Projectile`, `Tech`, and
-  `Faction`.
+  subtypes (`Weapon`/`Launcher` and the equipment `Shield`/`Cloak`/`Afterburner`), `Station`,
+  `Development`, `Drone`, `Expendable` subtypes (`Missile`/`Mine`/`Chaff`/`Probe` and the pure-cargo
+  `FuelPod`/`AmmoPack`), `Projectile`, `Tech`, and `Faction`.
 - **Serialization** — load/save the `Core` from human-readable, split YAML files via a manifest
   (`CoreSerializer`).
 - **Validation** — referential integrity checking (`CoreValidator`).
 - **Resolution** — the runtime tech-tree logic: given what a team owns, compute what it can reach
-  and what it can build (`TechResolver`, `BuildableResolver`, `AttributeResolver`).
+  and what it can build (`TechResolver`, `BuildableResolver`, `AttributeResolver`), plus the per-ship
+  equipment rules — which shield/afterburner/cloak a hull may carry and starts with
+  (`EquipmentResolver`).
 
 The library is **pure data + rules**. It has no notion of frames, rendering, networking, or ECS. It
 answers questions like "what can blue team build right now?" and "what are red team's effective stat
@@ -86,7 +88,7 @@ All types are in these namespaces:
 ```csharp
 using Allegiance.Factions.Model;          // Core, Faction, Hull, Station, Capability, TechSet, ...
 using Allegiance.Factions.Serialization;  // CoreSerializer
-using Allegiance.Factions.Resolution;     // TechResolver, BuildableResolver, AttributeResolver, TechState
+using Allegiance.Factions.Resolution;     // TechResolver, BuildableResolver, AttributeResolver, EquipmentResolver, TechState
 using Allegiance.Factions.Validation;     // CoreValidator, ValidationResult
 ```
 

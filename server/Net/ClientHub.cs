@@ -774,9 +774,10 @@ public sealed partial class ClientHub
                 case Protocol.MsgSpawn:
                 {
                     // Spawn the chosen class — honored only while a match is live. The team comes from
-                    // the lobby (authoritative), not the client. Both tails of the frame are optional
-                    // (SpawnMessage): a bare frame carries no cargo (hull default) and no mount
-                    // overrides (authored loadout); a torn tail parses as absent, not as an error.
+                    // the lobby (authoritative), not the client. Every tail of the frame is optional
+                    // (SpawnMessage): a bare frame carries no cargo (hull default), no mount overrides
+                    // (authored loadout) and no equipment picks (the hull's DefaultEquipment); a torn
+                    // tail parses as absent, not as an error.
                     // launchBaseId 0 = server default base; the sim validates friendly+alive+
                     // launch-capable+station-class (TryResolveLaunchSite) and REJECTS pre-charge a
                     // pick that can't serve the hull (wrong class / exitless); only an unrestricted
@@ -797,6 +798,11 @@ public sealed partial class ClientHub
                     var mounts = new (byte hpIndex, uint weaponId)[spawn.Mounts.Length];
                     for (int i = 0; i < mounts.Length; i++)
                         mounts[i] = (spawn.Mounts[i].HpIndex, spawn.Mounts[i].WeaponId);
+                    // Equipment picks: overridden slots only (0xFFFF = launch with the slot empty);
+                    // ResolveLoadout validates slot, part, hull and tech at spawn time.
+                    var equipment = new (byte slot, ushort equipmentId)[spawn.Equipment.Length];
+                    for (int i = 0; i < equipment.Length; i++)
+                        equipment[i] = (spawn.Equipment[i].Slot, spawn.Equipment[i].EquipmentId);
                     if (_sim.IsActive)
                     {
                         byte team = _lobby.TeamOf(client.Id);
@@ -807,7 +813,7 @@ public sealed partial class ClientHub
                             break;
                         }
                         client.Team = team;
-                        _sim.EnqueueJoin(client.Id, team, cls, cargo, spawn.LaunchBaseId, mounts);
+                        _sim.EnqueueJoin(client.Id, team, cls, cargo, spawn.LaunchBaseId, mounts, equipment);
                     }
                     break;
                 }

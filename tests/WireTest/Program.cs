@@ -95,7 +95,9 @@ string mapsDir = Path.Combine(AppContext.BaseDirectory, "content", "maps");
 Console.WriteLine("---- 1. fixed sizes + message ids ----");
 var sizePins = new (string, int, int)[]
 {
-    ("ShipRecord", ShipRecord.Size, 67),
+    ("ShipRecord", ShipRecord.Size, 76),
+    ("ShipPools", ShipPools.Size, 9),
+    ("EquipmentOverrideRecord", EquipmentOverrideRecord.Size, 3),
     ("MissileRecord", MissileRecord.Size, 35),
     ("MinefieldRecord", MinefieldRecord.Size, 41),
     ("ContactRecord", ContactRecord.Size, 28),
@@ -233,15 +235,17 @@ Check(
         && InputFlags.Firing2 == 4
         && InputFlags.DropChaff == 8
         && InputFlags.DropMine == 16
-        && InputFlags.DropProbe == 32,
-    "InputFlags bits pinned",
+        && InputFlags.DropProbe == 32
+        && InputFlags.Cloak == 64,
+    "InputFlags bits pinned (incl. Cloak = 64)",
     "input flag bits moved"
 );
 Check(
     Protocol.ShipRecordSize == ShipRecord.Size
         && Protocol.MsgSnapshot == SnapshotMessage.MsgId
         && Protocol.ShipFlagMining == ShipFlags.Mining
-        && Protocol.FlagBoost == InputFlags.Boost,
+        && Protocol.FlagBoost == InputFlags.Boost
+        && Protocol.FlagCloak == InputFlags.Cloak,
     "the server Protocol facade aliases the shared constants",
     "Protocol facade drift"
 );
@@ -350,6 +354,44 @@ foreach (var s in ships)
             && back.FuelPodAmmo == s.FuelPodAmmo,
         $"ShipRecord ship {s.ShipId} ({s.Kind}, pig={s.IsPig}, threat={s.ThreatLockState}, ap={s.ApEngaged}) fills + parses (pos bit-exact f32, rot within ~1e-5 rad, f16 rates)",
         $"ShipRecord ship {s.ShipId}: a field did not survive the fill/parse"
+    );
+}
+
+// The resource pools (equipment PR) ride the record EXACT, as its last 9 bytes in field order: raw f32
+// energy (1234.567 has no Half — a quantized pool would flip the fire gate at fractional energy), u16
+// ammo, u8 packs, u16 cloak level.
+{
+    var rec = Frames.ShipRecordOf(ships[0]);
+    var pools = new ShipPools
+    {
+        Energy = 1234.567f,
+        Ammo = ushort.MaxValue,
+        AmmoPacks = 7,
+        Cloak = 40959,
+    };
+    rec.Pools = pools;
+    var buf = rec.ToBytes();
+    var back = ShipRecord.Parse(buf);
+    const int at = ShipRecord.Size - ShipPools.Size;
+    Check(
+        (float)(Half)1234.567f != 1234.567f
+            && buf.Length == ShipRecord.Size
+            && back.Pools == pools
+            && BitConverter.SingleToInt32Bits(back.Pools.Energy) == BitConverter.SingleToInt32Bits(1234.567f)
+            && BitConverter.ToSingle(buf, at) == 1234.567f
+            && BitConverter.ToUInt16(buf, at + 4) == ushort.MaxValue
+            && buf[at + 6] == 7
+            && BitConverter.ToUInt16(buf, at + 7) == 40959
+            && back.ShipId == rec.ShipId
+            && back.LastInputTick == rec.LastInputTick
+            && back.FuelPodAmmo == rec.FuelPodAmmo,
+        "ShipRecord.Pools: bit-exact f32 energy (not a Half), u16 ammo 65535, u8 packs, u16 cloak — the record's last 9 bytes",
+        "ShipRecord.Pools did not survive exactly"
+    );
+    Check(
+        ShipPools.Parse(pools.ToBytes()) == pools && pools.ToBytes().Length == ShipPools.Size,
+        "ShipPools: standalone 9-byte round-trip is exact (record-struct ==)",
+        "ShipPools round-trip"
     );
 }
 
@@ -824,6 +866,43 @@ for (int i = 0; i < world.Asteroids.Count; i++)
         "TeamState: lists are sorted (byte-deterministic)",
         "TeamState unsorted"
     );
+
+    // Attributes = the NON-NEUTRAL entries of the sim's resolved cache (World.TeamAttr), sorted by
+    // attribute byte, bit-exact — the stock Iron GAS block (MaxEnergy ×1.2 among it) is live after
+    // StartMatch on every team.
+    bool attrsOk = true;
+    foreach (var row in ts.Teams)
+    {
+        var expect = new List<AttrMod>();
+        for (int a = 0; a <= byte.MaxValue; a++)
+            if (world.TeamAttr(row.Team, a) != 1f)
+                expect.Add(new AttrMod((byte)a, world.TeamAttr(row.Team, a)));
+        attrsOk &=
+            expect.Count > 0
+            && row.Attributes.Length == expect.Count
+            && row.Attributes.Zip(expect)
+                .All(p =>
+                    p.First.Attr == p.Second.Attr
+                    && BitConverter.SingleToInt32Bits(p.First.Mult) == BitConverter.SingleToInt32Bits(p.Second.Mult)
+                );
+    }
+    Check(
+        attrsOk
+            && t0.Attributes.Any(m => m.Attr == (byte)Allegiance.Factions.Model.GameAttribute.MaxEnergy && m.Mult == 1.2f),
+        $"TeamState: Attributes = the {t0.Attributes.Length} non-neutral cached multipliers per team, sorted, bit-exact (MaxEnergy ×1.2)",
+        "TeamState attributes"
+    );
+
+    // An unseeded cache (pre-match / attributes disabled) streams no entries.
+    var saved = ts.Teams.Select(r => (r.Team, Attrs: world.TeamAttributes(r.Team).ToArray())).ToList();
+    world.ClearTeamAttributes();
+    Check(
+        TeamStateMessage.Parse(Protocol.BuildTeamState(sim)).Teams.All(r => r.Attributes.Length == 0),
+        "TeamState: an unseeded attribute cache streams empty Attributes",
+        "TeamState unseeded attributes"
+    );
+    foreach (var (team, attrs) in saved)
+        world.SetTeamAttributes(team, attrs);
 }
 {
     int b0 = world.Bases.FindIndex(b => b.Team == 0);
@@ -918,6 +997,15 @@ sim.Step();
             "ShipLoadouts: override row carries the effective ids + empty hold + turret stations",
             "loadout override row"
         );
+        // Neither ship picked equipment, so both rows carry the scout's default part per slot.
+        var scoutEquip = content.Ships.First(d => d.ClassId == 0).DefaultEquipment;
+        Check(
+            scoutEquip.Length == EquipmentDef.SlotCount
+                && r0.EquipmentIds.SequenceEqual(scoutEquip)
+                && r1.EquipmentIds.SequenceEqual(scoutEquip),
+            $"ShipLoadouts: rows carry the equipment by slot ([{string.Join(", ", r0.EquipmentIds)}] = the scout default)",
+            "loadout equipment ids"
+        );
         Check(
             r1.Hold.Length == 3
                 && r1.Hold[0].Kind == 2
@@ -940,6 +1028,60 @@ sim.Step();
         ShipLoadoutMessage.Parse(Protocol.BuildShipLoadouts(sim)).Ships.Length == 0,
         "ShipLoadouts: no rows → empty frame (still sent, prunes by omission)",
         "loadout empty"
+    );
+}
+
+// Equipment rows + live pools (equipment PR): an equipment-only spawn (a hangar pick, no gun
+// override, so an empty hold) streams its own row with the sim's EFFECTIVE equipment, and the ship
+// record carries PoolsAtFire — the pools the fire phase started with, not the end-of-tick pools.
+sim.EnqueueJoin(
+    3,
+    0,
+    0,
+    Array.Empty<(uint, byte)>(),
+    0,
+    null,
+    new (byte, ushort)[] { (EquipmentDef.SlotShield, EquipmentDef.NoEquipment) }
+);
+sim.Step();
+{
+    var picked = sim.Ships.First(s => s.OwnerClientId == 3 && !s.IsPod);
+    var rows = ShipLoadoutMessage.Parse(Protocol.BuildShipLoadouts(sim)).Ships;
+    var authoredScout = content
+        .Ships.First(d => d.ClassId == 0)
+        .Hardpoints.Where(h => h.Kind == HardpointKind.Weapon)
+        .Select(h => h.WeaponId);
+    Check(
+        rows.Length == 1
+            && rows[0].ShipId == picked.ShipId
+            && rows[0]
+                .EquipmentIds.SequenceEqual(
+                    new[] { EquipmentDef.NoEquipment, EquipmentDef.NoEquipment, EquipmentDef.NoEquipment }
+                )
+            && rows[0].WeaponIds.SequenceEqual(authoredScout)
+            && rows[0].Hold.Length == 0,
+        "ShipLoadouts: an equipment-only spawn streams its own row — the effective equipment (shield slot emptied) + the authored guns",
+        $"equipment row wrong ({rows.Length} rows, equipment [{string.Join(",", rows.FirstOrDefault().EquipmentIds ?? Array.Empty<ushort>())}])"
+    );
+
+    picked.Pools.Energy = 1234.567f;
+    sim.Step();
+    var rec = ShipRecord.Parse(Frames.ShipRecordOf(picked).ToBytes());
+    Check(
+        BitConverter.SingleToInt32Bits(rec.Pools.Energy) == BitConverter.SingleToInt32Bits(1234.567f)
+            && rec.Pools == picked.PoolsAtFire
+            && picked.Pools.Energy != rec.Pools.Energy
+            && rec.LastInputTick == sim.Tick,
+        $"ShipRecord.Pools from a live sim: the PoolsAtFire snapshot, bit-exact (1234.567 entering the tick; the live pool has since recharged to {picked.Pools.Energy})",
+        $"live record pools wrong (record {rec.Pools.Energy}, at-fire {picked.PoolsAtFire.Energy}, live {picked.Pools.Energy})"
+    );
+
+    sim.EnqueueLeave(3);
+    sim.Step();
+    Check(
+        ShipLoadoutMessage.Parse(Protocol.BuildShipLoadouts(sim)).Ships.Length == 0,
+        "ShipLoadouts: the equipment row prunes when its ship leaves",
+        "equipment row lingered after the leave"
     );
 }
 {
@@ -998,8 +1140,10 @@ Check(Protocol.BuildMinerTargets(sim) is null, "MinerTargets: null when nothing 
             && d.Developments.Count == content.Developments.Count
             && d.Stations.Count == content.StationCatalog.Count
             && d.FactionName == content.Start.FactionName
-            && d.FactionAttributes.Length == content.Start.BaseAttributes.Length,
-        "Defs (stock bundle): every catalog count + faction identity",
+            && d.FactionAttributes.Length == content.Start.BaseAttributes.Length
+            && d.Equipment.Count == content.Equipment.Count
+            && content.Equipment.Count > 0,
+        "Defs (stock bundle): every catalog count + faction identity + equipment",
         "Defs counts"
     );
     for (int i = 0; i < content.Ships.Count; i++)
@@ -1014,7 +1158,6 @@ Check(Protocol.BuildMinerTargets(sim) is null, "MinerTargets: null when nothing 
                 && a.Mass == c.Mass
                 && a.MaxSpeed == c.MaxSpeed
                 && a.MaxHull == c.MaxHull
-                && a.ShieldCapacity == c.ShieldCapacity
                 && a.Cost == c.Cost
                 && a.PayloadCapacity == c.PayloadCapacity
                 && a.FactionId == c.FactionId
@@ -1025,6 +1168,12 @@ Check(Protocol.BuildMinerTargets(sim) is null, "MinerTargets: null when nothing 
                 && a.LaunchClassMask == c.LaunchClassMask
                 && a.CargoCapacity == Math.Clamp(c.CargoCapacity, 0, 255)
                 && a.SignatureBias == 0f
+                && a.MaxFuel == c.MaxFuel
+                && a.MaxEnergy == c.MaxEnergy
+                && a.EnergyRecharge == c.EnergyRecharge
+                && a.MaxAmmo == c.MaxAmmo
+                && a.AllowedEquipment.SequenceEqual(c.AllowedEquipment)
+                && a.DefaultEquipment.SequenceEqual(c.DefaultEquipment)
             )
         )
         {
@@ -1057,6 +1206,8 @@ Check(Protocol.BuildMinerTargets(sim) is null, "MinerTargets: null when nothing 
                 && a.SucceededByWeaponId == c.SucceededByWeaponId
                 && a.ReloadTicks == c.ReloadTicks
                 && a.RoundMass == c.RoundMass
+                && a.EnergyPerShot == c.EnergyPerShot
+                && a.AmmoPerShot == c.AmmoPerShot
                 && a.MineSignature == 0f
                 && a.ProbeHitPoints == 0f
                 && a.ProbeSignature == 0f
@@ -1073,6 +1224,46 @@ Check(Protocol.BuildMinerTargets(sim) is null, "MinerTargets: null when nothing 
                 ""
             );
     }
+    var cg = d
+        .CargoItems.Zip(content.CargoItems)
+        .All(p =>
+            p.First.CargoId == p.Second.CargoId
+            && p.First.FuelPerCharge == p.Second.FuelPerCharge
+            && p.First.ReloadTicks == p.Second.ReloadTicks
+            && p.First.ModelName == p.Second.ModelName
+            && p.First.AmmoPerCharge == p.Second.AmmoPerCharge
+        );
+    // Equipment rides the wire whole except its server-only Signature ([WireIgnore]).
+    var eqp = d
+        .Equipment.Zip(content.Equipment)
+        .All(p =>
+            p.First.EquipmentId == p.Second.EquipmentId
+            && p.First.Slot == p.Second.Slot
+            && p.First.Name == p.Second.Name
+            && p.First.Description == p.Second.Description
+            && p.First.ModelName == p.Second.ModelName
+            && p.First.Mass == p.Second.Mass
+            && p.First.RequiredTechIdx.SequenceEqual(p.Second.RequiredTechIdx)
+            && p.First.ObsoletedByTechIdx.SequenceEqual(p.Second.ObsoletedByTechIdx)
+            && p.First.SucceededById == p.Second.SucceededById
+            && p.First.MaxStrength == p.Second.MaxStrength
+            && p.First.RegenRate == p.Second.RegenRate
+            && p.First.RechargeDelaySec == p.Second.RechargeDelaySec
+            && p.First.AbAccel == p.Second.AbAccel
+            && p.First.AbOnRate == p.Second.AbOnRate
+            && p.First.AbOffRate == p.Second.AbOffRate
+            && p.First.FuelDrain == p.Second.FuelDrain
+            && p.First.EnergyDrain == p.Second.EnergyDrain
+            && p.First.MaxCloaking == p.Second.MaxCloaking
+            && p.First.OnRate == p.Second.OnRate
+            && p.First.OffRate == p.Second.OffRate
+            && p.First.Signature == 0f
+        );
+    Check(
+        cg && eqp,
+        $"Defs: cargo items (incl. AmmoPerCharge) and all {content.Equipment.Count} equipment defs survive the round-trip ([WireIgnore] Signature dropped)",
+        "Defs cargo/equipment"
+    );
     var dv = d
         .Developments.Zip(content.Developments)
         .All(p =>
@@ -1327,6 +1518,7 @@ Console.WriteLine("---- 5. client->server layouts ----");
         DropChaff = false,
         DropMine = true,
         DropProbe = true,
+        Cloak = true,
         LockTargetId = 0x0102030405060708UL,
     };
     // GameNetClient.SendInput, verbatim.
@@ -1346,6 +1538,7 @@ Console.WriteLine("---- 5. client->server layouts ----");
         | (input.DropChaff ? 8 : 0)
         | (input.DropMine ? 16 : 0)
         | (input.DropProbe ? 32 : 0)
+        | (input.Cloak ? 64 : 0)
     );
     BitConverter.TryWriteBytes(f.AsSpan(30), input.LockTargetId);
     Same("Input (client layout)", f, InputMessage.From(777, input).ToBytes());
@@ -1359,16 +1552,34 @@ Console.WriteLine("---- 5. client->server layouts ----");
             && back.DropChaff == input.DropChaff
             && back.DropMine == input.DropMine
             && back.DropProbe == input.DropProbe
+            && back.Cloak
             && back.LockTargetId == input.LockTargetId,
-        "Input: ToInput restores every stick and flag",
+        "Input: ToInput restores every stick and flag (incl. the Cloak level)",
         "Input round-trip"
+    );
+    // The cloak is its own bit: alone it is exactly 64, and a cleared latch clears only that bit.
+    var cloakOnly = InputMessage.From(1, new ShipInputState { Cloak = true });
+    var noCloak = InputMessage.From(777, input with { Cloak = false });
+    Check(
+        cloakOnly.Flags == InputFlags.Cloak
+            && cloakOnly.ToInput().Cloak
+            && !cloakOnly.ToInput().Firing
+            && noCloak.Flags == (byte)(f[29] & ~InputFlags.Cloak)
+            && !noCloak.ToInput().Cloak,
+        "Input: Cloak maps to bit 64 alone, both directions",
+        "Input cloak bit"
     );
 }
 {
-    // GameNetClient.RequestSpawn, verbatim.
+    // GameNetClient.RequestSpawn, verbatim — plus the equipment tail (u8 count, then u8 slot + u16 id).
     var cargo = new (uint cargoId, byte count)[] { (2u, 3), (5u, 1) };
     var mounts = new (byte hpIndex, uint weaponId)[] { (1, uint.MaxValue), (0, 9u) };
-    var f = new byte[11 + cargo.Length * 5 + 1 + mounts.Length * 5];
+    var equip = new (byte slot, ushort id)[]
+    {
+        (EquipmentDef.SlotCloak, 16),
+        (EquipmentDef.SlotShield, EquipmentDef.NoEquipment),
+    };
+    var f = new byte[11 + cargo.Length * 5 + 1 + mounts.Length * 5 + 1 + equip.Length * 3];
     int o = 0;
     f[o++] = 4;
     f[o++] = 3;
@@ -1388,6 +1599,14 @@ Console.WriteLine("---- 5. client->server layouts ----");
         BitConverter.TryWriteBytes(f.AsSpan(o), weaponId);
         o += 4;
     }
+    int equipAt = o; // 32: where the equipment tail starts
+    f[o++] = (byte)equip.Length;
+    foreach (var (slot, id) in equip)
+    {
+        f[o++] = slot;
+        BitConverter.TryWriteBytes(f.AsSpan(o), id);
+        o += 2;
+    }
     var msg = new SpawnMessage
     {
         ShipClass = 3,
@@ -1402,38 +1621,105 @@ Console.WriteLine("---- 5. client->server layouts ----");
             new MountOverrideRecord { HpIndex = 1, WeaponId = uint.MaxValue },
             new MountOverrideRecord { HpIndex = 0, WeaponId = 9 },
         },
+        Equipment = new[]
+        {
+            new EquipmentOverrideRecord { Slot = EquipmentDef.SlotCloak, EquipmentId = 16 },
+            new EquipmentOverrideRecord { Slot = EquipmentDef.SlotShield, EquipmentId = EquipmentDef.NoEquipment },
+        },
     };
-    Same("Spawn (client layout, cargo + mounts)", f, msg.ToBytes());
+    Same("Spawn (client layout, cargo + mounts + equipment)", f, msg.ToBytes());
     Check(
         SpawnMessage.TryParse(f, out var sp)
             && sp.Cargo.Length == 2
             && sp.Mounts.Length == 2
             && sp.Mounts[0].WeaponId == uint.MaxValue
-            && sp.LaunchBaseId == 0xB00BUL,
-        "Spawn parses cargo + mounts",
+            && sp.LaunchBaseId == 0xB00BUL
+            && sp.Equipment.Length == 2
+            && sp.Equipment[0].Slot == EquipmentDef.SlotCloak
+            && sp.Equipment[0].EquipmentId == 16
+            && sp.Equipment[1].Slot == EquipmentDef.SlotShield
+            && sp.Equipment[1].EquipmentId == EquipmentDef.NoEquipment,
+        "Spawn parses cargo + mounts + equipment (0xFFFF = explicitly empty survives)",
         "Spawn parse"
     );
-    // ClientHub today: a bare 10-byte frame = no cargo, no mounts; cargo-only = mounts empty; a tail
-    // whose element bytes are missing is IGNORED (not a protocol error).
+    // ClientHub today: a bare 10-byte frame = no cargo, no mounts, no equipment; cargo-only = mounts
+    // and equipment empty; a tail whose element bytes are missing is IGNORED (not a protocol error).
     Check(
         SpawnMessage.TryParse(f.AsSpan(0, 10), out var bare)
             && bare.ShipClass == 3
             && (bare.Cargo?.Length ?? 0) == 0
-            && (bare.Mounts?.Length ?? 0) == 0,
-        "Spawn: bare 10-byte frame → hull default cargo + authored loadout",
+            && (bare.Mounts?.Length ?? 0) == 0
+            && (bare.Equipment?.Length ?? 0) == 0,
+        "Spawn: bare 10-byte frame → hull default cargo + authored loadout + default equipment",
         "Spawn bare"
     );
     Check(
         SpawnMessage.TryParse(f.AsSpan(0, 21), out var cargoOnly)
             && cargoOnly.Cargo.Length == 2
-            && (cargoOnly.Mounts?.Length ?? 0) == 0,
+            && (cargoOnly.Mounts?.Length ?? 0) == 0
+            && (cargoOnly.Equipment?.Length ?? 0) == 0,
         "Spawn: cargo block without a mount tail → zero overrides",
         "Spawn cargo-only"
     );
     Check(
-        SpawnMessage.TryParse(f.AsSpan(0, 25), out var torn) && torn.Cargo.Length == 2 && (torn.Mounts?.Length ?? 0) == 0,
+        SpawnMessage.TryParse(f.AsSpan(0, 25), out var torn)
+            && torn.Cargo.Length == 2
+            && (torn.Mounts?.Length ?? 0) == 0
+            && (torn.Equipment?.Length ?? 0) == 0,
         "Spawn: a torn mount tail is ignored (cargo kept, no overrides)",
         "Spawn torn tail"
+    );
+    Check(
+        SpawnMessage.TryParse(f.AsSpan(0, equipAt), out var noEquip)
+            && noEquip.Cargo.Length == 2
+            && noEquip.Mounts.Length == 2
+            && (noEquip.Equipment?.Length ?? 0) == 0,
+        "Spawn: cargo + mounts without an equipment tail (an older client) → default equipment",
+        "Spawn no equipment tail"
+    );
+    Check(
+        SpawnMessage.TryParse(f.AsSpan(0, equipAt + 1 + 4), out var tornEquip)
+            && tornEquip.Cargo.Length == 2
+            && tornEquip.Mounts.Length == 2
+            && tornEquip.Mounts[1].WeaponId == 9
+            && (tornEquip.Equipment?.Length ?? 0) == 0,
+        "Spawn: a torn equipment tail parses as absent (cargo + mounts kept)",
+        "Spawn torn equipment tail"
+    );
+    var equipOnly = new SpawnMessage
+    {
+        ShipClass = 0,
+        Cargo = Array.Empty<CargoLoadDef>(),
+        Mounts = Array.Empty<MountOverrideRecord>(),
+        Equipment = new[]
+        {
+            new EquipmentOverrideRecord { Slot = EquipmentDef.SlotAfterburner, EquipmentId = 12 },
+        },
+    }.ToBytes();
+    var mountsOnly = new SpawnMessage
+    {
+        ShipClass = 1,
+        Cargo = Array.Empty<CargoLoadDef>(),
+        Mounts = new[]
+        {
+            new MountOverrideRecord { HpIndex = 2, WeaponId = 4 },
+        },
+    }.ToBytes();
+    Check(
+        equipOnly.Length == 10 + 1 + 1 + 1 + EquipmentOverrideRecord.Size
+            && SpawnMessage.TryParse(equipOnly, out var eo)
+            && eo.Cargo.Length == 0
+            && eo.Mounts.Length == 0
+            && eo.Equipment.Length == 1
+            && eo.Equipment[0].Slot == EquipmentDef.SlotAfterburner
+            && eo.Equipment[0].EquipmentId == 12
+            && SpawnMessage.TryParse(mountsOnly, out var mo)
+            && mo.Cargo.Length == 0
+            && mo.Mounts.Length == 1
+            && mo.Mounts[0].HpIndex == 2
+            && mo.Equipment.Length == 0,
+        "Spawn: equipment-only and mounts-only frames (empty leading tails) parse exactly",
+        "Spawn equipment-only / mounts-only"
     );
     var legacySmoke = new byte[] { Protocol.MsgSpawn, 0, 0, 0, 0, 0, 0, 0, 0, 0 }; // SalvageTest's join frame
     Check(
@@ -1696,6 +1982,15 @@ RoundTrip(
     v => v.ToBytes()
 );
 var synthShips = ships.Select(Frames.ShipRecordOf).ToArray();
+
+// Non-default pools on the first record, so the ShipRecord.hex / Snapshot goldens pin their bytes.
+synthShips[0].Pools = new ShipPools
+{
+    Energy = 1234.567f,
+    Ammo = 960,
+    AmmoPacks = 2,
+    Cloak = 819,
+};
 var synthSnapshot = new SnapshotMessage
 {
     Tick = 1000,
@@ -1760,6 +2055,7 @@ var synthTeamState = new TeamStateMessage
             MinerCount = 2,
             MinerCap = 4,
             BuildQueueLimit = 4,
+            Attributes = new[] { new AttrMod(4, 1.15f), new AttrMod(13, 1.2f), new AttrMod(20, 0.85f) },
         },
         new TeamStateRecord
         {
@@ -1773,10 +2069,27 @@ var synthTeamState = new TeamStateMessage
             MinerCount = 0,
             MinerCap = 4,
             BuildQueueLimit = 4,
+            Attributes = Array.Empty<AttrMod>(),
         },
     },
 };
 RoundTrip("TeamState (synthetic)", synthTeamState.ToBytes(), b => TeamStateMessage.Parse(b), v => v.ToBytes());
+{
+    // The attribute tail is REQUIRED inside an array element: team 0's entries come back bit-exact and
+    // team 1's empty list doesn't swallow anything after it.
+    var back = TeamStateMessage.Parse(synthTeamState.ToBytes());
+    Check(
+        back.Teams.Length == 2
+            && back.Teams[0].Attributes.SequenceEqual(synthTeamState.Teams[0].Attributes)
+            && BitConverter.SingleToInt32Bits(back.Teams[0].Attributes[1].Mult) == BitConverter.SingleToInt32Bits(1.2f)
+            && back.Teams[0].BuildQueueLimit == 4
+            && back.Teams[1].Team == 1
+            && back.Teams[1].Attributes.Length == 0
+            && back.Teams[1].DiscoveredRockClasses == 0xFF,
+        "TeamState (synthetic): per-team Attributes round-trip exactly, an empty list included",
+        "TeamState synthetic attributes"
+    );
+}
 RoundTrip(
     "ResearchState (synthetic)",
     new ResearchStateMessage
@@ -1896,32 +2209,51 @@ RoundTrip(
     b => BasesMessage.Parse(b),
     v => v.ToBytes()
 );
-RoundTrip(
-    "ShipLoadout (synthetic)",
-    new ShipLoadoutMessage
+var synthLoadouts = new ShipLoadoutMessage
+{
+    Ships = new[]
     {
-        Ships = new[]
+        new ShipLoadoutRecord
         {
-            new ShipLoadoutRecord
+            ShipId = 1,
+            WeaponIds = new uint[] { 0, uint.MaxValue },
+            Hold = new[]
             {
-                ShipId = 1,
-                WeaponIds = new uint[] { 0, uint.MaxValue },
-                Hold = new[]
+                new HoldItemRecord
                 {
-                    new HoldItemRecord
-                    {
-                        Kind = 2,
-                        ItemId = 3,
-                        Count = 6,
-                    },
+                    Kind = 2,
+                    ItemId = 3,
+                    Count = 6,
                 },
-                TurretWeaponIds = new uint[] { 0, 12 },
             },
+            TurretWeaponIds = new uint[] { 0, 12 },
+            EquipmentIds = new ushort[] { 1, 9, EquipmentDef.NoEquipment },
         },
-    }.ToBytes(),
-    b => ShipLoadoutMessage.Parse(b),
-    v => v.ToBytes()
-);
+        // An equipment-only row (default guns, empty hold, no stations) — rides the same record.
+        new ShipLoadoutRecord
+        {
+            ShipId = 2,
+            WeaponIds = new uint[] { 0 },
+            Hold = Array.Empty<HoldItemRecord>(),
+            TurretWeaponIds = Array.Empty<uint>(),
+            EquipmentIds = new ushort[] { EquipmentDef.NoEquipment, EquipmentDef.NoEquipment, 16 },
+        },
+    },
+};
+RoundTrip("ShipLoadout (synthetic)", synthLoadouts.ToBytes(), b => ShipLoadoutMessage.Parse(b), v => v.ToBytes());
+{
+    var back = ShipLoadoutMessage.Parse(synthLoadouts.ToBytes());
+    Check(
+        back.Ships.Length == 2
+            && back.Ships[0].EquipmentIds.SequenceEqual(new ushort[] { 1, 9, EquipmentDef.NoEquipment })
+            && back.Ships[0].TurretWeaponIds.SequenceEqual(new uint[] { 0, 12 })
+            && back.Ships[1].ShipId == 2
+            && back.Ships[1]
+                .EquipmentIds.SequenceEqual(new ushort[] { EquipmentDef.NoEquipment, EquipmentDef.NoEquipment, 16 }),
+        "ShipLoadout (synthetic): EquipmentIds by slot survive per row (the required tail swallows nothing)",
+        "ShipLoadout synthetic equipment"
+    );
+}
 RoundTrip(
     "HangarIntent (synthetic)",
     new HangarIntentMessage
@@ -2130,16 +2462,9 @@ var synthDefs = new DefsMessage
             DriftPitchDeg = 2f,
             SideMult = 0.4f,
             BackMult = 0.5f,
-            AbAccel = 60f,
-            AbOnRate = 2f,
-            AbOffRate = 4f,
             MaxFuel = 50f,
-            AbFuelDrain = 10f,
             AbFuelRecharge = 5f,
             MaxHull = 400f,
-            ShieldCapacity = 100f,
-            ShieldRecharge = 10f,
-            ShieldDelaySec = 3f,
             VisionConeLength = 2000f,
             VisionConeAngleDeg = 30f,
             VisionSphereRadius = 500f,
@@ -2153,6 +2478,11 @@ var synthDefs = new DefsMessage
             IsConstructor = false,
             LaunchClassMask = 0b101,
             CargoCapacity = 300,
+            MaxEnergy = 1440.5f,
+            EnergyRecharge = 60f,
+            MaxAmmo = 960,
+            AllowedEquipment = new ushort[] { 0, 1, 2 },
+            DefaultEquipment = new ushort[] { 0, 1, EquipmentDef.NoEquipment },
             RequiredTechIdx = new ushort[] { 1, 2 },
             Hardpoints = new List<HardpointDef>
             {
@@ -2223,6 +2553,8 @@ var synthDefs = new DefsMessage
             SucceededByWeaponId = 12,
             ReloadTicks = 40,
             RoundMass = 4f,
+            EnergyPerShot = 60f,
+            AmmoPerShot = 2,
         },
     },
     CargoItems = new List<CargoItemDef>
@@ -2238,6 +2570,18 @@ var synthDefs = new DefsMessage
             FuelPerCharge = 30f,
             ReloadTicks = 60,
             ModelName = "pod",
+        },
+        new()
+        {
+            CargoId = 6,
+            Name = "Ammo Pack",
+            Glyph = "◓",
+            Mass = 1f,
+            ChargesPerPack = 1,
+            Description = "a",
+            ReloadTicks = 40,
+            ModelName = "acs29",
+            AmmoPerCharge = 1000,
         },
     },
     Bases = new List<BaseDef>
@@ -2320,6 +2664,57 @@ var synthDefs = new DefsMessage
     },
     FactionName = "Iron Coalition",
     FactionAttributes = new[] { new AttrMod(1, 1.1f) },
+    Equipment = new List<EquipmentDef>
+    {
+        new()
+        {
+            EquipmentId = 0,
+            Slot = EquipmentDef.SlotShield,
+            Name = "Sm Shield 1",
+            Description = "shield",
+            ModelName = "acs30",
+            Mass = 2f,
+            RequiredTechIdx = Array.Empty<ushort>(),
+            ObsoletedByTechIdx = new ushort[] { 3 },
+            SucceededById = 1,
+            MaxStrength = 51.4286f,
+            RegenRate = 0.6857f,
+            RechargeDelaySec = 1.5f,
+            Signature = 9f,
+        },
+        new()
+        {
+            EquipmentId = 1,
+            Slot = EquipmentDef.SlotAfterburner,
+            Name = "Booster 1",
+            Description = "",
+            ModelName = "acs48",
+            Mass = 2f,
+            RequiredTechIdx = new ushort[] { 2 },
+            ObsoletedByTechIdx = Array.Empty<ushort>(),
+            AbAccel = 36.6667f,
+            AbOnRate = 0.5f,
+            AbOffRate = 2f,
+            FuelDrain = 1.2221f,
+            Signature = 9f,
+        },
+        new()
+        {
+            EquipmentId = 2,
+            Slot = EquipmentDef.SlotCloak,
+            Name = "Sig Cloak 1",
+            Description = "cloak",
+            ModelName = "acs38",
+            Mass = 3f,
+            RequiredTechIdx = Array.Empty<ushort>(),
+            ObsoletedByTechIdx = Array.Empty<ushort>(),
+            EnergyDrain = 115f,
+            MaxCloaking = 0.625f,
+            OnRate = 0.25f,
+            OffRate = 0.25f,
+            Signature = 9f,
+        },
+    },
 };
 var synthDefsBytes = synthDefs.ToBytes();
 RoundTrip("Defs (synthetic)", synthDefsBytes, b => DefsMessage.Parse(b), v => v.ToBytes());
@@ -2339,6 +2734,35 @@ RoundTrip("Defs (synthetic)", synthDefsBytes, b => DefsMessage.Parse(b), v => v.
         "Defs (synthetic): u8 clamp, ignored fields dropped, positional AttrMod, enums, i16 survive",
         "Defs synthetic fields"
     );
+    // Equipment PR: the ship pools / allowed + default equipment, gun per-shot costs, the ammo pack's
+    // refill and the whole equipment catalog survive; the server-only equipment Signature does not.
+    Check(
+        d.Ships[0].MaxEnergy == 1440.5f
+            && d.Ships[0].EnergyRecharge == 60f
+            && d.Ships[0].MaxAmmo == 960
+            && d.Ships[0].AllowedEquipment.SequenceEqual(new ushort[] { 0, 1, 2 })
+            && d.Ships[0].DefaultEquipment.SequenceEqual(new ushort[] { 0, 1, EquipmentDef.NoEquipment })
+            && d.Ships[0].DefaultEquipmentFor(EquipmentDef.SlotAfterburner) == 1
+            && d.Ships[0].AllowsEquipment(2)
+            && !d.Ships[0].AllowsEquipment(3)
+            && d.Weapons[0].EnergyPerShot == 60f
+            && d.Weapons[0].AmmoPerShot == 2
+            && d.CargoItems[1].AmmoPerCharge == 1000
+            && d.CargoItems[0].AmmoPerCharge == 0
+            && d.Equipment.Count == 3
+            && d.Equipment.All(e => e.Signature == 0f)
+            && d.Equipment[0].SucceededById == 1
+            && d.Equipment[0].ObsoletedByTechIdx.SequenceEqual(new ushort[] { 3 })
+            && d.Equipment[0].RechargeDelaySec == 1.5f
+            && d.Equipment[1].SucceededById == EquipmentDef.NoEquipment
+            && d.Equipment[1].FuelDrain == 1.2221f
+            && d.Equipment[1].RequiredTechIdx.SequenceEqual(new ushort[] { 2 })
+            && d.Equipment[2].Slot == EquipmentDef.SlotCloak
+            && d.Equipment[2].MaxCloaking == 0.625f
+            && d.Equipment[2].Description == "cloak",
+        "Defs (synthetic): pools, allowed/default equipment, per-shot costs, AmmoPerCharge and the equipment catalog survive; equipment Signature dropped",
+        "Defs synthetic equipment fields"
+    );
 }
 
 // ================================================================================================
@@ -2352,6 +2776,7 @@ Console.WriteLine("---- 7. hostile input ----");
         ("Welcome", synthWelcome.ToBytes(), b => WelcomeMessage.TryParse(b, out _)),
         ("Defs", synthDefsBytes, b => DefsMessage.TryParse(b, out _)),
         ("TeamState", synthTeamState.ToBytes(), b => TeamStateMessage.TryParse(b, out _)),
+        ("ShipLoadout", synthLoadouts.ToBytes(), b => ShipLoadoutMessage.TryParse(b, out _)),
         ("MapList", synthMaps.ToBytes(), b => MapListMessage.TryParse(b, out _)),
         ("LobbyState", synthLobby, b => LobbyStateMessage.TryParse(b, out _)),
         ("Input", InputMessage.From(1, default).ToBytes(), b => InputMessage.TryParse(b, out _)),
@@ -2479,6 +2904,10 @@ Golden(
         {
             new MountOverrideRecord { HpIndex = 1, WeaponId = uint.MaxValue },
         },
+        Equipment = new[]
+        {
+            new EquipmentOverrideRecord { Slot = EquipmentDef.SlotCloak, EquipmentId = 16 },
+        },
     }.ToBytes(),
     hash: false
 );
@@ -2507,30 +2936,7 @@ Golden(
 );
 Golden("Salvage.sha", new SalvageMessage { AnchorSector = 5, Items = new[] { Frames.SalvageRecordOf(item, 1) } }.ToBytes());
 Golden("Probes.sha", new ProbesMessage { Probes = new[] { Frames.ProbeRecordOf(probe, 10) } }.ToBytes());
-Golden(
-    "ShipLoadout.sha",
-    new ShipLoadoutMessage
-    {
-        Ships = new[]
-        {
-            new ShipLoadoutRecord
-            {
-                ShipId = 1,
-                WeaponIds = new uint[] { 0, uint.MaxValue },
-                Hold = new[]
-                {
-                    new HoldItemRecord
-                    {
-                        Kind = 2,
-                        ItemId = 3,
-                        Count = 6,
-                    },
-                },
-                TurretWeaponIds = new uint[] { 0, 12 },
-            },
-        },
-    }.ToBytes()
-);
+Golden("ShipLoadout.sha", synthLoadouts.ToBytes());
 Golden("Crew.sha", synthCrew.ToBytes());
 Golden("Turrets.sha", synthTurrets.ToBytes());
 
@@ -2626,15 +3032,15 @@ static class Goldens
     public static readonly Dictionary<string, string> Table = new()
     {
         ["ShipRecord.hex"] =
-            "887766554433221100010007000000C84200007AC300803B45767B0BDB5A2729C9404A80C2191400B8003D0040003A2A507855204A40E2010008E2010006AA03020104",
+            "887766554433221100010007000000C84200007AC300803B45767B0BDB5A2729C9404A80C2191400B8003D0040003A2A507855204A40E2010008E2010006AA0302010425529A44C003023303",
         ["MissileRecord.hex"] = "1807F6E5D4C3B2A103000000010C003EED84009D0FB05C00CD80459900000000000000",
         ["Input.hex"] = "02090300000000403F0000000000000000000080BF0000000000000000210807060504030201",
-        ["Spawn.hex"] = "04030BB00000000000000102000000030101FFFFFFFF",
+        ["Spawn.hex"] = "04030BB00000000000000102000000030101FFFFFFFF01021000",
         ["Hello.hex"] = "010173016E017401006A",
         ["Welcome.sha"] = "7F14443FC9C31349AEB7EE1FAD7EC40374C31124D7580A03B1D32FC3A8F10C01",
-        ["Snapshot.sha"] = "9B98F4552A954612681978B6D6BDA9B94B28B5F877F90AA700F041A383E99F6F",
-        ["Defs.sha"] = "A7940A383CCD58689BE6010896C05BF4A1BE968E64F80B9D4B6D4F8A8C645E7F",
-        ["TeamState.sha"] = "25235899FBC33C1A257D7B77EAEAE952505462B4646ECB87A97839F338E447AE",
+        ["Snapshot.sha"] = "02289C1D54DBBEF44E080F6630685B96E15AEA3712C5CA6C5713EF8C5F463349",
+        ["Defs.sha"] = "892EF9A20BAAEC43656EAE947EB16C47A7554EDDA958F9E5D3BE3799CD5FE7E6",
+        ["TeamState.sha"] = "A7556A65E310C2F0D26F2FF7BD03EF7A03E9B4FFD75BE0CAF81D2CF2F1C85FF1",
         ["MapList.sha"] = "F769D835423E744FA13F3CDC7D3D9EC75F04237A3D22D015A5C95724EB7986E1",
         ["LobbyState.sha"] = "4B0A27B18C1D18069B72B844B39215B352BFA8041C7EEA6285A0E88AA87ADA0B", // team rows (MsgLobbyState)
         ["MatchStats.sha"] = "BE3A951973FEA7F5A5D911BA99AA79E2DB1E46A2DCD40A6E1B134C252DACC5EE",
@@ -2642,7 +3048,7 @@ static class Goldens
         ["Minefields.sha"] = "D2373973B1AE71B791C4982E628ECB480C3082E506167F52E8242E3BAFFA9137",
         ["Salvage.sha"] = "662E2256144D77C491EAD5CF39E3D5B0AAD6CA7ADCDE5295FF1C740E991E8CCB",
         ["Probes.sha"] = "37D850ABA44223163079AD407EF3ED07726567CFDCF710F15E311BC086D6CCA6",
-        ["ShipLoadout.sha"] = "9EF7781C2F8C9A567CA29F6883FFD6233AEBC4285D0B3F394E6FB47893CA70A2",
+        ["ShipLoadout.sha"] = "161A5D72880A68941ADC729D42CFC1CB83BAD2A6F45703C07D62C731F57CCCDF",
         ["Crew.sha"] = "664298509128CD9A39A9953A65370D81004C5E77A3811B3B68E6BA435B97CF0C",
         ["Turrets.sha"] = "031111F49B12A3EDCB340670614E30709773F835F6EC546FB97014FF14674756",
         ["ServerNotice.hex"] = "220105312E322E33",

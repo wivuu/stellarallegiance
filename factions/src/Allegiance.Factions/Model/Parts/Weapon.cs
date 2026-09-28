@@ -9,13 +9,24 @@ public record Weapon : Part
     /// <summary>Duration of a burst, in seconds (<c>dtimeBurst</c>).</summary>
     public double BurstTime { get; set; }
 
-    /// <summary>Energy consumed by the ship each time this weapon fires.</summary>
+    /// <summary>
+    /// Energy drawn from the ship's <see cref="Hull.MaxEnergy"/> pool per shot; a shot the pool
+    /// can't cover doesn't fire. 0 = free. Our guns fire at their own cadence, so the stock value
+    /// keeps Allegiance's drain per SECOND: IGC energyPerShot × fire-interval-ticks ÷
+    /// (20 × IGC dtimeBurst). Must be &gt;= 0 and fit the pool of every hull that mounts it.
+    /// </summary>
     public double EnergyPerShot { get; set; }
 
     /// <summary>Random aiming spread applied to each shot, in radians.</summary>
     public double Dispersion { get; set; }
 
-    /// <summary>Rounds of ammo consumed per shot.</summary>
+    /// <summary>
+    /// Rounds drawn from the ship's <see cref="Hull.MaxAmmo"/> magazine per shot; a shot the
+    /// magazine can't cover doesn't fire. 0 = no ammo. Same per-second rule as
+    /// <see cref="EnergyPerShot"/> (IGC cAmmoPerShot × fire-interval-ticks ÷ (20 × dtimeBurst),
+    /// rounded up to a whole round). Must be in 0..65535 and fit the magazine of every hull that
+    /// mounts it.
+    /// </summary>
     public int AmmoPerShot { get; set; }
 
     /// <summary>The projectile this weapon fires; references a projectile id.</summary>

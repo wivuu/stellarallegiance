@@ -21,6 +21,7 @@ public sealed partial class Simulation
     private const byte PigKindSteerPoint = 3; // fly to a static point (aleph gate / home)
     private const byte PigKindAttackPoint = 4; // shell a static target (enemy base) from standoff
     private const byte PigKindPatrol = 5; // sweep a ring around the cached sector center
+    private const byte PigKindRearm = 6; // guns dry: fly home to a friendly base and dock (TryRearm)
 
     // The number of teams the sim drives drones for — an ENGINE capability limit (win condition,
     // lobby validation, World's garrison fail-fast), not a tuning knob, so it stays compile-time.
@@ -152,6 +153,7 @@ public sealed partial class Simulation
         Attack,
         Patrol,
         Rescue,
+        Rearm, // flying home to dock — the slot relaunches a fully-stocked drone (DockShip)
     }
 
     // One persistent slot per drone. Outlives the drone: when the drone dies its Ship goes to
@@ -185,6 +187,7 @@ public sealed partial class Simulation
             Pz;
         public float Radius;
         public ulong TargetBaseLockId; // GameContent.BaseLockId(base.Id) for PigKindAttackPoint, else 0
+        public ulong HomeBaseId; // the friendly base a PigKindRearm drone docks at (raw base id), else 0
     }
 
     // Everything one decision needs, gathered ONCE per drone per brain tick (single sector/radar
@@ -430,9 +433,12 @@ public sealed partial class Simulation
         // -2..2 vertical fan keyed by slot.
         float fan = ((slot.PigId % 5) - 2f) * (World.ShipRadius * 2.5f);
         s.State.Pos += new Vec3(0f, fan, 0f);
-        s.State.Mass = StatsFor(slot.Class, false).Mass;
+        // Drones fly their class's DefaultEquipment as authored (no hangar, no tier migration): the
+        // default booster's flight stats and the parts' signature bias. The shield pool still starts
+        // at 0 and regenerates (drones have always launched unshielded).
+        ApplyEquipment(s, null);
+        s.State.Mass = s.Stats.Mass;
         s.Health = HullFor(slot.Class);
-        s.SigBias = ShieldDefFor(s).SignatureBias; // drones carry the same projected loadout bias
         if (MissileMountFor(slot.Class) is (_, WeaponDef mw)) // missile-armed pigs spawn with a full rack
             s.MissileAmmo = mw.MagazineSize;
         // Drones carry the hull's authored hold too — same seam player spawns fall back to, so
@@ -443,6 +449,9 @@ public sealed partial class Simulation
         // until wrecks drop what they were carrying). It is seeded anyway so the authored data and
         // the sim agree; a drone silently flying an empty hold was the inconsistency.
         SeedDispenserAmmo(s, DefaultCargoFor(slot.Class));
+        // Full energy + magazine (a relaunch after a rearm run is a fresh hull, so this IS the rearm).
+        RefreshMinAmmoPerShot(s);
+        FillPools(s);
 
         _ships[s.ShipId] = s;
         _order.Add(s);
@@ -559,8 +568,10 @@ public sealed partial class Simulation
         var ctx = GatherPigContext(me, tick);
         bool isBomber = ctx.Slot?.IsBomberSlot ?? false;
         // Rescue deliberately outranks a commander order — a downed player's pod must never be
-        // stranded because its fetcher was ordered elsewhere.
+        // stranded because its fetcher was ordered elsewhere. A drone whose guns are dry goes home to
+        // rearm before anything else it could be told to do: it can't shoot, so it isn't useful.
         return TryRescue(in ctx)
+            ?? TryRearm(in ctx)
             ?? TryObeyOrder(in ctx)
             ?? TryChaseLockedTarget(in ctx)
             ?? (isBomber ? null : TryChaseEnemyBomber(in ctx))
@@ -675,6 +686,81 @@ public sealed partial class Simulation
                 TargetShipId = rescuePodId,
             };
         return null;
+    }
+
+    // Goal: out of ammo — fly home and dock (PigKindRearm). DockShip frees the slot for an immediate
+    // relaunch, and the relaunched drone is a fresh hull with full pools, so the dock IS the rearm
+    // (Allegiance's sortie → dock → rearm rhythm, for drones). The commander order a drone was
+    // obeying is keyed by its ShipId, so it dies with the docked hull — the relaunch starts fresh.
+    // No friendly base it may dock at (all lost / unreachable): stay in the fight, dry.
+    private PigPlan? TryRearm(in PigContext ctx)
+    {
+        if (!PigNeedsRearm(ctx.Me) || NearestDockableFriendlyBase(ctx.Me) is not World.BaseSite home)
+            return null;
+        if (ctx.Slot is PigSlot sl)
+        {
+            sl.State = PigState.Rearm;
+            sl.TargetShipId = null;
+        }
+        return new PigPlan
+        {
+            Kind = PigKindRearm,
+            PigId = ctx.PigId,
+            HomeBaseId = home.Id,
+        };
+    }
+
+    // Is this drone out of the fight? Every BOLT gun it flies must draw ammo (an energy or free gun
+    // can always fire again, so it never counts as dry) and the magazine must be below the cheapest
+    // of them with no ammo pack aboard or loading — AND it carries no missile rack or has emptied it
+    // (a bomber keeps pressing the base until its torpedoes are spent). A drone with no gun at all is
+    // never "dry" (nothing a rearm would fix). The AmmoEnabled kill-switch disables it.
+    private bool PigNeedsRearm(ShipSim s)
+    {
+        if (!AmmoEnabled)
+            return false;
+        var muzzles = s.Class < ClassMuzzles.Length ? ClassMuzzles[s.Class] : System.Array.Empty<Muzzle>();
+        ushort cheapest = 0;
+        for (int b = 0; b < muzzles.Length; b++)
+        {
+            if (!WeaponDefs.TryGetValue(WeaponIdAt(s, b), out var w) || w.Kind != WeaponKind.Bolt)
+                continue;
+            if (w.AmmoPerShot == 0)
+                return false; // an energy / free gun: never dry
+            if (cheapest == 0 || w.AmmoPerShot < cheapest)
+                cheapest = w.AmmoPerShot;
+        }
+        if (cheapest == 0 || s.Pools.Ammo >= cheapest || s.Pools.AmmoPacks > 0 || s.AmmoLoadEndTick != 0)
+            return false;
+        return MissileMountFor(s) is null || s.MissileAmmo == 0;
+    }
+
+    // The nearest LIVE friendly base this hull may DOCK at (its launch-station-classes gate): fewest
+    // gate hops, then straight-line distance in-sector, then base id — NearestFriendlyBase's order.
+    private World.BaseSite? NearestDockableFriendlyBase(ShipSim s)
+    {
+        ushort mask = LaunchClassMaskFor(s.Class);
+        World.BaseSite? best = null;
+        (int hops, float d2, ulong id) bestKey = default;
+        for (int i = 0; i < World.Bases.Count; i++)
+        {
+            var b = World.Bases[i];
+            if (b.Team != s.Team || World.BaseHealth[i] <= 0f)
+                continue;
+            if (!DockRules.ClassAllowed(mask, StationClassOfBaseType(b.BaseTypeId)))
+                continue;
+            int hops = World.SectorHops(s.SectorId, b.SectorId);
+            if (hops < 0)
+                continue; // unreachable through gates
+            float d2 = hops == 0 ? (b.Pos - s.State.Pos).LengthSquared() : 0f;
+            var key = (hops, d2, b.Id);
+            if (best is null || key.CompareTo(bestKey) < 0)
+            {
+                best = b;
+                bestKey = key;
+            }
+        }
+        return best;
     }
 
     // Goal: a locked target slipped to another sector — chase THROUGH the aleph that leads there.
@@ -906,9 +992,29 @@ public sealed partial class Simulation
                 return PigAttackPoint(me, myPos, myRot, new Vec3(d.Px, d.Py, d.Pz), d.Radius, d.TargetBaseLockId);
             case PigKindPatrol:
                 return PigSteerTo(me, myPos, myRot, new Vec3(d.Px, d.Py, d.Pz), 0.7f);
+            case PigKindRearm:
+                return PigRearmInput(me, tick, d.HomeBaseId);
             default:
                 return default;
         }
+    }
+
+    // Fly a dry drone home to dock — the machinery pods, miners and the player autopilot use: the
+    // next-hop gate across sectors (World.NextGateTo), then the 3-phase DockApproach at a base with
+    // door geometry, else a straight steer into a doorless base's legacy dock sphere. Never fires.
+    private ShipInputState PigRearmInput(ShipSim me, uint tick, ulong homeBaseId)
+    {
+        if (World.BaseById(homeBaseId) is not World.BaseSite b)
+            return default; // lost this cycle — the brain re-picks a base next decision
+        Vec3 myPos = me.State.Pos;
+        Quat myRot = me.State.Rot;
+        if (b.SectorId != me.SectorId)
+            return World.NextGateTo(me.SectorId, b.SectorId) is World.Gate gate
+                ? PigSteerTo(me, myPos, myRot, gate.Pos, 1f)
+                : default;
+        if (World.BaseDockFacesOf(b.BaseTypeId).Length > 0 && World.BaseHullOf(b.BaseTypeId) is not null)
+            return DockApproach(me, tick, b, me.Stats, (p, dir) => AvoidObstacles(me.SectorId, p, dir, excludeBaseId: b.Id));
+        return PigSteerTo(me, myPos, myRot, b.Pos, 1f, excludeBaseId: b.Id);
     }
 
     private ShipInputState PigChaseInput(ShipSim me, ShipSim tgt, ulong pigId, uint tick)
@@ -1026,7 +1132,7 @@ public sealed partial class Simulation
                                 me,
                                 tick,
                                 b,
-                                StatsFor(me.Class, me.IsPod),
+                                me.Stats,
                                 (p, d) => AvoidObstacles(me.SectorId, p, d, excludeBaseId: b.Id)
                             );
                         // Without a model, fall back to the base center (pre-hull legacy dock sphere).
