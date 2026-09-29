@@ -455,10 +455,14 @@ public partial class TargetPane : Control
 
         y = DrawTelemetry(x0, y, w, t.GlobalPosition, t.Velocity, me, mobile: true, surfaceRadius: 0f);
 
-        // Missile lock — an enemy, from the pilot's seat only (a gunner has no launcher; WireLockId
-        // already strips a friendly focus from the lock slot).
+        // Footer: missile lock for an enemy from the pilot's seat (a gunner has no launcher;
+        // WireLockId already strips a friendly focus from the lock slot), else — for a friendly
+        // carrying a cloak — its own live cloak level, so a squadmate reads how hidden they are
+        // exactly as their own CLK tag would.
         if (enemy && me.Pilot is not null)
             DrawLockRow(x0, y, w);
+        else if (!enemy && t.HasCloak)
+            DrawFact(x0, y, w, "CLOAK", $"{Mathf.RoundToInt(t.CloakLevel * 100f)}%", DesignTokens.TeamAccent);
     }
 
     private void DrawBaseColumn(in Focus f, in HudSubject me, bool enemy, float x0, float y, float w)

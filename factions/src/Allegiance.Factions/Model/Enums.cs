@@ -33,10 +33,10 @@ public enum GameAttribute
     /// <summary>Multiplier on ship maximum armor/hull points.</summary>
     MaxArmorShip,
 
-    /// <summary>Multiplier on ship maximum shield strength.</summary>
+    /// <summary>Multiplier on ship maximum shield strength (the equipped shield part's max-strength).</summary>
     MaxShieldShip,
 
-    /// <summary>Multiplier on ship shield regeneration rate.</summary>
+    /// <summary>Multiplier on ship shield regeneration rate (the equipped shield part's regen-rate).</summary>
     ShieldRegenerationShip,
 
     /// <summary>Multiplier on sensor/scan detection range.</summary>
@@ -45,7 +45,7 @@ public enum GameAttribute
     /// <summary>Multiplier on detectability (how far away this team's units are seen).</summary>
     Signature,
 
-    /// <summary>Multiplier on maximum energy capacity.</summary>
+    /// <summary>Multiplier on a ship's maximum energy pool (the hull's max-energy), which feeds energy guns and the cloak.</summary>
     MaxEnergy,
 
     /// <summary>Multiplier on projectile travel speed.</summary>
@@ -82,7 +82,12 @@ public enum GameAttribute
     DevelopmentTime,
 }
 
-/// <summary>The mountable equipment slots on a hull. Mirrors <c>EquipmentType</c> (igc.h:530-539).</summary>
+/// <summary>
+/// The mountable equipment slots on a hull — the keys of <see cref="Hull.AllowedParts"/>. Mirrors
+/// <c>EquipmentType</c> (igc.h:530-539). The runtime enforces the three EQUIPMENT slots
+/// (<see cref="Shield"/>, <see cref="Afterburner"/>, <see cref="Cloak"/>: one part each, chosen per
+/// ship); weapon and launcher mounts are typed by the hull's hardpoints instead.
+/// </summary>
 public enum EquipmentSlot
 {
     /// <summary>Mounts a chaff launcher.</summary>
@@ -97,16 +102,19 @@ public enum EquipmentSlot
     /// <summary>Mounts a dispenser launcher (mines, probes, etc.).</summary>
     Dispenser,
 
-    /// <summary>Mounts a shield generator.</summary>
+    /// <summary>The shield equipment slot (one shield generator).</summary>
     Shield,
 
-    /// <summary>Mounts a cloaking device.</summary>
+    /// <summary>The cloak equipment slot (one cloaking device; needs a hull energy pool).</summary>
     Cloak,
 
-    /// <summary>Mounts a consumable booster pack.</summary>
+    /// <summary>
+    /// Allegiance's pack slot. Nothing mounts here: ammo packs and fuel pods are hold CARGO
+    /// (<c>ammo-packs:</c> / <c>fuels:</c>), so <c>allowed-parts</c> refuses this key.
+    /// </summary>
     Pack,
 
-    /// <summary>Mounts an afterburner.</summary>
+    /// <summary>The afterburner equipment slot (one booster; needs a hull fuel tank).</summary>
     Afterburner,
 }
 

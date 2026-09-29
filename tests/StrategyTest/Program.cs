@@ -236,8 +236,10 @@ var research0 = world.ResearchByBase[base0Idx]; // live state (StartMatch clears
 // Phase 6 (Iron Coalition ordnance import): 14 more developments append at the VERY tail (indices
 // 13-26 — dev-seeker-2/3, dev-quickfire-2/3, dev-dumbfire-2/3, dev-anti-base-2/3, dev-mine-2/3,
 // dev-chaff-2/3, dev-probe-2/3, in that order) so every index above (0-12) stays stable.
+// Equipment PR: the 12 EQUIPMENT research devs append after them (indices 27-38 — the Sm / Med / Lrg
+// Shield tiers 2-3, Booster 2-3, Lt Booster 1-2, Crs Booster, Hvy Booster), leaving 0-26 stable.
 Check(
-    content.Developments.Count == 27
+    content.Developments.Count == 39
         && content.Developments[0].Id == "dev-bomber"
         && content.Developments[1].Id == "dev-gat-2"
         && content.Developments[3].Id == "dev-minigun-2"
@@ -258,8 +260,20 @@ Check(
         && content.Developments[23].Id == "dev-chaff-2"
         && content.Developments[24].Id == "dev-chaff-3"
         && content.Developments[25].Id == "dev-probe-2"
-        && content.Developments[26].Id == "dev-probe-3",
-    "development catalog is in authored order (0 bomber, 1 gat-2, 3 minigun-2, 5 autocan-2, 7 upgrade-garrison, 10 nanite-2, 12 upgrade-outpost, 13-26 Iron ordnance tiers seeker/quickfire/dumbfire/anti-base/mine/chaff/probe)",
+        && content.Developments[26].Id == "dev-probe-3"
+        && content.Developments[27].Id == "dev-sm-shield-2"
+        && content.Developments[28].Id == "dev-sm-shield-3"
+        && content.Developments[29].Id == "dev-med-shield-2"
+        && content.Developments[30].Id == "dev-med-shield-3"
+        && content.Developments[31].Id == "dev-lrg-shield-2"
+        && content.Developments[32].Id == "dev-lrg-shield-3"
+        && content.Developments[33].Id == "dev-booster-2"
+        && content.Developments[34].Id == "dev-booster-3"
+        && content.Developments[35].Id == "dev-lt-booster-1"
+        && content.Developments[36].Id == "dev-lt-booster-2"
+        && content.Developments[37].Id == "dev-crs-booster"
+        && content.Developments[38].Id == "dev-hvy-booster",
+    "development catalog is in authored order (0 bomber, 1 gat-2, 3 minigun-2, 5 autocan-2, 7 upgrade-garrison, 10 nanite-2, 12 upgrade-outpost, 13-26 Iron ordnance tiers seeker/quickfire/dumbfire/anti-base/mine/chaff/probe, 27-38 equipment tiers sm/med/lrg shield, booster, lt/crs/hvy booster)",
     $"development order wrong: [{string.Join(",", content.Developments.Select(d => d.Id))}]"
 );
 

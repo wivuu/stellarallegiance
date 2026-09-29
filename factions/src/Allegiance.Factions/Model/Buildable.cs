@@ -58,7 +58,7 @@ public abstract record Buildable
 #pragma warning restore YDNG001
 
     /// <summary>
-    /// Lowercase-kebab label naming this buildable's concrete kind (e.g. "hull", "ammo-pack"),
+    /// Lowercase-kebab label naming this buildable's concrete kind (e.g. "hull", "afterburner"),
     /// used to build human-readable descriptions in validation errors and tech-tree reports.
     /// Computed, not authored data — excluded from (de)serialization.
     /// </summary>
@@ -72,7 +72,6 @@ public abstract record Buildable
             Shield => "shield",
             Cloak => "cloak",
             Afterburner => "afterburner",
-            AmmoPack => "ammo-pack",
             Launcher => "launcher",
             Station => "station",
             Development => "development",

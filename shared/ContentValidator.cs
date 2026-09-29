@@ -21,8 +21,11 @@ namespace StellarAllegiance.Shared
         // Returns a (possibly empty) list of human-readable errors. Empty == valid.
         // Checks: unique ids per kind; every non-pod class carries a positive hull; every
         // Weapon hardpoint (on a ship OR a base) resolves to a known WeaponDef; every ship's
-        // authored default loadout fits its payload capacity (no hull ships overburdened);
-        // afterburner/fuel are authored as a consistent pair (see ValidateFuel).
+        // authored default loadout fits its payload capacity (no hull ships overburdened) and its
+        // default guns fit its energy/ammo pools; the equipment catalog and each ship's allowed/
+        // default equipment are coherent, and the afterburner slot and fuel tank come as a pair
+        // (see ValidateFuel). A null `equipment` skips every equipment-dependent check (mirrors a
+        // null `cargoItems`).
         public static List<string> Validate(
             IReadOnlyList<ShipClassDef> ships,
             IReadOnlyList<WeaponDef> weapons,
@@ -30,14 +33,17 @@ namespace StellarAllegiance.Shared
             IReadOnlyList<CargoItemDef>? cargoItems = null,
             IReadOnlyList<TechDef>? techs = null,
             IReadOnlyList<DevelopmentDef>? developments = null,
-            IReadOnlyList<StationCatalogDef>? stationCatalog = null
+            IReadOnlyList<StationCatalogDef>? stationCatalog = null,
+            IReadOnlyList<EquipmentDef>? equipment = null
         )
         {
             var errors = new List<string>();
+            int nTechs = techs?.Count ?? 0;
 
             // Cargo items a dispenser-kind weapon / a hull default-cargo entry can reference.
             var cargoIds = new HashSet<uint>();
             var cargoById = new Dictionary<uint, CargoItemDef>();
+            CargoItemDef? ammoLine = null;
             if (cargoItems is not null)
                 foreach (var c in cargoItems)
                 {
@@ -45,12 +51,30 @@ namespace StellarAllegiance.Shared
                     cargoById[c.CargoId] = c;
                     if (c.FuelPerCharge < 0)
                         errors.Add($"cargo item {c.CargoId} (\"{c.Name}\") has negative FuelPerCharge");
+                    // A pack refills ONE pool: the sim auto-loads a fuel pack on an empty tank and an
+                    // ammo pack on a dry magazine, and a both-ways item would be consumed by either.
+                    if (c.FuelPerCharge > 0 && c.AmmoPerCharge > 0)
+                        errors.Add(
+                            $"cargo item {c.CargoId} (\"{c.Name}\") has both FuelPerCharge and AmmoPerCharge — a pack refills one pool"
+                        );
                     // A load time long enough to outlive a sortie is content authored in the wrong
                     // unit (seconds vs ticks); the sim clock is 20 Hz, so 1200 ticks is a minute.
                     if (c.ReloadTicks > 1200)
                         errors.Add(
                             $"cargo item {c.CargoId} (\"{c.Name}\") has ReloadTicks {c.ReloadTicks} (> 60 s) — check the authored load-time"
                         );
+                    // ONE ammo-pack line: every ammo line's charges pool into ShipPools.AmmoPacks, but
+                    // both peers load them at the FIRST line's AmmoPerCharge and load time
+                    // (Simulation._ammoPackItem / DefRegistry.AmmoCargoItem), so a second line would
+                    // silently load at the first one's numbers.
+                    if (c.AmmoPerCharge > 0)
+                    {
+                        if (ammoLine is not null)
+                            errors.Add(
+                                $"cargo item {c.CargoId} (\"{c.Name}\") is a second ammo-pack line (after {ammoLine.CargoId} \"{ammoLine.Name}\") — the resource rule loads one ammo pack kind"
+                            );
+                        ammoLine ??= c;
+                    }
                 }
 
             var weaponIds = new HashSet<uint>();
@@ -67,6 +91,10 @@ namespace StellarAllegiance.Shared
 
                 ValidateWeapon(w, cargoIds, cargoItems is not null, errors);
             }
+
+            // The equipment catalog (shields / afterburners / cloaks), when supplied.
+            if (equipment is not null)
+                ValidateEquipment(equipment, nTechs, techs is not null, errors);
 
             // Weapon-tier succession must stay within one category: WeaponTier.Migrate (the shared
             // succession rule, applied at spawn by the server and mirrored by every client display)
@@ -94,9 +122,10 @@ namespace StellarAllegiance.Shared
 
                 ValidateWeaponHardpoints(d.Name, d.Hardpoints, weaponIds, weaponsById, errors);
                 ValidatePayload(d, weaponsById, cargoById, cargoItems is not null, errors);
-                ValidateFuel(d, errors);
-                ValidateShield(d, errors);
-                ValidateVision(d, errors);
+                ValidateShipEquipment(d, equipment, errors);
+                ValidatePools(d, weaponsById, errors);
+                ValidateFuel(d, equipment, errors);
+                ValidateVision(d, equipment, errors);
             }
 
             ValidateWinnable(ships, weaponsById, errors);
@@ -119,7 +148,6 @@ namespace StellarAllegiance.Shared
             // ---- Tech-path catalog (Stage 4): the projected research defs the wire streams. ----
             // CoreValidator already proved the STRING refs resolve; these rules guard the projected
             // INDEX space + the research engine's assumptions (positive research time, unique ids).
-            int nTechs = techs?.Count ?? 0;
             if (techs is not null)
             {
                 var techIds = new HashSet<string>();
@@ -280,6 +308,105 @@ namespace StellarAllegiance.Shared
             // against any shielded ship (the shield absorbs everything and never depletes).
             if (w.ShieldMult <= 0f)
                 errors.Add($"weapon {w.WeaponId} (\"{w.Name}\") has non-positive ShieldMult {w.ShieldMult}");
+
+            // Per-shot resource costs are a GUN rule: racks and dispensers feed from their magazine
+            // and the hold, so a cost there is authored in the wrong place.
+            if (!(w.EnergyPerShot >= 0f))
+                errors.Add($"weapon {w.WeaponId} (\"{w.Name}\") has negative EnergyPerShot {w.EnergyPerShot}");
+            if (w.Kind != WeaponKind.Bolt && (w.EnergyPerShot != 0f || w.AmmoPerShot != 0))
+                errors.Add(
+                    $"{w.Kind} weapon {w.WeaponId} (\"{w.Name}\") has EnergyPerShot {w.EnergyPerShot} / AmmoPerShot {w.AmmoPerShot} — only guns (Bolt) draw energy or ammo"
+                );
+        }
+
+        // The equipment catalog: ids are list positions (the projection's rule, and what every
+        // allowed/default/successor reference indexes), each part's stat block is live, its tech
+        // gates land in the tech catalog, and succession stays in one slot and terminates (the tier
+        // migration swaps a slot's part in place and walks the chain).
+        private static void ValidateEquipment(
+            IReadOnlyList<EquipmentDef> equipment,
+            int nTechs,
+            bool haveTechs,
+            List<string> errors
+        )
+        {
+            if (equipment.Count >= EquipmentDef.NoEquipment)
+                errors.Add(
+                    $"equipment catalog has {equipment.Count} parts — ids must stay below the NoEquipment sentinel {EquipmentDef.NoEquipment}"
+                );
+            for (int i = 0; i < equipment.Count; i++)
+            {
+                var e = equipment[i];
+                string ctx = $"equipment {e.EquipmentId} (\"{e.Name}\")";
+                if (e.EquipmentId != i)
+                    errors.Add($"{ctx} sits at catalog index {i} — an EquipmentId must equal its list position");
+                if (!(e.Mass >= 0f))
+                    errors.Add($"{ctx} has negative Mass {e.Mass}");
+                switch (e.Slot)
+                {
+                    case EquipmentDef.SlotShield:
+                        if (!(e.MaxStrength > 0f))
+                            errors.Add($"{ctx} shield has non-positive MaxStrength {e.MaxStrength}");
+                        if (!(e.RegenRate > 0f))
+                            errors.Add($"{ctx} shield has non-positive RegenRate {e.RegenRate} — it would never regenerate");
+                        if (!(e.RechargeDelaySec >= 0f))
+                            errors.Add($"{ctx} shield has negative RechargeDelaySec {e.RechargeDelaySec}");
+                        break;
+                    case EquipmentDef.SlotAfterburner:
+                        if (!(e.AbAccel > 0f))
+                            errors.Add($"{ctx} afterburner has non-positive AbAccel {e.AbAccel}");
+                        if (!(e.FuelDrain > 0f))
+                            errors.Add(
+                                $"{ctx} afterburner has non-positive FuelDrain {e.FuelDrain} — it would never drain its tank"
+                            );
+                        if (!(e.AbOnRate > 0f) || !(e.AbOffRate > 0f))
+                            errors.Add(
+                                $"{ctx} afterburner needs positive AbOnRate/AbOffRate (got {e.AbOnRate}/{e.AbOffRate})"
+                            );
+                        break;
+                    case EquipmentDef.SlotCloak:
+                        if (!(e.EnergyDrain >= 0f))
+                            errors.Add($"{ctx} cloak has negative EnergyDrain {e.EnergyDrain}");
+                        if (!(e.MaxCloaking > 0f && e.MaxCloaking < 1f))
+                            errors.Add(
+                                $"{ctx} cloak has MaxCloaking {e.MaxCloaking} outside (0, 1) — a full cloak would be permanently undetectable"
+                            );
+                        if (!(e.OnRate > 0f) || !(e.OffRate > 0f))
+                            errors.Add($"{ctx} cloak needs positive OnRate/OffRate (got {e.OnRate}/{e.OffRate})");
+                        break;
+                    default:
+                        errors.Add($"{ctx} has Slot {e.Slot} — must be below {EquipmentDef.SlotCount}");
+                        break;
+                }
+                if (haveTechs)
+                {
+                    ValidateTechIdx(e.Name, e.RequiredTechIdx, nTechs, errors);
+                    ValidateTechIdx(e.Name, e.ObsoletedByTechIdx, nTechs, errors);
+                }
+                if (e.SucceededById == EquipmentDef.NoEquipment)
+                    continue;
+                if (e.SucceededById >= equipment.Count)
+                {
+                    errors.Add($"{ctx} is succeeded by unknown equipment {e.SucceededById}");
+                    continue;
+                }
+                var succ = equipment[e.SucceededById];
+                if (succ.Slot != e.Slot)
+                    errors.Add(
+                        $"{ctx} is succeeded by {succ.EquipmentId} (\"{succ.Name}\") in slot {succ.Slot}, not slot {e.Slot} — tier migration would change the slot"
+                    );
+                // The chain must end: walk at most Count steps from here.
+                ushort cursor = e.SucceededById;
+                for (int steps = 0; cursor != EquipmentDef.NoEquipment && cursor < equipment.Count; steps++)
+                {
+                    if (cursor == e.EquipmentId || steps > equipment.Count)
+                    {
+                        errors.Add($"{ctx} succession chain loops — tier migration would never end");
+                        break;
+                    }
+                    cursor = equipment[cursor].SucceededById;
+                }
+            }
         }
 
         // Every projected tech index must land inside the streamed tech catalog — an out-of-range
@@ -322,6 +449,11 @@ namespace StellarAllegiance.Shared
                             errors.Add(
                                 $"class \"{ship.Name}\" ({ship.ClassId}) default cargo carries fuel (id {load.CargoId}) but has no fuel model (MaxFuel <= 0)"
                             );
+                        // Same for ammo packs on a hull with no magazine: dead cargo.
+                        if (item.AmmoPerCharge > 0 && load.Count > 0 && ship.MaxAmmo == 0)
+                            errors.Add(
+                                $"class \"{ship.Name}\" ({ship.ClassId}) default cargo carries ammo (id {load.CargoId}) but has no magazine (MaxAmmo 0)"
+                            );
                     }
                     else if (haveCargo)
                         errors.Add(
@@ -356,44 +488,136 @@ namespace StellarAllegiance.Shared
             );
         }
 
-        // Afterburner and fuel are authored as a pair, and the drain/recharge rates must
-        // actually behave like a gauge (never net-zero, never negative).
-        private static void ValidateFuel(ShipClassDef ship, List<string> errors)
+        // A ship's equipment: AllowedEquipment is sorted (AllowsEquipment binary-searches it),
+        // fits its u8 wire count, resolves, and is successor-closed (tier migration may swap a part
+        // for its successor, which must stay allowed); DefaultEquipment is one entry per slot (or
+        // none), each an allowed part of THAT slot whose tech gates the hull itself carries — the
+        // server hands the default to every ship of the class without a tech check. A cloak slot
+        // needs an energy pool to run on.
+        private static void ValidateShipEquipment(
+            ShipClassDef ship,
+            IReadOnlyList<EquipmentDef>? equipment,
+            List<string> errors
+        )
         {
-            if (ship.AbAccel > 0 && ship.MaxFuel <= 0)
-                errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) has an afterburner (AbAccel > 0) but no MaxFuel");
-            if (ship.MaxFuel > 0 && ship.AbAccel <= 0)
+            if (equipment is null)
+                return;
+            string ctx = $"class \"{ship.Name}\" ({ship.ClassId})";
+            ushort[] allowed = ship.AllowedEquipment ?? System.Array.Empty<ushort>();
+            if (allowed.Length > byte.MaxValue)
+                errors.Add($"{ctx} allows {allowed.Length} equipment parts — more than the 255 the wire count carries");
+            for (int i = 1; i < allowed.Length; i++)
+                if (allowed[i] <= allowed[i - 1])
+                {
+                    errors.Add($"{ctx} AllowedEquipment is not sorted ascending without duplicates");
+                    break;
+                }
+            bool hasCloak = false;
+            foreach (ushort id in allowed)
+            {
+                if (id >= equipment.Count)
+                {
+                    errors.Add($"{ctx} allows unknown equipment {id}");
+                    continue;
+                }
+                var part = equipment[id];
+                hasCloak |= part.Slot == EquipmentDef.SlotCloak;
+                if (part.SucceededById != EquipmentDef.NoEquipment && System.Array.IndexOf(allowed, part.SucceededById) < 0)
+                    errors.Add(
+                        $"{ctx} allows equipment {id} (\"{part.Name}\") but not its successor {part.SucceededById} — tier migration would leave the allowed set"
+                    );
+            }
+            if (hasCloak && ship.MaxEnergy <= 0f)
+                errors.Add($"{ctx} has a cloak slot but no MaxEnergy — the cloak runs on the energy pool");
+
+            ushort[] defaults = ship.DefaultEquipment ?? System.Array.Empty<ushort>();
+            if (defaults.Length != 0 && defaults.Length != EquipmentDef.SlotCount)
+            {
                 errors.Add(
-                    $"class \"{ship.Name}\" ({ship.ClassId}) has MaxFuel but no afterburner (AbAccel <= 0) — dead data"
+                    $"{ctx} DefaultEquipment has {defaults.Length} entries — must be 0 or {EquipmentDef.SlotCount} (one per slot)"
                 );
-            if (ship.MaxFuel > 0 && ship.AbFuelDrain <= 0)
-                errors.Add(
-                    $"class \"{ship.Name}\" ({ship.ClassId}) has MaxFuel but no AbFuelDrain — never drains, an unlimited boost with a gauge"
-                );
-            if (ship.MaxFuel > 0 && ship.AbFuelRecharge >= ship.AbFuelDrain)
-                errors.Add(
-                    $"class \"{ship.Name}\" ({ship.ClassId}) AbFuelRecharge >= AbFuelDrain — fuel never net-depletes"
-                );
-            if (ship.AbFuelDrain < 0)
-                errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) has negative AbFuelDrain");
-            if (ship.AbFuelRecharge < 0)
-                errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) has negative AbFuelRecharge");
+                return;
+            }
+            for (int slot = 0; slot < defaults.Length; slot++)
+            {
+                ushort id = defaults[slot];
+                if (id == EquipmentDef.NoEquipment)
+                    continue;
+                if (id >= equipment.Count)
+                {
+                    errors.Add($"{ctx} default slot {slot} names unknown equipment {id}");
+                    continue;
+                }
+                var part = equipment[id];
+                if (part.Slot != slot)
+                    errors.Add($"{ctx} default slot {slot} names equipment {id} (\"{part.Name}\"), a slot-{part.Slot} part");
+                if (System.Array.IndexOf(allowed, id) < 0)
+                    errors.Add(
+                        $"{ctx} default slot {slot} names equipment {id} (\"{part.Name}\"), which the hull does not allow"
+                    );
+                foreach (ushort tech in part.RequiredTechIdx)
+                    if (System.Array.IndexOf(ship.RequiredTechIdx, tech) < 0)
+                    {
+                        errors.Add(
+                            $"{ctx} default slot {slot} names equipment {id} (\"{part.Name}\"), locked behind tech index {tech} the hull does not require — every team fielding the hull would get it free"
+                        );
+                        break;
+                    }
+            }
         }
 
-        // Regenerating shield: all-zero = no shield (fine). If a hull carries any shield stat, the
-        // trio must be coherent — a positive capacity needs a positive recharge (else it never comes
-        // back after the first hit), and no field may be negative.
-        private static void ValidateShield(ShipClassDef ship, List<string> errors)
+        // Energy + ammo pools: non-negative, and every DEFAULT gun (pilot mount or crew turret) must
+        // be able to afford one shot from a full pool — otherwise the class ships with a barrel that
+        // can never fire.
+        private static void ValidatePools(ShipClassDef ship, Dictionary<uint, WeaponDef> weaponsById, List<string> errors)
         {
-            if (ship.ShieldCapacity < 0f)
-                errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) has negative ShieldCapacity {ship.ShieldCapacity}");
-            if (ship.ShieldRecharge < 0f)
-                errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) has negative ShieldRecharge {ship.ShieldRecharge}");
-            if (ship.ShieldDelaySec < 0f)
-                errors.Add($"class \"{ship.Name}\" ({ship.ClassId}) has negative ShieldDelaySec {ship.ShieldDelaySec}");
-            if (ship.ShieldCapacity > 0f && ship.ShieldRecharge <= 0f)
+            string ctx = $"class \"{ship.Name}\" ({ship.ClassId})";
+            if (!(ship.MaxEnergy >= 0f))
+                errors.Add($"{ctx} has negative MaxEnergy {ship.MaxEnergy}");
+            if (!(ship.EnergyRecharge >= 0f))
+                errors.Add($"{ctx} has negative EnergyRecharge {ship.EnergyRecharge}");
+            if (ship.Hardpoints is null)
+                return;
+            foreach (var h in ship.Hardpoints)
+            {
+                if (h.Kind != HardpointKind.Weapon && h.Kind != HardpointKind.Turret)
+                    continue;
+                if (!weaponsById.TryGetValue(h.WeaponId, out var w))
+                    continue;
+                if (w.EnergyPerShot > ship.MaxEnergy)
+                    errors.Add(
+                        $"{ctx} {h.Kind} index {h.Index} binds {w.WeaponId} (\"{w.Name}\") costing {w.EnergyPerShot} energy per shot, above MaxEnergy {ship.MaxEnergy} — it could never fire"
+                    );
+                if (w.AmmoPerShot > ship.MaxAmmo)
+                    errors.Add(
+                        $"{ctx} {h.Kind} index {h.Index} binds {w.WeaponId} (\"{w.Name}\") costing {w.AmmoPerShot} ammo per shot, above MaxAmmo {ship.MaxAmmo} — it could never fire"
+                    );
+            }
+        }
+
+        // The tank belongs to the afterburner SLOT: a hull that allows an afterburner needs a tank,
+        // a tank without one is dead data, and the in-flight recharge must lag the drain of every
+        // allowed afterburner — else the gauge never net-depletes (a free boost). The slot is read
+        // from the equipment catalog, so a null catalog only checks the sign.
+        private static void ValidateFuel(ShipClassDef ship, IReadOnlyList<EquipmentDef>? equipment, List<string> errors)
+        {
+            string ctx = $"class \"{ship.Name}\" ({ship.ClassId})";
+            if (ship.AbFuelRecharge < 0)
+                errors.Add($"{ctx} has negative AbFuelRecharge");
+            if (equipment is null)
+                return;
+            EquipmentDef? frugal = null; // the allowed afterburner with the lowest drain
+            foreach (ushort id in ship.AllowedEquipment ?? System.Array.Empty<ushort>())
+                if (id < equipment.Count && equipment[id].Slot == EquipmentDef.SlotAfterburner)
+                    if (frugal is null || equipment[id].FuelDrain < frugal.FuelDrain)
+                        frugal = equipment[id];
+            if (frugal is not null && ship.MaxFuel <= 0)
+                errors.Add($"{ctx} has an afterburner slot but no MaxFuel — the booster has no tank");
+            if (frugal is null && ship.MaxFuel > 0)
+                errors.Add($"{ctx} has MaxFuel but no afterburner slot — dead data");
+            if (frugal is not null && ship.AbFuelRecharge >= frugal.FuelDrain)
                 errors.Add(
-                    $"class \"{ship.Name}\" ({ship.ClassId}) has ShieldCapacity but no ShieldRecharge — shield never regenerates"
+                    $"{ctx} AbFuelRecharge {ship.AbFuelRecharge} >= FuelDrain {frugal.FuelDrain} of allowed afterburner {frugal.EquipmentId} (\"{frugal.Name}\") — fuel never net-depletes"
                 );
         }
 
@@ -402,7 +626,7 @@ namespace StellarAllegiance.Shared
         // must be a sane 0..90 degrees, a cone with reach must actually have a nonzero angle (else it
         // sees nothing), and RadarSignature must be positive — projection resolves an authored 0 to
         // 1.0 BEFORE this validator runs, so a non-positive resolved signature is an authoring bug.
-        private static void ValidateVision(ShipClassDef ship, List<string> errors)
+        private static void ValidateVision(ShipClassDef ship, IReadOnlyList<EquipmentDef>? equipment, List<string> errors)
         {
             string ctx = $"class \"{ship.Name}\" ({ship.ClassId})";
             if (ship.VisionConeLength < 0f)
@@ -415,12 +639,31 @@ namespace StellarAllegiance.Shared
                 errors.Add($"{ctx} has VisionConeLength > 0 but VisionConeAngleDeg <= 0 — cone sees nothing");
             if (ship.RadarSignature <= 0f)
                 errors.Add($"{ctx} has non-positive RadarSignature {ship.RadarSignature}");
-            // The additive equipment bias must leave the effective base positive — a base+bias of 0
+            // The additive hull bias must leave the effective base positive — a base+bias of 0
             // would make the hull undetectable at any range (the signature clamp rails scale off it).
             if (ship.RadarSignature + ship.SignatureBias <= 0f)
                 errors.Add(
                     $"{ctx} has RadarSignature + SignatureBias <= 0 ({ship.RadarSignature} + {ship.SignatureBias}) — hull would be undetectable"
                 );
+            // ...and so must the WORST loadout: each equipped part adds its Signature per ship, so
+            // the stealthiest allowed part in every slot together must not reach zero either.
+            else if (equipment is not null)
+            {
+                float worst = ship.RadarSignature + ship.SignatureBias;
+                var stealthiest = new float[EquipmentDef.SlotCount];
+                foreach (ushort id in ship.AllowedEquipment ?? System.Array.Empty<ushort>())
+                    if (id < equipment.Count && equipment[id].Slot < EquipmentDef.SlotCount)
+                        stealthiest[equipment[id].Slot] = System.Math.Min(
+                            stealthiest[equipment[id].Slot],
+                            equipment[id].Signature
+                        );
+                foreach (float bias in stealthiest)
+                    worst += bias;
+                if (worst <= 0f)
+                    errors.Add(
+                        $"{ctx} can equip parts whose Signature sum takes RadarSignature + SignatureBias to {worst} <= 0 — the ship would be undetectable"
+                    );
+            }
         }
 
         // Same sphere/signature checks as ships, minus the directional cone (bases are omnidirectional-only).

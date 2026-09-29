@@ -1,6 +1,7 @@
 using Godot;
 using StellarAllegiance.Net;
 using StellarAllegiance.Shared;
+using StellarAllegiance.Ui;
 
 // Other players' ships (T6). The client cannot predict a remote ship (it doesn't
 // have that player's input), so it renders authoritative snapshots behind an
@@ -69,10 +70,12 @@ public partial class RemoteShip : Node3D
     // Authoritative hull + shield, straight off the Ship row each snapshot, so the HUD can draw a
     // health indicator around a Tab-focused target (TargetMarkers.DrawTargetHealthArc). Latest-value
     // assignment — a HUD arc needs no interpolation, and Push already drops out-of-order frames.
-    // Max values come LIVE from the class def (not from spawn health): a target can already be
-    // damaged when it enters our AOI, so its cur/max must derive from the def, not the first row.
-    // 0 until the def streams in (client-no-baked-tuning-fallback) — the arc simply holds off until
-    // then. MaxShield is 0 for a hull that carries no shield, so no shield band is drawn.
+    // Max values come LIVE from the defs (not from spawn health): a target can already be damaged
+    // when it enters our AOI, so its cur/max must derive from the def, not the first row. 0 until the
+    // def streams in (client-no-baked-tuning-fallback) — the arc simply holds off until then.
+    // MaxShield is the EQUIPPED shield part × the team's MaxShieldShip attribute (equipment PR) — 0
+    // for a ship flying no shield part (a shieldless hull, an emptied slot, every pod), so no shield
+    // band is drawn.
     public float Health { get; private set; }
     public float Shield { get; private set; }
 
@@ -80,16 +83,73 @@ public partial class RemoteShip : Node3D
     // prediction weights its impulse share by it, matching the server's ResolveShipImpulse.
     public float Mass { get; private set; }
     public float MaxHealth => _defs != null && _defs.TryGetShipDef((byte)Class, out var d) ? d.MaxHull : 0f;
-    public float MaxShield => _defs != null && _defs.TryGetShipDef((byte)Class, out var d) ? d.ShieldCapacity : 0f;
+    public float MaxShield =>
+        _defs != null && _teams != null ? _defs.MaxShield(Team, (byte)Class, IsPod, _equipIds, _teams) : 0f;
     private DefRegistry _defs = null!;
+    private TeamStateStore? _teams; // team attribute vector (shield / energy maxima)
     private MatchClock _clock = null!; // render timeline (ServerNowMs) + the snapshot tick samples are stamped with
+
+    // ---- Equipment + pools (equipment PR) ----
+    // The ship's effective equipment by slot, pushed by ShipRenderer from its MsgShipLoadout row (null
+    // = the hull's DefaultEquipment, the omission rule). Drives the boost plume gate and MaxShield.
+    private ushort[]? _equipIds;
+    public ushort[]? EquipmentIds => _equipIds;
+    public EquipmentSet Equipment => _defs != null ? _defs.EffectiveEquipment((byte)Class, IsPod, _equipIds) : default;
+    public bool HasCloak => Equipment.Cloak is not null;
+
+    // Latest authoritative pools off the row (energy / magazine / pack charges / cloak level) — exact,
+    // the pools LastInputTick's fire phase began with. The cloak level drives the shimmer for EVERY
+    // viewer (fog decides whether an enemy is streamed at all); a friendly target's readouts use it.
+    public ShipPools Pools { get; private set; }
+    public float CloakLevel => ShipResources.CloakFraction(Pools.Cloak);
+    public float MaxEnergy => _defs != null && _teams != null ? _defs.MaxEnergy(Team, (byte)Class, IsPod, _teams) : 0f;
+    public int MaxAmmo => _defs != null ? _defs.MaxAmmo((byte)Class, IsPod) : 0;
+
+    // The shimmer actually shown: eased toward the row's level (20 Hz steps of the u16 ramp) so the
+    // hull fades smoothly; re-applied now and then while cloaked so a node added under the model
+    // later (a turret barrel) joins the effect. Stopped for good once the ship is fading out.
+    private const float CloakEaseRate = 10f; // 1/s
+    private const double CloakReapplySec = 0.5;
+    private float _cloakShown;
+    private float _cloakApplied;
+    private double _cloakReapplyAcc;
+    private bool _fadingOut;
+
+    // Whether the shown level has left 0 for the current cloak run (equipment PR audio) — the edge
+    // this ship's own PlayAt cue fires on, distinct from the pilot's own hull (which cues off the
+    // toggle LATCH in Hud.cs, not the level: nothing streams a latch bit for a hull that isn't ours).
+    private bool _cloakAudible;
+
+    // Swap the ship's effective equipment (a loadout row landed / was dropped): re-derive what the
+    // parts drive on this node — the throttle proxy's top speed and whether it has a booster at all.
+    public void SetEquipment(ushort[]? ids)
+    {
+        _equipIds = ids;
+        RefreshFlightProxy();
+    }
+
+    // Stop driving the cloak shimmer: the node is being faded out (fog lost contact) and the fade owns
+    // every mesh's transparency from here.
+    public void BeginFadeOut() => _fadingOut = true;
+
+    // Cosmetic throttle-proxy inputs (engine glow) from the ship's flight stats — its EQUIPPED
+    // afterburner decides whether the synthesized plume may light. A missing def just leaves the
+    // harmless defaults until it lands — no baked tuning on the client.
+    private void RefreshFlightProxy()
+    {
+        if (_defs != null && _defs.TryGetStats((byte)Class, IsPod, _equipIds, out var s))
+        {
+            _maxSpeed = s.MaxSpeed;
+            _canBoost = s.AbThrust > 0f;
+        }
+    }
 
     // Dynamic engine glow. A remote ship has no input to read, so its throttle is
     // approximated from forward speed as a fraction of the class max — fast forward
     // flight lights the engines, drifting/turning lets them idle.
     private EngineGlow? _engine;
     private float _maxSpeed = 1f;
-    private bool _canBoost; // hull has an afterburner (AbThrust > 0); gates the synthesized plume
+    private bool _canBoost; // the ship carries an afterburner part (AbThrust > 0); gates the synthesized plume
 
     // PIG afterburner: drones have no input to read, so we synthesize occasional
     // afterburner bursts when one swings onto a new heading (added realism — a
@@ -142,7 +202,7 @@ public partial class RemoteShip : Node3D
     public void SetPilotName(string name) =>
         Nameplate.SetText(ref _nameplate, ref _pilotName, name, Team, this, visibleWhenSet: !_nameplateHidden);
 
-    public void Initialize(Ship row, DefRegistry defs, MatchClock clock)
+    public void Initialize(Ship row, DefRegistry defs, MatchClock clock, TeamStateStore teams)
     {
         _clock = clock;
         ShipId = row.ShipId;
@@ -150,18 +210,21 @@ public partial class RemoteShip : Node3D
         Class = row.Class;
         IsPig = row.IsPig;
         Kind = row.Kind;
-        _defs = defs; // kept so MaxHealth/MaxShield can resolve the class def live (it may stream in later)
+        _defs = defs; // kept so MaxHealth/MaxShield can resolve the defs live (they may stream in later)
+        _teams = teams;
         // Cosmetic throttle-proxy denominator only (engine glow), so a missing def just
         // leaves the harmless 1f default until the row lands — no baked tuning on the
-        // client. Pod-aware so a pod's proxy reads against its slow cap.
-        if (defs.TryGetStats((byte)row.Class, row.IsPod, out var s))
-        {
-            _maxSpeed = s.MaxSpeed;
-            _canBoost = s.AbThrust > 0f;
-        }
+        // client. Pod-aware so a pod's proxy reads against its slow cap. Starts on the hull's
+        // default equipment; ShipRenderer pushes a loadout row's parts via SetEquipment.
+        _equipIds = null;
+        RefreshFlightProxy();
         _burnCooldown = (float)GD.RandRange(1.0, 3.0); // stagger drones' first burst roll
         _interp.StatsId = row.ShipId; // fidelity-instrumentation bucket key (no-op unless InterpStats.Enabled)
         Push(row, clock.ServerTick);
+        // A ship first seen (or back in AOI) already cloaked appears at its level with no fade-in and
+        // no CloakOn cue: only a level change watched on THIS node is an audible edge.
+        _cloakShown = ShipResources.CloakFraction(row.Pools.Cloak);
+        _cloakAudible = _cloakShown > 0f;
     }
 
     public void OnAuthoritative(Ship row, uint serverTick) => Push(row, serverTick);
@@ -197,6 +260,7 @@ public partial class RemoteShip : Node3D
         Health = row.Health;
         Shield = row.Shield;
         Mass = row.Mass;
+        Pools = row.Pools;
         IsMining = row.IsMining; // per-tick mining flag → drives the beam (WorldRenderer) + model roll (_Process)
 
         if (first)
@@ -238,6 +302,7 @@ public partial class RemoteShip : Node3D
             _engine.SetThrottle(throttle, boost);
         }
 
+        UpdateCloak(delta);
         UpdateMiningRoll((float)delta);
 
         // The shared interpolator owns the whole pose pipeline: adaptive delay, Hermite
@@ -251,6 +316,45 @@ public partial class RemoteShip : Node3D
             Quaternion = q;
         }
         PerfBuckets.Add(PerfBuckets.RShip, t0);
+    }
+
+    // The cloak shimmer (equipment PR): every viewer who receives this ship sees it go translucent by
+    // its cloak level (capped at CloakFx.OtherMaxTransparency) with a faction-tinted rim shimmer —
+    // an enemy is only streamed at all while fog lets us see it. Eased toward the row's level, and
+    // pushed to the meshes only when the shown level moves (plus the periodic re-apply).
+    private void UpdateCloak(double delta)
+    {
+        if (_fadingOut)
+            return;
+        float target = CloakLevel;
+        _cloakShown =
+            Mathf.Abs(target - _cloakShown) < 0.001f
+                ? target
+                : Mathf.Lerp(_cloakShown, target, 1f - Mathf.Exp(-CloakEaseRate * (float)delta));
+
+        // Audible cloak edges for every OTHER viewer: the eased level leaving 0 (engaging) or settling
+        // back on it (fully decloaked), positional at the hull — there is no latch bit to edge on.
+        if (_cloakShown > 0f && !_cloakAudible)
+        {
+            _cloakAudible = true;
+            SfxManager.Instance?.PlayAt(SfxManager.SfxId.CloakOn, GlobalPosition);
+        }
+        else if (_cloakShown <= 0f && _cloakAudible)
+        {
+            _cloakAudible = false;
+            SfxManager.Instance?.PlayAt(SfxManager.SfxId.CloakOff, GlobalPosition);
+        }
+
+        _engine?.SetCloak(_cloakShown);
+        if (ResolveShipModel() is not { } model)
+            return;
+        _cloakReapplyAcc += delta;
+        bool reapply = _cloakShown > 0f && _cloakReapplyAcc >= CloakReapplySec;
+        if (_cloakShown == _cloakApplied && !reapply)
+            return;
+        _cloakReapplyAcc = 0;
+        CloakFx.Apply(model, _cloakShown, CloakFx.OtherMaxTransparency, DesignTokens.Faction(Team));
+        _cloakApplied = _cloakShown;
     }
 
     // Cosmetic barrel-roll of the ShipModel child while mining, eased in/out on the IsMining flag.

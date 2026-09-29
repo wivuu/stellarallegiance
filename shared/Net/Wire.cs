@@ -11,11 +11,11 @@ public static class Wire
     // The layouts themselves are the attributed types in Messages.cs / Records.cs (+ the content
     // defs in ../Defs.cs); tools/wire-gen generates the codecs and tests/WireTest pins the goldens.
     // The per-version change log that used to live here is in git history (`git log -p -- shared/Net/Wire.cs`).
-    // One bump per PR to master (a release), never per commit: master ships 40; this branch's step is
-    // hangar crews — crew-served turret stations (ShipLoadoutRecord.TurretWeaponIds) plus the
-    // HangarIntent / CrewSeat / Crew frames (41), then turret aim + fire: TurretInput / Turrets (42).
-    // 43: ServerNotice (the "this server wants to restart for an update" banner) + Reject code 3.
-    public const byte ProtocolVersion = 43;
+    // One bump per PR to master (a release), never per commit: master ships 43; this branch's step is
+    // 44 — equipment, energy + ammo: the MsgDefs equipment catalog / hull pools / per-shot costs,
+    // ShipRecord.Pools, ShipLoadoutRecord.EquipmentIds, the MsgSpawn equipment tail,
+    // TeamStateRecord.Attributes and InputFlags.Cloak.
+    public const byte ProtocolVersion = 44;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

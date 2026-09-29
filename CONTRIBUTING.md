@@ -10,7 +10,7 @@
 | `launcher/` | The **Game Launcher** — a small Avalonia app that installs/updates the game through Velopack and then runs the client as a child process (`Core/` = UI-free flow + services, `App/` = the themed window). See [`launcher/README.md`](launcher/README.md) and [`docs/RELEASING.md`](docs/RELEASING.md). |
 | `tools/simbot/` | Bot swarm for load testing the server. |
 | `tools/asteroid-gen/` | Generates the asteroid mesh/normal-map catalog. |
-| `tests/` | 24 suites — `FlightModelTest` (determinism + golden), `CryptoTest` (shared-secret HMAC), plus `ShieldTest`, `FogTest`, `MissileTest`, `MineTest`, `MiningTest`, `CommanderTest`, `ConstructorTest`, `FuelPodTest`, `LoadoutTest`, and more (one `.csproj` per suite). |
+| `tests/` | 35 suites — `FlightModelTest` (determinism + golden), `CryptoTest` (shared-secret HMAC), plus `ShieldTest`, `FogTest`, `MissileTest`, `MineTest`, `MiningTest`, `CommanderTest`, `ConstructorTest`, `FuelPodTest`, `LoadoutTest`, `EquipmentTest`, `AmmoEnergyTest`, `ResourcePredictTest`, and more (one `.csproj` per suite). |
 
 ## Architecture in one paragraph
 
@@ -57,7 +57,7 @@ dotnet run --project tests/FlightModelTest/FlightModelTest.csproj -c Release   #
 dotnet run --project tests/CryptoTest/CryptoTest.csproj -c Release             # must print all checks passed
 ```
 
-`tests/` holds 24 suites in total (one `.csproj` each — `ShieldTest`, `FogTest`, `MissileTest`, `MineTest`, `MiningTest`,
+`tests/` holds 35 suites in total (one `.csproj` each — `ShieldTest`, `FogTest`, `MissileTest`, `MineTest`, `MiningTest`,
 `CommanderTest`, `ConstructorTest`, `FuelPodTest`, `LoadoutTest`, and more); run the suite(s)
 covering whatever you touched with the same `dotnet run --project tests/<Suite>/<Suite>.csproj`
 pattern.

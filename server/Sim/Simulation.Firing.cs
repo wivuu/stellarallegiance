@@ -33,6 +33,14 @@ public sealed partial class Simulation
         // array index as `barrel` (the per-barrel spread seed) — skipped slots consume their
         // index, so gun seeds stay aligned with the client (SpawnBoltFor/PredictionController)
         // regardless of where racks or emptied slots sit in the array.
+        //
+        // Eligibility is cadence AND the resource gate (equipment PR, shared/ShipResources.cs): a
+        // cadence-ready mount fires only if TrySpendShot covers its EnergyPerShot / AmmoPerShot from
+        // the ship's pools, in barrel declaration order (an earlier mount can starve a later one).
+        // A BLOCKED mount does not stamp MountLastFire — it stays ready and fires on the first tick
+        // the pools allow. A client replaying a row whose LastFireTick == LastInputTick runs this same
+        // loop on the row's Pools (the pools this fire phase started with), so it knows exactly which
+        // mounts fired without any per-mount wire data.
         bool fired = false;
         for (byte barrel = 0; barrel < muzzles.Length; barrel++)
         {
@@ -41,6 +49,8 @@ public sealed partial class Simulation
             ship.MountLastFire ??= new uint[muzzles.Length];
             if (!FireCadence.MountFires(tick, ship.MountLastFire[barrel], w.FireIntervalTicks))
                 continue;
+            if (!SpendShot(ship, w))
+                continue; // out of energy / ammo: no shot, no stamp
             ship.MountLastFire[barrel] = tick;
             FireBolt(ship, tick, w, muzzles[barrel], barrel, ship.OwnerClientId);
             fired = true;
@@ -95,6 +105,10 @@ public sealed partial class Simulation
                 continue; // an emptied / non-bolt station fires nothing
             if (!FireCadence.MountFires(tick, stamps[slot], w.FireIntervalTicks))
                 continue; // the server's cadence is the ONLY debounce — held input replays every tick
+            // The stations draw on the SAME pools as the pilot's barrels, after them (Pass A calls
+            // TryFire first): a dry ship's turrets stop too, and a blocked station doesn't stamp.
+            if (!SpendShot(s, w))
+                continue;
             FireBolt(s, tick, w, new Muzzle(st.Off, aim, wid), TurretAim.SpreadBarrel(st.HpIndex), gunner);
             stamps[slot] = tick;
             s.LastTurretFireTick = tick;
@@ -105,6 +119,17 @@ public sealed partial class Simulation
     // How far a clamped aim must move before it is worth a MsgTurrets record (a unit vector, so this
     // is ~0.006°) — the gunner's mouse jitters every tick and the stream is per-client.
     private const float TurretAimEpsilon = 1e-4f;
+
+    // The resource gate for ONE cadence-ready gun shot (shared ShipResources.TrySpendShot): deducts
+    // the weapon's energy + ammo cost from the ship's live pools when both are covered, else changes
+    // nothing and returns false. The test kill-switches zero a cost rather than skipping the call, so
+    // the gate's ordering is identical either way.
+    private bool SpendShot(ShipSim ship, WeaponDef w) =>
+        ShipResources.TrySpendShot(
+            ref ship.Pools,
+            EnergyEnabled ? w.EnergyPerShot : 0f,
+            AmmoEnabled ? w.AmmoPerShot : (ushort)0
+        );
 
     // Cast one bolt from a single muzzle: spawn it at the hardpoint, walk the spatial grid for the
     // first hull/base/rock it enters, and queue the damage at the impact tick. The bolt direction

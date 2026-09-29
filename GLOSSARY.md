@@ -280,23 +280,27 @@ view persist as last-known "ghost" contacts (HUD/radar only) until re-scouted or
 ### Radar Signature (dynamic pipeline)
 A ship's effective radar signature — what scales every viewer's fog detection range against it — is a
 composable per-tick value, not the hull constant: `clamp((RadarSignature + SigBias) × fireMult ×
-boostMult × shieldMult × dustMult, rails)`. Firing (guns/missiles, decaying window) and the
-afterburner (ramped by live `AbPower`) make a ship louder; an EQUIPPED shield (capacity > 0,
-regardless of pool) radiates; sitting inside a dust cloud quiets it (stacking with the sightline dust
-attenuation — hiding in dust beats being seen through it). `ShipSim.SigBias` is the per-ship additive
-equipment/ability seam (seeded at spawn from the projected `ShipClassDef.SignatureBias` = authored
-`Hull.Signature` + preferred-parts `Part.Signature` sum; a future loadout/cloak system mutates it
-live). Computed on the sim thread at vision capture (`SignatureModel.Compute`); server-only — never
-streamed, no protocol impact. All world knobs default neutral (1.0) ⇒ byte-identical to
-fire-boost-only fog.
+boostMult × shieldMult × dustMult, rails) × (1 − cloaking)`. Firing (guns/missiles, decaying window)
+and the afterburner (ramped by live `AbPower`) make a ship louder; an EQUIPPED shield PART radiates
+(regardless of its current pool — see [[Shield]]); sitting inside a dust cloud quiets it (stacking with
+the sightline dust attenuation — hiding in dust beats being seen through it); a [[Cloak]] hides a
+fraction of whatever's left AFTER the clamp (deliberately outside the min/max rails — the rails bound
+the loudness terms, not the cloak — and firing does not break it). `ShipSim.SigBias` is the per-ship
+additive equipment seam: `Simulation.Equipment.cs`'s `ApplyEquipment` re-seeds it on every
+equip/re-equip as `Hull.Signature + ShieldPart.Signature + AfterburnerPart.Signature +
+CloakPart.Signature` (stock parts all author 0 — Allegiance never actually applies part signatures,
+see [[Equipment (per-ship slots)]]'s Notes). Computed on the sim thread at vision capture
+(`SignatureModel.Compute`); server-only — never streamed, no protocol impact. All world knobs default
+neutral (1.0, no cloak) ⇒ byte-identical to fire-boost-only fog.
 - **Frequency:** Core (fog-only; stock world.yaml authors boost 1.4 / shield 1.15 / dust 0.5)
 - **Key Files:**
-  - `server/Sim/SignatureModel.cs` — the pure pipeline (`SignatureKnobs`/`SignatureInputs`/`Compute`)
-  - `server/Sim/Simulation.Vision.cs` — capture-time call, `DustCoverageAt`, `_sigKnobs` cache
+  - `server/Sim/SignatureModel.cs` — the pure pipeline (`SignatureKnobs`/`SignatureInputs`/`Compute`), `SignatureInputs.Cloaking`
+  - `server/Sim/Simulation.Vision.cs` — capture-time call (passes the live cloak level), `DustCoverageAt`, `_sigKnobs` cache
   - `server/Content/core/world.yaml` — `boost/shield/dust-signature-mult`, `signature-min/max-mult` rails
-  - `server/Content/FactionsContentProjection.cs` — `SignatureBias` projection
-- **Related:** [[Fog of War (Team Vision)]], [[Per-Sector Environment (God Rays / Nebula / Dust Clouds)]]
-- **Notes:** tests/FogTest section 0 (unit) + 21 (live-sim boost/shield/dust/bias) guard the pipeline
+  - `server/Sim/Simulation.Equipment.cs` — `ApplyEquipment`'s `SigBias` re-seed (hull + equipped parts)
+- **Related:** [[Cloak]], [[Equipment (per-ship slots)]], [[Fog of War (Team Vision)]], [[Per-Sector Environment (God Rays / Nebula / Dust Clouds)]]
+- **Notes:** tests/FogTest section 0 (unit) + 21 (live-sim boost/shield/dust/bias) guard the pipeline;
+  new cloak-after-clamp and cloaked-hull-undetected cases were added alongside (equipment PR).
 
 ### Per-Sector Environment (God Rays / Nebula / Dust Clouds)
 Optional `environment:` block on each sector in a map YAML, driving that sector's look AND — for dust —
@@ -358,7 +362,8 @@ their sector, never dock, expire after `lifetime-seconds`, and are capped per se
 first). Any PLAYER hull — either team, no tech gate — collects by touch, in two tiers. EQUIP first: a
 gun needs an empty type-compatible mount plus payload headroom; loose rounds join the magazine when
 the item's rack id equals the picker's first effective rack; cargo packs mirror `SeedDispenserAmmo`
-(fuel needs a tank). Whatever the equip tier refuses goes to the CARGO HOLD second
+(fuel needs a tank, an ammo pack needs a magazine — `MaxAmmo > 0`, [[Ammo Pool & Ammo Pack]]).
+Whatever the equip tier refuses goes to the CARGO HOLD second
 (see [[Cargo hold (cargo-capacity)]]): a hull with a free slot carries ANY item inert — a gun with no mount, foreign-rack
 rounds, a pack past the payload budget — and only a hull that can neither use nor hold it makes it
 ricochet ("Can't carry …: hold full", or the equip reason when the hull has no hold at all). Salvage
@@ -414,8 +419,10 @@ The time it takes to pull the next charge out of the cargo hold. Authored per ex
 launcher's `WeaponDef.ReloadTicks` (and, for the fuel pod, onto `CargoItemDef.ReloadTicks`), and
 streamed to clients on `MsgDefs`. A cargo-fed launcher/dispenser is usable again after
 `FireCadence.LoadIntervalTicks(FireIntervalTicks, ReloadTicks)` — **one** window, longest wins — so
-`load-time: 0`/omitted is exactly the legacy cadence-only behavior. Guns are excluded (infinite ammo,
-no hold).
+`load-time: 0`/omitted is exactly the legacy cadence-only behavior. Guns are excluded from THIS
+mechanic — they have no `WeaponDef.ReloadTicks` of their own; a gun's own ammo now lives in the ship's
+shared magazine ([[Ammo Pool & Ammo Pack]]), and the AMMO PACK that refills it is cargo that follows
+this exact load-time rule, same as the fuel pod.
 - **Frequency:** Common
 - **Key Files:**
   - `shared/FireCadence.cs` — `LoadIntervalTicks`, the single rule server + HUD both read
@@ -454,24 +461,34 @@ which tier a hold actually deploys.
     dispenser rows, all of which must name what the server will hand the ship
   - `shared/ContentValidator.cs` — refuses a succession chain that changes weapon CATEGORY
   - `tests/LoadoutTest` — scenario 8 (mounted rack) and 8b (cargo hold)
-- **Related:** [[Per-Ship Weapon Loadout (mount overrides)]], [[Expendables]], [[Payload]], [[Tech Paths / Research]]
+- **Related:** [[Per-Ship Weapon Loadout (mount overrides)]], [[Expendables]], [[Payload]], [[Tech Paths / Research]], [[Equipment (per-ship slots)]]
 - **Notes:** Migration runs even on a pure authored spawn, so a quick-launch also flies the current
   tier. The client copy is a DISPLAY mirror with no authority — if it disagrees with the server the
-  screen is simply lying about what you will carry.
+  screen is simply lying about what you will carry. `shared/EquipmentTier.cs` mirrors this exact rule
+  for the shield/afterburner/cloak slots ([[Equipment (per-ship slots)]]'s succession) — same
+  successor walk, but with NO mass guard, since equipment costs no payload and can never push a hull
+  over its capacity.
 
 ### Fuel Pod
-Reserve afterburner fuel carried as pure cargo (no launcher, no key): when a fuel-modeled hull's
-tank hits 0 while boost is held, one charge is committed pre-Integrate and — after the pod's
-`load-time` (stock 2 s), during which the tank and the afterburner stay DEAD — the tank refills by
-`fuel-per-charge` (clamped to `max-fuel` — the stock 999 value means "full refill").
+Reserve afterburner fuel carried as pure cargo (no launcher, no key): when a hull with an EQUIPPED
+afterburner part burns its tank to 0 while boost is held, one charge is committed pre-Integrate and —
+after the pod's `load-time` (stock 2 s), during which the tank and the afterburner stay DEAD — the tank
+refills by `fuel-per-charge` (clamped to `max-fuel` — the stock 999 value means "full refill"). The
+TANK stays a hull stat (`max-fuel`, authored only on a hull with an afterburner slot); since the
+equipment PR the DRAIN is the equipped part's own `fuel-consumption` (`EquipmentDef.FuelDrain`), not a
+hull field, so re-equipping a thirstier booster changes burn time without touching the hull.
+`ab-fuel-recharge` is 0 on every stock hull — Allegiance never refuels in flight, and any recharge at
+or above the frugal Lt Booster's 0.195/s drain would be free boost (`CoreValidator` refuses one at or
+above any allowed booster's drain).
 - **Frequency:** Domain-specific
 - **Key Files:**
   - `factions/src/Allegiance.Factions/Model/Expendables/FuelPod.cs` — authoring model (`fuels:` in expendables.yaml)
+  - `server/Content/core/equipment.yaml` — `afterburners:` — each part's `max-thrust`/`fuel-consumption` (the drain source)
   - `server/Sim/Simulation.cs` — `ShipSim.FuelPodAmmo` + the Pass A auto-load before `FlightModel.Integrate`
   - `client/scripts/PredictionController.cs` — `ConsumeFuelPod` prediction mirror (live Step + reconcile replay)
   - `client/scripts/SystemRing.cs` — `POD +N` reserve readout under the FUEL arc, `LOAD nn%` + a
     danger-tone sweep arc while a pod is loading
-- **Related:** [[Reload (load-from-hold)]], [[Expendables]], [[Payload]], [[Afterburner]]
+- **Related:** [[Reload (load-from-hold)]], [[Expendables]], [[Payload]], [[Equipment (per-ship slots)]]
 - **Notes:** Proto v35: ship record appends u8 fuelPodAmmo; cargo defs append f32 FuelPerCharge.
   FlightModel.Integrate is untouched (PIG determinism) — the refill lands between InputFor and
   Integrate so the boost gate (which reads pre-tick fuel) never blinks. Hangar hides the row on
@@ -495,8 +512,10 @@ Flight-HUD inspector for the Tab-focused target, docked right of the minimap at 
 private-world SubViewport renders the target's real model seen down the line of sight from your hull
 with the screen's up (so your own yaw/pitch never turns it; roll does, as on screen), auto-fit to the
 well, with a magnification caption, beside a per-kind readout. SHIP: pilot/class, HULL/SHLD bars
-(held off until the class def streams), RNG/SPD/CLOSE, enemy lock progress, aspect-angle caption (0° =
-nose-on to you). BASE: station/owner (+HQ), HULL, friendly DOCK clearance or enemy siege LOCK,
+(held off until the class def streams; SHLD max is now EQUIPMENT-aware — the same live hull-part ×
+team-attribute function [[Shield]] uses, `DefRegistry.MaxShield` client-side — so a target with no
+shield part equipped, e.g. a bare Lt Interceptor, shows no bar), RNG/SPD/CLOSE, enemy lock progress,
+aspect-angle caption (0° = nose-on to you). BASE: station/owner (+HQ), HULL, friendly DOCK clearance or enemy siege LOCK,
 RNG/CLOSE/ETA, diameter caption. ASTEROID: resource class, He3 ORE bar + YIELD or buildable SITE
 stations, RNG/CLOSE/ETA, MINERS harvesting it, diameter caption.
 - **Frequency:** Domain-specific
@@ -566,19 +585,239 @@ stay launch-capable).
   - `client/scripts/ui/ShipLoadout.cs` + `.Hangar.cs` — WrongBase / NO LAUNCH BAY UX
 - **Related:** [[Docking Door]], [[Dock Refund]], [[Def (Definition)]]
 
+### Equipment (per-ship slots)
+Per-ship gear picked in the hangar: one **shield**, one **afterburner** and one **cloak** slot
+(`EquipmentDef.SlotShield`/`SlotAfterburner`/`SlotCloak`, `SlotCount = 3`). A hull has a slot only if
+its `allowed-parts` (hulls.yaml, keys `shield`/`afterburner`/`cloak`) lists it; a listed part
+implicitly allows its whole successor chain (`Part.SuccessorPartId`), so a hull allowed Sm Shield 1 can
+also carry Sm Shield 2/3 once researched. `preferred-parts` (Allegiance's `preferredPartsTypes`) picks
+each slot's STATIC default: the first listed part the slot allows whose `required-techs` the hull
+ITSELF already requires (`EquipmentResolver.StaticDefault`, Allegiance's `TryToBuyParts` — a
+research-locked part is never handed out free); a researched tier then migrates the default live (see
+[[Weapon Tier Migration]]'s equipment twin). Equipment costs NO payload and never changes flight mass —
+`mass` is purely a hangar display number. Equipment ids are the part's position in the streamed
+catalog, grouped shields → afterburners → cloaks (stock 0-8, 9-15, 16); append within a section, never
+reorder. **Wire omission rule:** a ship with no `MsgShipLoadout` row flies its hull's literal
+`DefaultEquipment` — the server sends a row whenever the effective equipment differs from that
+default, including a research-migrated one.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `server/Content/core/equipment.yaml` — the shield/afterburner/cloak catalog (stock Iron Coalition parts, PCore014-translated)
+  - `factions/src/Allegiance.Factions/Model/Hull.cs` — `AllowedParts` / `PreferredParts`; `Model/Parts/Shield.cs` / `Afterburner.cs` / `Cloak.cs` — the three part kinds
+  - `factions/src/Allegiance.Factions/Resolution/EquipmentResolver.cs` — `SlotOf` / `SlotAccepts` / `AllowedClosure` / `StaticDefault`, shared by `CoreValidator` and the projection
+  - `shared/Defs.cs` — `EquipmentDef` (catalog entry) + `ShipClassDef.AllowedEquipment` / `DefaultEquipment` / `DefaultEquipmentFor` / `AllowsEquipment`
+  - `shared/EquipmentTier.cs` — the succession rule (WeaponTier's twin; no mass guard — equipment has no flight mass)
+  - `server/Sim/Simulation.Equipment.cs` — `ApplyEquipment` (resolves the 3 parts + derives flight stats/signature bias), `TryResolveEquipment` (hangar request validation + tier migration)
+  - `client/scripts/DefRegistry.cs` (`AllowedEquipment`/`HasEquipmentSlot`/`DefaultEquipmentId`/`EffectiveEquipment`), `ui/LoadoutState.cs`, `ui/ShipLoadout.Hangar.cs` — the hangar's E1 SHIELD / E2 AFTERBURNER / E3 CLOAK rows
+  - `shared/Net/Records.cs` — `ShipLoadoutRecord.EquipmentIds`, `EquipmentOverrideRecord` (the `MsgSpawn` tail)
+- **Related:** [[Shield]], [[Energy Pool]], [[Cloak]], [[Weapon Tier Migration]], [[Per-Ship Weapon Loadout (mount overrides)]], [[Hull]]
+- **Notes:** Protocol 44. The seven fields equipment replaced — hull `shield-capacity`/`-recharge`/
+  `-delay` and `ab-accel`/`-on-rate`/`-off-rate`/`-fuel-drain` — are nullable **tombstones** on
+  `Hull.cs`: `CoreValidator` refuses to boot a bundle that still authors any of them ("moved to
+  equipment parts, see equipment.yaml"), because the YAML deserializer otherwise silently ignores
+  unknown keys and a custom bundle would lose its shields and boost with no warning. The hull keeps
+  `max-fuel` (the tank) and `ab-fuel-recharge` (0 on every stock hull: dock-only refuel — see
+  [[Fuel Pod]]). Stock parts author no `signature` — Allegiance authors part signatures but never
+  applies them (`shipIGC.h:270`); authoring one here would make it live (see
+  [[Radar Signature (dynamic pipeline)]]).
+
 ### Shield
-Regenerating energy layer over the raw-health model, authored per hull/faction (`shield-capacity`,
-`shield-recharge` points/sec, `shield-delay` seconds). Absorbs incoming damage before the hull;
-overflow from a shield-popping hit spills into the hull the same tick; recharges after the quiet
-delay. A per-weapon `shield-damage-multiplier` (default 1.0) is the damage-type interaction.
+Regenerating energy layer over the raw-health model — now an EQUIPPED PART (`EquipmentDef.SlotShield`,
+one of the three [[Equipment (per-ship slots)]] slots), not a hull constant. A ship's shield strength
+and regen are the part's `max-strength` / `regen-rate` × the team's `MaxShieldShip` /
+`ShieldRegenerationShip` attributes ([[Team Attribute Vector (`TeamStateRecord.Attributes`)]]), read
+LIVE every tick — a research change or a dropped multiplier applies at once, clamping the pool down if
+the new maximum is smaller. Absorbs incoming damage before the hull; overflow from a shield-popping hit
+spills into the hull the same tick; regen resumes the part's `recharge-delay` seconds after the last
+hit (stock parts author 0 = Allegiance's CONTINUOUS regen — it recovers even under fire). No shield
+part equipped (an emptied slot, or a hull with no shield slot at all, like the Lt Interceptor) = no
+shield: 0 capacity, 0 regen. A per-weapon `shield-damage-multiplier` (default 1.0) is the damage-type
+interaction.
 - **Frequency:** Common
 - **Key Files:**
-  - `factions/src/Allegiance.Factions/Model/Hull.cs` — `ShieldCapacity/ShieldRecharge/ShieldDelay`; `Model/Parts/Part.cs` — `ShieldDamageMultiplier`
-  - `server/Sim/Simulation.cs` — `ApplyDamage` (single damage seam for all 7 sites), spawn init, end-of-Step recharge sweep, `ShieldsEnabled` test toggle
-  - `server/Net/Protocol.cs` — shield f16 rides the ship record (`ShipRecordSize`, single-sourced in Protocol.cs) + 3 shield floats/1 shieldMult in MsgDefs (proto 19)
+  - `server/Content/core/equipment.yaml` — the Sm/Med/Lrg Shield 1-3 parts (`max-strength`/`regen-rate`/`recharge-delay`)
+  - `factions/src/Allegiance.Factions/Model/Parts/Shield.cs` — `MaxStrength`/`RegenRate`/`RechargeDelay`; `Model/Parts/Part.cs` — `ShieldDamageMultiplier`
+  - `server/Sim/Simulation.Equipment.cs` — `ShieldCapacityFor`/`ShieldRechargeFor`/`ShieldDelayTicksFor` (the part × live team-attribute reads)
+  - `server/Sim/Simulation.cs` — `ApplyDamage` (single damage seam for all 7 sites), the end-of-Step recharge sweep (per-ship clamp-down), `ShieldsEnabled` test toggle
+  - `server/Net/Protocol.cs` — shield f16 rides the ship record + `EquipmentDef`'s shield fields in `MsgDefs`
+  - `client/scripts/DefRegistry.cs` — `MaxShield(team, classId, isPod, equipIds, teams)`, the client mirror of `ShieldCapacityFor`
   - `client/scripts/SystemRing.cs` — cyan SHLD solid arc wrapping the HULL gauge; `client/scripts/ShieldFlash.cs` — hemisphere hit flash
-- **Related:** [[Hull]], [[Blast Radius]], [[Direct Hit Multiplier]]
-- **Notes:** Proto v19; a pod uses the Pod def's shield (0). `ShieldsEnabled=false` lets damage-mechanic tests isolate raw damage. `tests/ShieldTest` is the determinism guard.
+- **Related:** [[Equipment (per-ship slots)]], [[Team Attribute Vector (`TeamStateRecord.Attributes`)]], [[Hull]], [[Blast Radius]], [[Direct Hit Multiplier]]
+- **Notes:** Protocol 44 moved the stats from the hull onto the part; a pod carries no equipment, so it
+  has no shield. `ShieldsEnabled=false` lets damage-mechanic tests isolate raw damage. `tests/ShieldTest`
+  is the determinism guard (its fighter now authors a 3 s `recharge-delay` in a per-boot content tweak
+  so the delay-tick math can't underflow, plus a separate zero-delay continuous-regen check).
+
+### Energy Pool
+Per-ship rechargeable resource that energy guns (the ER Nanite) and an engaged/ramping [[Cloak]] draw
+from: `ShipClassDef.MaxEnergy` × the team's `MaxEnergy` attribute
+(see [[Team Attribute Vector (`TeamStateRecord.Attributes`)]]), refilled at `EnergyRecharge` per second
+(`ShipResourceStats.RechargePerTick` = that × `FlightModel.Dt`). Iron's `max-energy` is the raw IGC
+value (Scout 1200, ×1.2 Iron = 1440) — previously resolved but INERT, now live. A weapon spends
+`WeaponDef.EnergyPerShot` per shot (today only the ER Nanite, 60/shot — the per-shot formula that keeps
+Allegiance's drain-per-second at our half-rate cadence is authored in `weapons.yaml`); a shot the pool
+can't cover doesn't fire and doesn't stamp cooldown. 0 `MaxEnergy` (most non-combat/unarmed hulls) = no
+pool, no energy gate, ever.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `server/Content/core/hulls.yaml` — `max-energy` / `energy-recharge-rate` per hull
+  - `server/Content/core/weapons.yaml` — `energy-per-shot` (ER Nanite only, stock)
+  - `shared/Defs.cs` — `ShipClassDef.MaxEnergy`/`EnergyRecharge`; `WeaponDef.EnergyPerShot`
+  - `shared/ShipResources.cs` — `ShipResourceStats.MaxEnergy`/`RechargePerTick`, `EnergyStep` (the recharge + cloak-drain step)
+  - `server/Sim/Simulation.Equipment.cs` — `ResourceStatsFor` (reads the team's live MaxEnergy attribute)
+  - `client/scripts/DefRegistry.cs` — `MaxEnergy(team, classId, isPod, teams)`, `TryResourceStats`
+  - `client/scripts/SystemRing.cs` — the ENRG arc; `client/scripts/WeaponsPanel.cs` — NO ENRG state
+- **Related:** [[Resource Rule (`ShipResources`)]], [[Cloak]], [[Ammo Pool & Ammo Pack]], [[Team Attribute Vector (`TeamStateRecord.Attributes`)]], [[Weapon]]
+- **Notes:** Protocol 44. Energy rides the wire as raw f32 (`ShipPools.Energy`) — a Half/u16 would flip
+  the fire gate at fractional energy, breaking exact replay. `EnergyEnabled=false` (the
+  `ShieldsEnabled` test-isolation precedent) pins the pool full and disables the gate; the cloak still
+  ramps, drawing nothing.
+
+### Ammo Pool & Ammo Pack
+The magazine every ammo-costing gun on a ship shares (`ShipClassDef.MaxAmmo`, e.g. Enh Fighter 720 —
+its three Gats each draw `WeaponDef.AmmoPerShot` = 2 per shot, ~24 s of continuous fire), refilled at
+dock/relaunch and — mid-sortie — by an **Ammo Pack** carried in the cargo hold: the Fuel Pod's twin,
+authored as an `Expendable` in `expendables.yaml` (`ammo-packs:`, cargo-id 6, appended after `fuels:`
+so the cargo catalog order stays stable), 1000 ammo per charge, 2 s load. The magazine auto-loads a
+charge — **input-independent**, so it runs even when a gunner (not the pilot) is the one draining ammo
+— the instant it drops below the cheapest ammo gun over the ship's EFFECTIVE mounts (pilot barrels
+**and** turret stations: one shared magazine), a pack is aboard, and nothing is already loading; the
+charge is spent at once (`AmmoPacks--`) and its ammo lands `AmmoReloadTicks` later, during which the
+ammo guns stay dry (energy guns are unaffected — they never touch this pool). Refused as cargo on a
+0-`MaxAmmo` hull. 0 `MaxAmmo` (unarmed hulls, and hulls with only energy guns) = no magazine, ever.
+`ContentValidator` allows ONE ammo-pack line: every line's charges would pool into `AmmoPacks` but load
+at a single line's per-charge refill and load time.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `server/Content/core/hulls.yaml` — `max-ammo` per hull; `server/Content/core/weapons.yaml` — `ammo-per-shot` per gun
+  - `server/Content/core/expendables.yaml` — `ammo-packs:` (mirrors `fuels:`)
+  - `factions/src/Allegiance.Factions/Model/Expendables/AmmoPack.cs` — `record AmmoPack : Expendable { int AmmoPerCharge }`
+  - `shared/Defs.cs` — `ShipClassDef.MaxAmmo`; `WeaponDef.AmmoPerShot`; `CargoItemDef.AmmoPerCharge`
+  - `shared/ShipResources.cs` — `ShipResourceStats.MinAmmoPerShot`/`AmmoPerCharge`/`AmmoReloadTicks`, `AmmoStep` (the load-commit rule)
+  - `server/Sim/Simulation.Equipment.cs` — `RefreshMinAmmoPerShot` (barrels + turret stations, cached on the ship)
+  - `client/scripts/DefRegistry.cs` — `AmmoCargoItem()` (the `FuelCargoItem()` twin), `MinAmmoPerShot`
+  - `client/scripts/SystemRing.cs` — `AMMO nnn +P` tag; `client/scripts/WeaponsPanel.cs` — NO AMMO / LOADING states
+- **Related:** [[Resource Rule (`ShipResources`)]], [[Energy Pool]], [[Fuel Pod]], [[Reload (load-from-hold)]], [[Cargo hold (cargo-capacity)]]
+- **Notes:** Protocol 44. `weapons.yaml`'s old "infinite ammo" header is gone — see
+  [[Reload (load-from-hold)]]. Ammo rides the wire as an exact `u16` (`ShipPools.Ammo`), packs as a `u8`.
+  `AmmoEnabled=false` disables the gate outright (no gun spends, no pack ever commits, no PIG flies
+  home to rearm — see [[PIG Rearm]]). Only `tests/AmmoEnergyTest` flips it, to prove the kill-switch
+  itself and as the PIG-rearm control; every other suite runs with both gates live.
+
+### Cloak
+The optional third equipment slot (`EquipmentDef.SlotCloak`): `toggle_cloak` (default **K**, pad
+**L3**) flips a CLIENT LATCH sent every tick as a held input LEVEL bit (`InputFlags.Cloak = 64`;
+held-input replay forbids edge detection, so a toggle press can't be "missed" or double-applied), not
+an edge. While engaged the level ramps on an integer `u16` scale (`ShipPools.Cloak`,
+0..`ShipResources.CloakFull`) at the equipped part's `on-rate`/`off-rate` (at least 1 step/tick, so
+even a slow cloak moves) toward the part's `max-cloaking` (0 < value < 1 — a full cloak never reaches
+total invisibility); it keeps draining `EnergyDrain`/s from the [[Energy Pool]] while engaged **or**
+still ramping down, so releasing mid-ramp doesn't cut the drain short. A pool that can't cover the
+tick's drain spends whatever is left and scales the RAMP TARGET by `(energy / need)²` instead of
+gating outright (Allegiance, `cloakIGC.cpp:59-120`) — a starved cloak fades rather than snapping off,
+and it keeps draining until the level reaches 0. The cloaked fraction (`ShipResources.CloakFraction` =
+level ÷ full) multiplies [[Radar Signature (dynamic pipeline)]]'s clamped output AFTER the min/max
+rails — a cloaked ship can drop below the normal detection floor, and firing does not break it (both
+match Allegiance, `shipIGC.h:270`). Every viewer who RECEIVES the ship (fog alone decides whether an
+enemy streams at all) sees a translucent shimmer scaled by that same fraction — the owner's own ship is
+capped LESS than everyone else's view of it (0.75 vs 0.85 max transparency), so the chase cam still
+reads it. The Scout's cloak slot (Sig Cloak 1: 115 energy/s, 0.625 max cloaking) is a deliberate
+STAND-IN, not lore: verified against PCore014, no ported Iron combat hull can cloak (only the unported
+Stealth Fighter can) — the slot holds the spot until a stealth hull lands.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `server/Content/core/equipment.yaml` — `cloaks:` (Sig Cloak 1; header explains why 2/3 and the Hvy Cloaks aren't ported)
+  - `factions/src/Allegiance.Factions/Model/Parts/Cloak.cs` — `EnergyDrain`/`MaxCloaking`/`OnRate`/`OffRate`
+  - `shared/ShipResources.cs` — `EnergyStep`'s cloak half (the ramp + shortfall math), `CloakFraction`
+  - `client/scripts/InputBindings.cs` — `toggle_cloak` binding; `client/scripts/ShipController.cs` — the latch (flips on press only when the ship has a cloak, else `ActionDenied`)
+  - `client/scripts/CloakFx.cs` — the shimmer (per-instance `Transparency` + a shared fresnel `MaterialOverlay` shader, faction-tinted) + `EngineGlow.SetCloak`
+  - `server/Sim/SignatureModel.cs` — `SignatureInputs.Cloaking`, applied after the clamp
+  - `server/Sim/Simulation.Vision.cs` — passes the live level into the signature pipeline
+- **Related:** [[Equipment (per-ship slots)]], [[Energy Pool]], [[Radar Signature (dynamic pipeline)]], [[Resource Rule (`ShipResources`)]], [[Fog of War (Team Vision)]]
+- **Notes:** Protocol 44 (`InputFlags.Cloak`, `ShipPools.Cloak`). `--cloak-test` game flag drives a
+  client through engage/starve/disengage for smoke. `EquipmentTier` migrates a cloak pick like any
+  other equipment (no mass guard — a cloak costs no payload).
+
+### Resource Rule (`ShipResources`)
+THE single per-tick rule for a ship's energy, ammo, ammo-pack and cloak pools (`ShipPools`: `float
+Energy; ushort Ammo; byte AmmoPacks; ushort Cloak; ushort AmmoLoadLeft` — 11 B), called identically by every peer that steps
+a ship so the pools can never drift (the [[Flight Model]]/`FireCadence`/`WeaponTier` single-rule
+pattern, now shared by the server's Pass A, the owner's client-side
+[[Resource Mirror (client prediction)]], and a remote's replay in `BoltRenderer`). Tick order,
+exactly, on every peer:
+1. **Ammo step** (`ShipResources.AmmoStep`, input-independent) — land a finished pack load
+   (`Ammo = min(MaxAmmo, Ammo + AmmoPerCharge)`), then commit a new one when the magazine can't afford
+   the cheapest ammo gun over the ship's EFFECTIVE mounts, a pack is aboard, and nothing is already
+   loading. Runs even when a gunner (not the pilot) is the one draining the shared magazine. It then
+   stamps `AmmoLoadLeft` (ticks until the pending load lands), so the snapshot carries the load too.
+2. **Snapshot** — the pools right now become `PoolsAtFire` (`ShipSim.PoolsAtFire`): what
+   `ShipRecord.Pools` streams for `LastInputTick`, i.e. the pools the FIRE PHASE below will spend
+   from, not the tick's end state. A remote row whose `LastFireTick == LastInputTick` replays step 4 on
+   exactly this snapshot to learn which mounts fired — no fired-mask on the wire.
+3. Fuel pod auto-load + `FlightModel.Integrate` (unchanged; Integrate never reads a pool).
+4. **Fire phase** (`ShipResources.TrySpendShot`) — pilot mounts in barrel declaration order, then
+   turret stations: a cadence-eligible mount fires only if the pools also cover its
+   `EnergyPerShot`/`AmmoPerShot`; a BLOCKED mount does NOT stamp its cooldown, so it fires on the first
+   tick the pools allow instead of losing that cycle.
+5. **Energy step** (`ShipResources.EnergyStep`) — recharge (clamped to `MaxEnergy`, which also clamps
+   a pool DOWN the tick a smaller team multiplier lands), then the cloak ramp/drain (see [[Cloak]]).
+The pools entering tick T+1 are exactly the pools leaving tick T. Deterministic on purpose: plain f32
+`+ - * /` and compares in one fixed order (no FMA, no doubles), and the cloak level is an integer ramp
+— energy crosses the wire as raw f32 so a replay gates at the same fractional values the server did.
+- **Frequency:** Every tick (any ship with a nonzero pool)
+- **Key Files:**
+  - `shared/ShipResources.cs` — the whole rule: `ShipPools`, `ShipResourceStats`, `StatsFor`, `AmmoStep`, `TrySpendShot`, `EnergyStep`, `MinAmmoPerShot`, `CloakFraction`
+  - `server/Sim/Simulation.cs` — Pass A calls the rule in this exact order (authority)
+  - `server/Sim/Simulation.Firing.cs` — `TryFire`/`TryFireTurrets` gate each mount through `TrySpendShot`
+  - `client/scripts/ResourceMirror.cs` — the client mirror (see [[Resource Mirror (client prediction)]])
+  - `client/scripts/world/BoltRenderer.cs` — remote replay of step 4 off a row's `Pools`
+  - `shared/Net/Records.cs` — `ShipRecord.Pools` (the snapshot from step 2, 78-byte record)
+  - `tests/AmmoEnergyTest`, `tests/ResourcePredictTest` — the determinism + derivation-invariant guards
+- **Related:** [[Energy Pool]], [[Ammo Pool & Ammo Pack]], [[Cloak]], [[Resource Mirror (client prediction)]], [[Flight Model]], [[Held-Input Replay]], [[Per-Ship Weapon Loadout (mount overrides)]]
+- **Notes:** Protocol 44 (`ShipRecord` 67 → 78 B). Shields are NOT in `ShipPools` — they're a separate,
+  simpler per-ship value (see [[Shield]]); this rule only ever covers energy/ammo/cloak. Two test
+  kill-switches, `AmmoEnabled`/`EnergyEnabled` (default on, the `ShieldsEnabled` precedent), let a
+  PIG-heavy or long-firing suite disable one gate without disabling the other.
+
+### Resource Mirror (client prediction)
+The client half of [[Resource Rule (`ShipResources`)]]: a Godot-free class (`client/scripts/
+ResourceMirror.cs`, linked directly by `tests/ResourcePredictTest`) that predicts the LOCAL ship's
+energy/ammo/cloak pools tick-by-tick in the server's exact order, so the HUD, the gun gate and the
+cloak respond the instant the pilot acts instead of a round trip later — the fuel pod's
+`ConsumeFuelPod` pattern, generalized. Keeps a 64-tick ring of pre-fire snapshots (`RingSize` — deeper
+than the flight reconcile buffer) plus each tick's per-mount cadence stamps, so a reconcile (`Resync`)
+can REPLAY every recorded tick after a divergent one from the authoritative pools with the SAME
+recorded inputs, re-deriving cadence stamps on the way — a trigger the server applied a tick late
+converges within one ack instead of leaving the cadence out of phase (and the pools mismatching) for
+the rest of a burst. The pending ammo-pack load rides the row too (`ShipPools.AmmoLoadLeft`), so a
+replay restarts it exactly — even a load a gunner's shots or a salvaged pack committed, which the
+prediction never saw happen. When the acked tick's recorded stamps show no mount ready although the
+server fired (a press it took a tick late, whose ack was lost), the replay re-derives WHICH mounts from
+the previous tick's stamps (before the client's early shot), and only then falls back to every mount
+the pools allow — which would put a mixed-cadence loadout's still-cycling mount out of phase.
+`SelectBarrels` — the actual fire-gate loop
+(cadence AND resources) — is a `static` method shared verbatim by this mirror, its own replay, AND
+`BoltRenderer`'s remote replay, so every client derives the same fired set from the same row.
+`PredictionController` wraps the mirror with the HUD-ready seams: `Energy`/`MaxEnergy`/`Ammo`/
+`MaxAmmo`/`AmmoPacks`/`AmmoLoading`/`AmmoLoadFrac`/`CloakLevel`/`CloakEngaged`/`Equipment`
+(`EquipmentSet`)/`HasCloak`/`HasAfterburner`/`LastGateBlock`/`GateBlockFor(w)`, plus `MaxShield` via the
+same live team-attribute function [[Shield]] uses.
+- **Frequency:** Domain-specific
+- **Key Files:**
+  - `client/scripts/ResourceMirror.cs` — `ResourceMirror`, `EquipmentSet`, `GateBlock`, `SelectBarrels`
+  - `client/scripts/PredictionController.cs` — drives `BeginTick`/`FireStep`/`EndTick` around the
+    existing fuel-pod/Integrate/muzzle code, calls `Resync` on every authoritative ack, exposes the HUD seams
+  - `client/scripts/world/BoltRenderer.cs` — the remote-row twin of `SelectBarrels`
+  - `client/scripts/DefRegistry.cs` — `TryResourceStats` (refreshed live, never stamped at spawn)
+  - `tests/ResourcePredictTest` — links this file + references SimServer directly (`FuelPodTest`'s
+    pattern), asserting tick-exact pools under identical inputs
+- **Related:** [[Resource Rule (`ShipResources`)]], [[Client Prediction]], [[Held-Input Replay]], [[Fuel Pod]]
+- **Notes:** `[predict-stats]` logs `res_resync=` — the resource-mirror replays within that stats
+  window (the delta of the static `PredictionController.ResourceResyncs`, summed over every local ship;
+  `[cloak-test]` prints the running total); ≈0 during ordinary flight is the smoke-test signal (see
+  `--combat-test --interp-stats`). Crewed ships:
+  the captain's client can't predict a GUNNER's spend, so a turret shot is an expected, bounded
+  one-round-trip resync, not a bug.
 
 ### Blast Radius
 Damage falloff zone around explosion epicenter; damps based on distance and intervening obstacles.
@@ -619,15 +858,22 @@ In-memory, server-only ballistic hit record (target ship ID, impact position, ti
 - **Notes:** Hit detection is server-authoritative; there is no `MsgShotResolution` and the client never consumes resolutions — hit VFX are client-side interception (`CheckBoltImpacts`) per [[Client-Side Hit Sparks]].
 
 ### Per-Ship Weapon Loadout (mount overrides)
-The hangar's weapon-slot assignments (swap or leave-empty per Weapon hardpoint) carried on MsgSpawn, validated + stored per-ship in the sim, and echoed to every client via MsgShipLoadout=28 (full table, reconcile-by-omission: an omitted ship flies its authored class loadout).
+The hangar's weapon-slot assignments (swap or leave-empty per Weapon hardpoint) AND — since the
+equipment PR — its EQUIPMENT-slot picks (shield/afterburner/cloak, [[Equipment (per-ship slots)]]),
+carried on MsgSpawn (`Mounts` tail + `Equipment` tail: `EquipmentOverrideRecord[]`, overridden slots
+only, `0xFFFF` = explicitly empty), validated + stored per-ship in the sim, and echoed to every client
+via MsgShipLoadout=28 (full table, reconcile-by-omission: an omitted ship flies its authored class
+loadout AND its hull's `DefaultEquipment`).
 - **Frequency:** Domain-specific
 - **Key Files:**
-  - `client/scripts/ui/LoadoutState.cs` — hangar model; WeaponOverridesFor / ExpectedEffectiveIds
+  - `client/scripts/ui/LoadoutState.cs` — hangar model; WeaponOverridesFor / ExpectedEffectiveIds / `EquipmentPicksFor` / `ExpectedEquipment`
   - `server/Sim/Simulation.cs` — ResolveLoadout (joint mount+cargo validation: mountable kind, team tech, PayloadCapacity), ShipSim.MountWeaponIds/MountLastFire, WeaponIdAt
+  - `server/Sim/Simulation.Equipment.cs` — `TryResolveEquipment` (the loadout's equipment half: slot/kind/tech validation + tier migration)
   - `shared/FireCadence.cs` — THE per-mount gun-cadence rule shared by server TryFire, PredictionController, and WorldRenderer.SpawnBoltFor
+  - `shared/Net/Records.cs` — `ShipLoadoutRecord.EquipmentIds`, `EquipmentOverrideRecord`
   - `client/scripts/DefRegistry.cs` — WeaponSlots (positional, empties kept); SlotsForShip loadout overlay; MissileMount
-- **Related:** [[Projectile]], [[Dock Refund]], [[Held-Input Replay]]
-- **Notes:** Guns fire on PER-MOUNT cooldowns; the wire carries only LastFireTick — clients derive WHICH mounts fired by replaying FireCadence against a per-ship shadow, so hardpoint count is unlimited (no fired-mask field). Barrel index = position in the FULL Weapon-hardpoint list (empties included) and seeds the spread — barrel-indexed code must never use the filtered mount list. Whole-request reject → authored fallback (mounts AND cargo); empty cargo alongside overrides = deliberately empty hold, not "seed default". Mount TYPES gate what fits each slot (gun mounts take guns, missile mounts take racks, `any` mounts take either, and an UNAUTHORED empty mesh mount is `NonMountable` — hidden in the hangar, not a slot — via `HardpointDef.MountAccepts`, enforced hangar-side and in ResolveLoadout). Bots/pods always fly authored (MountWeaponIds null). tests/LoadoutTest covers the seams.
+- **Related:** [[Projectile]], [[Dock Refund]], [[Held-Input Replay]], [[Equipment (per-ship slots)]]
+- **Notes:** Guns fire on PER-MOUNT cooldowns; the wire carries only LastFireTick — clients derive WHICH mounts fired by replaying FireCadence against a per-ship shadow, so hardpoint count is unlimited (no fired-mask field). Barrel index = position in the FULL Weapon-hardpoint list (empties included) and seeds the spread — barrel-indexed code must never use the filtered mount list. Whole-request reject → authored fallback (mounts AND cargo); empty cargo alongside overrides = deliberately empty hold, not "seed default". Mount TYPES gate what fits each slot (gun mounts take guns, missile mounts take racks, `any` mounts take either, and an UNAUTHORED empty mesh mount is `NonMountable` — hidden in the hangar, not a slot — via `HardpointDef.MountAccepts`, enforced hangar-side and in ResolveLoadout). Bots/pods always fly authored (MountWeaponIds null). tests/LoadoutTest covers the seams; equipment picks are covered by `tests/EquipmentTest`.
 
 ### Crew / Turret Station
 A **turret station** is an authored `kind: turret` hardpoint (hulls.yaml) that binds a mesh `HP_Turret_N` node and names a default gun; a **crew** is the set of pilots seated in a hull's stations. A docked **captain** advertises their selected turret hull + per-station gun picks (`MsgHangarIntent`=17); a shipless teammate claims / moves / leaves a **seat** (`MsgCrewSeat`=18); the server streams each team's roster (`MsgCrew`=32, reliable, full reconcile) so the sidebar lists CREWED SHIPS, the captain sees who mans what, and a seated **gunner** rides along once the captain launches (no ship of their own; camera follows the captain's ship). Once launched, the gunner AIMS and FIRES the station: a turret hardpoint's `Dir` is its **zenith** (outward mount normal — mesh `HP_Turret` nodes point +Z into the hull, so the geometry merge negates them) and the firing **arc** is a 105° cone around it (a hemisphere plus 15° of depression under the mount's horizon, `TurretAim.ArcHalfAngleRad`); the gunner's client runs a FREE LOOK (`TurretLook`: the mouse turns a ship-local look basis about its own axes, the arc edge is the only fence; wheel-in past the tightest gun cam or `toggle_view` sits the gunner INSIDE the turret with the ridden hull hidden; the telescopic scope `ZoomView` works from the seat too — `ScopePose` looks down the station's aim and the mouse gain divides by the magnification) and sends the ship-local aim + fire flag (`MsgTurretInput`=19, held-input, latest wins); turret aim is CLIENT-AUTHORITATIVE — `MsgTurretInput` carries the gun's ACTUAL aim, and the server's only edit is `TurretAim.Clamp` into the arc (so a stale or forged aim can never fire through the hull); the station's authored `slew-deg` (streamed as `HardpointDef.TurretSlewRad`; a station that authors none takes world.yaml `turret.default-slew-deg`, stock 180°/s; Devastator 110) is the CLIENT-side limit on the look's — and so the gun's — SUSTAINED turn rate. It is a **slew bucket** (`TurretAim.SlewLimit`: a token bucket holding `SlewWindowSec` = 0.15 s of traverse, refilled at the slew rate), so a motion smaller than the bucket passes 1:1 on EVERY mount and only a held spin is brought down to the rate; mouse → angle is strictly linear (`TurretStations.RadPerStickUnit`, ~0.07°/px at default sensitivity) — there is no wind-up and no lag between sight and gun. The server fires the station's gun on its own per-station cadence along the ACTUAL aim (spread seed barrel `0x80|index`, never touching the pilot's `LastFireTick`), credits hits to the GUNNER, and streams every manned station's aim + own `LastFireTick` to clients in range (`MsgTurrets`=33, per-client AOI, lossy) so they rebuild the bolt and turn the procedural barrel. Slice 1 (protocol 41) = seats + gun assignment + ride-along; slice 2 (protocol 42) = aim + fire.
@@ -785,6 +1031,36 @@ development started at the wrong family (mirrored derivation — keep the two in
 - **Related:** [[Tech Tree]], [[YAML Content Pipeline]], [[Def]], [[Build Tab]]
 - **Notes:** Client status is derived from streamed data only (owned techs/caps + per-base research),
   never baked; non-commanders see a disabled affordance. The hub drops every gameplay frame a connection sends after its MsgBye (a quitting client's world reset pops the hangar, whose teardown would otherwise retract the crew advertisement and dissolve the crew before the leave drains). Protocol v36 introduced the wire.
+
+---
+
+### Team Attribute Vector (`TeamStateRecord.Attributes`)
+How team-wide stat multipliers (Allegiance's `GameAttribute`s — `MaxEnergy`, `MaxShieldShip`,
+`ShieldRegenerationShip`, gun/missile damage, sensors, …) reach the CLIENT, not just the sim.
+`Simulation.RecomputeTeamAttributes` resolves faction base × completed developments into
+`World.TeamAttr` at match start and on every research completion (pre-existing); the equipment PR adds
+the wire half: `TeamStateRecord.Attributes` streams only the NON-NEUTRAL entries (`AttrMod[]`, sorted
+by attribute byte, != 1.0), exact f32, on the existing low-rate team-state stream. This closes the
+loop for [[Equipment (per-ship slots)]] and [[Shield]]: every EFFECTIVE maximum (a hull's live
+`MaxEnergy`, a ship's live shield strength/regen) is read from ONE shared function on both peers, off
+the SAME bits — the client is never guessing a multiplier from local defs.
+- **Frequency:** Domain-specific (streams only while a team owns a non-neutral attribute)
+- **Key Files:**
+  - `shared/Net/Records.cs` — `TeamStateRecord.Attributes` (`AttrMod[]`, required — an array element, not `[WireOptional]`)
+  - `server/Sim/Simulation.cs` — `RecomputeTeamAttributes`, `TeamAttr(team, attribute)` (the live read `ShieldCapacityFor`/`ResourceStatsFor` and the client-mirrored accessors both ultimately trace to)
+  - `server/Net/Frames.cs` — fills the team-state row's `Attributes` tail
+  - `client/scripts/world/TeamStateStore.cs` — `TeamAttr(team, attr)`, `HasAttributes(team)`, the wire-byte consts (`AttrMaxShieldShip=9`, `AttrShieldRegenerationShip=10`, `AttrMaxEnergy=13`)
+  - `shared/Defs.cs` — `AttrMod`; the factions model's `GameAttribute` enum (APPEND-ONLY — the wire byte IS the list index)
+  - `tests/TeamStateStoreTest` — wire + store coverage
+- **Related:** [[Tech Paths / Research]], [[Equipment (per-ship slots)]], [[Shield]], [[Energy Pool]]
+- **Notes:** Protocol 44. Only 9 of 25 `GameAttribute`s are consumed by a live reader today (MaxEnergy,
+  MaxShieldShip and ShieldRegenerationShip newly, plus the 6 that already had one); see
+  `.PLAN/README.md` → *Stat-boost research* for the rest. `TeamStateStore.HasAttributes(team)` gates
+  the client's own-ship resource predictor — it waits for the first attribute frame rather than
+  assuming 1.0 neutral, since a guessed multiplier would gate shots the server refuses (or allow ones
+  it gates) until corrected. A stat-only development that grants no tech still needs a marker tech for
+  `Simulation.cs`'s "completed" check (`GrantedTechs.Count > 0`, `Simulation.cs:1439`) to see it as
+  done — recorded as an open gotcha, not yet fixed.
 
 ---
 
@@ -1202,8 +1478,36 @@ Server-side AI decision system: 5 Hz decision tick, evaluates targets/actions, s
   - `server/Sim/Simulation.Pig.cs` — PigBrainTick and decision logic
   - `server/Sim/PigDecision.cs` — steering action encoding
   - `server/Sim/Simulation.cs` — decision caching and re-steering
-- **Related:** [[SimTick]], [[Flight Model]], [[Commander Order]]
+- **Related:** [[SimTick]], [[Flight Model]], [[Commander Order]], [[PIG Rearm]]
 - **Notes:** Decoupled from SimTick (20 Hz vs 5 Hz); PigBrainTick evaluates fresh targets; SimTick re-steers from cache; safe to hot-swap scheduled table
+
+### PIG Rearm
+The drone half of Allegiance's sortie → dock → rearm rhythm (equipment PR): a PIG whose guns have run
+dry (`PigNeedsRearm` — every BOLT gun it flies costs ammo, the shared magazine is below the cheapest of
+them with no pack aboard or loading, AND it carries no missile rack or has emptied it; an energy-only
+or gunless drone is never "dry") flies home and docks instead of fighting (`PigKindRearm` / `TryRearm`),
+via the SAME nearest-dockable-base search, gate routing (`World.NextGateTo`) and 3-phase `DockApproach`
+that pods, miners and player autopilot use. `TryRearm` sits in `PigDecide` right after `TryRescue` —
+a downed teammate still outranks going home, but a dry drone outranks every offensive goal (an order, a
+chase, an attack run): it can't shoot, so nothing else it could be told to do is useful. `DockShip`
+frees the PIG's slot the instant it docks (`FreePigPodSlot(s, tick + 1, tick)`) so the slot relaunches
+immediately as a FRESH hull with full pools — the dock itself IS the rearm, no separate refill logic.
+The team's lone BOMBER slot is the exception: a docked bomber (not its pod) waits out
+`ai.bomber-respawn-seconds` exactly as a lost one does, so docking never relaunches a bomber sooner
+than losing it would.
+`AmmoEnabled = false` (the test kill-switch) disables the whole goal.
+- **Frequency:** Domain-specific (only while `AmmoEnabled` and a PIG's guns can run dry)
+- **Key Files:**
+  - `server/Sim/Simulation.Pig.cs` — `PigKindRearm`, `PigState.Rearm`, `TryRearm`, `PigNeedsRearm`, `NearestDockableFriendlyBase`, `PigRearmInput`
+  - `server/Sim/Simulation.cs` — `DockShip`'s `FreePigPodSlot` call (every PIG kind, not just rearm — this also fixes a pre-existing dangling `slot.Ship` on any PIG dock)
+  - `shared/ShipResources.cs` — the pool `TryRearm` reads (`s.Pools`, `s.AmmoLoadEndTick`)
+- **Related:** [[PigBrain]], [[Ammo Pool & Ammo Pack]], [[Commander Order]], [[Miner (AI ore drone)]], [[Dock Refund]]
+- **Notes:** `tests/AmmoEnergyTest` §6 drives REAL drones (`PigsEnabled = true`, pinned RNG,
+  CommanderTest's `WaitForPig` idiom): a drained drone flies home and docks (`GoneClean`) and its slot
+  relaunches a full one; a drone with ammo, and a dry one with `AmmoEnabled` off, never go home; a
+  drained bomber's slot relaunches only after the bomber cooldown. A commander order a
+  rearming drone was obeying dies with the docked hull (keyed by `ShipId`) — the relaunch starts
+  fresh, not mid-order.
 
 ### Commander
 Per-team AI decision authority (proto 34): the ONE pilot whose orders AI vessels execute; also gates miner buys (`MsgBuyMiner`) and F3 miner orders (`MsgOrder`). Explicit STATE (not derived like the rename-gating LeaderOf): seeded to the first pilot to join the side, falls to the next-lowest client id when the commander leaves, manually handed off via `/commander <name>` (sitting commander or host). Streamed on the `MsgLobbyState` tail; gold CMDR badge in the roster.

@@ -26,8 +26,8 @@ using StellarAllegiance.Shared;
 //    Phase C (main thread, ONE item per frame): per-mesh readbacks + shadow-occluder extremes
 //            + trace BVHs (WarmAsteroidVariant / EnvironmentRenderer.WarmModelScene) — sliced
 //            so even the warm itself never hitches.
-//    Phase D: the per-source effect shaders (BuildSphere / ShieldFlash / AlephView) compile
-//            once here instead of at their first in-world spawn.
+//    Phase D: the per-source effect shaders (BuildSphere / ShieldFlash / AlephView / CloakFx)
+//            compile once here instead of at their first in-world spawn.
 //
 //  Scope: the ASTEROID CATALOG (AsteroidShapes.Variants — wire-significant) plus every GLB in
 //  assets/bases/ and assets/ships/ (small, bounded sets; a first-sight miss costs a raw
@@ -112,6 +112,7 @@ public partial class AssetPreloader : Node
         BuildSphere.WarmShaders();
         ShieldFlash.WarmShaders();
         AlephView.WarmShaders();
+        CloakFx.WarmShaders();
     }
 
     // Every .glb under a res:// folder. Export builds list imported files as "<name>.glb.remap"

@@ -507,13 +507,31 @@ public partial class TurretController : Node
                 _lastSentTick = _predTick;
             }
 
-            if (_firing && gun is not null && FireCadence.MountFires(_predTick, _lastFire, gun.FireIntervalTicks))
+            if (
+                _firing
+                && gun is not null
+                && FireCadence.MountFires(_predTick, _lastFire, gun.FireIntervalTicks)
+                && RiddenCanAfford(shipId, gun)
+            )
             {
                 _lastFire = LastFireTick = _predTick;
                 _predictedShots++;
                 PredictShot(shipId, hp, gun);
             }
         }
+    }
+
+    // The station's gun draws on the CAPTAIN's pools (energy / magazine), which the gunner can't
+    // predict — the pilot and the other stations spend them too. Gate the predicted shot on the
+    // ridden ship's newest authoritative row instead: a gun it can't afford there is a shot the server
+    // will refuse, so no tracer leaves the barrel and the cadence stays ready (a blocked station never
+    // stamps, server-side either). Approximate — the row is a round trip old — and purely cosmetic.
+    private bool RiddenCanAfford(ulong shipId, WeaponDef gun)
+    {
+        if (!_world.Ships.TryLastRow(shipId, out var row))
+            return true; // no row yet: nothing to judge by, keep the old behaviour
+        var pools = row.Pools;
+        return ShipResources.TrySpendShot(ref pools, gun.EnergyPerShot, gun.AmmoPerShot);
     }
 
     // Our own bolt, spawned from the ridden hull's RENDERED pose (what is actually on screen this

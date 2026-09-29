@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Godot;
 using StellarAllegiance.Net;
 using StellarAllegiance.Shared;
+using StellarAllegiance.Ui;
 
 // Local-ship prediction + rollback reconciliation (.PLAN/07).
 // Attached as the scene node for the player's own ship.
@@ -112,6 +113,97 @@ public partial class PredictionController : Node3D
 
     public IReadOnlyList<(byte Kind, uint ItemId, byte Count)> Hold =>
         _hold ?? System.Array.Empty<(byte Kind, uint ItemId, byte Count)>();
+
+    // ---- Equipment + resource pools (equipment PR) ----
+
+    // The local ship's EFFECTIVE equipment by slot (EquipmentDef.Slot*; null = the hull's
+    // DefaultEquipment — the wire's omission rule). Seeded at spawn from the hangar's expectation
+    // (LoadoutState.ExpectedEquipment) and replaced by the authoritative MsgShipLoadout row — or by
+    // null when a table leaves the ship out (ShipRenderer's omission-race fix). The equipped
+    // afterburner changes the flight stats (TryGetStats re-pulls them every Step), the cloak part the
+    // resource rule, the shield part MaxShield.
+    private ushort[]? _equipIds;
+
+    public void SetEquipment(ushort[]? ids) => _equipIds = ids;
+
+    public ushort[]? EquipmentIds => _equipIds;
+
+    // The effective gun at each crew-served turret station (null = authored), from the same row: the
+    // stations draw on the pilot's magazine, so they count toward the cheapest ammo gun that decides
+    // when an ammo pack loads.
+    private uint[]? _turretIds;
+
+    public void SetTurretGuns(uint[]? ids) => _turretIds = ids;
+
+    public uint[]? TurretGuns => _turretIds;
+
+    // Team attribute vector (MaxEnergy / MaxShieldShip), handed over at Initialize.
+    private TeamStateStore? _teams;
+
+    // THE own-ship resource prediction (ResourceMirror.cs): energy, magazine, ammo-pack charges and the
+    // cloak level, stepped in the server's exact Pass A order and reconciled per authoritative row.
+    // Ready only once the defs AND the team's attribute vector are known (_resReady); until then no
+    // fire is predicted at all.
+    private readonly ResourceMirror _mirror = new();
+    private bool _resReady;
+    private readonly List<byte> _firedBarrels = new(); // reused per-Step fire-phase output
+
+    // The newest authoritative pools + their tick — what the mirror seeds from once it becomes ready.
+    private ShipPools _lastAuthPools;
+    private uint _lastAuthTick;
+
+    // [predict-stats] res_resync: resource replays across all local ships (static like
+    // LocalContactTicks, so a respawn doesn't restart the window count).
+    public static int ResourceResyncs;
+
+    // The cloak shimmer currently applied to the own model (CloakFx), and the re-apply clock that lets
+    // a node added under the model later (a turret barrel) join the effect.
+    private float _cloakApplied;
+    private double _cloakReapplyAcc;
+    private const double CloakReapplySec = 0.5;
+
+    // ---- Resource HUD seams: the PREDICTED pools, so every readout moves on the tick the pilot acts.
+    // All 0 / false until the mirror is ready. ----
+    public bool ResourcesReady => _resReady;
+    public ShipResourceStats ResourceStats => _mirror.Stats;
+    public float Energy => _mirror.Pools.Energy;
+    public float MaxEnergy => _mirror.Stats.MaxEnergy;
+    public int Ammo => _mirror.Pools.Ammo;
+    public int MaxAmmo => _mirror.Stats.MaxAmmo;
+    public int AmmoPacks => _mirror.Pools.AmmoPacks; // ammo-pack charges left in the hold
+    public bool AmmoLoading => _mirror.LoadEndTick != 0; // a pack charge is loading into the magazine
+
+    // Load progress 0..1 of the pack loading into the magazine (0 when none) — FuelLoadFrac's twin,
+    // derived from the predicted end tick so the sweep starts on the tick the magazine runs dry.
+    public float AmmoLoadFrac =>
+        _mirror.LoadEndTick == 0 || _mirror.Stats.AmmoReloadTicks == 0
+            ? 0f
+            : Mathf.Clamp(1f - (float)(_mirror.LoadEndTick - (double)_clientTick) / _mirror.Stats.AmmoReloadTicks, 0f, 1f);
+
+    // Cloaked fraction of the signature (0 = visible, up to the part's MaxCloaking) — predicted, so it
+    // starts moving on the very tick the pilot toggles.
+    public float CloakLevel => ShipResources.CloakFraction(_mirror.Pools.Cloak);
+
+    // The cloak latch this ship is flying with (ShipController's toggle, sent as the input LEVEL).
+    public bool CloakEngaged { get; set; }
+
+    public EquipmentSet Equipment => _defs.EffectiveEquipment((byte)_class, IsPod, _equipIds);
+    public bool HasCloak => !IsPod && Equipment.Cloak is not null;
+    public bool HasAfterburner => _hasStats && _stats.AbThrust > 0f;
+
+    // Why the trigger's last cadence-ready shot was refused (None while firing freely / released).
+    public GateBlock LastGateBlock => _mirror.LastBlock;
+
+    // Why a shot of `w` would be refused right now — the per-gun readout seam (NO ENRG / NO AMMO / LOADING).
+    public GateBlock GateBlockFor(WeaponDef w) => ResourceMirror.BlockFor(_mirror.Pools, AmmoLoading, w);
+
+    // Diagnostics ([cloak-test]): the newest authoritative pools, their tick, and what the mirror had
+    // predicted for that tick (false once it fell out of the history / before the mirror ran).
+    public ShipPools LastAuthPools => _lastAuthPools;
+    public uint LastAuthTick => _lastAuthTick;
+
+    public bool TryGetPredictedPools(uint tick, out ShipPools pools) => _mirror.TryGetPredicted(tick, out pools);
+
     private uint _clientTick; // tick last passed to Step (HUD cooldown readout keys off it)
     private readonly List<PredictedShot> _shotsOut = new(); // reused per-Step fire output (0, 1, or twin bolts)
     private readonly List<Entry> _buffer = new();
@@ -302,11 +394,11 @@ public partial class PredictionController : Node3D
     public float MaxHealth { get; private set; }
 
     // Regenerating energy shield, synced from the authoritative snapshot each tick. MaxShield is the
-    // authored capacity from this class's def (a pod uses the Pod def, which authors none) — 0 until
-    // the def arrives OR when the hull has no shield, so the HUD only draws the arc when there's one.
+    // EQUIPPED shield part's strength × the team's MaxShieldShip attribute (equipment PR; a pod flies
+    // the Pod def, which has no slots) — 0 until the defs arrive OR when the ship carries no shield
+    // part, so the HUD only draws the arc when there's one.
     public float Shield { get; private set; }
-    public float MaxShield =>
-        _defs.TryGetShipDef(IsPod ? GameContent.PodClassId : (byte)_class, out var d) ? d.ShieldCapacity : 0f;
+    public float MaxShield => _teams is not null ? _defs.MaxShield(Team, (byte)_class, IsPod, _equipIds, _teams) : 0f;
 
     // Afterburner power ramp, 0..1 (synced each snapshot into _state.AbPower; rises while
     // boosting, decays otherwise — it's a ramp, not a depleting reserve). Read by the HUD
@@ -468,7 +560,7 @@ public partial class PredictionController : Node3D
                 ? Mathf.Clamp(boost, 0f, 1f)
                 : 0f;
 
-    public void Initialize(Ship row, DefRegistry defs)
+    public void Initialize(Ship row, DefRegistry defs, TeamStateStore teams)
     {
         ShipId = row.ShipId;
         Team = row.Team;
@@ -478,16 +570,28 @@ public partial class PredictionController : Node3D
         Shield = row.Shield;
         _class = row.Class;
         _defs = defs;
+        _teams = teams;
         _lastFireTick = 0;
         _loadoutIds = null; // WorldRenderer pushes the expected/echoed loadout right after Initialize
+        _equipIds = null; // … and the equipment + turret guns alongside it
+        _turretIds = null;
         _mountLastFire = new uint[defs.WeaponSlots((byte)row.Class).Count];
-        // Stats come purely from the runtime ShipClassDef (M3): a pod flies the slow,
-        // boost-less Pod profile, combat ships their class stats. DefRegistry rebuilds the
-        // SAME shared ShipStats the server derives, so prediction stays bit-identical to
-        // authority. No baked-in fallback: until the def lands _hasStats is false and Step
-        // holds authority instead of flying stale numbers (defs arrive in the initial
-        // snapshot, before spawn, so this is effectively always ready here).
-        _hasStats = defs.TryGetStats((byte)row.Class, row.IsPod, out _stats);
+        // Resources start unknown: the first Step with the mirror ready seeds it from this row's pools
+        // (the launch pools: full energy + magazine, the hold's pack charges, the cloak off).
+        _mirror.Reset();
+        _resReady = false;
+        _lastAuthPools = row.Pools;
+        _lastAuthTick = row.LastInputTick;
+        CloakEngaged = false;
+        _cloakApplied = 0f;
+        // Stats come purely from the runtime defs (M3): a pod flies the slow, boost-less Pod
+        // profile, combat ships their hull + EQUIPPED afterburner (the default part until the
+        // loadout row is pushed — Step re-pulls every tick). DefRegistry rebuilds the SAME shared
+        // ShipStats the server derives, so prediction stays bit-identical to authority. No baked-in
+        // fallback: until the def lands _hasStats is false and Step holds authority instead of
+        // flying stale numbers (defs arrive in the initial snapshot, before spawn, so this is
+        // effectively always ready here).
+        _hasStats = defs.TryGetStats((byte)row.Class, row.IsPod, null, out _stats);
         _launchClassMask = defs.LaunchClassMask(row.IsPod ? DefRegistry.PodClassId : (byte)row.Class);
         _predFuelPods = row.FuelPodAmmo;
         _predFuelLoadEnd = 0; // a fresh ship launches with a loaded tank, nothing in the loader
@@ -520,11 +624,11 @@ public partial class PredictionController : Node3D
         _clientTick = clientTick;
         _prevState = _state;
         // Re-pull stats from the registry each tick (a cheap cached lookup) so a runtime
-        // retune of this class's ShipClassDef flows into prediction with no respawn — and
-        // stays in step with the server, which reads the same row. If the def hasn't loaded
-        // yet, don't predict on missing data: hold the last authoritative state until it
-        // arrives (no baked-tuning fallback).
-        if (_defs.TryGetStats((byte)_class, IsPod, out var st))
+        // retune of this class's ShipClassDef — or a swapped afterburner part — flows into
+        // prediction with no respawn, and stays in step with the server, which reads the same
+        // defs. If a def hasn't loaded yet, don't predict on missing data: hold the last
+        // authoritative state until it arrives (no baked-tuning fallback).
+        if (_defs.TryGetStats((byte)_class, IsPod, _equipIds, out var st))
         {
             _stats = st;
             _hasStats = true;
@@ -537,6 +641,23 @@ public partial class PredictionController : Node3D
         _fuelPodYield = fuelItem?.FuelPerCharge ?? 0f;
         _fuelPodReloadTicks = fuelItem?.ReloadTicks ?? 0u;
         _throttle = Mathf.Clamp(input.Thrust, 0f, 1f); // forward thrust drives the engine glow
+        int slotCount = _defs.WeaponSlots((byte)_class).Count;
+        if (_mountLastFire.Length < slotCount)
+            System.Array.Resize(ref _mountLastFire, slotCount);
+
+        // RESOURCES follow THE shared tick order — the server's Pass A, step for step
+        // (shared/ShipResources.cs): (a) the ammo step and (b) the pre-fire snapshot here, (c) fuel pod
+        // + Integrate below (they read no pool), then (d) the fire phase and (e) the energy step. The
+        // rule's inputs are re-resolved every tick (a research change applies live); until the defs
+        // AND the team's attribute vector are known nothing is stepped — and no fire is predicted.
+        _resReady = RefreshResourceStats();
+        if (_resReady)
+        {
+            if (!_mirror.Seeded)
+                _mirror.Seed(_lastAuthPools, _lastAuthTick);
+            _mirror.BeginTick(clientTick, input.Firing, input.Cloak, _mountLastFire);
+        }
+
         // Mirror of the server's pre-Integrate auto-load (commit a pod on empty, fill when loaded).
         ConsumeFuelPod(ref _state, input, ref _predFuelPods, ref _predFuelLoadEnd, clientTick);
         _state = FlightModel.Integrate(_state, input, _stats);
@@ -554,15 +675,18 @@ public partial class PredictionController : Node3D
         if (_buffer.Count > BufferLen)
             _buffer.RemoveRange(0, _buffer.Count - BufferLen);
 
-        // Slots + weapons come from data (M3): every Weapon hardpoint on this class — POSITIONAL,
-        // empties included, with this ship's effective loadout overlaid — the SAME resolution the
-        // server's TryFire reads (ClassMuzzles + MountWeaponIds), so the local bolts match the
-        // shots the server resolves. No def / no weapon hardpoint (e.g. a pod) ⇒ the server won't
-        // fire either, so we predict nothing. Each gun mount gates on its OWN cadence via the
-        // shared FireCadence rule (mixed loadouts) — the exact mirror of Simulation.TryFire.
-        var slots = input.Firing ? _defs.SlotsForShip((byte)_class, _loadoutIds) : EmptySlots;
-        if (_mountLastFire.Length < slots.Count)
-            System.Array.Resize(ref _mountLastFire, slots.Count);
+        // (d) FIRE PHASE. Slots + weapons come from data (M3): every Weapon hardpoint on this class —
+        // POSITIONAL, empties included, with this ship's effective loadout overlaid — the SAME
+        // resolution the server's TryFire reads (ClassMuzzles + MountWeaponIds), so the local bolts
+        // match the shots the server resolves. No def / no weapon hardpoint (e.g. a pod) ⇒ the server
+        // won't fire either, so we predict nothing. Each gun mount is gated by THE shared rule
+        // (ResourceMirror.SelectBarrels): its OWN cadence (FireCadence, mixed loadouts) AND the
+        // resource gate (TrySpendShot, in barrel order; a blocked mount doesn't stamp) — the exact
+        // mirror of Simulation.TryFire.
+        var slots = input.Firing && _resReady ? _defs.SlotsForShip((byte)_class, _loadoutIds) : EmptySlots;
+        _firedBarrels.Clear();
+        if (_resReady)
+            _mirror.FireStep(slots, _mountLastFire, clientTick, _firedBarrels);
         // Anchor each muzzle to the RENDERED transform (_renderedPos/_renderedRot), not the
         // raw post-integration _state. _state.Pos is up to one tick of motion AHEAD of what's
         // on screen (the visual interpolates toward it over the next tick, plus any reconcile
@@ -571,18 +695,14 @@ public partial class PredictionController : Node3D
         // where the ship appears right now, so each muzzle stays pinned to its hardpoint
         // regardless of thrust/velocity. The local hardpoint offset/forward are rotated by the
         // rendered attitude (the twin Fighter cannons sit at ±X, the single Scout/Bomber gun on
-        // the nose, reproducing the old `pos + fwd*NoseOffset`).
-        for (byte barrel = 0; barrel < slots.Count; barrel++)
+        // the nose, reproducing the old `pos + fwd*NoseOffset`). The barrel index is the slot's
+        // position (empties and racks consumed their index), so the spread seed stays aligned with
+        // the server's TryFire loop (same in BoltRenderer.SpawnBoltFor for remote ships).
+        foreach (byte barrel in _firedBarrels)
         {
             var (hp, weapon) = slots[barrel];
-            // Skip empty slots and missile racks: primary fire is bolts only. The barrel index
-            // is STILL consumed so the spread seed stays aligned with the server's TryFire loop
-            // (same skip in WorldRenderer.SpawnBoltFor for remote ships).
-            if (weapon is null || weapon.Kind != WeaponKind.Bolt)
-                continue;
-            if (!FireCadence.MountFires(clientTick, _mountLastFire[barrel], weapon.FireIntervalTicks))
-                continue;
-            _mountLastFire[barrel] = clientTick;
+            if (weapon is null)
+                continue; // (the gate only ever fires a bolt gun — this just narrows the nullable)
             _lastFireTick = clientTick;
             Vector3 fwdG = _renderedRot * new Vector3(hp.DirX, hp.DirY, hp.DirZ);
             Vector3 offG = _renderedRot * new Vector3(hp.OffX, hp.OffY, hp.OffZ);
@@ -603,10 +723,52 @@ public partial class PredictionController : Node3D
                 }
             );
         }
+
+        // (e) ENERGY STEP last: recharge, then the cloak on the input's latched LEVEL. The pools
+        // leaving this tick are the pools entering the next.
+        if (_resReady)
+            _mirror.EndTick();
         return _shotsOut;
     }
 
     private static readonly List<(HardpointDef hp, WeaponDef? weapon)> EmptySlots = new();
+
+    // Re-resolve this ship's resource-rule inputs (DefRegistry.TryResourceStats — the same shared
+    // resolver the server's ResourceStatsFor feeds): false until the defs and the team's attribute
+    // vector are both known.
+    private bool RefreshResourceStats()
+    {
+        if (
+            _teams is null
+            || !_defs.TryResourceStats(Team, (byte)_class, IsPod, _loadoutIds, _turretIds, _equipIds, _teams, out var rs)
+        )
+            return false;
+        _mirror.Stats = rs;
+        return true;
+    }
+
+    // Reconcile the resource prediction against one authoritative row: the ring entry for its
+    // LastInputTick vs its Pools (exact) and whether a pilot mount fired that tick. Resources are
+    // independent of flight, so this runs on every non-autopilot path whatever the flight reconcile
+    // decided; a replay re-derives the cadence stamps too, so the HUD's LastFireTick follows.
+    private void ResyncResources(Ship row)
+    {
+        if (!_resReady || !_mirror.Seeded)
+            return; // not stepping yet — Step seeds from the newest row the moment the mirror is ready
+        RefreshResourceStats();
+        var slots = IsPod ? EmptySlots : _defs.SlotsForShip((byte)_class, _loadoutIds);
+        if (_mountLastFire.Length < slots.Count)
+            System.Array.Resize(ref _mountLastFire, slots.Count);
+        bool fired = row.LastFireTick != 0 && row.LastFireTick == row.LastInputTick;
+        if (!_mirror.Resync(row.LastInputTick, row.Pools, fired, slots, _mountLastFire))
+            return;
+        ResourceResyncs++;
+        uint last = 0;
+        foreach (uint t in _mountLastFire)
+            if (t > last)
+                last = t;
+        _lastFireTick = last;
+    }
 
     // T5 test hook: artificially diverge the predicted path from authority by
     // offsetting the current state AND every unacknowledged buffered prediction.
@@ -632,6 +794,8 @@ public partial class PredictionController : Node3D
     // snap instantly instead of easing it in like an ordinary reconcile.
     public void OnAuthoritative(Ship row, bool warped = false)
     {
+        _lastAuthPools = row.Pools;
+        _lastAuthTick = row.LastInputTick;
         if (warped)
         {
             HardSnapTo(row);
@@ -650,6 +814,10 @@ public partial class PredictionController : Node3D
         {
             ReconcileFire(row);
             _predFuelPods = row.FuelPodAmmo; // no prediction running — adopt authority
+            // Nor for resources: the pools follow each row (the pilot may still fire / cloak).
+            _resReady = RefreshResourceStats();
+            if (_resReady)
+                _mirror.Seed(row.Pools, row.LastInputTick);
             // Keep the exhaust alive: local input.Thrust isn't driving _throttle while Step is
             // skipped, so feed the glow from the authoritative forward speed / afterburner ramp.
             _throttle =
@@ -660,6 +828,10 @@ public partial class PredictionController : Node3D
             RebaseTo(authState);
             return;
         }
+
+        // Resources ride their own history (ResourceMirror), independent of the flight buffer below:
+        // resync them against the acked tick whatever the flight reconcile decides.
+        ResyncResources(row);
 
         uint n = row.LastInputTick;
         var auth = authState;
@@ -680,11 +852,23 @@ public partial class PredictionController : Node3D
 
         if (posErr <= PosTolerance && rotErr <= RotTolerance)
         {
-            // Prediction good — retire acknowledged history, and resync the pod reserve against
-            // the acked tick so a server-side disagreement can't persist: pods burned since tick
-            // N re-apply on top of the authoritative count (a no-op when prediction matched).
-            int burnedSince = _buffer[idx].PredictedPods - _predFuelPods;
-            _predFuelPods = (byte)System.Math.Max(0, row.FuelPodAmmo - burnedSince);
+            // Prediction good — retire acknowledged history, and resync the pod reserve against the
+            // acked tick so a server-side disagreement can't persist: the delta between the count
+            // predicted AT tick N and the authoritative one shifts the current count AND every
+            // buffered prediction after N (a no-op when prediction matched). Shifting the buffer too
+            // is what keeps the correction from re-applying at the next ack: that entry still held
+            // the uncorrected count, so the old "burned since N" re-derivation counted it twice.
+            int delta = row.FuelPodAmmo - _buffer[idx].PredictedPods;
+            if (delta != 0)
+            {
+                _predFuelPods = ShiftPods(_predFuelPods, delta);
+                for (int i = idx + 1; i < _buffer.Count; i++)
+                {
+                    var e = _buffer[i];
+                    e.PredictedPods = ShiftPods(e.PredictedPods, delta);
+                    _buffer[i] = e;
+                }
+            }
             _buffer.RemoveRange(0, idx + 1);
             return;
         }
@@ -723,6 +907,8 @@ public partial class PredictionController : Node3D
         RebaseTo(s);
     }
 
+    private static byte ShiftPods(byte pods, int delta) => (byte)System.Math.Clamp(pods + delta, 0, byte.MaxValue);
+
     // Enter/leave follow-authority (autopilot) mode. Idempotent. On BOTH transitions the stale input
     // buffer is dropped and the render is re-anchored via RebaseTo so the handoff is C1-continuous
     // (no snap): entering, we stop predicting and coast on interpolated snapshots; exiting, prediction
@@ -748,7 +934,13 @@ public partial class PredictionController : Node3D
         _state = ShipMath.StateFromRow(row);
         _prevState = _state;
         _predFuelPods = row.FuelPodAmmo;
-        ReconcileFire(row);
+        // A warp moves the ship, not its pools: the resource history stays valid across it, so the
+        // ordinary resync runs (and re-derives the cadence stamps if it replays). ReconcileFire's
+        // cadence-shadow derivation remains the fallback while the mirror isn't running.
+        if (_resReady && _mirror.Seeded)
+            ResyncResources(row);
+        else
+            ReconcileFire(row);
         _buffer.Clear();
         _posErr = Vector3.Zero;
         _posErrVel = Vector3.Zero;
@@ -791,6 +983,7 @@ public partial class PredictionController : Node3D
 
         ApplyVisual(Mathf.Min(RenderAlpha, 1f));
         _engine?.SetThrottle(_throttle, _afterburner);
+        UpdateCloakFx(delta);
 
         // Hide the own hull / trail / glow while inside the cockpit (idempotent each frame).
         bool fp = ApplyViewMode();
@@ -804,6 +997,25 @@ public partial class PredictionController : Node3D
             _nameplate.Visible = !fp && (ShowOwnNameplate || SectorOverview.Active) && _pilotName.Length > 0;
             Nameplate.UpdateFovScale(_nameplate, SectorOverview.ActiveCamera);
         }
+    }
+
+    // The own hull's cloak shimmer (CloakFx) off the PREDICTED level — it starts on the toggle tick —
+    // capped at CloakFx.OwnMaxTransparency so the chase cam still reads the hull (first person hides
+    // the model anyway). Pushed to the meshes only when the level moves, plus a slow re-apply while
+    // cloaked so a node added under the model later (a turret barrel) joins in.
+    private void UpdateCloakFx(double delta)
+    {
+        float level = CloakLevel;
+        _engine?.SetCloak(level);
+        if (_shipModel is null)
+            return;
+        _cloakReapplyAcc += delta;
+        bool reapply = level > 0f && _cloakReapplyAcc >= CloakReapplySec;
+        if (level == _cloakApplied && !reapply)
+            return;
+        _cloakReapplyAcc = 0;
+        CloakFx.Apply(_shipModel, level, CloakFx.OwnMaxTransparency, DesignTokens.Faction(Team));
+        _cloakApplied = level;
     }
 
     // Semi-implicit critically-damped (ζ=1) spring driving offset x and its

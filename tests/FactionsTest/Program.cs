@@ -178,11 +178,84 @@ Check(
     $"stock payload wrong (scout cap {scout.PayloadCapacity}, fighter cap {fighter.PayloadCapacity}, gun mass {gatGun1.Mass})"
 );
 
-// Booster fuel: kebab-case (max-fuel/ab-fuel-drain/ab-fuel-recharge) binds onto the fighter hull.
+// Booster fuel: the tank (max-fuel, IGC 17) and the dock-only recharge bind onto the fighter hull;
+// the drain moved to the afterburner PART, so the old hull keys stay unauthored (null tombstones).
 Check(
-    fighter.MaxFuel == 15 && fighter.AbFuelDrain == 3.0 && fighter.AbFuelRecharge == 0.5,
-    "stock fighter carries booster-fuel stats (max-fuel/ab-fuel-drain/ab-fuel-recharge)",
-    $"stock fighter fuel wrong (max {fighter.MaxFuel}, drain {fighter.AbFuelDrain}, recharge {fighter.AbFuelRecharge})"
+    fighter.MaxFuel == 17
+        && fighter.AbFuelRecharge == 0
+        && stock.Hulls.All(h =>
+            h.AbAccel is null
+            && h.AbOnRate is null
+            && h.AbOffRate is null
+            && h.AbFuelDrain is null
+            && h.ShieldCapacity is null
+            && h.ShieldRecharge is null
+            && h.ShieldDelay is null
+        ),
+    "stock fighter carries its tank (max-fuel 17, ab-fuel-recharge 0) and no hull authors a moved shield/boost key",
+    $"stock fighter fuel wrong (max {fighter.MaxFuel}, recharge {fighter.AbFuelRecharge}) or a tombstone key is authored"
+);
+
+// Equipment (equipment PR): the raw catalogs bind from equipment.yaml — 9 shields, 7 afterburners,
+// 1 cloak — with the kebab-case stat keys, recharge-delay left at its continuous-regen default.
+var smShield1 = stock.Shields.FirstOrDefault(p => p.Id == "sm-shield-1");
+var booster1 = stock.Afterburners.FirstOrDefault(p => p.Id == "booster-1");
+var sigCloak1 = stock.Cloaks.FirstOrDefault(p => p.Id == "sig-cloak-1");
+Check(
+    stock.Shields.Count == 9
+        && stock.Afterburners.Count == 7
+        && stock.Cloaks.Count == 1
+        && smShield1 is { MaxStrength: 51.4286, RegenRate: 0.6857, RechargeDelay: 0, Mass: 2, ModelName: "acs30" }
+        && smShield1.SuccessorPartId == "sm-shield-2"
+        && smShield1.ObsoletedByTechs.Contains("sm-shield-2")
+        && booster1 is { MaxThrust: 36.6667, FuelConsumption: 1.2221, OnRate: 0.5, OffRate: 2, ModelName: "acs48" }
+        && sigCloak1 is { EnergyConsumption: 115, MaxCloaking: 0.625, OnRate: 0.25, OffRate: 0.25, Mass: 3 }
+        && stock.AllEquipment().All(p => p.Signature == 0),
+    "stock equipment catalog: 9 shields, 7 afterburners, 1 cloak with kebab-case stats (Sm Shield 1, Booster 1, Sig Cloak 1 spot-checked; no signatures)",
+    $"stock equipment wrong (shields {stock.Shields.Count}, afterburners {stock.Afterburners.Count}, cloaks {stock.Cloaks.Count})"
+);
+
+// Ammo pack: pure cargo under ammo-packs: (cargo-id 6, IGC amount 1000), appended after the fuel pod
+// in the expendables catalog.
+var ammoPack = stock.AmmoPacks.SingleOrDefault();
+Check(
+    ammoPack is { Id: "ammo-pack-1", CargoId: 6, AmmoPerCharge: 1000, Mass: 1, LoadTime: 2.0, ModelName: "acs29" }
+        && stock.AllExpendables().Last() == ammoPack,
+    "stock ammo pack binds from ammo-packs: (cargo-id 6, ammo-per-charge 1000, mass 1, load 2 s) and ends the expendables catalog",
+    $"stock ammo pack wrong ({ammoPack?.Id}, cargo {ammoPack?.CargoId}, ammo {ammoPack?.AmmoPerCharge})"
+);
+
+// Hull slots: allowed-parts (enum-keyed map) + preferred-parts bind per the IGC pmEquipment /
+// preferredPartsTypes, and the IGC energy/ammo pools bind raw.
+var scoutAllowed = scout.AllowedParts;
+var advFighter = stock.Hulls.Single(h => h.Id == "adv-fighter");
+var ltInterceptor = stock.Hulls.Single(h => h.Id == "lt-interceptor");
+Check(
+    scoutAllowed.Count == 2
+        && scoutAllowed[EquipmentSlot.Shield].SequenceEqual(new[] { "sm-shield-1" })
+        && scoutAllowed[EquipmentSlot.Cloak].SequenceEqual(new[] { "sig-cloak-1" })
+        && scout.PreferredParts.SequenceEqual(new[] { "sm-shield-1" })
+        && scout is { MaxEnergy: 1200, EnergyRechargeRate: 60, MaxAmmo: 960, MaxFuel: 0 }
+        && !ltInterceptor.AllowedParts.ContainsKey(EquipmentSlot.Shield)
+        && ltInterceptor.AllowedParts[EquipmentSlot.Afterburner].SequenceEqual(new[] { "booster-1", "lt-booster-1" })
+        && ltInterceptor is { MaxEnergy: 600, EnergyRechargeRate: 50, MaxAmmo: 540, MaxFuel: 13 }
+        && advFighter
+            .AllowedParts[EquipmentSlot.Afterburner]
+            .SequenceEqual(new[] { "booster-1", "lt-booster-1", "crs-booster", "hvy-booster" })
+        && advFighter.PreferredParts.SequenceEqual(new[] { "hvy-booster", "booster-1", "sm-shield-1" }),
+    "stock hulls carry allowed-parts / preferred-parts + IGC energy/ammo pools (Scout shield+cloak, Lt Interceptor no shield, Adv Fighter prefers the Hvy Booster)",
+    $"stock hull slots wrong (scout [{string.Join(",", scoutAllowed.Keys)}], lt-int [{string.Join(",", ltInterceptor.AllowedParts.Keys)}], adv prefers [{string.Join(",", advFighter.PreferredParts)}])"
+);
+
+// Guns: per-shot resource costs bind (ammo on the Gat/Mini-Gun/AutoCan lines, energy on the Nanites).
+Check(
+    stock
+        .Weapons.Where(w => w.Id.StartsWith("gat-gun-") || w.Id.StartsWith("mini-gun-") || w.Id.StartsWith("autocan-"))
+        .All(w => w.AmmoPerShot == 2 && w.EnergyPerShot == 0)
+        && stock.Weapons.Where(w => w.Id.StartsWith("nanite-")).All(w => w.EnergyPerShot == 60 && w.AmmoPerShot == 0)
+        && stock.Weapons.Count(w => w.AmmoPerShot > 0) == 9,
+    "stock guns carry per-shot costs (9 ammo guns at 2 rounds, 3 ER Nanites at 60 energy)",
+    $"stock gun costs wrong ([{string.Join(",", stock.Weapons.Select(w => $"{w.Id}:{w.AmmoPerShot}/{w.EnergyPerShot}"))}])"
 );
 var seeker = stock.Missiles.Single(m => m.Id == "mrm-seeker-1");
 Check(

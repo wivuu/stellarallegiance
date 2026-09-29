@@ -50,6 +50,10 @@ public static class ShipModelLoader
     // which itself is sized off the hull's silhouette length in BuildEngineGlow.
     private const float BoosterGlowScale = 0.6f;
 
+    // Meta tag on the visual hull under the "ShipModel" container (the GLB or the placeholder),
+    // telling it apart from the cosmetics parented beside it (glow, trail, beacons, barrels).
+    public const string HullMeta = "ship_hull";
+
     // Team-trail ribbon width and its behind-the-exhaust anchor gap, as fractions of the hull's
     // silhouette length (replaces the old per-class hand-tuned constants; 0.09 ≈ the fighter's
     // former 0.5 at length 5.5). The gap clears the flame plume even at full afterburner
@@ -72,6 +76,7 @@ public static class ShipModelLoader
         var root = new Node3D { Name = "ShipModel" };
 
         Node3D hull = LoadHull(defs, cls, isPod) ?? BuildPlaceholderMesh(cls, isPod, mat);
+        hull.SetMeta(HullMeta, true); // CloakFx's shimmer overlay goes on this subtree only
         root.AddChild(hull);
 
         // Stash the built hull's extents for the launch-cam framing (CameraRig reads these). Measure

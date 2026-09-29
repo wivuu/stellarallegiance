@@ -4,9 +4,16 @@
 //
 // Boots the real Simulation from the live content bundle (server/content/core, copied next to
 // the test binary — same seam as MissileTest) with shields ENABLED (the default), and drives it
-// tick-by-tick. Covers: spawn capacity from the class def; the shield absorbs damage while it holds
-// (hull untouched); overflow spills into the hull when a hit pops the shield; the recharge delay +
-// rate; and the per-weapon shield-damage multiplier (bomber cannon = 0.5 vs shields).
+// tick-by-tick. Covers: spawn capacity from the EQUIPPED shield part (equipment PR — a hull's shield
+// is its default shield part); the shield absorbs damage while it holds (hull untouched); overflow
+// spills into the hull when a hit pops the shield; the recharge delay + rate; stock continuous regen
+// (a part authoring no delay regenerates on the tick after a hit); and the per-weapon shield-damage
+// multiplier (bomber cannon = 0.5 vs shields).
+//
+// Stock shield parts author recharge-delay 0 (Allegiance's continuous regen), so the delay mechanic
+// needs a delay to measure: BootSim gives the FIGHTER's default shield part (shared with the scout) a
+// 3 s RechargeDelaySec in a per-boot content tweak. The bomber keeps its stock 0-delay part, so the
+// absorb checks against it account for the regen landing on the hit tick itself.
 //
 // Damage is driven through the real sim paths (a seeker missile for a clean single hit, the bomber
 // cannon for the shield-multiplier), so these exercise the same ApplyDamage seam production uses.
@@ -33,10 +40,23 @@ bool Near(float a, float b) => MathF.Abs(a - b) < 1e-3f;
 string stockPath = Path.Combine(AppContext.BaseDirectory, "content", "core", "core.manifest.yaml");
 string worldPath = Path.Combine(AppContext.BaseDirectory, "content", "core", "world.yaml");
 const uint EmptySector = 999; // unregistered → boundless, asteroid-free (see MissileTest)
+const float FighterShieldDelaySec = 3f; // the per-boot content tweak (see the header)
 
-Simulation BootSim(ulong seed, bool attributes = false)
+// The class's DEFAULT shield part — what a default-equipped ship of that class flies — or null when
+// the hull's shield slot starts empty (the pod has no slots at all).
+EquipmentDef? DefaultShield(ContentSet content, byte cls)
+{
+    ushort id = content.Ships.First(s => s.ClassId == cls).DefaultEquipmentFor(EquipmentDef.SlotShield);
+    return id == EquipmentDef.NoEquipment ? null : content.Equipment[id];
+}
+
+// shieldDelay (default on): the fighter's default shield part gets FighterShieldDelaySec before the
+// sim boots, so §4's quiet window is real; off = the stock 0-delay part (continuous regen).
+Simulation BootSim(ulong seed, bool attributes = false, bool shieldDelay = true)
 {
     var content = ContentLoader.Load(stockPath, worldPath);
+    if (shieldDelay)
+        DefaultShield(content, FlightModel.ClassFighter)!.RechargeDelaySec = FighterShieldDelaySec;
     // Seed the hull-gating techs this suite's duels need so StartMatch unlocks those classes:
     // `bomber` (class 2) and `supremacy-1` (the Enh Fighter, class 1, gated behind a Supremacy base
     // since Phase 4). Without supremacy-1 a fighter join would silently no-op and the duel setup
@@ -104,7 +124,23 @@ void JoinShip(Simulation sim, int clientId, byte team, byte cls)
     return (sim, attacker, target);
 }
 
-float ShieldCap(Simulation sim, byte cls) => sim.Content.Ships.First(s => s.ClassId == cls).ShieldCapacity;
+// The capacity a default-equipped ship of `cls` flies on `team`: its default shield part's strength ×
+// the team's MaxShieldShip attribute (neutral with attributes off — and Iron authors none), 0 for a
+// hull whose shield slot starts empty.
+float ShieldCap(Simulation sim, byte cls, byte team = 0) =>
+    (DefaultShield(sim.Content, cls)?.MaxStrength ?? 0f)
+    * sim.World.TeamAttr(team, (int)Allegiance.Factions.Model.GameAttribute.MaxShieldShip);
+
+// The same part's regen per TICK (× ShieldRegenerationShip), for expectations that span a regen tick.
+float ShieldRegenPerTick(Simulation sim, byte cls, byte team = 0) =>
+    (DefaultShield(sim.Content, cls)?.RegenRate ?? 0f)
+    * sim.World.TeamAttr(team, (int)Allegiance.Factions.Model.GameAttribute.ShieldRegenerationShip)
+    / Simulation.TickHz;
+
+// A stock (0-delay) shield regenerates on EVERY end-of-tick sweep — including the one on the tick
+// the hit landed — so a measurement taken N ticks after a hit carries N+1 ticks of regen on top.
+float AfterHitRegen(Simulation sim, Simulation.ShipSim target, byte cls) =>
+    (sim.Tick - target.ShieldDamageTick + 1) * ShieldRegenPerTick(sim, cls, target.Team);
 
 // ---- 1. Spawn capacity from the class def ------------------------------------------------------
 {
@@ -121,12 +157,12 @@ float ShieldCap(Simulation sim, byte cls) => sim.Content.Ships.First(s => s.Clas
         $"scout spawns with full authored shield ({scoutCap})",
         $"scout spawn shield wrong ({target.Shield}, expected {scoutCap})"
     );
-    // The pod hull authors no shield keys at all — a genuinely shieldless class, read straight
-    // from the loaded def rather than hardcoded (a pod never joins the fight directly; it's only
-    // ever reached via a death eject, so this checks the content fact, not a live spawn).
+    // The pod hull has no equipment slots — a genuinely shieldless class, read straight from the
+    // loaded def rather than hardcoded (a pod never joins the fight directly; it's only ever reached
+    // via a death eject, so this checks the content fact, not a live spawn).
     Check(
-        Near(ShieldCap(sim, GameContent.PodClassId), 0f),
-        "pod has no authored shield (capacity 0)",
+        DefaultShield(sim.Content, GameContent.PodClassId) is null && Near(ShieldCap(sim, GameContent.PodClassId), 0f),
+        "pod's default shield slot is empty (capacity 0)",
         $"pod shield capacity wrong ({ShieldCap(sim, GameContent.PodClassId)}, expected 0)"
     );
 }
@@ -153,8 +189,9 @@ void FireOneSeekerAndResolve(Simulation sim, Simulation.ShipSim attacker, Simula
 }
 
 // ---- 2. Shield absorbs; hull untouched while it holds ------------------------------------------
-// A seeker (Damage*DirectHitMult) into a BOMBER (shield 100) that exceeds the hit — the shield
-// takes the whole hit (shieldMult 1) and the hull stays full.
+// A seeker (Damage*DirectHitMult) into a BOMBER (Med Shield 1) that exceeds the hit — the shield
+// takes the whole hit (shieldMult 1) and the hull stays full. The bomber's stock part regenerates
+// continuously, so the pool reads cap − hit plus exactly the regen of the ticks since the hit.
 {
     var (sim, attacker, target) = SetupDuel(seed: 2, FlightModel.ClassScout, FlightModel.ClassBomber, dist: 300f);
     var seeker = sim.Content.Weapons.First(w => w.WeaponId == 3);
@@ -162,10 +199,11 @@ void FireOneSeekerAndResolve(Simulation sim, Simulation.ShipSim attacker, Simula
     float cap = ShieldCap(sim, FlightModel.ClassBomber);
     float hullBefore = target.Health;
     FireOneSeekerAndResolve(sim, attacker, target, seeker);
+    float expect = cap - hit + AfterHitRegen(sim, target, FlightModel.ClassBomber);
     Check(
-        hit < cap && Near(target.Shield, cap - hit),
-        $"shield absorbed the hit ({cap} -> {target.Shield}, took {hit})",
-        $"shield wrong after absorbed hit ({target.Shield}, expected {cap - hit})"
+        hit < cap && target.ShieldDamageTick != 0 && Near(target.Shield, expect),
+        $"shield absorbed the hit ({cap} -> {target.Shield}, took {hit}, + the continuous regen since)",
+        $"shield wrong after absorbed hit ({target.Shield}, expected {expect})"
     );
     Check(
         Near(target.Health, hullBefore),
@@ -175,8 +213,8 @@ void FireOneSeekerAndResolve(Simulation sim, Simulation.ShipSim attacker, Simula
 }
 
 // ---- 3. Overflow spills to hull when the shield pops -------------------------------------------
-// The same seeker into a FIGHTER (shield 60) where the hit exceeds the shield: shield -> 0 and the
-// remainder (hit - 60) lands on the hull the same tick.
+// The same seeker into a FIGHTER (Sm Shield 1, delay-tweaked) where the hit exceeds the shield:
+// shield -> 0 and the remainder (hit - cap) lands on the hull the same tick.
 {
     var (sim, attacker, target) = SetupDuel(seed: 3, FlightModel.ClassScout, FlightModel.ClassFighter, dist: 300f);
     var seeker = sim.Content.Weapons.First(w => w.WeaponId == 3);
@@ -198,7 +236,8 @@ void FireOneSeekerAndResolve(Simulation sim, Simulation.ShipSim attacker, Simula
 
 // ---- 4. Recharge delay + rate -----------------------------------------------------------------
 // An isolated fighter (no enemies): dent its shield and stamp "just hit", then step. It must NOT
-// regen inside the delay window, then regen at the authored rate (points/sec) and clamp to capacity.
+// regen inside the delay window (the per-boot 3 s tweak on its shield part), then regen at the
+// part's rate (points/sec) and clamp to capacity.
 {
     var sim = BootSim(seed: 4);
     sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassFighter);
@@ -206,10 +245,15 @@ void FireOneSeekerAndResolve(Simulation sim, Simulation.ShipSim attacker, Simula
     var s = sim.Ships.First(x => x.OwnerClientId == 1);
     Park(s, new Vec3(0f, 0f, 0f));
 
-    var def = sim.Content.Ships.First(d => d.ClassId == FlightModel.ClassFighter);
-    float cap = def.ShieldCapacity;
-    uint delayTicks = (uint)MathF.Round(def.ShieldDelaySec * Simulation.TickHz);
-    float perTick = def.ShieldRecharge / Simulation.TickHz;
+    var part = DefaultShield(sim.Content, FlightModel.ClassFighter)!;
+    float cap = part.MaxStrength;
+    uint delayTicks = (uint)MathF.Round(part.RechargeDelaySec * Simulation.TickHz);
+    float perTick = part.RegenRate / Simulation.TickHz;
+    Check(
+        ReferenceEquals(s.ShieldPart, part) && delayTicks > 4,
+        $"the fighter flies its default shield part ({part.Name}) carrying the {FighterShieldDelaySec} s test delay ({delayTicks} ticks)",
+        $"fighter shield part / delay wrong (part {s.ShieldPart?.Name}, delay {delayTicks} ticks)"
+    );
 
     s.Shield = 20f;
     s.ShieldDamageTick = sim.Tick; // "just took a shield hit this tick"
@@ -249,6 +293,36 @@ void FireOneSeekerAndResolve(Simulation sim, Simulation.ShipSim attacker, Simula
         Near(s.Shield, cap),
         $"shield clamps at capacity ({cap})",
         $"shield did not clamp at capacity ({s.Shield}, expected {cap})"
+    );
+}
+
+// ---- 4b. Stock continuous regen: a 0-delay part regenerates on the tick after a hit ------------
+// Allegiance shields have no quiet window. The same dent + "just hit" stamp on a fighter flying the
+// UNTWEAKED stock part: the very next tick already adds one tick of regen, and every tick after
+// adds exactly one more — there is no delay to wait out.
+{
+    var sim = BootSim(seed: 44, shieldDelay: false);
+    sim.EnqueueJoin(1, team: 0, cls: FlightModel.ClassFighter);
+    sim.Step();
+    var s = sim.Ships.First(x => x.OwnerClientId == 1);
+    Park(s, new Vec3(0f, 0f, 0f));
+    var part = DefaultShield(sim.Content, FlightModel.ClassFighter)!;
+    float perTick = part.RegenRate / Simulation.TickHz;
+
+    s.Shield = 20f;
+    s.ShieldDamageTick = sim.Tick; // "just took a shield hit this tick"
+    sim.Step();
+    Check(
+        part.RechargeDelaySec == 0f && Near(s.Shield, 20f + perTick),
+        $"a stock (0-delay) shield regenerates on the tick after a hit (+{perTick}/tick)",
+        $"stock shield did not regen the tick after a hit ({s.Shield}, expected {20f + perTick}, delay {part.RechargeDelaySec})"
+    );
+    for (int i = 0; i < 5; i++)
+        sim.Step();
+    Check(
+        Near(s.Shield, 20f + 6f * perTick),
+        "…and keeps regenerating every tick at the part's rate (continuous, no quiet window)",
+        $"stock shield regen not continuous ({s.Shield}, expected {20f + 6f * perTick})"
     );
 }
 
@@ -326,7 +400,7 @@ void FireOneSeekerAndResolve(Simulation sim, Simulation.ShipSim attacker, Simula
     Park(attacker, new Vec3(0f, 0f, 0f));
     Park(target, new Vec3(0f, 0f, 40f));
     var cannon = sim.Content.Weapons.First(w => w.WeaponId == AutoCan1);
-    float cap = ShieldCap(sim, FlightModel.ClassFighter);
+    float cap = ShieldCap(sim, FlightModel.ClassFighter, target.Team);
     float shieldBefore = target.Shield;
     bool hitSeen = false;
     for (uint i = 0; i < 40 && !hitSeen; i++)
@@ -357,13 +431,15 @@ void FireOneSeekerAndResolve(Simulation sim, Simulation.ShipSim attacker, Simula
     Park(target, new Vec3(0f, 0f, 300f));
     var seeker = sim.Content.Weapons.First(w => w.WeaponId == 3);
     float ironHit = seeker.Damage * seeker.DirectHitMult * 1.1f;
-    float cap = ShieldCap(sim, FlightModel.ClassBomber);
+    float cap = ShieldCap(sim, FlightModel.ClassBomber, target.Team);
     float hullBefore = target.Health;
     FireOneSeekerAndResolve(sim, attacker, target, seeker);
+    // The bomber's stock part regenerates continuously (see §2): + the regen since the hit.
+    float expect = cap - ironHit + AfterHitRegen(sim, target, FlightModel.ClassBomber);
     Check(
-        ironHit < cap && Near(target.Shield, cap - ironHit) && Near(target.Health, hullBefore),
+        ironHit < cap && target.ShieldDamageTick != 0 && Near(target.Shield, expect) && Near(target.Health, hullBefore),
         $"Iron MissileDamage ×1.10: seeker removed {ironHit:F3} shield ({seeker.Damage}×{seeker.DirectHitMult}×1.1), hull intact",
-        $"missile MissileDamage multiplier wrong (shield {target.Shield}, expected {cap - ironHit})"
+        $"missile MissileDamage multiplier wrong (shield {target.Shield}, expected {expect})"
     );
 }
 

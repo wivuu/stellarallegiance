@@ -69,6 +69,9 @@ public partial class SfxManager : Node
         Payday,
         ActionDenied,
         MatchStart,
+        CloakOn,
+        CloakOff,
+        OutOfAmmo,
     }
 
     private static readonly Dictionary<SfxId, string> Files = new()
@@ -120,6 +123,12 @@ public partial class SfxManager : Node
         { SfxId.ActionDenied, "action_denied.ogg" }, // ef03 = errorSound
         // No Allegiance match-start cue exists; this is its countdownStartingSound (countdownstart).
         { SfxId.MatchStart, "match_start.ogg" },
+        // Cloak engage/disengage (equipment PR): pick-assets/sound-effects/cloakon.ogg / cloakoff.ogg
+        // (Allegiance's vo_sal_cloakengage / vo_sal_cloakdisengage pair without the voice line).
+        { SfxId.CloakOn, "cloak_on.ogg" },
+        { SfxId.CloakOff, "cloak_off.ogg" },
+        // Ammo-gate dry-fire (equipment PR): outofammo.ogg (Allegiance's vo_sal_noammo without the line).
+        { SfxId.OutOfAmmo, "out_of_ammo.ogg" },
     };
 
     // Streams that should play as seamless loops (engine bed, ambience).

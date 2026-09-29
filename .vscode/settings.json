@@ -32,6 +32,7 @@
             "server/Content/core/projectiles.yaml",
             "server/Content/core/launchers.yaml",
             "server/Content/core/expendables.yaml",
+            "server/Content/core/equipment.yaml",
             "server/Content/core/stations.yaml"
         ],
         "./schemas/allegiance-faction.schema.json": ["server/Content/core/factions/*.yaml"],

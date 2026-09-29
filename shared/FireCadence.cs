@@ -10,6 +10,12 @@ namespace StellarAllegiance.Shared;
 // so eligibility depends only on (tick, mount's last fire tick, mount's interval). A shadow that
 // sees every LastFireTick change stays in lockstep with the server; a lossy far-tier shadow drifts
 // and self-corrects — visual only.
+//
+// Eligibility is cadence AND the resource gate (equipment PR): a cadence-eligible mount fires only if
+// ShipResources.TrySpendShot also covers its energy / ammo cost, and a resource-BLOCKED mount does not
+// stamp its last-fire tick (it stays ready for the first tick the pools allow). ShipRecord.Pools
+// carries the pools the fire phase of LastInputTick started with, so a remote shadow at a row whose
+// LastFireTick == LastInputTick replays both gates exactly; otherwise it falls back to cadence alone.
 public static class FireCadence
 {
     // lastFireTick == 0 means "never fired" and is always eligible (mirrors the pre-loadout

@@ -244,7 +244,8 @@ var contentErrors = ContentValidator.Validate(
     content.CargoItems,
     content.Techs,
     content.Developments,
-    content.StationCatalog
+    content.StationCatalog,
+    content.Equipment
 );
 if (contentErrors.Count > 0)
 {

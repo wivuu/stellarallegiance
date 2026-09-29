@@ -136,6 +136,7 @@ public partial class WeaponsPanel : Control
         int secCount =
             _weapons.Count
             - 1
+            + (local.ShowAmmo ? 1 : 0)
             + (chaffDisp != null ? 1 : 0)
             + (mineDisp != null ? 1 : 0)
             + (probeDisp != null ? 1 : 0)
@@ -167,7 +168,8 @@ public partial class WeaponsPanel : Control
 
         float readyFrac = BoltReadyFrac(local, primary);
         bool ready = readyFrac >= 1f;
-        string primState = ready ? "READY" : "CYCLING";
+        GateBlock primBlock = local.GateBlockFor(primary);
+        (string primState, Color primStateColor) = GateStateText(primBlock, ready);
         float primStateW = MonoWidth(mono, primState, 10);
         DrawString(mono, new Vector2(left + 8f, y + 14f), "[1]", HorizontalAlignment.Left, -1, 10, DesignTokens.TeamAccent);
         DrawString(
@@ -179,12 +181,26 @@ public partial class WeaponsPanel : Control
             14,
             DesignTokens.TextHi
         );
-        DrawStringRight(mono, new Vector2(right - 6f, y + 14f), primState, 10, ready ? DesignTokens.Ok : DesignTokens.Warn);
+        DrawStringRight(mono, new Vector2(right - 6f, y + 14f), primState, 10, primStateColor);
 
-        // Cadence bar: charges from just-fired (empty) back to full = READY. Green when ready, cyan while charging.
+        // Cadence bar: charges from just-fired (empty) back to full = READY. Green when ready and
+        // affordable, cyan while charging, the gate's own tone while resource-blocked (a dry gun is
+        // dry whether or not its cooldown has finished). The pool it draws on rides the same line,
+        // right-aligned — ammo if it costs ammo, else energy if it costs energy (an ER Nanite-style
+        // gun); neither for a free-firing weapon.
         DrawString(mono, new Vector2(left + 8f, y + 33f), "CYCLE", HorizontalAlignment.Left, -1, 9, DesignTokens.TextDim);
         var pbar = new Rect2(left + 44f, y + 27f, primRect.Size.X - 44f - 10f, 5f);
-        DrawBar(pbar, readyFrac, ready ? DesignTokens.Ok : DesignTokens.TeamAccent);
+        DrawBar(
+            pbar,
+            readyFrac,
+            primBlock != GateBlock.None ? primStateColor
+                : ready ? DesignTokens.Ok
+                : DesignTokens.TeamAccent
+        );
+        if (primary.AmmoPerShot > 0)
+            DrawStringRight(mono, new Vector2(right - 6f, y + 33f), $"{local.Ammo}", 9, DesignTokens.Data);
+        else if (primary.EnergyPerShot > 0f)
+            DrawStringRight(mono, new Vector2(right - 6f, y + 33f), $"{local.Energy:0}", 9, DesignTokens.Data);
         y += PrimaryH + RowGap;
 
         // ---- Secondary rows (launcher + any extra guns) ----
@@ -194,6 +210,13 @@ public partial class WeaponsPanel : Control
             if (i == primaryIdx)
                 continue;
             DrawSecondaryRow(_weapons[i], slot++, left, right, y, mono, local);
+            y += SecRowH;
+        }
+
+        // ---- Ammo row: the shared magazine, only when something aboard actually spends it ----
+        if (local.ShowAmmo)
+        {
+            DrawAmmoRow(local, left, right, y, mono);
             y += SecRowH;
         }
 
@@ -222,6 +245,54 @@ public partial class WeaponsPanel : Control
             DrawHoldRow(kind, itemId, count, i == 0 ? holdCap : -1, left, right, y, mono);
             y += SecRowH;
         }
+    }
+
+    // One AMMO row: the ship's shared magazine — every ammo-costing gun (pilot barrels AND this
+    // hull's turret stations) draws on it, so it earns its own row rather than repeating on each gun
+    // row. Modelled on DrawDispenserRow: pool count, pack pips (packs still holding a charge, all
+    // shown filled — a pack ridden dry no longer counts), LOADING with the load line while a charge
+    // is inbound, EMPTY when the mag and every pack are dry. Own-hull PREDICTED state (AmmoLoading is
+    // pilot-only on HudSubject — a gunner's row always reads NO AMMO instead of LOADING mid-load; see
+    // HudSubject.GateBlockFor).
+    private void DrawAmmoRow(in HudSubject local, float left, float right, float y, Font mono)
+    {
+        float mid = y + SecRowH * 0.5f;
+        DrawString(mono, new Vector2(left, mid + 4f), "[A]", HorizontalAlignment.Left, -1, 10, DesignTokens.TextDim);
+
+        bool loading = local.AmmoLoading;
+        bool empty = !loading && local.Ammo <= 0 && local.AmmoPacks <= 0;
+        (string txt, Color col) =
+            empty ? ("EMPTY", DesignTokens.TextDim)
+            : loading ? ("LOADING", DesignTokens.Warn)
+            : local.Ammo <= 0 ? ("NO AMMO", DesignTokens.Danger)
+            : ("READY", DesignTokens.Ok);
+        DrawStringRight(mono, new Vector2(right, mid + 4f), txt, 10, col);
+        if (loading)
+            DrawLoadLine(left, right, y, local.AmmoLoadFrac);
+
+        string countTxt = local.Ammo.ToString();
+        float countRight = right - MonoWidth(mono, txt, 10) - 10f;
+        DrawStringRight(
+            mono,
+            new Vector2(countRight, mid + 4f),
+            countTxt,
+            10,
+            local.Ammo <= 0 ? DesignTokens.TextDim : DesignTokens.Data
+        );
+
+        float pipsRight = countRight - MonoWidth(mono, countTxt, 10) - 10f;
+        float clusterLeft = DrawPips(pipsRight, mid, local.AmmoPacks, System.Math.Max(local.AmmoPacks, 1));
+
+        float nameX = left + 26f;
+        DrawString(
+            UiFonts.Saira,
+            new Vector2(nameX, mid + 4f),
+            "AMMO",
+            HorizontalAlignment.Left,
+            Mathf.Max(24f, clusterLeft - 8f - nameX),
+            12,
+            DesignTokens.Text2
+        );
     }
 
     // One HOLD row: "HOLD  NAME ×N  INERT" (the first row's label also carries "n/cap"). Whatever
@@ -423,13 +494,21 @@ public partial class WeaponsPanel : Control
         }
         else
         {
-            // Extra gun mount: its own cadence bar (rare — most hulls carry a single gun).
+            // Extra gun mount: its own cadence bar (rare — most hulls carry a single gun), gated by
+            // the same resource check as the primary slot.
             float frac = BoltReadyFrac(local, w);
             bool ready = frac >= 1f;
-            string txt = ready ? "READY" : "CYCLING";
-            DrawStringRight(mono, new Vector2(right, mid + 4f), txt, 10, ready ? DesignTokens.Ok : DesignTokens.Warn);
+            GateBlock block = local.GateBlockFor(w);
+            (string txt, Color col) = GateStateText(block, ready);
+            DrawStringRight(mono, new Vector2(right, mid + 4f), txt, 10, col);
             float barLeft = right - MonoWidth(mono, txt, 10) - 8f - 56f;
-            DrawBar(new Rect2(barLeft, mid - 2f, 56f, 4f), frac, ready ? DesignTokens.Ok : DesignTokens.TeamAccent);
+            DrawBar(
+                new Rect2(barLeft, mid - 2f, 56f, 4f),
+                frac,
+                block != GateBlock.None ? col
+                    : ready ? DesignTokens.Ok
+                    : DesignTokens.TeamAccent
+            );
             clusterLeft = barLeft;
         }
 
@@ -487,6 +566,18 @@ public partial class WeaponsPanel : Control
         : locked ? ("LOCKED", DesignTokens.Danger, true)
         : prog > 0 ? ($"LOCK {prog}%", DesignTokens.Warn, false)
         : (readyText, DesignTokens.Ok, false);
+
+    // A bolt gun's state tag + colour: the resource gate outranks cadence — a dry or loading gun says
+    // so even mid-cycle — and cadence supplies READY/CYCLING once the gate is clear. Shared by the
+    // primary slot and every secondary bolt-gun row so the two can never disagree about a mount.
+    private static (string Text, Color Color) GateStateText(GateBlock block, bool cadenceReady) =>
+        block switch
+        {
+            GateBlock.NoEnergy => ("NO ENRG", DesignTokens.Danger),
+            GateBlock.NoAmmo => ("NO AMMO", DesignTokens.Danger),
+            GateBlock.Loading => ("LOADING", DesignTokens.Warn),
+            _ => cadenceReady ? ("READY", DesignTokens.Ok) : ("CYCLING", DesignTokens.Warn),
+        };
 
     // Fire-cadence readiness for a bolt gun, 0..1 (1 = READY). Mirrors the fire gate the SIM will
     // apply, in the seat's own prediction-tick space: the pilot's per-mount gate (mixed loadouts cool

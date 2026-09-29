@@ -3,11 +3,19 @@
 # (fire-interval-ticks / projectile-life-ticks) are explicit runtime extensions.
 # mass = payload units the weapon occupies when mounted (counts against the hull's payload-capacity).
 #
-# Guns have NO reload: they carry infinite ammo and feed from no cargo hold, so fire-interval-ticks is
-# their only gate. The core `reload-time` field here is IGC dtimeReady and is NOT read at runtime
-# (fire-interval-ticks supersedes it), and the RELOAD mechanic — the time to pull a charge out of the
-# hold — is authored as `load-time` on the EXPENDABLES a launcher carries (expendables.yaml).
-# ContentValidator refuses to boot a bolt weapon that somehow reaches the sim with a load time.
+# Guns have NO reload of their own: fire-interval-ticks is their cadence, and each shot draws on the
+# SHIP's pools — `ammo-per-shot` from the hull's magazine (max-ammo), `energy-per-shot` from its energy
+# pool (max-energy). A shot the pools can't cover doesn't fire; the magazine refills at dock and from
+# ammo packs in the hold (expendables.yaml), the energy pool recharges over time. Per-shot costs keep
+# Allegiance's drain PER SECOND at our cadence (our guns fire at half the IGC rate, see below):
+#   cost = IGC cost × fire-interval-ticks ÷ (20 × IGC dtimeBurst), rounded up to a whole round.
+#   Gat 1 × 4 ÷ (20 × 0.100) = 2 exactly; Mini-Gun 1 × 3 ÷ (20 × 0.080) = 1.875 → 2 (Mini-Gun 2's
+#   0.078 burst: 1.92 → 2); AutoCan 1 × 3 ÷ (20 × 0.083) = 1.81 → 2 — the rounding makes those two
+#   lines 7-11% hungrier than Allegiance. ER Nanite 30 energy × 10 ÷ (20 × 0.25) = 60.
+# The core `reload-time` field here is IGC dtimeReady and is NOT read at runtime (fire-interval-ticks
+# supersedes it), and the RELOAD mechanic — the time to pull a charge out of the hold — is authored as
+# `load-time` on the EXPENDABLES a launcher carries (expendables.yaml). ContentValidator refuses to
+# boot a bolt weapon that somehow reaches the sim with a load time.
 #
 # Iron Coalition gun line (Phase 2, PCore014.igc). Three tiered lines share the gun weapon-id space
 # with the launchers (launchers.yaml claims 3–8):
@@ -34,6 +42,7 @@ weapons:
     name: PW Gat Gun 1
     weapon-id: 0
     mass: 1
+    ammo-per-shot: 2      # IGC 1 × 4 ÷ (20 × 0.100) = 2 — 10 rounds/s
     dispersion: 0.005
     fire-interval-ticks: 4
     projectile-life-ticks: 20
@@ -46,6 +55,7 @@ weapons:
     name: PW Gat Gun 2
     weapon-id: 1
     mass: 1
+    ammo-per-shot: 2      # IGC 1 × 4 ÷ (20 × 0.100) = 2 — 10 rounds/s
     dispersion: 0.005
     fire-interval-ticks: 4
     projectile-life-ticks: 20
@@ -59,6 +69,7 @@ weapons:
     name: PW Gat Gun 3
     weapon-id: 2
     mass: 1
+    ammo-per-shot: 2      # IGC 1 × 4 ÷ (20 × 0.100) = 2 — 10 rounds/s
     dispersion: 0.005
     fire-interval-ticks: 4
     projectile-life-ticks: 20
@@ -72,6 +83,7 @@ weapons:
     name: PW Mini-Gun 1
     weapon-id: 9
     mass: 1
+    ammo-per-shot: 2      # IGC 1 × 3 ÷ (20 × 0.080) = 1.875, rounded up
     dispersion: 0.010
     fire-interval-ticks: 3
     projectile-life-ticks: 16
@@ -84,6 +96,7 @@ weapons:
     name: PW Mini-Gun 2
     weapon-id: 10
     mass: 1
+    ammo-per-shot: 2      # IGC 1 × 3 ÷ (20 × 0.078) = 1.92, rounded up
     dispersion: 0.010
     fire-interval-ticks: 3
     projectile-life-ticks: 16
@@ -97,6 +110,7 @@ weapons:
     name: PW Mini-Gun 3
     weapon-id: 11
     mass: 1
+    ammo-per-shot: 2      # IGC 1 × 3 ÷ (20 × 0.080) = 1.875, rounded up
     dispersion: 0.010
     fire-interval-ticks: 3
     projectile-life-ticks: 16
@@ -110,6 +124,7 @@ weapons:
     name: PW AutoCan 1
     weapon-id: 12
     mass: 1
+    ammo-per-shot: 2      # IGC 1 × 3 ÷ (20 × 0.083) = 1.81, rounded up
     dispersion: 0.010
     fire-interval-ticks: 3
     projectile-life-ticks: 20
@@ -123,6 +138,7 @@ weapons:
     name: PW AutoCan 2
     weapon-id: 13
     mass: 1
+    ammo-per-shot: 2      # IGC 1 × 3 ÷ (20 × 0.083) = 1.81, rounded up
     dispersion: 0.010
     fire-interval-ticks: 3
     projectile-life-ticks: 20
@@ -137,6 +153,7 @@ weapons:
     name: PW AutoCan 3
     weapon-id: 14
     mass: 1
+    ammo-per-shot: 2      # IGC 1 × 3 ÷ (20 × 0.083) = 1.81, rounded up
     dispersion: 0.010
     fire-interval-ticks: 3
     projectile-life-ticks: 20
@@ -155,6 +172,7 @@ weapons:
     name: ER Nanite 1
     weapon-id: 15
     mass: 2
+    energy-per-shot: 60   # IGC 30 × 10 ÷ (20 × 0.25) — 120 energy/s
     dispersion: 0.005
     fire-interval-ticks: 10
     projectile-life-ticks: 20
@@ -168,6 +186,7 @@ weapons:
     name: ER Nanite 2
     weapon-id: 16
     mass: 2
+    energy-per-shot: 60   # IGC 30 × 10 ÷ (20 × 0.25) — 120 energy/s
     dispersion: 0.005
     fire-interval-ticks: 10
     projectile-life-ticks: 20
@@ -182,6 +201,7 @@ weapons:
     name: ER Nanite 3
     weapon-id: 17
     mass: 2
+    energy-per-shot: 60   # IGC 30 × 10 ÷ (20 × 0.25) — 120 energy/s
     dispersion: 0.005
     fire-interval-ticks: 10
     projectile-life-ticks: 20

@@ -294,3 +294,122 @@ developments:
     tech-only: true
     required-techs: [supremacy-adv, probe-2]
     granted-techs: [probe-3]
+
+  # ---- Iron Coalition equipment research (equipment PR, PCore014.igc). Appended at the VERY END
+  # (indices 27-38) so every dev wire index above stays stable (StrategyTest drives research ops by dev
+  # index). All group: EQUIPMENT, tech-only, each granting its same-named tech (see equipment.yaml for
+  # the parts). Price = IGC × 0.06 (2500 → 150, the Large Shields 5000 → 300); build-time = price ÷ 5
+  # seconds, like the gun research. Homing follows the IGC gates: the Sm Shield / Booster / Crs / Hvy
+  # lines research at the Supremacy (tier 3 at its Adv tier), the Med Shield / Lt Booster lines at the
+  # Garrison (Med Shield 2 and Lt Booster 1 from match start, the next tier behind garrison-str), the
+  # Large Shields at the Shipyard.
+  # The Hvy Booster is the Adv Fighter's preferred booster; until it is researched the hull launches
+  # with Booster 1. ----
+  - id: dev-sm-shield-2
+    name: Sm Shield 2
+    description: "Uprate the small-ship shield line to tier 2."
+    group: EQUIPMENT
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [supremacy-1]
+    granted-techs: [sm-shield-2]
+  - id: dev-sm-shield-3
+    name: Sm Shield 3
+    description: "Uprate the small-ship shield line to tier 3."
+    group: EQUIPMENT
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [supremacy-adv, sm-shield-2]
+    granted-techs: [sm-shield-3]
+  - id: dev-med-shield-2
+    name: Med Shield 2
+    description: "Uprate the medium-ship shield line to tier 2."
+    group: EQUIPMENT
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-capabilities: [base]
+    granted-techs: [med-shield-2]
+  - id: dev-med-shield-3
+    name: Med Shield 3
+    description: "Uprate the medium-ship shield line to tier 3."
+    group: EQUIPMENT
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [garrison-str, med-shield-2]
+    granted-techs: [med-shield-3]
+  - id: dev-lrg-shield-2
+    name: Large Shield 2
+    description: "Uprate the capital-ship shield line to tier 2."
+    group: EQUIPMENT
+    price: 300
+    build-time-seconds: 60
+    tech-only: true
+    required-techs: [shipyard-1]
+    granted-techs: [lrg-shield-2]
+  - id: dev-lrg-shield-3
+    name: Large Shield 3
+    description: "Uprate the capital-ship shield line to tier 3."
+    group: EQUIPMENT
+    price: 300
+    build-time-seconds: 60
+    tech-only: true
+    required-techs: [shipyard-dry, lrg-shield-2]
+    granted-techs: [lrg-shield-3]
+  - id: dev-booster-2
+    name: Booster 2
+    description: "Uprate the Booster line to tier 2."
+    group: EQUIPMENT
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [supremacy-1]
+    granted-techs: [booster-2]
+  - id: dev-booster-3
+    name: Booster 3
+    description: "Uprate the Booster line to tier 3."
+    group: EQUIPMENT
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [supremacy-adv, booster-2]
+    granted-techs: [booster-3]
+  - id: dev-lt-booster-1
+    name: Lt Booster 1
+    description: "Certify the frugal light booster for the fighter hulls."
+    group: EQUIPMENT
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-capabilities: [base]
+    granted-techs: [lt-booster-1]
+  - id: dev-lt-booster-2
+    name: Lt Booster 2
+    description: "Uprate the light booster to tier 2."
+    group: EQUIPMENT
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [garrison-str, lt-booster-1]
+    granted-techs: [lt-booster-2]
+  - id: dev-crs-booster
+    name: Cruise Booster
+    description: "Certify the efficient cruise booster for the fighter hulls."
+    group: EQUIPMENT
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [supremacy-1, lt-booster-1]
+    granted-techs: [crs-booster]
+  - id: dev-hvy-booster
+    name: Hvy Booster
+    description: "Certify the heavy sprint booster for the Adv Fighter."
+    group: EQUIPMENT
+    price: 150
+    build-time-seconds: 30
+    tech-only: true
+    required-techs: [supremacy-adv, lt-booster-1, booster-3]
+    granted-techs: [hvy-booster]

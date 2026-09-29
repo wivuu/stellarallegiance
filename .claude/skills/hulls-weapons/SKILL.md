@@ -7,16 +7,17 @@ description: Author and tune playable HULLS (ships), WEAPONS (guns), and LAUNCHE
 
 All ship/weapon balance is **authored YAML, streamed at runtime** — no compile-time content, no
 client fallback (see the `tech-tree-content` skill for the full pipeline & iron rules). This skill
-is the hands-on reference for the four content files that define what a ship *is* and *carries*.
+is the hands-on reference for the content files that define what a ship *is* and *carries*.
 
 ## The files (all under `server/Content/core/`)
 
 | File | Defines | Wire id |
 |------|---------|---------|
-| `hulls.yaml` | playable ships + escape pod: flight stats, shield, afterburner, payload, hardpoint bindings, default cargo | `class-id` |
-| `weapons.yaml` | guns (cannons): damage via projectile, cadence, spread, mass, `shield-damage-multiplier` | `weapon-id` |
+| `hulls.yaml` | playable ships + escape pod: flight stats, payload, hardpoint bindings, default cargo, equipment slots (`allowed-parts`/`preferred-parts`), energy/ammo pools | `class-id` |
+| `weapons.yaml` | guns (cannons): damage via projectile, cadence, spread, mass, `shield-damage-multiplier`, `ammo-per-shot`/`energy-per-shot` | `weapon-id` |
 | `launchers.yaml` | missile racks + chaff/mine/probe dispensers: magazine (`amount`), cadence, mounted `mass`, referenced expendable | `weapon-id` |
-| `expendables.yaml` | the payloads a launcher fires: missiles/mines/decoys/probes — ballistics, `mass`, `cargo-id`, `can-damage-base` — plus `fuels:` (fuel pods: pure cargo, no launcher; auto-loads `fuel-per-charge` into the tank when it runs dry mid-boost) | `cargo-id` (dispensed kinds) |
+| `expendables.yaml` | the payloads a launcher fires: missiles/mines/decoys/probes — ballistics, `mass`, `cargo-id`, `can-damage-base` — plus `fuels:` (fuel pods) and `ammo-packs:` (both pure cargo, no launcher; auto-load into the tank/magazine when it runs dry; at most ONE ammo-pack entry — ContentValidator refuses a second) | `cargo-id` (dispensed kinds) |
+| `equipment.yaml` | the shield/afterburner/cloak PARTS a hull's `allowed-parts` may pick from — one per-ship slot each, no payload cost | `EquipmentDef.EquipmentId` (catalog position) |
 | `stations.yaml` | bases/garrisons (`base-type-id`) — see `hardpoints` skill for their docking nodes | `base-type-id` |
 
 The manifest `core.manifest.yaml` lists which files load; bump its `version:` when adding a file.
@@ -77,6 +78,46 @@ hardpoints:
   A `mount:` contradicting the bound weapon, or a `successor-part-id` that would change a
   weapon's category at tier migration, refuses boot.
 
+## Equipment slots (shield / afterburner / cloak)
+
+Unlike guns/racks, these three are NOT hardpoint mounts — every hull gets at most one of each,
+picked in the hangar from `equipment.yaml`'s catalog (shields, then afterburners, then cloaks; a
+part's `EquipmentId` is its position in that order — append within a section, never reorder).
+
+- **`allowed-parts`** (hulls.yaml, keys `shield`/`afterburner`/`cloak`) is what gives a hull a slot
+  at all — an omitted key means the hull has NO such slot (e.g. the Lt Interceptor has no `shield`
+  key, so it has no shield, ever). A listed part's whole successor chain
+  (`obsoleted-by-techs`/`successor-part-id`) is IMPLICITLY allowed too, so listing just `sm-shield-1`
+  is enough to also permit `sm-shield-2`/`-3` once researched:
+  ```yaml
+  allowed-parts:
+    shield: [sm-shield-1]
+    afterburner: [booster-1, lt-booster-1, crs-booster]
+  ```
+- **`preferred-parts`** (a flat list, IGC `preferredPartsTypes` order) picks each slot's STATIC
+  default: the first entry the slot allows whose `required-techs` the HULL ITSELF already requires
+  (so the default is always buildable the moment the hull is — a research-locked preferred part is
+  skipped, never handed out free). A researched tier then migrates that default live at spawn — no
+  YAML change needed when a new tier lands.
+- **No payload cost, no flight-mass cost.** `mass` in `equipment.yaml` is a hangar DISPLAY number
+  only — equipment never counts against `payload-capacity` and never changes a ship's `mass`.
+- **Energy + ammo pools** are hull fields, not equipment: `max-energy`/`energy-recharge-rate`
+  (drawn by energy guns and a cloak) and `max-ammo` (drawn by ammo guns, refilled by ammo packs)
+  live in `hulls.yaml` beside `allowed-parts`. A cloak slot needs `max-energy > 0` — boot refuses
+  otherwise.
+- **Per-shot costs on `weapons.yaml`**: `ammo-per-shot` (u16) and/or `energy-per-shot` (float) per
+  gun. Keep Allegiance's drain PER SECOND at our cadence: `cost = IGC cost × fire-interval-ticks ÷
+  (20 × IGC dtimeBurst)`, rounded UP to a whole round for ammo. A shot the ship's pools can't cover
+  doesn't fire and doesn't stamp cooldown — CoreValidator/ContentValidator refuse a default loadout
+  whose cheapest gun can't afford one shot from a full pool on its hull.
+- **REMOVED / tombstoned hull keys** — `shield-capacity`/`-recharge`/`-delay` and
+  `ab-accel`/`-on-rate`/`-off-rate`/`-fuel-drain` moved onto the equipment parts (`max-strength`/
+  `regen-rate`/`recharge-delay` on a shield; `max-thrust`/`on-rate`/`off-rate`/`fuel-consumption` on
+  an afterburner). They survive on `Hull.cs` only as nullable properties CoreValidator REFUSES when
+  set (a boot error naming the key), so an old bundle that still authors them fails loudly instead of
+  silently flying with no shield/boost. `max-fuel` (the tank) and `ab-fuel-recharge` stay hull
+  fields.
+
 ## Payload budgeting (boot gate — `CoreValidator`)
 
 Every armed hull must satisfy, or the server **refuses to boot**
@@ -106,10 +147,16 @@ lt-interceptor 2, enh/adv fighter 3, bomber 4, devastator 5. Not validated again
   mount a `can-damage-base` weapon, else "bases can never be destroyed, matches can never end" and
   boot fails. Today only the **SRM Anti-Base line (weapon-ids 5/22/23)** is `can-damage-base`, and
   only the **bomber** mounts it (id 5) — do not strip it without giving another hull a base-cracker.
-- **Shield**: authoring `shield-capacity` requires a positive `shield-recharge` (else it never comes
-  back). `shield-delay` is the quiet-time before regen resumes.
-- **Afterburner**: `ab-accel > 0` requires `max-fuel` (and vice-versa); `ab-fuel-recharge` must be
-  `< ab-fuel-drain` (never net-depletes). `ab-fuel-recharge: 0` = valid "dock-only" refuel.
+- **Shield / afterburner stats live in `equipment.yaml` now** (see *Equipment slots* above) — a
+  shield part needs a positive `regen-rate` (else it never comes back) and `recharge-delay >= 0`
+  (0 = Allegiance's continuous regen); an afterburner part needs `max-thrust > 0` (refuses the
+  never-ported Retro Booster) and `fuel-consumption > 0`.
+- **Afterburner fuel pairing**: a hull with an `afterburner` key in `allowed-parts` MUST author
+  `max-fuel > 0` (and vice-versa); `ab-fuel-recharge` must stay BELOW the lowest `fuel-consumption`
+  of any allowed booster (never net-refills in flight). `ab-fuel-recharge: 0` = valid "dock-only"
+  refuel (the stock value everywhere).
+- **Cloak**: a `cloak` key in `allowed-parts` requires `max-energy > 0`; the part itself needs
+  `0 < max-cloaking < 1` and positive `on-rate`/`off-rate`.
 - **Every hardpoint** needs a mesh node OR authored geometry; a zero-length direction, a duplicate
   `(kind,index)`, or a dangling `weapon-id` all fail boot.
 - **`radar-signature` must be positive** on ships and bases.
@@ -118,7 +165,8 @@ lt-interceptor 2, enh/adv fighter 3, bomber 4, devastator 5. Not validated again
 
 YAML → runtime `ShipClassDef` (see `hulls.yaml` header comment): `mass`→mass, `speed`→max-speed,
 `thrust`→accel, `max-turn-rates`→rate-*-deg, `armor-hit-points`→max-hull,
-`strafe/reverse-thrust-multiplier`→side/back-mult. `class-id`, `drift-*-deg`, `ab-*`, vision-*, and
+`strafe/reverse-thrust-multiplier`→side/back-mult. `class-id`, `drift-*-deg`, `ab-fuel-recharge`,
+`max-energy`/`energy-recharge-rate`/`max-ammo`, `allowed-parts`/`preferred-parts`, vision-*, and
 `hardpoints` are explicit runtime extensions.
 
 ## Launch/dock base restriction (`launch-station-classes`)
@@ -138,6 +186,8 @@ unlock) — this gates WHERE, not WHETHER.
 ```sh
 dotnet run --project tests/ContentTest      # projection + merged hardpoints + payload + win-condition
 dotnet run --project tests/FactionsTest     # raw YAML field parsing
+dotnet run --project tests/EquipmentTest    # equipment slots, defaults, tier migration, loadout rows
+dotnet run --project tests/AmmoEnergyTest   # ammo/energy pools, per-shot gating, PIG rearm
 ```
 
 `tests/ContentTest/Program.cs` asserts per-hull merged layouts and payload capacities — **update

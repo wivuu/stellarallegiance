@@ -7,16 +7,32 @@ namespace Allegiance.Factions.Model;
 /// </summary>
 public abstract record Part : Buildable
 {
-    /// <summary>Mass this part adds when mounted, counted against the hull's payload capacity.</summary>
+    /// <summary>
+    /// Mass of the part. A mounted gun or launcher counts it against the hull's payload capacity;
+    /// for EQUIPMENT (shield / afterburner / cloak) it is display-only — equipment costs no payload
+    /// and does not change flight mass.
+    /// </summary>
     public double Mass { get; set; }
 
-    /// <summary>Detectability this part adds to the mounting hull/station.</summary>
+    /// <summary>
+    /// Additive radar-signature bias (radar-signature units) this part gives the ship while
+    /// equipped. Stock content leaves it unset: Allegiance authors part signatures but never applies
+    /// them (a ship's signature is its hull's × (1 − cloaking), shipIGC.h:270).
+    /// </summary>
     public double Signature { get; set; }
 
-    /// <summary>Which hull slot this part occupies.</summary>
+    /// <summary>
+    /// Which hull slot this part occupies. Informational: the runtime decides a part's slot by its
+    /// catalog (a <c>shields:</c> entry fills the shield slot), and <c>allowed-parts</c> checks the
+    /// part's kind, not this field.
+    /// </summary>
     public EquipmentSlot Slot { get; set; }
 
-    /// <summary>Part upgrade target; references another part id.</summary>
+    /// <summary>
+    /// Part upgrade target; references another part id of the same kind (no cycles). A tier whose
+    /// <see cref="Buildable.ObsoletedByTechs"/> is owned migrates to it; a hull that allows a part
+    /// implicitly allows its whole successor chain.
+    /// </summary>
     public string? SuccessorPartId { get; set; }
 
     // ---- StellarAllegiance runtime extension (omit-when-default; see RuntimeData.cs) -----------

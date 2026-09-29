@@ -11,10 +11,12 @@ Usage:
         categories: hulls parts stations devs drones civs missiles mines chaff probes
     python3 igc_parser.py <core.igc> --faction "Iron Coalition"   # resolve a faction's buildable set
     python3 igc_parser.py <core.igc> --iron-slice   # Phase-2 report: raw + anchor-translated combat stats
+    python3 igc_parser.py <core.igc> --iron-equipment   # Phase-3 report: shield/cloak/afterburner/pack/gun
+                                                          # cross-check + hull equipment-slot fitting
 
 Validated against artwork-full/static_core.igc (5 factions, 683 objects).
 """
-import struct, sys
+import struct, sys, math
 from collections import Counter, defaultdict
 
 # ---- ObjectType enum (igc.h:120-187); static-core subset ----
@@ -80,7 +82,10 @@ def parse_hull(b, size):
              ripcordSpeed=u('<f',b,o+72), ripcordCost=u('<f',b,o+76), maxAmmo=u('<h',b,o+80),
              hitPoints=u('<f',b,o+88), defenseType=u('<B',b,o+94),
              capacityMagazine=u('<h',b,o+96), capacityDispenser=u('<h',b,o+98),
-             capacityChaffLauncher=u('<h',b,o+100))
+             capacityChaffLauncher=u('<h',b,o+100),
+             # preferredPartsTypes[14] (PartID i16, igc.h c_cMaxPreferredPartTypes) @102..130,
+             # immediately before habm@130 (validated by that pre-existing anchor); -1 = unset slot.
+             preferred=[p for p in struct.unpack_from('<14h',b,o+102) if p!=-1])
     # variable HardpointData[] tail: 30 bytes each, PartMask at +26, bFixed at +28
     HULL_STRUCT=540; HP=30
     n=max(0,(size-HULL_STRUCT)//HP)
@@ -94,7 +99,9 @@ def parse_part(b, size):
                     amount=u('<h',b,0), partID=u('<h',b,2), succ=u('<h',b,4),
                     launchCount=u('<h',b,6), expendableTypeID=u('<h',b,8))
     d=parse_buyable(b); o=BUY
-    d.update(mass=u('<f',b,o), partID=u('<h',b,o+8), succ=u('<h',b,o+10),
+    # DataPartTypeIGC (igc.h:1822): mass@0 signature@4 partID@8 successorPartID@10
+    #  equipmentType@12 partMask@14 -> derived sizeof 32 (subtype tails below all start @32).
+    d.update(mass=u('<f',b,o), signature=u('<f',b,o+4), partID=u('<h',b,o+8), succ=u('<h',b,o+10),
              equipmentType=u('<h',b,o+12), partMask=u('<H',b,o+14))
     # DataWeaponTypeIGC tail follows DataPartTypeIGC (derived sizeof 32 -> weapon fields at +32):
     #  dtimeReady@32 dtimeBurst@36 energyPerShot@40 dispersion@44 cAmmoPerShot(short)@48
@@ -105,6 +112,27 @@ def parse_part(b, size):
                  cAmmoPerShot=u('<h',b,o+48), projectileTypeID=u('<h',b,o+50),
                  activateSound=u('<h',b,o+52), singleShotSound=u('<h',b,o+54),
                  burstSound=u('<h',b,o+56))
+    # DataShieldTypeIGC tail (igc.h:1846): rateRegen@32 maxStrength@36 defenseType(byte)@40
+    #  activateSound@42 deactivateSound@44
+    if d.get('equipmentType')==4 and size >= BUY+46:
+        d.update(rateRegen=u('<f',b,o+32), maxStrength=u('<f',b,o+36),
+                 defenseType=u('<B',b,o+40), activateSound=u('<h',b,o+42),
+                 deactivateSound=u('<h',b,o+44))
+    # DataCloakTypeIGC tail (igc.h:1855): energyConsumption@32 maxCloaking@36 onRate@40 offRate@44
+    #  engageSound@48 disengageSound@50
+    if d.get('equipmentType')==5 and size >= BUY+52:
+        d.update(energyConsumption=u('<f',b,o+32), maxCloaking=u('<f',b,o+36),
+                 onRate=u('<f',b,o+40), offRate=u('<f',b,o+44),
+                 engageSound=u('<h',b,o+48), disengageSound=u('<h',b,o+50))
+    # DataPackTypeIGC tail (igc.h:1875): packType(byte)@32 (+1 pad byte @33) amount(short)@34
+    if d.get('equipmentType')==6 and size >= BUY+36:
+        d.update(packType=u('<B',b,o+32), amount=u('<h',b,o+34))
+    # DataAfterburnerTypeIGC tail (igc.h:1865): fuelConsumption@32 maxThrust@36 onRate@40 offRate@44
+    #  interiorSound@48 exteriorSound@50
+    if d.get('equipmentType')==7 and size >= BUY+52:
+        d.update(fuelConsumption=u('<f',b,o+32), maxThrust=u('<f',b,o+36),
+                 onRate=u('<f',b,o+40), offRate=u('<f',b,o+44),
+                 interiorSound=u('<h',b,o+48), exteriorSound=u('<h',b,o+50))
     return d
 
 def parse_projectile(b):
@@ -503,6 +531,141 @@ def iron_slice_report(data):
         if not o: print(f"  {name!r}: NOT FOUND in Iron roster"); continue
         print_probe(o)
 
+# ---- --iron-equipment: equipment (Shield/Cloak/Afterburner/Pack) + gun + hull-slot cross-check ----
+# Translation rules (a separate, narrower slice than _A/_O above -- these are content-author-picked,
+# not measured against an existing our-side item, since shields/cloaks/afterburners/packs don't exist
+# on our side yet):
+#   shield      : yaml regen/max = raw rateRegen/maxStrength x 0.342857 (same multiplier both fields).
+#   afterburner : yaml max-thrust = maxThrust / 30 (accel units); yaml fuel-consumption =
+#                 fuelConsumption x maxThrust (IGC fuelConsumption is a fuel/thrust ratio, so this
+#                 recovers fuel burned per second at full burn). A NEGATIVE maxThrust (reverse/retro
+#                 thrust, e.g. "Retro Booster") has no our-side analogue -- flagged, not translated.
+#   cloak/pack  : no translation rule defined yet -- raw values only.
+#   gun cost/shot: fire_interval_ticks = round(dtimeBurst * 40); cost_per_shot = IGC_cost *
+#                 fire_interval_ticks / (20 * dtimeBurst), applied once to energyPerShot and once to
+#                 cAmmoPerShot. Ammo must land on a whole unit, so both the exact value and its
+#                 ceiling are printed; energy is left fractional.
+_EQ_SHIELD_MULT = 0.342857
+_EQ_THRUST_DIV = 30.0
+_EQ_GUN_FI_TICKS_PER_SEC = 40.0
+_EQ_GUN_COST_TICKS_PER_SEC = 20.0
+
+def _by_id(lst, key):
+    """Dedupe a resolved roster by id (last wins). Defends against a core with literal duplicate
+    records for the same id; a no-op otherwise. Use instead of `_dedup` (which dedupes by NAME and
+    is wrong here -- e.g. two distinct 'Retro Booster' partIDs are real, different tiers)."""
+    out={}
+    for o in lst: out[o[key]]=o
+    return list(out.values())
+
+def iron_equipment_report(data):
+    civ=next((c for c in data['civs'] if 'iron' in c['name'].lower()), None)
+    if not civ:
+        print("no Iron Coalition faction in this core"); return
+    r=resolve_faction(data,civ)
+    # partID -> name across ALL factions' parts (not just Iron's resolved set): successorPartID and a
+    # hull's preferredPartsTypes can point at a part outside the current roster, and partIDs are
+    # globally unique in practice (validated: 0 collisions across all factions in this core).
+    pname={p['partID']:p['name'] for p in data['parts'] if 'partID' in p}
+    def pname_of(pid):
+        return '-' if pid is None or pid==-1 else pname.get(pid, f'id{pid}?')
+
+    print(f"IRON COALITION EQUIPMENT  (civ {civ['civID']}, core faction {civ['name']!r})")
+    print("Cross-check for YAML authoring: raw IGC values -> yaml-translated values.")
+    print(f"  shield regen/max        x {_EQ_SHIELD_MULT}")
+    print(f"  afterburner max-thrust  = maxThrust / {_EQ_THRUST_DIV:.0f}")
+    print(f"  afterburner fuel/s      = fuelConsumption x maxThrust  (full-burn fuel per second)")
+    print(f"  gun cost/shot           = IGC_cost x fire_interval_ticks / ({_EQ_GUN_COST_TICKS_PER_SEC:.0f} x dtimeBurst),"
+          f" fire_interval_ticks = round(dtimeBurst x {_EQ_GUN_FI_TICKS_PER_SEC:.0f})")
+    print("  cloak / pack / on-off rates: raw only, no translation rule defined yet.\n")
+
+    # IMPORTANT: go through resolve_faction (r['parts']/r['hulls']), never raw data['parts']/data['hulls']
+    # -- multiple factions share part/hull NAMES (their own tuned tiers), so a name-only lookup outside
+    # the resolved roster can silently grab the wrong faction's stats.
+    parts=_by_id(r['parts'], 'partID')
+
+    # ---------------- SHIELDS ----------------
+    print("================= SHIELDS (yaml regen/max = raw x 0.342857) =================")
+    for p in sorted((p for p in parts if p.get('equipmentType')==4), key=lambda x:x['partID']):
+        tr_regen=round(p['rateRegen']*_EQ_SHIELD_MULT,3); tr_max=round(p['maxStrength']*_EQ_SHIELD_MULT,2)
+        print(f"  {p['name']:<12} [partID {p['partID']:>4}  succ {pname_of(p['succ'])}]"
+              f"  mass {p['mass']:.1f}  sig {p['signature']:.2f}"
+              f"  raw regen/max {p['rateRegen']:.2f} / {p['maxStrength']:.2f}"
+              f"  -> yaml {tr_regen} / {tr_max}")
+
+    # ---------------- AFTERBURNERS ----------------
+    print("\n================= AFTERBURNERS (yaml max-thrust = maxThrust/30, fuel/s = fcon x maxThrust) =================")
+    for p in sorted((p for p in parts if p.get('equipmentType')==7), key=lambda x:x['partID']):
+        line=(f"  {p['name']:<14} [partID {p['partID']:>4}  succ {pname_of(p['succ'])}]"
+              f"  raw fcon {p['fuelConsumption']:.6f}  maxThrust {p['maxThrust']:.1f}"
+              f"  on/off {p['onRate']:.3f}/{p['offRate']:.3f}")
+        if p['maxThrust'] < 0:
+            print(line + "  ** negative maxThrust (reverse/retro) -> NOT PORTED **")
+        else:
+            tr_thrust=round(p['maxThrust']/_EQ_THRUST_DIV,3)
+            tr_fuel=round(p['fuelConsumption']*p['maxThrust'],3)
+            print(line + f"  -> yaml max-thrust {tr_thrust}  fuel-consumption {tr_fuel}")
+
+    # ---------------- CLOAKS ----------------
+    print("\n================= CLOAKS (raw only) =================")
+    for p in sorted((p for p in parts if p.get('equipmentType')==5), key=lambda x:x['partID']):
+        print(f"  {p['name']:<12} [partID {p['partID']:>4}  succ {pname_of(p['succ'])}]"
+              f"  energyConsumption {p['energyConsumption']:.1f}  maxCloaking {p['maxCloaking']:.3f}"
+              f"  on/off {p['onRate']:.3f}/{p['offRate']:.3f}")
+
+    # ---------------- PACKS ----------------
+    print("\n================= PACKS (raw only) =================")
+    for p in sorted((p for p in parts if p.get('equipmentType')==6), key=lambda x:x['partID']):
+        kind='fuel' if p['packType']==1 else 'ammo'
+        print(f"  {p['name']:<12} [partID {p['partID']:>4}  succ {pname_of(p['succ'])}]"
+              f"  packType {kind}  amount {p['amount']}")
+
+    # ---------------- GUNS ----------------
+    print("\n================= GUNS (cost/shot = IGC_cost x fire_interval_ticks / (20 x dtimeBurst)) =================")
+    for prefix in ['PW Gat Gun','PW Mini-Gun','PW AutoCan','ER Nanite','EW Sniper','EW Utl Can']:
+        for tier in (1,2,3):
+            w=_pick(parts, f"{prefix} {tier}")
+            if not w or w.get('equipmentType')!=1: continue
+            fi_ticks=round(w['dtimeBurst']*_EQ_GUN_FI_TICKS_PER_SEC)
+            denom=_EQ_GUN_COST_TICKS_PER_SEC*w['dtimeBurst']
+            cost_energy=(w['energyPerShot']*fi_ticks/denom) if denom else 0.0
+            cost_ammo=(w['cAmmoPerShot']*fi_ticks/denom) if denom else 0.0
+            print(f"  {w['name']:<14} [partID {w['partID']:>4}]"
+                  f"  energyPerShot {w['energyPerShot']:.2f}  cAmmoPerShot {w['cAmmoPerShot']}"
+                  f"  dtimeBurst {w['dtimeBurst']:.3f}  fi_ticks {fi_ticks}"
+                  f"  -> cost/shot energy {cost_energy:.3f}  ammo {cost_ammo:.3f} (ceil {math.ceil(cost_ammo)})")
+
+    # ---------------- HULLS ----------------
+    print("\n================= HULLS (pmEquipment Shield/Cloak/Afterburner + fitting parts + preferred) =================")
+    hulls=_by_id(r['hulls'], 'hullID')
+    explicit=['Scout','Lt Interceptor','Interceptor','Enh Fighter','Adv Fighter','Bomber',
+              'Devastator','Stealth Fighter','Miner','Sm Std Constructor']
+    ordered=[]
+    for name in explicit:
+        h=_pick(hulls, name)
+        if h: ordered.append(h)
+        else: print(f"  {name!r}: NOT FOUND in Iron roster")
+    named={h['name'] for h in ordered}
+    # "any other Iron combat hull" = anything else in the resolved roster that actually mounts weapons
+    # (maxWeapons>0); 0-weapon utility hulls (constructors/miners/lifepod/carriers) are already covered
+    # by name above where relevant and otherwise out of scope for an equipment-slot cross-check.
+    ordered += sorted((h for h in hulls if h['maxWeapons']>0 and h['name'] not in named),
+                       key=lambda h:h['hullID'])
+
+    def fits(et, mask):
+        names=[p['name'] for p in parts if p.get('equipmentType')==et and (p['partMask'] & mask)]
+        return ', '.join(names) if names else '-'
+
+    for h in ordered:
+        pmS,pmC,pmA=h['pmEquip'][4],h['pmEquip'][5],h['pmEquip'][7]
+        pref=', '.join(pname_of(pid) for pid in h['preferred']) or '-'
+        print(f"  {h['name']:<20} [hullID {h['hullID']:>4}  model {h['model']!r}]"
+              f"  maxEnergy {h['maxEnergy']:.0f}  rechargeRate {h['rechargeRate']:.0f}"
+              f"  maxAmmo {h['maxAmmo']}  maxFuel {h['maxFuel']:.1f}")
+        print(f"      pmEquip: shield 0x{pmS:x}  cloak 0x{pmC:x}  afterburner 0x{pmA:x}")
+        print(f"      fits:    shield [{fits(4,pmS)}]  cloak [{fits(5,pmC)}]  afterburner [{fits(7,pmA)}]")
+        print(f"      preferred: {pref}")
+
 def main():
     if len(sys.argv)<2:
         print(__doc__); return
@@ -511,6 +674,8 @@ def main():
     ver,ds,_=read_records(path)
     if '--iron-slice' in sys.argv:
         iron_slice_report(data); return
+    if '--iron-equipment' in sys.argv:
+        iron_equipment_report(data); return
     if '--faction' in sys.argv:
         name=sys.argv[sys.argv.index('--faction')+1]
         civ=next((c for c in data['civs'] if name.lower() in c['name'].lower()), None)
@@ -527,7 +692,24 @@ def main():
         for o in _dedup(data[cat]) if data[cat] and isinstance(data[cat][0],dict) else data[cat]:
             if isinstance(o,str): print(" ",o); continue
             extra=""
-            if cat=='parts': extra=f" et={EQUIP.get(o.get('equipmentType'),'?')} pmask=0x{o.get('partMask',0):x}"
+            if cat=='parts':
+                extra=f" et={EQUIP.get(o.get('equipmentType'),'?')} pmask=0x{o.get('partMask',0):x}"
+                et=o.get('equipmentType')
+                if et==1 and 'dtimeReady' in o:
+                    extra+=(f" dtimeReady={o['dtimeReady']:.3f} dtimeBurst={o['dtimeBurst']:.3f}"
+                            f" energyPerShot={o['energyPerShot']:.2f} cAmmoPerShot={o['cAmmoPerShot']}"
+                            f" projectileTypeID={o['projectileTypeID']}")
+                elif et==4 and 'rateRegen' in o:
+                    extra+=(f" rateRegen={o['rateRegen']:.3f} maxStrength={o['maxStrength']:.3f}"
+                            f" defenseType={o['defenseType']}")
+                elif et==5 and 'energyConsumption' in o:
+                    extra+=(f" energyConsumption={o['energyConsumption']:.3f} maxCloaking={o['maxCloaking']:.3f}"
+                            f" onRate={o['onRate']:.3f} offRate={o['offRate']:.3f}")
+                elif et==6 and 'packType' in o:
+                    extra+=f" packType={'fuel' if o['packType']==1 else 'ammo'} amount={o['amount']}"
+                elif et==7 and 'fuelConsumption' in o:
+                    extra+=(f" fuelConsumption={o['fuelConsumption']:.6f} maxThrust={o['maxThrust']:.3f}"
+                            f" onRate={o['onRate']:.3f} offRate={o['offRate']:.3f}")
             if cat=='stations': extra=f" class={SCLASS.get(o.get('classID'),o.get('classID'))} aabm=0x{o.get('aabm',0):x}"
             if cat=='hulls': extra=f" mounts={o.get('maxWeapons')} hardpoints={[hex(x) for x in o.get('hardpoints',[])]}"
             print(f"  price={o.get('price',0):7d} req={o.get('req')} eff={o.get('eff')}{extra}  {o['name']!r}")

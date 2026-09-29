@@ -11,8 +11,20 @@ using StellarAllegiance.Shared;
 // spawn/warp/death. Owns scene nodes; a plain class driven by the coordinator's Net* routing + fan-out.
 public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
 {
+    // One MsgShipLoadout row, decoded (FrameApplier.ApplyShipLoadout): the ship's effective per-barrel
+    // weapon ids, its inert hold, the gun at each crew-served turret station and its effective
+    // equipment by slot (EquipmentDef.Slot*; NoEquipment = an empty slot).
+    public readonly record struct LoadoutRow(
+        ulong ShipId,
+        uint[] WeaponIds,
+        (byte Kind, uint ItemId, byte Count)[] Hold,
+        uint[] TurretGuns,
+        ushort[] EquipmentIds
+    );
+
     private readonly Node3D _container;
     private readonly DefRegistry _defs;
+    private readonly TeamStateStore _teams;
     private readonly Func<byte, bool, StandardMaterial3D> _shipMaterial;
     private readonly SectorView _sectors;
     private readonly PlayerContext _player;
@@ -29,6 +41,7 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
     public ShipRenderer(
         Node3D container,
         DefRegistry defs,
+        TeamStateStore teams,
         Func<byte, bool, StandardMaterial3D> shipMaterial,
         SectorView sectors,
         PlayerContext player,
@@ -45,6 +58,7 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
     {
         _container = container;
         _defs = defs;
+        _teams = teams;
         _shipMaterial = shipMaterial;
         _sectors = sectors;
         _player = player;
@@ -74,8 +88,19 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
 
     // The EFFECTIVE gun at each crew-served turret station (station order), from the same
     // MsgShipLoadout row. Absent = authored guns. TurretGun reads it for ships the team crew roster
-    // doesn't cover (enemies), so a captain's re-assigned station draws the right bolt.
+    // doesn't cover (enemies), so a captain's re-assigned station draws the right bolt; the local
+    // predictor reads it for the cheapest ammo gun (the stations share the pilot's magazine).
     private readonly Dictionary<ulong, uint[]> _turretGuns = new();
+
+    // The EFFECTIVE equipment by slot for every ship with a MsgShipLoadout row (absent = the hull's
+    // DefaultEquipment — the wire's omission rule), from the same row. Pushed to the local predictor
+    // (flight stats, resource rule, shield max) and to each RemoteShip (boost plume, shield max).
+    private readonly Dictionary<ulong, ushort[]> _equipment = new();
+
+    // The omission-race fix: the LOCAL ship id a loadout table processed after its YouAre left OUT —
+    // the server's positive word that it flies the authored loadout and its DefaultEquipment. The
+    // local insert prefers it over the hangar's expectation, so a rejected pick can't be predicted.
+    private ulong _localDefaultsConfirmed;
 
     // Per-remote-ship derived MountLastFire shadow (FireCadence): which tick each gun barrel last fired,
     // reconstructed from observed LastFireTick changes so SpawnBoltFor knows WHICH mounts fired a given
@@ -405,6 +430,7 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
         _shield.Remove(row.ShipId);
         _mounts.Remove(row.ShipId); // immediate prune; the next MsgShipLoadout omits it anyway
         _turretGuns.Remove(row.ShipId);
+        _equipment.Remove(row.ShipId);
         _mountShadow.Remove(row.ShipId);
         _hold.Remove(row.ShipId);
         _lastRow.Remove(row.ShipId);
@@ -416,40 +442,111 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
     // Reconcile the loadout mirror to the streamed table (replace-whole, reconcile-by-omission). Only ships
     // whose ids ACTUALLY changed reset their cadence shadow / re-seed the local predictor (the frame also
     // arrives as a ~0.5s keepalive; resetting shadows on every keepalive would re-derive "all mounts
-    // eligible" mid-burst). The v40 hold tail rides the same row but is tracked SEPARATELY: an item
-    // stowed mid-flight changes the hold, never the barrels, so it must not reset a cadence shadow.
-    public void NetShipLoadouts(
-        List<(ulong shipId, uint[] ids, (byte kind, uint itemId, byte count)[] hold, uint[] turretGuns)> table
-    )
+    // eligible" mid-burst). The v40 hold tail, the turret guns and the equipment ride the same row but
+    // are tracked SEPARATELY: an item stowed mid-flight changes the hold, never the barrels, so it must
+    // not reset a cadence shadow. `localShipId` is FrameApplier's current binding (0 = none).
+    public void NetShipLoadouts(List<LoadoutRow> table, ulong localShipId)
     {
         _loadoutScratch.Clear();
         foreach (var id in _mounts.Keys)
             _loadoutScratch.Add(id);
-        foreach (var (shipId, ids, hold, turretGuns) in table)
+        bool localListed = false;
+        foreach (var row in table)
         {
-            _loadoutScratch.Remove(shipId);
-            PushHold(shipId, hold);
-            if (turretGuns is { Length: > 0 })
-                _turretGuns[shipId] = turretGuns;
-            else
-                _turretGuns.Remove(shipId);
-            if (_mounts.TryGetValue(shipId, out var old) && old.AsSpan().SequenceEqual(ids))
+            _loadoutScratch.Remove(row.ShipId);
+            localListed |= row.ShipId == localShipId;
+            PushHold(row.ShipId, row.Hold);
+            PushTurretGuns(row.ShipId, row.TurretGuns);
+            PushEquipment(row.ShipId, row.EquipmentIds);
+            if (_mounts.TryGetValue(row.ShipId, out var old) && old.AsSpan().SequenceEqual(row.WeaponIds))
                 continue; // unchanged keepalive row
-            _mounts[shipId] = ids;
-            _mountShadow.Remove(shipId);
-            if (LocalShip is { } pc && pc.ShipId == shipId)
-                pc.SetLoadout(ids); // the authoritative echo of what the server accepted
+            _mounts[row.ShipId] = row.WeaponIds;
+            _mountShadow.Remove(row.ShipId);
+            if (LocalShip is { } pc && pc.ShipId == row.ShipId)
+                pc.SetLoadout(row.WeaponIds); // the authoritative echo of what the server accepted
         }
-        foreach (var shipId in _loadoutScratch) // omitted = back on the authored loadout
+        foreach (var shipId in _loadoutScratch) // omitted = back on the authored loadout + default equipment
         {
             _mounts.Remove(shipId);
             _mountShadow.Remove(shipId);
-            _turretGuns.Remove(shipId);
+            PushTurretGuns(shipId, System.Array.Empty<uint>());
+            PushEquipment(shipId, null);
             PushHold(shipId, System.Array.Empty<(byte, uint, byte)>()); // omitted ⇒ the hold is empty too
             if (LocalShip is { } pc && pc.ShipId == shipId)
                 pc.SetLoadout(null);
         }
+
+        // THE OMISSION-RACE FIX. A table that leaves OUR ship out is the server's positive word that it
+        // flies the authored loadout and its DefaultEquipment: YouAre and this stream are both reliable
+        // and ordered, YouAre goes out first (ClientHub.SendPerClientFrames), and the snapshot that
+        // inserts the ship comes after both. The prune loop above can't see it — it only prunes ids
+        // that once HAD a row — so a hangar pick the server rejected used to be predicted for the whole
+        // sortie; with the afterburner a part, that is a reconcile on every boost. Push the defaults
+        // now if the ship already exists, and remember the id so InsertShip prefers them over the
+        // hangar's expectation. (A table that lists the ship clears the mark: its row is the truth.)
+        if (localListed)
+            _localDefaultsConfirmed = 0;
+        else if (localShipId != 0 && _localDefaultsConfirmed != localShipId)
+        {
+            _localDefaultsConfirmed = localShipId;
+            if (LocalShip is { } local && local.ShipId == localShipId)
+            {
+                local.SetLoadout(null);
+                local.SetEquipment(null);
+                local.SetTurretGuns(null);
+            }
+        }
     }
+
+    // Adopt one ship's turret station guns, pushing a change to the local predictor (its cheapest
+    // ammo gun spans the stations). An empty list prunes the entry — the authored guns stand.
+    private void PushTurretGuns(ulong shipId, uint[] turretGuns)
+    {
+        bool had = _turretGuns.TryGetValue(shipId, out var old);
+        if (turretGuns.Length == 0)
+        {
+            if (!had)
+                return;
+            _turretGuns.Remove(shipId);
+        }
+        else if (had && old.AsSpan().SequenceEqual(turretGuns))
+            return; // unchanged keepalive
+        else
+            _turretGuns[shipId] = turretGuns;
+        if (LocalShip is { } pc && pc.ShipId == shipId)
+            pc.SetTurretGuns(turretGuns.Length == 0 ? null : turretGuns);
+    }
+
+    // Adopt one ship's effective equipment (null = back on its DefaultEquipment), pushing a change to
+    // the ship's node: the local predictor (flight stats, pools, shield max) or a RemoteShip (boost
+    // plume, shield max). The frame is also a keepalive, so an unchanged row pushes nothing.
+    private void PushEquipment(ulong shipId, ushort[]? ids)
+    {
+        bool had = _equipment.TryGetValue(shipId, out var old);
+        if (ids is null ? !had : had && old.AsSpan().SequenceEqual(ids))
+            return;
+        if (ids is null)
+            _equipment.Remove(shipId);
+        else
+            _equipment[shipId] = ids;
+        switch (_nodes.TryGetValue(shipId, out var node) ? node : null)
+        {
+            case PredictionController pc:
+                pc.SetEquipment(ids);
+                break;
+            case RemoteShip rs:
+                rs.SetEquipment(ids);
+                break;
+        }
+    }
+
+    // A ship's effective equipment by slot as the loadout table streams it — null = its hull's
+    // DefaultEquipment (resolve through DefRegistry.EffectiveEquipment either way). The HUD's read
+    // seam for a hull it has no node-level copy of (a gunner's captain).
+    public ushort[]? EquipmentOf(ulong shipId) => _equipment.TryGetValue(shipId, out var e) ? e : null;
+
+    // A ship's effective turret station guns (null = the authored stations).
+    public uint[]? TurretGunsOf(ulong shipId) => _turretGuns.TryGetValue(shipId, out var g) ? g : null;
 
     // Adopt one ship's hold, pushing it to the local predictor only when it actually moved (the
     // frame is also a ~0.5 s keepalive). An empty hold prunes the mirror entry, so a hull that
@@ -816,17 +913,30 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
             _container.AddChild(pc);
             pc.AddChild(ShipModelLoader.Build(_defs, row.Class, row.IsPod, _shipMaterial(row.Team, row.IsPig)));
             ShipModelLoader.AttachEngineGlow(pc, _defs, row.Class, row.IsPod, row.Team);
-            pc.Initialize(row, _defs);
-            // Seed the loadout prediction fires from: the authoritative MsgShipLoadout echo when it already
-            // landed (reliable, sent the spawn tick — it can precede this insert), else the hangar's
-            // optimistic expectation (corrected within a tick by the echo). Pods fly no guns — skip.
+            pc.Initialize(row, _defs, _teams);
+            // Seed the loadout + equipment prediction flies with, in priority order: the authoritative
+            // MsgShipLoadout row when it already landed (reliable, sent the spawn tick right after
+            // YouAre — it normally precedes this insert); the defaults when a table since YouAre
+            // positively LEFT the ship out (the omission-race fix: the server rejected or never needed
+            // the hangar's picks); else the hangar's optimistic expectation (corrected by the next
+            // table either way). Pods fly no guns and no parts — skip.
             if (!row.IsPod)
+            {
+                bool confirmedDefaults = _localDefaultsConfirmed == row.ShipId;
                 pc.SetLoadout(
                     _mounts.TryGetValue(row.ShipId, out var mountIds) ? mountIds
+                    : confirmedDefaults ? null
                     : _defs.GetHardpoints((byte)row.Class) is { } hps
                         ? StellarAllegiance.Ui.LoadoutState.Shared.ExpectedEffectiveIds((byte)row.Class, hps)
                     : null
                 );
+                pc.SetEquipment(
+                    _equipment.TryGetValue(row.ShipId, out var equipIds) ? equipIds
+                    : confirmedDefaults ? null
+                    : ExpectedEquipment(row)
+                );
+                pc.SetTurretGuns(_turretGuns.TryGetValue(row.ShipId, out var turretGuns) ? turretGuns : null);
+            }
             // Fresh launch gets the establishing cinematic; a reconnect reclaim of a ship already in flight
             // does not (NetPromoteLocal tagged it). A hull leaving the bay also gets the launch cue — but
             // not an escape pod, which is flung from a wreck, not launched.
@@ -876,7 +986,11 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
         _container.AddChild(rs);
         rs.AddChild(ShipModelLoader.Build(_defs, row.Class, row.IsPod, _shipMaterial(row.Team, row.IsPig)));
         ShipModelLoader.AttachEngineGlow(rs, _defs, row.Class, row.IsPod, row.Team);
-        rs.Initialize(row, _defs, _clock);
+        rs.Initialize(row, _defs, _clock, _teams);
+        // The loadout table can precede a remote ship's first snapshot: hand over the equipment it
+        // already streamed (absent = the hull's defaults, which Initialize resolved).
+        if (_equipment.TryGetValue(row.ShipId, out var remoteEquip))
+            rs.SetEquipment(remoteEquip);
         if (_pilotNames.TryGetValue(row.ShipId, out var pilot))
             rs.SetPilotName(pilot);
         _nodes[row.ShipId] = node;
@@ -930,6 +1044,18 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
         }
     }
 
+    // The hangar's expected equipment for our freshly launched hull (tier-migrated through the team's
+    // techs, exactly as the server resolves it), or null when that is the hull's defaults.
+    private ushort[]? ExpectedEquipment(Ship row)
+    {
+        if (!_defs.TryGetShipDef((byte)row.Class, out var def))
+            return null;
+        byte team = row.Team;
+        bool Owns(ushort techIdx) => _teams.OwnsTech(team, techIdx);
+
+        return StellarAllegiance.Ui.LoadoutState.Shared.ExpectedEquipment((byte)row.Class, def, Owns, _defs.GetEquipment);
+    }
+
     // reason: 0 = destroyed (blast + death-cam), 1 = clean despawn (voluntary dock / pod rescue),
     // 2 = fog lost-contact (quiet fade, no blast).
     private void DeleteShip(Ship row, byte reason)
@@ -956,6 +1082,7 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
             if (local)
                 LocalShip = null; // defensive: reason 2 shouldn't hit the local ship
             _contactLost.OpenContactLostWindow();
+            (node as RemoteShip)?.BeginFadeOut(); // its cloak shimmer must not fight the fade's transparency
             NodeFx.QuietFade(node, ContactFadeSec);
             return;
         }
@@ -1030,6 +1157,7 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
         _turretBarrels.Clear(); // the views went with the freed ship nodes
         _hiddenRideModel = null; // went with its node
         _stationsByClass.Clear(); // a rebuilt world re-streams the defs the cache was derived from
+        _localDefaultsConfirmed = 0; // a rebuilt world re-binds our ship from the next YouAre + table
         LocalShip = null;
         _deathCamUntil = -1.0;
         _pendingHomeReset = false;

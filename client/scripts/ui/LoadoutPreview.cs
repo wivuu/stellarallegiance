@@ -74,6 +74,20 @@ public partial class LoadoutPreview : SubViewportContainer
     private Vector2 _mousePos;
     private Vector2? _pendingPick; // click awaiting the physics-frame raycast
 
+    // Cloak preview (equipment PR): while the CLOAK row is selected with a part equipped, oscillate
+    // the previewed hull's shimmer so the pilot can see roughly what it looks like before launching.
+    // `_cloakPreviewMax` is the picked part's MaxCloaking (the fraction it would actually hide at full
+    // cloak) — null stops the animation and returns the model to opaque.
+    private const float CloakPreviewRateRad = 1.1f; // rad/s — a slow, readable breathe, not a strobe
+
+    // The breathe is quantized to this level step and CloakFx re-applied only when the step changes —
+    // ~15 walks of the model's meshes a second instead of one every frame, invisibly coarse.
+    private const float CloakPreviewStep = 1f / 64f;
+    private float? _cloakPreviewMax;
+    private Color _cloakPreviewTint;
+    private double _cloakPreviewT;
+    private float _cloakPreviewApplied = -1f; // the level last applied to _model (-1 = none yet)
+
     public override void _Ready()
     {
         Stretch = true;
@@ -145,6 +159,7 @@ public partial class LoadoutPreview : SubViewportContainer
         };
         _model = ShipModelLoader.Build(defs, (ShipClass)classId, isPod: false, mat);
         _viewport.AddChild(_model);
+        _cloakPreviewApplied = -1f; // a fresh model: the next preview frame applies whatever level
 
         // Frame the orbit camera off the hull's authored silhouette length (the same
         // ShipClassDef.ModelLength the model loader normalizes the GLB to); DefaultModelLength
@@ -197,6 +212,15 @@ public partial class LoadoutPreview : SubViewportContainer
             area.AddChild(new CollisionShape3D { Shape = new SphereShape3D { Radius = pickRadius } });
             _model.AddChild(area);
         }
+    }
+
+    // Start/stop the oscillating cloak preview (see the fields above). `tint` is the pilot's own
+    // faction colour (CloakFx never tints cyan — chrome is not team identity).
+    public void SetCloakPreview(float? maxLevel, Color tint = default)
+    {
+        _cloakPreviewMax = maxLevel;
+        _cloakPreviewTint = tint;
+        _cloakPreviewApplied = -1f; // a new part / tint re-applies on the next frame
     }
 
     // Screen-space position of a mount in THIS control's local coords (1:1 with viewport
@@ -274,6 +298,36 @@ public partial class LoadoutPreview : SubViewportContainer
         // Hover = nearest assignable mount within a comfortable screen distance. 2D
         // proximity (not the ray) so the affordance is forgiving on small mounts.
         HoverKey = NearestAssignable(_mousePos, 20f);
+
+        UpdateCloakPreview(delta);
+    }
+
+    // Drive the cloak-preview shimmer: a slow sine breathing between fully visible and the picked
+    // part's own MaxCloaking, so the pilot sees the SAME shimmer their chase cam would show in flight
+    // (CloakFx.Apply, capped at the own-ship transparency) rather than a made-up preview effect.
+    // Applies only when the quantized level moves, and returns the model to opaque exactly once when
+    // stopped.
+    private void UpdateCloakPreview(double delta)
+    {
+        if (_model is null)
+            return;
+        if (_cloakPreviewMax is not float max)
+        {
+            if (_cloakPreviewT != 0)
+            {
+                _cloakPreviewT = 0;
+                _cloakPreviewApplied = -1f;
+                CloakFx.Apply(_model, 0f, CloakFx.OwnMaxTransparency, _cloakPreviewTint);
+            }
+            return;
+        }
+        _cloakPreviewT += delta;
+        float level = max * (0.5f + 0.5f * Mathf.Sin((float)_cloakPreviewT * CloakPreviewRateRad));
+        level = Mathf.Round(level / CloakPreviewStep) * CloakPreviewStep;
+        if (level == _cloakPreviewApplied)
+            return;
+        _cloakPreviewApplied = level;
+        CloakFx.Apply(_model, level, CloakFx.OwnMaxTransparency, _cloakPreviewTint);
     }
 
     public override void _PhysicsProcess(double delta)

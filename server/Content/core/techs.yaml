@@ -110,3 +110,44 @@ techs:
   - id: probe-3
     name: EWS Probe 3
     description: "Top-tier EWS Probe — the fleet's longest-ranged sensor buoy."
+
+  # ---- Iron Coalition equipment research (equipment PR, PCore014.igc; granted by developments.yaml,
+  # group EQUIPMENT). Appended at the tail (indices 30-41) — wire indices are list order, so nothing
+  # above this line may ever be reordered. Sm Shield 1, Med Shield 1, Booster 1 and Sig Cloak 1 need no
+  # tech (Iron starting techs); Lrg Shield 1 gates on shipyard-1. ----
+  - id: sm-shield-2
+    name: Sm Shield 2
+    description: "Uprated small-ship shield — stronger and faster to regenerate."
+  - id: sm-shield-3
+    name: Sm Shield 3
+    description: "Top-tier small-ship shield — the fighters' strongest shield."
+  - id: med-shield-2
+    name: Med Shield 2
+    description: "Uprated medium-ship shield for the bomber and the utility hulls."
+  - id: med-shield-3
+    name: Med Shield 3
+    description: "Top-tier medium-ship shield — the strongest a bomber can carry."
+  - id: lrg-shield-2
+    name: Lrg Shield 2
+    description: "Uprated capital-ship shield."
+  - id: lrg-shield-3
+    name: Lrg Shield 3
+    description: "Top-tier capital-ship shield — the fleet's heaviest shield."
+  - id: booster-2
+    name: Booster 2
+    description: "Uprated booster — more thrust from every unit of fuel."
+  - id: booster-3
+    name: Booster 3
+    description: "Top-tier booster — the most thrust and efficiency of the Booster line."
+  - id: lt-booster-1
+    name: Lt Booster 1
+    description: "Light booster — frugal fuel burn, gentle thrust."
+  - id: lt-booster-2
+    name: Lt Booster 2
+    description: "Uprated light booster — more thrust, even more frugal."
+  - id: crs-booster
+    name: Crs Booster
+    description: "Cruise booster — efficient long burns with a slow spool."
+  - id: hvy-booster
+    name: Hvy Booster
+    description: "Heavy booster — a huge sprint for a thirsty burn."

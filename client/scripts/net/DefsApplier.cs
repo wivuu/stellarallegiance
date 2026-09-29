@@ -47,10 +47,11 @@ public sealed class DefsApplier
             d.Developments,
             d.Stations,
             d.FactionName,
-            d.FactionAttributes
+            d.FactionAttributes,
+            d.Equipment
         );
         Log.Print(
-            $"[GameNet] defs received — {d.Ships.Count} ship classes, {d.Weapons.Count} weapons, {d.CargoItems.Count} cargo items, {d.Bases.Count} bases, {d.Techs.Count} techs, {d.Developments.Count} developments, {d.Stations.Count} stations"
+            $"[GameNet] defs received — {d.Ships.Count} ship classes, {d.Weapons.Count} weapons, {d.CargoItems.Count} cargo items, {d.Equipment.Count} equipment parts, {d.Bases.Count} bases, {d.Techs.Count} techs, {d.Developments.Count} developments, {d.Stations.Count} stations"
         );
         _host.RaiseDefsReceived();
     }

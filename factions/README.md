@@ -12,9 +12,12 @@ draw on it.
 - **`Faction`** — economy, starting techs, baseline stat modifiers, lifepod hull, start station
   (was `Civilization`).
 - **`Team`** — a team in a match that selects a faction and accumulates owned techs (was `Side`).
-- **`Buildable`** base → **`Hull`** (ship), **`Part`** (`Weapon`/`Shield`/`Cloak`/`Afterburner`/
-  `AmmoPack`/`Launcher`), **`Station`** (building), **`Development`** (research), **`Drone`**.
-- **`Expendable`** → `Missile`/`Mine`/`Chaff`/`Probe`; plus `Projectile`.
+- **`Buildable`** base → **`Hull`** (ship), **`Part`** (`Weapon`/`Launcher`, plus the per-ship
+  equipment `Shield`/`Cloak`/`Afterburner`), **`Station`** (building), **`Development`** (research),
+  **`Drone`**. `EquipmentResolver` decides which equipment a hull may carry (`allowed-parts` + successor
+  chains) and which it starts with (`preferred-parts`).
+- **`Expendable`** → `Missile`/`Mine`/`Chaff`/`Probe`, plus the pure-cargo packs `FuelPod`/`AmmoPack`
+  (hold cargo, not a mounted part); plus `Projectile`.
 - **`Capability`** — a closed enum of engine-checked gates (`base`, `shipyard-allowed`,
   `expansion-allowed`, `tactical-allowed`, `supremacy-allowed`). These are the things *code* branches on to decide what a
   team may do, so they are strongly typed rather than free strings. Carried as `CapabilitySet`

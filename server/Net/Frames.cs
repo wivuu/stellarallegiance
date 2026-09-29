@@ -40,6 +40,10 @@ public static class Frames
             MineAmmo = s.MineAmmo,
             ProbeAmmo = s.ProbeAmmo,
             FuelPodAmmo = s.FuelPodAmmo,
+            // The pools the fire phase of LastInputTick STARTED with (Pass A's snapshot after the ammo
+            // step) — not the end-of-tick pools: the owner reconciles against them and a remote
+            // client replays that tick's fire gate on them (ShipResources' tick order).
+            Pools = s.PoolsAtFire,
         };
 
     public static MissileRecord MissileRecordOf(Simulation.MissileSim m) =>
@@ -461,10 +465,29 @@ public static class Frames
         return new BasesMessage { Bases = rows.ToArray() };
     }
 
-    // Per-team economy + owned techs/caps. HashSets are unordered — every list is SORTED so the
-    // frame is byte-deterministic.
+    // Per-team economy + owned techs/caps + resolved stat multipliers. HashSets are unordered — every
+    // list is SORTED so the frame is byte-deterministic.
     public static TeamStateMessage TeamState(Simulation sim)
     {
+        // The team's NON-NEUTRAL multipliers from the sim's attribute cache (World.TeamAttr), in
+        // attribute-byte order, exact f32 — the client derives every effective maximum from these
+        // bits. Empty before the match seeds the cache (and while attributes are disabled).
+        static AttrMod[] NonNeutralAttributes(ReadOnlySpan<float> attrs)
+        {
+            int n = 0;
+            for (int i = 0; i < attrs.Length && i <= byte.MaxValue; i++)
+                if (attrs[i] != 1f)
+                    n++;
+            if (n == 0)
+                return Array.Empty<AttrMod>();
+            var mods = new AttrMod[n];
+            n = 0;
+            for (int i = 0; i < attrs.Length && i <= byte.MaxValue; i++)
+                if (attrs[i] != 1f)
+                    mods[n++] = new AttrMod((byte)i, attrs[i]);
+            return mods;
+        }
+
         World world = sim.World;
         var content = sim.Content;
         var teams = world.TeamStates;
@@ -493,6 +516,7 @@ public static class Frames
                 MinerCount = (byte)sim.MinerCount(kv.Key),
                 MinerCap = (byte)world.Mining.MaxMinersPerTeam,
                 BuildQueueLimit = (byte)world.Build.QueueLimit,
+                Attributes = NonNeutralAttributes(world.TeamAttributes(kv.Key)),
             };
         }
         return new TeamStateMessage { Teams = rows };
@@ -626,10 +650,12 @@ public static class Frames
         return rows is null ? null : new MinerTargetsMessage { Targets = rows.ToArray() };
     }
 
-    // Per-ship loadout table: one row per ship flying a NON-authored loadout (barrels OR crew-served
-    // turret stations) or holding anything — effective per-barrel ids + the turret-station guns (a
-    // row that only differs in one of them streams the authored values for the rest) + the inert
-    // hold. Always a frame (count may be 0) so a stale entry prunes when the last override ship leaves.
+    // Per-ship loadout table: one row per ship flying a NON-authored loadout (barrels, crew-served
+    // turret stations OR equipment — a hangar pick or a research-migrated default) or holding
+    // anything (Simulation.HasLoadoutRow) — effective per-barrel ids + the turret-station guns + the
+    // inert hold + the effective equipment by slot (a row that only differs in one of them streams
+    // the authored values for the rest). Always a frame (count may be 0) so a stale entry prunes when
+    // the last override ship leaves; an omitted ship flies its authored guns and DefaultEquipment.
     public static ShipLoadoutMessage ShipLoadouts(Simulation sim)
     {
         // The authored per-barrel ids for a class with no override array — the SAME rule
@@ -659,7 +685,7 @@ public static class Frames
         {
             if (rows.Count >= 255)
                 break;
-            if (s.MountWeaponIds is null && s.TurretWeaponIds is null && s.Hold is not { Count: > 0 })
+            if (!sim.HasLoadoutRow(s))
                 continue;
             int nHold = Math.Min(s.Hold?.Count ?? 0, 255);
             var hold = new HoldItemRecord[nHold];
@@ -680,6 +706,7 @@ public static class Frames
                     WeaponIds = s.MountWeaponIds ?? AuthoredIds(s.Class),
                     Hold = hold,
                     TurretWeaponIds = s.TurretWeaponIds ?? sim.AuthoredTurretIds(s.Class),
+                    EquipmentIds = sim.EffectiveEquipmentIds(s),
                 }
             );
         }
@@ -807,6 +834,7 @@ public static class Frames
             Stations = content.StationCatalog,
             FactionName = content.Start.FactionName,
             FactionAttributes = content.Start.BaseAttributes,
+            Equipment = content.Equipment,
         };
 
     public static LobbyStateMessage LobbyState(

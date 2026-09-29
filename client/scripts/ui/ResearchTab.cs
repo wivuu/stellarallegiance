@@ -643,6 +643,11 @@ public partial class ResearchTab : Control
         foreach (WeaponDef w in _defs.AllWeapons())
             if (Intersects(w.RequiredTechIdx))
                 names.Add(w.Name);
+        // Equipment (equipment PR): shields/afterburners/cloaks certified by a granted tech — the
+        // hangar's EQUIPMENT arsenal reads the same RequiredTechIdx gate (DefRegistry.EquipmentVisible).
+        foreach (EquipmentDef e in _defs.AllEquipment())
+            if (Intersects(e.RequiredTechIdx))
+                names.Add(e.Name);
 
         _detail.SetUnlocks(names); // dedupe + "// nothing new" fallback live in the panel
     }

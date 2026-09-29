@@ -10,7 +10,11 @@ public record Hull : Buildable
     /// <summary>Ship mass; affects acceleration/inertia in the flight model.</summary>
     public double Mass { get; set; }
 
-    /// <summary>Base radar cross-section from the original Core model; the fog-of-war vision system instead uses <c>radar-signature</c> below.</summary>
+    /// <summary>
+    /// Additive radar-signature bias on top of <c>radar-signature</c> below (radar-signature units,
+    /// default 0 = neutral). Projected onto <c>ShipClassDef.SignatureBias</c>; the parts a ship has
+    /// equipped add their own <see cref="Part.Signature"/> per ship at runtime.
+    /// </summary>
     public double Signature { get; set; }
 
     /// <summary>Maximum forward flight speed, in world units/second.</summary>
@@ -34,7 +38,11 @@ public record Hull : Buildable
     /// <summary>Legacy Core sensor-range stat; fog-of-war instead uses the vision-cone/vision-sphere fields below.</summary>
     public double ScannerRange { get; set; }
 
-    /// <summary>Afterburner fuel tank size; pairs with ab-fuel-drain/ab-fuel-recharge below (0 = no afterburner fuel modeled).</summary>
+    /// <summary>
+    /// Afterburner fuel tank the equipped afterburner burns (IGC <c>maxFuel</c>, untranslated). A
+    /// hull with an afterburner slot must author it (&gt; 0); a hull without one must not (0 = no
+    /// fuel model — dead data otherwise). Refilled at dock and by fuel pods from the hold.
+    /// </summary>
     public double MaxFuel { get; set; }
 
     /// <summary>Legacy Core electronic-countermeasures stat (not currently used by the runtime).</summary>
@@ -43,10 +51,15 @@ public record Hull : Buildable
     /// <summary>Legacy Core hull length stat; model-length below sizes the runtime GLB instead.</summary>
     public double Length { get; set; }
 
-    /// <summary>Legacy Core energy-pool stat (not currently used by the runtime).</summary>
+    /// <summary>
+    /// Energy pool (IGC <c>maxEnergy</c>, untranslated) that energy guns (<c>energy-per-shot</c>)
+    /// and the cloak draw from; full at launch and refilled at dock. Scaled by the team
+    /// <see cref="GameAttribute.MaxEnergy"/> multiplier. 0 = no pool: energy guns can't fire and a
+    /// cloak slot is refused. Must be &gt;= 0.
+    /// </summary>
     public double MaxEnergy { get; set; }
 
-    /// <summary>Legacy Core energy-regen stat (not currently used by the runtime).</summary>
+    /// <summary>Energy regained per second, clamped to the pool (IGC <c>rechargeRate</c>, untranslated). Must be &gt;= 0.</summary>
     public double EnergyRechargeRate { get; set; }
 
     /// <summary>Legacy Core ripcord (emergency warp) departure speed (not currently used by the runtime).</summary>
@@ -55,7 +68,12 @@ public record Hull : Buildable
     /// <summary>Legacy Core ripcord (emergency warp) money cost (not currently used by the runtime).</summary>
     public double RipcordCost { get; set; }
 
-    /// <summary>Legacy Core max carried ammo stat (not currently used by the runtime).</summary>
+    /// <summary>
+    /// Magazine shared by every ammo-costing gun the ship mounts (<c>ammo-per-shot</c>; IGC
+    /// <c>maxAmmo</c>, untranslated). Full at launch, refilled at dock and by ammo packs loaded out
+    /// of the hold. 0 = no magazine: ammo guns can't fire and ammo packs are refused as cargo. Must
+    /// be in 0..65535 (the runtime carries it as a u16).
+    /// </summary>
     public int MaxAmmo { get; set; }
 
     /// <summary>Hull points before the ship is destroyed.</summary>
@@ -70,24 +88,30 @@ public record Hull : Buildable
     /// <summary>Defense table id used to resolve incoming damage against armor.</summary>
     public string? DefenseType { get; set; }
 
-    /// <summary>Legacy Core magazine (missile rack) capacity stat (not currently used by the runtime).</summary>
-    public int MagazineCapacity { get; set; }
-
-    /// <summary>Legacy Core dispenser (mine/chaff pack) capacity stat (not currently used by the runtime).</summary>
-    public int DispenserCapacity { get; set; }
-
-    /// <summary>Legacy Core chaff-launcher capacity stat (not currently used by the runtime).</summary>
-    public int ChaffLauncherCapacity { get; set; }
-
     /// <summary>Hull upgrade target; references another hull <c>id</c>.</summary>
     public string? SuccessorHullId { get; set; }
 
-    /// <summary>Suggested default loadout — references part ids.</summary>
+    /// <summary>
+    /// The suggested default loadout by part id, in IGC order (Allegiance's
+    /// <c>preferredPartsTypes</c>). The runtime reads its EQUIPMENT entries: per slot, the default
+    /// part is the first entry the slot allows whose required-techs and required-capabilities the
+    /// hull itself already requires, so a default is always buildable whenever the hull is (the
+    /// rule Allegiance's <c>TryToBuyParts</c> applies, clintlib.h:1341); research tier succession
+    /// then upgrades it. No such entry = the slot starts empty. Every shield/afterburner/cloak
+    /// listed here must be allowed by <see cref="AllowedParts"/>. Default guns come from the
+    /// hardpoints' <c>weapon-id</c> instead.
+    /// </summary>
     public List<string> PreferredParts { get; set; } = new();
 
     /// <summary>
-    /// Per-slot whitelist of mountable parts: for each <see cref="EquipmentSlot"/>, the part ids
-    /// that may be mounted there. Replaces the C++ <c>pmEquipment[ET_MAX]</c> part-mask array.
+    /// Per-slot whitelist of mountable parts: for each <see cref="EquipmentSlot"/> key (kebab-case,
+    /// e.g. <c>shield</c>), the part ids that may be mounted there. Replaces the C++
+    /// <c>pmEquipment[ET_MAX]</c> part-mask array. The runtime enforces the EQUIPMENT keys
+    /// (<c>shield</c> / <c>afterburner</c> / <c>cloak</c>): a hull HAS an equipment slot only if it
+    /// lists that key, and each listed part implicitly allows its whole successor chain (a hull
+    /// allowed Sm Shield 1 may carry Sm Shield 2/3 once researched). Every listed part must be of
+    /// the slot's kind, and the <c>pack</c> key is refused (packs are cargo). Weapon/launcher keys
+    /// are catalog data; gun and rack mounts keep the hardpoint mount-type gate.
     /// </summary>
     public Dictionary<EquipmentSlot, List<string>> AllowedParts { get; set; } = new();
 
@@ -161,35 +185,12 @@ public record Hull : Buildable
     /// <summary>Pitch-axis drift (turn-rate slop) knob, in degrees; pairs with drift-yaw-deg above.</summary>
     public double DriftPitchDeg { get; set; }
 
-    /// <summary>Afterburner flight knobs (extra accel + spool on/off rates); no clean Core source.</summary>
-    public double AbAccel { get; set; }
-
-    /// <summary>How fast the afterburner boost spools up to full extra accel once engaged (per second).</summary>
-    public double AbOnRate { get; set; }
-
-    /// <summary>How fast the afterburner boost spools back down once released (per second).</summary>
-    public double AbOffRate { get; set; }
-
-    /// <summary>Afterburner fuel drain/recharge (per second); pairs with the Core <see cref="MaxFuel"/> field above.</summary>
-    public double AbFuelDrain { get; set; }
-
-    /// <summary>Afterburner fuel regained per second while boost is released (0 = dock-only refill, no in-flight regen).</summary>
-    public double AbFuelRecharge { get; set; }
-
     /// <summary>
-    /// Regenerating energy shield layered over the raw hull. <see cref="ShieldCapacity"/> is the
-    /// total shield pool (0 = this hull has NO shield). Incoming damage depletes the shield before
-    /// the hull and overflows into the hull when the shield pops. <see cref="ShieldRecharge"/> is
-    /// the regen rate in points/second, resuming <see cref="ShieldDelay"/> seconds after the last
-    /// shield damage. All omit-when-default; projected onto the ShipClassDef shield fields.
+    /// Afterburner fuel regained per second while the boost is released. 0 = dock-only refill
+    /// (Allegiance never refuels in flight; the stock value). Must be &gt;= 0 and below the
+    /// fuel-consumption of every afterburner the hull allows — else the gauge never net-drains.
     /// </summary>
-    public double ShieldCapacity { get; set; }
-
-    /// <summary>Shield regen rate, in points/second, once recharge resumes.</summary>
-    public double ShieldRecharge { get; set; }
-
-    /// <summary>Seconds after the last shield hit before recharge resumes.</summary>
-    public double ShieldDelay { get; set; }
+    public double AbFuelRecharge { get; set; }
 
     /// <summary>
     /// Long-range directional sensor cone: <see cref="VisionConeLength"/> is its max range (u),
@@ -230,6 +231,34 @@ public record Hull : Buildable
     /// <c>ShipClassDef.LaunchClassMask</c>.
     /// </summary>
     public List<StationClass> LaunchStationClasses { get; set; } = new();
+
+    // ---- Removed keys (TOMBSTONES) --------------------------------------------------------------
+    // The shield and afterburner stats moved from the hull onto the equipment parts (equipment.yaml:
+    // shields: / afterburners:). The YAML reader IGNORES unknown keys, so simply deleting these would
+    // let a custom bundle that still authors them boot with no shield and no boost, silently. They
+    // survive as nullable properties only so CoreValidator can refuse any value; nothing reads them.
+    // (Not [Obsolete]: the source-generated YAML context must set them, and would warn on every build.)
+
+    /// <summary>REMOVED — boost moved to the afterburner part's <c>max-thrust</c> (equipment.yaml). Refused when set.</summary>
+    public double? AbAccel { get; set; }
+
+    /// <summary>REMOVED — moved to the afterburner part's <c>on-rate</c> (equipment.yaml). Refused when set.</summary>
+    public double? AbOnRate { get; set; }
+
+    /// <summary>REMOVED — moved to the afterburner part's <c>off-rate</c> (equipment.yaml). Refused when set.</summary>
+    public double? AbOffRate { get; set; }
+
+    /// <summary>REMOVED — moved to the afterburner part's <c>fuel-consumption</c> (equipment.yaml). Refused when set.</summary>
+    public double? AbFuelDrain { get; set; }
+
+    /// <summary>REMOVED — moved to the shield part's <c>max-strength</c> (equipment.yaml). Refused when set.</summary>
+    public double? ShieldCapacity { get; set; }
+
+    /// <summary>REMOVED — moved to the shield part's <c>regen-rate</c> (equipment.yaml). Refused when set.</summary>
+    public double? ShieldRecharge { get; set; }
+
+    /// <summary>REMOVED — moved to the shield part's <c>recharge-delay</c> (equipment.yaml). Refused when set.</summary>
+    public double? ShieldDelay { get; set; }
 }
 
 /// <summary>One entry in a hull's default consumable hold: an expendable id + a count.</summary>

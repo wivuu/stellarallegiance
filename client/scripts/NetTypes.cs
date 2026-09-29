@@ -69,6 +69,12 @@ namespace StellarAllegiance.Net
         public byte MineAmmo; // mine fields left in the dispenser
         public byte ProbeAmmo; // recon probes left in the dispenser
         public byte FuelPodAmmo; // reserve fuel pods in the hold (auto-consumed when the tank empties mid-boost)
+
+        // Energy / magazine / ammo-pack charges / cloak level (equipment PR), EXACT off the wire — the
+        // pools the fire phase of LastInputTick STARTED with (after that tick's ammo step), not the
+        // end-of-tick pools. The owner reconciles its ResourceMirror against them; a remote ship's bolt
+        // rebuild replays that tick's fire gate on them (BoltRenderer.SpawnBoltFor).
+        public ShipPools Pools;
         public byte ThreatLock; // being-locked warning: 0 none, 1 an enemy is locking me, 2 locked
         public bool IsPig; // AI combat drone (orthogonal to Kind — a PIG pod is IsPig && Kind.Pod)
         public bool Autopilot; // server-steered autopilot engaged (ShipFlagAutopilot) — owning client follows authority
@@ -79,6 +85,12 @@ namespace StellarAllegiance.Net
         // sites keep working and can never disagree with it.
         public bool IsPod => Kind == ShipKind.Pod; // ejected escape pod
         public bool IsMiner => Kind == ShipKind.Miner; // AI mining ship — HUD tags it MINER
+
+        // Pool reads for the HUD (a gunner's view of the captain's hull, a friendly target's cloak).
+        public float Energy => Pools.Energy;
+        public int Ammo => Pools.Ammo;
+        public int AmmoPacks => Pools.AmmoPacks;
+        public float CloakLevel => ShipResources.CloakFraction(Pools.Cloak); // fraction of signature hidden (0 = visible)
     }
 
     // One deployed minefield, decoded from MsgMinefields (server/Net/Protocol.cs WriteMinefield). The

@@ -9,11 +9,12 @@
 #
 # load-time (SECONDS, core Allegiance field) is how long a charge takes to come out of the hold once
 # the previous one is spent — the RELOAD. Projected to ticks (round(load-time*20)) onto the launcher's
-# WeaponDef, and for the fuel pod onto its CargoItemDef. The slot is usable again after
-# max(fire-interval-ticks, load-time-in-ticks): one window, longest wins, so 0/omitted keeps the
-# legacy cadence-only behavior. EVERY TIER MUST AUTHOR IT — mines/chaff/probes keep one tier-neutral
-# cargo row but the FIRED tier is the researched successor, and a tier that omits load-time deploys
-# instantly. The fuel pod's value is how long the tank (and the afterburner) stays dead mid-boost.
+# WeaponDef, and for the pure-cargo packs (fuel pod, ammo pack — no launcher) onto their CargoItemDef.
+# The slot is usable again after max(fire-interval-ticks, load-time-in-ticks): one window, longest
+# wins, so 0/omitted keeps the legacy cadence-only behavior. EVERY TIER MUST AUTHOR IT —
+# mines/chaff/probes keep one tier-neutral cargo row but the FIRED tier is the researched successor,
+# and a tier that omits load-time deploys instantly. The fuel pod's value is how long the tank (and
+# the afterburner) stays dead mid-boost; the ammo pack's, how long the guns stay dry.
 #
 # Missiles that a launcher fires (launchers.yaml, weapon-id racks) also carry a guidance/lock stat
 # block projected onto the missile-kind WeaponDef: acceleration/turn-rate (deg/s)/initial-speed/
@@ -495,3 +496,21 @@ fuels:
     glyph: "◒"            # geometric like the other cargo glyphs (◈ ◇ ◉) — HUD font has no emoji
     fuel-per-charge: 999  # >= every tank => full refill (clamped to max-fuel); lower for partials
     model-name: acs36     # IGC "Fuel" pack — the GLB a dropped pod is drawn as (assets/parts/acs36.glb)
+
+ammo-packs:
+  # A spare gun magazine carried in the hold — the fuel pod's twin, and Allegiance's "Ammo" pack
+  # (PCore014 packType 0, amount 1000, mass 1). Pure cargo (nothing is fired or deployed): when the
+  # ship's ammo runs below what its guns need for a shot and a pack is aboard, one charge loads over
+  # load-time and refills the magazine by ammo-per-charge, clamped to the hull's max-ammo (overshoot is
+  # wasted, as in Allegiance). Refused as cargo on a hull with no magazine (max-ammo 0). No stock hull
+  # carries one by default — pilots stock them in the hangar. Single tier, no launcher, no tech gate.
+  - id: ammo-pack-1
+    name: Ammo Pack
+    description: "Spare magazine for particle weapons. Auto-loads when the guns run dry."
+    cargo-id: 6
+    mass: 1               # payload cost per PACK (IGC mass 1)
+    load-time: 2.0        # seconds the guns stay dry while the pack loads
+    charges-per-pack: 1   # one refill per pack
+    glyph: "◓"            # pairs with the fuel pod's ◒ (geometric like the other cargo glyphs)
+    ammo-per-charge: 1000 # IGC amount 1000 — more than most magazines, so effectively a full reload
+    model-name: acs29     # IGC "Ammo" pack — the GLB a dropped pack is drawn as (assets/parts/acs29.glb)

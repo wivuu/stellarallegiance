@@ -57,6 +57,56 @@ public readonly record struct HudSubject
     public float MaxFuel { get; init; }
     public float? AbPower { get; init; }
 
+    // Whether this hull carries an EQUIPPED afterburner part at all (equipment PR) — the FUEL gauge
+    // gate: a tank with no booster (shouldn't happen in stock content) or a booster with no tank both
+    // show nothing rather than a half-true readout.
+    public bool HasAfterburner { get; init; }
+
+    // ---- Resource pools (equipment PR): energy, magazine, ammo packs, cloak. Pilot reads the
+    // predicted mirror; gunner reads the captain's last snapshotted row (ShipRenderer.TryLastRow),
+    // maxima from the captain's equipment × team attribute — the same "own-hull-only prediction"
+    // split as Fuel/AbPower above. The pack load rides the row (ShipPools.AmmoLoadLeft), so a gunner
+    // sees the captain's LOAD sweep too, stepped at the row rate instead of predicted. ----
+    public float Energy { get; init; }
+    public float MaxEnergy { get; init; }
+
+    // Show the ENRG gauge at all only when something on this hull actually spends it — a cloak, or a
+    // mounted energy-costing gun (pilot barrels + this ship's turret stations for a pilot; the seat's
+    // one gun for a gunner). A shieldless/boostless/gunless subject (a fresh pod) shows nothing.
+    public bool ShowEnergy { get; init; }
+
+    public int Ammo { get; init; }
+    public int MaxAmmo { get; init; }
+    public int AmmoPacks { get; init; }
+
+    // Show the AMMO gauge only when a mounted gun actually costs ammo.
+    public bool ShowAmmo { get; init; }
+
+    public bool AmmoLoading { get; init; }
+    public float AmmoLoadFrac { get; init; }
+
+    public float CloakLevel { get; init; }
+    public bool CloakEngaged { get; init; }
+    public bool HasCloak { get; init; }
+
+    // Why a shot of `w` would be refused right now (None = affordable) — the per-gun WeaponsPanel
+    // readout (NO ENRG / NO AMMO / LOADING). Pilot: the predictor's live per-gun check (re-resolved
+    // every frame, not just while the trigger is held). Gunner: the same shared gate over the ridden
+    // hull's last snapshotted pools and pack load (one row behind the server, never predicted).
+    public GateBlock GateBlockFor(WeaponDef w) =>
+        Pilot is { } p
+            ? p.GateBlockFor(w)
+            : ResourceMirror.BlockFor(
+                new ShipPools
+                {
+                    Energy = Energy,
+                    Ammo = (ushort)Ammo,
+                    AmmoPacks = (byte)AmmoPacks,
+                },
+                AmmoLoading,
+                w
+            );
+
     public bool IsGunner => Pilot is null;
 
     // The world point the aim reticle sits on. ONE expression, so the reticle, the system ring and the
@@ -94,6 +144,26 @@ public readonly record struct HudSubject
                 break;
             }
 
+        // Whether anything aboard actually spends energy/ammo — every bolt-kind mount, pilot barrels
+        // AND this hull's own turret stations (a captain's ammo gun on a station still shares the
+        // pilot's magazine), plus the cloak for energy. Determines ShowEnergy/ShowAmmo below.
+        bool anyEnergyGun = local.HasCloak,
+            anyAmmoGun = false;
+        foreach (var (_, w) in defs.SlotsForShip(cls, loadout))
+        {
+            if (w is null)
+                continue;
+            anyEnergyGun |= w.EnergyPerShot > 0f;
+            anyAmmoGun |= w.AmmoPerShot > 0;
+        }
+        if (local.TurretGuns is { } turretGuns)
+            foreach (uint tid in turretGuns)
+                if (defs.GetWeapon(tid) is { } tw)
+                {
+                    anyEnergyGun |= tw.EnergyPerShot > 0f;
+                    anyAmmoGun |= tw.AmmoPerShot > 0;
+                }
+
         return new HudSubject
         {
             Pilot = local,
@@ -115,6 +185,19 @@ public readonly record struct HudSubject
             Fuel = local.Fuel,
             MaxFuel = local.MaxFuel,
             AbPower = local.AbPower,
+            HasAfterburner = local.HasAfterburner,
+            Energy = local.Energy,
+            MaxEnergy = local.MaxEnergy,
+            ShowEnergy = anyEnergyGun,
+            Ammo = local.Ammo,
+            MaxAmmo = local.MaxAmmo,
+            AmmoPacks = local.AmmoPacks,
+            ShowAmmo = anyAmmoGun,
+            AmmoLoading = local.AmmoLoading,
+            AmmoLoadFrac = local.AmmoLoadFrac,
+            CloakLevel = local.CloakLevel,
+            CloakEngaged = local.CloakEngaged,
+            HasCloak = local.HasCloak,
         };
     }
 
@@ -134,6 +217,8 @@ public readonly record struct HudSubject
         // other, and is 0 until the def streams (client-no-baked-tuning-fallback).
         bool hasRow = world.Ships.TryLastRow(seat.ShipId, out var row);
         float maxFuel = defs.TryGetShipDef(cls, out var def) ? def.MaxFuel : 0f;
+        ushort loadLeft = hasRow ? row.Pools.AmmoLoadLeft : (ushort)0;
+        uint reloadTicks = defs.AmmoCargoItem()?.ReloadTicks ?? 0;
 
         return new HudSubject
         {
@@ -156,6 +241,22 @@ public readonly record struct HudSubject
             Fuel = hasRow ? row.Fuel : 0f,
             MaxFuel = maxFuel,
             AbPower = hasRow ? row.AbPower : null,
+            HasAfterburner = hull?.Equipment.Afterburner is not null,
+            Energy = hasRow ? row.Energy : 0f,
+            MaxEnergy = hull?.MaxEnergy ?? 0f,
+            ShowEnergy = (hull?.HasCloak ?? false) || seat.Gun?.EnergyPerShot > 0f,
+            Ammo = hasRow ? row.Ammo : 0,
+            MaxAmmo = hull?.MaxAmmo ?? 0,
+            AmmoPacks = hasRow ? row.AmmoPacks : 0,
+            ShowAmmo = seat.Gun?.AmmoPerShot > 0,
+            // The captain's pack load, off the row: exact as of its tick, stepped at the row rate.
+            AmmoLoading = loadLeft > 0,
+            AmmoLoadFrac = loadLeft == 0 || reloadTicks == 0 ? 0f : Mathf.Clamp(1f - (float)loadLeft / reloadTicks, 0f, 1f),
+            CloakLevel = hasRow ? row.CloakLevel : 0f,
+            // No latch bit rides the wire for a ridden hull; the level itself is the only tell (it
+            // only moves while engaged or ramping down), so "above zero" is the closest live read.
+            CloakEngaged = hasRow && row.CloakLevel > 0f,
+            HasCloak = hull?.HasCloak ?? false,
         };
     }
 }

@@ -316,16 +316,19 @@ public partial class ShipLoadout
             SelectSlot(key.Index);
     }
 
-    // Station selection — the mirror of SelectSlot (the two are mutually exclusive).
+    // Station selection — the mirror of SelectSlot/SelectEquip (all three mutually exclusive).
     private void SelectTurret(byte hpIndex)
     {
         _selectedTurret = hpIndex;
         _selectedHp = null;
+        _selectedEquip = null;
         _preview.SelectedKey = new LoadoutPreview.MountKey(HardpointKind.Turret, hpIndex);
         foreach ((byte _, LoadoutSlot row) in _slotRows)
             row.Selected = false;
         foreach ((byte idx, TurretStationRow row) in _turretRows)
             row.Selected = idx == hpIndex;
+        foreach ((byte _, LoadoutSlot erow) in _equipRows)
+            erow.Selected = false;
         RefreshArsenal();
     }
 

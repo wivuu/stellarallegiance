@@ -47,6 +47,9 @@ public sealed class BoltRenderer
     // ship (CheckBoltImpacts).
     private readonly List<ProjectileView> _bolts = new();
 
+    // SpawnBoltFor's fired-barrel output, reused per call.
+    private readonly List<byte> _firedScratch = new();
+
     public BoltRenderer(
         Node3D projectiles,
         DefRegistry defs,
@@ -80,9 +83,13 @@ public sealed class BoltRenderer
 
     // A REMOTE ship's row showed a new LastFireTick: rebuild the shot the server fired — the exact mirror
     // of the module's TryFire muzzle math. The spread direction is deterministic in (ShipId, fire tick) via
-    // the shared FlightModel.SpreadDirection, and WHICH mounts fired is derived by replaying the shared
-    // FireCadence rule against this ship's per-mount shadow (per-mount cooldowns; the wire carries only
-    // LastFireTick), so every client and the server derive the same bolts from the same replicated row. A
+    // the shared FlightModel.SpreadDirection, and WHICH mounts fired is derived by replaying THE shared
+    // fire gate (ResourceMirror.SelectBarrels) against this ship's per-mount shadow (per-mount cooldowns;
+    // the wire carries only LastFireTick), so every client and the server derive the same bolts from the
+    // same replicated row. When the row IS the fire tick (LastFireTick == LastInputTick) its Pools are the
+    // pools that fire phase started with, so the replay runs the resource gate too (energy / ammo, in
+    // barrel order — a starved later mount is skipped exactly as the server skipped it); otherwise the
+    // pools belong to a later tick and it falls back to the cadence alone (cosmetic, self-correcting). A
     // fresh shadow (first sight / loadout change / reconnect) renders the first volley from every
     // off-cooldown mount and is in lockstep from then on; a lossy far-tier ship that skips fire events
     // drifts and self-corrects — visual only.
@@ -102,20 +109,28 @@ public sealed class BoltRenderer
             row.LastInputTick > row.LastFireTick ? System.Math.Min(row.LastInputTick - row.LastFireTick, 8u) : 0u;
         Vec3 firePos = state.Pos - state.Vel * (ticksPast * FlightModel.Dt);
 
+        _firedScratch.Clear();
+        var pools = row.Pools; // a copy: the replay deducts each fired shot, like the server's fire phase
+        ResourceMirror.SelectBarrels(
+            slots,
+            shadow,
+            row.LastFireTick,
+            ref pools,
+            _firedScratch,
+            cadence: true,
+            resources: row.LastFireTick == row.LastInputTick,
+            loading: false,
+            out _
+        );
+
         // One bolt per FIRING weapon slot, each from its own muzzle offset and with its own barrel-seeded
-        // scatter — the exact mirror of the server's TryFire.
-        for (byte barrel = 0; barrel < slots.Count; barrel++)
+        // scatter — the exact mirror of the server's TryFire. The barrel index is the slot's position
+        // (empties and racks consumed their index), so the spread seed stays aligned with the server.
+        foreach (byte barrel in _firedScratch)
         {
             var (hp, weapon) = slots[barrel];
-            // Skip empty slots and missile racks: they don't fire bolts. The barrel index is STILL consumed
-            // so the per-barrel spread seed stays aligned with the server's TryFire loop regardless of where
-            // racks/empties sit in the hardpoint array.
-            if (weapon is null || weapon.Kind != WeaponKind.Bolt)
-                continue;
-            // Off cooldown at the observed fire tick? (The same gate the server fired by.)
-            if (!FireCadence.MountFires(row.LastFireTick, shadow[barrel], weapon.FireIntervalTicks))
-                continue;
-            shadow[barrel] = row.LastFireTick;
+            if (weapon is null)
+                continue; // (the gate only ever fires a bolt gun — this just narrows the nullable)
             Vec3 fwd = state.Rot.Rotate(new Vec3(hp.DirX, hp.DirY, hp.DirZ));
             Vec3 shotDir = FlightModel.SpreadDirection(fwd, weapon.SpreadRad, row.ShipId, row.LastFireTick, barrel);
             Vec3 mp = firePos + state.Rot.Rotate(new Vec3(hp.OffX, hp.OffY, hp.OffZ));

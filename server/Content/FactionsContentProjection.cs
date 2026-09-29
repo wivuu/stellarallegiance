@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Allegiance.Factions.Resolution;
 using StellarAllegiance.Shared;
 using Factions = Allegiance.Factions.Model;
 
@@ -13,13 +14,16 @@ namespace SimServer.Content;
 // models — the library never references shared/, and shared/client/wasm never reference the library.
 //
 // Every flight stat either DERIVES losslessly from a Core field (mass/speed/thrust/turn-rates/armor/
-// strafe+reverse multipliers) or reads an explicit runtime extend-field on the model (class/weapon/
-// base ids, drift/afterburner knobs, tick ballistics, hardpoints, world cfg — see RuntimeData.cs).
-// It adds NO new derived math: the projected ShipClassDef feeds the unchanged ShipStats.FromDef, so
-// server authority and client prediction stay bit-identical to the pre-pivot v1 loader.
+// strafe+reverse multipliers, energy/ammo pools) or reads an explicit runtime extend-field on the
+// model (class/weapon/base ids, drift knobs, tick ballistics, hardpoints, world cfg — see
+// RuntimeData.cs). It adds NO new derived math: the projected ShipClassDef feeds the unchanged
+// ShipStats.FromDef, so server authority and client prediction stay bit-identical.
 //
 // A "runtime" hull/weapon/station is one carrying its stable wire id (ClassId/WeaponId/BaseTypeId).
 // Catalog entries without one (e.g. tech-tree-only parts) are not part of the runtime def set.
+// EQUIPMENT (shields/afterburners/cloaks) is the exception: it authors no wire id, EVERY part
+// projects, and its EquipmentId is its position in Core.AllEquipment(). Which parts a hull may carry
+// and starts with come from EquipmentResolver — the same rules CoreValidator checked.
 // Iteration follows Core list order (manifest + file order), which CoreSerializer.Load fixes
 // deterministically — so two loads project byte-identical defs (tests/ContentTest guards this).
 public static class FactionsContentProjection
@@ -37,9 +41,9 @@ public static class FactionsContentProjection
         var cargoIdByExpendable = core.AllExpendables()
             .Where(e => e.CargoId is not null)
             .ToDictionary(e => e.Id, e => e.CargoId!.Value);
-        // part id -> authored Signature, for a hull's projected SignatureBias (default-loadout sum).
-        // Iterates every mountable part collection; CoreValidator already proves ids are unique.
-        var partSigById = core.AllParts().ToDictionary(p => p.Id, p => p.Signature);
+        // part id -> part, for the equipment rules (allowed closure + default). CoreValidator already
+        // proved ids are unique across every part collection.
+        var partById = core.AllParts().ToDictionary(p => p.Id, StringComparer.Ordinal);
 
         // Stage-4 tech paths: the authored Core.Techs LIST ORDER fixes the u16 wire index of every
         // tech (deterministic — CoreSerializer.Load fixes manifest+file order). Built first so the
@@ -81,10 +85,27 @@ public static class FactionsContentProjection
                 .Select(l => l.WeaponId!.Value)
         );
 
+        // Equipment catalog (equipment PR): every shield, afterburner and cloak, in AllEquipment()
+        // order (shields → afterburners → cloaks, each in list order). The list index IS the
+        // EquipmentId every allowed/default/successor reference carries.
+        var equipmentParts = core.AllEquipment().ToList();
+        var equipIdByPartId = new Dictionary<string, ushort>(StringComparer.Ordinal);
+        for (int i = 0; i < equipmentParts.Count; i++)
+            equipIdByPartId[equipmentParts[i].Id] = (ushort)i;
+        var equipment = equipmentParts.Select((p, i) => ProjectEquipment(p, (ushort)i, techIdx, equipIdByPartId)).ToList();
+
         var ships = core
             .Hulls.Where(h => h.ClassId is not null)
             .Select(h =>
-                ProjectShip(h, cargoIdByExpendable, partSigById, techIdx, rackWeaponIds, world.Turret.DefaultSlewDeg)
+                ProjectShip(
+                    h,
+                    cargoIdByExpendable,
+                    techIdx,
+                    rackWeaponIds,
+                    world.Turret.DefaultSlewDeg,
+                    partById,
+                    equipIdByPartId
+                )
             )
             .ToList();
 
@@ -116,7 +137,8 @@ public static class FactionsContentProjection
             .Select(s => ProjectBase(s, SuccessorBaseType(s.SuccessorStationId), rackWeaponIds, world.Turret.DefaultSlewDeg))
             .ToList();
 
-        // AllExpendables() iterates Missiles→Mines→Chaffs→Probes→Fuels in list order — deterministic.
+        // AllExpendables() iterates Missiles→Mines→Chaffs→Probes→Fuels→AmmoPacks in list order —
+        // deterministic.
         var cargoItems = core.AllExpendables().Where(e => e.CargoId is not null).Select(ProjectCargoItem).ToList();
 
         var start = ProjectFactionStart(core);
@@ -132,7 +154,8 @@ public static class FactionsContentProjection
             techs,
             developments,
             stationCatalog,
-            techIdx
+            techIdx,
+            equipment
         );
     }
 
@@ -221,15 +244,94 @@ public static class FactionsContentProjection
         );
     }
 
+    // One equipment part → its runtime EquipmentDef. Only the block for the part's slot is filled;
+    // the slot byte is the part's position in EquipmentResolver.Slots (0 shield, 1 afterburner, 2
+    // cloak). Succession resolves like SucceededByWeaponId: an absent/unresolvable successor stays
+    // NoEquipment (a top tier never migrates).
+    private static EquipmentDef ProjectEquipment(
+        Factions.Part p,
+        ushort equipmentId,
+        IReadOnlyDictionary<string, ushort> techIdx,
+        IReadOnlyDictionary<string, ushort> equipIdByPartId
+    )
+    {
+        var def = new EquipmentDef
+        {
+            EquipmentId = equipmentId,
+            Name = p.Name,
+            Description = p.Description ?? "",
+            ModelName = p.ModelName ?? "",
+            Mass = (float)p.Mass,
+            RequiredTechIdx = TechIdxArray(p.RequiredTechs, techIdx),
+            ObsoletedByTechIdx = TechIdxArray(p.ObsoletedByTechs, techIdx),
+            SucceededById =
+                p.SuccessorPartId is { } sid && equipIdByPartId.TryGetValue(sid, out ushort sEq)
+                    ? sEq
+                    : EquipmentDef.NoEquipment,
+            // Additive per-ship signature bias while equipped (server-only; stock leaves it 0).
+            Signature = (float)p.Signature,
+        };
+        switch (p)
+        {
+            case Factions.Shield shield:
+                def.Slot = EquipmentDef.SlotShield;
+                def.MaxStrength = (float)shield.MaxStrength;
+                def.RegenRate = (float)shield.RegenRate;
+                def.RechargeDelaySec = (float)shield.RechargeDelay;
+                break;
+            case Factions.Afterburner booster:
+                def.Slot = EquipmentDef.SlotAfterburner;
+                def.AbAccel = (float)booster.MaxThrust; // hull-thrust-scale extra accel (IGC maxThrust / 30)
+                def.AbOnRate = (float)booster.OnRate;
+                def.AbOffRate = (float)booster.OffRate;
+                def.FuelDrain = (float)booster.FuelConsumption; // fuel/s while engaged
+                break;
+            case Factions.Cloak cloak:
+                def.Slot = EquipmentDef.SlotCloak;
+                def.EnergyDrain = (float)cloak.EnergyConsumption;
+                def.MaxCloaking = (float)cloak.MaxCloaking;
+                def.OnRate = (float)cloak.OnRate;
+                def.OffRate = (float)cloak.OffRate;
+                break;
+            default:
+                throw new InvalidDataException($"part '{p.Id}' is not equipment (shield/afterburner/cloak)");
+        }
+        return def;
+    }
+
     private static ShipClassDef ProjectShip(
         Factions.Hull h,
         IReadOnlyDictionary<string, uint> cargoIdByExpendable,
-        IReadOnlyDictionary<string, double> partSigById,
         IReadOnlyDictionary<string, ushort> techIdx,
         IReadOnlySet<uint> rackWeaponIds,
-        double defaultSlewDeg
-    ) =>
-        new()
+        double defaultSlewDeg,
+        IReadOnlyDictionary<string, Factions.Part> partById,
+        IReadOnlyDictionary<string, ushort> equipIdByPartId
+    )
+    {
+        // Equipment slots (equipment PR). Allowed = every slot's closure (listed parts + their
+        // successor chains) as sorted ids; default = EquipmentResolver.StaticDefault per slot (the
+        // first preferred part the slot allows whose tech/capability gates the hull already
+        // carries — never a research-locked freebie). A hull with no equipment slot at all streams
+        // an empty DefaultEquipment.
+        ushort[] allowedEquipment = EquipmentResolver
+            .Slots.SelectMany(slot => EquipmentResolver.AllowedClosure(h, slot, partById))
+            .Select(p => equipIdByPartId[p.Id])
+            .Distinct()
+            .OrderBy(id => id)
+            .ToArray();
+        ushort[] defaultEquipment =
+            allowedEquipment.Length == 0
+                ? System.Array.Empty<ushort>()
+                : EquipmentResolver
+                    .Slots.Select(slot =>
+                        EquipmentResolver.StaticDefault(h, slot, partById) is { } part
+                            ? equipIdByPartId[part.Id]
+                            : EquipmentDef.NoEquipment
+                    )
+                    .ToArray();
+
+        return new()
         {
             ClassId = h.ClassId!.Value,
             Name = h.Name,
@@ -249,10 +351,6 @@ public static class FactionsContentProjection
             SideMult = (float)h.StrafeThrustMultiplier,
             BackMult = (float)h.ReverseThrustMultiplier,
             MaxHull = (float)h.ArmorHitPoints,
-            // Regenerating shield (all 0 = no shield); delay authored in seconds, sim rounds to ticks.
-            ShieldCapacity = (float)h.ShieldCapacity,
-            ShieldRecharge = (float)h.ShieldRecharge,
-            ShieldDelaySec = (float)h.ShieldDelay,
             // Fog-of-war vision (behavior-inert until a later WP): cone/sphere derive losslessly;
             // RadarSignature resolves an authored 0/omitted to 1.0 so the wire never carries a
             // signature of 0 (which would make the hull undetectable at any range).
@@ -260,12 +358,9 @@ public static class FactionsContentProjection
             VisionConeAngleDeg = (float)h.VisionConeAngleDeg,
             VisionSphereRadius = (float)h.VisionSphereRadius,
             RadarSignature = Sig(h.RadarSignature),
-            // Authored equipment bias: the hull's own Signature plus its default loadout's
-            // (PreferredParts) part Signature sum. Stock core hulls author neither ⇒ 0 ⇒ no
-            // behavior change; a faction that authors loadout signatures gets it for free. An
-            // unresolved preferred-part id contributes 0 (PreferredParts is a suggestion list,
-            // not validated as a runtime loadout).
-            SignatureBias = (float)(h.Signature + h.PreferredParts.Sum(id => partSigById.GetValueOrDefault(id))),
+            // The HULL's own additive signature bias only (stock: 0). Equipment is chosen per ship,
+            // so each equipped part's EquipmentDef.Signature is added by the server per ship.
+            SignatureBias = (float)h.Signature,
             // Stage-2 economy: build cost from the buildable's authored price (whole credits).
             Cost = h.Price,
             PayloadCapacity = (float)h.PayloadCapacity,
@@ -280,11 +375,9 @@ public static class FactionsContentProjection
             // Explicit runtime extend-fields (no clean Core source).
             DriftYawDeg = (float)h.DriftYawDeg,
             DriftPitchDeg = (float)h.DriftPitchDeg,
-            AbAccel = (float)h.AbAccel,
-            AbOnRate = (float)h.AbOnRate,
-            AbOffRate = (float)h.AbOffRate,
+            // The hull's tank + in-flight regen (both hull stats; the equipped booster part's
+            // AbAccel / on-off rates / FuelDrain come in per ship via ShipStats.FromDef(hull, part)).
             MaxFuel = (float)h.MaxFuel,
-            AbFuelDrain = (float)h.AbFuelDrain,
             AbFuelRecharge = (float)h.AbFuelRecharge,
             Hardpoints = h.Hardpoints.Select(hp => ProjectHardpoint(hp, rackWeaponIds, defaultSlewDeg)).ToList(),
             FactionId = 0, // reserved (per-team content); Stage-1 is a single stock bundle
@@ -301,7 +394,15 @@ public static class FactionsContentProjection
             // Station-class launch/dock restriction (2026-07-21): authored launch-station-classes
             // list -> one bit per StationClassId; 0 = unrestricted.
             LaunchClassMask = LaunchMask(h.LaunchStationClasses),
+            // Energy + ammo pools (equipment PR): IGC values, untranslated. The team MaxEnergy
+            // attribute scales the energy pool at runtime; ammo rides the wire as a u16.
+            MaxEnergy = (float)h.MaxEnergy,
+            EnergyRecharge = (float)h.EnergyRechargeRate,
+            MaxAmmo = (ushort)Math.Clamp(h.MaxAmmo, 0, ushort.MaxValue),
+            AllowedEquipment = allowedEquipment,
+            DefaultEquipment = defaultEquipment,
         };
+    }
 
     private static ushort LaunchMask(List<Factions.StationClass> classes)
     {
@@ -353,6 +454,10 @@ public static class FactionsContentProjection
             ObsoletedByTechIdx = TechIdxArray(w.ObsoletedByTechs, techIdx),
             SucceededByWeaponId =
                 w.SuccessorPartId is { } sid && weaponIdByPartId.TryGetValue(sid, out uint swid) ? swid : uint.MaxValue,
+            // Per-shot resource costs (equipment PR): drawn from the ship's energy pool / magazine.
+            // Launchers keep 0 — racks and dispensers feed from their magazine and the hold.
+            EnergyPerShot = (float)w.EnergyPerShot,
+            AmmoPerShot = (ushort)Math.Clamp(w.AmmoPerShot, 0, ushort.MaxValue),
         };
     }
 
@@ -522,13 +627,15 @@ public static class FactionsContentProjection
             ChargesPerPack = (byte)System.Math.Max(1, e.ChargesPerPack ?? 1),
             Description = e.Description ?? "",
             FuelPerCharge = e is Factions.FuelPod f ? (float)f.FuelPerCharge : 0f,
-            // Load time out of the hold. Only the fuel pod consumes it from the CARGO def (it has no
-            // launcher); a dispenser's identical value rides its WeaponDef instead.
+            // Load time out of the hold. Only the launcher-less pure cargo (fuel pod, ammo pack)
+            // consumes it from the CARGO def; a dispenser's identical value rides its WeaponDef.
             ReloadTicks = LoadTicks(e.LoadTime),
             // The GLB a DROPPED item of this kind is drawn as. Same split as ReloadTicks: only the
-            // launcher-less pure cargo (the fuel pod) is read from here — a dispenser's item takes
-            // its mesh from the dispenser WeaponDef, which already carries the deployed-mesh name.
+            // pure cargo (fuel pod, ammo pack) is read from here — a dispenser's item takes its mesh
+            // from the dispenser WeaponDef, which already carries the deployed-mesh name.
             ModelName = e.ModelName ?? "",
+            // Ammo pack (equipment PR): magazine rounds restored per charge; 0 = not an ammo item.
+            AmmoPerCharge = e is Factions.AmmoPack a ? (ushort)Math.Clamp(a.AmmoPerCharge, 0, ushort.MaxValue) : (ushort)0,
         };
 
     private static BaseDef ProjectBase(

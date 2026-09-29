@@ -96,6 +96,7 @@ public static class Protocol
     public const byte FlagDropChaff = InputFlags.DropChaff;
     public const byte FlagDropMine = InputFlags.DropMine;
     public const byte FlagDropProbe = InputFlags.DropProbe;
+    public const byte FlagCloak = InputFlags.Cloak;
 
     // ---- ship-record flags byte ----
     public const byte ShipFlagPig = ShipFlags.Pig;

@@ -203,6 +203,96 @@ public class SerializationTests
         Assert.DoesNotContain("obsoleted-by-techs", yaml);
     }
 
+    // Ammo packs are pure CARGO (the fuel pod's twin): they round-trip under the expendables-side
+    // `ammo-packs:` key with `ammo-per-charge`, and Save writes them into expendables.yaml, not parts.yaml.
+    [Fact]
+    public void AmmoPack_RoundTripsAsCargo()
+    {
+        var core = new Core
+        {
+            AmmoPacks =
+            {
+                new AmmoPack
+                {
+                    Id = "ammo-pack-1",
+                    Name = "Ammo Pack",
+                    CargoId = 6,
+                    Mass = 1,
+                    LoadTime = 2,
+                    AmmoPerCharge = 1000,
+                },
+            },
+        };
+
+        var yaml = CoreSerializer.Serialize(core);
+        Assert.Contains("ammo-packs:", yaml);
+        Assert.Contains("ammo-per-charge: 1000", yaml);
+
+        var reloaded = CoreSerializer.Deserialize(yaml);
+        var pack = Assert.Single(reloaded.AmmoPacks);
+        Assert.Equal(1000, pack.AmmoPerCharge);
+        Assert.Equal(6u, pack.CargoId);
+        Assert.Same(pack, reloaded.AllExpendables().Last()); // appended after Fuels in the cargo catalog
+        Assert.DoesNotContain(reloaded.AllParts(), p => p.Id == "ammo-pack-1");
+
+        var tempDir = Path.Combine(Path.GetTempPath(), "allegiance-core-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            CoreSerializer.Save(core, tempDir);
+            Assert.Contains("ammo-packs:", File.ReadAllText(Path.Combine(tempDir, "expendables.yaml")));
+            Assert.DoesNotContain("ammo-packs:", File.ReadAllText(Path.Combine(tempDir, "parts.yaml")));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    // A shield's recharge-delay is omit-when-default: 0 is Allegiance's continuous regen, so stock
+    // shields author nothing; a delayed shield round-trips its seconds.
+    [Fact]
+    public void ShieldRechargeDelay_OmittedWhenDefaultAndRoundTrips()
+    {
+        var continuous = new Shield
+        {
+            Id = "sm-shield-1",
+            Name = "Sm Shield 1",
+            MaxStrength = 51.4286,
+            RegenRate = 0.6857,
+        };
+        Assert.DoesNotContain("recharge-delay", CoreSerializer.Serialize(continuous));
+
+        var delayed = continuous with { RechargeDelay = 3 };
+        var yaml = CoreSerializer.Serialize(delayed);
+        Assert.Contains("recharge-delay: 3", yaml);
+        Assert.Equal(3, CoreSerializer.Deserialize<Shield>(yaml).RechargeDelay);
+    }
+
+    // The enum-keyed allowed-parts map binds its kebab-case slot keys (shield / afterburner / cloak)
+    // through the static YAML context — the shape the stock hulls use for their equipment slots.
+    [Fact]
+    public void Deserialize_AllowedPartsEquipmentSlots()
+    {
+        var hull = CoreSerializer.Deserialize<Hull>(
+            """
+            id: x
+            name: X
+            allowed-parts:
+              shield: [sm-shield-1]
+              afterburner: [booster-1, lt-booster-1]
+              cloak: [sig-cloak-1]
+            preferred-parts: [booster-1, sm-shield-1]
+            """
+        );
+
+        Assert.Equal(["sm-shield-1"], hull.AllowedParts[EquipmentSlot.Shield]);
+        Assert.Equal(["booster-1", "lt-booster-1"], hull.AllowedParts[EquipmentSlot.Afterburner]);
+        Assert.Equal(["sig-cloak-1"], hull.AllowedParts[EquipmentSlot.Cloak]);
+        Assert.Equal(["booster-1", "sm-shield-1"], hull.PreferredParts);
+        Assert.Null(hull.ShieldCapacity); // an unauthored tombstone stays null
+    }
+
     [Fact]
     public void Deserialize_HardpointMountTypeAndEmptyWeaponId()
     {
