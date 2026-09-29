@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using PublicLobby.Data;
@@ -11,9 +12,11 @@ using PublicLobby.Data;
 namespace PublicLobby.Data.Migrations
 {
     [DbContext(typeof(LobbyDbContext))]
-    partial class LobbyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260926223305_WebPushNotifications")]
+    partial class WebPushNotifications
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -524,26 +527,6 @@ namespace PublicLobby.Data.Migrations
                     b.ToTable("match_teams", (string)null);
                 });
 
-            modelBuilder.Entity("PublicLobby.Data.Entities.NotificationDelivery", b =>
-                {
-                    b.Property<Guid>("PlayerId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("player_id");
-
-                    b.Property<string>("Event")
-                        .HasColumnType("text")
-                        .HasColumnName("event");
-
-                    b.Property<DateTimeOffset>("LastSentAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("last_sent_at");
-
-                    b.HasKey("PlayerId", "Event")
-                        .HasName("pk_notification_deliveries");
-
-                    b.ToTable("notification_deliveries", (string)null);
-                });
-
             modelBuilder.Entity("PublicLobby.Data.Entities.NotificationPreference", b =>
                 {
                     b.Property<Guid>("PlayerId")
@@ -1040,16 +1023,6 @@ namespace PublicLobby.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_match_teams_matches_match_id");
-                });
-
-            modelBuilder.Entity("PublicLobby.Data.Entities.NotificationDelivery", b =>
-                {
-                    b.HasOne("PublicLobby.Data.Entities.Player", null)
-                        .WithMany()
-                        .HasForeignKey("PlayerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_notification_deliveries_players_player_id");
                 });
 
             modelBuilder.Entity("PublicLobby.Data.Entities.NotificationPreference", b =>

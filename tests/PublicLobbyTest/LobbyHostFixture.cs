@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using PublicLobby.Data;
+using PublicLobby.Notifications;
 
 // WebApplicationFactory<Program>'s default content-root heuristic guesses a sibling directory
 // matching the ASSEMBLY name ("PublicLobby") relative to the repo layout; the actual project
@@ -23,6 +24,9 @@ sealed class LobbyWebApplicationFactory : WebApplicationFactory<Program>
         // suite can count SQL commands the host's contexts execute (ProfileTests: a second grain
         // read must not touch Postgres).
         builder.ConfigureServices(services => services.AddSingleton<IInterceptor>(DbCommandCounter.Instance));
+
+        // Web Push: record sends instead of reaching a real push service (PushTests).
+        builder.ConfigureServices(services => services.AddSingleton<IPushSender>(FakePushSender.Instance));
 
         // AddIdentityCore<LobbyUser>().AddSignInManager() (Persistence.cs, WP0.1) registers the
         // Identity STORE only — the sign-in SURFACE (AddAuthentication/AddDataProtection) is
@@ -108,6 +112,10 @@ static class LobbyHostFixture
         // ReleaseTests drives a watcher round by hand with a fake feed instead.
         Environment.SetEnvironmentVariable("LOBBY_RELEASE_VERSION", BakedRelease);
         Environment.SetEnvironmentVariable("LOBBY_RELEASE_POLL_SECONDS", "0");
+        // Web Push on (a throwaway VAPID pair); the sender itself is FakePushSender (see above).
+        var (vapidPublic, vapidPrivate) = PushOptions.GenerateKeys();
+        Environment.SetEnvironmentVariable("LOBBY_VAPID_PUBLIC_KEY", vapidPublic);
+        Environment.SetEnvironmentVariable("LOBBY_VAPID_PRIVATE_KEY", vapidPrivate);
 
         var factory = new LobbyWebApplicationFactory();
         // Force the host to actually start now (rather than lazily on first CreateClient/request)

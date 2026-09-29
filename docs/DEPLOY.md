@@ -153,7 +153,9 @@ command `dotnet PublicLobby.dll --migrate` (applies EF Core + Orleans migrations
 `LOBBY_PUBLIC_URL=https://<lobby-domain>` (must equal the `PUBLIC_LOBBY` servers dial — it is the
 join-token issuer and the passkey relying party), `LOBBY_ADMINS` (`name:<display>`, `github:<login>`,
 `google:<sub>`, `steam:<id>`), optionally `AUTH_GOOGLE_CLIENT_ID/SECRET`, `AUTH_GITHUB_CLIENT_ID/SECRET`,
-`AUTH_STEAM_API_KEY`, `RANKED_RESULTS`, `ALLOW_UNVERIFIED_SERVERS`. Never set `AUTH_DEV_LOGIN` in
+`AUTH_STEAM_API_KEY`, `RANKED_RESULTS`, `ALLOW_UNVERIFIED_SERVERS`, and `LOBBY_VAPID_PUBLIC_KEY` /
+`LOBBY_VAPID_PRIVATE_KEY` for browser notifications (generate once with `--gen-vapid-keys`; never
+rotate). Never set `AUTH_DEV_LOGIN` in
 production. `docker-compose.yml` wires the same for a single box (`lobby-db` + one-shot
 `lobby-migrate`). Health: `/health` (web) and `/health/orleans` (silo). Full reference:
 `public-lobby/README.md`.

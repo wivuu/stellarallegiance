@@ -80,6 +80,12 @@ services:
       AUTH_GITHUB_CLIENT_ID: ${AUTH_GITHUB_CLIENT_ID:-}
       AUTH_GITHUB_CLIENT_SECRET: ${AUTH_GITHUB_CLIENT_SECRET:-}
       AUTH_STEAM_API_KEY: ${AUTH_STEAM_API_KEY:-}
+      # Web Push notifications ("a ranked match starts"): off unless both keys are set. Generate a pair
+      # once with `dotnet PublicLobby.dll --gen-vapid-keys` — changing the public key later strands
+      # every browser's subscription. SUBJECT defaults to LOBBY_PUBLIC_URL when that is https.
+      LOBBY_VAPID_PUBLIC_KEY: ${LOBBY_VAPID_PUBLIC_KEY:-}
+      LOBBY_VAPID_PRIVATE_KEY: ${LOBBY_VAPID_PRIVATE_KEY:-}
+      LOBBY_VAPID_SUBJECT: ${LOBBY_VAPID_SUBJECT:-}
       # flagged (default): only admin-flagged Ranked servers move the global ladder; authenticated:
       # every verified server does.
       RANKED_RESULTS: ${RANKED_RESULTS:-flagged}

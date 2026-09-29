@@ -42,6 +42,51 @@ public enum MatchEndReasonKind
     Shutdown,
 }
 
+/// <summary>
+/// notification_preferences.event: a Notification Event (public-lobby/CONTEXT.md) a pilot can opt
+/// in to. Adding one = a member here, its key and default in <see cref="NotificationEvents"/>, and
+/// one more row under "Notify me when" on /me.
+/// </summary>
+public enum NotificationEvent
+{
+    RankedMatchStarted,
+}
+
+/// <summary>
+/// The wire/UI key of each <see cref="NotificationEvent"/> (the column text, the /me form value and
+/// the service worker's "Mute these" payload all use it) and whether it is on for an account that
+/// never chose.
+/// </summary>
+public static class NotificationEvents
+{
+    public const string RankedMatchStartedKey = "ranked.match-started";
+
+    public static readonly IReadOnlyList<NotificationEvent> All = Enum.GetValues<NotificationEvent>();
+
+    public static string Key(NotificationEvent e) => EnumTextMaps.NotificationEventText[e];
+
+    public static bool TryParse(string? key, out NotificationEvent e)
+    {
+        foreach (var (value, text) in EnumTextMaps.NotificationEventText)
+        {
+            if (text == key)
+            {
+                e = value;
+                return true;
+            }
+        }
+        e = default;
+        return false;
+    }
+
+    public static bool DefaultEnabled(NotificationEvent e) =>
+        e switch
+        {
+            NotificationEvent.RankedMatchStarted => true,
+            _ => false,
+        };
+}
+
 // Generic enum<->text converter driven by an explicit literal map, rather than a naive
 // enum.ToString().ToLowerInvariant() — MatchEndReason.WinCondition is "win-condition" (a hyphen),
 // which no CLR enum member name can spell. One small class, reused by every status/kind property
@@ -107,5 +152,13 @@ internal static class EnumTextMaps
         [MatchEndReasonKind.WinCondition] = MatchEndReason.WinCondition,
         [MatchEndReasonKind.Reset] = MatchEndReason.Reset,
         [MatchEndReasonKind.Shutdown] = MatchEndReason.Shutdown,
+    };
+
+    public static readonly IReadOnlyDictionary<NotificationEvent, string> NotificationEventText = new Dictionary<
+        NotificationEvent,
+        string
+    >
+    {
+        [NotificationEvent.RankedMatchStarted] = NotificationEvents.RankedMatchStartedKey,
     };
 }

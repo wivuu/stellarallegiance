@@ -34,4 +34,42 @@ internal static partial class Log
     // Debug, not Warning: a GitHub blip every now and then is normal, and the last confirmed version stays.
     [LoggerMessage(EventId = 6, Level = LogLevel.Debug, Message = "release feed unavailable: {Reason}")]
     public static partial void ReleaseFeedUnavailable(ILogger logger, string reason);
+
+    // ---- Web Push (Notifications/) ----
+
+    [LoggerMessage(
+        EventId = 7,
+        Level = LogLevel.Information,
+        Message = "push notifications: enabled={Enabled} subject={Subject}"
+    )]
+    public static partial void PushConfigured(ILogger logger, bool enabled, string subject);
+
+    [LoggerMessage(
+        EventId = 8,
+        Level = LogLevel.Information,
+        Message = "ranked match {MatchId} start pushed to {Recipients} browser(s): {Delivered} delivered, {Gone} pruned, {Failed} failed"
+    )]
+    public static partial void MatchStartPushed(
+        ILogger logger,
+        Guid matchId,
+        int recipients,
+        int delivered,
+        int gone,
+        int failed
+    );
+
+    [LoggerMessage(EventId = 9, Level = LogLevel.Error, Message = "ranked match {MatchId} start push failed")]
+    public static partial void MatchStartPushFailed(ILogger logger, Guid matchId, Exception exception);
+
+    // Warning: an unexpected refusal (403 = VAPID key mismatch, 400 = bad encoding) needs a look;
+    // 404/410 never get here - they are the normal "subscription gone" answer and prune the row.
+    [LoggerMessage(EventId = 10, Level = LogLevel.Warning, Message = "push to {Host} refused: {Status} {Reason}")]
+    public static partial void PushRejected(ILogger logger, string host, int status, string reason);
+
+    [LoggerMessage(
+        EventId = 11,
+        Level = LogLevel.Warning,
+        Message = "LOBBY_VAPID_SUBJECT {Subject} is a localhost contact: Apple's push service refuses it (403 BadJwtToken), so Safari subscribers get nothing"
+    )]
+    public static partial void PushSubjectRejectedByApple(ILogger logger, string subject);
 }

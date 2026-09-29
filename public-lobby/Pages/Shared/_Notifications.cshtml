@@ -1,0 +1,207 @@
+@model PublicLobby.Pages.NotificationsView
+@using System.Globalization
+@*
+    The Notifications section on /me (issue #98; design canvas
+    https://claude.ai/artifact/8Bv2baHMqKrwLq3bePzNhj). Rendered inline on first paint (Me.cshtml) and
+    re-rendered WHOLE by every MeModel notifications handler for the htmx swap (outerHTML onto
+    #notifications), so this file is the only copy of its markup and copy. wwwroot/push.js does the
+    browser half: it asks the browser for permission and a PushManager subscription, reports what it
+    found, and un-hides the "waiting" / "failed" lines below - it renders nothing itself.
+
+    Every request carries #push-client-state: the antiforgery token plus what push.js found in this
+    browser (supported / permission / endpoint), echoed back here on each render so it survives the
+    swap. hx-target / hx-swap / hx-include on the <section> are inherited by every button inside it;
+    buttons marked data-push-action are driven by push.js, which fires their custom hx-trigger event
+    once the browser side is done.
+*@
+@{
+    var device = Model.Device;
+    var thisBrowser = Model.ThisBrowser;
+    var browserAsksFirst = Model.Client.Permission != "granted";
+    var primary = "rounded bg-accent px-4 py-2.5 text-sm font-semibold text-void hover:bg-accent/90";
+    static string Day(DateTimeOffset at) => at.ToString("MMM d", CultureInfo.InvariantCulture);
+}
+<section id="notifications"
+         class="scroll-mt-6 space-y-3 rounded border border-accent/35 bg-accent/[0.04] p-4 sm:p-5"
+         data-push-surface="settings"
+         data-vapid-key="@Model.VapidPublicKey"
+         hx-post="/me?handler=Notifications"
+         hx-trigger="push-probe"
+         hx-target="#notifications"
+         hx-swap="outerHTML"
+         hx-include="#push-client-state">
+    <form id="push-client-state" data-push-state hidden>
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="PushSupported" value="@(Model.Client.Supported is { } s ? (s ? "true" : "false") : "")" />
+        <input type="hidden" name="PushPermission" value="@Model.Client.Permission" />
+        <input type="hidden" name="PushEndpoint" value="@Model.Client.Endpoint" />
+        <input type="hidden" name="PushP256dh" value="" />
+        <input type="hidden" name="PushAuth" value="" />
+        <input type="hidden" name="PushStandalone" value="" />
+    </form>
+
+    <div class="flex items-center justify-between gap-3">
+        <h2 class="flex items-center gap-2 text-sm font-semibold text-text-2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#37e0ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>
+            Notifications
+        </h2>
+        @if (device == PushDeviceState.On)
+        {
+            <span class="rounded-sm border border-ok/35 px-1.5 py-px text-[11px] font-semibold uppercase tracking-[1px] text-ok sm:text-xs"><span class="sm:hidden">On here</span><span class="hidden sm:inline">On in this browser</span></span>
+        }
+        else if (device == PushDeviceState.Off)
+        {
+            <span class="rounded-sm border border-hairline px-1.5 py-px text-[11px] font-semibold uppercase tracking-[1px] text-text-dim sm:text-xs"><span class="sm:hidden">Off here</span><span class="hidden sm:inline">Off in this browser</span></span>
+        }
+    </div>
+
+    @* ---- This browser (the design's setup states A-E) ----------------------------------------- *@
+    @switch (device)
+    {
+        case PushDeviceState.Checking:
+            <p class="text-sm text-text-dim">Checking this browser&hellip;</p>
+            break;
+
+        case PushDeviceState.NeverAsked:
+            <div data-push-idle class="space-y-3">
+                <p class="text-[15px] leading-relaxed text-text-hi">Get a browser notification when a ranked match starts.</p>
+                <div class="flex flex-wrap items-center gap-3">
+                    <button type="button" class="@primary" data-push-action="subscribe" hx-post="/me?handler=PushSubscribe" hx-trigger="push-subscribed">Turn on notifications</button>
+                    @if (browserAsksFirst)
+                    {
+                        <span class="text-[13px] text-text-dim">Your browser will ask first.</span>
+                    }
+                </div>
+            </div>
+            break;
+
+        case PushDeviceState.Off:
+            <div data-push-idle class="flex flex-col gap-3 rounded border border-panel-hi bg-panel px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                <p class="text-sm leading-relaxed text-text-2">
+                    This browser isn't receiving notifications.
+                    @if (browserAsksFirst)
+                    {
+                        <span>Your browser will ask for permission.</span>
+                    }
+                </p>
+                <button type="button" class="@primary shrink-0" data-push-action="subscribe" hx-post="/me?handler=PushSubscribe" hx-trigger="push-subscribed">Turn on here</button>
+            </div>
+            break;
+
+        case PushDeviceState.Blocked:
+            <div class="space-y-3 rounded border border-warn/30 bg-warn/5 px-3.5 py-3">
+                <div class="flex gap-3">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffb347" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mt-0.5 shrink-0" aria-hidden="true"><path d="M12 9v4"></path><path d="M12 17h.01"></path><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"></path></svg>
+                    <p class="text-sm leading-relaxed text-text-2"><strong class="font-semibold text-warn">Blocked in this browser.</strong> Open site settings (the icon left of the address), set Notifications to Allow, then come back.</p>
+                </div>
+                <button type="button" class="rounded border border-panel-hi px-3.5 py-2 text-[13px] font-medium text-text-2 hover:text-text-hi" data-push-action="probe">Check again</button>
+            </div>
+            break;
+
+        case PushDeviceState.Unsupported:
+            <div class="space-y-2">
+                <p class="text-sm leading-relaxed text-text-2">This browser can't receive push notifications from a tab. On iPhone or iPad: tap <strong class="font-semibold text-text-hi">Share &rarr; Add to Home Screen</strong>, open the lobby from there and turn notifications on.</p>
+                <p class="text-xs text-text-dim">Your preferences still save &mdash; they apply to any browser you turn on later.</p>
+            </div>
+            break;
+
+        case PushDeviceState.Expired:
+            <div data-push-idle class="space-y-3">
+                <p class="text-sm leading-relaxed text-text-2">This browser stopped accepting notifications, so we removed it. Turn it back on to keep getting alerts here.</p>
+                <button type="button" class="@primary" data-push-action="subscribe" data-push-resubscribe hx-post="/me?handler=PushSubscribe" hx-trigger="push-subscribed">Turn on again</button>
+            </div>
+            break;
+    }
+
+    @* B: the browser's permission prompt is open. Shown by push.js in place of the [data-push-idle] block. *@
+    <div data-push-waiting hidden class="space-y-3">
+        <p class="text-[15px] leading-relaxed text-text-hi">Choose <strong class="font-semibold text-accent">Allow</strong> in the prompt near your address bar.</p>
+        <button type="button" disabled class="rounded border border-panel-hi bg-panel-deep px-4 py-2.5 text-sm font-semibold text-text-dim">Waiting for permission&hellip;</button>
+    </div>
+    <p data-push-failed hidden role="alert" class="text-[13px] text-danger">Couldn't turn notifications on in this browser. Try again, or reload the page.</p>
+
+    @* ---- Notify me when (per ACCOUNT: toggling never touches a browser) ------------------------ *@
+    <div class="space-y-1.5">
+        <h3 class="text-xs font-semibold uppercase tracking-[1px] text-text-dim">Notify me when</h3>
+        @foreach (var (evt, enabled) in Model.Preferences)
+        {
+            var key = NotificationEvents.Key(evt);
+            var labelId = $"ev-{key.Replace('.', '-')}";
+            <div class="flex items-center justify-between gap-4 rounded border border-panel-hi bg-panel p-3.5">
+                <div class="flex flex-col gap-[3px]">
+                    @if (evt == NotificationEvent.RankedMatchStarted)
+                    {
+                        <span id="@labelId" class="text-[15px] font-semibold text-text-hi">A ranked match starts</span>
+                        <span class="text-[13px] leading-relaxed text-text-dim"><span class="sm:hidden">2+ pilots. At most once a day, never while you're in the game.</span><span class="hidden sm:inline">When a ranked game launches with 2 or more pilots. At most one alert a day, and none while you're signed in to the game.</span></span>
+                    }
+                </div>
+                <button type="button"
+                        role="switch"
+                        aria-checked="@(enabled ? "true" : "false")"
+                        aria-labelledby="@labelId"
+                        hx-post="/me?handler=NotifyEvent"
+                        hx-vals='{"event":"@key","enabled":"@(enabled ? "false" : "true")"}'
+                        class="flex h-8 w-[52px] shrink-0 rounded-full border p-[3px] sm:h-7 sm:w-12 @(enabled ? "justify-end border-accent bg-accent/25" : "justify-start border-text-dim bg-panel-deep")">
+                    <span class="size-6 rounded-full sm:size-5 @(enabled ? "bg-accent" : "bg-text-dim")"></span>
+                </button>
+            </div>
+        }
+        <p class="text-xs text-text-dim">Your choices follow your account to every browser you turn on.</p>
+    </div>
+
+    @* ---- Browsers receiving (per BROWSER: one Push Subscription row each) ---------------------- *@
+    @if (Model.Browsers.Count > 0)
+    {
+        <div class="space-y-1.5">
+            <h3 class="text-xs font-semibold uppercase tracking-[1px] text-text-dim">Browsers receiving</h3>
+            <ul class="space-y-1">
+                @foreach (var browser in Model.Browsers)
+                {
+                    var isThis = thisBrowser?.Id == browser.Id;
+                    <li class="flex flex-col gap-2.5 rounded border border-panel-hi bg-panel px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                        <div class="flex min-w-0 flex-col gap-0.5">
+                            <span class="text-sm text-text-hi">@browser.Label
+                                @if (isThis)
+                                {
+                                    <span class="ml-1.5 text-[11px] font-semibold uppercase tracking-[1px] text-accent sm:text-xs">This browser</span>
+                                }
+                            </span>
+                            <span class="font-mono text-xs text-text-dim">added @Day(browser.CreatedAt) &middot; last sent @(browser.LastSentAt is { } sent ? Day(sent) : "never")</span>
+                        </div>
+                        @if (isThis)
+                        {
+                            <div class="flex gap-2">
+                                <button type="button"
+                                        hx-post="/me?handler=PushTest"
+                                        hx-vals='{"id":"@browser.Id"}'
+                                        class="min-h-11 flex-1 rounded border border-secondary bg-secondary/10 px-3 text-[13px] font-medium text-secondary hover:bg-secondary/20 sm:min-h-0 sm:flex-none sm:py-1.5 sm:text-xs">Send test</button>
+                                <button type="button"
+                                        data-push-action="turn-off"
+                                        hx-post="/me?handler=PushRemove"
+                                        hx-trigger="push-unsubscribed"
+                                        hx-vals='{"id":"@browser.Id"}'
+                                        class="min-h-11 flex-1 rounded border border-panel-hi px-3 text-[13px] font-medium text-text-2 hover:text-text-hi sm:min-h-0 sm:flex-none sm:py-1.5 sm:text-xs">Turn off</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <button type="button"
+                                    hx-post="/me?handler=PushRemove"
+                                    hx-vals='{"id":"@browser.Id"}'
+                                    class="min-h-11 shrink-0 rounded border border-danger/40 bg-danger/10 px-3.5 text-[13px] font-medium text-danger hover:bg-danger/20 sm:min-h-0 sm:py-1.5 sm:text-xs">Remove</button>
+                        }
+                    </li>
+                }
+            </ul>
+        </div>
+    }
+
+    @if (Model.Status is not null)
+    {
+        <p role="status" class="text-[13px] text-ok">@Model.Status</p>
+    }
+    @if (Model.Error is not null)
+    {
+        <p role="alert" class="text-[13px] text-danger">@Model.Error</p>
+    }
+</section>

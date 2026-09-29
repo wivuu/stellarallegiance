@@ -99,6 +99,8 @@ Environment variables (see [`PublicLobby.cs`](PublicLobby.cs)):
 | `LOBBY_RELEASE_VERSION` | unset | The lobby's baked-in "latest game release" ([`ReleaseState`](ReleaseAdverts/ReleaseState.cs)), known the instant the process boots — which is exactly when every game server reconnects, so a lobby redeploy is usually what flips the fleet. Set by `aspire do deploy-lobby` from the latest stable git tag; blank/unset means no baked version (adverts then come from the polled feed alone). |
 | `LOBBY_RELEASE_FEED_URL` | the project's own GitHub "latest release" server feed | Feed the lobby polls for the *confirmed* version: an `http(s)` URL, or a local file path (dev / verification). Empty = the default. |
 | `LOBBY_RELEASE_POLL_SECONDS` | `300` (min `5`) | Poll cadence. `0` disables polling — baked-only, and game clients then hear nothing (they're only ever told the *confirmed* version, never the baked one — see "Release Adverts" below). |
+| `LOBBY_VAPID_PUBLIC_KEY` / `LOBBY_VAPID_PRIVATE_KEY` | unset (notifications off) | Web Push VAPID key pair (base64url). Both set = browser notifications on (see "Notifications (Web Push)" below); a malformed key fails startup. Generate once with `--gen-vapid-keys` and never rotate the public key: every existing browser subscription is bound to it. The private key is a secret. |
+| `LOBBY_VAPID_SUBJECT` | `LOBBY_PUBLIC_URL` when https, else `https://github.com/wivuu/stellarallegiance` | Contact the push services may use (`mailto:` or `https:`). Never a localhost address: Apple's push service answers `403 BadJwtToken` to the whole request (logged at startup as a warning). |
 
 A public STUN server is fine — there's nothing to host for it. The live server registry and
 signaling relay still hold everything in memory (registry entries expire 30 s after the last
@@ -271,6 +273,7 @@ Registry:
 | `GET` | `/servers` | — | active server list (browser view); never includes `secret`. |
 | `GET` | `/servers/live` | — | **anonymous** SSE. Announces registry changes to the public web pages as the reduced `PublicServerStrip` projection (`PublicView.cs`) — server names, player counts, state badge, totals; never the session id, endpoint, ICE config or roster. One `snapshot` event on connect, one per change (identical snapshots suppressed), a keepalive comment every 20 s, and `503` past `PublicStreams.Max` concurrent streams. |
 | `DELETE` | `/servers/{sessionId}` | — | graceful removal on host shutdown. Requires `Authorization: Bearer <secret>`; a missing/wrong secret returns `404`. |
+| `POST` | `/push/mute` | `{ endpoint, event }` | **anonymous**. A notification's "Mute these" (`wwwroot/sw.js`): turns that Notification Event off for the account owning the browser subscription `endpoint` (the unguessable endpoint is the capability — the service worker has no session). `204`; `404` for an unknown endpoint or when notifications are off; `400` for an unknown event. See "Notifications (Web Push)". |
 | `GET` | `/release` | — | **anonymous**. What this lobby believes the latest game release is: `{ latest, confirmed, baked }` ([`ReleaseState`](ReleaseAdverts/ReleaseState.cs) — see "Release Adverts" below). Public knowledge (the GitHub releases page says the same); lets an operator, or a tool watching neither stream, ask the one watcher instead of GitHub directly. |
 
 Liveness + status come solely from the server WebSocket (`/servers/ws`): the host authenticates
@@ -449,3 +452,67 @@ global ladder); every ended match feeds the per-server ladder. `Grains/MatchGrai
 writer of `matches` / `match_teams` / `match_pilots` and registers an Orleans reminder (5 min) that
 marks a match **abandoned** once its listing has been gone for 10 min. `/servers/{gameServerId}/history`
 shows a server's matches and ladder.
+
+## Notifications (Web Push)
+
+Signed-in pilots can get a browser notification when a ranked match starts (issue #98). Choices
+are per **account**, delivery is per **browser** (`public-lobby/CONTEXT.md`: Notification Event /
+Notification Preference / Push Subscription):
+
+- `notification_preferences` holds a player's explicit on/off per event; a missing row means the
+  event's default (`ranked.match-started` defaults ON, so turning a browser on is enough). Toggling
+  never touches a browser.
+- `push_subscriptions` holds one row per browser (the PushManager endpoint + keys, a User-Agent
+  label, created / last-sent). The endpoint is unique: a browser belongs to whichever account turned
+  it on last. "Turn off" deletes only that row; at most 10 browsers per account.
+- `notification_deliveries` holds when each account was last actually sent each event — the
+  Notification Cap (at most one per account per rolling 24 h). Test sends never count.
+- No anonymous subscriptions and no master switch — a new event is one more row under "Notify me when".
+
+**`ranked.match-started` delivery rules** (`Notifications/PushNotifier.cs`, queued from `Api/MatchEndpoints.cs`):
+
+| | |
+|---|---|
+| Fires when | `POST /matches` answers Started (the FIRST start of that match id) for a Ranked server — the admin flag, or every authenticated server under `RANKED_RESULTS=authenticated`, the same test the result is ranked by — on a Verified live listing whose roster has ≥ 2 distinct player ids |
+| Recipients | Accounts opted in with ≥ 1 browser, minus that roster's pilots, minus accounts under a ban, minus anyone **in the game** (below), minus anyone already alerted in the last 24 h |
+| In the game | A game client signed in with its server list open (the `/servers/events` stream), or a pilot on any live listing's roster — leased in `Grains/PlayerPresenceGrain.cs` (60 s, refreshed by the stream keepalive and the game server's `/servers/ws` update/ping frames), so it is cluster-wide and lapses on its own if a silo dies. An open lobby web page does not count |
+| Cap | At most one per account per rolling 24 h (`notification_deliveries`), started only when one of its browsers took the message |
+| Dedupe | Once per match id (a spool re-send answers AlreadyStarted); notification `tag` and push `Topic` = match id, so a re-send replaces rather than stacks |
+| TTL | 10 minutes — a device offline longer gets nothing stale |
+| Click | Focus an open lobby tab (moved to `/#servers`), else open `/#servers` |
+| Mute these | `POST /push/mute` turns the event off for the account (undo on `/me`) |
+
+Delivery never holds up the game server: the request only queues the alert (`PushOutbox`, bounded,
+drop-oldest) and `PushDispatcher` sends it in the background (8 at a time). A `404`/`410` from a
+push service prunes that browser's row (its `/me` then offers "Turn on again"); any other refusal is
+logged (EventId 10 — a `403` usually means the VAPID key changed). An alert still queued when the
+process stops is lost: it would be stale by the time a restarted lobby could send it.
+
+**Setup.** Generate a key pair once and set both halves (Railway: the deploy dialog, private key as a
+secret; locally: the root `.env`):
+
+```bash
+dotnet run --project public-lobby -- --gen-vapid-keys    # prints LOBBY_VAPID_PUBLIC_KEY=… / LOBBY_VAPID_PRIVATE_KEY=…
+```
+
+Never rotate the public key casually — every browser subscription is bound to it, and all of them
+stop working (each browser then shows "Turn on again").
+
+**Pieces.** `/me` renders `Pages/Shared/_Notifications.cshtml` (every state of the design: checking,
+never asked, off, blocked, unsupported, on, expired) and the home page renders
+`Pages/Shared/_PushPrompt.cshtml` above the server strip. Both are server-rendered htmx partials;
+`wwwroot/push.js` only looks at the browser (support, permission, its subscription), asks for
+permission, subscribes/unsubscribes, and fires the custom events the markup's `hx-post`s listen for.
+`wwwroot/sw.js` (root scope) shows the notification and handles its clicks.
+
+**Library.** `Lib.Net.Http.WebPush` (RFC 8291 `aes128gcm` + RFC 8292 `vapid t=…, k=…`). The `WebPush`
+package still sends the legacy `aesgcm` / `Crypto-Key` form, which Apple's push service (Safari on
+macOS and iOS) rejects.
+
+**Push-service allowlist.** The lobby POSTs to whatever endpoint a browser hands it, so only these
+hosts are accepted (anything else is refused at subscribe time): `fcm.googleapis.com`,
+`android.googleapis.com`, `*.push.services.mozilla.com`, `*.notify.windows.com`, `*.push.apple.com`.
+
+**iOS.** Safari on iPhone/iPad delivers Web Push only to a Home Screen web app (iOS 16.4+): Share →
+Add to Home Screen, open the lobby from there, then turn notifications on. That is why the lobby
+serves `wwwroot/manifest.webmanifest` + icons; a plain Safari tab gets the "can't receive push" state.
