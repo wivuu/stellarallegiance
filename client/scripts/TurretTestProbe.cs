@@ -49,7 +49,7 @@ public partial class TurretTestProbe : CanvasLayer
         _label.AddThemeColorOverride("font_color", DesignTokens.TextHi);
         _label.AddThemeColorOverride("font_outline_color", DesignTokens.Void);
         _label.AddThemeConstantOverride("outline_size", 4);
-        _label.Position = new Vector2(16f, 170f); // clear of the FPS / sector / credits debug lines
+        _label.Position = new Vector2(16f, 170f); // clear of the FPS / controls / credits debug lines
         AddChild(_label);
     }
 

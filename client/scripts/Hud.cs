@@ -17,7 +17,6 @@ public partial class Hud : CanvasLayer
     private GameNetClient _net = null!;
     private DefRegistry _defs = null!;
     private Label _label = null!;
-    private Label _sectorShips = null!;
     private Label _credits = null!;
     private Label _warning = null!;
 
@@ -185,21 +184,14 @@ public partial class Hud : CanvasLayer
         _fps.Position = new Vector2(16, 12);
         AddChild(_fps);
 
-        // Active-ship count for the local sector. Hidden until a match is live (the lobby overlay
-        // owns the screen otherwise). Telemetry → mono Data style. Sits under the FPS readout.
-        _sectorShips = UiKit.MakeLabel("", UiKit.TextStyle.Data);
-        _sectorShips.Position = new Vector2(16, 38);
-        _sectorShips.Visible = false;
-        AddChild(_sectorShips);
-
         _label = UiKit.MakeLabel("", UiKit.TextStyle.Data);
-        _label.Position = new Vector2(16, 64);
+        _label.Position = new Vector2(16, 38);
         AddChild(_label);
 
         // Team credits readout (Stage-2 economy), under the flight/controls line. Hidden until a
         // match is live. The Secondary token replaces the old inline gold.
         _credits = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.Secondary);
-        _credits.Position = new Vector2(16, 90);
+        _credits.Position = new Vector2(16, 64);
         _credits.Visible = false;
         AddChild(_credits);
 
@@ -655,10 +647,6 @@ public partial class Hud : CanvasLayer
                 _scoreboard.Close();
         }
         _prevPhase = _world.Phase;
-
-        _sectorShips.Visible = inMatch;
-        if (inMatch)
-            _sectorShips.Text = $"Ships in sector: {_world.Ships.ShipsInLocalSector()}";
 
         // Running team balance (server-authoritative; accrues on the paycheck cadence). Same team
         // source as the buy menu so the balance shown matches what gates the buttons.

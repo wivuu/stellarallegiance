@@ -288,16 +288,6 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
             ? rs
             : null;
 
-    // Number of ships currently tagged with the local sector (the local ship IS one of these while flying).
-    public int ShipsInLocalSector()
-    {
-        int n = 0;
-        foreach (var node in _nodes.Values)
-            if (SectorView.InSector(node, _sectors.LocalSector))
-                n++;
-        return n;
-    }
-
     // Team of a ship node (for the own-base dock-disc carve-out). -1 if unknown.
     public static int ShipTeamOf(Node3D ship) =>
         ship switch
