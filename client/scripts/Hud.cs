@@ -69,9 +69,9 @@ public partial class Hud : CanvasLayer
     // demand like the two above — see Scoreboard's header.
     private Scoreboard? _scoreboard;
 
-    // Previous-frame match phase, so the Active→Ended edge can auto-open the post-match board. That
-    // edge is detected HERE, not in the Lobby: the sim holds the ships for ~6s after the win, so the
-    // Lobby is still hidden (LocalShip != null) when the phase flips.
+    // Previous-frame match phase, so the Active→Ended edge can auto-open the post-match board. The
+    // Hud owns that edge because it owns the board; the Lobby comes up underneath at the same edge
+    // (WorldRenderer.MatchOver) even though the sim still holds our hull for ~6s after the win.
     private MatchPhase _prevPhase = MatchPhase.Lobby;
 
     // The floating chat overlay (created in _Ready). Kept as a field so OpenHangar can raise it
@@ -632,11 +632,12 @@ public partial class Hud : CanvasLayer
             _hangar = null;
         }
 
-        // Match scoreboard lifecycle. The Active→Ended edge auto-opens the post-match board — detected
-        // HERE rather than in the Lobby because the sim holds the ships for ~6s after the win, so the
-        // Lobby is still hidden (and the cursor still captured) at that moment; the board frees the
-        // cursor itself. That board then STAYS up over the lobby until Esc / BACK TO LOBBY dismisses
-        // it. The live board is dismissed whenever it loses its subject (the match stops being live)
+        // Match scoreboard lifecycle. The Active→Ended edge auto-opens the post-match board. The sim
+        // holds the ships for ~6s after the win, so the cursor is usually still captured at that
+        // moment; the board frees it itself. From the same edge the finished match is out of play
+        // (WorldRenderer.MatchOver): flight input is gated off and the Lobby comes up under the board,
+        // which STAYS up until Esc / BACK TO LOBBY dismisses it — into the lobby, never back into
+        // flight. The live board is dismissed whenever it loses its subject (the match stops being live)
         // or the mandatory spawn hangar takes the screen, and any board closes when a new match
         // starts. Read after the hangar block so the hangar state is current.
         if (_scoreboard != null)

@@ -159,10 +159,11 @@ public partial class Chat : Control
     //     or its comms box unfocused while ShipLoadout.Active) and binds no Enter of its own.
     //   - riding a teammate's turret: a gunner has no LocalShip but IS in flight (the Lobby is down),
     //     so without this the gunner had no chat at all — no Enter-to-talk and no log.
+    // Once the match is over (WorldRenderer.MatchOver) nobody is in flight any more, hull or seat:
+    // the Lobby is up (see its show-gate) and hosts comms, so this overlay steps aside there too.
     private bool LobbyOwnsScreen =>
         _cm.State == ConnectionManager.ConnState.Connected
-        && _world.Ships.LocalShip == null
-        && !_world.Ships.Riding
+        && (WorldRenderer.MatchOver || (_world.Ships.LocalShip == null && !_world.Ships.Riding))
         && !SectorOverview.Active
         && !ShipLoadout.Active;
 

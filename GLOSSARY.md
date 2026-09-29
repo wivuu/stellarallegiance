@@ -1426,7 +1426,7 @@ The match scoreboard overlay, one class in two modes over one ledger (`WorldRend
   - `client/scripts/ui/RosterCells.cs` — the row/header/cell primitives it shares with the Lobby roster
   - `client/scripts/Hud.cs` — creation, the F5 hotkey, and the Active→Ended auto-open edge
 - **Related:** [[MsgMatchStats]], [[Kill Credit]], [[Lobby]], [[Fog of War (Team Vision)]], [[UI Components]]
-- **Notes:** `Scoreboard.Active` is deliberately NOT part of `InputGate.FlightInputFree` — the server replays held input, so freezing the client would leave the pilot thrusting blind; the live board also never touches `Input.MouseMode`. The post-match board DOES free the cursor on open, because it fires while you're still flying with the lobby hidden. `--ui-open=scoreboard-live|scoreboard-post` opens a mode for a `--ui-shot` capture.
+- **Notes:** `Scoreboard.Active` is deliberately NOT part of `InputGate.FlightInputFree` — the server replays held input, so freezing the client would leave the pilot thrusting blind; the live board also never touches `Input.MouseMode`. The post-match board DOES free the cursor on open, because it fires while your hull still exists (the sim holds ships ~6s after the win). From that same Ended edge `WorldRenderer.MatchOver` (latched until the next Active or a world rebuild) takes the finished match out of play: it IS part of `FlightInputFree`, `ShipController` samples neutral input and drops its flight seat, and the Lobby comes up under the board — so Esc / BACK TO LOBBY lands in the lobby, never back in flight. `--ui-open=scoreboard-live|scoreboard-post` opens a mode for a `--ui-shot` capture.
 
 ---
 

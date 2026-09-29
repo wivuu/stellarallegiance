@@ -127,8 +127,11 @@ public partial class ShipController : Node
     private bool _shipInbound;
 
     // Either seat: flight input sampling still gates on the local ship alone (ReadInput is never
-    // called while riding), but everything about the CURSOR is shared.
-    private bool InFlightSeat => _hasShip || _riding || _shipInbound;
+    // called while riding), but everything about the CURSOR is shared. Neither counts once the match
+    // is over: the hull outlives the win by the sim's ~6s hold, but the post-match board and the lobby
+    // own the cursor and Esc from that edge on, so a click never re-locks mouse-look into the
+    // finished match and HandleMouseCapture keeps the cursor free.
+    private bool InFlightSeat => (_hasShip || _riding || _shipInbound) && !WorldRenderer.MatchOver;
 
     // Headless verification: `--autofly` auto-spawns a Scout and flies a fixed
     // input so the full ApplyInput -> SimTick -> reconcile loop can be checked
@@ -456,11 +459,12 @@ public partial class ShipController : Node
         _world.Ships.LocalShip?.SetAutopilot(false);
     }
 
-    // Autopilot toggle (T): edge-triggered like Tab. Swallowed while chatting (T would type). Toggles
-    // between engage (toward the current focus/waypoint) and disengage.
+    // Autopilot toggle (T): edge-triggered like Tab. Swallowed while chatting (T would type), and once
+    // the match is over (a T typed into the post-match lobby's comms box). Toggles between engage
+    // (toward the current focus/waypoint) and disengage.
     private void HandleAutopilotToggle()
     {
-        if (Chat.Capturing)
+        if (Chat.Capturing || WorldRenderer.MatchOver)
         {
             _apHeld = true;
             return;
@@ -544,11 +548,16 @@ public partial class ShipController : Node
 
     // Neutral input while the chat box is open, the sector overview map is up, or the
     // hangar screen is open, so typing/panning/clicking never steers or fires — the
-    // ship coasts on held/neutral input.
+    // ship coasts on held/neutral input. Likewise once the match is over: the hull lives on
+    // through the post-match hold, but typing in the lobby that now covers it must not fly it.
     private ShipInputState SampleInput(double delta) =>
         _autoFly
             ? AutoInput()
-            : (Chat.Capturing || SectorOverview.Active || ShipLoadout.Active ? new ShipInputState() : ReadInput(delta));
+            : (
+                Chat.Capturing || SectorOverview.Active || ShipLoadout.Active || WorldRenderer.MatchOver
+                    ? new ShipInputState()
+                    : ReadInput(delta)
+            );
 
     private void TickAutoFlyBootstrap(bool connected, bool hasShip, double delta)
     {
@@ -737,8 +746,16 @@ public partial class ShipController : Node
         // spawn hangar is the launch source and is still in the tree this frame (it closes once
         // the ship exists, Hud._Process), and its _ExitTree doesn't touch MouseMode, so this
         // capture sticks. Skipped in headless autofly (no cursor) and while a real modal owns the
-        // cursor, so we never yank it out from under a menu/map/chat.
-        if (!_autoFly && !EscapeMenu.Active && !SettingsDialog.Active && !SectorOverview.Active && !Chat.Capturing)
+        // cursor, so we never yank it out from under a menu/map/chat — nor once the match is over
+        // (a pod ejected during the post-match hold is not a launch; the lobby owns the cursor).
+        if (
+            !_autoFly
+            && !EscapeMenu.Active
+            && !SettingsDialog.Active
+            && !SectorOverview.Active
+            && !Chat.Capturing
+            && !WorldRenderer.MatchOver
+        )
         {
             Input.MouseMode = Input.MouseModeEnum.Captured;
             _mouseDelta = Vector2.Zero;
@@ -984,9 +1001,11 @@ public partial class ShipController : Node
     // while Chat/SectorOverview own the cursor (they restore it on close), and while the
     // escape menu / settings dialog / post-match scoreboard are up (so clicking their buttons never
     // recaptures). The POST-MATCH board earns its place here because it auto-opens at the match-end
-    // edge while the pilot is STILL FLYING — without the guard, clicking BACK TO LOBBY would re-lock
-    // the cursor for mouse-look. The LIVE (F5) board is deliberately absent: it's read-only,
-    // mouse-transparent, and must leave flight input exactly as it was.
+    // edge while the pilot's hull still exists — without the guard, clicking BACK TO LOBBY would
+    // re-lock the cursor for mouse-look (InFlightSeat now also drops out once the match is over, so
+    // Esc there belongs to the board and then the Lobby's escape menu, never this two-step). The
+    // LIVE (F5) board is deliberately absent: it's read-only, mouse-transparent, and must leave
+    // flight input exactly as it was.
     public override void _Input(InputEvent @event)
     {
         // ScreenRelative, not Relative: Relative is divided by the UI scale (ContentScaleFactor), which
@@ -1050,8 +1069,8 @@ public partial class ShipController : Node
     }
 
     // Release the cursor for the spawn menu (dead / not yet spawned, and not riding a turret station
-    // either). The in-flight capture/release lives in _Input; this only handles the no-seat menu case
-    // each frame.
+    // either) or the post-match screens (match over — see InFlightSeat). The in-flight capture/release
+    // lives in _Input; this only handles the no-seat menu case each frame.
     private void HandleMouseCapture(bool flying)
     {
         if (

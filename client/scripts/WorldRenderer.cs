@@ -312,6 +312,15 @@ public partial class WorldRenderer
     public MatchPhase Phase => _clock.Phase;
     public byte? Winner => _clock.Winner;
 
+    // The match this client was in is over: latched when the phase reaches Ended, cleared by the next
+    // Active (or a world Reset). The sim keeps every ship alive for ~6s after the win, so without this
+    // the pilot could close the post-match board and fly the finished match. From here on the Lobby
+    // overlay owns the screen even while our hull still exists, and InputGate / ShipController keep
+    // flight input off. It stays latched through the Lobby flip on purpose: the lossy Lobby snapshot
+    // can overtake the reliable ShipGone that tears our hull down, and the hull must not become
+    // flyable in that gap. Static so the static InputGate can read it (like the overlays' Active flags).
+    public static bool MatchOver { get; private set; }
+
     // The local player's team, set when their ship spawns (null until then). Read by
     // TargetMarkers to tell friend from foe.
     public byte? LocalTeam => _player.LocalTeam;
@@ -537,6 +546,10 @@ public partial class WorldRenderer
             // so drop the mirror now rather than showing a stale CREWED SHIPS list in the next hangar.
             Crew.Clear();
         }
+        if (newPhase == MatchPhase.Ended)
+            MatchOver = true;
+        else if (newPhase == MatchPhase.Active)
+            MatchOver = false;
         _clock.Phase = newPhase;
         _clock.Winner = winner == 255 ? (byte?)null : winner;
     }
@@ -604,6 +617,7 @@ public partial class WorldRenderer
         _localSector = HomeSector;
         _sectorView.SetViewOverride(null);
         _clock.Reset();
+        MatchOver = false; // the rebuilt world starts over at the lobby baseline, like the clock
         AbandonWarp(); // a world rebuild (reconnect / phase change) abandons any deferred warp
         ApplySectorEnv(HomeSector);
     }
