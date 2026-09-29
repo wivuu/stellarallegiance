@@ -314,8 +314,9 @@ public sealed partial class Simulation
     }
 
     // Tear down all drones (no player / match ended) and reset every slot + squad so the next
-    // time combat goes live a fresh squad scrambles immediately.
-    private void DespawnAllPigs()
+    // time combat goes live a fresh squad scrambles immediately. `reason` is the ShipGone code each
+    // drone leaves with: a blast by default, GoneMatchEnd when the match teardown sweeps them.
+    private void DespawnAllPigs(byte reason = GoneDestroyed)
     {
         _pigOrders.Clear();
         for (byte team = 0; team < NumTeams; team++)
@@ -328,7 +329,7 @@ public sealed partial class Simulation
             if (slot.Ship is ShipSim sh)
             {
                 _pigDecisions.Remove(sh.ShipId);
-                RemoveShipNow(sh); // before Pass A, so direct removal is safe
+                RemoveShipNow(sh, reason); // before Pass A, so direct removal is safe
             }
             slot.Ship = null;
             slot.RespawnAtTick = 0;

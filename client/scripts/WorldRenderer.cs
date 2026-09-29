@@ -312,14 +312,17 @@ public partial class WorldRenderer
     public MatchPhase Phase => _clock.Phase;
     public byte? Winner => _clock.Winner;
 
-    // The match this client was in is over: latched when the phase reaches Ended, cleared by the next
-    // Active (or a world Reset). The sim keeps every ship alive for ~6s after the win, so without this
-    // the pilot could close the post-match board and fly the finished match. From here on the Lobby
-    // overlay owns the screen even while our hull still exists, and InputGate / ShipController keep
-    // flight input off. It stays latched through the Lobby flip on purpose: the lossy Lobby snapshot
-    // can overtake the reliable ShipGone that tears our hull down, and the hull must not become
-    // flyable in that gap. Static so the static InputGate can read it (like the overlays' Active flags).
+    // The match this client was in is over: latched when the phase reaches Ended — or earlier, by the
+    // reliable match-end ShipGone (LatchMatchOver), which can overtake the lossy Ended snapshot — and
+    // cleared only on the EDGE into the next Active (or a world Reset), so a late Active snapshot can't
+    // undo an early latch. The server sweeps every ship out one step after the win; this keeps the
+    // hull we may still hold for that step (or across a lost frame) from ever being flyable again. From
+    // here on the Lobby overlay owns the screen and InputGate / ShipController keep flight input off.
+    // Static so the static InputGate can read it (like the overlays' Active flags).
     public static bool MatchOver { get; private set; }
+
+    // ShipRenderer: a match-end ShipGone arrived — the match is over even if no Ended snapshot has yet.
+    public static void LatchMatchOver() => MatchOver = true;
 
     // The local player's team, set when their ship spawns (null until then). Read by
     // TargetMarkers to tell friend from foe.
@@ -548,8 +551,8 @@ public partial class WorldRenderer
         }
         if (newPhase == MatchPhase.Ended)
             MatchOver = true;
-        else if (newPhase == MatchPhase.Active)
-            MatchOver = false;
+        else if (newPhase == MatchPhase.Active && Phase != MatchPhase.Active)
+            MatchOver = false; // a NEW match — not a stale Active snapshot behind an early latch
         _clock.Phase = newPhase;
         _clock.Winner = winner == 255 ? (byte?)null : winner;
     }

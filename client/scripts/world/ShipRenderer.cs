@@ -183,11 +183,13 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
     // once it despawns). CameraRig chases its MatchClock-interpolated transform — no new timeline.
     public Node3D? RidingNode => _ridingShipId != 0 && _nodes.TryGetValue(_ridingShipId, out var n) ? n : null;
 
-    // ShipGone reason codes (mirror server Simulation.GoneDestroyed/GoneClean). A clean removal is a
-    // voluntary dock or a pod rescue; lost-contact (2) is fog information loss — both despawn without a
-    // blast. Duration of the fog lost-contact mesh fade — brief, so the ship visibly slips out of sight.
+    // ShipGone reason codes (mirror server Simulation.GoneDestroyed/GoneClean/GoneMatchEnd). A clean
+    // removal is a voluntary dock or a pod rescue; lost-contact (2) is fog information loss; match-end
+    // (3) is the server sweeping the finished match out of the world — all despawn without a blast.
+    // Duration of the fog lost-contact mesh fade — brief, so the ship visibly slips out of sight.
     private const byte GoneClean = 1;
     private const byte GoneLostContact = 2;
+    private const byte GoneMatchEnd = 3;
     private const float ContactFadeSec = 0.5f;
 
     // ---- IShipQuery + coordinator handshakes ----------------------------------------------------
@@ -1057,7 +1059,7 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
     }
 
     // reason: 0 = destroyed (blast + death-cam), 1 = clean despawn (voluntary dock / pod rescue),
-    // 2 = fog lost-contact (quiet fade, no blast).
+    // 2 = fog lost-contact (quiet fade, no blast), 3 = match-end teardown (gone, nothing else).
     private void DeleteShip(Ship row, byte reason)
     {
         // The hull a YouAre promised us died before its first snapshot: stop holding the shipless rules
@@ -1084,6 +1086,21 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
             _contactLost.OpenContactLostWindow();
             (node as RemoteShip)?.BeginFadeOut(); // its cloak shimmer must not fight the fade's transparency
             NodeFx.QuietFade(node, ContactFadeSec);
+            return;
+        }
+
+        // Match-end teardown: the server swept the finished match out of the world. Not a dock and not a
+        // death — no blast, no sound, no death-cam, no hangar defaults; the ship is simply gone. It also
+        // arrives (reliable) ahead of the lossy snapshot that carries Ended, so latch MatchOver here: the
+        // mandatory spawn hangar must not open over the post-match board in between.
+        if (reason == GoneMatchEnd)
+        {
+            if (local)
+                LocalShip = null;
+            if (_ridingShipId == row.ShipId)
+                SetRiding(0);
+            WorldRenderer.LatchMatchOver();
+            node.QueueFree();
             return;
         }
 

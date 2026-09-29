@@ -128,8 +128,8 @@ public partial class ShipController : Node
 
     // Either seat: flight input sampling still gates on the local ship alone (ReadInput is never
     // called while riding), but everything about the CURSOR is shared. Neither counts once the match
-    // is over: the hull outlives the win by the sim's ~6s hold, but the post-match board and the lobby
-    // own the cursor and Esc from that edge on, so a click never re-locks mouse-look into the
+    // is over: the hull can outlive the win by a step (until the server's match-end sweep reaches us),
+    // but the post-match board and the lobby own the cursor and Esc from that edge on, so a click never re-locks mouse-look into the
     // finished match and HandleMouseCapture keeps the cursor free.
     private bool InFlightSeat => (_hasShip || _riding || _shipInbound) && !WorldRenderer.MatchOver;
 

@@ -630,9 +630,12 @@ public sealed partial class Simulation
     // Per-tick ship spatial grid for shot broad-phase (module ShipGridForSector).
     private readonly Dictionary<uint, Dictionary<(int, int, int), List<ShipSim>>> _shipGrid = new();
 
-    // ShipGone reason codes (mirrored on the client in GameNetClient). Default 0 = a real death.
+    // ShipGone reason codes (mirrored on the client in ShipRenderer). Default 0 = a real death.
+    // 2 is the hub's fog lost-contact fade (ClientHub, per team). GoneMatchEnd is the match teardown
+    // (DespawnMatchEntities): a silent removal the client treats as neither a dock nor a death.
     public const byte GoneDestroyed = 0;
     public const byte GoneClean = 1;
+    public const byte GoneMatchEnd = 3;
 
     // Match lifecycle. The server is now the lobby host: it starts in Lobby, the matchmaker
     // (ShouldStartMatch hook, polled each step) flips it to Active, a destroyed base flips it
@@ -659,6 +662,11 @@ public sealed partial class Simulation
     // (world.yaml `ended-to-lobby-seconds`, stock 6s).
     private readonly uint EndedToLobbyTicks;
     private uint _returnToLobbyAtTick;
+
+    // Raised at the Ended latch (ApplyBaseDamage, mid-pass — too late in the step to mutate _order
+    // safely) and consumed at the top of the NEXT Step, which takes the finished match out of the
+    // world with DespawnMatchEntities. The Ended hold then shows only the board, never a live world.
+    private bool _endTeardownPending;
 
     // Lobby integration hooks (set by Program/ClientHub; null in unit tests). ShouldStartMatch
     // is polled every step while in Lobby — it consults the live lobby roster + the matchmaker
@@ -921,20 +929,30 @@ public sealed partial class Simulation
         ExpireHeldOrphans(tick);
 
         // Lobby host: poll the matchmaker while waiting in the lobby, and return to the lobby
-        // a few seconds after a match ends so the next one can be readied up.
+        // a few seconds after a match ends so the next one can be readied up. The step right after
+        // the Ended latch takes the finished match out of the world (before Pass A, so removing
+        // ships here is safe); the hold that follows is board-only.
         if (Phase == PhaseLobby)
         {
             if (ShouldStartMatch?.Invoke() == true)
                 StartMatch();
         }
-        else if (Phase == PhaseEnded && tick >= _returnToLobbyAtTick)
+        else if (Phase == PhaseEnded)
         {
-            ReturnToLobby();
+            if (_endTeardownPending)
+            {
+                _endTeardownPending = false;
+                DespawnMatchEntities();
+            }
+            if (tick >= _returnToLobbyAtTick)
+                ReturnToLobby();
         }
 
-        ProcessRespawns(tick);
         if (Phase == PhaseActive)
         {
+            // Ships spawn only into a live match. The hub already refuses a MsgSpawn outside Active;
+            // this also stops a join or respawn queued just before the latch landing in the Ended hold.
+            ProcessRespawns(tick);
             PigBrainStep(tick); // 5 Hz AI decisions + squad lifecycle (Simulation.Pig.cs)
             MinerBrainStep(tick); // 5 Hz miner lifecycle + rock/base targeting (Simulation.Mining.cs)
             ConstructorBrainStep(tick); // 5 Hz constructor build lifecycle (Simulation.Constructors.cs)
@@ -1522,15 +1540,40 @@ public sealed partial class Simulation
         }
     }
 
-    // -> Lobby. Tears down every ship (players + drones), refills bases, clears the win state
-    // and shot ring, and lets the hub clear ready flags. Called a few seconds after a match
-    // ends and whenever the server empties out.
+    // -> Lobby. Tears down every match entity (DespawnMatchEntities — already done at the Ended latch
+    // after a win, so on that path this finds nothing left), refills bases, clears the shot ring, and
+    // lets the hub clear ready flags. Called a few seconds after a match ends and whenever the server
+    // empties out.
     public void ReturnToLobby()
     {
         if (Phase == PhaseActive)
             JustReset = true; // leaving a live match with no winner: reported as "reset"
-        DespawnAllPigs();
-        DespawnAllMiners();
+        _endTeardownPending = false; // a reset inside the latch step: the sweep below covers it
+        DespawnMatchEntities();
+        World.ResetMatchBases();
+        Events.BasesChanged = true;
+        Phase = PhaseLobby;
+        // Winner is deliberately NOT cleared here. It is match RESULT, not match state: the
+        // post-match scoreboard stays up over the lobby (and F5 reopens it there), so the winning
+        // side has to survive the Ended -> Lobby flip exactly the way the ledger above does.
+        // StartMatch is the only place it resets.
+        _matchDirty = false;
+        foreach (var ring in _shotRing)
+            ring.Clear();
+        ResetVision(); // drain any in-flight vision compute + clear fog state (Simulation.Vision.cs)
+        OnReturnToLobby?.Invoke();
+    }
+
+    // Take the finished (or abandoned) match out of the world: every ship, player and drone alike,
+    // plus missiles, chaff, minefields, probes, salvage, crews and held orphans. Every ship leaves with
+    // GoneMatchEnd — a silent removal the client renders as neither a dock nor a death — so the end of
+    // a match never reads as a wave of explosions. Runs one step after the Ended latch (Step, via
+    // _endTeardownPending) and again from ReturnToLobby, where it is a no-op if the latch already ran.
+    // Bases stay: ReturnToLobby refills them.
+    private void DespawnMatchEntities()
+    {
+        DespawnAllPigs(GoneMatchEnd);
+        DespawnAllMiners(GoneMatchEnd);
         // Tear down any in-flight missiles too (emit gone so live clients don't keep ghosts).
         foreach (var mis in _missiles)
             Events.MissileGone.Add((mis.MissileId, 0, mis.SectorId, mis.Pos));
@@ -1555,7 +1598,7 @@ public sealed partial class Simulation
         foreach (var s in _order)
         {
             _ships.Remove(s.ShipId);
-            Events.Deaths.Add((s.ShipId, GoneDestroyed));
+            Events.Deaths.Add((s.ShipId, GoneMatchEnd));
         }
         _order.Clear();
         _byClient.Clear();
@@ -1564,18 +1607,6 @@ public sealed partial class Simulation
         // Held orphans' ships were just torn down by the _order loop above; drop the stale tokens
         // so a reconnect mid-grace can't try to reclaim a ship that no longer exists.
         _heldOrphans.Clear();
-        World.ResetMatchBases();
-        Events.BasesChanged = true;
-        Phase = PhaseLobby;
-        // Winner is deliberately NOT cleared here. It is match RESULT, not match state: the
-        // post-match scoreboard stays up over the lobby (and F5 reopens it there), so the winning
-        // side has to survive the Ended -> Lobby flip exactly the way the ledger above does.
-        // StartMatch is the only place it resets.
-        _matchDirty = false;
-        foreach (var ring in _shotRing)
-            ring.Clear();
-        ResetVision(); // drain any in-flight vision compute + clear fog state (Simulation.Vision.cs)
-        OnReturnToLobby?.Invoke();
     }
 
     // ---- Player ship lifecycle (spawn / respawn / death -> pod -> dock/rescue) ----
@@ -2963,13 +2994,13 @@ public sealed partial class Simulation
     }
 
     // Remove a ship from the world immediately (used at join-drain time, before the step's
-    // passes iterate _order). Emits a ShipGone via Events.Deaths.
-    private void RemoveShipNow(ShipSim s)
+    // passes iterate _order). Emits a ShipGone via Events.Deaths with `reason` (a blast by default).
+    private void RemoveShipNow(ShipSim s, byte reason = GoneDestroyed)
     {
         ReleaseCrewOfShip(s); // riding gunners go back to the hangar (Simulation.Crew.cs)
         _ships.Remove(s.ShipId);
         _order.Remove(s);
-        Events.Deaths.Add((s.ShipId, GoneDestroyed));
+        Events.Deaths.Add((s.ShipId, reason));
         if (HasLoadoutRow(s))
             Events.LoadoutsChanged = true; // MsgShipLoadout table shrinks — reconcile-by-omission
     }

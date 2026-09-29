@@ -936,10 +936,11 @@ public partial class Lobby : Control
         // post-match, and "joined but not yet deployed" mid-match. While flying, the flight HUD
         // and the ConnectLinkModal own it.
         //
-        // "Not flying" includes a finished match (WorldRenderer.MatchOver): the sim holds every hull
-        // for ~6s after the win, but from the Ended edge this overlay comes up under the post-match
-        // board, so dismissing the board (Esc / BACK TO LOBBY) lands here, not back in the cockpit.
-        // Flight input is gated off for that hold too (InputGate / ShipController).
+        // "Not flying" includes a finished match (WorldRenderer.MatchOver): our hull may outlive the
+        // win by the step before the server's silent match-end sweep, but from the Ended edge this
+        // overlay comes up under the post-match board, so dismissing the board (Esc / BACK TO LOBBY)
+        // lands here, not back in the cockpit. Flight input is gated off from that edge too
+        // (InputGate / ShipController).
         //
         // But once the pilot has committed to the fight (deploy intent raised on first LAUNCH), the
         // hangar — not the team picker — owns the not-flying screen for the rest of the active match.

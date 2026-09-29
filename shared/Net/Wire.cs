@@ -11,11 +11,10 @@ public static class Wire
     // The layouts themselves are the attributed types in Messages.cs / Records.cs (+ the content
     // defs in ../Defs.cs); tools/wire-gen generates the codecs and tests/WireTest pins the goldens.
     // The per-version change log that used to live here is in git history (`git log -p -- shared/Net/Wire.cs`).
-    // One bump per PR to master (a release), never per commit: master ships 43; this branch's step is
-    // 44 — equipment, energy + ammo: the MsgDefs equipment catalog / hull pools / per-shot costs,
-    // ShipRecord.Pools, ShipLoadoutRecord.EquipmentIds, the MsgSpawn equipment tail,
-    // TeamStateRecord.Attributes and InputFlags.Cloak.
-    public const byte ProtocolVersion = 44;
+    // One bump per PR to master (a release), never per commit: master ships 44; this branch's step is
+    // 45 — ShipGone reason 3 (GoneMatchEnd, the silent match-end teardown). Same frame layout, but an
+    // older client would render the new reason as a blast.
+    public const byte ProtocolVersion = 45;
 
     // Sentinel team byte for a pilot who hasn't picked a side ("NOAT" — not on a team). It
     // travels on the wire anywhere a team byte does and never indexes a real team array.

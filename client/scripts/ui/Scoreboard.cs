@@ -18,8 +18,8 @@ namespace StellarAllegiance.Ui;
 //     thrusting blind. Adds a SHIP/STATUS column that follows fog of war — an enemy your team can't
 //     see reads "· · ·"; K/D/EJ/PTS are match RECORD and always shown.
 //   • POST-MATCH — a full-screen result screen the Hud auto-opens on the Active→Ended edge. That
-//     edge fires while your hull still exists (the sim holds the ships for ~6s) and the cursor is
-//     still captured, so this mode frees the cursor itself on open. The finished match is out of
+//     edge fires while you were flying a beat ago (the server sweeps every ship out on the step after
+//     the win) and the cursor is still captured, so this mode frees the cursor itself on open. The finished match is out of
 //     play from the same edge (WorldRenderer.MatchOver): flight input is gated off and the lobby
 //     comes up underneath, so closing this board lands in the lobby, never back in the cockpit.
 //     Sortable columns, a team filter, the team-summary comparison and the Top Gun callout.
