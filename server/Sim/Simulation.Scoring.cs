@@ -20,7 +20,8 @@ namespace SimServer.Sim;
 //
 // The ledger is keyed by CLIENT ID and OUTLIVES a leaver (a departed pilot loses their name and team
 // server-side, so the hub memoises those and puts them on the frame). It survives ReturnToLobby too,
-// so the post-match board still reads the finished match; only StartMatch clears it.
+// so the post-match board still reads the finished match; only StartMatch clears it — or the server
+// emptying out (ClearMatchResult), once nobody is left to read that board.
 public sealed partial class Simulation
 {
     // One pilot's row. Kills/Deaths/Ejects/Points are what rides the wire; the *Kills breakdown is
@@ -91,10 +92,10 @@ public sealed partial class Simulation
     }
 
     // The single points seam. A team's score is EXACTLY the sum of its pilots' points — this is the
-    // only writer of TeamState.Score, so the lobby/HUD score labels light up off the unchanged
-    // MsgTeamState stream with no extra wiring. A zero weight is a no-op on the team score (but the
-    // K/D/EJ counter that called it still ticked), and an unresolvable team simply skips the team
-    // roll-up rather than throwing.
+    // only thing that moves TeamState.Score (the resets zero it with the ledger), so the lobby/HUD
+    // score labels light up off the unchanged MsgTeamState stream with no extra wiring. A zero weight
+    // is a no-op on the team score (but the K/D/EJ counter that called it still ticked), and an
+    // unresolvable team simply skips the team roll-up rather than throwing.
     private void AddPoints(PilotStats st, byte team, int pts)
     {
         st.Points += pts;
@@ -205,10 +206,10 @@ public sealed partial class Simulation
         AddPoints(ks, kt, garrison ? _scoring.KillGarrison : _scoring.KillOutpost);
     }
 
-    // Wipe the ledger for a fresh match. Called from StartMatch ONLY — deliberately NOT from
-    // ReturnToLobby, so the scoreboard still reads the finished match while everyone sits in the
-    // lobby. World.SeedEconomy (also in StartMatch) zeroes TeamState.Score, so the "team score ==
-    // sum of its pilots' points" invariant re-establishes itself at 0/0.
+    // Wipe the ledger for a fresh match. Called from StartMatch and ClearMatchResult — deliberately
+    // NOT from ReturnToLobby, so the scoreboard still reads the finished match while everyone sits in
+    // the lobby. Both callers zero TeamState.Score alongside it (StartMatch via World.SeedEconomy), so
+    // the "team score == sum of its pilots' points" invariant re-establishes itself at 0/0.
     private void ResetMatchStats()
     {
         _pilotStats.Clear();
@@ -216,6 +217,27 @@ public sealed partial class Simulation
         Array.Clear(_teamGarrisonsDestroyed, 0, _teamGarrisonsDestroyed.Length);
         Array.Clear(_teamOutpostsDestroyed, 0, _teamOutpostsDestroyed.Length);
         Events.StatsChanged = true;
+    }
+
+    // Whether the last match's result is still on the board: a ledger row (a pilot scored or lost a
+    // hull) or a latched winner. IsIdle reads it so the empty-server recycle fires even after a clean
+    // win, when there is no live match left to tear down but there is a result left to wipe.
+    private bool HasMatchResult => _pilotStats.Count > 0 || Winner != NoWinner;
+
+    // Wipe the last match's RESULT — ledger, tallies, every team score, the winner — once nobody is
+    // left to read it. The sim loop calls it when it recycles an emptied-out server, AFTER reporting a
+    // cut-short match off the ledger. Without it the result outlived its audience: the next pilot to
+    // join the idle server sat in a lobby showing a match they never played, whose death penalties had
+    // left the team score (and the leavers' rows) negative (issue #110). A full World.SeedEconomy is
+    // not needed here: StartMatch reseeds the economy anyway, and the score is all the lobby shows.
+    public void ClearMatchResult()
+    {
+        ResetMatchStats();
+        foreach (var team in World.TeamStates.Values)
+            team.Score = 0;
+        Winner = NoWinner;
+        Events.TeamStateChanged = true;
+        OnMatchResultCleared?.Invoke();
     }
 
     // A reconnecting client reclaimed a held ship under a NEW client id: move the ledger row across

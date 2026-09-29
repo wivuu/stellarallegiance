@@ -11,7 +11,8 @@
 // expiry, unowned damage NOT clearing a live stamp, the garrison killing blow (points + tally +
 // match end in the right order), reconnect-reclaim row migration, a leaver's row surviving, the
 // ledger surviving ReturnToLobby but not StartMatch, the Ended-window phase guard, and (at the hub
-// level) the board surviving the re-Welcome the server sends on the match->lobby flip.
+// level) the board surviving the re-Welcome the server sends on the match->lobby flip, and the
+// empty-server recycle handing its next joiner a clean board instead of the last match's (#110).
 
 using System.Linq;
 using System.Text;
@@ -19,6 +20,7 @@ using SimServer.Content;
 using SimServer.Net;
 using SimServer.Sim;
 using StellarAllegiance.Shared;
+using StellarAllegiance.Shared.Net;
 using TestKit;
 
 int failures = 0;
@@ -361,6 +363,13 @@ Simulation siegeSim;
         "ReturnToLobby keeps the winning team latched (the result screen outlives the Ended phase)",
         $"ReturnToLobby cleared the winner (winner={sim.Winner}, phase={sim.Phase})"
     );
+    // ...and because that result is still on the board, the lobby does not read as idle yet: if the
+    // server then empties, the recycle must still fire and wipe it for the next joiner (issue #110).
+    Check(
+        !sim.IsIdle,
+        "a finished match's result keeps the lobby from reading as idle (the empty-server recycle still owes a wipe)",
+        "the lobby reads as idle while the last match's result is still on the board"
+    );
     sim.StartMatch();
     Check(
         sim.MatchStats.Count == 0
@@ -537,6 +546,146 @@ Simulation siegeSim;
             + $"phase={(lastSnap >= 0 ? sent[lastSnap][5] : -1)}/{sim.Phase}, winner={(lastSnap >= 0 ? sent[lastSnap][6] : -1)}/{sim.Winner})"
     );
     cts.Cancel();
+}
+
+// ---- 13. An emptied server hands its next joiner a CLEAN board (issue #110) --------------------
+// "Join a lobby, don't start a game, and your points go negative." Nothing scores outside
+// PhaseActive, so that number is a PREVIOUS match's result: the ledger and TeamState.Score survive
+// ReturnToLobby on purpose (the post-match board), and they also survived the empty-server recycle.
+// A pilot who later joined the idle server was shown a match they never played — the negative team
+// score on the score bar / team cards / TEAM PTS, the leaver's negative row on F5. Here a pilot plays
+// solo, loses a hull and then its pod with nobody to credit (the ordinary way to go negative alone:
+// a rock, the boundary), quits, the server recycles, and a newcomer joins that side without readying.
+{
+    var content = ContentLoader.Load(stockPath, worldPath);
+    var world = new World(13, content.World, content.Bases[0].MaxHealth, content.Start, content.Ships);
+    var sim = new Simulation(world, content)
+    {
+        PigsEnabled = false,
+        MinersEnabled = false,
+        FogEnabled = false,
+    };
+    var w = Weights(sim);
+    var hub = new ClientHub(
+        sim,
+        new SimServer.Backend.OpenAuthenticator(),
+        new SimServer.Backend.InMemoryPlayerDirectory(),
+        new SimServer.Backend.ReadyUpMatchmaker(autoStart: false),
+        "Test Arena",
+        Array.Empty<MapCatalogEntry>()
+    );
+    sim.ShouldStartMatch = hub.ShouldStartMatch;
+    sim.OnReturnToLobby = hub.OnReturnToLobby;
+    sim.OnMatchStart = hub.OnMatchStart;
+    sim.OnMatchResultCleared = hub.OnMatchResultCleared;
+
+    void Pump(int n)
+    {
+        for (int i = 0; i < n; i++)
+        {
+            sim.Step();
+            hub.AfterStep();
+        }
+        System.Threading.Thread.Sleep(60); // the async SendLoop flushes AfterStep's frames a moment later
+    }
+    void Feed(FakeHubTransport t, byte[] frame)
+    {
+        t.Feed(frame);
+        System.Threading.Thread.Sleep(50);
+    }
+    int IdOf(FakeHubTransport t) =>
+        WelcomeMessage.TryParse(t.SentOf(Protocol.MsgWelcome)[0], out var welcome) ? welcome.ClientId : -1;
+
+    var ace = new FakeHubTransport();
+    var aceCts = new System.Threading.CancellationTokenSource();
+    _ = hub.HandleConnection(ace, aceCts.Token);
+    Feed(ace, HubFrames.Hello("ace"));
+    Feed(ace, HubFrames.SetTeam(0));
+    Feed(ace, HubFrames.SetReady(true));
+    Pump(20); // the ready-up matchmaker starts the match
+    int aceId = IdOf(ace);
+    Feed(ace, HubFrames.Spawn(FlightModel.ClassScout));
+    Pump(5);
+    if (sim.Ships.FirstOrDefault(s => s.OwnerClientId == aceId && !s.IsPod) is { } hull)
+    {
+        hull.Health = 0f; // uncredited: ejects into a pod (EJ, 0 pts)
+        Pump(1);
+    }
+    if (sim.Ships.FirstOrDefault(s => s.OwnerClientId == aceId && s.IsPod) is { } pod)
+    {
+        pod.Health = 0f; // uncredited: the pod is the DEATH, at the (negative) death weight
+        Pump(1);
+    }
+    Check(
+        w.Death < 0
+            && Row(sim, aceId).Deaths == 1
+            && Row(sim, aceId).Points == w.Death
+            && sim.World.TeamStates[0].Score == w.Death,
+        $"premise: the solo pilot's match ended negative (PTS {w.Death}, team 0 score {w.Death})",
+        $"premise failed (death weight {w.Death}, D={Row(sim, aceId).Deaths}, PTS={Row(sim, aceId).Points}, "
+            + $"team 0 score {sim.World.TeamStates[0].Score})"
+    );
+
+    // Quit (MsgBye + close), and the server empties.
+    Feed(ace, HubFrames.Bye());
+    aceCts.Cancel();
+    for (int i = 0; i < 100 && hub.ConnectionCount > 0; i++)
+        System.Threading.Thread.Sleep(20);
+    Pump(1);
+
+    // The empty-server recycle, as the sim loop (server/Program.cs) runs it once the grace expires:
+    // tear the match down, report it (off the still-intact ledger), then wipe the result.
+    Check(!sim.IsIdle, "premise: the emptied server still owes a recycle", "the emptied server already reads as idle");
+    sim.ResetMatch();
+    Check(
+        sim.JustReset && Row(sim, aceId).Points == w.Death,
+        "ResetMatch leaves the cut-short match's ledger intact for the reset report",
+        $"the reset report would read a wiped ledger (justReset={sim.JustReset}, PTS={Row(sim, aceId).Points})"
+    );
+    sim.ClearMatchResult();
+    Check(sim.IsIdle, "after the wipe the server reads as a clean idle lobby", "the recycled server still is not idle");
+
+    // A newcomer joins the idle lobby and takes the same side, but never readies (no match starts).
+    var rookie = new FakeHubTransport();
+    var rookieCts = new System.Threading.CancellationTokenSource();
+    _ = hub.HandleConnection(rookie, rookieCts.Token);
+    Feed(rookie, HubFrames.Hello("rookie"));
+    Feed(rookie, HubFrames.SetTeam(0));
+    Pump(25); // past a coarse keepalive, so the team-state stream has reached the newcomer
+    Check(
+        sim.Phase == Simulation.PhaseLobby && hub.ConnectionCount == 1,
+        "premise: the newcomer sits in the lobby of an otherwise empty server",
+        $"premise failed (phase {sim.Phase}, connections {hub.ConnectionCount})"
+    );
+
+    // What that lobby renders. The score bar, the team cards and TEAM PTS read MsgTeamState's Score;
+    // the roster's PTS cells and F5 read MsgMatchStats — including the board the Welcome seeds.
+    var teamFrames = rookie.SentOf(Protocol.MsgTeamState);
+    int shownTeamScore =
+        teamFrames.Count > 0 && TeamStateMessage.TryParse(teamFrames[^1], out var teamState)
+            ? teamState.Teams.FirstOrDefault(t => t.Team == 0).Score
+            : int.MinValue;
+    Check(
+        shownTeamScore == 0,
+        "the newcomer's lobby shows their side at 0 points, not the last match's score",
+        $"the newcomer was shown the previous match's team score ({shownTeamScore})"
+    );
+    var boards = rookie.SentOf(Protocol.MsgMatchStats);
+    var stale = boards
+        .SelectMany(f => MatchStatsMessage.TryParse(f, out var board) ? board.Pilots : Array.Empty<PilotStatsRecord>())
+        .Where(p => p.ClientId == aceId || p.Points != 0)
+        .ToList();
+    Check(
+        boards.Count > 0 && stale.Count == 0,
+        "every board the newcomer is sent is free of the last match's rows",
+        $"the newcomer was sent the previous match's rows ({string.Join(", ", stale.Select(p => $"{p.Name} {p.Points} pts"))})"
+    );
+    Check(
+        sim.MatchStats.Count == 0 && sim.Winner == Simulation.NoWinner && sim.GarrisonsDestroyed(0) == 0,
+        "the recycle left the sim a clean slate (no ledger rows, no winner, no tallies)",
+        $"the recycle left a result behind (rows {sim.MatchStats.Count}, winner {sim.Winner})"
+    );
+    rookieCts.Cancel();
 }
 
 Console.WriteLine(failures == 0 ? "\nALL SCOREBOARD TESTS PASSED" : $"\n{failures} SCOREBOARD TEST(S) FAILED");

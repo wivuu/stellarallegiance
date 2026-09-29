@@ -895,7 +895,7 @@ Who a death is scored to. Every hit that reaches a ship's HULL through the singl
 - **Frequency:** Domain-specific
 - **Key Files:**
   - `server/Sim/Simulation.cs` — `ApplyDamage` stamp seam, `PendingShot.AttackerClientId`, `MissileSim/MineFieldSim.OwnerClientId`, `ApplyBaseDamage` base-kill credit
-  - `server/Sim/Simulation.Scoring.cs` — `PilotStats` ledger, `CreditedKiller`, `ScoreDeath`, `AddPoints`, `ResetMatchStats`, `MigrateStats`
+  - `server/Sim/Simulation.Scoring.cs` — `PilotStats` ledger, `CreditedKiller`, `ScoreDeath`, `AddPoints`, `ResetMatchStats`, `ClearMatchResult`, `MigrateStats`
   - `server/Content/core/world.yaml` — the `scoring:` weight block
   - `tests/ScoreboardTest` — credit window, unowned damage, reclaim/leaver, garrison kill, Σ-points invariant
 - **Related:** [[Scoreboard]], [[MsgMatchStats]], [[World Tuning Blocks]], [[Shield]]
@@ -1148,7 +1148,7 @@ The match scoreboard ledger (id 29, proto v37): `u8 nPilots`, then per pilot `i3
   - `client/scripts/GameNetClient.cs` — `ApplyMatchStats` reader + `MatchStatsChanged`
   - `client/scripts/world/MatchStatsStore.cs` — the client ledger (filter/aggregate/sort); `tests/MatchStatsStoreTest`
 - **Related:** [[Scoreboard]], [[Kill Credit]], [[Protocol]], [[Lobby]]
-- **Notes:** The ledger persists across a match ending (so the post-match board and the lobby roster keep reading it) and is cleared server-side only by `StartMatch`; client-side only by a world rebuild. No dotnet suite loads the Godot client, so a writer↔reader field-order bug only shows at runtime — smoke a change with `--autofly`.
+- **Notes:** The ledger persists across a match ending (so the post-match board and the lobby roster keep reading it) and is cleared server-side only by `StartMatch` or by the empty-server recycle (`Simulation.ClearMatchResult`, run by the sim loop after the reset report, so a later joiner never inherits the last match's board or team scores); client-side only by a world rebuild. No dotnet suite loads the Godot client, so a writer↔reader field-order bug only shows at runtime — smoke a change with `--autofly`.
 
 ### WireQuant (Wire Quantization)
 Half-precision (f16) floating-point compression for network transmission of velocities, power levels, and health.
