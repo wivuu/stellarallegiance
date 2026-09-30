@@ -298,11 +298,11 @@ public sealed partial class Simulation
         }
     }
 
-    private void DespawnAllMiners()
+    private void DespawnAllMiners(byte reason = GoneDestroyed)
     {
         foreach (var slot in _miners)
             if (slot.Ship is ShipSim sh)
-                RemoveShipNow(sh); // before Pass A, direct removal is safe (mirrors DespawnAllPigs)
+                RemoveShipNow(sh, reason); // before Pass A, direct removal is safe (mirrors DespawnAllPigs)
         _miners.Clear();
     }
 

@@ -312,6 +312,18 @@ public partial class WorldRenderer
     public MatchPhase Phase => _clock.Phase;
     public byte? Winner => _clock.Winner;
 
+    // The match this client was in is over: latched when the phase reaches Ended — or earlier, by the
+    // reliable match-end ShipGone (LatchMatchOver), which can overtake the lossy Ended snapshot — and
+    // cleared only on the EDGE into the next Active (or a world Reset), so a late Active snapshot can't
+    // undo an early latch. The server sweeps every ship out one step after the win; this keeps the
+    // hull we may still hold for that step (or across a lost frame) from ever being flyable again. From
+    // here on the Lobby overlay owns the screen and InputGate / ShipController keep flight input off.
+    // Static so the static InputGate can read it (like the overlays' Active flags).
+    public static bool MatchOver { get; private set; }
+
+    // ShipRenderer: a match-end ShipGone arrived — the match is over even if no Ended snapshot has yet.
+    public static void LatchMatchOver() => MatchOver = true;
+
     // The local player's team, set when their ship spawns (null until then). Read by
     // TargetMarkers to tell friend from foe.
     public byte? LocalTeam => _player.LocalTeam;
@@ -537,6 +549,10 @@ public partial class WorldRenderer
             // so drop the mirror now rather than showing a stale CREWED SHIPS list in the next hangar.
             Crew.Clear();
         }
+        if (newPhase == MatchPhase.Ended)
+            MatchOver = true;
+        else if (newPhase == MatchPhase.Active && Phase != MatchPhase.Active)
+            MatchOver = false; // a NEW match — not a stale Active snapshot behind an early latch
         _clock.Phase = newPhase;
         _clock.Winner = winner == 255 ? (byte?)null : winner;
     }
@@ -604,6 +620,7 @@ public partial class WorldRenderer
         _localSector = HomeSector;
         _sectorView.SetViewOverride(null);
         _clock.Reset();
+        MatchOver = false; // the rebuilt world starts over at the lobby baseline, like the clock
         AbandonWarp(); // a world rebuild (reconnect / phase change) abandons any deferred warp
         ApplySectorEnv(HomeSector);
     }

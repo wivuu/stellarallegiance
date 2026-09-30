@@ -385,6 +385,7 @@ public sealed partial class Simulation
                 Phase = PhaseEnded;
                 JustEnded = true;
                 _returnToLobbyAtTick = tick + EndedToLobbyTicks;
+                _endTeardownPending = true; // next Step despawns the world (we are mid-pass here)
             }
         }
     }

@@ -147,7 +147,7 @@ mechanics:
   mine-eject-clearance: 4    # u past the field's cloud-radius the cluster centre sits, aft of the tail
   probe-eject-clearance: 2   # u past (ship radius + probe hit radius); too small and you kick your own hull
   reconnect-grace-seconds: 5 # dropped ship held (simulated, vulnerable) for reconnect reclaim
-  ended-to-lobby-seconds: 6  # after match end before the server returns to the lobby
+  ended-to-lobby-seconds: 6  # after match end before the server returns to the lobby (ships are swept out silently at the end itself; this hold is board-only)
 
 # Wreck salvage: a destroyed combat hull scatters what it still carried (each mounted gun, the
 # remaining missile magazine, each cargo kind) as physical items that drift, bounce off rocks and

@@ -17,7 +17,6 @@ public partial class Hud : CanvasLayer
     private GameNetClient _net = null!;
     private DefRegistry _defs = null!;
     private Label _label = null!;
-    private Label _sectorShips = null!;
     private Label _credits = null!;
     private Label _warning = null!;
 
@@ -69,9 +68,9 @@ public partial class Hud : CanvasLayer
     // demand like the two above — see Scoreboard's header.
     private Scoreboard? _scoreboard;
 
-    // Previous-frame match phase, so the Active→Ended edge can auto-open the post-match board. That
-    // edge is detected HERE, not in the Lobby: the sim holds the ships for ~6s after the win, so the
-    // Lobby is still hidden (LocalShip != null) when the phase flips.
+    // Previous-frame match phase, so the Active→Ended edge can auto-open the post-match board. The
+    // Hud owns that edge because it owns the board; the Lobby comes up underneath at the same edge
+    // (WorldRenderer.MatchOver), even if our hull is still a step away from the server's match-end sweep.
     private MatchPhase _prevPhase = MatchPhase.Lobby;
 
     // The floating chat overlay (created in _Ready). Kept as a field so OpenHangar can raise it
@@ -185,21 +184,14 @@ public partial class Hud : CanvasLayer
         _fps.Position = new Vector2(16, 12);
         AddChild(_fps);
 
-        // Active-ship count for the local sector. Hidden until a match is live (the lobby overlay
-        // owns the screen otherwise). Telemetry → mono Data style. Sits under the FPS readout.
-        _sectorShips = UiKit.MakeLabel("", UiKit.TextStyle.Data);
-        _sectorShips.Position = new Vector2(16, 38);
-        _sectorShips.Visible = false;
-        AddChild(_sectorShips);
-
         _label = UiKit.MakeLabel("", UiKit.TextStyle.Data);
-        _label.Position = new Vector2(16, 64);
+        _label.Position = new Vector2(16, 38);
         AddChild(_label);
 
         // Team credits readout (Stage-2 economy), under the flight/controls line. Hidden until a
         // match is live. The Secondary token replaces the old inline gold.
         _credits = UiKit.MakeLabel("", UiKit.TextStyle.Data, DesignTokens.Secondary);
-        _credits.Position = new Vector2(16, 90);
+        _credits.Position = new Vector2(16, 64);
         _credits.Visible = false;
         AddChild(_credits);
 
@@ -584,7 +576,10 @@ public partial class Hud : CanvasLayer
         // The Lobby overlay owns the not-flying screen — pre-match, post-match, AND mid-match
         // until the pilot presses LAUNCH — so a joiner can see the teams and pick a side before
         // deploying. The spawn hangar opens only once deploy is requested (Hud.RequestDeploy).
-        bool inMatch = _world.Phase == MatchPhase.Active;
+        // MatchOver can latch a beat BEFORE the Ended snapshot (the reliable match-end ShipGone that
+        // sweeps our hull away overtakes it): the match is already not live then, or the mandatory
+        // spawn hangar would flash open over the post-match board.
+        bool inMatch = _world.Phase == MatchPhase.Active && !WorldRenderer.MatchOver;
         // Deploy intent is sticky for the whole match — cleared only when it ends (back to the
         // post-match lobby). It persists across the lobby→active flip (a pre-match ready flows
         // straight into the ship-select at start) AND across losing a ship, so docking or dying
@@ -632,11 +627,13 @@ public partial class Hud : CanvasLayer
             _hangar = null;
         }
 
-        // Match scoreboard lifecycle. The Active→Ended edge auto-opens the post-match board — detected
-        // HERE rather than in the Lobby because the sim holds the ships for ~6s after the win, so the
-        // Lobby is still hidden (and the cursor still captured) at that moment; the board frees the
-        // cursor itself. That board then STAYS up over the lobby until Esc / BACK TO LOBBY dismisses
-        // it. The live board is dismissed whenever it loses its subject (the match stops being live)
+        // Match scoreboard lifecycle. The Active→Ended edge auto-opens the post-match board. The cursor
+        // is usually still captured at that moment (the pilot was flying a beat ago, and the server only
+        // sweeps the ships out on the step after the win); the board frees it itself. From the same edge
+        // the finished match is out of play
+        // (WorldRenderer.MatchOver): flight input is gated off and the Lobby comes up under the board,
+        // which STAYS up until Esc / BACK TO LOBBY dismisses it — into the lobby, never back into
+        // flight. The live board is dismissed whenever it loses its subject (the match stops being live)
         // or the mandatory spawn hangar takes the screen, and any board closes when a new match
         // starts. Read after the hangar block so the hangar state is current.
         if (_scoreboard != null)
@@ -650,10 +647,6 @@ public partial class Hud : CanvasLayer
                 _scoreboard.Close();
         }
         _prevPhase = _world.Phase;
-
-        _sectorShips.Visible = inMatch;
-        if (inMatch)
-            _sectorShips.Text = $"Ships in sector: {_world.Ships.ShipsInLocalSector()}";
 
         // Running team balance (server-authoritative; accrues on the paycheck cadence). Same team
         // source as the buy menu so the balance shown matches what gates the buttons.

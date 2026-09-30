@@ -301,7 +301,7 @@ public partial struct SnapshotMessage
 public partial struct ShipGoneMessage
 {
     public ulong ShipId;
-    public byte Reason; // 0 destroyed/blast, 1 clean despawn, 2 fog lost-contact quiet fade
+    public byte Reason; // 0 destroyed/blast, 1 clean despawn, 2 fog lost-contact quiet fade, 3 match-end teardown (silent)
 }
 
 [WireMessage(5)]
