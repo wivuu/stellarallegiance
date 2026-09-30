@@ -682,6 +682,10 @@ public sealed partial class Simulation
     public Func<World?>? BuildMatchWorld;
     public Action? OnMatchStart;
 
+    // Fires from ClearMatchResult (sim thread) so the hub drops its name/team memo and rebuilds the
+    // cached board it hands every joiner, in step with the sim's wiped ledger.
+    public Action? OnMatchResultCleared;
+
     // True only on the single step the match ends — Program.cs reads it to fire the
     // one-shot result writeback (IMatchResultSink).
     public bool JustEnded { get; private set; }
@@ -703,11 +707,13 @@ public sealed partial class Simulation
     // whether the sim still has a live/finished match to tear down.
     private bool _matchDirty;
 
-    // True when the sim is already a clean idle lobby — no match running and no ships left.
-    // The sim loop resets an emptied-out server to this state after a grace window, then the
-    // server sits idle here (matchmaker won't start a match until players rejoin and ready up).
-    // Reading it keeps that reset idempotent: it fires once per empty spell, not every tick.
-    public bool IsIdle => Phase == PhaseLobby && _order.Count == 0 && !_matchDirty;
+    // True when the sim is already a clean idle lobby — no match running, no ships left, and no
+    // finished match's result still on the board (HasMatchResult). The sim loop resets an emptied-out
+    // server to this state after a grace window, then the server sits idle here (matchmaker won't
+    // start a match until players rejoin and ready up). Reading it keeps that reset idempotent: it
+    // fires once per empty spell, not every tick — and still fires after a clean win, so the result
+    // the lobby kept up for its players is wiped before a newcomer can be shown it (issue #110).
+    public bool IsIdle => Phase == PhaseLobby && _order.Count == 0 && !_matchDirty && !HasMatchResult;
 
     public uint Tick => _tick;
     public int ShipCount => _order.Count;
@@ -1406,6 +1412,8 @@ public sealed partial class Simulation
     // the last client leaves). Tears the match down to a clean idle Lobby so the next handoff
     // readies up afresh, and the server sits idle until then. A live match cut short this way
     // gets its "match ended" log here — the normal win path logs via the result sink instead.
+    // The RESULT is left readable on purpose: the sim loop reports a cut-short match off the ledger
+    // first, then wipes it with ClearMatchResult (Simulation.Scoring.cs).
     public void ResetMatch()
     {
         if (Phase == PhaseActive)

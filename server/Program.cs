@@ -379,6 +379,7 @@ MatchResultInfo BuildMatchResult(string endReason) =>
         matchListingId
     );
 sim.OnMatchStart = hub.OnMatchStart;
+sim.OnMatchResultCleared = hub.OnMatchResultCleared;
 
 // Behind the hosting layer's TLS-terminating proxy (wss:// -> ws://:8090): honour the
 // X-Forwarded-* headers so the request scheme/remote IP reflect the real client. Clear the
@@ -448,11 +449,15 @@ var simThread = new Thread(() =>
         // Recycle the match once the server has been empty for the grace window: end whatever
         // was running and reset to a clean idle lobby. IsIdle makes this fire once per empty
         // spell (not every tick); reconnecting before the window elapses cancels the reset.
+        bool recycled = false;
         if (hub.ConnectionCount == 0)
         {
             emptySinceMs ??= now;
             if (now - emptySinceMs.Value >= EmptyResetMs && !sim.IsIdle)
+            {
                 sim.ResetMatch();
+                recycled = true;
+            }
         }
         else
         {
@@ -469,6 +474,11 @@ var simThread = new Thread(() =>
             results.ReportResult(BuildMatchResult(StellarAllegiance.Shared.Lobby.MatchEndReason.WinCondition)); // one-shot
         if (sim.JustReset)
             results.ReportResult(BuildMatchResult(StellarAllegiance.Shared.Lobby.MatchEndReason.Reset));
+        // The recycle's second half, AFTER the reports above have read the ledger: nobody is left to
+        // read the post-match board, so wipe the result and the next pilot to join starts at zero
+        // rather than inside a match they never played (issue #110).
+        if (recycled)
+            sim.ClearMatchResult();
     }
 })
 {

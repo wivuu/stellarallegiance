@@ -420,6 +420,16 @@ public sealed partial class ClientHub
         BroadcastLobby();
     }
 
+    // Wired to Simulation.OnMatchResultCleared — the emptied-out server just wiped the last match's
+    // result (sim thread). Its pilots leave the name/team memo too, and the cached board is rebuilt:
+    // SendWelcome hands that cache to every joiner, so left stale it would still show the next pilot
+    // in the rows of a match they never played (issue #110).
+    public void OnMatchResultCleared()
+    {
+        _pilotIdentity.Clear();
+        BroadcastMatchStats();
+    }
+
     // The lobby-selected map name — read by Simulation.BuildMatchWorld (via Program's closure) at
     // match start to build the arena from the map the host picked.
     public string SelectedMap => _selectedMap;
