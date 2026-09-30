@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -16,7 +17,9 @@ using HttpClient = System.Net.Http.HttpClient;
 
 // Owns the player's public-lobby session end to end (plan .PLAN/LobbyRankingService.md WP3.1):
 // persists ONLY a refresh token + display name + player id to user://auth.json (NEVER the access
-// token), restores it on boot, runs the RFC 8628 device-code flow for a fresh sign-in, and keeps
+// token) — one entry PER LOBBY, keyed by the normalized lobby base, so switching between the local
+// Aspire lobby and prod keeps both sign-ins (a session for lobby A is still never replayed at lobby
+// B) — restores the current lobby's entry on boot, runs the RFC 8628 device-code flow for a fresh sign-in, and keeps
 // the in-memory access token fresh (refreshed 60s ahead of its 15-minute expiry, and on demand for
 // WP3.2's bearer calls via GetAccessTokenAsync). A static Instance mirrors SfxManager so any
 // script can reach it without a node lookup; register it in Main.tscn the same way.
@@ -89,9 +92,17 @@ public partial class AuthSession : Node
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15) };
     private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
 
-    // The ONLY thing ever written to disk — refresh token + display name/id for the UI + the lobby
-    // base it was issued against (a persisted session for lobby A must never be replayed at lobby B).
-    private sealed record AuthFile(
+    // The ONLY thing ever written to disk, per lobby — refresh token + display name/id for the UI.
+    // auth.json is a map { "<lobbyBase>": AuthEntry }, so a session issued by lobby A is only ever
+    // looked up under A's key and never replayed at lobby B.
+    private sealed record AuthEntry(
+        [property: JsonPropertyName("refreshToken")] string RefreshToken,
+        [property: JsonPropertyName("displayName")] string DisplayName,
+        [property: JsonPropertyName("playerId")] Guid PlayerId
+    );
+
+    // Pre-per-lobby shape: one top-level object carrying its own lobbyBase. Read once, migrated.
+    private sealed record LegacyAuthFile(
         [property: JsonPropertyName("refreshToken")] string RefreshToken,
         [property: JsonPropertyName("displayName")] string DisplayName,
         [property: JsonPropertyName("playerId")] Guid PlayerId,
@@ -124,8 +135,8 @@ public partial class AuthSession : Node
             return;
         }
 
-        var saved = LoadAuthFile();
-        if (saved is null || saved.LobbyBase != _lobbyBase)
+        var saved = LoadAuthFile().GetValueOrDefault(_lobbyBase);
+        if (saved is null)
         {
             SetState(State.SignedOut);
         }
@@ -208,7 +219,7 @@ public partial class AuthSession : Node
     {
         DisplayName = displayName;
         if (!string.IsNullOrEmpty(_refreshToken) && PlayerId is { } id)
-            SaveAuthFile(new AuthFile(_refreshToken, displayName, id, _lobbyBase));
+            SaveAuthEntry(_lobbyBase, new AuthEntry(_refreshToken, displayName, id));
         StateChanged?.Invoke();
     }
 
@@ -225,7 +236,7 @@ public partial class AuthSession : Node
         _autoPromptArmed = false;
     }
 
-    // Revokes the session at the lobby (best effort) and deletes user://auth.json.
+    // Revokes the session at the lobby (best effort) and drops this lobby's entry from user://auth.json.
     public async Task SignOutAsync()
     {
         _deviceCts?.Cancel();
@@ -234,7 +245,7 @@ public partial class AuthSession : Node
         _refreshToken = null;
         DisplayName = "";
         PlayerId = null;
-        DeleteAuthFile();
+        DeleteAuthEntry(_lobbyBase);
         SetState(State.SignedOut);
 
         if (string.IsNullOrEmpty(bearer))
@@ -461,7 +472,7 @@ public partial class AuthSession : Node
         DisplayName = tok.Subject.DisplayName;
         PlayerId = tok.Subject.Id;
         LastError = "";
-        SaveAuthFile(new AuthFile(_refreshToken, DisplayName, PlayerId.Value, _lobbyBase));
+        SaveAuthEntry(_lobbyBase, new AuthEntry(_refreshToken, DisplayName, PlayerId.Value));
         ScheduleProactiveRefresh(tok.ExpiresIn);
         Log.Print($"[AuthSession] signed in as {DisplayName}");
         SetState(State.SignedIn);
@@ -471,7 +482,7 @@ public partial class AuthSession : Node
     {
         if (invalidGrant)
         {
-            DeleteAuthFile();
+            DeleteAuthEntry(_lobbyBase);
             _refreshToken = null;
             _accessToken = null;
             DisplayName = "";
@@ -519,26 +530,73 @@ public partial class AuthSession : Node
         };
     }
 
-    // ---- user://auth.json: refresh token + display name + player id ONLY — never the access token --
+    // ---- user://auth.json: per-lobby refresh token + display name + player id ONLY — never the access token --
 
-    private static AuthFile? LoadAuthFile()
+    // Every lobby's entry, keyed by lobby base. A legacy single-object file loads as a one-entry map
+    // (so existing sign-ins survive); the next save rewrites it in the new shape.
+    private static Dictionary<string, AuthEntry> LoadAuthFile()
     {
+        var map = new Dictionary<string, AuthEntry>();
         string real = ProjectSettings.GlobalizePath(AuthFilePath);
         if (!File.Exists(real))
-            return null;
+            return map;
         try
         {
-            return JsonSerializer.Deserialize<AuthFile>(File.ReadAllText(real), JsonOpts);
+            string json = File.ReadAllText(real);
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                return map;
+            if (doc.RootElement.TryGetProperty("refreshToken", out _))
+            {
+                var legacy = JsonSerializer.Deserialize<LegacyAuthFile>(json, JsonOpts);
+                if (legacy is not null && !string.IsNullOrEmpty(legacy.LobbyBase))
+                    map[legacy.LobbyBase] = new AuthEntry(legacy.RefreshToken, legacy.DisplayName, legacy.PlayerId);
+                return map;
+            }
+            foreach (var prop in doc.RootElement.EnumerateObject())
+            {
+                // One malformed entry must not cost the player the other lobbies' sign-ins.
+                try
+                {
+                    var entry = prop.Value.Deserialize<AuthEntry>(JsonOpts);
+                    if (entry is not null && !string.IsNullOrEmpty(entry.RefreshToken))
+                        map[prop.Name] = entry;
+                }
+                catch (JsonException e)
+                {
+                    Log.Err($"[AuthSession] skipping malformed entry for {prop.Name} in {AuthFilePath}: {e.Message}");
+                }
+            }
         }
         catch (Exception e)
         {
             Log.Err($"[AuthSession] failed to read {AuthFilePath}: {e.Message}");
-            return null;
         }
+        return map;
+    }
+
+    // Read-modify-write of ONLY this lobby's entry; other lobbies' sessions are carried over untouched.
+    private static void SaveAuthEntry(string lobbyBase, AuthEntry entry)
+    {
+        var map = LoadAuthFile();
+        map[lobbyBase] = entry;
+        WriteAuthFile(map);
+    }
+
+    // Removes only this lobby's entry; the file itself goes when no lobby has a session left.
+    private static void DeleteAuthEntry(string lobbyBase)
+    {
+        var map = LoadAuthFile();
+        if (!map.Remove(lobbyBase))
+            return;
+        if (map.Count == 0)
+            DeleteAuthFile();
+        else
+            WriteAuthFile(map);
     }
 
     // Write-to-temp-then-rename so a crash/force-quit mid-write can never leave a truncated file.
-    private static void SaveAuthFile(AuthFile file)
+    private static void WriteAuthFile(Dictionary<string, AuthEntry> map)
     {
         string real = ProjectSettings.GlobalizePath(AuthFilePath);
         string dir = Path.GetDirectoryName(real)!;
@@ -546,7 +604,7 @@ public partial class AuthSession : Node
         string tmp = Path.Combine(dir, $".auth.json.{Guid.NewGuid():N}.tmp");
         try
         {
-            File.WriteAllText(tmp, JsonSerializer.Serialize(file));
+            File.WriteAllText(tmp, JsonSerializer.Serialize(map));
             File.Move(tmp, real, overwrite: true); // atomic rename (POSIX rename / Win32 ReplaceFile)
         }
         catch (Exception e)

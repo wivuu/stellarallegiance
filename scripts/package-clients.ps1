@@ -470,7 +470,9 @@ if ($delta) {
 if ($IsWindows) {
     # Every exe a player sees must carry the game icon. The launcher's comes from <ApplicationIcon>, the
     # execution stub copies the launcher's resources at pack time, the game's comes from its export preset.
-    $exes = @("lib/app/$mainExe", "lib/app/$([IO.Path]::GetFileNameWithoutExtension($mainExe))_ExecutionStub.exe")
+    # Since Velopack 1.2.158 the stub is named after --packTitle, not --mainExe (velopack#985); install and
+    # update extract it to the install root as "<PackTitle>.exe", a launcher-name-independent Update.exe shim.
+    $exes = @("lib/app/$mainExe", "lib/app/$($PackTitle)_ExecutionStub.exe")
     if (-not $FakeGame) { $exes += "lib/app/game/$GameExeBase.exe" }
     $zip = [System.IO.Compression.ZipFile]::OpenRead($full.FullName)
     try {

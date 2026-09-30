@@ -10,9 +10,11 @@
 // exactly the sum of its pilots' points" invariant, deaths nobody gets credit for, credit-window
 // expiry, unowned damage NOT clearing a live stamp, the garrison killing blow (points + tally +
 // match end in the right order), reconnect-reclaim row migration, a leaver's row surviving, the
-// ledger surviving ReturnToLobby but not StartMatch, the Ended-window phase guard, and (at the hub
-// level) the board surviving the re-Welcome the server sends on the match->lobby flip, and the
-// empty-server recycle handing its next joiner a clean board instead of the last match's (#110).
+// ledger surviving ReturnToLobby but not StartMatch, the silent match-end sweep (every ship out with
+// GoneMatchEnd the step after the win, the board frozen, no spawns in the Ended hold, a live reset just
+// as silent), and (at the hub level) the board surviving the re-Welcome the server sends on the
+// match->lobby flip, and the empty-server recycle handing its next joiner a clean board instead of the
+// last match's (#110).
 
 using System.Linq;
 using System.Text;
@@ -259,8 +261,9 @@ Simulation siegeSim;
     var sim = BootSim(seed: 6);
     var w = Weights(sim);
     sim.EnqueueJoin(Attacker, team: 0, cls: FlightModel.ClassBomber);
-    // The Ended-window target (section 7) has to be in the world BEFORE the match ends — respawns
-    // only process while the match is Active. Parked far out of the siege in the empty sector.
+    // A second pilot, parked far out of the siege in the empty sector, so section 7's match-end sweep
+    // has more than the shooter to take out. It must be in the world BEFORE the match ends — respawns
+    // only process while the match is Active.
     sim.EnqueueJoin(Victim, team: 1, cls: FlightModel.ClassFighter);
     sim.Step();
     var bomber = sim.Ships.First(s => s.OwnerClientId == Attacker);
@@ -314,35 +317,52 @@ Simulation siegeSim;
     siegeSim = sim;
 }
 
-// ---- 7. A kill inside the Ended window must NOT touch the final board ---------------------------
-// The structural/death pass runs in every phase and ships live on for ended-to-lobby-seconds, so
-// ScoreDeath's phase guard is the only thing stopping a post-match frag from editing the result.
+// ---- 7. The step after the win sweeps the finished match out of the world, silently -------------
+// The Ended latch fires mid-pass on the killing blow; the NEXT Step takes every ship out with ShipGone
+// reason GoneMatchEnd (the client renders it as neither a dock nor a death). The Ended hold is then
+// board-only: nothing left to fly, fire, autopilot, or blow up at the lobby flip — and the board
+// itself stays exactly as the win left it.
 {
     var sim = siegeSim;
-    var bomber = sim.Ships.First(s => s.OwnerClientId == Attacker);
-    int pointsBefore = Row(sim, Attacker).Points;
-    var latecomer = sim.Ships.FirstOrDefault(s => s.OwnerClientId == Victim);
+    var before = Row(sim, Attacker);
+    (int pts, int k) board = (before.Points, before.Kills);
+    var sweptIds = sim.Ships.Select(s => s.ShipId).ToHashSet();
     Check(
-        latecomer is not null && sim.Phase == Simulation.PhaseEnded,
-        "premise: a target is still flying inside the Ended window",
-        $"no target flying in the Ended window (target={latecomer is not null}, phase={sim.Phase})"
+        sweptIds.Count >= 2 && sim.Phase == Simulation.PhaseEnded,
+        $"premise: the killing blow's step still has both pilots' ships in the world ({sweptIds.Count})",
+        $"premise failed (ships={sweptIds.Count}, phase={sim.Phase})"
     );
-    if (latecomer is not null)
-    {
-        latecomer.Health = 1f;
-        bool died = ShootUntil(sim, bomber, latecomer, () => !sim.Ships.Contains(latecomer));
-        var ks = Row(sim, Attacker);
-        Check(
-            died && sim.Phase == Simulation.PhaseEnded && ks.Kills == 0 && ks.Points == pointsBefore,
-            "a kill in the Ended window scored nothing (the final board is frozen)",
-            $"post-match kill mutated the board (died={died}, phase={sim.Phase}, K={ks.Kills}, PTS={ks.Points} was {pointsBefore})"
-        );
-        Check(
-            !sim.MatchStats.ContainsKey(Victim),
-            "the post-match victim never got a row either",
-            $"post-match victim row created (EJ={Row(sim, Victim).Ejects})"
-        );
-    }
+
+    sim.Step();
+    var deaths = sim.Events.Deaths.ToList();
+    Check(
+        sim.Ships.Count == 0 && sim.Phase == Simulation.PhaseEnded,
+        "the step after the win took every ship out of the world (the Ended hold is board-only)",
+        $"ships survived the match-end sweep ({sim.Ships.Count} left, phase={sim.Phase})"
+    );
+    Check(
+        deaths.Count == sweptIds.Count
+            && deaths.All(d => sweptIds.Contains(d.id) && d.reason == Simulation.GoneMatchEnd),
+        "every ship left with GoneMatchEnd — no blast (GoneDestroyed), no dock (GoneClean)",
+        $"match-end sweep emitted the wrong gone reasons ({string.Join(", ", deaths.Select(d => $"{d.id}:{d.reason}"))})"
+    );
+    var after = Row(sim, Attacker);
+    Check(
+        after.Points == board.pts && after.Kills == board.k && sim.Winner == 0 && !sim.MatchStats.ContainsKey(Victim),
+        "the sweep scored nothing: the final board and the winner are untouched",
+        $"the sweep mutated the board (PTS={after.Points} was {board.pts}, K={after.Kills}, winner={sim.Winner})"
+    );
+
+    // Nothing spawns into the hold either: the hub refuses MsgSpawn outside Active, and the sim only
+    // processes respawns while Active, so even a join queued straight into the sim lands nowhere.
+    sim.EnqueueJoin(Victim, team: 1, cls: FlightModel.ClassFighter);
+    for (int i = 0; i < 5; i++)
+        sim.Step();
+    Check(
+        sim.Ships.Count == 0 && sim.Phase == Simulation.PhaseEnded,
+        "a join queued during the Ended hold spawns nothing",
+        $"a ship spawned into the Ended hold ({sim.Ships.Count} ships, phase={sim.Phase})"
+    );
 }
 
 // ---- 8. The ledger survives ReturnToLobby; only StartMatch clears it ----------------------------
@@ -379,6 +399,19 @@ Simulation siegeSim;
         "StartMatch zeroes the ledger, the tallies, every team score and the winner",
         $"StartMatch left stale state (rows={sim.MatchStats.Count}, garrisons={sim.GarrisonsDestroyed(0)}, "
             + $"team0 score={sim.World.TeamStates[0].Score}, winner={sim.Winner})"
+    );
+
+    // A reset straight out of a LIVE match (the empty-server recycle) goes through the same sweep, so
+    // it is just as silent: the pilot's ship leaves with GoneMatchEnd, never a blast.
+    sim.EnqueueJoin(Attacker, team: 0, cls: FlightModel.ClassFighter);
+    sim.Step();
+    var live = sim.Ships.FirstOrDefault(s => s.OwnerClientId == Attacker);
+    sim.ReturnToLobby();
+    var gone = sim.Events.Deaths.Where(d => live is not null && d.id == live.ShipId).ToList();
+    Check(
+        live is not null && sim.Ships.Count == 0 && gone.Count == 1 && gone[0].reason == Simulation.GoneMatchEnd,
+        "a reset out of a live match removes the ship silently (GoneMatchEnd), not as a death",
+        $"live reset wasn't silent (ship={live is not null}, left={sim.Ships.Count}, reasons={string.Join(",", gone.Select(d => d.reason))})"
     );
 }
 

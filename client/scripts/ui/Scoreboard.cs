@@ -18,9 +18,11 @@ namespace StellarAllegiance.Ui;
 //     thrusting blind. Adds a SHIP/STATUS column that follows fog of war — an enemy your team can't
 //     see reads "· · ·"; K/D/EJ/PTS are match RECORD and always shown.
 //   • POST-MATCH — a full-screen result screen the Hud auto-opens on the Active→Ended edge. That
-//     edge fires while you're still flying (the sim holds the ships for ~6s), with the lobby hidden
-//     and the cursor captured, so this mode frees the cursor itself on open. Sortable columns, a
-//     team filter, the team-summary comparison and the Top Gun callout.
+//     edge fires while you were flying a beat ago (the server sweeps every ship out on the step after
+//     the win) and the cursor is still captured, so this mode frees the cursor itself on open. The finished match is out of
+//     play from the same edge (WorldRenderer.MatchOver): flight input is gated off and the lobby
+//     comes up underneath, so closing this board lands in the lobby, never back in the cockpit.
+//     Sortable columns, a team filter, the team-summary comparison and the Top Gun callout.
 //
 //  Created ONCE by the Hud (last child, so it draws above Lobby + Chat but under the ConnectLayer /
 //  ModalHost canvas layers) and visibility-toggled, never freed — the sort column, direction and
@@ -41,8 +43,9 @@ public partial class Scoreboard : Control
 
     // True only while the POST-MATCH board is up — i.e. while this overlay owns the cursor and Esc.
     // ShipController's `_Input` consults it exactly like ShipLoadout.Active/EscapeMenu.Active, so a
-    // click on this board doesn't re-capture the cursor for mouse-look (the pilot is usually still
-    // flying at that moment — see trap 3). The LIVE board must never appear in such a gate.
+    // click on this board doesn't re-capture the cursor for mouse-look (the pilot's hull usually
+    // still exists at that moment — see trap 3), and the Lobby parks no comms caret under it. The
+    // LIVE board must never appear in such a gate.
     public static bool PostMatchActive { get; private set; }
 
     private WorldRenderer _world = null!;
@@ -142,12 +145,15 @@ public partial class Scoreboard : Control
         _dirty = true;
         // Live is a pure read-out laid over the flight view: it must not swallow the mouse (the
         // pilot is still steering with it). Post-match is a screen you click, and it opens while the
-        // cursor is still captured for flight — free it here, since the lobby that normally owns the
-        // cursor is hidden at the Active→Ended edge.
+        // cursor is still captured for flight — free it here rather than wait a frame for
+        // ShipController to drop its seat. It also takes keyboard focus off whatever sat under it:
+        // a lobby comms caret that was already editing would spend the first Esc leaving edit mode
+        // instead of letting it close this board.
         if (mode == Mode.PostMatch)
         {
             MouseFilter = MouseFilterEnum.Stop;
             Input.MouseMode = Input.MouseModeEnum.Visible;
+            GetViewport()?.GuiReleaseFocus();
         }
         else
         {

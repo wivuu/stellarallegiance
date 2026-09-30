@@ -936,6 +936,12 @@ public partial class Lobby : Control
         // post-match, and "joined but not yet deployed" mid-match. While flying, the flight HUD
         // and the ConnectLinkModal own it.
         //
+        // "Not flying" includes a finished match (WorldRenderer.MatchOver): our hull may outlive the
+        // win by the step before the server's silent match-end sweep, but from the Ended edge this
+        // overlay comes up under the post-match board, so dismissing the board (Esc / BACK TO LOBBY)
+        // lands here, not back in the cockpit. Flight input is gated off from that edge too
+        // (InputGate / ShipController).
+        //
         // But once the pilot has committed to the fight (deploy intent raised on first LAUNCH), the
         // hangar — not the team picker — owns the not-flying screen for the rest of the active match.
         // Without this the lobby would flash up during the death-cam beat / respawn gap on every
@@ -949,7 +955,7 @@ public partial class Lobby : Control
         // the lobby again next frame. See SectorOverview / ShipLoadout.
         bool show =
             _cm.State == ConnectionManager.ConnState.Connected
-            && _world.Ships.LocalShip == null
+            && (_world.Ships.LocalShip == null || WorldRenderer.MatchOver)
             && !committed
             && !SectorOverview.Active;
         if (!show)
@@ -986,13 +992,16 @@ public partial class Lobby : Control
         // FocusMode.None), so keep the caret in it whenever focus would otherwise be on nothing.
         // This is what lets the player keep typing after Enter or a SEND/tab click, regardless of
         // what transiently dropped focus. Suppressed while a higher overlay (hangar / sector map /
-        // escape menu / settings) is up so it never fights (or types under) their controls.
+        // escape menu / settings / post-match board) is up so it never fights (or types under) their
+        // controls. The post-match board also owns Esc, and a focused LineEdit spends the first Esc
+        // leaving edit mode — a caret parked here under the board would eat the press that closes it.
         if (
             !ShipLoadout.Active
             && !SectorOverview.Active
             && !EscapeMenu.Active
             && !SettingsDialog.Active
             && !MapPickerModal.Active
+            && !Scoreboard.PostMatchActive
             && _editingTeam < 0
             && GetViewport().GuiGetFocusOwner() == null
         )
