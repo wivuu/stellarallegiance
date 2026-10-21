@@ -1,6 +1,7 @@
 using Orleans;
 using PublicLobby.Auth;
 using PublicLobby.Grains;
+using PublicLobby.Notifications;
 using StellarAllegiance.Shared.Lobby;
 
 namespace PublicLobby.Api;
@@ -21,6 +22,7 @@ static class MatchEndpoints
                 HttpContext http,
                 IServerRegistry registry,
                 IGrainFactory grains,
+                PushOutbox pushes,
                 TimeProvider clock
             ) =>
             {
@@ -31,7 +33,8 @@ static class MatchEndpoints
                     || string.IsNullOrWhiteSpace(req.Map)
                 )
                     return Results.BadRequest(new { error = "matchId, listingId and map are required" });
-                if (await RefuseIfBanned(grains, gameServerId, clock.GetUtcNow()) is { } banned)
+                var server = await grains.GetGrain<IGameServerGrain>(gameServerId).Get();
+                if (RefuseIfBanned(server, clock.GetUtcNow()) is { } banned)
                     return banned;
                 // The listing, if still alive, must be this server's.
                 var listing = registry.Get(req.ListingId);
@@ -43,6 +46,21 @@ static class MatchEndpoints
                 var outcome = await grains
                     .GetGrain<IMatchGrain>(req.MatchId)
                     .Start(gameServerId, req.ListingId.Trim(), req.Map.Trim(), req.StartedAt, clock.GetUtcNow());
+                // ranked.match-started: only on the FIRST start of a match id (a spool re-send answers
+                // AlreadyStarted, as does a start arriving after its own result), so this is the dedupe.
+                // Queued, never awaited - see PushOutbox.
+                if (
+                    outcome == MatchStartOutcome.Started
+                    && RankedMatchStarted.TryCreate(
+                        req.MatchId,
+                        req.Map.Trim(),
+                        server,
+                        listing,
+                        LobbyPolicy.RankedResultsAuthenticated
+                    )
+                        is { } alert
+                )
+                    pushes.TryEnqueue(alert);
                 return outcome switch
                 {
                     MatchStartOutcome.Started => Results.Accepted($"/matches/{req.MatchId}"),
@@ -69,7 +87,10 @@ static class MatchEndpoints
                     );
                 if (report.Teams is null || report.Pilots is null || string.IsNullOrWhiteSpace(report.EndReason))
                     return Results.BadRequest(new { error = "teams, pilots and endReason are required" });
-                if (await RefuseIfBanned(grains, gameServerId, clock.GetUtcNow()) is { } banned)
+                if (
+                    RefuseIfBanned(await grains.GetGrain<IGameServerGrain>(gameServerId).Get(), clock.GetUtcNow()) is
+                    { } banned
+                )
                     return banned;
 
                 var input = new MatchResultInput(
@@ -121,9 +142,8 @@ static class MatchEndpoints
     // A banned game server is refused both halves of match ingestion. 403 (not 401) so the sim
     // server logs and backs off instead of re-authenticating; note that its spool treats 403 as
     // terminal, so results produced while banned are dropped — which is the point of the ban.
-    static async Task<IResult?> RefuseIfBanned(IGrainFactory grains, Guid gameServerId, DateTimeOffset now)
+    static IResult? RefuseIfBanned(GameServerSnapshot? server, DateTimeOffset now)
     {
-        var server = await grains.GetGrain<IGameServerGrain>(gameServerId).Get();
         if (server is null || !server.Ban.IsBanned(now))
             return null;
         return Results.Json(

@@ -1,0 +1,60 @@
+@model PublicLobby.Pages.PushPromptView
+@*
+    The home page's ranked-match opt-in (issue #98), above the server strip - outside it, because the
+    strip replaces itself on every live update. Rendered HIDDEN: wwwroot/push.js reveals it only while
+    this browser could turn notifications on and hasn't (supported, permission not "denied", no
+    subscription yet) and "Not now" hasn't hidden it (30 days, localStorage) - the same rule signed in
+    or out. Signed out, it is a sign-in link that lands on /me's Notifications section.
+
+    Signed in, "Turn on" posts the subscription to IndexModel.OnPostPushSubscribeAsync, which also
+    turns the ranked-match event on (this prompt is about exactly that) and answers with this partial
+    in its Done state, swapped over the prompt.
+*@
+<div id="push-prompt"
+     data-push-surface="prompt"
+     data-vapid-key="@Model.VapidPublicKey"
+     hidden="@(!Model.Done)"
+     hx-target="#push-prompt"
+     hx-swap="outerHTML"
+     class="mb-5 flex flex-col gap-4 rounded border border-accent/35 bg-accent/[0.06] px-4 py-3.5 sm:flex-row sm:items-center">
+    <div class="flex flex-1 items-center gap-4">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#37e0ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>
+        @if (Model.Done)
+        {
+            <p role="status" class="text-sm text-text-2">Notifications are on in this browser. Manage them on <a href="/me#notifications" class="text-data hover:text-text-hi">your profile</a>.</p>
+        }
+        else
+        {
+            <div class="flex flex-col gap-0.5">
+                <span class="text-[15px] font-semibold text-text-hi">Don't miss the next ranked match</span>
+                <span data-push-idle class="text-[13px] text-text-2">Get a browser notification when one starts with 2+ pilots.</span>
+                <span data-push-waiting hidden class="text-[13px] text-text-2">Choose <strong class="font-semibold text-accent">Allow</strong> in the prompt near your address bar.</span>
+                <span data-push-failed hidden role="alert" class="text-[13px] text-danger">Couldn't turn notifications on in this browser.</span>
+            </div>
+        }
+    </div>
+    @if (!Model.Done && Model.SignedIn)
+    {
+        <form id="push-prompt-state" data-push-state hidden>
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="PushPermission" value="" />
+            <input type="hidden" name="PushEndpoint" value="" />
+            <input type="hidden" name="PushP256dh" value="" />
+            <input type="hidden" name="PushAuth" value="" />
+            <input type="hidden" name="PushStandalone" value="" />
+        </form>
+        <div data-push-idle class="flex shrink-0 items-center justify-end gap-2">
+            <button type="button" data-push-action="snooze" class="rounded px-3 py-2.5 text-[13px] text-text-2 hover:text-text-hi">Not now</button>
+            <button type="button"
+                    data-push-action="subscribe"
+                    hx-post="/?handler=PushSubscribe"
+                    hx-trigger="push-subscribed"
+                    hx-include="#push-prompt-state"
+                    class="chamfer bg-accent px-3.5 py-[11px] text-sm font-semibold text-void hover:bg-accent/90">Turn on</button>
+        </div>
+    }
+    else if (!Model.Done)
+    {
+        <a href="/login?returnUrl=%2Fme%23notifications" class="chamfer shrink-0 self-start bg-accent px-3.5 py-[11px] text-sm font-semibold text-void hover:bg-accent/90 sm:self-auto">Sign in to turn on</a>
+    }
+</div>

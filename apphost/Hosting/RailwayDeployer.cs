@@ -35,6 +35,10 @@ public sealed record RailwayTarget(
             new("AUTH_GOOGLE_CLIENT_ID", false, "AUTH_GOOGLE_CLIENT_ID"),
             new("AUTH_GOOGLE_CLIENT_SECRET", true, "AUTH_GOOGLE_CLIENT_SECRET"),
             new("AUTH_STEAM_API_KEY", true, "AUTH_STEAM_API_KEY"),
+            // Changing the public key strands every browser's push subscription: set the pair once.
+            new("LOBBY_VAPID_PUBLIC_KEY", false, "LOBBY_VAPID_PUBLIC_KEY (Web Push; set once, never rotate)"),
+            new("LOBBY_VAPID_PRIVATE_KEY", true, "LOBBY_VAPID_PRIVATE_KEY"),
+            new("LOBBY_VAPID_SUBJECT", false, "LOBBY_VAPID_SUBJECT (mailto: or https:; blank = LOBBY_PUBLIC_URL)"),
         ]
     );
 

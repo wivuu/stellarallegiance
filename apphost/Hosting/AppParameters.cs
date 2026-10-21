@@ -33,6 +33,9 @@ public sealed class AppParameters
     public required IResourceBuilder<ParameterResource> AuthGoogleClientId { get; init; }
     public required IResourceBuilder<ParameterResource> AuthGoogleClientSecret { get; init; }
     public required IResourceBuilder<ParameterResource> AuthSteamApiKey { get; init; }
+    public required IResourceBuilder<ParameterResource> LobbyVapidPublicKey { get; init; }
+    public required IResourceBuilder<ParameterResource> LobbyVapidPrivateKey { get; init; }
+    public required IResourceBuilder<ParameterResource> LobbyVapidSubject { get; init; }
 
     // Deploy-only: the LOCAL lobby/server always dial each other's Aspire endpoints.
     public required IResourceBuilder<ParameterResource> LobbyPublicUrl { get; init; }
@@ -189,6 +192,25 @@ public sealed class AppParameters
                 secret: true
             ),
             AuthSteamApiKey = Param(b, "auth-steam-api-key", "", "Optional Steam Web API key.", secret: true),
+            LobbyVapidPublicKey = Param(
+                b,
+                "lobby-vapid-public-key",
+                "",
+                "Web Push VAPID public key (base64url); empty = notifications off. `dotnet PublicLobby.dll --gen-vapid-keys` makes a pair."
+            ),
+            LobbyVapidPrivateKey = Param(
+                b,
+                "lobby-vapid-private-key",
+                "",
+                "Web Push VAPID private key (base64url), paired with lobby-vapid-public-key.",
+                secret: true
+            ),
+            LobbyVapidSubject = Param(
+                b,
+                "lobby-vapid-subject",
+                "",
+                "Optional Web Push contact (mailto: or https:); empty = LOBBY_PUBLIC_URL when https."
+            ),
 
             LobbyPublicUrl = Param(
                 b,

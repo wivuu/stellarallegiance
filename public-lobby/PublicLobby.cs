@@ -13,6 +13,7 @@ using PublicLobby.Auth;
 using PublicLobby.Data;
 using PublicLobby.Grains;
 using PublicLobby.Hosting;
+using PublicLobby.Notifications;
 using PublicLobby.ReleaseAdverts;
 
 // Public lobby + WebRTC signaling box. Player-run game servers register here (name + port) and
@@ -32,6 +33,18 @@ using PublicLobby.ReleaseAdverts;
 //                space-separate several for redundancy. Default stun:stun.cloudflare.com:3478.
 //   LOBBY_RELEASE_VERSION / LOBBY_RELEASE_FEED_URL / LOBBY_RELEASE_POLL_SECONDS
 //                the Release Advert: which game release is the latest (ReleaseAdverts/ReleaseWatcher.cs).
+//   LOBBY_VAPID_PUBLIC_KEY / LOBBY_VAPID_PRIVATE_KEY / LOBBY_VAPID_SUBJECT
+//                Web Push notifications, off unless both keys are set (Notifications/PushOptions.cs).
+
+// `--gen-vapid-keys`: print a fresh VAPID key pair for LOBBY_VAPID_* and exit - before anything is
+// built, so it needs no database.
+if (args.Contains("--gen-vapid-keys"))
+{
+    var (vapidPublic, vapidPrivate) = PushOptions.GenerateKeys();
+    Console.WriteLine($"LOBBY_VAPID_PUBLIC_KEY={vapidPublic}");
+    Console.WriteLine($"LOBBY_VAPID_PRIVATE_KEY={vapidPrivate}");
+    return;
+}
 
 // Listen port: PORT (PaaS like Railway inject it and route their HTTPS edge to it) wins, then
 // SHARE_PORT (compose/self-host), else the 8091 default.
@@ -73,6 +86,7 @@ builder.AddLobbyPersistence();
 builder.AddLobbyOrleans();
 builder.AddLobbyWeb();
 builder.AddLobbyBearerAuth();
+builder.AddLobbyNotifications();
 
 var app = builder.Build();
 
@@ -131,6 +145,7 @@ app.MapProfileApi();
 app.MapJwks();
 app.MapJoin();
 app.MapMatchApi();
+app.MapPushApi();
 
 // ---- Registry: server discovery -------------------------------------------
 
@@ -357,6 +372,12 @@ app.MapGet(
             CancellationToken ct
         ) =>
         {
+            // A game client with this stream open is signed in to the game (Grains/PlayerPresenceGrain.cs):
+            // no push notifications for this player while it stays open. Leased, refreshed by the
+            // keepalive below, released in the finally.
+            var presence = grains.GetGrain<IPlayerPresenceGrain>(LobbyBearer.SubjectId(ctx.User));
+            var streamId = Guid.NewGuid();
+            await presence.ClientSeen(streamId, clock.GetUtcNow());
             ctx.Response.Headers["Content-Type"] = "text/event-stream; charset=utf-8";
             ctx.Response.Headers["Cache-Control"] = "no-cache";
             ctx.Response.Headers["X-Accel-Buffering"] = "no"; // disable nginx/Railway proxy buffering
@@ -378,7 +399,7 @@ app.MapGet(
             // until they disconnected. Cancelling kaCts ends both loops.
             using var kaCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             var playerId = LobbyBearer.SubjectId(ctx.User);
-            var keepalive = KeepaliveLoop(ctx.Response.Body, grains, clock, playerId, kaCts);
+            var keepalive = KeepaliveLoop(ctx.Response.Body, grains, clock, playerId, presence, streamId, kaCts);
             try
             {
                 await foreach (var evt in reader.ReadAllAsync(kaCts.Token))
@@ -407,6 +428,11 @@ app.MapGet(
             {
                 kaCts.Cancel();
                 await keepalive;
+                try
+                {
+                    await presence.ClientClosed(streamId);
+                }
+                catch (Exception) { } // shutting down: the lease lapses on its own
             }
         }
     )
@@ -572,6 +598,8 @@ static async Task KeepaliveLoop(
     IGrainFactory grains,
     TimeProvider clock,
     Guid playerId,
+    IPlayerPresenceGrain presence,
+    Guid streamId,
     CancellationTokenSource cts
 )
 {
@@ -587,6 +615,7 @@ static async Task KeepaliveLoop(
                 await cts.CancelAsync();
                 return;
             }
+            await presence.ClientSeen(streamId, clock.GetUtcNow());
             await body.WriteAsync(comment, ct);
             await body.FlushAsync(ct);
         }
@@ -606,6 +635,8 @@ static async Task WsRecvServerUpdates(
     CancellationToken ct
 )
 {
+    // Pilots on this listing's roster count as in the game (Grains/PlayerPresenceGrain.cs).
+    var rosterPresence = new RosterPresence(grains, sessionId);
     try
     {
         while (!ct.IsCancellationRequested && ws.State == WebSocketState.Open)
@@ -629,10 +660,21 @@ static async Task WsRecvServerUpdates(
             // grain self-throttles to once a minute, so this is cheap to call unconditionally.
             if (verifiedGameServerId is { } gsid && msg.Type is "update" or "ping")
                 await grains.GetGrain<IGameServerGrain>(gsid).OnListed(clock.GetUtcNow());
+            if (msg.Type is "update" or "ping")
+                await rosterPresence.ObserveAsync(registry.Get(sessionId)?.Roster, clock.GetUtcNow());
         }
     }
     catch (OperationCanceledException) { }
     catch { }
+    finally
+    {
+        // The socket's end removes the listing (see the caller), and its roster with it.
+        try
+        {
+            await rosterPresence.EndAsync();
+        }
+        catch (Exception) { }
+    }
 }
 
 static async Task WsSendPushes(WebSocket ws, ChannelReader<ServerPush> reader, CancellationToken ct)

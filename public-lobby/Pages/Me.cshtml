@@ -34,6 +34,11 @@
         <p class="text-xs text-text-dim">Unique, 3–24 characters, case-insensitive. Shown on every listing, roster and ladder.</p>
     </section>
 
+    @if (Model.Notifications is { } notifications)
+    {
+        <partial name="_Notifications" model="notifications" />
+    }
+
     <section class="space-y-2">
         <h2 class="text-sm font-semibold text-text-2">Linked logins</h2>
         @if (Model.Logins.Count == 0)
@@ -81,3 +86,7 @@
 </div>
 
 <script src="/passkeys.js" data-mode="add"></script>
+@if (Model.Notifications is not null)
+{
+    <script src="/push.js" defer></script>
+}

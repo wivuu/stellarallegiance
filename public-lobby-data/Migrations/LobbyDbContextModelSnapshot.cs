@@ -17,7 +17,7 @@ namespace PublicLobby.Data.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.11")
+                .HasAnnotation("ProductVersion", "10.0.12")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "citext");
@@ -524,6 +524,50 @@ namespace PublicLobby.Data.Migrations
                     b.ToTable("match_teams", (string)null);
                 });
 
+            modelBuilder.Entity("PublicLobby.Data.Entities.NotificationDelivery", b =>
+                {
+                    b.Property<Guid>("PlayerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("player_id");
+
+                    b.Property<string>("Event")
+                        .HasColumnType("text")
+                        .HasColumnName("event");
+
+                    b.Property<DateTimeOffset>("LastSentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_sent_at");
+
+                    b.HasKey("PlayerId", "Event")
+                        .HasName("pk_notification_deliveries");
+
+                    b.ToTable("notification_deliveries", (string)null);
+                });
+
+            modelBuilder.Entity("PublicLobby.Data.Entities.NotificationPreference", b =>
+                {
+                    b.Property<Guid>("PlayerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("player_id");
+
+                    b.Property<string>("Event")
+                        .HasColumnType("text")
+                        .HasColumnName("event");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("enabled");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("PlayerId", "Event")
+                        .HasName("pk_notification_preferences");
+
+                    b.ToTable("notification_preferences", (string)null);
+                });
+
             modelBuilder.Entity("PublicLobby.Data.Entities.Player", b =>
                 {
                     b.Property<Guid>("Id")
@@ -607,6 +651,57 @@ namespace PublicLobby.Data.Migrations
                         .HasDatabaseName("ix_players_display_name");
 
                     b.ToTable("players", (string)null);
+                });
+
+            modelBuilder.Entity("PublicLobby.Data.Entities.PushSubscription", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Auth")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("auth");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Endpoint")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("endpoint");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("label");
+
+                    b.Property<DateTimeOffset?>("LastSentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_sent_at");
+
+                    b.Property<string>("P256dh")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("p256dh");
+
+                    b.Property<Guid>("PlayerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("player_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_push_subscriptions");
+
+                    b.HasIndex("Endpoint")
+                        .IsUnique()
+                        .HasDatabaseName("ix_push_subscriptions_endpoint");
+
+                    b.HasIndex("PlayerId")
+                        .HasDatabaseName("ix_push_subscriptions_player_id");
+
+                    b.ToTable("push_subscriptions", (string)null);
                 });
 
             modelBuilder.Entity("PublicLobby.Data.Entities.Session", b =>
@@ -947,6 +1042,26 @@ namespace PublicLobby.Data.Migrations
                         .HasConstraintName("fk_match_teams_matches_match_id");
                 });
 
+            modelBuilder.Entity("PublicLobby.Data.Entities.NotificationDelivery", b =>
+                {
+                    b.HasOne("PublicLobby.Data.Entities.Player", null)
+                        .WithMany()
+                        .HasForeignKey("PlayerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_notification_deliveries_players_player_id");
+                });
+
+            modelBuilder.Entity("PublicLobby.Data.Entities.NotificationPreference", b =>
+                {
+                    b.HasOne("PublicLobby.Data.Entities.Player", null)
+                        .WithMany()
+                        .HasForeignKey("PlayerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_notification_preferences_players_player_id");
+                });
+
             modelBuilder.Entity("PublicLobby.Data.Entities.Player", b =>
                 {
                     b.HasOne("PublicLobby.Data.LobbyUser", null)
@@ -955,6 +1070,16 @@ namespace PublicLobby.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_players_asp_net_users_id");
+                });
+
+            modelBuilder.Entity("PublicLobby.Data.Entities.PushSubscription", b =>
+                {
+                    b.HasOne("PublicLobby.Data.Entities.Player", null)
+                        .WithMany()
+                        .HasForeignKey("PlayerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_push_subscriptions_players_player_id");
                 });
 #pragma warning restore 612, 618
         }

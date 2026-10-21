@@ -53,7 +53,11 @@ var lobby = builder
     .WithEnvironment("AUTH_GITHUB_CLIENT_SECRET", p.AuthGithubClientSecret)
     .WithEnvironment("AUTH_GOOGLE_CLIENT_ID", p.AuthGoogleClientId)
     .WithEnvironment("AUTH_GOOGLE_CLIENT_SECRET", p.AuthGoogleClientSecret)
-    .WithEnvironment("AUTH_STEAM_API_KEY", p.AuthSteamApiKey);
+    .WithEnvironment("AUTH_STEAM_API_KEY", p.AuthSteamApiKey)
+    // Web Push notifications (public-lobby/Notifications): off while the key pair is empty.
+    .WithEnvironment("LOBBY_VAPID_PUBLIC_KEY", p.LobbyVapidPublicKey)
+    .WithEnvironment("LOBBY_VAPID_PRIVATE_KEY", p.LobbyVapidPrivateKey)
+    .WithEnvironment("LOBBY_VAPID_SUBJECT", p.LobbyVapidSubject);
 var lobbyHttp = lobby.GetEndpoint("http");
 lobby
     .WithEnvironment("LOBBY_PUBLIC_URL", lobbyHttp) // join-token issuer + passkey RP: must equal what servers dial

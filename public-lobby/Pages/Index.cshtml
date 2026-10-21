@@ -60,6 +60,12 @@
         <span class="h-px flex-1 bg-hairline"></span>
     </div>
 
+    @* ---- Ranked-match notifications prompt (hidden until wwwroot/push.js says it applies) ------- *@
+    @if (Model.PushPrompt is { } pushPrompt)
+    {
+        <partial name="_PushPrompt" model="pushPrompt" />
+    }
+
     @* ---- Servers online (live: htmx re-GETs the section on every /servers/live announcement) --- *@
     <partial name="_ServerStrip" model="Model.Strip" />
 
@@ -212,4 +218,8 @@ Linux only: chmod +x StellarAllegiance.AppImage &amp;&amp; ./StellarAllegiance.A
 
 @section Scripts {
     <script src="/lobby-live.js" defer></script>
+    @if (Model.PushPrompt is not null)
+    {
+        <script src="/push.js" defer></script>
+    }
 }
