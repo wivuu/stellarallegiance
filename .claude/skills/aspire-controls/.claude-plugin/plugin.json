@@ -1,0 +1,6 @@
+{
+  "name": "aspire-controls",
+  "version": "0.1.0",
+  "description": "In an Aspire workspace: start and stop the AppHost and see its resources in the status line and a pane",
+  "types": "./types/index.d.ts"
+}
