@@ -81,9 +81,7 @@
   <Target Name="ConfigureNativeLink" BeforeTargets="PrepareForILLink">
     <ItemGroup>
       <RuntimeHostConfigurationOption Include="SimServer.SchemaTooling.IsSupported" Value="false" Trim="true" />
-      <ManagedAssemblyToLink
-        Condition="'%(Filename)' == 'SIPSorcery' Or '%(Filename)' == 'Common.Logging' Or '%(Filename)' == 'Common.Logging.Core'"
-      >
+      <ManagedAssemblyToLink Condition="'%(Filename)' == 'SIPSorcery' Or '%(Filename)' == 'Common.Logging' Or '%(Filename)' == 'Common.Logging.Core'">
         <TrimmerSingleWarn>true</TrimmerSingleWarn>
       </ManagedAssemblyToLink>
     </ItemGroup>
