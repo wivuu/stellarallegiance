@@ -108,12 +108,14 @@ project reference; `public-lobby/Dockerfile` matches for uniformity). `railway u
 root and won't read a subdirectory config, so each service just sets `RAILWAY_DOCKERFILE_PATH` to
 point at its Dockerfile — no Root Directory setting needed.
 
-The root `railway.json` gives both services a **healthcheck** on `/health` (each serves one on
-`PORT`). Railway then keeps the old deployment serving until the new one answers, instead of
-routing to a container that is not listening yet. That cutover window used to return Railway's own
-`502` (a JSON body), which an older game server mistook for a refusal and gave up its credential
-over (2026-10-24, needed a device-code re-pair). The file only names the healthcheck: config as code
-merges with the dashboard's settings, so the pre-deploy command, region and replicas stay where they are.
+Give both services a **healthcheck** on `/health` (service Settings → Deploy → Healthcheck Path;
+each serves one on `PORT`). Railway then keeps the old deployment serving until the new one
+answers, instead of routing to a container that is not listening yet. Without it that cutover
+window returns Railway's own `502` (a JSON body), which game servers before the 2026-10-24 fix
+mistook for a refusal and gave up their credential over (a device-code re-pair). It is a service
+setting, like the pre-deploy command, not a repo file: Railway's config-as-code `railway.json` is
+deprecated (hard cutoff 2026-12-01) and a service that never used it cannot opt in — a root
+`railway.json` was tried and silently ignored.
 
 A Railway game-server deploy builds `server/Dockerfile` **from source**, not the packaged
 `server/Dockerfile.release` image — so, same as the local source build above, its `SIM_AUTO_UPDATE` can
@@ -156,7 +158,8 @@ Verify with `curl https://<lobby-domain>/servers` — the entry's `publicEndpoin
 
 The lobby is stateful now (accounts, sessions, matches, ladder). Attach a **Postgres** service and
 set on the lobby service: `ConnectionStrings__postgres-database` (the database URL), the pre-deploy
-command `dotnet PublicLobby.dll --migrate` (applies EF Core + Orleans migrations, idempotent),
+command `dotnet PublicLobby.dll --migrate` (applies EF Core + Orleans migrations, idempotent), the
+healthcheck path `/health` (see above),
 `LOBBY_PUBLIC_URL=https://<lobby-domain>` (must equal the `PUBLIC_LOBBY` servers dial — it is the
 join-token issuer and the passkey relying party), `LOBBY_ADMINS` (`name:<display>`, `github:<login>`,
 `google:<sub>`, `steam:<id>`), optionally `AUTH_GOOGLE_CLIENT_ID/SECRET`, `AUTH_GITHUB_CLIENT_ID/SECRET`,
