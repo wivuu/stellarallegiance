@@ -192,7 +192,12 @@ proven, alongside the reset and shutdown paths the suites already covered.
 - Google OAuth and the Steam Web API key are deliberately unconfigured; GitHub and passkeys carry
   sign-in today. Both are env-gated, so adding them later needs no code change.
 - A listing's id changes each time a server re-registers; the client automatically retries a
-  rejected join with a fresh token, so a mid-join re-registration costs one retry.
+  rejected join with a fresh token, so a mid-join re-registration costs one retry. A dropped
+  link no longer re-registers: the server resumes the same listing within the lobby's 30 s
+  resume grace, so only a lobby restart or a longer outage changes the id.
+- A game server keeps its credential through any lobby failure short of an explicit
+  `invalid_grant` (a deploy's 502, a 503, a 429, a database hiccup): it retries the same refresh
+  token with jittered backoff and never falls back to a device code on its own.
 - Slice 2 in the plan: Glicko-2 team rating once enough real ranked matches have accumulated, and
   Steam session tickets when there is an AppID. Slice 3: listings and signaling into grains for a
   second lobby replica, Apple login, loadout persistence.

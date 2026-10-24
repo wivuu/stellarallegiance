@@ -108,6 +108,13 @@ project reference; `public-lobby/Dockerfile` matches for uniformity). `railway u
 root and won't read a subdirectory config, so each service just sets `RAILWAY_DOCKERFILE_PATH` to
 point at its Dockerfile — no Root Directory setting needed.
 
+The root `railway.json` gives both services a **healthcheck** on `/health` (each serves one on
+`PORT`). Railway then keeps the old deployment serving until the new one answers, instead of
+routing to a container that is not listening yet. That cutover window used to return Railway's own
+`502` (a JSON body), which an older game server mistook for a refusal and gave up its credential
+over (2026-10-24, needed a device-code re-pair). The file only names the healthcheck: config as code
+merges with the dashboard's settings, so the pre-deploy command, region and replicas stay where they are.
+
 A Railway game-server deploy builds `server/Dockerfile` **from source**, not the packaged
 `server/Dockerfile.release` image — so, same as the local source build above, its `SIM_AUTO_UPDATE` can
 only ever **warn**; there is nothing there for it to swap in place. A source build carries no version of

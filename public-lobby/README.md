@@ -277,6 +277,19 @@ Liveness + status come solely from the server WebSocket (`/servers/ws`): the hos
 with `{ type: "auth", sessionId, secret }`, then its `ping`/`update` frames keep the entry fresh
 and current. (There is no HTTP heartbeat endpoint.)
 
+The socket and the listing do **not** share a lifetime. A socket that **drops** (no close frame:
+a reset, a dead NAT path, a ping/pong timeout) leaves its listing **held** for the resume grace
+(`LOBBY_SERVER_RESUME_GRACE_SECONDS`, default 30), and the game server opens a new socket with the
+same `sessionId` + `secret`: same listing id (join tokens stay valid), no token refresh, no
+`removed`/`registered` churn on the streams. Only a goodbye (`NormalClosure`), a `DELETE`, or a grace
+that runs out removes the listing. A resumed socket supersedes one the lobby still thought open
+(that one is closed, and its teardown leaves the listing alone), and each socket carries a
+generation so an older drop's grace never cuts a newer one's short. A stopping lobby closes every
+server socket at once with `EndpointUnavailable` ("going away"): the server's resume is refused by
+the next process, which never knew the session, and it registers there straight away. Every end is
+logged with how long the socket lived and why (`PublicLobby.ServerSocket`, EventIds 20-23), and so
+is every drop on the game server's side (`LobbyRegistrar`, EventIds 1204/1226/1227).
+
 Signaling (relays opaque SDP; long-polls so a join settles in ~one round trip):
 
 | Method | Path | Body | Notes |

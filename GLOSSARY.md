@@ -1623,6 +1623,24 @@ display name (`GameServerId`/`OperatorName`); an Unverified listing has neither,
 - **Related:** [[Public Lobby]], [[ServerRegistry]]
 - **Notes:** `GET /servers` and `GET /servers/events` require a player bearer (plan §1.5: anonymous accounts see no server list at all, verified or not).
 
+### Listing Resume (resume grace)
+A game server whose `/servers/ws` socket **drops** (no close frame) reconnects to the SAME listing
+instead of registering a new one: the lobby holds a dropped listing for the resume grace
+(`LOBBY_SERVER_RESUME_GRACE_SECONDS`, default 30 s) and accepts a new socket carrying the same
+`sessionId` + `secret`. Same listing id (join tokens stay valid), no token refresh, no churn in the browser.
+- **Frequency:** Occasional
+- **Key Files:**
+  - `server/Net/LobbyRegistrar.cs` — `HoldListingAsync` (jittered resume steps, then register afresh), `RunWsAsync` (`WsEnded`: Rejected / Failed / Dropped, with lifetime + reason), ping/pong keepalive timeout
+  - `public-lobby/PublicLobby.cs` — `/servers/ws` teardown: goodbye removes, drop holds for the grace, a stopping lobby closes every socket "going away"
+  - `public-lobby/ServerConnectionManager.cs` — `Connect` generations, supersede-on-resume, `IsLatest`
+  - `tests/PublicLobbyTest/ServerSocketTests.cs` — drop/resume, double drop, grace expiry, goodbye, supersede, DELETE
+- **Related:** [[ServerRegistry]], [[Verified Listing]], [[Game Server]]
+- **Notes:** Only a goodbye (`NormalClosure`), a `DELETE`, or an expired grace removes the listing.
+  A lobby restart refuses every resume (the new process never knew the session), so servers register
+  afresh. Separately, a game server keeps its credential through anything short of an explicit
+  `invalid_grant` (`LobbyAuthClient`/`LobbyAuthSession`): a PaaS edge's 502 during a deploy once burned
+  one (2026-10-24).
+
 ### Signaling
 WebRTC SDP offer/answer relay: matches peers for connection negotiation.
 - **Frequency:** Common

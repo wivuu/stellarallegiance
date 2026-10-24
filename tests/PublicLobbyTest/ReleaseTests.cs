@@ -395,11 +395,16 @@ static partial class Suite
     {
         readonly WebSocket _ws;
         public string? AuthReply { get; }
+        public string SessionId { get; }
+        public string Secret { get; }
+        public WebSocketState State => _ws.State;
 
-        FakeGameServer(WebSocket ws, string? authReply)
+        FakeGameServer(WebSocket ws, string? authReply, string sessionId, string secret)
         {
             _ws = ws;
             AuthReply = authReply;
+            SessionId = sessionId;
+            Secret = secret;
         }
 
         public static async Task<FakeGameServer> ConnectAsync(HttpClient http, string name, int port)
@@ -410,6 +415,13 @@ static partial class Suite
                 bearer: null
             );
             var body = listed.Body ?? throw new InvalidOperationException($"could not list {name}: {listed.Status}");
+            return await ResumeAsync(body.Server.SessionId, body.Secret);
+        }
+
+        // A new socket for an existing session, as LobbyRegistrar opens after a drop: AuthReply is
+        // "ok" while the lobby still holds the listing, null once it has let it go.
+        public static async Task<FakeGameServer> ResumeAsync(string sessionId, string secret)
+        {
             var ws = await LobbyHostFixture
                 .CreateWebSocketClient()
                 .ConnectAsync(new Uri("ws://localhost/servers/ws"), default);
@@ -417,14 +429,23 @@ static partial class Suite
                 new
                 {
                     type = "auth",
-                    sessionId = body.Server.SessionId,
-                    secret = body.Secret,
+                    sessionId,
+                    secret,
                 }
             );
             await ws.SendAsync(auth, WebSocketMessageType.Text, true, default);
             var reply = await ReceiveAsync(ws, TimeSpan.FromSeconds(5));
-            return new FakeGameServer(ws, reply?.GetProperty("type").GetString());
+            string? type = null;
+            if (reply is { } frame && frame.TryGetProperty("type", out var t))
+                type = t.GetString();
+            return new FakeGameServer(ws, type, sessionId, secret);
         }
+
+        // The link dies without a close frame, as a network drop looks to the lobby.
+        public void Abort() => _ws.Abort();
+
+        // The next frame of any type, or null on timeout / close.
+        public Task<JsonElement?> NextFrameAsync(TimeSpan timeout) => ReceiveAsync(_ws, timeout);
 
         // The next {"type":"release"} frame's version (skipping anything else), or null on timeout.
         public async Task<string?> NextReleaseAsync()

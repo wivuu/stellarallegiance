@@ -228,14 +228,16 @@ public sealed class InMemoryServerRegistry : IServerRegistry
         return CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(secret), Encoding.UTF8.GetBytes(expected));
     }
 
+    // Evicts listings that went quiet past the TTL, telling SSE subscribers like any removal, so a
+    // browser never keeps showing a server whose socket died without a close (a half-open link).
     void Prune()
     {
         var cutoff = DateTimeOffset.UtcNow - Ttl;
         foreach (var kvp in _servers)
-            if (kvp.Value.LastSeen < cutoff)
+            if (kvp.Value.LastSeen < cutoff && _servers.TryRemove(kvp))
             {
-                _servers.TryRemove(kvp.Key, out _);
                 _secrets.TryRemove(kvp.Key, out _);
+                _bus.Publish(new LobbyEvent(LobbyEventKind.Removed, SessionId: kvp.Key));
             }
     }
 }
