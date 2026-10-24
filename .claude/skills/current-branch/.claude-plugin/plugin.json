@@ -1,0 +1,5 @@
+{
+  "name": "current-branch",
+  "version": "0.1.0",
+  "description": "Shows the session's current git branch in the status line under the prompt"
+}
