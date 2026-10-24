@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.WebSockets;
@@ -23,7 +24,10 @@ namespace SimServer.Net;
 // considers it alive (no periodic heartbeats needed). State updates (player count, game state) are
 // pushed over the WS only when values actually change; a ping is sent every ~25 s as a keepalive
 // within the 30 s registry TTL. WebRTC offers from clients are pushed back down the same channel
-// (no long-polling /pending). On WS drop the server re-registers and re-opens a fresh WS.
+// (no long-polling /pending). On a WS drop the server RESUMES the same session (the lobby holds a
+// dropped listing for a grace), so a blip keeps the listing id and needs no token refresh; only
+// when the lobby no longer knows the session (it restarted, or the grace ran out) does the server
+// register afresh. Every drop is logged with how long the link lived and why it ended.
 //
 // Env:
 //   PUBLIC_LOBBY          public-lobby base — host:port or https://domain
@@ -53,6 +57,24 @@ public sealed class LobbyRegistrar : ILobbyIdentity
     // re-register on a faster cadence to re-probe until it flips to DIRECT — capped.
     static readonly TimeSpan DirectRetryEvery = TimeSpan.FromSeconds(15);
     const int MaxDirectRetries = 8;
+
+    // Resuming a dropped WS: one jittered attempt per step, well inside the lobby's 30 s resume grace
+    // (public-lobby LOBBY_SERVER_RESUME_GRACE_SECONDS); running out of steps means register afresh.
+    static readonly TimeSpan[] ResumeBackoff =
+    [
+        TimeSpan.FromSeconds(0.5),
+        TimeSpan.FromSeconds(1),
+        TimeSpan.FromSeconds(2),
+        TimeSpan.FromSeconds(4),
+        TimeSpan.FromSeconds(8),
+    ];
+
+    // A link that lived at least this long dropped for an outside reason; a shorter one is flapping.
+    static readonly TimeSpan StableLink = TimeSpan.FromSeconds(30);
+    static readonly TimeSpan WsKeepAliveInterval = TimeSpan.FromSeconds(15);
+    static readonly TimeSpan WsKeepAliveTimeout = TimeSpan.FromSeconds(20);
+    static readonly TimeSpan WsHandshakeTimeout = TimeSpan.FromSeconds(10);
+    static readonly TimeSpan RegisterRetry = TimeSpan.FromSeconds(5);
 
     private readonly ClientHub _hub;
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(15) };
@@ -199,14 +221,8 @@ public sealed class LobbyRegistrar : ILobbyIdentity
 
                     // Registration failed (lobby unreachable?); wait before retrying. A deliberate
                     // refusal waits far longer — it will still pick itself up when a ban is lifted.
-                    try
-                    {
-                        await Task.Delay(_refused ? RefusedRetry : TimeSpan.FromSeconds(5), ct);
-                    }
-                    catch (OperationCanceledException)
-                    {
+                    if (!await SleepAsync(_refused ? RefusedRetry : Jitter(RegisterRetry), ct))
                         break;
-                    }
                     continue;
                 }
 
@@ -227,11 +243,11 @@ public sealed class LobbyRegistrar : ILobbyIdentity
                     continue;
                 }
 
-                // Normal: hold the WS until it drops or we shut down.
-                await RunWsAsync(_sessionId!, ct);
+                // Normal: hold the listing, resuming its WS through drops, until the lobby no longer
+                // knows it (or stays unreachable) — only then register afresh.
+                await HoldListingAsync(_sessionId!, ct);
                 if (ct.IsCancellationRequested)
                     break;
-                Log.WsDroppedReRegister(_log);
                 await Deregister();
             }
         }
@@ -409,52 +425,122 @@ public sealed class LobbyRegistrar : ILobbyIdentity
         }
     }
 
-    // Opens a WS to the lobby, authenticates, then runs send/receive loops concurrently until
-    // the socket drops, ct fires, or a connection error occurs. Always returns (never throws).
-    private async Task RunWsAsync(string sessionId, CancellationToken ct)
+    // Holds the listing's control channel: runs the WS, and on a drop resumes the SAME session
+    // (the lobby keeps a dropped listing for a grace, public-lobby "server resume grace"), so a
+    // network blip costs no token refresh, no new listing id (join tokens are minted for it) and
+    // no churn in the server browser. Returns — so the caller registers afresh — once the lobby
+    // no longer knows the session (it restarted, or the grace ran out) or stays unreachable for
+    // every resume attempt.
+    private async Task HoldListingAsync(string sessionId, CancellationToken ct)
+    {
+        int failures = 0;
+        while (!ct.IsCancellationRequested)
+        {
+            var ended = await RunWsAsync(sessionId, ct);
+            if (ct.IsCancellationRequested)
+                return;
+            switch (ended.Kind)
+            {
+                case WsEnd.Rejected:
+                    Log.WsResumeRejected(_log, sessionId, ended.Reason);
+                    return;
+                case WsEnd.Dropped:
+                    Log.WsDropped(_log, Describe(ended.Lifetime), ended.Reason, sessionId);
+                    // A link that drops straight after connecting counts against the resume budget,
+                    // so a flapping path still ends in a fresh registration instead of a spin.
+                    failures = ended.Lifetime >= StableLink ? 0 : failures + 1;
+                    break;
+                default:
+                    Log.WsError(_log, ended.Reason);
+                    failures++;
+                    break;
+            }
+            if (failures >= ResumeBackoff.Length)
+            {
+                Log.WsResumeGaveUp(_log, sessionId, failures, ended.Reason);
+                return;
+            }
+            if (!await SleepAsync(Jitter(ResumeBackoff[failures]), ct))
+                return;
+        }
+    }
+
+    enum WsEnd
+    {
+        Rejected, // the lobby refused the session (unknown, or its grace ran out): register afresh
+        Failed, // never got as far as "ok": connect / handshake error or timeout
+        Dropped, // was connected, then the link ended
+    }
+
+    readonly record struct WsEnded(WsEnd Kind, string Reason, TimeSpan Lifetime);
+
+    // Opens a WS to the lobby, authenticates, then runs send/receive loops concurrently until the
+    // socket drops or ct fires. Says how and why it ended (never throws, bar ct).
+    private async Task<WsEnded> RunWsAsync(string sessionId, CancellationToken ct)
     {
         try
         {
             using var ws = new ClientWebSocket();
-            await ws.ConnectAsync(ToWsUri(_shareBase), ct);
+            // Protocol-level ping/pong with a deadline: a path that died silently (a NAT or proxy
+            // forgetting the flow) is noticed in under a minute, not after TCP's ~15 min of retries.
+            ws.Options.KeepAliveInterval = WsKeepAliveInterval;
+            ws.Options.KeepAliveTimeout = WsKeepAliveTimeout;
 
-            // Auth handshake — carries the per-session secret so the lobby can verify ownership.
-            var authBytes = JsonSerializer.SerializeToUtf8Bytes(
-                new WsAuthMsg("auth", sessionId, _secret),
-                LobbyWsJson.Default.WsAuthMsg
-            );
-            await ws.SendAsync(new ArraySegment<byte>(authBytes), WebSocketMessageType.Text, true, ct);
-
-            var buf = new byte[512];
-            var r = await ws.ReceiveAsync(buf, ct);
-            if (r.MessageType == WebSocketMessageType.Close)
-                return;
-            var reply = JsonSerializer.Deserialize(buf.AsSpan(0, r.Count), LobbyWsJson.Default.WsReplyDto);
-            if (reply?.Type != "ok")
+            using (var handshake = CancellationTokenSource.CreateLinkedTokenSource(ct))
             {
-                Log.WsAuthRejected(_log, reply?.Message);
-                return;
+                handshake.CancelAfter(WsHandshakeTimeout);
+                try
+                {
+                    await ws.ConnectAsync(ToWsUri(_shareBase), handshake.Token);
+
+                    // Auth handshake — carries the per-session secret so the lobby can verify ownership.
+                    var authBytes = JsonSerializer.SerializeToUtf8Bytes(
+                        new WsAuthMsg("auth", sessionId, _secret),
+                        LobbyWsJson.Default.WsAuthMsg
+                    );
+                    await ws.SendAsync(new ArraySegment<byte>(authBytes), WebSocketMessageType.Text, true, handshake.Token);
+
+                    var buf = new byte[512];
+                    var r = await ws.ReceiveAsync(buf, handshake.Token);
+                    if (r.MessageType == WebSocketMessageType.Close)
+                        return new(WsEnd.Rejected, CloseReason(ws, "lobby closed the socket"), TimeSpan.Zero);
+                    var reply = JsonSerializer.Deserialize(buf.AsSpan(0, r.Count), LobbyWsJson.Default.WsReplyDto);
+                    if (reply?.Type != "ok")
+                    {
+                        Log.WsAuthRejected(_log, reply?.Message);
+                        return new(WsEnd.Rejected, reply?.Message ?? "no ok", TimeSpan.Zero);
+                    }
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    return new(WsEnd.Failed, $"no answer within {WsHandshakeTimeout.TotalSeconds:0} s", TimeSpan.Zero);
+                }
             }
             Log.WsConnected(_log, sessionId);
+            var connectedAt = Stopwatch.GetTimestamp();
 
             using var pair = CancellationTokenSource.CreateLinkedTokenSource(ct);
             var sendTask = WsSendLoop(ws, pair.Token);
             var recvTask = WsRecvLoop(ws, pair.Token);
-            await Task.WhenAny(sendTask, recvTask);
+            var first = await Task.WhenAny(sendTask, recvTask);
             pair.Cancel();
             await Task.WhenAll(sendTask, recvTask);
+            var reason = await first ?? await recvTask ?? await sendTask ?? "closed";
+            return new(WsEnd.Dropped, reason, Stopwatch.GetElapsedTime(connectedAt));
         }
         catch (OperationCanceledException)
-        { /* ct fired (shutdown or retry interval) */
+        {
+            return new(WsEnd.Failed, "cancelled", TimeSpan.Zero); // ct fired: shutdown or retry interval
         }
         catch (Exception e)
         {
-            Log.WsError(_log, e.Message);
+            return new(WsEnd.Failed, Describe(e), TimeSpan.Zero);
         }
     }
 
-    // Sends state updates when values change, plus a periodic ping to keep LastSeen fresh.
-    private async Task WsSendLoop(ClientWebSocket ws, CancellationToken ct)
+    // Sends state updates when values change, plus a periodic ping to keep LastSeen fresh. Returns
+    // why it stopped, or null when it was cancelled (the other loop ended first, or shutdown).
+    private async Task<string?> WsSendLoop(ClientWebSocket ws, CancellationToken ct)
     {
         const int CheckMs = 2_000;
         const int PingAfterTicks = 12; // 12 × 2 s = 24 s, within the 30 s TTL
@@ -494,9 +580,16 @@ public sealed class LobbyRegistrar : ILobbyIdentity
 
                 await Task.Delay(CheckMs, ct);
             }
+            return ct.IsCancellationRequested ? null : $"socket {ws.State}";
         }
-        catch (OperationCanceledException) { }
-        catch { }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+        catch (Exception e)
+        {
+            return $"send failed: {Describe(e)}";
+        }
     }
 
     // Raised (on the registrar's task) when the lobby says which game release is the latest - right
@@ -507,8 +600,9 @@ public sealed class LobbyRegistrar : ILobbyIdentity
     public Action<string>? OnReleaseAdvertised { get; set; }
 
     // Receives messages from the lobby: WebRTC offer pushes and Release Adverts. Unknown types are
-    // ignored, so a newer lobby can grow the channel without breaking this server.
-    private async Task WsRecvLoop(ClientWebSocket ws, CancellationToken ct)
+    // ignored, so a newer lobby can grow the channel without breaking this server. Returns why it
+    // stopped, or null when it was cancelled.
+    private async Task<string?> WsRecvLoop(ClientWebSocket ws, CancellationToken ct)
     {
         var buf = new byte[64 * 1024]; // SDP offers can be large
         try
@@ -517,7 +611,7 @@ public sealed class LobbyRegistrar : ILobbyIdentity
             {
                 var result = await ws.ReceiveAsync(buf, ct);
                 if (result.MessageType == WebSocketMessageType.Close)
-                    return;
+                    return CloseReason(ws, "lobby closed the socket");
 
                 var msg = JsonSerializer.Deserialize(buf.AsSpan(0, result.Count), LobbyWsJson.Default.WsOfferMsg);
                 if (msg?.Type == "offer" && _offerChannel is not null)
@@ -525,9 +619,50 @@ public sealed class LobbyRegistrar : ILobbyIdentity
                 else if (msg?.Type == "release" && msg.Version is { Length: > 0 } version)
                     OnReleaseAdvertised?.Invoke(version);
             }
+            return ct.IsCancellationRequested ? null : $"socket {ws.State}";
         }
-        catch (OperationCanceledException) { }
-        catch { }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+        catch (Exception e)
+        {
+            return $"receive failed: {Describe(e)}";
+        }
+    }
+
+    static string CloseReason(WebSocket ws, string who) =>
+        ws.CloseStatus is { } status
+            ? $"{who}: {status}{(string.IsNullOrEmpty(ws.CloseStatusDescription) ? "" : $" '{ws.CloseStatusDescription}'")}"
+            : who;
+
+    // The exception chain in one line: a WebSocketException's own message is often generic, the
+    // socket error underneath ("Connection reset by peer", "keep-alive timeout") is the useful part.
+    static string Describe(Exception e)
+    {
+        var text = e is WebSocketException we ? $"{we.WebSocketErrorCode}: {e.Message}" : $"{e.GetType().Name}: {e.Message}";
+        return e.InnerException is { } inner ? $"{text} <- {inner.Message}" : text;
+    }
+
+    static string Describe(TimeSpan t) =>
+        t.TotalHours >= 1 ? $"{(int)t.TotalHours}h{t.Minutes:00}m"
+        : t.TotalMinutes >= 1 ? $"{t.Minutes}m{t.Seconds:00}s"
+        : $"{t.TotalSeconds:0.0}s";
+
+    // Scales a delay into [50 %, 100 %] so servers that lost the lobby together don't retry in lockstep.
+    static TimeSpan Jitter(TimeSpan span) => span * (0.5 + Random.Shared.NextDouble() * 0.5);
+
+    static async Task<bool> SleepAsync(TimeSpan span, CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(span, ct);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
     }
 
     private async Task Deregister()

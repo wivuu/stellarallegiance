@@ -90,8 +90,26 @@ internal static partial class Log
     )]
     public static partial void EndpointNotReachable(ILogger logger, int attempt, int max);
 
-    [LoggerMessage(EventId = 1204, Level = LogLevel.Information, Message = "WS dropped; re-registering.")]
-    public static partial void WsDroppedReRegister(ILogger logger);
+    [LoggerMessage(
+        EventId = 1204,
+        Level = LogLevel.Information,
+        Message = "WS dropped after {Lifetime} ({Reason}); resuming session {SessionId}."
+    )]
+    public static partial void WsDropped(ILogger logger, string lifetime, string reason, string sessionId);
+
+    [LoggerMessage(
+        EventId = 1226,
+        Level = LogLevel.Information,
+        Message = "the lobby no longer holds session {SessionId} ({Reason}); re-registering."
+    )]
+    public static partial void WsResumeRejected(ILogger logger, string sessionId, string reason);
+
+    [LoggerMessage(
+        EventId = 1227,
+        Level = LogLevel.Warning,
+        Message = "could not resume session {SessionId} after {Attempts} attempt(s) ({Reason}); re-registering."
+    )]
+    public static partial void WsResumeGaveUp(ILogger logger, string sessionId, int attempts, string reason);
 
     [LoggerMessage(EventId = 1205, Level = LogLevel.Warning, Message = "register failed ({StatusCode}).")]
     public static partial void LobbyRegisterFailed(ILogger logger, int statusCode);
@@ -159,6 +177,13 @@ internal static partial class Log
         Message = "lobby unreachable refreshing the saved credential ({Reason}); will retry."
     )]
     public static partial void LobbyAuthRefreshUnreachable(ILogger logger, string reason);
+
+    [LoggerMessage(
+        EventId = 1225,
+        Level = LogLevel.Warning,
+        Message = "the lobby answered the credential refresh with '{Error}', which is not a verdict on the credential; keeping it and retrying."
+    )]
+    public static partial void LobbyAuthRefreshUnexpected(ILogger logger, string error);
 
     // Warning (not Information) so the banner is visible with default logging, per plan §4 WP2.1.
     [LoggerMessage(

@@ -24,6 +24,7 @@ public sealed class LobbyAuthSession
 
     static readonly TimeSpan AccessTokenRefreshMargin = TimeSpan.FromSeconds(60);
     static readonly TimeSpan TransientRetryDelay = TimeSpan.FromSeconds(5);
+    static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(60);
     static readonly TimeSpan SlowDownStep = TimeSpan.FromSeconds(5);
 
     readonly LobbyAuthClient _authClient;
@@ -93,13 +94,13 @@ public sealed class LobbyAuthSession
         return await RunDeviceFlowAsync(ct);
     }
 
-    // Keeps retrying the SAME stored refresh token through transient (network) failures — only an
-    // explicit invalid_grant burns the credential and moves to the device flow, so a lobby blip
-    // never forces the operator to re-approve.
+    // Keeps retrying the SAME stored refresh token until the lobby gives a real verdict — only an
+    // explicit invalid_grant burns the credential and moves to the device flow, so a lobby blip (a
+    // redeploy, a PaaS edge's 502, a database hiccup) never forces the operator to re-approve.
     async Task<(bool Refreshed, bool Cancelled)> TryRefreshStoredAsync(LobbyCredential stored, CancellationToken ct)
     {
         var refreshToken = stored.RefreshToken;
-        while (!ct.IsCancellationRequested)
+        for (int attempt = 0; !ct.IsCancellationRequested; attempt++)
         {
             LobbyTokenOutcome outcome;
             try
@@ -113,7 +114,7 @@ public sealed class LobbyAuthSession
             catch (Exception e)
             {
                 Log.LobbyAuthRefreshUnreachable(_log, e.Message);
-                if (!await _delay(TransientRetryDelay, ct))
+                if (!await _delay(RetryDelay(attempt), ct))
                     return (false, true);
                 continue;
             }
@@ -124,16 +125,36 @@ public sealed class LobbyAuthSession
                 return (true, false);
             }
 
-            Log.LobbyAuthRefreshRefused(_log, outcome.Error ?? "unknown");
-            LobbyCredentialStore.Delete(_authFilePath);
-            return (false, false);
+            if (outcome.Error == LobbyTokenError.InvalidGrant)
+            {
+                Log.LobbyAuthRefreshRefused(_log, outcome.Error);
+                LobbyCredentialStore.Delete(_authFilePath);
+                return (false, false);
+            }
+
+            // Any other OAuth error is the lobby misbehaving, not a verdict on this credential.
+            Log.LobbyAuthRefreshUnexpected(_log, outcome.Error ?? "unknown_error");
+            if (!await _delay(RetryDelay(attempt), ct))
+                return (false, true);
         }
         return (false, true);
     }
 
+    // Exponential backoff with jitter: 5 s, 10 s, 20 s ... capped at 60 s, each scaled into
+    // [50 %, 100 %], so a fleet of servers that lost the lobby together (a redeploy drops them all
+    // at once) does not come back in lockstep.
+    public static TimeSpan RetryDelay(int attempt)
+    {
+        var ceiling = Math.Min(
+            MaxRetryDelay.TotalSeconds,
+            TransientRetryDelay.TotalSeconds * Math.Pow(2, Math.Min(attempt, 8))
+        );
+        return TimeSpan.FromSeconds(ceiling * (0.5 + Random.Shared.NextDouble() * 0.5));
+    }
+
     async Task<BootResult> RunDeviceFlowAsync(CancellationToken ct)
     {
-        while (!ct.IsCancellationRequested)
+        for (int attempt = 0; !ct.IsCancellationRequested; attempt++)
         {
             DeviceAuthResponse device;
             try
@@ -147,7 +168,7 @@ public sealed class LobbyAuthSession
             catch (Exception e)
             {
                 Log.LobbyDeviceCodePollError(_log, e.Message);
-                if (!await _delay(TransientRetryDelay, ct))
+                if (!await _delay(RetryDelay(attempt), ct))
                     return BootResult.Cancelled;
                 continue;
             }

@@ -341,8 +341,7 @@ Simulation siegeSim;
         $"ships survived the match-end sweep ({sim.Ships.Count} left, phase={sim.Phase})"
     );
     Check(
-        deaths.Count == sweptIds.Count
-            && deaths.All(d => sweptIds.Contains(d.id) && d.reason == Simulation.GoneMatchEnd),
+        deaths.Count == sweptIds.Count && deaths.All(d => sweptIds.Contains(d.id) && d.reason == Simulation.GoneMatchEnd),
         "every ship left with GoneMatchEnd — no blast (GoneDestroyed), no dock (GoneClean)",
         $"match-end sweep emitted the wrong gone reasons ({string.Join(", ", deaths.Select(d => $"{d.id}:{d.reason}"))})"
     );

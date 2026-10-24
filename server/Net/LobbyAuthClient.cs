@@ -1,4 +1,6 @@
+using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using StellarAllegiance.Shared.Lobby;
 
 namespace SimServer.Net;
@@ -37,6 +39,12 @@ public sealed class LobbyAuthClient
     public Task<LobbyTokenOutcome> RefreshAsync(string refreshToken, CancellationToken ct) =>
         PostTokenAsync(new TokenRequest(LobbyGrantType.RefreshToken, RefreshToken: refreshToken), ct);
 
+    // Only the lobby's own OAuth answer (a 400/401 carrying {"error": ...}) says anything about the
+    // grant. Anything else is the lobby or the path to it failing, and is THROWN so callers treat it
+    // as transient and retry the same refresh token: a PaaS edge's 502 with its own JSON body
+    // (Railway's, during a deploy cutover), a 429, an HTML error page, a 200 with no token. On
+    // 2026-10-24 that 502 body parsed as an error with no code and burned a production server's
+    // credential.
     async Task<LobbyTokenOutcome> PostTokenAsync(TokenRequest req, CancellationToken ct)
     {
         using var resp = await _http.PostAsJsonAsync(
@@ -48,11 +56,35 @@ public sealed class LobbyAuthClient
         if (resp.IsSuccessStatusCode)
         {
             var token = await resp.Content.ReadFromJsonAsync(LobbyHttpJson.Default.TokenResponse, ct);
-            return token is null ? LobbyTokenOutcome.Failed(LobbyTokenError.InvalidGrant) : LobbyTokenOutcome.Ok(token);
+            return token is null
+                ? throw new HttpRequestException("POST /auth/token answered 200 with no token")
+                : LobbyTokenOutcome.Ok(token);
         }
 
-        var err = await resp.Content.ReadFromJsonAsync(LobbyHttpJson.Default.TokenErrorResponse, ct);
-        return LobbyTokenOutcome.Failed(err?.Error ?? "unknown_error");
+        if (
+            resp.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Unauthorized
+            && await TryReadOAuthErrorAsync(resp, ct) is { } error
+        )
+            return LobbyTokenOutcome.Failed(error);
+
+        throw new HttpRequestException(
+            $"POST /auth/token answered {(int)resp.StatusCode} {resp.ReasonPhrase} with no OAuth error",
+            inner: null,
+            resp.StatusCode
+        );
+    }
+
+    static async Task<string?> TryReadOAuthErrorAsync(HttpResponseMessage resp, CancellationToken ct)
+    {
+        try
+        {
+            var err = await resp.Content.ReadFromJsonAsync(LobbyHttpJson.Default.TokenErrorResponse, ct);
+            return string.IsNullOrEmpty(err?.Error) ? null : err.Error;
+        }
+        catch (Exception e) when (e is JsonException or NotSupportedException)
+        {
+            return null; // not JSON at all (an HTML error page, an empty body)
+        }
     }
 }
 

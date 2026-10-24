@@ -56,7 +56,7 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Resolve version
         id: version
@@ -125,10 +125,10 @@ jobs:
       MAC_NOTARY_PROFILE: ${{ secrets.MAC_NOTARY_PROFILE }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           # Single source of truth for the SDK: root global.json (>= 10.0.401, which is the
           # Roslyn 5.9.0 floor tools/wire-gen needs). Bump it there, not here.
@@ -246,10 +246,10 @@ jobs:
       VERSION: ${{ needs.prepare.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           # Single source of truth for the SDK: root global.json (>= 10.0.401, which is the
           # Roslyn 5.9.0 floor tools/wire-gen needs). Bump it there, not here.
@@ -345,7 +345,7 @@ jobs:
       packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # Merges BOTH package-server legs' staged contexts into one dir: ctx/amd64/…, ctx/arm64/…
       # (Docker's arch names — see scripts/package-server.ps1) plus ctx/docker-entrypoint.sh (written
@@ -409,10 +409,10 @@ jobs:
       CHANNELS: "win osx linux server-linux-x64 server-linux-arm64"
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           # Single source of truth for the SDK: root global.json (>= 10.0.401, which is the
           # Roslyn 5.9.0 floor tools/wire-gen needs). Bump it there, not here.

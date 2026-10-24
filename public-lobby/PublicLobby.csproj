@@ -64,19 +64,15 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(OS)' != 'Windows_NT' AND $([MSBuild]::IsOSPlatform('OSX'))">
     <TailwindAssetName Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' == 'Arm64'"
-      >tailwindcss-macos-arm64</TailwindAssetName
-    >
+      >tailwindcss-macos-arm64</TailwindAssetName>
     <TailwindAssetName Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' != 'Arm64'"
-      >tailwindcss-macos-x64</TailwindAssetName
-    >
+      >tailwindcss-macos-x64</TailwindAssetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(OS)' != 'Windows_NT' AND $([MSBuild]::IsOSPlatform('Linux'))">
     <TailwindAssetName Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' == 'Arm64'"
-      >tailwindcss-linux-arm64</TailwindAssetName
-    >
+      >tailwindcss-linux-arm64</TailwindAssetName>
     <TailwindAssetName Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' != 'Arm64'"
-      >tailwindcss-linux-x64</TailwindAssetName
-    >
+      >tailwindcss-linux-x64</TailwindAssetName>
   </PropertyGroup>
   <PropertyGroup>
     <TailwindExe>$(TailwindToolsDir)/$(TailwindAssetName)</TailwindExe>

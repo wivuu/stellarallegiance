@@ -236,11 +236,7 @@ float Dist(Vec3 a, Vec3 b) => (a - b).Length();
         "issuer got the no-radar-contact rejection",
         "no rejection notice reached the issuer"
     );
-    Check(
-        sim.Events.OrderDirectives.Count == 0,
-        "no team directive for a rejected order",
-        "rejected order still announced"
-    );
+    Check(sim.Events.OrderDirectives.Count == 0, "no team directive for a rejected order", "rejected order still announced");
 }
 
 // ---- 4 + 5 + 6. Goto-idle: arrive + hold, defend the point, explicit clear -----------------------

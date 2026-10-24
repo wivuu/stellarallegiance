@@ -3,16 +3,20 @@ namespace PublicLobby.Data.Migrations;
 // Official Orleans ADO.NET PostgreSQL schema scripts, embedded verbatim so the OrleansAdoNet
 // migration (WP0.2, plan .PLAN/LobbyRankingService.md §1.4/§3.5) stays readable without a
 // 600-line inline SQL blob in the migration file itself. Sourced from the dotnet/orleans GitHub
-// repository at tag v10.3.1 (commit 137d9acc17830f15b13a4eb0058d6cee633cad5e), matching the
-// Microsoft.Orleans.Clustering.AdoNet / Microsoft.Orleans.Reminders.AdoNet 10.3.1 NuGet packages
-// referenced by public-lobby/PublicLobby.csproj — those packages ship only the ADO.NET provider
-// code, not the schema scripts, so the scripts are fetched from the tagged source instead:
+// repository at tag v10.3.1 (commit 137d9acc17830f15b13a4eb0058d6cee633cad5e), the version the
+// Microsoft.Orleans.Clustering.AdoNet / Microsoft.Orleans.Reminders.AdoNet packages were at when
+// this migration was written — those packages ship only the ADO.NET provider code, not the schema
+// scripts, so the scripts are fetched from the tagged source instead:
 //   src/AdoNet/Shared/PostgreSQL-Main.sql                    (OrleansQuery table)
 //   src/AdoNet/Orleans.Clustering.AdoNet/PostgreSQL-Clustering.sql
 //   src/AdoNet/Orleans.Reminders.AdoNet/PostgreSQL-Reminders.sql
 // Applied in this order (Main before Clustering/Reminders: both later scripts INSERT INTO the
-// OrleansQuery table Main creates). Do not hand-edit the SQL bodies below — replace them wholesale
-// from the same source if the pinned package version ever changes.
+// OrleansQuery table Main creates). Do not hand-edit the SQL bodies below, and do not swap them for
+// a newer tag either: this migration is already applied in production, so editing it would only
+// change fresh databases. A package bump keeps these definitions — Orleans 10.4.0's clustering
+// README: "Upgrading silos ... preserves support for existing query installations. Database updates
+// are optional." Adopting a newer tag's revised queries (10.4.0 rewrote the PostgreSQL membership
+// functions and added the optional CleanupDefunctSiloEntryKey) is a NEW migration.
 internal static class OrleansSql
 {
     // src/AdoNet/Shared/PostgreSQL-Main.sql — OrleansQuery table.

@@ -49,8 +49,7 @@ static class PersistenceHosting
                 // (IdentityUserPasskey) in IdentityUserContext.OnModelCreating — versions 1/2
                 // predate passkeys and silently omit it. LobbyDbContextFactory (design time) pins
                 // the same version so `dotnet ef migrations add` sees the identical model.
-                o =>
-                o.Stores.SchemaVersion = IdentitySchemaVersions.Version3
+                o => o.Stores.SchemaVersion = IdentitySchemaVersions.Version3
             )
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<LobbyDbContext>()

@@ -100,7 +100,12 @@ var fwd = new ForwardedHeadersOptions
 fwd.KnownIPNetworks.Clear();
 fwd.KnownProxies.Clear();
 app.UseForwardedHeaders(fwd);
-app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30) });
+
+// KeepAliveTimeout: a game server whose path died without a close (a NAT forgetting the flow) is
+// noticed by ping/pong instead of holding a dead socket until TCP gives up, so its resume grace starts.
+app.UseWebSockets(
+    new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30), KeepAliveTimeout = TimeSpan.FromSeconds(30) }
+);
 app.UseLobbyWeb();
 
 // Liveness endpoint for a PaaS healthcheck (Railway). Distinct token from the sim server's
@@ -249,7 +254,9 @@ app.MapGet(
         LobbyEventBus bus,
         ServerConnectionManager connMgr,
         IGrainFactory grains,
-        TimeProvider clock
+        TimeProvider clock,
+        ILoggerFactory loggers,
+        IHostApplicationLifetime lifetime
     ) =>
     {
         if (!ctx.WebSockets.IsWebSocketRequest)
@@ -269,8 +276,7 @@ app.MapGet(
             || !registry.ValidateSecret(auth.SessionId, auth.Secret)
         )
         {
-            if (ws.State == WebSocketState.Open)
-                await ws.CloseAsync(WebSocketCloseStatus.PolicyViolation, "unauthorized", default);
+            await WsCloseQuietlyAsync(ws, WebSocketCloseStatus.PolicyViolation, "unauthorized");
             return;
         }
         var sessionId = auth.SessionId;
@@ -280,23 +286,85 @@ app.MapGet(
         var verifiedGameServerId = listing is { Verified: true, GameServerId: { } gsid } ? gsid : (Guid?)null;
         await WsSendJsonAsync(ws, new { type = "ok" }, ct);
 
-        var pushReader = connMgr.Register(sessionId);
+        var log = loggers.CreateLogger("PublicLobby.ServerSocket");
+        var (pushReader, generation) = connMgr.Connect(sessionId);
+        var connectedAt = clock.GetTimestamp();
+        WsEnd ended;
+        bool stillOurs;
         try
         {
-            using var pair = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            var recvTask = WsRecvServerUpdates(ws, sessionId, registry, verifiedGameServerId, grains, clock, pair.Token);
+            // ApplicationStopping too: a stopping lobby lets go of every server socket at once
+            // instead of holding shutdown until the host's timeout (and Railway's kill).
+            using var pair = CancellationTokenSource.CreateLinkedTokenSource(ct, lifetime.ApplicationStopping);
+            var recvTask = WsRecvServerUpdates(
+                ws,
+                sessionId,
+                registry,
+                verifiedGameServerId,
+                grains,
+                clock,
+                log,
+                pair.Token
+            );
             var sendTask = WsSendPushes(ws, pushReader, pair.Token);
-            await Task.WhenAny(recvTask, sendTask);
+            var first = await Task.WhenAny(recvTask, sendTask);
             pair.Cancel();
             await Task.WhenAll(recvTask, sendTask);
+            ended =
+                await first ?? await recvTask ?? await sendTask ?? new WsEnd("the request was aborted", Deliberate: false);
         }
         finally
         {
-            connMgr.Unregister(sessionId); // completes the push channel → send loop exits
-            registry.Remove(sessionId); // fires SSE "removed" (no-op if DELETE already ran)
-            if (ws.State == WebSocketState.Open)
-                await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye", default);
+            // Completes the push channel → send loop exits; false when a resumed socket (or a
+            // DELETE) has already taken the session, so the listing is not this handler's to drop.
+            stillOurs = connMgr.Unregister(sessionId, pushReader);
+            if (lifetime.ApplicationStopping.IsCancellationRequested)
+                // "Going away": the server resumes at once, is refused by the next lobby process
+                // (it never knew the session), and registers there straight away.
+                await WsCloseQuietlyAsync(ws, WebSocketCloseStatus.EndpointUnavailable, "lobby restarting");
+            else
+                await WsCloseQuietlyAsync(ws, WebSocketCloseStatus.NormalClosure, "bye");
         }
+
+        var lived = clock.GetElapsedTime(connectedAt);
+        if (lifetime.ApplicationStopping.IsCancellationRequested)
+        {
+            Log.ServerSocketClosed(log, sessionId, lived, "the lobby is shutting down");
+            return; // the whole registry goes with the process: nothing to hold or remove
+        }
+        if (!stillOurs || ended.Deliberate)
+        {
+            Log.ServerSocketClosed(log, sessionId, lived, stillOurs ? ended.Reason : "superseded or deleted");
+            if (stillOurs)
+            {
+                connMgr.Forget(sessionId, generation);
+                registry.Remove(sessionId); // fires SSE "removed"
+            }
+            return;
+        }
+
+        // A drop, not a goodbye: hold the listing (its id, its secret, its place in every browser)
+        // for the grace, so the server can resume this same session on a new socket. LastSeen
+        // restarts now, so the registry TTL does not evict it under the grace.
+        var grace = ServerResumeGrace();
+        Log.ServerSocketDropped(log, sessionId, lived, ended.Reason, (int)grace.TotalSeconds);
+        if (!registry.Heartbeat(sessionId))
+            return; // already gone (a DELETE raced the drop)
+        try
+        {
+            await Task.Delay(grace, clock, lifetime.ApplicationStopping);
+        }
+        catch (OperationCanceledException)
+        {
+            return; // shutting down: the whole registry goes with the process
+        }
+        // A newer socket took the session meanwhile: it owns the listing now (and, if it has dropped
+        // too, runs a grace of its own that must not be cut short by this older one).
+        if (!connMgr.IsLatest(sessionId, generation))
+            return;
+        connMgr.Forget(sessionId, generation);
+        if (registry.Remove(sessionId))
+            Log.ServerNotResumed(log, sessionId, (int)grace.TotalSeconds);
     }
 );
 
@@ -594,15 +662,17 @@ static async Task KeepaliveLoop(
     catch (OperationCanceledException) { }
 }
 
-// WS helpers for the /servers/ws handler.
+// WS helpers for the /servers/ws handler. Each loop returns how the socket ended (null when it was
+// only cancelled because the other loop ended first), so every drop is logged with a reason.
 
-static async Task WsRecvServerUpdates(
+static async Task<WsEnd?> WsRecvServerUpdates(
     WebSocket ws,
     string sessionId,
     IServerRegistry registry,
     Guid? verifiedGameServerId,
     IGrainFactory grains,
     TimeProvider clock,
+    ILogger log,
     CancellationToken ct
 )
 {
@@ -615,8 +685,13 @@ static async Task WsRecvServerUpdates(
             var msg = await WsReceiveJsonAsync<WsServerMsg>(ws, ct);
             if (msg is null)
             {
+                if (ws.State == WebSocketState.CloseReceived || ws.CloseStatus is not null)
+                    return new WsEnd(
+                        $"the server closed the socket: {ws.CloseStatus} '{ws.CloseStatusDescription}'",
+                        Deliberate: ws.CloseStatus == WebSocketCloseStatus.NormalClosure
+                    );
                 if (ws.State != WebSocketState.Open)
-                    return;
+                    return new WsEnd($"socket {ws.State}", Deliberate: false);
                 continue;
             }
 
@@ -626,23 +701,40 @@ static async Task WsRecvServerUpdates(
                 registry.Heartbeat(sessionId); // bare touch; no SSE event (values unchanged)
 
             // Verified listings keep GameServerGrain.LastListedAt fresh on every ping/update; the
-            // grain self-throttles to once a minute, so this is cheap to call unconditionally.
+            // grain self-throttles to once a minute, so this is cheap to call unconditionally. It is
+            // bookkeeping: a database or silo hiccup here must not tear down a healthy server's
+            // control channel (it used to, silently, through the catch-all below).
             if (verifiedGameServerId is { } gsid && msg.Type is "update" or "ping")
-                await grains.GetGrain<IGameServerGrain>(gsid).OnListed(clock.GetUtcNow());
+                try
+                {
+                    await grains.GetGrain<IGameServerGrain>(gsid).OnListed(clock.GetUtcNow());
+                }
+                catch (Exception e) when (e is not OperationCanceledException)
+                {
+                    Log.ServerListedBookkeepingFailed(log, sessionId, e.GetType().Name, e.Message);
+                }
         }
+        return ct.IsCancellationRequested ? null : new WsEnd($"socket {ws.State}", Deliberate: false);
     }
-    catch (OperationCanceledException) { }
-    catch { }
+    catch (OperationCanceledException)
+    {
+        return null;
+    }
+    catch (Exception e)
+    {
+        var detail = e.InnerException is { } inner ? $"{e.Message} <- {inner.Message}" : e.Message;
+        return new WsEnd($"receive failed: {e.GetType().Name}: {detail}", Deliberate: false);
+    }
 }
 
-static async Task WsSendPushes(WebSocket ws, ChannelReader<ServerPush> reader, CancellationToken ct)
+static async Task<WsEnd?> WsSendPushes(WebSocket ws, ChannelReader<ServerPush> reader, CancellationToken ct)
 {
     try
     {
         await foreach (var push in reader.ReadAllAsync(ct))
         {
             if (ws.State != WebSocketState.Open)
-                return;
+                return new WsEnd($"socket {ws.State}", Deliberate: false);
             // Anonymous shapes = the wire format; member order is the JSON order older servers bind.
             object payload = push switch
             {
@@ -657,9 +749,38 @@ static async Task WsSendPushes(WebSocket ws, ChannelReader<ServerPush> reader, C
             };
             await WsSendJsonAsync(ws, payload, ct);
         }
+        // The channel was completed: a resumed socket superseded this one, or a DELETE took the session.
+        return ct.IsCancellationRequested ? null : new WsEnd("push channel completed", Deliberate: false);
     }
-    catch (OperationCanceledException) { }
-    catch { }
+    catch (OperationCanceledException)
+    {
+        return null;
+    }
+    catch (Exception e)
+    {
+        return new WsEnd($"send failed: {e.GetType().Name}: {e.Message}", Deliberate: false);
+    }
+}
+
+// How long a dropped game server's listing is held for it to resume on a new socket. Read per
+// request (like AllowUnverifiedServers) so tests can shorten it without restarting the host.
+static TimeSpan ServerResumeGrace() =>
+    int.TryParse(Environment.GetEnvironmentVariable("LOBBY_SERVER_RESUME_GRACE_SECONDS"), out var s) && s >= 0
+        ? TimeSpan.FromSeconds(s)
+        : TimeSpan.FromSeconds(30);
+
+// Sends our close frame without waiting for the peer's: after a drop, or a refusal the server
+// hangs up on, there is no peer left to answer, and a close that throws must never skip what the
+// handler does next (the resume grace).
+static async Task WsCloseQuietlyAsync(WebSocket ws, WebSocketCloseStatus status, string description)
+{
+    if (ws.State is not (WebSocketState.Open or WebSocketState.CloseReceived))
+        return;
+    try
+    {
+        await ws.CloseOutputAsync(status, description, CancellationToken.None);
+    }
+    catch (Exception e) when (e is WebSocketException or IOException or ObjectDisposedException) { }
 }
 
 static async Task WsSendJsonAsync(WebSocket ws, object payload, CancellationToken ct)
@@ -761,3 +882,7 @@ static class LobbyJson
 // partial declaration makes that type visible so tests/PublicLobbyTest/LobbyHostFixture.cs can
 // boot the real host via WebApplicationFactory<Program> (WP0.2/WP0.3).
 public partial class Program { }
+
+// How a game server's socket ended. Deliberate = the server said goodbye (a NormalClosure frame),
+// so its listing goes at once; anything else is a drop and the listing is held for a resume.
+record WsEnd(string Reason, bool Deliberate);

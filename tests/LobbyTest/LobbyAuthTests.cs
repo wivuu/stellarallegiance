@@ -28,8 +28,207 @@ static class LobbyAuthTests
         await RunMatchingFileResumesViaRefresh(Check);
         await RunDeviceFlowPendingSlowDownApproved(Check);
         await RunAccessDeniedStopsWithNoRetry(Check);
+        await RunGatewayFailuresKeepTheCredential(Check);
+        await RunInvalidGrantBurnsTheCredential(Check);
+        await RunSteadyStateRefreshSurvivesAGateway(Check);
+        RunRetryDelayBackoffIsJitteredAndCapped(Check);
 
         return failures;
+    }
+
+    // What a PaaS edge answers while a lobby redeploy cuts over: Railway's own 502 JSON (no OAuth
+    // `error`), an HTML 503, a bare 429, a 500 that happens to carry an OAuth-looking body, and a
+    // 400 with an OAuth error other than invalid_grant. None of them is a verdict on the grant; on
+    // 2026-10-24 the first one burned a production server's credential (EventId 1216 -> device code).
+    static readonly Func<HttpResponseMessage>[] GatewayFailures =
+    [
+        () =>
+            new(HttpStatusCode.BadGateway)
+            {
+                Content = new StringContent(
+                    """{"status":"error","code":502,"message":"Application failed to respond","request_id":"x"}""",
+                    System.Text.Encoding.UTF8,
+                    "application/json"
+                ),
+            },
+        () =>
+            new(HttpStatusCode.ServiceUnavailable)
+            {
+                Content = new StringContent("<html><body>503</body></html>", System.Text.Encoding.UTF8, "text/html"),
+            },
+        () => new(HttpStatusCode.TooManyRequests),
+        () =>
+            new(HttpStatusCode.InternalServerError) { Content = JsonContent.Create(new TokenErrorResponse("server_error")) },
+        () => ErrorResponse("temporarily_unavailable"),
+    ];
+
+    // ---- Boot refresh: every gateway failure is retried with the SAME token, then it resumes --
+    static async Task RunGatewayFailuresKeepTheCredential(Action<bool, string> Check)
+    {
+        var dir = Directory.CreateTempSubdirectory("lobby-auth-test-");
+        try
+        {
+            var path = Path.Combine(dir.FullName, "lobby-auth.json");
+            var gameServerId = Guid.NewGuid();
+            LobbyCredentialStore.Save(path, new LobbyCredential(LobbyBase, gameServerId, "Srv", "r.kept"));
+
+            int deviceRequests = 0,
+                refreshRequests = 0;
+            var presented = new List<string?>();
+            var handler = new StubHandler(req =>
+            {
+                if (req.RequestUri!.AbsolutePath == "/auth/device")
+                {
+                    deviceRequests++;
+                    return new HttpResponseMessage(HttpStatusCode.NotFound);
+                }
+                var body = req.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+                using var doc = JsonDocument.Parse(body);
+                presented.Add(doc.RootElement.GetProperty("refresh_token").GetString());
+                if (refreshRequests++ < GatewayFailures.Length)
+                {
+                    // The credential must still be on disk while the lobby is failing.
+                    Check(File.Exists(path), $"credential still on disk during gateway failure {refreshRequests}");
+                    return GatewayFailures[refreshRequests - 1]();
+                }
+                return JsonResponse(
+                    new TokenResponse(
+                        "access-ok",
+                        "refresh-rotated",
+                        900,
+                        new TokenSubject(LobbySubjectKind.Server, gameServerId, "Srv")
+                    )
+                );
+            });
+
+            var delays = new List<TimeSpan>();
+            var session = NewSession(
+                handler,
+                path,
+                (span, _) =>
+                {
+                    delays.Add(span);
+                    // Once the session has fallen into the device flow the credential is already
+                    // lost: stop it there, so a regression FAILS the checks below instead of hanging.
+                    return Task.FromResult(deviceRequests == 0);
+                }
+            );
+            var result = await session.AuthenticateAsync(CancellationToken.None);
+
+            Check(result == LobbyAuthSession.BootResult.Approved, "boot refresh rides out every gateway failure");
+            Check(deviceRequests == 0, "no device code was requested: the operator never has to re-approve");
+            Check(refreshRequests == GatewayFailures.Length + 1, "one refresh POST per failure, then the success");
+            Check(presented.TrueForAll(t => t == "r.kept"), "every retry presented the SAME stored refresh token");
+            Check(delays.Count == GatewayFailures.Length, "a backoff wait before every retry");
+            Check(
+                LobbyCredentialStore.TryLoad(path)?.RefreshToken == "refresh-rotated",
+                "the rotated refresh token was persisted once the lobby answered"
+            );
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    // ---- Boot refresh: an explicit invalid_grant (and only that) burns the credential ---------
+    static async Task RunInvalidGrantBurnsTheCredential(Action<bool, string> Check)
+    {
+        var dir = Directory.CreateTempSubdirectory("lobby-auth-test-");
+        try
+        {
+            var path = Path.Combine(dir.FullName, "lobby-auth.json");
+            LobbyCredentialStore.Save(path, new LobbyCredential(LobbyBase, Guid.NewGuid(), "Srv", "r.revoked"));
+
+            int deviceRequests = 0;
+            bool fileGoneBeforeDeviceFlow = false;
+            var handler = new StubHandler(req =>
+            {
+                if (req.RequestUri!.AbsolutePath == "/auth/device")
+                {
+                    deviceRequests++;
+                    fileGoneBeforeDeviceFlow = !File.Exists(path);
+                    return new HttpResponseMessage(HttpStatusCode.NotFound);
+                }
+                return ErrorResponse(LobbyTokenError.InvalidGrant);
+            });
+
+            // Stop at the device flow's first retry wait: reaching it is what this test is about.
+            var session = NewSession(handler, path, (_, _) => Task.FromResult(false));
+            var result = await session.AuthenticateAsync(CancellationToken.None);
+
+            Check(deviceRequests == 1, "invalid_grant moves straight on to the device flow");
+            Check(fileGoneBeforeDeviceFlow, "invalid_grant deleted the stored credential first");
+            Check(result == LobbyAuthSession.BootResult.Cancelled, "the device flow was stopped by the test");
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    // ---- Steady state: a gateway failure on refresh keeps the in-memory and on-disk token --------
+    static async Task RunSteadyStateRefreshSurvivesAGateway(Action<bool, string> Check)
+    {
+        var dir = Directory.CreateTempSubdirectory("lobby-auth-test-");
+        try
+        {
+            var path = Path.Combine(dir.FullName, "lobby-auth.json");
+            var gameServerId = Guid.NewGuid();
+            LobbyCredentialStore.Save(path, new LobbyCredential(LobbyBase, gameServerId, "Srv", "r.0"));
+
+            int refreshes = 0;
+            bool failNext = false;
+            var handler = new StubHandler(req =>
+            {
+                refreshes++;
+                if (failNext)
+                {
+                    failNext = false;
+                    return GatewayFailures[0]();
+                }
+                return JsonResponse(
+                    new TokenResponse(
+                        $"access-{refreshes}",
+                        $"refresh-{refreshes}",
+                        900,
+                        new TokenSubject(LobbySubjectKind.Server, gameServerId, "Srv")
+                    )
+                );
+            });
+
+            var session = NewSession(handler, path);
+            await session.AuthenticateAsync(CancellationToken.None);
+
+            failNext = true;
+            var during = await session.GetAccessTokenAsync(forceRefresh: true, CancellationToken.None);
+            Check(during is null, "a forced refresh through a 502 yields no token this time");
+            Check(LobbyCredentialStore.TryLoad(path) is not null, "…but the credential file survives it");
+
+            var after = await session.GetAccessTokenAsync(forceRefresh: true, CancellationToken.None);
+            Check(after is not null && after.StartsWith("access-"), "the next refresh succeeds with the kept token");
+            Check(session.GameServerId == gameServerId, "the server keeps its Game Server identity throughout");
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    // ---- Backoff: grows, is capped, and is jittered so a fleet does not retry in lockstep -------
+    static void RunRetryDelayBackoffIsJitteredAndCapped(Action<bool, string> Check)
+    {
+        var first = Enumerable.Range(0, 200).Select(_ => LobbyAuthSession.RetryDelay(0)).ToList();
+        Check(
+            first.TrueForAll(d => d >= TimeSpan.FromSeconds(2.5) && d <= TimeSpan.FromSeconds(5)),
+            "first retry waits 2.5-5 s"
+        );
+        Check(first.Distinct().Count() > 1, "first retry delays are jittered");
+        Check(
+            Enumerable.Range(0, 200).All(_ => LobbyAuthSession.RetryDelay(50) <= TimeSpan.FromSeconds(60)),
+            "the backoff is capped at 60 s"
+        );
+        Check(LobbyAuthSession.RetryDelay(3) >= TimeSpan.FromSeconds(20), "the backoff grows (attempt 3 >= 20 s)");
     }
 
     // ---- LobbyCredentialStore: write -> read, 0600 on Unix, malformed/empty ignored --------
