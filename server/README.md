@@ -66,7 +66,7 @@ For a raw run outside Aspire (perf/benchmark measurements, or just this project)
   while; `on` needs a packaged Linux install and degrades to `warn` (logged once at boot) anywhere else.
   `SIM_UPDATE_IDLE_SECONDS` (default `60`, min `10`) — empty time required before any update work starts.
   `SIM_UPDATE_INTERVAL_SECONDS` (default `21600` = 6h, min `30`, `0` = off) — the safety-net feed check for
-  a server the public lobby can't reach, skipped whenever a lobby advert arrives. `SIM_UPDATE_PRERELEASE`
+  a server the public lobby can't reach, skipped while the lobby link is up and has advertised. `SIM_UPDATE_PRERELEASE`
   (default off) — also follow GitHub pre-releases (rehearsals). `SIM_UPDATE_FEED` (default unset) —
   override the feed with a folder or URL. `SIM_UPDATE_RESTART` (default `exit` in a container or under
   systemd, else `relaunch`) — how the new build starts once swapped in. `SIM_BUILD_VERSION` — this

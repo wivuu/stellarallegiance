@@ -46,8 +46,11 @@ static class FuzzTests
                     case < 15:
                         rig.Gate.Leave();
                         break;
-                    case < 17:
+                    case < 16:
                         rig.Coordinator.OnLobbyAdvert(versions[random.Next(versions.Length)]);
+                        break;
+                    case 16:
+                        rig.Coordinator.OnLobbyLinkLost();
                         break;
                     case 17:
                         rig.Backend.NextOffer = random.Next(4) switch

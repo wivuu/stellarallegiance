@@ -115,20 +115,27 @@ static class CoordinatorTests
         T.Eq(1, unlisted.Backend.Checks, "no advert after 60 s: the safety net asks the feed itself");
         T.Eq(UpdatePhase.Offered, unlisted.Coordinator.Phase, "…and finds the release");
 
-        var listed = new Rig(safetyNetSeconds: 100);
-        listed.Coordinator.OnLobbyAdvert("1.0.0"); // the lobby is talking, nothing newer
-        listed.Run(TimeSpan.FromSeconds(120));
-        T.Eq(0, listed.Backend.Checks, "adverts are arriving: the tick is SKIPPED - the lobby does the watching");
-        listed.Run(TimeSpan.FromSeconds(60));
-        T.Eq(1, listed.Backend.Checks, "the lobby went quiet for a whole interval: the safety net is back");
-        listed.Coordinator.OnLobbyAdvert("1.0.0");
-        listed.Run(TimeSpan.FromSeconds(100));
-        T.Eq(1, listed.Backend.Checks, "…and steps aside again as soon as adverts resume");
-
         var never = new Rig(safetyNetSeconds: 0);
         never.Backend.NextOffer = Rig.OfferOf("1.1.0");
         never.Run(TimeSpan.FromHours(2));
         T.Eq(0, never.Backend.Checks, "SIM_UPDATE_INTERVAL_SECONDS=0: no safety net at all");
+
+        T.Section("safety net: a listed server never asks while its lobby link is up");
+        var listed = new Rig();
+        listed.Coordinator.OnLobbyAdvert("1.0.0"); // the connect-time advert, nothing newer
+        listed.Run(TimeSpan.FromHours(25));
+        T.Eq(0, listed.Backend.Checks, "a quiet night on a live link: no feed checks at all - the lobby does the watching");
+        listed.Coordinator.OnLobbyLinkLost();
+        listed.Run(TimeSpan.FromHours(6));
+        T.Eq(1, listed.Backend.Checks, "the link dropped: the safety net is back within one interval");
+        listed.Coordinator.OnLobbyAdvert("1.0.0"); // reconnected
+        listed.Run(TimeSpan.FromHours(13));
+        T.Eq(1, listed.Backend.Checks, "…and stands down again as soon as a reconnect advertises");
+
+        var garbled = new Rig();
+        garbled.Coordinator.OnLobbyAdvert("not a version");
+        garbled.Run(TimeSpan.FromSeconds(61));
+        T.Eq(1, garbled.Backend.Checks, "a link that advertises no usable version is not watching for us");
 
         T.Section("safety net: following pre-releases (rehearsals)");
         var rehearsal = new Rig(prerelease: true, safetyNetSeconds: 100);

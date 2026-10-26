@@ -1751,8 +1751,8 @@ player is connected, and the swap only after an idle window of zero connections,
 - **Related:** [[Release Advert]], [[Update Drain]], [[Server Notice]], [[Game Launcher]],
   [[Update Feed / Channel]]
 - **Notes:** The coordinator only ever reacts to a [[Release Advert]] or its own slow safety-net poll (first
-  check 60 s after boot, then every 6 h, skipped whenever an advert already arrived) — it never polls GitHub
-  on its own while listed. Version identity, in order: installed (Velopack) → assembly `-p:Version` →
+  check 60 s after boot, then every 6 h, skipped while the lobby link is up and has advertised) — it never
+  polls GitHub on its own while listed. Version identity, in order: installed (Velopack) → assembly `-p:Version` →
   `SIM_BUILD_VERSION` (`scripts/run-server.ps1` sets it from `git describe`) → unknown (never compares, never
   warns). `SIM_UPDATE_RESTART=exit` (the default in a container or under systemd) exits code `85` for a
   supervisor to relaunch; `relaunch` (a server started by hand) starts the new build itself once this
@@ -1784,8 +1784,9 @@ anonymously.
 - **Related:** [[Server Auto-Update]], [[Update Feed / Channel]], [[Public Lobby]]
 - **Notes:** Servers are told `Latest` (`max(baked, confirmed)`) — an early advert only costs a no-op check.
   Clients are told `Confirmed` only (never `Baked`) — an early "UPDATE READY" would send a player through the
-  Game Launcher and straight back having installed nothing. A server the lobby can't reach (unlisted, or an
-  old lobby) gets no advert at all and relies on [[Server Auto-Update]]'s own safety-net poll instead.
+  Game Launcher and straight back having installed nothing. A server the lobby can't reach (unlisted, an
+  old lobby, or its link is down) gets no advert at all and relies on [[Server Auto-Update]]'s own safety-net
+  poll instead.
 
 ### Update Drain
 The closed front door a game server holds while it swaps its own package in: `IUpdateGate.TryBeginDrain()`
