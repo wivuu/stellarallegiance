@@ -437,6 +437,7 @@ public sealed class LobbyRegistrar : ILobbyIdentity
         while (!ct.IsCancellationRequested)
         {
             var ended = await RunWsAsync(sessionId, ct);
+            OnLinkLost?.Invoke();
             if (ct.IsCancellationRequested)
                 return;
             switch (ended.Kind)
@@ -598,6 +599,10 @@ public sealed class LobbyRegistrar : ILobbyIdentity
     // A lobby redeploy drops every socket and usually ships WITH a release, so "we just reconnected" is
     // exactly the moment there may be an update.
     public Action<string>? OnReleaseAdvertised { get; set; }
+
+    // Raised whenever the control channel ends (dropped, refused, never connected): adverts heard on it
+    // no longer mean the lobby is watching the release feed for this server.
+    public Action? OnLinkLost { get; set; }
 
     // Receives messages from the lobby: WebRTC offer pushes and Release Adverts. Unknown types are
     // ignored, so a newer lobby can grow the channel without breaking this server. Returns why it

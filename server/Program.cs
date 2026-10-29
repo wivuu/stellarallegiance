@@ -537,10 +537,14 @@ var updateCoordinator = new ServerUpdateCoordinator(
 );
 
 // The public lobby is the one watcher of the release feed: it tells this server which release is the
-// latest on every (re)connect and whenever that rises. An unlisted server has no such link and falls
-// back to the coordinator's slow safety-net tick.
+// latest on every (re)connect and whenever that rises, and while that link is up this server never asks
+// the feed itself. An unlisted server, or one whose link is down, falls back to the coordinator's slow
+// safety-net tick.
 if (registrar is not null)
+{
     registrar.OnReleaseAdvertised = updateCoordinator.OnLobbyAdvert;
+    registrar.OnLinkLost = updateCoordinator.OnLobbyLinkLost;
+}
 app.Lifetime.ApplicationStarted.Register(() => _ = Task.Run(() => updateCoordinator.RunAsync(cts.Token)));
 
 Log.ServerListening(log, port, seed, world.Asteroids.Count);

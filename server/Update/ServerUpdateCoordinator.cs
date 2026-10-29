@@ -24,8 +24,9 @@ namespace SimServer.Update;
 // connected game server "the latest release is X" on each (re)connect and whenever that rises
 // (OnLobbyAdvert). The advert is only a doorbell - what to install, and whether there is anything newer
 // for THIS install at all, is still the Velopack feed's answer, so a wrong or hostile lobby can cost a
-// few no-op checks and nothing else. A server the lobby cannot reach (unlisted; an old lobby) has a slow
-// safety-net tick instead, skipped for as long as adverts keep arriving.
+// few no-op checks and nothing else. While the lobby link is up and has advertised, this server never
+// asks the feed on its own; one without such a link (unlisted; an old lobby; the link is down) has a
+// slow safety-net tick instead.
 //
 // Pure apart from the backend/gate calls: time comes from a TimeProvider and the loop is one public
 // StepAsync, so the tests drive it tick by tick and never sleep.
@@ -70,11 +71,11 @@ public sealed class ServerUpdateCoordinator
     // Written by the lobby registrar's task, read by the coordinator's.
     private readonly Lock _advertGate = new();
     private string? _incomingAdvert;
+    private bool _lobbyWatching; // the live lobby link has advertised a release: the lobby does the watching
 
     private bool _started;
     private AutoUpdateMode _mode;
     private string? _advertised;
-    private bool _advertSinceLastTick;
     private DateTimeOffset _nextSafetyNet;
     private bool _doorbell;
     private string _doorbellReason = "";
@@ -124,11 +125,23 @@ public sealed class ServerUpdateCoordinator
     public AutoUpdateMode EffectiveMode => _mode;
 
     // Any thread. The lobby says "the latest release is <version>": on registration, on every
-    // reconnect, and when it rises. Only remembers it; the coordinator's own tick acts on it.
+    // reconnect, and when it rises. Only remembers it; the coordinator's own tick acts on it. From here
+    // until OnLobbyLinkLost the lobby is this server's release watcher, so the safety net stands down.
     public void OnLobbyAdvert(string version)
     {
         lock (_advertGate)
+        {
             _incomingAdvert = version;
+            _lobbyWatching |= ReleaseVersion.TryParse(version, out _);
+        }
+    }
+
+    // Any thread. The lobby link went down: nobody watches the feed for this server until a reconnect
+    // advertises again, so the safety-net tick is back.
+    public void OnLobbyLinkLost()
+    {
+        lock (_advertGate)
+            _lobbyWatching = false;
     }
 
     public async Task RunAsync(CancellationToken ct)
@@ -249,7 +262,6 @@ public sealed class ServerUpdateCoordinator
         if (advert is null || !ReleaseVersion.TryParse(advert, out var parsed))
             return;
 
-        _advertSinceLastTick = true;
         string version = parsed.ToString();
         if (!SameVersion(version, _advertised))
         {
@@ -269,14 +281,15 @@ public sealed class ServerUpdateCoordinator
     {
         if (now < _nextSafetyNet)
             return;
-        bool lobbyIsWatching = _advertSinceLastTick;
-        _advertSinceLastTick = false;
         if (!_options.SafetyNetEnabled && _options.SimulatedVersion is null)
         {
             _nextSafetyNet = DateTimeOffset.MaxValue;
             return;
         }
         _nextSafetyNet = _options.SafetyNetEnabled ? now + _options.SafetyNetInterval : DateTimeOffset.MaxValue;
+        bool lobbyIsWatching;
+        lock (_advertGate)
+            lobbyIsWatching = _lobbyWatching;
         if (lobbyIsWatching && !_options.Prerelease && _options.SimulatedVersion is null)
             return; // the lobby does the watching for this server
         Ring("safety net");

@@ -68,7 +68,7 @@ with `Exec format error` / `FATAL: cannot unpack`.
 |---|---|---|
 | `SIM_AUTO_UPDATE` | `on` in a container, else `warn` | `off` ignores releases · `warn` logs when a newer one exists · `on` restarts onto it once empty |
 | `SIM_UPDATE_IDLE_SECONDS` | `60` (min `10`) | continuous zero-connection time required before any update work starts |
-| `SIM_UPDATE_INTERVAL_SECONDS` | `21600` (6 h; min `30`, `0` = off) | safety-net feed check for a server the public lobby can't reach; skipped whenever a lobby advert arrives |
+| `SIM_UPDATE_INTERVAL_SECONDS` | `21600` (6 h; min `30`, `0` = off) | safety-net feed check for a server the public lobby can't reach; skipped while the lobby link is up and has advertised |
 | `SIM_UPDATE_PRERELEASE` | off | also follow GitHub pre-releases — rehearsals only |
 | `SIM_UPDATE_FEED` | unset | override the feed: a folder or URL |
 | `SIM_UPDATE_RESTART` | `exit` in a container or under systemd, else `relaunch` | after a swap: exit `85` for a supervisor to relaunch (the image's own entrypoint), or have Velopack relaunch directly |

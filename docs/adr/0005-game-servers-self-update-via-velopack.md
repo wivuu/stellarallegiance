@@ -40,9 +40,9 @@ applied only once nobody would notice.
   counts immediately, which matters because a lobby redeploy is usually *why* every server just reconnected);
   clients are told `confirmed` only (polled from the real feed), because a premature "UPDATE READY" would
   send a player through the launcher and straight back having installed nothing. A server the lobby cannot
-  reach — unlisted, or talking to a lobby that predates adverts — falls back to its own slow safety-net poll
-  (first check 60 s after boot, then every 6 h, skipped whenever a lobby advert already arrived) instead of
-  going deaf.
+  reach — unlisted, talking to a lobby that predates adverts, or with its lobby link down — falls back to
+  its own slow safety-net poll (first check 60 s after boot, then every 6 h) instead of going deaf; while the
+  link is up and has advertised, the server never polls the feed itself.
 - **A server that is never empty never updates — by design.** The idle-window gate means a busy community
   server can sit on an old build indefinitely; once its release is old enough that `Wire.ProtocolVersion`
   no longer matches, it quietly drops out of updated clients' server list — the same silent disappearance
