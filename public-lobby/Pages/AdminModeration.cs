@@ -95,6 +95,15 @@ static class AdminModeration
         DropListing(registry, gameServerId);
     }
 
+    /// <summary>The Listing each game server is holding now. A restarted server holds two until the
+    /// old one's resume grace ends, and its newest registration is the live one.</summary>
+    public static Dictionary<Guid, ServerEntry> CurrentListings(IServerRegistry registry) =>
+        registry
+            .ListActive()
+            .Where(s => s.GameServerId is not null)
+            .GroupBy(s => s.GameServerId!.Value)
+            .ToDictionary(g => g.Key, g => g.MaxBy(s => s.RegisteredAt)!);
+
     /// <summary>Remove whatever Listing this game server is holding, if any.</summary>
     public static void DropListing(IServerRegistry registry, Guid gameServerId)
     {

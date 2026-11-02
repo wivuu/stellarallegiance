@@ -58,7 +58,7 @@ public sealed class AdminServerModel(
         if (view is null)
             return NotFound();
         View = view;
-        Listing = registry.ListActive().FirstOrDefault(s => s.GameServerId == id);
+        Listing = AdminModeration.CurrentListings(registry).GetValueOrDefault(id);
         return Page();
     }
 

@@ -130,7 +130,7 @@ public sealed class AdminModel(
         Now = clock.GetUtcNow();
         var query = grains.GetGrain<IQueryGrain>(0);
         Counts = await query.AdminTabCounts();
-        Listings = registry.ListActive().Where(s => s.GameServerId is not null).ToDictionary(s => s.GameServerId!.Value);
+        Listings = AdminModeration.CurrentListings(registry);
 
         switch (Tab)
         {
