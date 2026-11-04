@@ -10,19 +10,30 @@ using SimServer.Sim;
 using SimServer.Update;
 using StellarAllegiance.Shared;
 
-// Maintenance flag: build + cache the convex-hull/hardpoint SimModel for the base and EVERY
-// asteroid variant (not just the ones a given seed rolls), then exit. Run after editing an art
-// GLB so the committed assets/sim-cache/ stays complete; the hash-keyed cache makes it a no-op
-// when nothing changed. Usage: SimServer --pregen-assets   (from source: dotnet run --project server -- --pregen-assets)
+// Maintenance flag: build + cache the convex-hull/hardpoint SimModel for every base, every ship and
+// EVERY asteroid variant (not just the ones a given seed rolls), then exit. Whatever this leaves out
+// is parsed and hulled on each fresh container's first boot, so it must stay complete. The hash-keyed
+// cache makes it a no-op when nothing changed.
+// Usage: SimServer --pregen-assets   (from source: dotnet run --project server -- --pregen-assets)
 if (args.Contains("--pregen-assets"))
 {
-    int ok = SimAssets.TryLoad("bases/garrison.glb", CollisionConfig.BaseModelRotation) is not null ? 1 : 0;
+    int LoadAll(string folder, Quat pre = default)
+    {
+        int loaded = 0;
+        if (SimAssets.AssetsDir is { } dir && Directory.Exists(Path.Combine(dir, folder)))
+            foreach (string glb in Directory.GetFiles(Path.Combine(dir, folder), "*.glb"))
+                if (SimAssets.TryLoad($"{folder}/{Path.GetFileName(glb)}", pre) is not null)
+                    loaded++;
+        return loaded;
+    }
+    int bases = LoadAll("bases", CollisionConfig.BaseModelRotation);
+    int ships = LoadAll("ships");
     int rocks = 0;
     foreach (string name in AsteroidShapes.Variants)
         if (SimAssets.TryLoad($"asteroids/{name}.glb") is not null)
             rocks++;
     Console.WriteLine(
-        $"[SimServer] pregen-assets: base={ok}, asteroid variants cached={rocks}/{AsteroidShapes.Variants.Length}"
+        $"[SimServer] pregen-assets: bases={bases}, ships={ships}, asteroid variants cached={rocks}/{AsteroidShapes.Variants.Length}"
     );
     return;
 }
@@ -425,6 +436,14 @@ var cts = new CancellationTokenSource();
 // ready up. Wall-clock so it's independent of how many ticks the (now empty) sim runs.
 const double EmptyResetMs = 5_000; // end + reset within 5 s of the server going empty
 double? emptySinceMs = null;
+
+// Dormant = nobody connected and that idle lobby reached: no tick has to be on time, so after a tick the
+// loop sleeps until a client registers, still stepping once per nap to run whatever the sim polls. A few
+// naps in, once boot or the last match is over, it hands the garbage they left back to the OS.
+const int DormantNapMs = 1_000;
+const int DormantCollectAfterNaps = 5;
+WaitHandle[] dormantWakers = [hub.ClientArrived, cts.Token.WaitHandle];
+int dormantNaps = 0;
 var simThread = new Thread(() =>
 {
     double dtMs = 1000.0 / Simulation.TickHz;
@@ -450,7 +469,8 @@ var simThread = new Thread(() =>
         // was running and reset to a clean idle lobby. IsIdle makes this fire once per empty
         // spell (not every tick); reconnecting before the window elapses cancels the reset.
         bool recycled = false;
-        if (hub.ConnectionCount == 0)
+        bool empty = hub.ConnectionCount == 0;
+        if (empty)
         {
             emptySinceMs ??= now;
             if (now - emptySinceMs.Value >= EmptyResetMs && !sim.IsIdle)
@@ -479,6 +499,18 @@ var simThread = new Thread(() =>
         // rather than inside a match they never played (issue #110).
         if (recycled)
             sim.ClearMatchResult();
+
+        if (empty && sim.IsIdle)
+        {
+            if (++dormantNaps == DormantCollectAfterNaps)
+                GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+            WaitHandle.WaitAny(dormantWakers, DormantNapMs);
+            next = clock.Elapsed.TotalMilliseconds; // no catch-up ticks for the time spent asleep
+        }
+        else
+        {
+            dormantNaps = 0;
+        }
     }
 })
 {

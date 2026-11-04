@@ -124,19 +124,35 @@ its own, so `aspire do deploy-server` stamps `SIM_BUILD_VERSION` from the latest
 checkout it uploads: that is what lets the server tell, when the public lobby advertises a newer release,
 that it is behind (`update-state Warn …` in its log). Redeploy by hand to actually move it onto that release.
 
+**Carina is the exception:** its Railway service runs the published image
+(`ghcr.io/wivuu/stellarallegiance-sim:latest`), so it applies updates itself once empty. Don't run
+`aspire do deploy-server` against it: that would deploy a source build in the image's place, which can only
+warn. Change it with the service's own settings instead. An update lives inside the container, so a new
+container starts at the image's version and updates itself from there. What idle memory it bills, measured on
+Railway on 2026-11-04 over about 2 hours (unlisted servers, one evening):
+
+| State | Billed memory |
+|---|---|
+| Just unpacked | 262 MB |
+| Once the host evicts that file cache, about 45 minutes later | about 50 MB |
+| Just after an update | about 750 MB, falling the same way (to 90-220 MB within 2 hours on v0.0.17) |
+
+That eviction is the host's doing and isn't guaranteed. Don't set a memory limit to force it: at 128 MB, 4 of 5
+fresh boots had the unpack OOM-killed, and 1 of 4 at 192 MB; limited servers also settled higher, at 117-128 MB.
+
 Deploy from the Aspire dashboard's **Deploy to Railway** button on the `lobby` or `server`
 resource (prompts for the project, environment, and which variables to push; blank leaves a
 variable untouched), or from the CLI:
 
 ```bash
 aspire do deploy-lobby     # deploy/update the public lobby (project wivuu-public-lobby)
-aspire do deploy-server    # deploy/update a game server (project wivuu-game-server)
+aspire do deploy-server    # deploy/update a game server (project Carina)
 ```
 
 Both are **idempotent** — re-running against the same project UPDATES it instead of creating a
 duplicate (so a server never gets advertised twice). Project names come from the AppHost
 parameters `railway-lobby-project` (default `wivuu-public-lobby`), `railway-server-project`
-(default `wivuu-game-server`) and `railway-environment` (default `production`) — override them in
+(default `Carina`) and `railway-environment` (default `production`) — override them in
 the dashboard prompt or `.env` for a second, differently-named server.
 
 The **lobby** deploy targets project `wivuu-public-lobby` (the domain baked into the
@@ -144,7 +160,8 @@ server/client defaults); set `STUN_URL` to override the public STUN handed to We
 
 The **game-server** deploy uses the project name as the server's public name (`SIM_PUBLIC_NAME`)
 and leaves `PUBLIC_LOBBY` unset so it registers with the default hosted lobby (set `PUBLIC_LOBBY`
-to point elsewhere). `SIM_PUBLIC_ENDPOINT` auto-derives from Railway's `RAILWAY_PUBLIC_DOMAIN` to
+to point elsewhere). A local `SIM_AUTOSTART` in `.env` is not pushed; set it in the dashboard dialog if a
+deployed server really needs it. `SIM_PUBLIC_ENDPOINT` auto-derives from Railway's `RAILWAY_PUBLIC_DOMAIN` to
 `https://<server-domain>`, so the lobby probes it over HTTPS and advertises `wss://<server-domain>` —
 clients one-click-join directly. On a fresh deploy the Railway edge takes ~1 min to propagate; the
 server **self-heals** (re-registers until the probe succeeds), so it settles to DIRECT on its own.

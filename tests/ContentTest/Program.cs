@@ -2054,6 +2054,88 @@ Check(
         SameGraph(map, ServerYaml.Deserialize<MapDef>);
 }
 
+// ---- hull cache stamps: an unchanged GLB is not opened, a changed one is always caught --------------
+{
+    string assets = SimServer.Assets.SimAssets.AssetsDir!;
+    string tmp = Path.Combine(Path.GetTempPath(), "simmodel-stamp-" + Guid.NewGuid().ToString("n"));
+    string cache = Path.Combine(tmp, "cache");
+    string glb = Path.Combine(tmp, "model.glb");
+    string scoutGlb = Path.Combine(assets, "ships", "fig13.glb");
+    string otherGlb = Directory
+        .GetFiles(Path.Combine(assets, "ships"), "*.glb")
+        .First(f => new FileInfo(f).Length != new FileInfo(scoutGlb).Length);
+    string stampPath = Path.Combine(cache, "model.simmodel.stamp");
+    static byte[] Bytes(SimModel m) => SimModelCodec.Encode(new byte[SimModelCodec.KeyLength], m);
+    bool Same(SimModel a, SimModel b) => Bytes(a).AsSpan().SequenceEqual(Bytes(b));
+    Directory.CreateDirectory(tmp);
+    try
+    {
+        File.Copy(scoutGlb, glb);
+        var built = SimServer.Assets.SimModelCache.Load(glb, cache);
+        Check(File.Exists(stampPath), "hull cache: a fresh build leaves a stamp", "hull cache: no stamp after a build");
+
+        // Garbage of the same size and time: parsing or hashing it would fail, so a hit proves it wasn't read.
+        var time = File.GetLastWriteTimeUtc(glb);
+        File.WriteAllBytes(glb, new byte[new FileInfo(scoutGlb).Length]);
+        File.SetLastWriteTimeUtc(glb, time);
+        Check(
+            Same(built, SimServer.Assets.SimModelCache.Load(glb, cache)),
+            "hull cache: an unchanged stamp loads without opening the GLB",
+            "hull cache: the stamped load differs from the build"
+        );
+
+        // A seed cache (what ships in the build) answers the same way, and writes nothing to the empty cache.
+        string seeded = Path.Combine(tmp, "empty");
+        File.Copy(stampPath, stampPath + ".keep");
+        Check(
+            Same(built, SimServer.Assets.SimModelCache.Load(glb, seeded, seedDir: cache)) && !Directory.Exists(seeded),
+            "hull cache: a seed's stamp is honoured with nothing written",
+            "hull cache: the seed's stamp was not used"
+        );
+        File.Delete(stampPath + ".keep");
+
+        // Same bytes with a new time: the hash confirms it and the stamp moves on.
+        File.Copy(scoutGlb, glb, overwrite: true);
+        File.SetLastWriteTimeUtc(glb, time.AddMinutes(1));
+        string before = File.ReadAllText(stampPath);
+        var touched = SimServer.Assets.SimModelCache.Load(glb, cache);
+        Check(
+            Same(built, touched) && File.ReadAllText(stampPath) != before,
+            "hull cache: a touched GLB is re-hashed, reused and re-stamped",
+            "hull cache: a touched GLB was not handled"
+        );
+
+        // A real edit changes the size: the model must be rebuilt from the new bytes.
+        File.Copy(otherGlb, glb, overwrite: true);
+        var edited = SimServer.Assets.SimModelCache.Load(glb, cache);
+        Check(
+            Same(edited, SimServer.Assets.SimModelCache.Load(otherGlb, Path.Combine(tmp, "other"))) && !Same(edited, built),
+            "hull cache: an edited GLB rebuilds",
+            "hull cache: an edited GLB kept the old model"
+        );
+
+        // The pre-rotation is part of the key, so a stamp from another rotation must not answer.
+        var rotated = SimServer.Assets.SimModelCache.Load(glb, cache, CollisionConfig.BaseModelRotation);
+        Check(
+            !Same(rotated, edited),
+            "hull cache: another rotation is not served by the stamp",
+            "hull cache: a rotated load got the old model"
+        );
+
+        // A damaged stamp is only a miss.
+        File.WriteAllText(stampPath, "not a stamp");
+        Check(
+            Same(rotated, SimServer.Assets.SimModelCache.Load(glb, cache, CollisionConfig.BaseModelRotation)),
+            "hull cache: a damaged stamp falls back to the hash",
+            "hull cache: a damaged stamp broke the load"
+        );
+    }
+    finally
+    {
+        Directory.Delete(tmp, recursive: true);
+    }
+}
+
 Console.WriteLine(failures == 0 ? "\nALL CONTENT TESTS PASSED" : $"\n{failures} CONTENT TEST(S) FAILED");
 return failures == 0 ? 0 : 1;
 
