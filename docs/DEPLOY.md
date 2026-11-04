@@ -130,13 +130,13 @@ variable untouched), or from the CLI:
 
 ```bash
 aspire do deploy-lobby     # deploy/update the public lobby (project wivuu-public-lobby)
-aspire do deploy-server    # deploy/update a game server (project wivuu-game-server)
+aspire do deploy-server    # deploy/update a game server (project Carina)
 ```
 
 Both are **idempotent** — re-running against the same project UPDATES it instead of creating a
 duplicate (so a server never gets advertised twice). Project names come from the AppHost
 parameters `railway-lobby-project` (default `wivuu-public-lobby`), `railway-server-project`
-(default `wivuu-game-server`) and `railway-environment` (default `production`) — override them in
+(default `Carina`) and `railway-environment` (default `production`) — override them in
 the dashboard prompt or `.env` for a second, differently-named server.
 
 The **lobby** deploy targets project `wivuu-public-lobby` (the domain baked into the

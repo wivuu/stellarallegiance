@@ -211,7 +211,7 @@ public sealed class AppParameters
             RailwayServerProject = Param(
                 b,
                 "railway-server-project",
-                "wivuu-game-server",
+                "Carina",
                 "Railway project/service name for a game server; doubles as its SIM_PUBLIC_NAME."
             ),
             RailwayEnvironment = Param(b, "railway-environment", "production", "Railway environment to deploy into."),
