@@ -20,6 +20,17 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <RootNamespace>PublicLobby</RootNamespace>
   </PropertyGroup>
+  <!-- Memory first: Railway bills the container's cgroup memory, and the lobby sits near idle under a
+       0.5 vCPU limit (where .NET already picks Workstation GC). Measured there on 2026-11-01:
+       TieredPGO off saves about 35 MB at peak and stops re-JITting from eating the CPU quota, at the
+       cost of burst throughput. The gen0 cap stops a large host CPU cache from inflating the default
+       budget (about 20-30 MB in a simulated large-cache run). It is 4 MiB, in bytes. -->
+  <PropertyGroup>
+    <TieredPGO>false</TieredPGO>
+  </PropertyGroup>
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.GC.Gen0MaxBudget" Value="4194304" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../public-lobby-data/PublicLobby.Data.csproj" />
     <ProjectReference Include="../shared/Shared.csproj" />

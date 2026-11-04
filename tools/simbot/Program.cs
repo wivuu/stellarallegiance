@@ -3,12 +3,14 @@ using System.Net.WebSockets;
 using StellarAllegiance.Shared;
 using StellarAllegiance.Shared.Net;
 
-// Bot swarm for the standalone sim server. Each bot: Hello (no secret/name), ready-up, then —
-// once the match is Active — a Spawn (Scout: the only hull unlocked at match start) and 20 Hz
+// Bot swarm for the standalone sim server. Each bot: Hello (no secret/name), pick a team, ready-up,
+// then — once the match is Active — a Spawn (Scout: the only hull unlocked at match start) and 20 Hz
 // Input frames (full thrust, a slow per-bot yaw weave, trigger held), deliberately sent EVERY
-// tick (worst-case ingest; real clients send on change). Run the server with --autostart so the
-// match goes live as soon as the bots ready up. Tracks received snapshot bytes/rate and the
-// freshest server tick seen, so the aggregate report shows both directions of the pipe.
+// tick (worst-case ingest; real clients send on change). A bot whose ship dies asks to spawn again.
+// Run the server with --autostart so the match goes live as soon as the bots ready up. Tracks
+// received snapshot bytes/rate, the freshest server tick seen and how many bots hold a ship, so the
+// aggregate report shows both directions of the pipe and how much of the swarm is really flying.
+// Team credits pay for each spawn, so a large swarm can have far fewer ships than connections.
 //
 // Frames come from the shared wire definitions (shared/Net/Messages.cs) — the same codec the
 // server and the Godot client compile — so a layout change here is a rebuild, not an edit.
@@ -38,6 +40,7 @@ long totalRx = 0;
 long snapshots = 0;
 uint maxTick = 0;
 int connected = 0;
+int flying = 0;
 object tickLock = new();
 
 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(seconds));
@@ -63,7 +66,7 @@ var report = Task.Run(async () =>
         double mbps = (rx - lastRx) / 5.0 / 1e6;
         lastRx = rx;
         Console.WriteLine(
-            $"[Bots] connected={connected}/{bots} rx={mbps:0.0}MB/s ({mbps * 1e3 / Math.Max(connected, 1):0.0}KB/s/bot) "
+            $"[Bots] connected={connected}/{bots} flying={Volatile.Read(ref flying)} rx={mbps:0.0}MB/s ({mbps * 1e3 / Math.Max(connected, 1):0.0}KB/s/bot) "
                 + $"snapshots={Interlocked.Read(ref snapshots)} serverTick={maxTick} t={sw.Elapsed.TotalSeconds:0}s"
         );
     }
@@ -80,12 +83,14 @@ async Task RunBot(int idx, CancellationToken ct)
         await ws.ConnectAsync(new Uri(url), ct);
         Interlocked.Increment(ref connected);
 
-        // Hello (no password, default name), then ready up so the matchmaker starts the match.
+        // Hello (no password, default name), pick a side (the server refuses to spawn a pilot with no
+        // team), then ready up so the matchmaker starts the match.
         await ws.SendAsync(new HelloMessage { Name = $"bot{idx}" }.ToBytes(), WebSocketMessageType.Binary, true, ct);
+        await ws.SendAsync(new SetTeamMessage { Team = (byte)(idx % 2) }.ToBytes(), WebSocketMessageType.Binary, true, ct);
         await ws.SendAsync(new SetReadyMessage { Ready = true }.ToBytes(), WebSocketMessageType.Binary, true, ct);
 
         byte phase = 0; // latest match phase from snapshots (1 = Active)
-        bool spawned = false; // set when our YouAre arrives
+        bool spawned = false; // we hold a ship, per the latest YouAre
 
         var rxTask = Task.Run(
             async () =>
@@ -97,8 +102,14 @@ async Task RunBot(int idx, CancellationToken ct)
                     if (r.MessageType == WebSocketMessageType.Close)
                         break;
                     Interlocked.Add(ref totalRx, r.Count);
-                    if (r.Count >= 1 && buf[0] == YouAreMessage.MsgId) // we have a ship
-                        spawned = true;
+                    if (r.Count >= 1 && buf[0] == YouAreMessage.MsgId)
+                    {
+                        // A zero id means our ship is gone: the send loop goes back to requesting a spawn.
+                        bool hasShip = YouAreMessage.TryParse(buf.AsSpan(0, r.Count), out var you) && you.ShipId != 0;
+                        if (hasShip != spawned)
+                            Interlocked.Add(ref flying, hasShip ? 1 : -1);
+                        spawned = hasShip;
+                    }
                     else if (r.Count >= SnapshotMessage.HeaderSize && buf[0] == SnapshotMessage.MsgId)
                     {
                         // Only the header is needed (tick + phase); the ship records are counted as bytes.

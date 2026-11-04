@@ -11,12 +11,13 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <!-- Latency-sensitive 20 Hz sim thread + parallel snapshot fan-out: server GC gives a
-         per-core heap so the parallel AfterStep doesn't contend on one allocator, concurrent
-         GC keeps collections off the tick thread (trims the step-time p99 jitter), and PGO
-         lets the steady-state hot path (snapshot build) re-optimize after warmup. -->
-    <ServerGarbageCollection>true</ServerGarbageCollection>
-    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <!-- Workstation, non-concurrent GC: the 20 Hz sim allocates little, so collections are rare and
+         short. Measured on the native binary against Server + Concurrent with a real bot swarm
+         (2026-11-01): about 40% less memory for about 1 ms more tick p99 at 300 bots, worst forced
+         gen2 6.4 ms, all well inside the 50 ms tick budget. PGO lets the steady-state hot path
+         (snapshot build) re-optimize after warmup; it only applies to JIT builds. -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
     <TieredPGO>true</TieredPGO>
     <!-- Emit the .xml doc file so the gen-schemas command can surface WorldDef/MapDef summary
          comments as schema description fields. CS1591 (missing XML comment for a public member)

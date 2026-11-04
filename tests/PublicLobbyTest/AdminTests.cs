@@ -1,6 +1,7 @@
 using System.Net;
 using Microsoft.Extensions.DependencyInjection;
 using Orleans;
+using PublicLobby;
 using PublicLobby.Grains;
 
 // WP4.1: /admin is role-gated (LOBBY_ADMINS → admin role + players.is_admin at sign-in) and its
@@ -84,6 +85,20 @@ static partial class Suite
             "non-admin cannot toggle"
         );
         Eq(true, (await grains.GetGrain<IGameServerGrain>(gameServerId).Get())?.Ranked, "…and the flag is unchanged");
+
+        // A restarted game server registers a new Listing while the old one waits out its resume grace,
+        // so for up to 30 s two Listings name one game server. The newest is the live one.
+        var registry = services.GetRequiredService<IServerRegistry>();
+        var identity = new ListingIdentity(gameServerId, "Admin Ops");
+        var held = registry.Register(new RegisterRequest("Admin Box", 9, null), null, identity)!.Server;
+        await Task.Delay(5);
+        var restarted = registry.Register(new RegisterRequest("Admin Box", 9, null), null, identity)!.Server;
+        Eq(HttpStatusCode.OK, (await admin.GetAsync("/admin")).StatusCode, "two listings for one server: /admin still 200");
+        var detail = await admin.GetStringAsync($"/admin/servers/{gameServerId}");
+        Check(detail.Contains(restarted.SessionId), "the server page shows the newest listing");
+        Check(!detail.Contains(held.SessionId), "…not the one held for a resume");
+        registry.Remove(held.SessionId);
+        registry.Remove(restarted.SessionId);
     }
 
     static string? ExtractAntiforgery(string html)
