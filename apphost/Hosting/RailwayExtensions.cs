@@ -190,8 +190,8 @@ public static class RailwayExtensions
             "AUTH_STEAM_API_KEY" => p.AuthSteamApiKey,
             "PUBLIC_LOBBY" => p.PublicLobby,
             "SIM_SECRET" => p.SimSecret,
-            "SIM_AUTOSTART" => p.SimAutostart,
-            _ => null, // ALLOW_UNVERIFIED_SERVERS, SIM_MAX_PLAYERS: dialog-only, no local default is pushed
+            // SIM_AUTOSTART: .env turns it on for solo testing, and a deployed server must not inherit that.
+            _ => null, // ALLOW_UNVERIFIED_SERVERS, SIM_AUTOSTART, SIM_MAX_PLAYERS: dialog-only, no local default is pushed
         };
 
     // Dialog pre-fill: parameter values are config-backed constants, safe to read at model-build time.

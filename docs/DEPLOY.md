@@ -144,7 +144,8 @@ server/client defaults); set `STUN_URL` to override the public STUN handed to We
 
 The **game-server** deploy uses the project name as the server's public name (`SIM_PUBLIC_NAME`)
 and leaves `PUBLIC_LOBBY` unset so it registers with the default hosted lobby (set `PUBLIC_LOBBY`
-to point elsewhere). `SIM_PUBLIC_ENDPOINT` auto-derives from Railway's `RAILWAY_PUBLIC_DOMAIN` to
+to point elsewhere). A local `SIM_AUTOSTART` in `.env` is not pushed; set it in the dashboard dialog if a
+deployed server really needs it. `SIM_PUBLIC_ENDPOINT` auto-derives from Railway's `RAILWAY_PUBLIC_DOMAIN` to
 `https://<server-domain>`, so the lobby probes it over HTTPS and advertises `wss://<server-domain>` —
 clients one-click-join directly. On a fresh deploy the Railway edge takes ~1 min to propagate; the
 server **self-heals** (re-registers until the probe succeeds), so it settles to DIRECT on its own.
