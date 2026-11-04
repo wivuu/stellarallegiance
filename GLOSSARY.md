@@ -37,7 +37,7 @@ Server's authoritative 20 Hz simulation loop that drives all gameplay state upda
   - `server/Sim/Simulation.Pig.cs` — pig brain decision integration
   - `shared/Net/Records.cs` (`ShipRecord`, 57 B) + `server/Net/Frames.cs` (`ShipRecordOf`) — the quantized snapshot record and its fill; `server/Net/Protocol.cs` is the byte facade the hub calls
 - **Related:** [[Flight Model]], [[PigBrain]]
-- **Notes:** Never blocks on network I/O; runs deterministically regardless of client connections
+- **Notes:** Never blocks on network I/O; runs deterministically regardless of client connections, except on an empty server at its idle lobby, where it sleeps (see [[Dormant Sim Loop]])
 
 ### Held-Input Replay
 Client technique for smoothing input predictions: store held inputs, replay against server state deltas, avoid jitter when server corrects position.
@@ -1237,6 +1237,17 @@ A GLB's BUILT collision model — merged hull planes, hardpoints and compound `C
 - **Related:** [[Collision Model Fault]], [[Asset Verification (`--verify-assets`)]], [[Compound Base Hull (COL_ parts)]], [[Client Prediction]]
 - **Notes:** `SA_COLLISION_SIDECARS=only` makes a run from source load models the way a package does (fly the shipped path, or `--verify-assets` the sidecars, without exporting). ~270 KiB for all 31 models, against 193 MB of raw GLBs that are 83% embedded textures.
 
+
+### Hull Cache Stamp (`.simmodel.stamp`)
+A small text file beside each server `.simmodel` remembering its key together with the GLB's size, modified time and pre-rotation. While those match, `SimModelCache.Load` uses the remembered key and never opens the GLB, so boot and every match start skip reading 185 MB of models, which a container host would otherwise bill as memory through the page cache.
+- **Frequency:** Domain-specific (server boot / hosting cost)
+- **Key Files:**
+  - `server/Assets/SimModel.cs` — `SimModelCache` (`StampOf`, `TryReadStamped`, `WriteStamp`); anything else falls back to the full [[Collision Sidecar (`.glb.simmodel`)]] content hash
+  - `server/Program.cs` — `--pregen-assets` bakes every base, ship and asteroid, with stamps, into the image
+  - `tests/ContentTest` — the "hull cache" section
+- **Related:** [[Collision Sidecar (`.glb.simmodel`)]], [[Dormant Sim Loop]]
+- **Notes:** An edit that keeps both the size and the modified time exactly the same goes unnoticed. The model file itself is still validated by the codec, so a stale or damaged stamp is only a miss.
+
 ### Collision Model Fault
 A collision model the client could NOT build for a GLB (`CollisionModels.Load` returned null: neither its [[Collision Sidecar (`.glb.simmodel`)]] nor its raw `.glb` is readable, the sidecar does not decode, the hull build threw, or the geometry is degenerate). Nothing crashes — the caller stands a sphere in for the body — and that is the danger: the server still resolves the real hull, so every contact near that body is a mispredict and a reconcile. A base is the worst case (`BaseSphere` of the def radius with no docking doors: the ship LAUNCHES inside it). A fault is therefore never quiet: an `ERROR` in the log per model, a standing Danger `AlertBox` on the server browser (the whole ledger, before anyone joins), and — for a **fielded** fault, a model the SERVER actually put in this match — a standing alert on the flight HUD.
 - **Frequency:** Rare (it means a broken build or install)
@@ -1431,6 +1442,15 @@ The match scoreboard overlay, one class in two modes over one ledger (`WorldRend
 ---
 
 ## Server Architecture
+
+### Dormant Sim Loop
+The state of the 20 Hz `SimLoop` thread when nobody is connected and the sim has reached its idle lobby (`Simulation.IsIdle`): instead of polling every millisecond it sleeps until a client registers, stepping once per second. A few seconds in it runs one aggressive GC to return what boot or the last match left behind.
+- **Frequency:** Domain-specific (idle hosting cost)
+- **Key Files:**
+  - `server/Program.cs` — the sim thread (`DormantNapMs`, `DormantCollectAfterNaps`)
+  - `server/Net/ClientHub.Update.cs` — `ClientArrived`, set in `TryAdmit`, wakes it at once
+- **Related:** [[SimTick]], [[Hull Cache Stamp (`.simmodel.stamp`)]]
+- **Notes:** Only reached with zero connections, after the 5 s empty-server reset. With anyone connected, including pilots sitting in the lobby, the loop runs exactly as before.
 
 ### Lobby
 In-game social state: player roster, team assignment, ready status, faction selection.

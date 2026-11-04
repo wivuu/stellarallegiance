@@ -10,7 +10,13 @@ namespace SimServer.Assets;
 //    - hash matches  → load the cached .simmodel
 //    - missing/stale → parse the GLB, build the hull, extract hardpoints, write the cache
 //  The release image bakes its .simmodel files at build time (--pregen-assets) so containers don't
-//  recompute on a cold start; the startup hash-check self-heals if a GLB is edited without a regen.
+//  recompute on a cold start; the hash-check self-heals if a GLB is edited without a regen.
+//
+//  Hashing means reading the whole GLB, which also leaves it in the page cache that a container host
+//  bills as memory. So each .simmodel gets a .stamp beside it recording the key together with the GLB's
+//  size and modified time: while those are unchanged, the remembered key is used and the GLB is never
+//  opened. An edit that kept both exactly the same would go unnoticed; any other edit falls back to
+//  the hash.
 //  The SimModel/ConvexHull/GlbReader types live in shared/ so the client builds identical hulls, and
 //  so does the BYTE FORMAT (shared/Collision/SimModelCodec.cs): the same files, written at export time
 //  next to each client GLB, are the only collision data a packaged client has.
@@ -28,19 +34,28 @@ public static class SimModelCache
     // as long as the GLB hash matches).
     public static SimModel Load(string glbPath, string cacheDir, Quat pre = default, string? seedDir = null)
     {
-        byte[] glb = File.ReadAllBytes(glbPath);
-        byte[] hash = SimModelCodec.KeyHash(glb, pre);
         string fileName = Path.GetFileNameWithoutExtension(glbPath) + ".simmodel";
         string cachePath = Path.Combine(cacheDir, fileName);
-
-        if (TryRead(cachePath, hash, out SimModel? cached))
-            return cached!;
-        if (
+        string? seedPath =
             seedDir is not null
             && !string.Equals(Path.GetFullPath(seedDir), Path.GetFullPath(cacheDir), StringComparison.Ordinal)
-            && TryRead(Path.Combine(seedDir, fileName), hash, out SimModel? seeded)
-        )
-            return seeded!;
+                ? Path.Combine(seedDir, fileName)
+                : null;
+
+        string stamp = StampOf(glbPath, pre);
+        if (TryReadStamped(cachePath, stamp, cachePath, seedPath, out SimModel? stamped))
+            return stamped!;
+        if (seedPath is not null && TryReadStamped(seedPath, stamp, cachePath, seedPath, out stamped))
+            return stamped!;
+
+        byte[] glb = File.ReadAllBytes(glbPath);
+        byte[] hash = SimModelCodec.KeyHash(glb, pre);
+
+        if (TryRead(cachePath, hash, out SimModel? cached) || (seedPath is not null && TryRead(seedPath, hash, out cached)))
+        {
+            WriteStamp(cacheDir, cachePath, stamp, hash);
+            return cached!;
+        }
 
         var glbModel = GlbReader.Read(glbPath, pre);
         var hull = ConvexHull.Build(glbModel.Vertices);
@@ -51,8 +66,9 @@ public static class SimModelCache
         try
         {
             Directory.CreateDirectory(cacheDir);
-            using var fs = File.Create(cachePath);
-            SimModelCodec.Write(fs, hash, model);
+            using (var fs = File.Create(cachePath))
+                SimModelCodec.Write(fs, hash, model);
+            WriteStamp(cacheDir, cachePath, stamp, hash);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -62,6 +78,57 @@ public static class SimModelCache
             // then SILENTLY fell back to sphere collision for that model.
         }
         return model;
+    }
+
+    private const string StampSuffix = ".stamp";
+
+    // What a GLB looks like without opening it. `pre` is part of it because it is part of the key.
+    private static string StampOf(string glbPath, Quat pre)
+    {
+        var glb = new FileInfo(glbPath);
+        static int Bits(float f) => BitConverter.SingleToInt32Bits(f);
+        return $"{glb.Length:x} {glb.LastWriteTimeUtc.Ticks:x} {Bits(pre.X):x} {Bits(pre.Y):x} {Bits(pre.Z):x} {Bits(pre.W):x}";
+    }
+
+    // The model for this exact stamp, if `stampOwner` remembers its key and either cache holds that key.
+    private static bool TryReadStamped(
+        string stampOwner,
+        string stamp,
+        string cachePath,
+        string? seedPath,
+        out SimModel? model
+    )
+    {
+        model = null;
+        byte[]? key = ReadStampedKey(stampOwner + StampSuffix, stamp);
+        return key is not null
+            && (TryRead(cachePath, key, out model) || (seedPath is not null && TryRead(seedPath, key, out model)));
+    }
+
+    private static byte[]? ReadStampedKey(string path, string stamp)
+    {
+        try
+        {
+            if (!File.Exists(path))
+                return null;
+            string[] lines = File.ReadAllLines(path);
+            return lines.Length == 2 && lines[0] == stamp ? Convert.FromHexString(lines[1]) : null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or FormatException)
+        {
+            return null;
+        }
+    }
+
+    // Best effort: on a read-only filesystem the next load just hashes again.
+    private static void WriteStamp(string cacheDir, string cachePath, string stamp, byte[] key)
+    {
+        try
+        {
+            Directory.CreateDirectory(cacheDir);
+            File.WriteAllLines(cachePath + StampSuffix, [stamp, Convert.ToHexString(key)]);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }
 
     // A cached model, if `path` holds a current-version file whose key is `expectHash` (= it was built

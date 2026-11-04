@@ -25,6 +25,10 @@ public sealed partial class ClientHub : IUpdateGate
     private bool _draining;
     private long _admittedTotal;
     private byte[]? _standingNotice; // null = nothing to tell a joiner
+    private readonly AutoResetEvent _clientArrived = new(false);
+
+    // Signalled when a client registers, so a dormant sim loop (Program.cs) starts ticking at once.
+    public WaitHandle ClientArrived => _clientArrived;
 
     public long AdmittedTotal => Interlocked.Read(ref _admittedTotal);
 
@@ -90,6 +94,7 @@ public sealed partial class ClientHub : IUpdateGate
             _lobby.Add(client.Id, _players.NameOf(client.Id));
             _clients[client.Id] = client; // visible to AfterStep / broadcasts once joined
             _admittedTotal++;
+            _clientArrived.Set();
             return true;
         }
     }
