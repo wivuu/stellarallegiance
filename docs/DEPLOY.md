@@ -124,6 +124,22 @@ its own, so `aspire do deploy-server` stamps `SIM_BUILD_VERSION` from the latest
 checkout it uploads: that is what lets the server tell, when the public lobby advertises a newer release,
 that it is behind (`update-state Warn …` in its log). Redeploy by hand to actually move it onto that release.
 
+**Carina is the exception:** its Railway service runs the published image
+(`ghcr.io/wivuu/stellarallegiance-sim:latest`), so it applies updates itself once empty. Don't run
+`aspire do deploy-server` against it: that would deploy a source build in the image's place, which can only
+warn. Change it with the service's own settings instead. An update lives inside the container, so a new
+container starts at the image's version and updates itself from there. What idle memory it bills, measured on
+Railway on 2026-11-04 over about 2 hours (unlisted servers, one evening):
+
+| State | Billed memory |
+|---|---|
+| Just unpacked | 262 MB |
+| Once the host evicts that file cache, about 45 minutes later | about 50 MB |
+| Just after an update | about 750 MB, falling the same way (to 90-220 MB within 2 hours on v0.0.17) |
+
+That eviction is the host's doing and isn't guaranteed. Don't set a memory limit to force it: at 128 MB, 4 of 5
+fresh boots had the unpack OOM-killed, and 1 of 4 at 192 MB; limited servers also settled higher, at 117-128 MB.
+
 Deploy from the Aspire dashboard's **Deploy to Railway** button on the `lobby` or `server`
 resource (prompts for the project, environment, and which variables to push; blank leaves a
 variable untouched), or from the CLI:
