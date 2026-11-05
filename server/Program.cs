@@ -439,9 +439,13 @@ double? emptySinceMs = null;
 
 // Dormant = nobody connected and that idle lobby reached: no tick has to be on time, so after a tick the
 // loop sleeps until a client registers, still stepping once per nap to run whatever the sim polls. A few
-// naps in, once boot or the last match is over, it hands the garbage they left back to the OS.
+// naps in, once boot or the last match is over, it hands the garbage they left back to the OS. After that
+// a gen0 a minute recycles what idling itself allocates (timers, the lobby socket): left alone, that keeps
+// touching fresh memory until the gen0 budget runs out, which took a hosted server 65 MB and more of billed
+// memory on Railway, about 4 MB an hour.
 const int DormantNapMs = 1_000;
 const int DormantCollectAfterNaps = 5;
+const int DormantGen0EveryNaps = 60;
 WaitHandle[] dormantWakers = [hub.ClientArrived, cts.Token.WaitHandle];
 int dormantNaps = 0;
 var simThread = new Thread(() =>
@@ -504,6 +508,8 @@ var simThread = new Thread(() =>
         {
             if (++dormantNaps == DormantCollectAfterNaps)
                 GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+            else if (dormantNaps % DormantGen0EveryNaps == 0)
+                GC.Collect(0, GCCollectionMode.Forced, blocking: true);
             WaitHandle.WaitAny(dormantWakers, DormantNapMs);
             next = clock.Elapsed.TotalMilliseconds; // no catch-up ticks for the time spent asleep
         }

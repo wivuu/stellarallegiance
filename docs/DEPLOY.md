@@ -134,11 +134,15 @@ Railway on 2026-11-04 over about 2 hours (unlisted servers, one evening):
 | State | Billed memory |
 |---|---|
 | Just unpacked | 262 MB |
-| Once the host evicts that file cache, about 45 minutes later | about 50 MB |
+| Once the host evicts that file cache: 45 minutes on the spike server, about 6 hours on Carina | about 50 MB |
 | Just after an update | about 750 MB, falling the same way (to 90-220 MB within 2 hours on v0.0.17) |
 
 That eviction is the host's doing and isn't guaranteed. Don't set a memory limit to force it: at 128 MB, 4 of 5
 fresh boots had the unpack OOM-killed, and 1 of 4 at 192 MB; limited servers also settled higher, at 117-128 MB.
+
+After that, idle memory should stay flat: the sim loop runs a gen0 collection once a minute while dormant. Without
+it Carina climbed about 4 MB an hour, reaching 123 MB, until a match ending collected it back down to 58 MB. A
+steady climb on the graph again means that collection isn't doing its job.
 
 Deploy from the Aspire dashboard's **Deploy to Railway** button on the `lobby` or `server`
 resource (prompts for the project, environment, and which variables to push; blank leaves a
