@@ -1444,10 +1444,10 @@ The match scoreboard overlay, one class in two modes over one ledger (`WorldRend
 ## Server Architecture
 
 ### Dormant Sim Loop
-The state of the 20 Hz `SimLoop` thread when nobody is connected and the sim has reached its idle lobby (`Simulation.IsIdle`): instead of polling every millisecond it sleeps until a client registers, stepping once per second. A few seconds in it runs one aggressive GC to return what boot or the last match left behind.
+The state of the 20 Hz `SimLoop` thread when nobody is connected and the sim has reached its idle lobby (`Simulation.IsIdle`): instead of polling every millisecond it sleeps until a client registers, stepping once per second. A few seconds in it runs one aggressive GC to return what boot or the last match left behind, then a gen0 once a minute so that what idling allocates reuses the same memory instead of touching more.
 - **Frequency:** Domain-specific (idle hosting cost)
 - **Key Files:**
-  - `server/Program.cs` — the sim thread (`DormantNapMs`, `DormantCollectAfterNaps`)
+  - `server/Program.cs` — the sim thread (`DormantNapMs`, `DormantCollectAfterNaps`, `DormantGen0EveryNaps`)
   - `server/Net/ClientHub.Update.cs` — `ClientArrived`, set in `TryAdmit`, wakes it at once
 - **Related:** [[SimTick]], [[Hull Cache Stamp (`.simmodel.stamp`)]]
 - **Notes:** Only reached with zero connections, after the 5 s empty-server reset. With anyone connected, including pilots sitting in the lobby, the loop runs exactly as before.
