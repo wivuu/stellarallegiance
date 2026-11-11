@@ -7,7 +7,7 @@
        References the same shared deterministic FlightModel the module and Godot client
        compile, so prediction math stays bit-identical across all three. -->
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <InvariantGlobalization>true</InvariantGlobalization>
@@ -78,13 +78,22 @@
                                 shared/Net/WebRtcSdp.cs).
             Common.Logging(*) - Makaretu mDNS logging: reflection only for a CONFIGURED log adapter;
                                 with no config it falls back to the no-op adapter.
-          A NEW warning from any other assembly still breaks the publish. -->
-  <Target Name="ConfigureNativeLink" BeforeTargets="PrepareForILLink">
+          A NEW warning from any other assembly still breaks the publish.
+
+       Hook point: .NET 11's NativeAOT targets no longer run PrepareForILLink (the ILLink extension
+       point this target used on .NET 10). ILC now reads its feature switches from
+       _TrimmerFeatureSettings, built from RuntimeHostConfigurationOption by the SDK's
+       _PrepareTrimConfiguration, and reads per-assembly TrimmerSingleWarn from ResolvedFileToPublish
+       (copied into _IlcManagedInputAssemblies right after). So both settings must exist BEFORE
+       _PrepareTrimConfiguration; it only fills TrimmerSingleWarn where it is still empty. If an SDK
+       moves the hook again, this target stops firing and the publish fails on the IL2026/IL3050 in
+       Program.cs and IL2072 in Common.Logging - loud, never a silently weaker binary. -->
+  <Target Name="ConfigureNativeLink" BeforeTargets="_PrepareTrimConfiguration">
     <ItemGroup>
       <RuntimeHostConfigurationOption Include="SimServer.SchemaTooling.IsSupported" Value="false" Trim="true" />
-      <ManagedAssemblyToLink Condition="'%(Filename)' == 'SIPSorcery' Or '%(Filename)' == 'Common.Logging' Or '%(Filename)' == 'Common.Logging.Core'">
+      <ResolvedFileToPublish Condition="'%(Filename)' == 'SIPSorcery' Or '%(Filename)' == 'Common.Logging' Or '%(Filename)' == 'Common.Logging.Core'">
         <TrimmerSingleWarn>true</TrimmerSingleWarn>
-      </ManagedAssemblyToLink>
+      </ResolvedFileToPublish>
     </ItemGroup>
   </Target>
   <ItemGroup>

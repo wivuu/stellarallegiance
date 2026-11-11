@@ -7,11 +7,18 @@
 # shared with the Godot client), which needs ../tools/wire-gen at compile time. Build with:
 #     docker build -f server/Dockerfile -t stellarallegiance-sim .
 # or via the repo-root docker-compose.yml (which sets context: .).
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
-# NativeAOT links with the platform toolchain, which the SDK image does not carry.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends clang zlib1g-dev \
-    && rm -rf /var/lib/apt/lists/*
+#
+# Build stage = Microsoft's Azure Linux 3.0 "-aot" SDK image, NOT the default sdk:11.0 tag, for the
+# glibc FLOOR of the published binary. A NativeAOT binary binds each libc/libm symbol to the newest
+# version the BUILD image's glibc defines. The default 11.0 tag is Ubuntu 26.04 (glibc 2.43), whose
+# CORE-MATH acosf/asinf/atan2f carry GLIBC_2.43 versions, so a binary linked there refuses to start
+# on Ubuntu 24.04, Debian 12/13 or RHEL 9/10 ("GLIBC_2.43 not found"). That binary is what
+# scripts/package-server.ps1 ships as the Linux AppImage (publish-output stage below), so the floor
+# is a support promise, not a detail. Azure Linux 3.0 has glibc 2.38; check the floor after any
+# image change with `objdump -T SimServer | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1` (2.34 on
+# .NET 10 and 11). The -aot image also carries the native toolchain (gcc + zlib headers), which the
+# NativeAOT link needs and plain SDK images lack.
+FROM mcr.microsoft.com/dotnet/sdk:11.0-azurelinux3.0-aot AS build
 WORKDIR /src
 
 # Restore against just the project files first so the (slow) restore layer caches across
@@ -70,7 +77,7 @@ RUN /app/SimServer --pregen-assets
 # lifts the published tree (binary + assets + the baked sim-cache) straight onto the host, with no
 # runtime image wrapped around it. scripts/package-server.ps1 uses this so Velopack always packs a
 # binary published INSIDE the SDK image — one publish path for CI and a Mac dev box, and the
-# glibc floor comes from the image (mcr.microsoft.com/dotnet/sdk:10.0), not whatever happens to be
+# glibc floor comes from the image (the Azure Linux build stage above), not whatever happens to be
 # on the runner. `FROM scratch` keeps the export to exactly the copied files (no base-image layers
 # to filter out of the output). Must sit BEFORE the `runtime` stage below: a target left unnamed on
 # `docker build`/`docker compose build` resolves to the LAST stage, and docker-compose.yml /
@@ -78,7 +85,7 @@ RUN /app/SimServer --pregen-assets
 FROM scratch AS publish-output
 COPY --from=build /app /
 
-FROM mcr.microsoft.com/dotnet/runtime-deps:10.0 AS runtime
+FROM mcr.microsoft.com/dotnet/runtime-deps:11.0 AS runtime
 WORKDIR /app
 # Carries the published binary, /app/assets (GLBs), and /app/sim-cache (warm hull cache).
 COPY --from=build /app ./

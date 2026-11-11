@@ -6,7 +6,7 @@
        (or TURN-relayed via the coturn sidecar), never through this process.
 
        Was originally a .NET-10 file-based app (single PublicLobby.cs with a #:sdk header); file
-       based apps can't span multiple .cs files, so it is a normal net10.0 csproj now — same
+       based apps can't span multiple .cs files, so it is a normal SDK-style csproj now (net11.0) — same
        toolchain/Docker pattern as server/ and shared/.
 
        Identity/persistence/ranking (.PLAN/LobbyRankingService.md): the lobby is its own identity
@@ -14,7 +14,7 @@
        sibling public-lobby-data/ project; the HTTP contracts every peer compiles live in
        shared/Lobby/. The Dockerfile copies all three directories (build context = repo root). -->
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <InvariantGlobalization>true</InvariantGlobalization>

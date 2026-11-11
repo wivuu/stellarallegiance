@@ -65,6 +65,7 @@ $Client = Join-Path $RepoRoot 'client'
 $LauncherProj = Join-Path $RepoRoot 'launcher/App/StellarLauncher.csproj'
 $StubProj = Join-Path $RepoRoot 'tools/launcher-stubgame/StubGame.csproj'
 $MacGameBundle = 'Stellar Allegiance.app' # must match GameLocator.MacGameBundle
+$GameAssembly = 'stellarallegiance' # client/project.godot dotnet/project/assembly_name: names the export's data_* folder + dll
 $GameExeBase = 'stellarallegiance' # must match GameLocator.GameExeBase (= project.godot config/name)
 
 $Channel = if ($IsWindows) { 'win' } elseif ($IsMacOS) { 'osx' } else { 'linux' }
@@ -213,6 +214,17 @@ function Export-Game {
         $exportExit = Invoke-Program $godot @('--headless', '--path', $Client, '--export-release', $preset, $target)
         Step "  export exit code: $exportExit"
         if (-not (Test-Path -LiteralPath $target)) { Fail "export produced no output at $target (exit code $exportExit)" }
+        # The target existing proves nothing about the C#: when Godot's `dotnet publish` fails ("Export
+        # .NET Project: Failed to build project") it still writes the binary + .pck and exits 0, and the
+        # game would ship with no scripts. Godot on macOS runs /usr/local/share/dotnet/dotnet whenever
+        # that file exists, so a stale system install that lacks the global.json SDK does exactly this.
+        # The real proof is the game assembly in every data_<assembly>_<platform>_<arch> folder.
+        $dataRoot = if ($IsMacOS) { Join-Path $target 'Contents/Resources' } else { Split-Path $target -Parent }
+        $dataDirs = @(Get-ChildItem -LiteralPath $dataRoot -Directory -Filter "data_${GameAssembly}_*" -ErrorAction SilentlyContinue)
+        if ($dataDirs.Count -eq 0) { Fail "export has no .NET data folder (data_${GameAssembly}_*) under $dataRoot: Godot's dotnet publish failed, see 'Failed to build project' in the export output above" }
+        foreach ($d in $dataDirs) {
+            if (-not (Test-Path -LiteralPath (Join-Path $d.FullName "$GameAssembly.dll"))) { Fail "export folder $($d.Name) has no $GameAssembly.dll: Godot's dotnet publish failed" }
+        }
         if ($IsMacOS) { return $target }
         return (Split-Path $target -Parent)
     }
