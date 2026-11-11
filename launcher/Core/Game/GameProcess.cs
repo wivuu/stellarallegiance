@@ -90,11 +90,16 @@ public sealed class GameProcess(ILauncherLog log, string pidFile) : IGameProcess
                 DeletePidFile();
                 return null;
             }
-            using var process = Process.GetProcessById(pid); // throws ArgumentException when the pid is gone
-            string? running = process.HasExited ? null : process.MainModule?.FileName;
-            var comparison = OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
-            if (running is not null && string.Equals(Path.GetFullPath(running), Path.GetFullPath(lines[1]), comparison))
-                return pid;
+            if (Process.TryGetProcessById(pid, out var process)) // false once the pid is gone
+            {
+                using (process)
+                {
+                    string? running = process.HasExited ? null : process.MainModule?.FileName;
+                    var comparison = OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+                    if (running is not null && string.Equals(Path.GetFullPath(running), Path.GetFullPath(lines[1]), comparison))
+                        return pid;
+                }
+            }
         }
         catch (Exception ex)
             when (ex
@@ -105,7 +110,8 @@ public sealed class GameProcess(ILauncherLog log, string pidFile) : IGameProcess
                         or System.ComponentModel.Win32Exception
             )
         {
-            // gone, recycled into something we may not inspect, or unreadable: not our game
+            // exited mid-inspection, recycled into something we may not inspect, a bad path in the pid
+            // file, or unreadable: not our game
         }
         DeletePidFile();
         return null;
@@ -113,14 +119,10 @@ public sealed class GameProcess(ILauncherLog log, string pidFile) : IGameProcess
 
     public async Task WaitForExitAsync(int pid, CancellationToken ct)
     {
-        try
+        if (Process.TryGetProcessById(pid, out var process)) // false when it's already gone
         {
-            using var process = Process.GetProcessById(pid);
-            await process.WaitForExitAsync(ct).ConfigureAwait(false);
-        }
-        catch (ArgumentException)
-        {
-            // already gone
+            using (process)
+                await process.WaitForExitAsync(ct).ConfigureAwait(false);
         }
         DeletePidFile();
     }

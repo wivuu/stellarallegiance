@@ -392,20 +392,14 @@ public partial class Simulation
         int idx = World.Bases.FindIndex(b => b.Id == baseId);
         if (idx < 0)
             return;
-        foreach (var dev in Content.Developments)
+        devs: foreach (var dev in Content.Developments)
         {
             if (dev.UpgradeScope != (byte)Allegiance.Factions.Model.UpgradeScope.All || dev.GrantedTechIdx.Length == 0)
                 continue;
             // The dev counts as completed when the team owns every tech it grants.
-            bool owned = true;
             foreach (ushort t in dev.GrantedTechIdx)
                 if (t >= Content.Techs.Count || !ts.OwnedTechs.Contains(Content.Techs[t].Id))
-                {
-                    owned = false;
-                    break;
-                }
-            if (!owned)
-                continue;
+                    continue devs;
             var ups = TriggeredUpgrades(dev);
             int mi = ups.FindIndex(u => u.FromType == builtType);
             if (mi >= 0)

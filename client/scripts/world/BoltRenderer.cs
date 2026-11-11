@@ -525,14 +525,14 @@ public sealed class BoltRenderer
             return;
 
         uint localSector = _sectors.LocalSector;
-        for (int i = _bolts.Count - 1; i >= 0; i--)
+        // A bolt consumed by a ship or probe skips the remaining target kinds: `continue bolts`.
+        bolts: for (int i = _bolts.Count - 1; i >= 0; i--)
         {
             var pv = _bolts[i];
             if (!pv.Visible)
                 continue;
             Vector3 b = pv.GlobalPosition;
             Vector3 a = b - pv.Velocity * (float)delta; // swept path across this frame
-            bool consumed = false;
             foreach (var (shipId, ship) in _ships.Nodes)
             {
                 // Never spark on the firing ship. Skipping by owner id (rather than a static muzzle-distance
@@ -575,12 +575,9 @@ public sealed class BoltRenderer
                     }
                     pv.QueueFree();
                     _bolts.RemoveAt(i);
-                    consumed = true;
-                    break;
+                    continue bolts;
                 }
             }
-            if (consumed)
-                continue;
 
             // A deployed probe is a solid, shootable object too: spark + consume the bolt where it meets a
             // visible probe (the server resolved the real damage). Team-agnostic, like ships.
@@ -597,12 +594,9 @@ public sealed class BoltRenderer
                     SfxManager.Instance?.PlayAt(SfxManager.SfxId.Impact, hit, pitch: 0.92f + GD.Randf() * 0.16f);
                     pv.QueueFree();
                     _bolts.RemoveAt(i);
-                    consumed = true;
-                    break;
+                    continue bolts;
                 }
             }
-            if (consumed)
-                continue;
 
             // An aleph is a solid barrier: the server already stopped the shot with no damage
             // (Simulation.FireBolt), so mirror that visually by absorbing the tracer at the gate mouth — no

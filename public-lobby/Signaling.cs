@@ -12,7 +12,7 @@ namespace PublicLobby;
 //   server  GET  /servers/{sid}/pending          -> [{ticket,offer}]  (long-poll, TakePending)
 //   server  POST /connect/{ticket}/answer {answer}                (PostAnswer)
 //   client  GET  /connect/{ticket}/answer        -> {answer}      (long-poll, WaitAnswer)
-public sealed class SignalingRelay(ServerConnectionManager connMgr)
+public sealed class SignalingRelay(ServerConnectionManager connMgr, IServerRegistry registry)
 {
     static readonly TimeSpan Ttl = TimeSpan.FromSeconds(60);
 
@@ -38,9 +38,17 @@ public sealed class SignalingRelay(ServerConnectionManager connMgr)
     readonly ConcurrentDictionary<string, ConcurrentQueue<string>> _inbox = new();
 
     // sessionId -> wake signal so /pending returns the instant a new offer lands.
+    //
+    // Both per-session maps hold REGISTERED sessions only: /pending is anonymous, so creating an
+    // entry for whatever id a caller names would let anyone grow the lobby's memory without bound,
+    // one semaphore and queue per made-up id. Prune drops entries once the registry forgets the
+    // session.
     readonly ConcurrentDictionary<string, SemaphoreSlim> _wake = new();
 
     SemaphoreSlim WakeFor(string sessionId) => _wake.GetOrAdd(sessionId, _ => new SemaphoreSlim(0));
+
+    // Sessions holding a queue or wake signal right now (test seam: tests/PublicLobbyTest/SignalingTests.cs).
+    internal int TrackedSessions => _wake.Keys.Union(_inbox.Keys).Count();
 
     // Client side: stash an offer for a server, return a ticket to poll the answer with.
     // Tries to push the offer directly to the server's live WS connection; falls back to the
@@ -74,7 +82,13 @@ public sealed class SignalingRelay(ServerConnectionManager connMgr)
 
         try
         {
-            await WakeFor(sessionId).WaitAsync(MaxWait, ct);
+            if (registry.Exists(sessionId))
+                await WakeFor(sessionId).WaitAsync(MaxWait, ct);
+            else
+                // No offer can be queued for an unregistered session (/connect checks), so answer
+                // empty after the usual long-poll wait (a caller never sees the difference, and an
+                // old server re-polling a lapsed session doesn't spin) without creating any state.
+                await Task.Delay(MaxWait, ct);
         }
         catch (OperationCanceledException)
         {
@@ -136,5 +150,13 @@ public sealed class SignalingRelay(ServerConnectionManager connMgr)
         foreach (var kvp in _byTicket)
             if (kvp.Value.CreatedAt < cutoff)
                 _byTicket.TryRemove(kvp.Key, out _);
+        // A session the registry no longer knows can't be offered to again (/connect checks), and its
+        // tickets above expire on their own; drop its queue and wake signal so they don't outlive it.
+        foreach (var sessionId in _inbox.Keys)
+            if (!registry.Exists(sessionId))
+                _inbox.TryRemove(sessionId, out _);
+        foreach (var sessionId in _wake.Keys)
+            if (!registry.Exists(sessionId))
+                _wake.TryRemove(sessionId, out _);
     }
 }

@@ -302,17 +302,17 @@ static class WebHosting
                     attestation.Passkey,
                     http.RequestAborted
                 );
-                if (!result.Succeeded || result.User is null)
-                    return Results.BadRequest(new { error = result.Error ?? "could not create account" });
+                if (result is not LobbyUser user)
+                    return Results.BadRequest(new { error = result is string error ? error : "could not create account" });
 
                 // Role before the cookie: role claims are baked into the principal at sign-in.
                 await accounts.ApplyAdminPolicyAsync(
-                    result.User,
+                    user,
                     provider: null,
                     providerPrincipal: null,
                     http.RequestAborted
                 );
-                await signInManager.SignInAsync(result.User, isPersistent: true);
+                await signInManager.SignInAsync(user, isPersistent: true);
 
                 return Results.Ok(new { ok = true, redirect = SafeLocalPath(body.ReturnUrl) ?? "/me" });
             }

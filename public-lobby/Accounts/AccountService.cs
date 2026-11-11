@@ -17,13 +17,14 @@ public static class LobbyRoles
 }
 
 /// <summary>Outcome of an account-service mutation: either the created/updated <see cref="LobbyUser"/>, or a
-/// friendly, user-facing <see cref="Error"/> (never an exception — validation/uniqueness failures are
-/// expected traffic on a public sign-up form).</summary>
-public sealed record AccountResult(bool Succeeded, LobbyUser? User, string? Error)
+/// friendly, user-facing error message (never an exception — validation/uniqueness failures are
+/// expected traffic on a public sign-up form). A union (C# 15): exactly one holds, so match
+/// <c>is LobbyUser user</c> rather than checking a flag and then null-checking the user.</summary>
+public union AccountResult(LobbyUser, string)
 {
-    public static AccountResult Ok(LobbyUser user) => new(true, user, null);
+    public static AccountResult Ok(LobbyUser user) => user;
 
-    public static AccountResult Failed(string error) => new(false, null, error);
+    public static AccountResult Failed(string error) => error;
 }
 
 /// <summary>

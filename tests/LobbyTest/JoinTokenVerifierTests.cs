@@ -46,18 +46,17 @@ static class JoinTokenVerifierTests
         var good = Mint(signer, "k1", player, "Vex", Listing, clock.Now, TimeSpan.FromSeconds(60));
         var r = await verifier.VerifyAsync(good, Listing, CancellationToken.None);
         Check(
-            r.IsValid && r.Identity!.PlayerId == player && r.Identity.DisplayName == "Vex",
+            r is JoinTokenIdentity id && id.PlayerId == player && id.DisplayName == "Vex",
             "valid token yields (sub, name)"
         );
         Check(
-            (await verifier.VerifyAsync(good, Listing, CancellationToken.None)).Failure == JoinTokenFailure.Replayed,
+            (await verifier.VerifyAsync(good, Listing, CancellationToken.None)) is JoinTokenFailure.Replayed,
             "same jti again is Replayed"
         );
 
         var wrongAud = Mint(signer, "k1", player, "Vex", "other-listing", clock.Now, TimeSpan.FromSeconds(60));
         Check(
-            (await verifier.VerifyAsync(wrongAud, Listing, CancellationToken.None)).Failure
-                == JoinTokenFailure.WrongAudience,
+            (await verifier.VerifyAsync(wrongAud, Listing, CancellationToken.None)) is JoinTokenFailure.WrongAudience,
             "wrong aud is WrongAudience"
         );
 
@@ -71,7 +70,7 @@ static class JoinTokenVerifierTests
             TimeSpan.FromSeconds(60)
         );
         Check(
-            (await verifier.VerifyAsync(expired, Listing, CancellationToken.None)).Failure == JoinTokenFailure.Expired,
+            (await verifier.VerifyAsync(expired, Listing, CancellationToken.None)) is JoinTokenFailure.Expired,
             "expired token is Expired"
         );
 
@@ -85,21 +84,21 @@ static class JoinTokenVerifierTests
             TimeSpan.FromSeconds(60)
         );
         Check(
-            (await verifier.VerifyAsync(skewOk, Listing, CancellationToken.None)).IsValid,
+            (await verifier.VerifyAsync(skewOk, Listing, CancellationToken.None)) is JoinTokenIdentity,
             "3 s past expiry is inside the 5 s skew"
         );
 
         var future = Mint(signer, "k1", player, "Vex", Listing, clock.Now, TimeSpan.FromSeconds(60));
         clock.Now += TimeSpan.FromSeconds(70);
         Check(
-            (await verifier.VerifyAsync(future, Listing, CancellationToken.None)).Failure == JoinTokenFailure.Expired,
+            (await verifier.VerifyAsync(future, Listing, CancellationToken.None)) is JoinTokenFailure.Expired,
             "token expires by the verifier's own clock"
         );
         clock.Now -= TimeSpan.FromSeconds(70);
 
         var forged = Mint(rogue, "k1", player, "Vex", Listing, clock.Now, TimeSpan.FromSeconds(60));
         Check(
-            (await verifier.VerifyAsync(forged, Listing, CancellationToken.None)).Failure == JoinTokenFailure.BadSignature,
+            (await verifier.VerifyAsync(forged, Listing, CancellationToken.None)) is JoinTokenFailure.BadSignature,
             "signature by another key under a known kid is BadSignature"
         );
 
@@ -114,7 +113,7 @@ static class JoinTokenVerifierTests
             issuer: "https://evil.example"
         );
         Check(
-            (await verifier.VerifyAsync(badIssuer, Listing, CancellationToken.None)).Failure == JoinTokenFailure.WrongIssuer,
+            (await verifier.VerifyAsync(badIssuer, Listing, CancellationToken.None)) is JoinTokenFailure.WrongIssuer,
             "wrong iss is WrongIssuer"
         );
 
@@ -132,14 +131,14 @@ static class JoinTokenVerifierTests
             }
         );
         var unsignedResult = await verifier.VerifyAsync(unsigned, Listing, CancellationToken.None);
-        Check(!unsignedResult.IsValid, "alg=none token is rejected (" + unsignedResult.Failure + ")");
+        Check(unsignedResult is JoinTokenFailure, "alg=none token is rejected (" + (unsignedResult is JoinTokenFailure why ? why : default) + ")");
 
         Check(
-            (await verifier.VerifyAsync("not.a.jwt", Listing, CancellationToken.None)).Failure == JoinTokenFailure.Malformed,
+            (await verifier.VerifyAsync("not.a.jwt", Listing, CancellationToken.None)) is JoinTokenFailure.Malformed,
             "garbage is Malformed"
         );
         Check(
-            (await verifier.VerifyAsync("", Listing, CancellationToken.None)).Failure == JoinTokenFailure.Malformed,
+            (await verifier.VerifyAsync("", Listing, CancellationToken.None)) is JoinTokenFailure.Malformed,
             "empty is Malformed"
         );
 
@@ -149,7 +148,7 @@ static class JoinTokenVerifierTests
         var rotated = Mint(signer2, "k2", player, "Vex", Listing, clock.Now, TimeSpan.FromSeconds(60));
         var fetchesBefore = fetches;
         Check(
-            (await verifier.VerifyAsync(rotated, Listing, CancellationToken.None)).Failure == JoinTokenFailure.UnknownKey,
+            (await verifier.VerifyAsync(rotated, Listing, CancellationToken.None)) is JoinTokenFailure.UnknownKey,
             "unknown kid while the JWKS is fresh: UnknownKey"
         );
         Check(fetches == fetchesBefore, "…no refresh inside the 30 s window");
@@ -157,7 +156,7 @@ static class JoinTokenVerifierTests
         jwks = Jwks(("k1", signer), ("k2", signer2));
         var rotated2 = Mint(signer2, "k2", player, "Vex", Listing, clock.Now, TimeSpan.FromSeconds(60));
         Check(
-            (await verifier.VerifyAsync(rotated2, Listing, CancellationToken.None)).IsValid,
+            (await verifier.VerifyAsync(rotated2, Listing, CancellationToken.None)) is JoinTokenIdentity,
             "unknown kid after the window refreshes the JWKS and verifies"
         );
         Check(fetches == fetchesBefore + 1, "…exactly one refresh");

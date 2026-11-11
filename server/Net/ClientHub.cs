@@ -728,14 +728,14 @@ public sealed partial class ClientHub
                             return;
                         }
                         var verdict = await verifier.VerifyAsync(joinToken, listingId, ct);
-                        if (!verdict.IsValid)
+                        if (verdict is not JoinTokenIdentity pilot)
                         {
-                            Log.RejectedJoinBadToken(_log, client.Id, verdict.Failure?.ToString() ?? "invalid");
+                            Log.RejectedJoinBadToken(_log, client.Id, verdict is JoinTokenFailure why ? why.ToString() : "invalid");
                             await RejectAndClose(RejectMessage.CodeJoinToken, RejectMessage.ReasonJoinTokenRejected);
                             return;
                         }
-                        name = verdict.Identity!.DisplayName;
-                        playerId = verdict.Identity.PlayerId;
+                        name = pilot.DisplayName;
+                        playerId = pilot.PlayerId;
                         Log.JoinedWithPlayerId(_log, client.Id, playerId.Value, name);
                     }
 
