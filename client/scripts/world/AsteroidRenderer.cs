@@ -89,7 +89,7 @@ public sealed class AsteroidRenderer
 
     // The rock nodes — read by the coordinator's shadow-occluder gather, ambience, mining beams, and
     // build spheres (until those extract in Milestone C/D).
-    public IReadOnlyDictionary<ulong, Node3D> Nodes => _nodes;
+    public Dictionary<ulong, Node3D> Nodes => _nodes;
 
     public void NetAdd(Asteroid row)
     {
@@ -314,7 +314,7 @@ public sealed class AsteroidRenderer
 
     // Asteroids in the currently-visible sector, as (id, node). Sector visibility already drives each rock
     // node's Visible flag, so this mirrors the ship/base accessors' filter. Shared scratch — read now.
-    public IReadOnlyList<(ulong Id, Node3D Node)> InView()
+    public List<(ulong Id, Node3D Node)> InView()
     {
         _viewScratch.Clear();
         foreach (var (id, node) in _nodes)

@@ -449,7 +449,7 @@ public partial class TargetMarkers : Control
         return -1;
     }
 
-    private static bool ContainsId(IReadOnlyList<RemoteShip> enemies, ulong id)
+    private static bool ContainsId(List<RemoteShip> enemies, ulong id)
     {
         foreach (var e in enemies)
             if (e.ShipId == id)
@@ -457,7 +457,7 @@ public partial class TargetMarkers : Control
         return false;
     }
 
-    private static bool ContainsBaseId(IEnumerable<(ulong Id, Vector3 Pos)> bases, ulong baseId)
+    private static bool ContainsBaseId(List<(ulong Id, Vector3 Pos)> bases, ulong baseId)
     {
         foreach (var (id, _) in bases)
             if (id == baseId)
@@ -489,7 +489,7 @@ public partial class TargetMarkers : Control
         return false;
     }
 
-    private static bool ContainsRockId(IEnumerable<(ulong Id, Node3D Node)> rocks, ulong rockId)
+    private static bool ContainsRockId(List<(ulong Id, Node3D Node)> rocks, ulong rockId)
     {
         foreach (var (id, _) in rocks)
             if (id == rockId)
@@ -508,7 +508,7 @@ public partial class TargetMarkers : Control
 
     // The enemy closest to the shooter, or null if there are none. Used to pick a
     // fresh focus when the current target dies — nearest is the most useful next threat.
-    private static ulong? NearestEnemy(IReadOnlyList<RemoteShip> enemies, Vector3 p)
+    private static ulong? NearestEnemy(List<RemoteShip> enemies, Vector3 p)
     {
         if (enemies.Count == 0)
             return null;

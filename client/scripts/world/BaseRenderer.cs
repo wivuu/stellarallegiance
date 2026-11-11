@@ -88,10 +88,10 @@ public sealed class BaseRenderer
     }
 
     // Sector -> team map for the Minimap + the coordinator's HomeSector resolution.
-    public IReadOnlyList<(uint Sector, byte Team)> Teams => _teams;
+    public List<(uint Sector, byte Team)> Teams => _teams;
 
     // The (node, team, id, sector) list — read by the coordinator's shadow-occluder gather.
-    public IReadOnlyList<(Node3D Node, byte Team, ulong Id, uint Sector)> List => _list;
+    public List<(Node3D Node, byte Team, ulong Id, uint Sector)> List => _list;
 
     // The friendly base the local ship most recently docked at (nearest same-team base, in the dock sector,
     // to where the ship vanished). 0 until the first dock this session — the hangar defaults its launch
@@ -214,7 +214,7 @@ public sealed class BaseRenderer
 
     // Bases in the currently-visible (local) sector (via Node.Visible), as (world pos, team, dead). Dead =
     // a fog stale-memory base the HUD draws as a dim hollow glyph. Shared scratch — read immediately.
-    public IReadOnlyList<(Vector3 Pos, byte Team, bool Dead)> Visible()
+    public List<(Vector3 Pos, byte Team, bool Dead)> Visible()
     {
         _visibleScratch.Clear();
         foreach (var (node, team, id, _) in _list)
@@ -247,7 +247,7 @@ public sealed class BaseRenderer
 
     // Enemy bases (vs the local team) in the visible sector still alive, for the Tab-cycle lock target.
     // Shared scratch — read immediately. Empty until the local team is known.
-    public IEnumerable<(ulong Id, Vector3 Pos)> LockableEnemy()
+    public List<(ulong Id, Vector3 Pos)> LockableEnemy()
     {
         _lockableScratch.Clear();
         if (_localTeam() is byte lt)
@@ -259,7 +259,7 @@ public sealed class BaseRenderer
 
     // Every base (ANY team) in the visible sector, as (id, world pos, team), for the F3 autopilot pick
     // (friendly bases are valid destinations). Shared scratch — read immediately.
-    public IReadOnlyList<(ulong Id, Vector3 Pos, byte Team)> AllVisible()
+    public List<(ulong Id, Vector3 Pos, byte Team)> AllVisible()
     {
         _pickScratch.Clear();
         foreach (var (node, team, id, _) in _list)
@@ -285,7 +285,7 @@ public sealed class BaseRenderer
 
     // Damaged bases in the visible sector, as (world pos, 0..1 fraction), for the screen-space damage bar.
     // Full-health and out-of-sector bases are skipped; under fog, stale-dead ones too. Shared scratch.
-    public IReadOnlyList<(Vector3 Pos, float Frac)> VisibleHealth()
+    public List<(Vector3 Pos, float Frac)> VisibleHealth()
     {
         _healthScratch.Clear();
         foreach (var (id, frac) in _healthFrac)

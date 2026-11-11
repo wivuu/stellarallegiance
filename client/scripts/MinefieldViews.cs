@@ -50,6 +50,7 @@ public partial class MinefieldViews : Node3D
         public Vector3[] FinalOrigins = null!;
         public Basis[] Bases = null!;
         public float DeployElapsed = -1f; // seconds into the expand; < 0 = not animating / done
+        public float[]? DeployBuf; // MultiMesh buffer reused across the deploy frames (null when idle)
     }
 
     private readonly Dictionary<ulong, FieldView> _fields = new();
@@ -188,11 +189,35 @@ public partial class MinefieldViews : Node3D
             float t = Mathf.Min(fv.DeployElapsed / DeployDuration, 1f);
             float u = 1f - t;
             float k = 1f - u * u * u; // ease-out cubic
-            var mm = fv.Node.Multimesh;
-            for (int i = 0; i < fv.FinalOrigins.Length; i++)
-                mm.SetInstanceTransform(i, new Transform3D(fv.Bases[i], fv.FinalOrigins[i] * k));
+            // One buffer write for the whole cloud rather than a native call per mine. Layout is the
+            // Transform3D MultiMesh format (no colours / custom data on this mesh): 12 floats per
+            // instance, the basis row by row with the origin in each row's fourth slot.
+            int n = fv.FinalOrigins.Length;
+            var buf = fv.DeployBuf ??= new float[n * 12];
+            for (int i = 0; i < n; i++)
+            {
+                Basis b = fv.Bases[i];
+                Vector3 p = fv.FinalOrigins[i] * k;
+                int o = i * 12;
+                buf[o] = b.X.X;
+                buf[o + 1] = b.Y.X;
+                buf[o + 2] = b.Z.X;
+                buf[o + 3] = p.X;
+                buf[o + 4] = b.X.Y;
+                buf[o + 5] = b.Y.Y;
+                buf[o + 6] = b.Z.Y;
+                buf[o + 7] = p.Y;
+                buf[o + 8] = b.X.Z;
+                buf[o + 9] = b.Y.Z;
+                buf[o + 10] = b.Z.Z;
+                buf[o + 11] = p.Z;
+            }
+            fv.Node.Multimesh.Buffer = buf;
             if (k >= 1f)
+            {
                 fv.DeployElapsed = -1f; // settled at finals (k==1 wrote them above)
+                fv.DeployBuf = null; // only needed while animating
+            }
         }
 
         // TTL countdown + per-frame sector gating. Resolve the view sector ONCE per frame (not per
@@ -203,7 +228,9 @@ public partial class MinefieldViews : Node3D
         List<ulong>? expired = null;
         foreach (var (id, fv) in _fields)
         {
-            fv.Node.Visible = viewSector < 0 || viewSector == fv.Sector;
+            bool show = viewSector < 0 || viewSector == fv.Sector;
+            if (fv.Node.Visible != show) // write only on a change: the setter is a native call
+                fv.Node.Visible = show;
             fv.SecondsLeft -= (float)delta;
             if (fv.SecondsLeft <= 0f)
                 (expired ??= new()).Add(id);
@@ -217,7 +244,7 @@ public partial class MinefieldViews : Node3D
     // Feed for the HUD mine glyph: center + owning team of every live field. Mirrors
     // WorldRenderer.VisibleProbes(). The set is already fog-filtered upstream (own team +
     // radar/LOS-revealed enemy). Returns a shared scratch list — read it immediately.
-    public IReadOnlyList<(Vector3 Pos, byte Team)> VisibleMinefields()
+    public List<(Vector3 Pos, byte Team)> VisibleMinefields()
     {
         _visibleScratch.Clear();
         foreach (var fv in _fields.Values)

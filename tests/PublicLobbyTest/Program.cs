@@ -18,6 +18,8 @@ static partial class Suite
         try
         {
             await RunConnectionStringTestsAsync();
+            await RunStreamJsonTestsAsync();
+            await RunSignalingTestsAsync();
             await RunSchemaTestsAsync();
             await RunOrleansTestsAsync();
             await RunAuthTestsAsync();

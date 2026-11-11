@@ -18,9 +18,9 @@ static partial class Suite
 {
     // Contracts.cs (public-lobby/) has no explicit [JsonPropertyName] attributes — its JSON shape
     // relies on the app's configured naming policy (ASP.NET Core Web defaults: camelCase output,
-    // case-insensitive input) instead. That policy lives on the app's JsonOptions, which this test
-    // assembly has no access to (LobbyJson.Opts is `internal` to the PublicLobby assembly), so
-    // client-side reads here just need case-insensitive matching to line up with it.
+    // case-insensitive input) instead. That policy lives on the app's JsonOptions (and on
+    // LobbyStreamJson for the SSE feeds), so client-side reads here just need case-insensitive
+    // matching to line up with it.
     static readonly JsonSerializerOptions ListingJson = new() { PropertyNameCaseInsensitive = true };
 
     static async Task RunListingTestsAsync()

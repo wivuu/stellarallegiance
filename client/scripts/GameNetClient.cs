@@ -183,7 +183,11 @@ public partial class GameNetClient : Node, INetClientHost
     private ClientWebSocket? _ws;
     private readonly CancellationTokenSource _cts = new();
     private CancellationTokenSource? _socketCts;
-    private readonly ConcurrentQueue<byte[]> _rx = new();
+
+    // Inbound frames awaiting the main-thread drain. A WebSocket frame is copied out of the receive
+    // buffer into a POOLED array (returned in _Process once applied; Buf may be longer than Len); a
+    // WebRTC frame arrives as an array the transport already allocated for us, so it is queued as is.
+    private readonly ConcurrentQueue<(byte[] Buf, int Len, bool Pooled)> _rx = new();
 
     // Raised on the main thread as this node leaves the tree (quit, scene change), read by the socket
     // tasks: from then on they have nothing more to say to it — see Post.
@@ -668,7 +672,9 @@ public partial class GameNetClient : Node, INetClientHost
                     _rejectReason = RejectReasonOf(len >= 2 ? buf[1] : (byte)0);
                     continue;
                 }
-                _rx.Enqueue(buf.AsSpan(0, len).ToArray());
+                byte[] frame = System.Buffers.ArrayPool<byte>.Shared.Rent(len);
+                buf.AsSpan(0, len).CopyTo(frame);
+                _rx.Enqueue((frame, len, true));
             }
             // Unblock the send loop (it may be parked on ReadAllAsync) so the drain returns promptly.
             sendCts.Cancel();
@@ -731,7 +737,7 @@ public partial class GameNetClient : Node, INetClientHost
                     _rejectReason = RejectReasonOf(data.Length >= 2 ? data[1] : (byte)0);
                     return;
                 }
-                _rx.Enqueue(data);
+                _rx.Enqueue((data, data.Length, false));
             };
             dc.onclose += () => Post(MethodName.OnSocketClosed, seq, "");
             pc.onconnectionstatechange += s =>
@@ -888,7 +894,17 @@ public partial class GameNetClient : Node, INetClientHost
         int perfFrames = 0;
         while (_rx.TryDequeue(out var frame))
         {
-            _frames.Apply(frame);
+            // Return the pooled buffer even when a frame throws (a malformed frame is a bug that
+            // surfaces as an exception here): nothing the appliers build keeps a slice of it.
+            try
+            {
+                _frames.Apply(frame.Buf.AsSpan(0, frame.Len));
+            }
+            finally
+            {
+                if (frame.Pooled)
+                    System.Buffers.ArrayPool<byte>.Shared.Return(frame.Buf);
+            }
             perfFrames++;
         }
         ulong perfMs = (Time.GetTicksUsec() - perfT0) / 1000;

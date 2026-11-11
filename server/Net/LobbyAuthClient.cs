@@ -58,14 +58,14 @@ public sealed class LobbyAuthClient
             var token = await resp.Content.ReadFromJsonAsync(LobbyHttpJson.Default.TokenResponse, ct);
             return token is null
                 ? throw new HttpRequestException("POST /auth/token answered 200 with no token")
-                : LobbyTokenOutcome.Ok(token);
+                : token;
         }
 
         if (
             resp.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Unauthorized
             && await TryReadOAuthErrorAsync(resp, ct) is { } error
         )
-            return LobbyTokenOutcome.Failed(error);
+            return error;
 
         throw new HttpRequestException(
             $"POST /auth/token answered {(int)resp.StatusCode} {resp.ReasonPhrase} with no OAuth error",
@@ -88,13 +88,7 @@ public sealed class LobbyAuthClient
     }
 }
 
-// Either a minted TokenResponse or a LobbyTokenError.* code — never both. Wraps the /auth/token
-// 200-vs-400 branch as a value so callers don't juggle a nullable tuple.
-public readonly record struct LobbyTokenOutcome(TokenResponse? Token, string? Error)
-{
-    public bool Succeeded => Token is not null;
-
-    public static LobbyTokenOutcome Ok(TokenResponse token) => new(token, null);
-
-    public static LobbyTokenOutcome Failed(string error) => new(null, error);
-}
+// The /auth/token 200-vs-400 branch as a value: either a minted TokenResponse or the lobby's OAuth
+// error code (a LobbyTokenError.* string). A union (C# 15), so exactly one holds: match
+// `is TokenResponse token`, or a code directly with `case LobbyTokenError.SlowDown:`.
+public union LobbyTokenOutcome(TokenResponse, string);

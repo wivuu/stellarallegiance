@@ -1,6 +1,7 @@
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using System.Threading.Channels;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -269,7 +270,7 @@ app.MapGet(
 
         // Auth: first frame must identify the session AND carry the secret minted at registration,
         // so a client that scraped the public sessionId can't hijack the server's control channel.
-        var auth = await WsReceiveJsonAsync<WsAuthMsg>(ws, ct);
+        var auth = await WsReceiveJsonAsync(ws, LobbyWsInboundJson.Default.WsAuthMsg, ct);
         if (
             auth?.Type != "auth"
             || string.IsNullOrEmpty(auth.SessionId)
@@ -284,7 +285,7 @@ app.MapGet(
         // resolve them once here rather than on every ping/update frame.
         var listing = registry.Get(sessionId);
         var verifiedGameServerId = listing is { Verified: true, GameServerId: { } gsid } ? gsid : (Guid?)null;
-        await WsSendJsonAsync(ws, new { type = "ok" }, ct);
+        await WsSendJsonAsync(ws, new WsOkFrame("ok"), LobbyStreamJson.Default.WsOkFrame, ct);
 
         var log = loggers.CreateLogger("PublicLobby.ServerSocket");
         var (pushReader, generation) = connMgr.Connect(sessionId);
@@ -434,11 +435,11 @@ app.MapGet(
 
             // Initial full snapshot filtered to the client's protocol (same FilterProtocol as GET /servers).
             var snap = FilterProtocol(registry.ListActive(), protocol);
-            await WriteSseEvent(ctx.Response.Body, "snapshot", SseJson(snap), ct);
+            await WriteSseEvent(ctx.Response.Body, "snapshot", SseJson(snap, LobbyStreamJson.Default.IReadOnlyCollectionServerEntry), ct);
             // Subscribed BEFORE this read, so a release confirmed in between arrives as a bus event
             // too: the client may see the same version twice, never miss one.
             if (releases.Confirmed is { } confirmed)
-                await WriteSseEvent(ctx.Response.Body, "release", SseJson(new { version = confirmed }), ct);
+                await WriteSseEvent(ctx.Response.Body, "release", SseJson(new SseRelease(confirmed), LobbyStreamJson.Default.SseRelease), ct);
 
             // Keepalive comment lines run concurrently with the event loop. This request
             // authenticated ONCE and then stays open indefinitely, so the keepalive tick doubles as
@@ -453,7 +454,7 @@ app.MapGet(
                 {
                     if (evt.Kind == LobbyEventKind.Release)
                     {
-                        await WriteSseEvent(ctx.Response.Body, "release", SseJson(new { version = evt.Version }), ct);
+                        await WriteSseEvent(ctx.Response.Body, "release", SseJson(new SseRelease(evt.Version), LobbyStreamJson.Default.SseRelease), ct);
                         continue;
                     }
 
@@ -463,10 +464,10 @@ app.MapGet(
 
                     var (name, data) = evt.Kind switch
                     {
-                        LobbyEventKind.Registered => ("registered", SseJson(evt.Entry)),
-                        LobbyEventKind.Updated => ("updated", SseJson(evt.Entry)),
-                        LobbyEventKind.Removed => ("removed", SseJson(new { sessionId = evt.SessionId })),
-                        _ => ("snapshot", SseJson(evt.Entry)),
+                        LobbyEventKind.Registered => ("registered", SseJson(evt.Entry, LobbyStreamJson.Default.ServerEntry)),
+                        LobbyEventKind.Updated => ("updated", SseJson(evt.Entry, LobbyStreamJson.Default.ServerEntry)),
+                        LobbyEventKind.Removed => ("removed", SseJson(new SseRemoved(evt.SessionId), LobbyStreamJson.Default.SseRemoved)),
+                        _ => ("snapshot", SseJson(evt.Entry, LobbyStreamJson.Default.ServerEntry)),
                     };
                     await WriteSseEvent(ctx.Response.Body, name, data, ct);
                 }
@@ -512,7 +513,7 @@ app.MapGet(
 
             using var sub = bus.Subscribe(out var reader);
 
-            var last = SseJson(PublicServerStrip.From(registry.ListActive(), PublicServerStrip.Shown));
+            var last = SseJson(PublicServerStrip.From(registry.ListActive(), PublicServerStrip.Shown), LobbyStreamJson.Default.PublicServerStrip);
             await WriteSseEvent(ctx.Response.Body, "snapshot", last, ct);
 
             // Single writer: one loop does both the events and the 20 s keepalive comment, waking on
@@ -536,7 +537,7 @@ app.MapGet(
                 // Coalesce: several listings can change between wakeups, and one snapshot covers them.
                 while (reader.TryRead(out _)) { }
 
-                var snapshot = SseJson(PublicServerStrip.From(registry.ListActive(), PublicServerStrip.Shown));
+                var snapshot = SseJson(PublicServerStrip.From(registry.ListActive(), PublicServerStrip.Shown), LobbyStreamJson.Default.PublicServerStrip);
                 if (snapshot == last)
                     continue; // nothing the strip shows actually moved (e.g. a roster-only update)
                 last = snapshot;
@@ -606,7 +607,7 @@ app.Run();
 
 // ---- Helpers ---------------------------------------------------------------
 
-static string SseJson(object? o) => JsonSerializer.Serialize(o, LobbyJson.Opts);
+static string SseJson<T>(T value, JsonTypeInfo<T> info) => JsonSerializer.Serialize(value, info);
 
 // Filters an active-server list to one wire-protocol version. Shared by GET /servers and the SSE
 // snapshot so both apply identical filtering. protocol <= 0 or absent means "no filter".
@@ -682,7 +683,7 @@ static async Task<WsEnd?> WsRecvServerUpdates(
         {
             // Roster-bearing updates can span multiple frames / exceed one 4 KB buffer, so
             // accumulate to EndOfMessage before parsing.
-            var msg = await WsReceiveJsonAsync<WsServerMsg>(ws, ct);
+            var msg = await WsReceiveJsonAsync(ws, LobbyWsInboundJson.Default.WsServerMsg, ct);
             if (msg is null)
             {
                 if (ws.State == WebSocketState.CloseReceived || ws.CloseStatus is not null)
@@ -735,19 +736,20 @@ static async Task<WsEnd?> WsSendPushes(WebSocket ws, ChannelReader<ServerPush> r
         {
             if (ws.State != WebSocketState.Open)
                 return new WsEnd($"socket {ws.State}", Deliberate: false);
-            // Anonymous shapes = the wire format; member order is the JSON order older servers bind.
-            object payload = push switch
+            // ServerPush is a closed hierarchy, so this switch is exhaustive: a new push kind is a
+            // compile error here, not a runtime throw. Frame shapes and member order: StreamJson.cs.
+            byte[] payload = push switch
             {
-                OfferPush offer => new
-                {
-                    type = "offer",
-                    ticket = offer.Offer.Ticket,
-                    sdpOffer = offer.Offer.SdpOffer,
-                },
-                ReleasePush release => new { type = "release", version = release.Version },
-                _ => throw new InvalidOperationException($"unhandled server push {push.GetType().Name}"),
+                OfferPush offer => JsonSerializer.SerializeToUtf8Bytes(
+                    new WsOfferFrame("offer", offer.Offer.Ticket, offer.Offer.SdpOffer),
+                    LobbyStreamJson.Default.WsOfferFrame
+                ),
+                ReleasePush release => JsonSerializer.SerializeToUtf8Bytes(
+                    new WsReleaseFrame("release", release.Version),
+                    LobbyStreamJson.Default.WsReleaseFrame
+                ),
             };
-            await WsSendJsonAsync(ws, payload, ct);
+            await ws.SendAsync(new ArraySegment<byte>(payload), WebSocketMessageType.Text, true, ct);
         }
         // The channel was completed: a resumed socket superseded this one, or a DELETE took the session.
         return ct.IsCancellationRequested ? null : new WsEnd("push channel completed", Deliberate: false);
@@ -783,26 +785,40 @@ static async Task WsCloseQuietlyAsync(WebSocket ws, WebSocketCloseStatus status,
     catch (Exception e) when (e is WebSocketException or IOException or ObjectDisposedException) { }
 }
 
-static async Task WsSendJsonAsync(WebSocket ws, object payload, CancellationToken ct)
+static async Task WsSendJsonAsync<T>(WebSocket ws, T payload, JsonTypeInfo<T> info, CancellationToken ct)
 {
-    var bytes = JsonSerializer.SerializeToUtf8Bytes(payload);
+    var bytes = JsonSerializer.SerializeToUtf8Bytes(payload, info);
     await ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, ct);
 }
 
-static async Task<T?> WsReceiveJsonAsync<T>(WebSocket ws, CancellationToken ct)
+// Frames are small (status updates, pings), so the common case is one receive that holds the whole
+// message: parse it straight out of a pooled buffer. Only a fragmented message is stitched together.
+static async Task<T?> WsReceiveJsonAsync<T>(WebSocket ws, JsonTypeInfo<T> info, CancellationToken ct)
 {
-    using var ms = new System.IO.MemoryStream();
-    var buf = new byte[4096];
-    WebSocketReceiveResult result;
-    do
+    var buf = System.Buffers.ArrayPool<byte>.Shared.Rent(4096);
+    try
     {
-        result = await ws.ReceiveAsync(buf, ct);
+        var result = await ws.ReceiveAsync(buf, ct);
         if (result.MessageType == WebSocketMessageType.Close)
             return default;
+        if (result.EndOfMessage)
+            return JsonSerializer.Deserialize(buf.AsSpan(0, result.Count), info);
+
+        using var ms = new System.IO.MemoryStream();
         ms.Write(buf, 0, result.Count);
-    } while (!result.EndOfMessage);
-    ms.Seek(0, System.IO.SeekOrigin.Begin);
-    return JsonSerializer.Deserialize<T>(ms, LobbyJson.CaseInsensitive);
+        do
+        {
+            result = await ws.ReceiveAsync(buf, ct);
+            if (result.MessageType == WebSocketMessageType.Close)
+                return default;
+            ms.Write(buf, 0, result.Count);
+        } while (!result.EndOfMessage);
+        return JsonSerializer.Deserialize(ms.GetBuffer().AsSpan(0, (int)ms.Length), info);
+    }
+    finally
+    {
+        System.Buffers.ArrayPool<byte>.Shared.Return(buf);
+    }
 }
 
 // Read at request time (same pattern as AuthEndpoints.DevLoginEnabled) so tests can flip it
@@ -831,18 +847,7 @@ static IReadOnlyList<IceServer> BuildStunServers()
 
 // ---- Message shapes --------------------------------------------------------
 
-// Inbound from game server over WS. Secret is the per-session capability from registration.
-file sealed record WsAuthMsg(string? Type, string? SessionId, string? Secret);
-
-// Roster entries now carry `playerId` (nullable; WP1.4) via LobbyRosterEntry itself — no separate
-// wire shape needed here, System.Text.Json picks it up like every other roster field.
-file sealed record WsServerMsg(
-    string? Type,
-    int Players = 0,
-    int MaxPlayers = 0,
-    string? State = null,
-    LobbyRosterEntry[]? Roster = null
-);
+// Inbound/outbound /servers/ws and SSE shapes live in StreamJson.cs (source-generated JSON).
 
 // Concurrency guard for the anonymous SSE stream (/servers/live). Every other long-lived route
 // here is gated by a bearer or a per-listing secret; this one is open to the public web, so it
@@ -868,14 +873,6 @@ static class PublicStreams
     }
 
     public static void Exit() => Interlocked.Decrement(ref _open);
-}
-
-static class LobbyJson
-{
-    internal static readonly JsonSerializerOptions Opts = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-
-    // Reused by WsReceiveJsonAsync for every inbound WS frame instead of allocating one per call.
-    internal static readonly JsonSerializerOptions CaseInsensitive = new() { PropertyNameCaseInsensitive = true };
 }
 
 // Top-level-statement programs compile their entry point into a generated `Program` class; this

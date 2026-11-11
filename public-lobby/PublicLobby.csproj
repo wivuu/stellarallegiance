@@ -53,6 +53,11 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
   </ItemGroup>
 
+  <!-- Pure-logic tests reach a few internal seams (e.g. SignalingRelay.TrackedSessions). -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="PublicLobbyTest" />
+  </ItemGroup>
+
   <!-- WP0.3 (web shell + auth providers): external-login handlers, env-gated in
        Hosting/WebAuth.cs — see public-lobby/README.md for the AUTH_* env vars. -->
   <ItemGroup>

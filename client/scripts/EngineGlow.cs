@@ -132,6 +132,9 @@ public partial class EngineGlow : Node3D
 
     private float _cloakDim = 1f; // wash-light multiplier, 1 = uncloaked
 
+    private static readonly StringName SmokeColorParam = "smoke_color";
+    private Color _lastSmokeColor = new(-1f, -1f, -1f, -1f); // none written yet (no real colour is negative)
+
     // Feed the current drive each frame. throttle (0..1) is forward thrust and
     // always glows the engines; boost (0..1) is the afterburner — a SEPARATE input
     // (the local pilot's afterburner key, a PIG's turn-burst, a remote ship near
@@ -385,6 +388,7 @@ public partial class EngineGlow : Node3D
         procMat.SetShaderParameter("opacity", SmokeOpacity);
         procMat.SetShaderParameter("smoke_color", CoreColor);
         _exhaustMats.Add(procMat);
+        _lastSmokeColor = new(-1f, -1f, -1f, -1f); // a new material has no tint yet: force the next write
         var exhaust = new GpuParticles3D
         {
             Amount = SmokeAmount,
@@ -548,7 +552,14 @@ public partial class EngineGlow : Node3D
             // Keep the motes near their base speed even at full boost: speeding them up just
             // stretches the plume and washes the spindle out, so stay close to 1.
             _exhausts[i].SpeedScale = Mathf.Lerp(1f, SmokeBoostSpeedUp, boost);
-            _exhaustMats[i].SetShaderParameter("smoke_color", plumeColor);
+        }
+        // The smoke tint only moves with boost, so most frames it is unchanged: skip the write then.
+        // The name is a cached StringName; a string literal here is converted on every call.
+        if (plumeColor != _lastSmokeColor)
+        {
+            _lastSmokeColor = plumeColor;
+            for (int i = 0; i < _exhaustMats.Count; i++)
+                _exhaustMats[i].SetShaderParameter(SmokeColorParam, plumeColor);
         }
 
         _light.LightColor = plumeColor;

@@ -65,7 +65,7 @@ public sealed class JoinTokenVerifier
     public async ValueTask<JoinTokenResult> VerifyAsync(string token, string expectedAudience, CancellationToken ct)
     {
         if (string.IsNullOrEmpty(token) || token.Length > 4096 || !_handler.CanReadToken(token))
-            return JoinTokenResult.Fail(JoinTokenFailure.Malformed);
+            return JoinTokenFailure.Malformed;
 
         JsonWebToken jwt;
         try
@@ -74,7 +74,7 @@ public sealed class JoinTokenVerifier
         }
         catch (Exception)
         {
-            return JoinTokenResult.Fail(JoinTokenFailure.Malformed);
+            return JoinTokenFailure.Malformed;
         }
 
         // Unknown kid → one refresh (rate-limited) before giving up: the lobby may have rotated.
@@ -90,7 +90,7 @@ public sealed class JoinTokenVerifier
             }
         }
         if (!HasKey(jwt.Kid))
-            return JoinTokenResult.Fail(JoinTokenFailure.UnknownKey);
+            return JoinTokenFailure.UnknownKey;
 
         var parameters = new TokenValidationParameters
         {
@@ -115,8 +115,7 @@ public sealed class JoinTokenVerifier
         };
         var result = await _handler.ValidateTokenAsync(token, parameters);
         if (!result.IsValid)
-            return JoinTokenResult.Fail(
-                result.Exception switch
+            return result.Exception switch
                 {
                     SecurityTokenExpiredException
                     or SecurityTokenNotYetValidException
@@ -128,21 +127,20 @@ public sealed class JoinTokenVerifier
                     SecurityTokenInvalidSignatureException or SecurityTokenInvalidAlgorithmException =>
                         JoinTokenFailure.BadSignature,
                     _ => JoinTokenFailure.Other,
-                }
-            );
+                };
 
         if (!Guid.TryParse(jwt.Subject, out var playerId) || string.IsNullOrEmpty(jwt.Id))
-            return JoinTokenResult.Fail(JoinTokenFailure.Malformed);
+            return JoinTokenFailure.Malformed;
         var name = jwt.TryGetClaim(JwtRegisteredClaimNames.Name, out var nameClaim) ? nameClaim.Value : "";
         if (string.IsNullOrWhiteSpace(name))
-            return JoinTokenResult.Fail(JoinTokenFailure.Malformed);
+            return JoinTokenFailure.Malformed;
 
         // Single use: remember the jti until its expiry (+ skew); sweep opportunistically.
         var expiresAt = new DateTimeOffset(jwt.ValidTo, TimeSpan.Zero) + ClockSkew;
         if (!_seenJti.TryAdd(jwt.Id, expiresAt))
-            return JoinTokenResult.Fail(JoinTokenFailure.Replayed);
+            return JoinTokenFailure.Replayed;
         SweepSeen();
-        return JoinTokenResult.Ok(new JoinTokenIdentity(playerId, name, jwt.Id));
+        return new JoinTokenIdentity(playerId, name, jwt.Id);
     }
 
     bool HasKey(string? kid) => !string.IsNullOrEmpty(kid) && _keys.Any(k => k.KeyId == kid);
@@ -173,11 +171,10 @@ public enum JoinTokenFailure
 /// <summary>The pilot identity a verified join token carries: (`sub`, `name`), plus its `jti`.</summary>
 public sealed record JoinTokenIdentity(Guid PlayerId, string DisplayName, string Jti);
 
-public readonly record struct JoinTokenResult(JoinTokenIdentity? Identity, JoinTokenFailure? Failure)
-{
-    public bool IsValid => Identity is not null;
-
-    public static JoinTokenResult Ok(JoinTokenIdentity identity) => new(identity, null);
-
-    public static JoinTokenResult Fail(JoinTokenFailure failure) => new(null, failure);
-}
+/// <summary>
+/// What <see cref="JoinTokenVerifier.VerifyAsync"/> decided: the identity the token carries, or why it
+/// was refused. A union (C# 15), so exactly one case holds and a caller can't read an identity off a
+/// refusal; the pair of nullables it replaced needed a <c>!</c> at the call site. Match it with
+/// <c>is JoinTokenIdentity id</c> / <c>is JoinTokenFailure.Replayed</c>.
+/// </summary>
+public union JoinTokenResult(JoinTokenIdentity, JoinTokenFailure);

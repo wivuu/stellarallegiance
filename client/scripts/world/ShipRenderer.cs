@@ -194,7 +194,7 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
 
     // ---- IShipQuery + coordinator handshakes ----------------------------------------------------
 
-    public IReadOnlyDictionary<ulong, Node3D> Nodes => _nodes;
+    public Dictionary<ulong, Node3D> Nodes => _nodes;
 
     public bool TryGetShield(ulong shipId, out float shield) => _shield.TryGetValue(shipId, out shield);
 
@@ -247,7 +247,7 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
     // Live enemy ship nodes (team != local team) with HUD presence. Shared scratch — read immediately.
     // Fog eyeball tier: an enemy NOT in the radar-visible set is streamed for its MESH only (no HUD/
     // targeting presence), so it's excluded here; the 3D mesh keeps rendering because it lives in _nodes.
-    public IReadOnlyList<RemoteShip> EnemyShips()
+    public List<RemoteShip> EnemyShips()
     {
         _enemyScratch.Clear();
         if (_player.MarkerTeam is byte lt)
@@ -268,7 +268,7 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
 
     // Live friendly ship nodes (team == local team, including allied pods). The local ship is a
     // PredictionController (not in _nodes) so it's naturally excluded.
-    public IReadOnlyList<RemoteShip> FriendlyShips()
+    public List<RemoteShip> FriendlyShips()
     {
         _friendlyScratch.Clear();
         if (_player.MarkerTeam is byte lt)
@@ -334,7 +334,7 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
     // the raw wire velocity, attitude by the local angular velocity (same convention the interpolator
     // extrapolates with), and vel = the SAME wire velocity — so pos and vel come from one instant. When
     // the sample is missing, fall back to today's rendered pose + eased velocity.
-    public IReadOnlyList<Collide.MovingShip> ShipObstacles(uint targetTick)
+    public List<Collide.MovingShip> ShipObstacles(uint targetTick)
     {
         _shipObstacleScratch.Clear();
         _shipObstacleRendered.Clear();

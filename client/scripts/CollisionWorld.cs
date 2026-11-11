@@ -26,7 +26,10 @@ public sealed class CollisionWorld
 
     private readonly Dictionary<uint, List<Entry>> _src = new();
     private readonly Dictionary<uint, List<Collide.StaticBody>> _live = new(); // reused output buffers
-    private static readonly Collide.StaticBody[] Empty = System.Array.Empty<Collide.StaticBody>();
+
+    // Returned for a sector with no bodies. A List (not an array) so BodiesIn can return the concrete
+    // type and callers enumerate without boxing; nobody adds to it.
+    private static readonly List<Collide.StaticBody> Empty = new(0);
 
     // Per-rock rebuild info so a live mining shrink (MsgRockUpdate) can rescale a rock's body ABSOLUTELY
     // to the new radius (matching the server's absolute rescale), not by compounding a factor. Index is
@@ -60,7 +63,7 @@ public sealed class CollisionWorld
     private readonly Dictionary<ulong, uint> _sphereSector = new(); // rockId → sector (for removal)
 
     // Bodies in a sector with their rotation advanced to sim time t (seconds = tick * FlightModel.Dt).
-    public IReadOnlyList<Collide.StaticBody> BodiesIn(uint sector, float t)
+    public List<Collide.StaticBody> BodiesIn(uint sector, float t)
     {
         if (!_src.TryGetValue(sector, out var src))
             return Empty;

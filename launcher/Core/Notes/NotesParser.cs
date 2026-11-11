@@ -353,23 +353,19 @@ public static class NotesParser
 
         var sb = new StringBuilder(line.Length);
         int i = 0;
-        while (i < line.Length)
+        scan: while (i < line.Length)
         {
             if (line[i] == '&')
             {
-                bool matched = false;
                 foreach (var (entity, value) in HtmlEntities)
                 {
                     if (i + entity.Length <= line.Length && string.CompareOrdinal(line, i, entity, 0, entity.Length) == 0)
                     {
                         sb.Append(value);
                         i += entity.Length;
-                        matched = true;
-                        break;
+                        continue scan;
                     }
                 }
-                if (matched)
-                    continue;
             }
             sb.Append(line[i]);
             i++;

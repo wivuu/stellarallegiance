@@ -491,22 +491,52 @@ public sealed class BoltRenderer
 
     public static float BoltHalfLength(float boltLength) => (boltLength > 0f ? boltLength : DefaultBoltLength) * 0.5f;
 
+    private readonly Dictionary<(float Radius, float Height), CylinderMesh> _boltMeshes = new();
+
+    // This frame's visible bolt targets, gathered ONCE (one Visible + GlobalPosition read per target)
+    // and then tested against every bolt in plain memory — reading them inside the per-bolt loop cost
+    // two native calls per bolt per ship.
+    private readonly List<(ulong Id, Vector3 Pos)> _shipTargets = new();
+    private readonly List<(Vector3 Pos, float Radius)> _probeTargets = new();
+    private readonly List<Vector3> _alephTargets = new();
+
+    private void GatherBoltTargets()
+    {
+        _shipTargets.Clear();
+        foreach (var (shipId, ship) in _ships.Nodes)
+            if (ship.Visible)
+                _shipTargets.Add((shipId, ship.GlobalPosition));
+        _probeTargets.Clear();
+        foreach (var probe in _probes.Nodes.Values)
+            if (probe.Visible)
+                _probeTargets.Add((probe.GlobalPosition, Mathf.Max(VisualHitRadius, probe.HitRadius)));
+        _alephTargets.Clear();
+        foreach (var node in _aleph.Nodes.Values)
+            if (node.Visible)
+                _alephTargets.Add(node.GlobalPosition);
+    }
+
     private MeshInstance3D NewProjectileMesh(float radius, float height, bool isHeal)
     {
         float r = radius > 0f ? radius : 0.22f;
         float h = height > 0f ? height : DefaultBoltLength;
-        return new MeshInstance3D
-        {
-            // Slim tracer bolt. The cylinder's long axis is local +Y; rotate it to local +Z so it runs along
-            // ProjectileView's forward, which is aimed down the bolt's velocity.
-            Mesh = new CylinderMesh
+        // One shared mesh per authored bolt size: every shot of a weapon draws the same cylinder, so
+        // building (and uploading) a fresh one per bolt was pure churn. The key space is the handful of
+        // sizes the weapon defs author; the material stays per instance (MaterialOverride below).
+        if (!_boltMeshes.TryGetValue((r, h), out var mesh))
+            _boltMeshes[(r, h)] = mesh = new CylinderMesh
             {
                 TopRadius = r,
                 BottomRadius = r,
                 Height = h,
                 RadialSegments = 8,
                 Rings = 1,
-            },
+            };
+        return new MeshInstance3D
+        {
+            // Slim tracer bolt. The cylinder's long axis is local +Y; rotate it to local +Z so it runs along
+            // ProjectileView's forward, which is aimed down the bolt's velocity.
+            Mesh = mesh,
             MaterialOverride = isHeal ? _healBoltMat : _projectileMat,
             RotationDegrees = new Vector3(-90f, 0f, 0f),
             // Self-lit glowing tracers: casting shadows would be wasteful and wrong-looking.
@@ -525,24 +555,27 @@ public sealed class BoltRenderer
             return;
 
         uint localSector = _sectors.LocalSector;
-        for (int i = _bolts.Count - 1; i >= 0; i--)
+        bool gathered = false; // targets are gathered on the first visible bolt (none visible = no work)
+        // A bolt consumed by a ship or probe skips the remaining target kinds: `continue bolts`.
+        bolts: for (int i = _bolts.Count - 1; i >= 0; i--)
         {
             var pv = _bolts[i];
             if (!pv.Visible)
                 continue;
+            if (!gathered)
+            {
+                GatherBoltTargets();
+                gathered = true;
+            }
             Vector3 b = pv.GlobalPosition;
             Vector3 a = b - pv.Velocity * (float)delta; // swept path across this frame
-            bool consumed = false;
-            foreach (var (shipId, ship) in _ships.Nodes)
+            foreach (var (shipId, c) in _shipTargets)
             {
                 // Never spark on the firing ship. Skipping by owner id (rather than a static muzzle-distance
                 // gate) holds even when the ship flies forward with its own bolt — flying straight while
                 // shooting no longer sparks on your own hull.
                 if (shipId == pv.OwnerShipId)
                     continue;
-                if (!ship.Visible)
-                    continue;
-                Vector3 c = ship.GlobalPosition;
                 Vector3 hit = ClosestPointOnSegment(a, b, c);
                 if (c.DistanceSquaredTo(hit) <= VisualHitRadius * VisualHitRadius)
                 {
@@ -575,21 +608,14 @@ public sealed class BoltRenderer
                     }
                     pv.QueueFree();
                     _bolts.RemoveAt(i);
-                    consumed = true;
-                    break;
+                    continue bolts;
                 }
             }
-            if (consumed)
-                continue;
 
             // A deployed probe is a solid, shootable object too: spark + consume the bolt where it meets a
             // visible probe (the server resolved the real damage). Team-agnostic, like ships.
-            foreach (var (probeId, probe) in _probes.Nodes)
+            foreach (var (c, r) in _probeTargets)
             {
-                if (!probe.Visible)
-                    continue;
-                Vector3 c = probe.GlobalPosition;
-                float r = Mathf.Max(VisualHitRadius, probe.HitRadius);
                 Vector3 hit = ClosestPointOnSegment(a, b, c);
                 if (c.DistanceSquaredTo(hit) <= r * r)
                 {
@@ -597,21 +623,15 @@ public sealed class BoltRenderer
                     SfxManager.Instance?.PlayAt(SfxManager.SfxId.Impact, hit, pitch: 0.92f + GD.Randf() * 0.16f);
                     pv.QueueFree();
                     _bolts.RemoveAt(i);
-                    consumed = true;
-                    break;
+                    continue bolts;
                 }
             }
-            if (consumed)
-                continue;
 
             // An aleph is a solid barrier: the server already stopped the shot with no damage
             // (Simulation.FireBolt), so mirror that visually by absorbing the tracer at the gate mouth — no
             // spark, it just vanishes into the vortex. Team-agnostic like ships/probes.
-            foreach (var node in _aleph.Nodes.Values)
+            foreach (var c in _alephTargets)
             {
-                if (!node.Visible)
-                    continue;
-                Vector3 c = node.GlobalPosition;
                 Vector3 hit = ClosestPointOnSegment(a, b, c);
                 if (c.DistanceSquaredTo(hit) <= AlephView.BlockRadius * AlephView.BlockRadius)
                 {
