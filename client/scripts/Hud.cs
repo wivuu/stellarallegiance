@@ -26,6 +26,7 @@ public partial class Hud : CanvasLayer
     private AlertBox? _faultAlert;
     private int _faultVersion = -1;
     private Label _fps = null!;
+    private int _fpsShown = -1; // FPS value the plain label last rendered (-1 = none, or the stats line owns it)
     private double _statLogAccum; // throttles the [render-stats] log line (see StressRender.ShowStats)
     private bool _measureEnabled; // one-shot: turn on the viewport's GPU/CPU render-time meters
     private Rid _viewportRid;
@@ -331,7 +332,7 @@ public partial class Hud : CanvasLayer
         if (best != null)
             TargetMarkers.SetFocus(best.ShipId);
 
-        static RemoteShip? Nearest(System.Collections.Generic.IReadOnlyList<RemoteShip> ships, Vector3 from)
+        static RemoteShip? Nearest(System.Collections.Generic.List<RemoteShip> ships, Vector3 from)
         {
             RemoteShip? pick = null;
             float bestD2 = float.MaxValue;
@@ -526,6 +527,7 @@ public partial class Hud : CanvasLayer
             gpuMs = RenderingServer.ViewportGetMeasuredRenderTimeGpu(_viewportRid);
             rcpuMs = RenderingServer.ViewportGetMeasuredRenderTimeCpu(_viewportRid);
             procMs = Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000.0;
+            _fpsShown = -1; // the plain label must repaint when the stats line turns off
             _fps.Text =
                 $"FPS {Engine.GetFramesPerSecond()}  DRAW {draws}  GPU {gpuMs:F1}  RCPU {rcpuMs:F1}  PROC {procMs:F1}ms  fx={StressRender.Fx}";
             // Accumulate proc_ms EVERY frame so the [perf-buckets] report can average it over the same
@@ -535,7 +537,13 @@ public partial class Hud : CanvasLayer
         }
         else
         {
-            _fps.Text = $"FPS: {Engine.GetFramesPerSecond()}";
+            // The reading only changes about once a second: rebuild the label text when it does.
+            int fps = (int)Engine.GetFramesPerSecond();
+            if (fps != _fpsShown)
+            {
+                _fpsShown = fps;
+                _fps.Text = $"FPS: {fps}";
+            }
         }
 
         // Per-frame render-hitch tally for the [interp-stats] report (global, not per-tier).

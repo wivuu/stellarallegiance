@@ -115,7 +115,7 @@ public sealed class SalvageRenderer
     // ProbeRenderer.Visible()'s sector filter via Node.Visible — the stream is already anchor-sector
     // and fog scoped, so whatever is here is exactly what the pilot may see. Returns a shared scratch
     // list; read it immediately.
-    public IReadOnlyList<(Vector3 Pos, byte Team, string Label)> Visible()
+    public List<(Vector3 Pos, byte Team, string Label)> Visible()
     {
         _scratch.Clear();
         foreach (var view in _views.Values)
