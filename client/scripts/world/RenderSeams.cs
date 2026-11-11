@@ -64,7 +64,7 @@ public interface IRadarVisibility
 // Read-only view of the live ship nodes, for the bolt/collision/mining/construction/fog/HUD consumers.
 public interface IShipQuery
 {
-    IReadOnlyDictionary<ulong, Node3D> Nodes { get; }
+    Dictionary<ulong, Node3D> Nodes { get; }
     bool TryGetShield(ulong shipId, out float shield);
     PredictionController? LocalShip { get; }
     int Count { get; }
@@ -75,19 +75,19 @@ public interface IShipQuery
 // collides against where each remote ship IS at that tick, not its interp-delayed rendered pose.
 public interface IShipObstacleSource
 {
-    IReadOnlyList<Collide.MovingShip> ShipObstacles(uint targetTick);
+    List<Collide.MovingShip> ShipObstacles(uint targetTick);
 }
 
 // Read-only view of the live probe nodes, for the bolt-impact sweep (coordinator → ProbeRenderer in C3).
 public interface IProbeQuery
 {
-    IReadOnlyDictionary<ulong, ProbeView> Nodes { get; }
+    Dictionary<ulong, ProbeView> Nodes { get; }
 }
 
 // Read-only view of the live aleph-gate nodes, for the bolt-impact sweep (implemented by AlephRenderer).
 public interface IAlephQuery
 {
-    IReadOnlyDictionary<ulong, Node3D> Nodes { get; }
+    Dictionary<ulong, Node3D> Nodes { get; }
 }
 
 // The live constructor build stream, for the collision thud gate + rock-lock suppression

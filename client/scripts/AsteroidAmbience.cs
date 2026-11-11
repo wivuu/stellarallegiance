@@ -97,8 +97,8 @@ public partial class AsteroidAmbience : Node
         float delta,
         Vector3 listenerPos,
         uint sector,
-        IReadOnlyDictionary<ulong, Node3D> asteroids,
-        IReadOnlyDictionary<ulong, ProbeView> probes
+        Dictionary<ulong, Node3D> asteroids,
+        Dictionary<ulong, ProbeView> probes
     )
     {
         EnsurePool();
@@ -107,12 +107,7 @@ public partial class AsteroidAmbience : Node
         UpdateProbePings(delta, listenerPos, sector, probes);
     }
 
-    private void UpdateAsteroidHum(
-        float delta,
-        Vector3 listenerPos,
-        uint sector,
-        IReadOnlyDictionary<ulong, Node3D> asteroids
-    )
+    private void UpdateAsteroidHum(float delta, Vector3 listenerPos, uint sector, Dictionary<ulong, Node3D> asteroids)
     {
         // Pass 1 — service latched emitters: drop any whose rock vanished, left the sector, or drifted past the
         // unlatch range; otherwise glue the emitter to the rock and shape its volume by proximity.
@@ -190,12 +185,7 @@ public partial class AsteroidAmbience : Node
         return false;
     }
 
-    private void UpdateProbePings(
-        float delta,
-        Vector3 listenerPos,
-        uint sector,
-        IReadOnlyDictionary<ulong, ProbeView> probes
-    )
+    private void UpdateProbePings(float delta, Vector3 listenerPos, uint sector, Dictionary<ulong, ProbeView> probes)
     {
         var sfx = SfxManager.Instance;
         if (sfx == null)

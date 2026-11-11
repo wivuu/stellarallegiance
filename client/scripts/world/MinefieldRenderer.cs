@@ -42,7 +42,7 @@ public sealed class MinefieldRenderer
     public void NetMinefieldGone(ulong fieldId) => _minefields.Remove(fieldId);
 
     // Pass-through to the minefield feed for the HUD mine glyph (mirrors ProbeRenderer.Visible()).
-    public IReadOnlyList<(Vector3 Pos, byte Team)> VisibleMinefields() => _minefields.VisibleMinefields();
+    public List<(Vector3 Pos, byte Team)> VisibleMinefields() => _minefields.VisibleMinefields();
 
     // Drop transient chaff/minefield visuals — on a lobby transition (NetSetMatch) and world rebuild
     // (Reset), so a stale hazard from the finished match doesn't linger into the next one.

@@ -20,8 +20,8 @@ public sealed class ClipCache
     private readonly List<(Vector3 Pos, uint Sector, MeshRaycaster? Ray)> _bases = new();
 
     // Read views for the bolt-TTL clip + sun-occlusion pass (iterate immediately; don't retain).
-    public IReadOnlyList<(Vector3 Pos, float Radius, uint Sector)> Asteroids => _asteroids;
-    public IReadOnlyList<(Vector3 Pos, uint Sector, MeshRaycaster? Ray)> Bases => _bases;
+    public List<(Vector3 Pos, float Radius, uint Sector)> Asteroids => _asteroids;
+    public List<(Vector3 Pos, uint Sector, MeshRaycaster? Ray)> Bases => _bases;
 
     // Append an asteroid occluder and remember its index for O(1) radius updates. `radius` is already the
     // collision-scaled clip radius (the caller applies AsteroidCollisionScale).
