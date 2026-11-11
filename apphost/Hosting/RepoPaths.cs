@@ -17,7 +17,7 @@ public sealed record RepoPaths(string Root)
             LauncherDir,
             "bin",
             "Debug",
-            "net10.0",
+            "net11.0",
             OperatingSystem.IsWindows() ? "StellarLauncher.exe" : "StellarLauncher"
         );
 

@@ -5,7 +5,7 @@
        tests/PublicLobbyTest suite share ONE model + migration set. Postgres only; schema is
        snake_cased by EFCore.NamingConventions; display names are citext. -->
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <InvariantGlobalization>true</InvariantGlobalization>

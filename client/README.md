@@ -1,6 +1,6 @@
 # client/
 
-The **Godot 4.7 (C#/.NET 10) game client**. It renders the world, takes input, and runs
+The **Godot 4.7 (C#/.NET 11) game client**. It renders the world, takes input, and runs
 client-side prediction — but it is **never** authoritative. It predicts the local ship,
 interpolates remote ships, and reconciles everything against the authoritative 20 Hz snapshots
 streamed by [`server/`](../server). All content (world layout, ship/asteroid catalogs, tuning
@@ -59,7 +59,7 @@ aspire resource client launch --mode autofly --godot-args "…"  # extra/custom 
 Or click **Start** / **Launch client** on the `client` resource in the Aspire dashboard. Either
 path rebuilds the client C# fresh before launching so Godot can't run a stale assembly against a
 rebuilt server (which would cause silent protocol skew). See the root [README](../README.md) and
-[QUICKSTART](../QUICKSTART.md) for prerequisites (Aspire CLI, Docker, Godot Mono build, .NET 10
+[QUICKSTART](../QUICKSTART.md) for prerequisites (Aspire CLI, Docker, Godot Mono build, .NET 11
 SDK).
 
 ### Account sign-in
