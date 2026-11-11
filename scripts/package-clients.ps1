@@ -221,7 +221,7 @@ function Export-Game {
         # The real proof is the game assembly in every data_<assembly>_<platform>_<arch> folder.
         $dataRoot = if ($IsMacOS) { Join-Path $target 'Contents/Resources' } else { Split-Path $target -Parent }
         $dataDirs = @(Get-ChildItem -LiteralPath $dataRoot -Directory -Filter "data_${GameAssembly}_*" -ErrorAction SilentlyContinue)
-        if ($dataDirs.Count -eq 0) { Fail "export has no .NET data folder (data_${GameAssembly}_*) under $dataRoot: Godot's dotnet publish failed, see 'Failed to build project' in the export output above" }
+        if ($dataDirs.Count -eq 0) { Fail "export has no .NET data folder (data_${GameAssembly}_*) under ${dataRoot}: Godot's dotnet publish failed, see 'Failed to build project' in the export output above" }
         foreach ($d in $dataDirs) {
             if (-not (Test-Path -LiteralPath (Join-Path $d.FullName "$GameAssembly.dll"))) { Fail "export folder $($d.Name) has no $GameAssembly.dll: Godot's dotnet publish failed" }
         }
