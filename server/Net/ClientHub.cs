@@ -326,6 +326,9 @@ public sealed partial class ClientHub
     // Per-player roster (name/team/ready/ship) advertised to the public lobby's server browser.
     public List<LobbyEntry> RosterSnapshot() => _lobby.Snapshot(id => _sim.ShipIdOf(id), _players.PlayerIdOf);
 
+    // True when RosterSnapshot would be empty, without building it (no list, no closures).
+    public bool RosterEmpty => _lobby.IsEmpty;
+
     // This server's relationship to the public lobby (WP2.1: device-code auth, Verified listing,
     // join-token verifier) — NoLobbyIdentity.Instance when unlisted. LobbyRegistrar.FromEnv builds
     // the real one; Program.cs assigns it here right after construction. WP2.2 (Hello join tokens)
