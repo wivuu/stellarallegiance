@@ -58,7 +58,7 @@ public sealed class FogStore : IContactLostSink, IRadarVisibility
     // rendered row for that id sits within GhostLiveSuppressDist of the ghost (avoids doubling the marker on
     // a re-spotted / eyeball-streaming ship). A live row elsewhere does NOT suppress the ghost — you can see
     // a mesh here and a stale contact there.
-    public IReadOnlyList<GhostContact> GhostContacts(uint sector)
+    public List<GhostContact> GhostContacts(uint sector)
     {
         _ghostScratch.Clear();
         foreach (var g in _ghosts.Values)
@@ -100,7 +100,7 @@ public sealed class FogStore : IContactLostSink, IRadarVisibility
     // silent (radar contacts only). Enemy contacts play the enemy sting, friendlies/neutrals the neutral
     // tone; a radar contact is an enemy by construction, so enemy is the norm. The blip is positional —
     // panned toward the first new contact's direction from the local ship.
-    public void NetSetContacts(IReadOnlyList<GhostContact> ghosts, IReadOnlyList<ulong> radarIds)
+    public void NetSetContacts(List<GhostContact> ghosts, List<ulong> radarIds)
     {
         bool anyNew = false;
         bool enemyTone = false;
@@ -153,7 +153,7 @@ public sealed class FogStore : IContactLostSink, IRadarVisibility
 
     // World position of a radar contact: its live rendered row if present, else its ghost's frozen pose from
     // the incoming set. False when neither is known (can't place the blip → caller pans off).
-    private bool TryContactPos(ulong id, IReadOnlyList<GhostContact> ghosts, out Vector3 pos)
+    private bool TryContactPos(ulong id, List<GhostContact> ghosts, out Vector3 pos)
     {
         if (_ships.Nodes.TryGetValue(id, out var node))
         {
@@ -172,7 +172,7 @@ public sealed class FogStore : IContactLostSink, IRadarVisibility
 
     // Whether a contact id belongs to the local team (a friendly). Resolves the team from the live rendered
     // row or the incoming ghost set; unknown → treated as hostile (the default for radar).
-    private bool ContactIsFriendly(ulong id, IReadOnlyList<GhostContact> ghosts)
+    private bool ContactIsFriendly(ulong id, List<GhostContact> ghosts)
     {
         if (_player.LocalTeam is not byte lt)
             return false;

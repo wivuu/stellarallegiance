@@ -83,7 +83,7 @@ public sealed class EnvironmentRenderer
     // (few, always worth a shadow) plus the nearest rocks within ShadowOccluderRadius (extended by each
     // rock's own radius so large rocks reach farther). Each is (its node, its LOCAL-frame hull vertices) for
     // SectorEnvironment to bake a spin-tracking shadow volume parented to the node. Nearest-first, backstopped.
-    private IReadOnlyList<(Node3D Node, Vector3[] LocalVerts)> GatherShadowOccluders(uint sector, Vector3 refPos)
+    private List<(Node3D Node, Vector3[] LocalVerts)> GatherShadowOccluders(uint sector, Vector3 refPos)
     {
         _occluderScratch.Clear();
         foreach (var (node, _, _, _) in _bases.List)

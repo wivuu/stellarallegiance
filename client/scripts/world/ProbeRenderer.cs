@@ -38,7 +38,7 @@ public sealed class ProbeRenderer : IProbeQuery
     }
 
     // IProbeQuery — the live probe nodes, for BoltRenderer's impact sweep.
-    public IReadOnlyDictionary<ulong, ProbeView> Nodes => _probes;
+    public Dictionary<ulong, ProbeView> Nodes => _probes;
 
     public void NetUpsert(Probe row)
     {
@@ -91,7 +91,7 @@ public sealed class ProbeRenderer : IProbeQuery
     // set is already owner-team-only plus radar-detected enemy probes, so whatever's here is exactly
     // "deployed by us or nearby and detected" — the marker pass draws it straight, tinted by each probe's
     // owning team. Returns a shared scratch list — read it immediately.
-    public IReadOnlyList<(Vector3 Pos, byte Team)> Visible()
+    public List<(Vector3 Pos, byte Team)> Visible()
     {
         _probeScratch.Clear();
         foreach (var node in _probes.Values)
