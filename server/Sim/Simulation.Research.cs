@@ -155,8 +155,7 @@ public partial class Simulation
                     Events.ResearchNotices.Add((cid, $"Not enough credits for {dev.Name} ({dev.Price:N0})."));
                     return;
                 }
-                string baseTypeName =
-                    BaseDefForType(World.Bases[baseIdx].BaseTypeId)?.Name
+                string baseTypeName = BaseDefForType(World.Bases[baseIdx].BaseTypeId)?.Name
                     ?? (Content.Bases.Count > 0 ? Content.Bases[0].Name : "Base");
                 string baseName = $"{baseTypeName} {World.SectorName(World.Bases[baseIdx].SectorId)}";
                 if (state.Active.Count < SlotsFor(baseIdx))

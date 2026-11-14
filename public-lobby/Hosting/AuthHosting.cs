@@ -21,23 +21,18 @@ static class AuthHosting
             .AddScheme<AuthenticationSchemeOptions, LobbyBearerHandler>(LobbyBearer.Scheme, displayName: null, _ => { });
         builder
             .Services.AddAuthorizationBuilder()
-            .AddPolicy(
-                LobbyBearer.PlayerPolicy,
-                p =>
-                    p.AddAuthenticationSchemes(LobbyBearer.Scheme)
-                        .RequireAuthenticatedUser()
-                        .RequireClaim(LobbyBearer.KindClaim, LobbySubjectKind.Player)
+            .AddPolicy(LobbyBearer.PlayerPolicy, p =>
+                p.AddAuthenticationSchemes(LobbyBearer.Scheme)
+                    .RequireAuthenticatedUser()
+                    .RequireClaim(LobbyBearer.KindClaim, LobbySubjectKind.Player)
             )
-            .AddPolicy(
-                LobbyBearer.ServerPolicy,
-                p =>
-                    p.AddAuthenticationSchemes(LobbyBearer.Scheme)
-                        .RequireAuthenticatedUser()
-                        .RequireClaim(LobbyBearer.KindClaim, LobbySubjectKind.Server)
+            .AddPolicy(LobbyBearer.ServerPolicy, p =>
+                p.AddAuthenticationSchemes(LobbyBearer.Scheme)
+                    .RequireAuthenticatedUser()
+                    .RequireClaim(LobbyBearer.KindClaim, LobbySubjectKind.Server)
             )
-            .AddPolicy(
-                LobbyBearer.AnyPolicy,
-                p => p.AddAuthenticationSchemes(LobbyBearer.Scheme).RequireAuthenticatedUser()
+            .AddPolicy(LobbyBearer.AnyPolicy, p =>
+                p.AddAuthenticationSchemes(LobbyBearer.Scheme).RequireAuthenticatedUser()
             );
         return builder;
     }

@@ -102,17 +102,13 @@ static class LobbyAuthTests
             });
 
             var delays = new List<TimeSpan>();
-            var session = NewSession(
-                handler,
-                path,
-                (span, _) =>
-                {
-                    delays.Add(span);
-                    // Once the session has fallen into the device flow the credential is already
-                    // lost: stop it there, so a regression FAILS the checks below instead of hanging.
-                    return Task.FromResult(deviceRequests == 0);
-                }
-            );
+            var session = NewSession(handler, path, (span, _) =>
+            {
+                delays.Add(span);
+                // Once the session has fallen into the device flow the credential is already
+                // lost: stop it there, so a regression FAILS the checks below instead of hanging.
+                return Task.FromResult(deviceRequests == 0);
+            });
             var result = await session.AuthenticateAsync(CancellationToken.None);
 
             Check(result == LobbyAuthSession.BootResult.Approved, "boot refresh rides out every gateway failure");

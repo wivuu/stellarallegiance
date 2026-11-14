@@ -86,10 +86,7 @@ public sealed partial class SectorMapPreview : Control
         DrawRect(r, DesignTokens.Well, filled: true);
 
         // Faint alignment grid, then the bracket frame on top.
-        var grid = DesignTokens.BorderLo with
-        {
-            A = 0.06f,
-        };
+        var grid = DesignTokens.BorderLo with { A = 0.06f };
         for (float x = GridStep; x < Size.X; x += GridStep)
             DrawLine(new Vector2(x, 0), new Vector2(x, Size.Y), grid);
         for (float y = GridStep; y < Size.Y; y += GridStep)

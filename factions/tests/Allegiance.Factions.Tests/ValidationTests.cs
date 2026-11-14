@@ -73,9 +73,8 @@ public class ValidationTests
         var result = CoreValidator.Validate(core);
 
         Assert.False(result.IsValid);
-        Assert.Contains(
-            result.Errors,
-            e => e.Contains("bad-nanite") && e.Contains("is-healing") && e.Contains("can-damage-base")
+        Assert.Contains(result.Errors, e =>
+            e.Contains("bad-nanite") && e.Contains("is-healing") && e.Contains("can-damage-base")
         );
     }
 
@@ -478,9 +477,8 @@ public class ValidationTests
         var result = CoreValidator.Validate(core);
 
         Assert.False(result.IsValid);
-        Assert.Contains(
-            result.Errors,
-            e => e.Contains("allowed-parts[shield]") && e.Contains("afterburner 'booster'") && e.Contains("shields")
+        Assert.Contains(result.Errors, e =>
+            e.Contains("allowed-parts[shield]") && e.Contains("afterburner 'booster'") && e.Contains("shields")
         );
     }
 
@@ -509,9 +507,8 @@ public class ValidationTests
         var result = CoreValidator.Validate(core);
 
         Assert.False(result.IsValid);
-        Assert.Contains(
-            result.Errors,
-            e => e.Contains("preferred-parts") && e.Contains("shield 'sm-shield'") && e.Contains("allowed-parts[shield]")
+        Assert.Contains(result.Errors, e =>
+            e.Contains("preferred-parts") && e.Contains("shield 'sm-shield'") && e.Contains("allowed-parts[shield]")
         );
         Assert.DoesNotContain(result.Errors, e => e.Contains("preferred-parts") && e.Contains("'booster'"));
     }
@@ -542,9 +539,8 @@ public class ValidationTests
         var result = CoreValidator.Validate(core);
 
         Assert.False(result.IsValid);
-        Assert.Contains(
-            result.Errors,
-            e => e.Contains("afterburner 'booster' successor-part-id") && e.Contains("same kind")
+        Assert.Contains(result.Errors, e =>
+            e.Contains("afterburner 'booster' successor-part-id") && e.Contains("same kind")
         );
     }
 
@@ -655,9 +651,8 @@ public class ValidationTests
         var result = CoreValidator.Validate(core);
 
         Assert.False(result.IsValid);
-        Assert.Contains(
-            result.Errors,
-            e => e.Contains("weapon 'cannon'") && e.Contains("energy-per-shot 60") && e.Contains("never fire")
+        Assert.Contains(result.Errors, e =>
+            e.Contains("weapon 'cannon'") && e.Contains("energy-per-shot 60") && e.Contains("never fire")
         );
     }
 
@@ -812,9 +807,8 @@ public class ValidationTests
         var result = CoreValidator.Validate(core);
 
         Assert.False(result.IsValid);
-        Assert.Contains(
-            result.Errors,
-            e => e.Contains("must resolve to a missile, mine, chaff, or probe") && e.Contains("rack")
+        Assert.Contains(result.Errors, e =>
+            e.Contains("must resolve to a missile, mine, chaff, or probe") && e.Contains("rack")
         );
     }
 

@@ -1132,12 +1132,8 @@ public sealed partial class Simulation
                         // A fresh pod's ApDock* FSM starts clean (field initializers); a mid-
                         // approach retarget self-heals via SelectDockDoor + the phase timeouts.
                         if (World.BaseDockFacesOf(b.BaseTypeId).Length > 0 && World.BaseHullOf(b.BaseTypeId) is not null)
-                            return DockApproach(
-                                me,
-                                tick,
-                                b,
-                                me.Stats,
-                                (p, d) => AvoidObstacles(me.SectorId, p, d, excludeBaseId: b.Id)
+                            return DockApproach(me, tick, b, me.Stats, (p, d) =>
+                                AvoidObstacles(me.SectorId, p, d, excludeBaseId: b.Id)
                             );
                         // Without a model, fall back to the base center (pre-hull legacy dock sphere).
                         return PigSteerTo(me, myPos, myRot, b.Pos, 1f, excludeBaseId: b.Id);
@@ -1252,13 +1248,8 @@ public sealed partial class Simulation
         float thrustWhenFacing,
         ulong excludeBaseId = 0
     ) =>
-        AutoSteer.SteerToPoint(
-            myPos,
-            myRot,
-            point,
-            PigTurnGain,
-            thrustWhenFacing,
-            (p, d) => AvoidObstacles(me.SectorId, p, d, excludeBaseId: excludeBaseId)
+        AutoSteer.SteerToPoint(myPos, myRot, point, PigTurnGain, thrustWhenFacing, (p, d) =>
+            AvoidObstacles(me.SectorId, p, d, excludeBaseId: excludeBaseId)
         );
 
     private ShipInputState PigAttackPoint(ShipSim me, Vec3 myPos, Quat myRot, Vec3 point, float radius, ulong baseLockId)
@@ -1267,14 +1258,8 @@ public sealed partial class Simulation
         // radius + PigStandoff * 0.6f). The shelled base itself is excluded from avoidance
         // (the standoff schedule owns its clearance); baseLockId = BaseLockFlag | baseId.
         ulong attackedBaseId = baseLockId == 0 ? 0 : baseLockId & ~GameContent.BaseLockFlag;
-        ShipInputState input = AutoSteer.AttackPoint(
-            myPos,
-            myRot,
-            point,
-            radius,
-            PigStandoff,
-            PigTurnGain,
-            (p, d) => AvoidObstacles(me.SectorId, p, d, excludeBaseId: attackedBaseId)
+        ShipInputState input = AutoSteer.AttackPoint(myPos, myRot, point, radius, PigStandoff, PigTurnGain, (p, d) =>
+            AvoidObstacles(me.SectorId, p, d, excludeBaseId: attackedBaseId)
         );
 
         float dist = (point - myPos).Length();

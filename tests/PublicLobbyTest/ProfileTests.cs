@@ -148,8 +148,7 @@ static partial class Suite
         var userManager = services.GetRequiredService<UserManager<LobbyUser>>();
         // By id, not name: the dev grant's LobbyUser is named by its Guid (player id == user id), and
         // SchemaTests seeds an unrelated raw Identity row literally named "vex".
-        var vexUser =
-            await userManager.FindByIdAsync(vex.Subject.Id.ToString())
+        var vexUser = await userManager.FindByIdAsync(vex.Subject.Id.ToString())
             ?? throw new InvalidOperationException("Vex has no Identity user");
         var credentialId = Guid.NewGuid().ToByteArray();
         var seeded = await userManager.AddOrUpdatePasskeyAsync(

@@ -65,92 +65,77 @@ static class AuthEndpoints
             }
         );
 
-        auth.MapPost(
-            "/token",
-            async (HttpContext http, IGrainFactory grains, AccountService accounts, TimeProvider clock) =>
-            {
-                var req = await ReadTokenRequest(http);
-                if (req is null)
-                    return TokenError("invalid_request", "grant_type required");
-                var now = clock.GetUtcNow();
+        auth.MapPost("/token", async (HttpContext http, IGrainFactory grains, AccountService accounts, TimeProvider clock) =>
+        {
+            var req = await ReadTokenRequest(http);
+            if (req is null)
+                return TokenError("invalid_request", "grant_type required");
+            var now = clock.GetUtcNow();
 
-                switch (req.GrantType)
+            switch (req.GrantType)
+            {
+                case LobbyGrantType.DeviceCode:
                 {
-                    case LobbyGrantType.DeviceCode:
+                    if (!IsWellFormedDeviceCode(req.DeviceCode))
+                        return TokenError(LobbyTokenError.InvalidGrant);
+                    var poll = await grains.GetGrain<IDeviceCodeGrain>(req.DeviceCode!).Poll(now);
+                    return poll.Outcome switch
                     {
-                        if (!IsWellFormedDeviceCode(req.DeviceCode))
-                            return TokenError(LobbyTokenError.InvalidGrant);
-                        var poll = await grains.GetGrain<IDeviceCodeGrain>(req.DeviceCode!).Poll(now);
-                        return poll.Outcome switch
-                        {
-                            DevicePollOutcome.Pending => TokenError(LobbyTokenError.AuthorizationPending),
-                            DevicePollOutcome.SlowDown => TokenError(LobbyTokenError.SlowDown),
-                            DevicePollOutcome.Expired => TokenError(LobbyTokenError.ExpiredToken),
-                            DevicePollOutcome.Denied => TokenError(LobbyTokenError.AccessDenied),
-                            DevicePollOutcome.Approved => await IssueNewLineage(
-                                grains,
-                                poll.Kind,
-                                poll.SubjectId!.Value,
-                                now
-                            ),
-                            _ => TokenError(LobbyTokenError.InvalidGrant),
-                        };
-                    }
-                    case LobbyGrantType.RefreshToken:
-                    {
-                        if (
-                            !OpaqueTokens.TryParse(req.RefreshToken, out var prefix, out var lineage)
-                            || prefix != OpaqueTokens.RefreshPrefix
-                        )
-                            return TokenError(LobbyTokenError.InvalidGrant);
-                        // Everything the response needs is resolved BEFORE the rotation commits:
-                        // a rotation the client never hears about strands it on a superseded
-                        // token (see SessionGrain's lost-rotation grace for the last line of
-                        // defence). Preflight applies the same refusal/reuse rules as Refresh.
-                        var session = grains.GetGrain<ISessionGrain>(lineage);
-                        var subject = await session.Preflight(req.RefreshToken!, now);
-                        if (subject is null)
-                            return TokenError(LobbyTokenError.InvalidGrant);
-                        var (refusal, displayName) = await ResolveSubject(grains, subject.Kind, subject.Id, now);
-                        if (refusal is not null)
-                            return refusal;
-                        var issued = await session.Refresh(req.RefreshToken!, now);
-                        return issued is null ? TokenError(LobbyTokenError.InvalidGrant) : TokenOk(issued, displayName!);
-                    }
-                    case LobbyGrantType.Dev:
-                    {
-                        // Headless harnesses only (plan §6 item 1). Refused unless the operator opted in.
-                        if (!DevLoginEnabled)
-                            return TokenError(LobbyTokenError.UnsupportedGrantType);
-                        var name = req.DisplayName?.Trim();
-                        if (
-                            name is null
-                            || name.Length < LobbyLimits.DisplayNameMin
-                            || name.Length > LobbyLimits.DisplayNameMax
-                        )
-                            return TokenError("invalid_request", "display_name must be 3-24 characters");
-                        var player = await accounts.FindOrCreateForDevGrantAsync(name, http.RequestAborted);
-                        return await IssueNewLineage(grains, SubjectKind.Player, player.Id, now);
-                    }
-                    default:
-                        return TokenError(LobbyTokenError.UnsupportedGrantType);
+                        DevicePollOutcome.Pending => TokenError(LobbyTokenError.AuthorizationPending),
+                        DevicePollOutcome.SlowDown => TokenError(LobbyTokenError.SlowDown),
+                        DevicePollOutcome.Expired => TokenError(LobbyTokenError.ExpiredToken),
+                        DevicePollOutcome.Denied => TokenError(LobbyTokenError.AccessDenied),
+                        DevicePollOutcome.Approved => await IssueNewLineage(grains, poll.Kind, poll.SubjectId!.Value, now),
+                        _ => TokenError(LobbyTokenError.InvalidGrant),
+                    };
                 }
+                case LobbyGrantType.RefreshToken:
+                {
+                    if (
+                        !OpaqueTokens.TryParse(req.RefreshToken, out var prefix, out var lineage)
+                        || prefix != OpaqueTokens.RefreshPrefix
+                    )
+                        return TokenError(LobbyTokenError.InvalidGrant);
+                    // Everything the response needs is resolved BEFORE the rotation commits:
+                    // a rotation the client never hears about strands it on a superseded
+                    // token (see SessionGrain's lost-rotation grace for the last line of
+                    // defence). Preflight applies the same refusal/reuse rules as Refresh.
+                    var session = grains.GetGrain<ISessionGrain>(lineage);
+                    var subject = await session.Preflight(req.RefreshToken!, now);
+                    if (subject is null)
+                        return TokenError(LobbyTokenError.InvalidGrant);
+                    var (refusal, displayName) = await ResolveSubject(grains, subject.Kind, subject.Id, now);
+                    if (refusal is not null)
+                        return refusal;
+                    var issued = await session.Refresh(req.RefreshToken!, now);
+                    return issued is null ? TokenError(LobbyTokenError.InvalidGrant) : TokenOk(issued, displayName!);
+                }
+                case LobbyGrantType.Dev:
+                {
+                    // Headless harnesses only (plan §6 item 1). Refused unless the operator opted in.
+                    if (!DevLoginEnabled)
+                        return TokenError(LobbyTokenError.UnsupportedGrantType);
+                    var name = req.DisplayName?.Trim();
+                    if (name is null || name.Length < LobbyLimits.DisplayNameMin || name.Length > LobbyLimits.DisplayNameMax)
+                        return TokenError("invalid_request", "display_name must be 3-24 characters");
+                    var player = await accounts.FindOrCreateForDevGrantAsync(name, http.RequestAborted);
+                    return await IssueNewLineage(grains, SubjectKind.Player, player.Id, now);
+                }
+                default:
+                    return TokenError(LobbyTokenError.UnsupportedGrantType);
             }
-        );
+        });
 
         // Revoke the lineage behind the presented access token (sign-out). Idempotent.
-        auth.MapPost(
-                "/revoke",
-                async (HttpContext http, IGrainFactory grains, AccessTokenCache cache, TimeProvider clock) =>
-                {
-                    var token = http.Request.Headers.Authorization.ToString()["Bearer ".Length..].Trim();
-                    if (!OpaqueTokens.TryParse(token, out _, out var lineage))
-                        return Results.BadRequest();
-                    await grains.GetGrain<ISessionGrain>(lineage).Revoke(clock.GetUtcNow());
-                    cache.Evict(token);
-                    return Results.NoContent();
-                }
-            )
+        auth.MapPost("/revoke", async (HttpContext http, IGrainFactory grains, AccessTokenCache cache, TimeProvider clock) =>
+            {
+                var token = http.Request.Headers.Authorization.ToString()["Bearer ".Length..].Trim();
+                if (!OpaqueTokens.TryParse(token, out _, out var lineage))
+                    return Results.BadRequest();
+                await grains.GetGrain<ISessionGrain>(lineage).Revoke(clock.GetUtcNow());
+                cache.Evict(token);
+                return Results.NoContent();
+            })
             .RequireAuthorization(LobbyBearer.AnyPolicy);
     }
 

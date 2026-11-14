@@ -45,11 +45,8 @@ public sealed class AppParameters
     {
         return new AppParameters
         {
-            GodotPath = b.AddParameter(
-                    "godot-path",
-                    () =>
-                        GodotLocator.Resolve(b.Configuration)
-                        ?? throw new MissingParameterValueException(GodotLocator.Guidance)
+            GodotPath = b.AddParameter("godot-path", () =>
+                    GodotLocator.Resolve(b.Configuration) ?? throw new MissingParameterValueException(GodotLocator.Guidance)
                 )
                 .WithDescription(
                     "Godot 4 .NET (mono) EXECUTABLE (not the macOS .app folder). Auto-detected from GODOT, the "

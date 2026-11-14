@@ -16,10 +16,8 @@ static class ProfileEndpoints
     {
         var me = app.MapGroup("/api/me").RequireAuthorization(LobbyBearer.PlayerPolicy);
 
-        me.MapGet(
-            "",
-            async (HttpContext http, IGrainFactory grains, UserManager<LobbyUser> users) =>
-                await Profile(grains, users, LobbyBearer.SubjectId(http.User))
+        me.MapGet("", async (HttpContext http, IGrainFactory grains, UserManager<LobbyUser> users) =>
+            await Profile(grains, users, LobbyBearer.SubjectId(http.User))
         );
 
         me.MapPatch(

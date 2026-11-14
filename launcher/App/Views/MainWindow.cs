@@ -426,10 +426,8 @@ public sealed class MainWindow : Window
 
         var folders = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
         folders.Children.Add(
-            Button(
-                "OPEN GAME LOG FOLDER",
-                ButtonVariant.Secondary,
-                () => _host?.OpenFolder(_services.FlowOptions.GameLogDir)
+            Button("OPEN GAME LOG FOLDER", ButtonVariant.Secondary, () =>
+                _host?.OpenFolder(_services.FlowOptions.GameLogDir)
             )
         );
         folders.Children.Add(

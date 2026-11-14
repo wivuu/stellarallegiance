@@ -27,22 +27,19 @@ static class OrleansHealth
 
     public static void MapOrleansHealth(this WebApplication app)
     {
-        app.MapGet(
-            "/health/orleans",
-            async (IGrainFactory grains) =>
+        app.MapGet("/health/orleans", async (IGrainFactory grains) =>
+        {
+            const string key = "health";
+            try
             {
-                const string key = "health";
-                try
-                {
-                    var pong = await grains.GetGrain<IPingGrain>(key).Ping();
-                    return pong == $"pong:{key}" ? Results.Text("orleans:ok") : Results.StatusCode(503);
-                }
-                catch
-                {
-                    return Results.StatusCode(503);
-                }
+                var pong = await grains.GetGrain<IPingGrain>(key).Ping();
+                return pong == $"pong:{key}" ? Results.Text("orleans:ok") : Results.StatusCode(503);
             }
-        );
+            catch
+            {
+                return Results.StatusCode(503);
+            }
+        });
 
         app.MapGet(
             "/health/cluster",
@@ -85,25 +82,18 @@ static class OrleansHealth
                                 status = h.Value.ToString(),
                             }),
                             crossSiloOk = stats.Length == active.Length,
-                            stats = active.Zip(
-                                stats,
-                                (silo, s) =>
-                                    new
-                                    {
-                                        silo = silo.ToParsableString(),
-                                        activations = s.ActivationCount,
-                                        cpuPct = Math.Round(s.EnvironmentStatistics.FilteredCpuUsagePercentage, 1),
-                                        memoryMb = Math.Round(
-                                            s.EnvironmentStatistics.FilteredMemoryUsageBytes / 1048576.0,
-                                            1
-                                        ),
-                                        availableMemoryMb = Math.Round(
-                                            s.EnvironmentStatistics.FilteredAvailableMemoryBytes / 1048576.0,
-                                            1
-                                        ),
-                                        overloaded = s.IsOverloaded,
-                                    }
-                            ),
+                            stats = active.Zip(stats, (silo, s) => new
+                                {
+                                    silo = silo.ToParsableString(),
+                                    activations = s.ActivationCount,
+                                    cpuPct = Math.Round(s.EnvironmentStatistics.FilteredCpuUsagePercentage, 1),
+                                    memoryMb = Math.Round(s.EnvironmentStatistics.FilteredMemoryUsageBytes / 1048576.0, 1),
+                                    availableMemoryMb = Math.Round(
+                                        s.EnvironmentStatistics.FilteredAvailableMemoryBytes / 1048576.0,
+                                        1
+                                    ),
+                                    overloaded = s.IsOverloaded,
+                                }),
                         },
                         JsonOpts
                     );

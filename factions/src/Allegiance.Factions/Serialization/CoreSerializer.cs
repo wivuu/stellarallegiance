@@ -97,8 +97,7 @@ public static class CoreSerializer
     /// </summary>
     public static Core Load(string manifestPath)
     {
-        var manifest =
-            Deserializer.Deserialize<Manifest>(File.ReadAllText(manifestPath))
+        var manifest = Deserializer.Deserialize<Manifest>(File.ReadAllText(manifestPath))
             ?? throw new InvalidDataException($"Manifest '{manifestPath}' is empty or invalid.");
         var baseDir = Path.GetDirectoryName(Path.GetFullPath(manifestPath)) ?? ".";
 
