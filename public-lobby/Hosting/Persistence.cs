@@ -41,7 +41,7 @@ static class PersistenceHosting
         // AddDbContextFactory registers BOTH the singleton IDbContextFactory<LobbyDbContext> the
         // grains use (grains are singletons per key with no request scope, and each write is one
         // short-lived context) AND the scoped LobbyDbContext Identity's stores resolve.
-        builder.Services.AddDbContextFactory<LobbyDbContext>(o => o.UseNpgsql(dataSource).UseSnakeCaseNamingConvention());
+        builder.Services.AddDbContextFactory<LobbyDbContext>(o => o.UseNpgsql(dataSource));
 
         builder
             .Services.AddIdentityCore<LobbyUser>(

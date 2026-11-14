@@ -26,7 +26,6 @@ public class LobbyDbContextFactory : IDesignTimeDbContextFactory<LobbyDbContext>
         var options = new DbContextOptionsBuilder<LobbyDbContext>()
             .UseApplicationServiceProvider(appServices)
             .UseNpgsql("Host=localhost;Database=lobby_designtime;Username=postgres;Password=postgres")
-            .UseSnakeCaseNamingConvention()
             .Options;
         return new LobbyDbContext(options);
     }
