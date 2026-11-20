@@ -1,3 +1,14 @@
 {
-    "plansDirectory": "./.claude/plans"
+  "plansDirectory": "./.claude/plans",
+  "extraKnownMarketplaces": {
+    "aspire-skills": {
+      "source": {
+        "source": "github",
+        "repo": "microsoft/aspire-skills"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "aspire@aspire-skills": true
+  }
 }
