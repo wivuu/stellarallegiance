@@ -222,9 +222,9 @@ public partial class PredictionController : Node3D
     // Integrate — in live prediction AND in reconcile replay — the predicted ship is resolved
     // against these with the SAME shared kernel the server uses, so it bounces/stops at the surface
     // immediately instead of sinking in until the authoritative push-out snaps it back.
-    private System.Func<IReadOnlyList<Collide.StaticBody>>? _bodies;
+    private System.Func<List<Collide.StaticBody>>? _bodies;
 
-    public void SetCollisionProvider(System.Func<IReadOnlyList<Collide.StaticBody>> bodies) => _bodies = bodies;
+    public void SetCollisionProvider(System.Func<List<Collide.StaticBody>> bodies) => _bodies = bodies;
 
     // Supplies the other ships in the local sector (interpolated remote poses) plus this hull's own
     // collision hull, so the predicted ship also bounces off SHIPS with the local share of the

@@ -121,6 +121,21 @@ public sealed class FrameApplier
     // Last-applied row per ship so updates hand the renderer (oldRow, newRow) — the shape its
     // LastFireTick bolt-synthesis and warp detection key off.
     private readonly Dictionary<ulong, Ship> _rows = [];
+
+    // The row each ship held BEFORE its current one, kept so the next snapshot can refill it instead
+    // of allocating: a ship's two Ship objects just trade places every snapshot. Safe because nothing
+    // holds a row across frames — _rows and ShipRenderer._lastRow keep the current one, and every
+    // (oldRow, newRow) consumer reads both inside the NetUpdateShip call.
+    private readonly Dictionary<ulong, Ship> _spareRows = [];
+
+    // Whole-set-replace streams refill these in place rather than building a fresh collection per
+    // frame. The receiving store keeps the reference (or copies out of it), so each one has a single
+    // writer (the apply below) and is only ever read between applies, on the main thread.
+    private readonly Dictionary<ulong, ulong> _minerTargets = [];
+    private readonly List<ConstructionRenderer.ConstructorBuild> _constructorBuilds = [];
+    private readonly List<TeamStateStore.ConstructorStatus> _constructorStates = [];
+    private readonly List<FogStore.GhostContact> _ghostScratch = [];
+    private readonly List<ulong> _radarScratch = [];
     private readonly HashSet<ulong> _seenThisSnapshot = [];
 
     // Ghost-ship heal deadline (0 = disarmed). Armed when a lobby roster claims we have NO ship
@@ -196,6 +211,7 @@ public sealed class FrameApplier
     public void ClearEntityCaches()
     {
         _rows.Clear();
+        _spareRows.Clear();
         _missileRows.Clear();
         _minefields.Clear();
         _probes.Clear();
@@ -269,7 +285,7 @@ public sealed class FrameApplier
     // One whole frame per call. The leading byte is the message id (shared/Net/Messages.cs); each
     // case parses with the generated codec, which throws WireFormatException on a malformed frame —
     // the server is trusted, so a bad frame here is a bug, not an input to tolerate.
-    public void Apply(byte[] f)
+    public void Apply(ReadOnlySpan<byte> f)
     {
         if (f.Length == 0)
             return;
@@ -380,10 +396,10 @@ public sealed class FrameApplier
                 // The exact rock each actively-mining miner is harvesting. Whole-set replace; the
                 // renderer only draws a beam for a ship+rock it can see, so an unknown id is harmless.
                 var m = MinerTargetsMessage.Parse(f);
-                var map = new Dictionary<ulong, ulong>(m.Targets.Length);
+                _minerTargets.Clear();
                 foreach (var t in m.Targets)
-                    map[t.ShipId] = t.RockId;
-                _world.Mining.NetUpdateMinerTargets(map);
+                    _minerTargets[t.ShipId] = t.RockId;
+                _world.Mining.NetUpdateMinerTargets(_minerTargets);
                 break;
             }
             case ResearchStateMessage.MsgId:
@@ -394,9 +410,9 @@ public sealed class FrameApplier
                 // Each constructor drone aligning/sinking/building on a rock, driving the build-sphere
                 // VFX. Whole-set replace each frame (a finished/cancelled build drops out).
                 var m = ConstructorBuildsMessage.Parse(f);
-                var list = new List<ConstructionRenderer.ConstructorBuild>(m.Builds.Length);
+                _constructorBuilds.Clear();
                 foreach (var b in m.Builds)
-                    list.Add(
+                    _constructorBuilds.Add(
                         new ConstructionRenderer.ConstructorBuild
                         {
                             ShipId = b.ShipId,
@@ -405,7 +421,7 @@ public sealed class FrameApplier
                             Progress = b.Progress,
                         }
                     );
-                _world.Construction.NetUpdateConstructorBuilds(list);
+                _world.Construction.NetUpdateConstructorBuilds(_constructorBuilds);
                 break;
             }
             case ConstructorStateMessage.MsgId:
@@ -452,6 +468,7 @@ public sealed class FrameApplier
         // where a snapshot raced ahead of the YouAre) so the next snapshot re-inserts it
         // as the predicted local ship rather than leaving it an un-predicted remote.
         _rows.Remove(LocalShipId);
+        _spareRows.Remove(LocalShipId);
         // Our own hull ends any ride-along: the server vacates a spawning gunner's seat, so the crew
         // frame will confirm it — but a YouAre is the earliest, most authoritative "you're flying now".
         // Run this BEFORE NetPromoteLocal for the CAPTAIN-PROMOTION case (the captain left and the
@@ -546,9 +563,9 @@ public sealed class FrameApplier
     // Whole-set replace each frame — a retired constructor drops out (reconcile by omission).
     private void ApplyConstructorState(ConstructorStateMessage m)
     {
-        var list = new List<TeamStateStore.ConstructorStatus>(m.Constructors.Length);
+        _constructorStates.Clear();
         foreach (var c in m.Constructors)
-            list.Add(
+            _constructorStates.Add(
                 new TeamStateStore.ConstructorStatus
                 {
                     Id = c.Id,
@@ -562,7 +579,7 @@ public sealed class FrameApplier
                     LaunchBaseId = c.LaunchBaseId,
                 }
             );
-        _world.TeamState.ApplyConstructorState(list);
+        _world.TeamState.ApplyConstructorState(_constructorStates);
     }
 
     // In-flight guided missiles. Each record upserts the local _missileRows cache and hands the decoded
@@ -948,9 +965,9 @@ public sealed class FrameApplier
     // radar list is eyeball-tier (mesh renders, but WP4 suppresses its marker).
     private void ApplyContacts(ContactsMessage m)
     {
-        var ghosts = new List<FogStore.GhostContact>(m.Ghosts.Length);
+        _ghostScratch.Clear();
         foreach (var g in m.Ghosts)
-            ghosts.Add(
+            _ghostScratch.Add(
                 new FogStore.GhostContact
                 {
                     ShipId = g.ShipId,
@@ -962,9 +979,9 @@ public sealed class FrameApplier
                     Pitch = g.Pitch,
                 }
             );
-        var radar = new List<ulong>(m.Radar.Length);
-        radar.AddRange(m.Radar);
-        _world.Fog.NetSetContacts(ghosts, radar);
+        _radarScratch.Clear();
+        _radarScratch.AddRange(m.Radar);
+        _world.Fog.NetSetContacts(_ghostScratch, _radarScratch);
     }
 
     private void ApplyLobbyState(LobbyStateMessage m)
@@ -1006,6 +1023,7 @@ public sealed class FrameApplier
                     // real YouAre is merely still in flight behind this roster frame.
                     LocalShipId = p.ShipId;
                     _rows.Remove(LocalShipId);
+                    _spareRows.Remove(LocalShipId);
                     _world.Ships.NetPromoteLocal(LocalShipId);
                     Log.Print($"[GameNet] adopted ship {LocalShipId} from lobby roster (YouAre missed?)");
                 }
@@ -1077,7 +1095,7 @@ public sealed class FrameApplier
     // The per-tick ship snapshot. Read straight off the frame with the shared reader (no per-frame
     // record array): header, then one ShipRecord per streamed ship, each turned into the render row
     // the renderer/prediction/interpolation stack keys off.
-    private void ApplySnapshot(byte[] f)
+    private void ApplySnapshot(ReadOnlySpan<byte> f)
     {
         var r = new WireReader(f);
         r.U8(); // message id (dispatched on already)
@@ -1095,44 +1113,46 @@ public sealed class FrameApplier
                 throw new WireFormatException("SnapshotMessage");
 
             _rows.TryGetValue(rec.ShipId, out var prev);
-            var row = new Ship
-            {
-                ShipId = rec.ShipId,
-                Team = rec.Team,
-                Class = (ShipClass)rec.Class,
-                IsPig = rec.IsPig,
-                Autopilot = rec.Autopilot, // server is steering this ship
-                Kind = rec.Kind,
-                IsMining = rec.IsMining, // actively transferring ore (drives beam/roll VFX)
-                ChaffAmmo = rec.ChaffAmmo,
-                MineAmmo = rec.MineAmmo,
-                ProbeAmmo = rec.ProbeAmmo,
-                FuelPodAmmo = rec.FuelPodAmmo,
-                ThreatLock = rec.ThreatLock,
-                SectorId = rec.Sector,
-                PosX = rec.Pos.X,
-                PosY = rec.Pos.Y,
-                PosZ = rec.Pos.Z,
-                RotX = rec.Rot.X,
-                RotY = rec.Rot.Y,
-                RotZ = rec.Rot.Z,
-                RotW = rec.Rot.W,
-                VelX = rec.Vel.X,
-                VelY = rec.Vel.Y,
-                VelZ = rec.Vel.Z,
-                AngVelX = rec.AngVel.X,
-                AngVelY = rec.AngVel.Y,
-                AngVelZ = rec.AngVel.Z,
-                AbPower = rec.AbPower,
-                Fuel = rec.Fuel,
-                Health = rec.Health,
-                Shield = rec.Shield,
-                LastInputTick = rec.LastInputTick,
-                LastFireTick = rec.LastFireTick,
-                MissileAmmo = rec.MissileAmmo,
-                LockState = rec.LockState,
-                Pools = rec.Pools, // exact: the pools LastInputTick's fire phase started with
-            };
+            // Refill the row this ship held two snapshots ago (see _spareRows). EVERY field is
+            // assigned below (Mass just after), so nothing stale survives the reuse — a field added
+            // to Ship must be set here too.
+            if (!_spareRows.TryGetValue(rec.ShipId, out var row))
+                row = new Ship();
+            row.ShipId = rec.ShipId;
+            row.Team = rec.Team;
+            row.Class = (ShipClass)rec.Class;
+            row.IsPig = rec.IsPig;
+            row.Autopilot = rec.Autopilot; // server is steering this ship
+            row.Kind = rec.Kind;
+            row.IsMining = rec.IsMining; // actively transferring ore (drives beam/roll VFX)
+            row.ChaffAmmo = rec.ChaffAmmo;
+            row.MineAmmo = rec.MineAmmo;
+            row.ProbeAmmo = rec.ProbeAmmo;
+            row.FuelPodAmmo = rec.FuelPodAmmo;
+            row.ThreatLock = rec.ThreatLock;
+            row.SectorId = rec.Sector;
+            row.PosX = rec.Pos.X;
+            row.PosY = rec.Pos.Y;
+            row.PosZ = rec.Pos.Z;
+            row.RotX = rec.Rot.X;
+            row.RotY = rec.Rot.Y;
+            row.RotZ = rec.Rot.Z;
+            row.RotW = rec.Rot.W;
+            row.VelX = rec.Vel.X;
+            row.VelY = rec.Vel.Y;
+            row.VelZ = rec.Vel.Z;
+            row.AngVelX = rec.AngVel.X;
+            row.AngVelY = rec.AngVel.Y;
+            row.AngVelZ = rec.AngVel.Z;
+            row.AbPower = rec.AbPower;
+            row.Fuel = rec.Fuel;
+            row.Health = rec.Health;
+            row.Shield = rec.Shield;
+            row.LastInputTick = rec.LastInputTick;
+            row.LastFireTick = rec.LastFireTick;
+            row.MissileAmmo = rec.MissileAmmo;
+            row.LockState = rec.LockState;
+            row.Pools = rec.Pools; // exact: the pools LastInputTick's fire phase started with
             // Surface the LOCAL ship's authoritative missile/chaff/mine ammo + lock/threat state for the HUD.
             if (rec.ShipId == LocalShipId)
             {
@@ -1165,12 +1185,15 @@ public sealed class FrameApplier
             else
                 _world.Ships.NetUpdateShip(prev, row);
             _rows[rec.ShipId] = row;
+            if (prev is not null)
+                _spareRows[rec.ShipId] = prev;
         }
     }
 
     // reason: 0 = destroyed (fiery blast), 1 = clean despawn (voluntary dock / pod rescue).
     private void ApplyShipGone(ulong shipId, byte reason)
     {
+        _spareRows.Remove(shipId);
         if (_rows.Remove(shipId, out var row))
             _world.Ships.NetDeleteShip(row, reason);
     }

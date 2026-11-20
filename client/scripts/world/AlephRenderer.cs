@@ -24,10 +24,10 @@ public sealed class AlephRenderer : IAlephQuery
     private readonly List<(Vector3 Pos, uint Dest)> _scratch = new();
 
     // The funnel nodes — read by the bolt-impact pass (a bolt is absorbed by a gate).
-    public IReadOnlyDictionary<ulong, Node3D> Nodes => _nodes;
+    public Dictionary<ulong, Node3D> Nodes => _nodes;
 
     // Sector→destination link map for the Minimap.
-    public IReadOnlyList<(uint Sector, uint Dest)> Links => _links;
+    public List<(uint Sector, uint Dest)> Links => _links;
 
     public void NetAdd(Aleph row) => Insert(row);
 
@@ -63,7 +63,7 @@ public sealed class AlephRenderer : IAlephQuery
     // Warp gates (alephs) in the currently-visible (local) sector, as world position + the destination
     // sector each gate warps to, for the HUD off-screen indicators / labels. Only gates whose node is
     // Visible (the sector filter) are returned. Shared scratch list — read it immediately.
-    public IReadOnlyList<(Vector3 Pos, uint Dest)> Visible()
+    public List<(Vector3 Pos, uint Dest)> Visible()
     {
         _scratch.Clear();
         foreach (var node in _nodes.Values)

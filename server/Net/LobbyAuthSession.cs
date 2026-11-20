@@ -119,21 +119,21 @@ public sealed class LobbyAuthSession
                 continue;
             }
 
-            if (outcome.Succeeded)
+            if (outcome is TokenResponse token)
             {
-                Adopt(outcome.Token!);
+                Adopt(token);
                 return (true, false);
             }
 
-            if (outcome.Error == LobbyTokenError.InvalidGrant)
+            if (outcome is LobbyTokenError.InvalidGrant)
             {
-                Log.LobbyAuthRefreshRefused(_log, outcome.Error);
+                Log.LobbyAuthRefreshRefused(_log, LobbyTokenError.InvalidGrant);
                 LobbyCredentialStore.Delete(_authFilePath);
                 return (false, false);
             }
 
             // Any other OAuth error is the lobby misbehaving, not a verdict on this credential.
-            Log.LobbyAuthRefreshUnexpected(_log, outcome.Error ?? "unknown_error");
+            Log.LobbyAuthRefreshUnexpected(_log, outcome is string code ? code : "unknown_error");
             if (!await _delay(RetryDelay(attempt), ct))
                 return (false, true);
         }
@@ -208,15 +208,12 @@ public sealed class LobbyAuthSession
                 continue; // transient network error — keep polling at the same interval
             }
 
-            if (outcome.Succeeded)
+            switch (outcome)
             {
-                Adopt(outcome.Token!);
-                Log.LobbyDeviceCodeApproved(_log, GameServerId!.Value, DisplayName ?? _serverName, _authFilePath);
-                return (BootResult.Approved, false);
-            }
-
-            switch (outcome.Error)
-            {
+                case TokenResponse token:
+                    Adopt(token);
+                    Log.LobbyDeviceCodeApproved(_log, GameServerId!.Value, DisplayName ?? _serverName, _authFilePath);
+                    return (BootResult.Approved, false);
                 case LobbyTokenError.AuthorizationPending:
                     continue;
                 case LobbyTokenError.SlowDown:
@@ -228,7 +225,7 @@ public sealed class LobbyAuthSession
                     Log.LobbyDeviceCodeDenied(_log);
                     return (BootResult.Denied, false);
                 default:
-                    Log.LobbyDeviceCodePollError(_log, outcome.Error ?? "unknown_error");
+                    Log.LobbyDeviceCodePollError(_log, outcome is string code ? code : "unknown_error");
                     continue;
             }
         }
@@ -287,10 +284,10 @@ public sealed class LobbyAuthSession
                 return null;
             }
 
-            if (!outcome.Succeeded)
+            if (outcome is not TokenResponse token)
             {
-                Log.LobbyAuthRefreshRefused(_log, outcome.Error ?? "unknown");
-                if (outcome.Error == LobbyTokenError.InvalidGrant)
+                Log.LobbyAuthRefreshRefused(_log, outcome is string code ? code : "unknown");
+                if (outcome is LobbyTokenError.InvalidGrant)
                 {
                     LobbyCredentialStore.Delete(_authFilePath);
                     GameServerId = null;
@@ -301,7 +298,7 @@ public sealed class LobbyAuthSession
                 return null;
             }
 
-            Adopt(outcome.Token!);
+            Adopt(token);
             return AccessToken;
         }
         finally

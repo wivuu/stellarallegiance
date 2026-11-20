@@ -6,7 +6,9 @@ namespace PublicLobby;
 
 // What the lobby pushes DOWN a game server's WebSocket. Two kinds today: a WebRTC offer addressed to
 // that one server, and a Release Advert ("the latest released version is X") sent to every server.
-public abstract record ServerPush;
+// Closed (C# 15): only this assembly can add a push kind, so the /servers/ws sender's switch over it
+// is exhaustive and a new kind is a compile error there instead of a runtime throw.
+public closed record ServerPush;
 
 public sealed record OfferPush(PendingOffer Offer) : ServerPush;
 

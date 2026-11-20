@@ -223,7 +223,7 @@ public sealed class TeamStateStore
 
     public void ApplyConstructorState(List<ConstructorStatus> list) => _constructorStates = list;
 
-    public IReadOnlyList<ConstructorStatus> ConstructorStates() => _constructorStates;
+    public List<ConstructorStatus> ConstructorStates() => _constructorStates;
 
     // A world rebuild (reconnect / phase change) drops the constructor roster; the economy/research dicts
     // deliberately persist (the next MsgTeamState overwrites them).
