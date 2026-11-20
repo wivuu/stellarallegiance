@@ -11,10 +11,11 @@ namespace StellarAllegiance.AppHost.Hosting;
 // The credential persists in SIM_AUTH_FILE (apphost/.local/server/), so this is once per checkout.
 public static partial class LobbyDevCommands
 {
-    public static IResourceBuilder<ProjectResource> WithApproveDeviceCodeCommand(
-        this IResourceBuilder<ProjectResource> lobby,
+    public static IResourceBuilder<T> WithApproveDeviceCodeCommand<T>(
+        this IResourceBuilder<T> lobby,
         EndpointReference lobbyEndpoint
     )
+        where T : IResource
     {
         return lobby.WithCommand(
             name: "approve-device-code",
@@ -27,6 +28,14 @@ public static partial class LobbyDevCommands
                 IconName = "ShieldCheckmark",
                 IsHighlighted = true,
                 UpdateState = _ => ResourceCommandState.Enabled,
+                // Shape check only (the lobby owns the real alphabet): a typo shows next to the field in the
+                // dashboard / as a CLI error instead of a round-trip to /device.
+                ValidateArguments = ctx =>
+                {
+                    if (NormalizeUserCode(ctx.Inputs.GetString("user-code")) is null)
+                        ctx.AddValidationError("user-code", "Expected 8 letters, as XXXX-XXXX.");
+                    return Task.CompletedTask;
+                },
                 Arguments =
                 [
                     new InteractionInput
@@ -53,10 +62,9 @@ public static partial class LobbyDevCommands
     static async Task<ExecuteCommandResult> ApproveAsync(ExecuteCommandContext ctx, EndpointReference lobbyEndpoint)
     {
         var ct = ctx.CancellationToken;
-        var code = (ctx.Arguments.GetString("user-code") ?? "").Trim().ToUpperInvariant();
+        if (NormalizeUserCode(ctx.Arguments.GetString("user-code")) is not { } code)
+            return CommandResults.Failure("Expected an 8-letter user code, as XXXX-XXXX.");
         var operatorName = (ctx.Arguments.GetString("display-name") ?? "Operator").Trim();
-        if (code.Length == 0)
-            return CommandResults.Failure("A user code is required.");
 
         var baseUri = new Uri(lobbyEndpoint.Url.TrimEnd('/') + "/");
         using var handler = new HttpClientHandler
@@ -98,6 +106,13 @@ public static partial class LobbyDevCommands
             );
         }
         return CommandResults.Failure($"Approve returned {(int)approve.StatusCode}.");
+    }
+
+    // Mirrors DeviceCodeGrain.NormalizeUserCode's leniency (case, hyphens, spaces) and re-adds the hyphen.
+    static string? NormalizeUserCode(string? typed)
+    {
+        var letters = new string((typed ?? "").Where(char.IsAsciiLetter).Select(char.ToUpperInvariant).ToArray());
+        return letters.Length == 8 ? $"{letters[..4]}-{letters[4..]}" : null;
     }
 
     [GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"(?<token>[^\"]+)\"", RegexOptions.IgnoreCase)]

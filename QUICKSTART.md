@@ -3,7 +3,7 @@
 Get a match running locally in five steps.
 
 ### 1. Install prerequisites
-- **.NET 10 SDK** — verify with `dotnet --version` (≥ 10).
+- **.NET 11 SDK** — verify with `dotnet --version` (≥ 11.0.100; `global.json` pins it).
 - **Aspire CLI** — `dotnet tool install -g Aspire.Cli` or `curl -sSL https://aspire.dev/install.sh | bash`.
 - **Docker** — runs the local Postgres container for the public lobby.
 - **Godot 4.7.2, Mono/.NET build** — auto-detected from the `GODOT` env var, the

@@ -107,7 +107,7 @@ Condensed outcomes. Each line names where the detail now lives.
   offline `tests/InterpTest` harness. [`GLOSSARY.md` → *MotionInterpolator*](../GLOSSARY.md).
 - ✅ **[S] Toolchain floor** (2026-09-20, PR #88) — Central Package Management: every NuGet version
   lives in `Directory.Packages.props` (with transitive pinning to lift vulnerable indirect packages),
-  and `global.json` pins the .NET SDK to 10.0.401. Both must be `COPY`d into a Dockerfile's restore
+  and `global.json` pins the .NET SDK (10.0.401 then, 11.0.100 since the .NET 11 move). Both must be `COPY`d into a Dockerfile's restore
   layer (`server/Dockerfile:26-27`, `public-lobby/Dockerfile:13-14`) or every package fails NU1010.
 - ✅ **[S] Clean exits** (2026-09-20, PR #93) — quitting to the desktop no longer segfaults: a quit was
   being read as a drop, which auto-reconnected and ran a pool-thread deferred call into an engine that

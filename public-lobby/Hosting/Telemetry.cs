@@ -10,12 +10,21 @@ namespace PublicLobby.Hosting;
 // running the lobby locally can show its telemetry in the Aspire dashboard alongside the rest of
 // the distributed app — mirrors the pattern Aspire's ServiceDefaults template generates
 // (ConfigureOpenTelemetry), reimplemented by hand here since public-lobby doesn't reference a
-// generated ServiceDefaults project. Production (Railway) never sets OTEL_EXPORTER_OTLP_ENDPOINT,
-// so the exporter is a no-op there — this is a local dev/observability aid, not a hosting change.
+// generated ServiceDefaults project.
+//
+// ALL of it is gated on OTEL_EXPORTER_OTLP_ENDPOINT, not just the exporter. Production (Railway)
+// never sets it, and with the pipelines registered anyway every request still built Activities and
+// fed metric instruments that nothing ever read — CPU, allocations, and (because the lobby's memory
+// is mostly JIT code and runtime data, not managed heap) resident memory for the OpenTelemetry SDK
+// paths themselves. Aspire injects the variable for every resource it runs, so the dashboard view
+// is unchanged; set it by hand to get telemetry from any other run.
 static class Telemetry
 {
     public static WebApplicationBuilder AddLobbyTelemetry(this WebApplicationBuilder builder)
     {
+        if (string.IsNullOrEmpty(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
+            return builder;
+
         builder.Logging.AddOpenTelemetry(l =>
         {
             l.IncludeFormattedMessage = true;
@@ -39,14 +48,8 @@ static class Telemetry
                         o.Filter = ctx => !ctx.Request.Path.StartsWithSegments("/health")
                     )
                     .AddHttpClientInstrumentation()
-            );
-
-        // Aspire injects OTEL_EXPORTER_OTLP_ENDPOINT (pointed at its dashboard's collector) for
-        // every resource it runs locally; only add the OTLP exporter when that's set so a
-        // non-Aspire run (Railway, docker-compose, `dotnet run` standalone) doesn't try to dial
-        // an endpoint that doesn't exist.
-        if (!string.IsNullOrEmpty(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
-            builder.Services.AddOpenTelemetry().UseOtlpExporter();
+            )
+            .UseOtlpExporter();
 
         return builder;
     }

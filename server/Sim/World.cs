@@ -476,8 +476,8 @@ public sealed class World
         for (int i = 0; i < secCfg.Count; i++)
         {
             var sc = secCfg[i];
-            var garrison =
-                sc.Garrison ?? (!anyGarrison && i < DefaultTeamCount ? new SectorGarrison { Team = (byte)i } : null);
+            var garrison = sc.Garrison
+                ?? (!anyGarrison && i < DefaultTeamCount ? new SectorGarrison { Team = (byte)i } : null);
             if (garrison is null)
                 continue;
             float r = RadiusOf(sc.Id, defaultRadius);
@@ -747,14 +747,11 @@ public sealed class World
             var order = new int[n];
             for (int i = 0; i < n; i++)
                 order[i] = i;
-            Array.Sort(
-                order,
-                (a, b) =>
-                {
-                    int c = hash[b].CompareTo(hash[a]); // descending hash
-                    return c != 0 ? c : rocks[a].Id.CompareTo(rocks[b].Id); // ascending id tie-break
-                }
-            );
+            Array.Sort(order, (a, b) =>
+            {
+                int c = hash[b].CompareTo(hash[a]); // descending hash
+                return c != 0 ? c : rocks[a].Id.CompareTo(rocks[b].Id); // ascending id tie-break
+            });
             var isHe3 = new bool[n];
             for (int k = 0; k < he3Count; k++)
                 isHe3[order[k]] = true;

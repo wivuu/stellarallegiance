@@ -413,19 +413,16 @@ app.MapGet("/health", () => Results.Text("wivuu-sim"));
 // Which release this server is, as plain text ("unknown" for an unstamped source build). Its own
 // route on purpose: /health must stay the fixed token the lobby's reachability probe matches.
 app.MapGet("/version", () => Results.Text(serverVersion ?? "unknown"));
-app.Map(
-    "/game",
-    async context =>
+app.Map("/game", async context =>
+{
+    if (!context.WebSockets.IsWebSocketRequest)
     {
-        if (!context.WebSockets.IsWebSocketRequest)
-        {
-            context.Response.StatusCode = 400;
-            return;
-        }
-        using var socket = await context.WebSockets.AcceptWebSocketAsync();
-        await hub.HandleConnection(new WebSocketTransport(socket), context.RequestAborted);
+        context.Response.StatusCode = 400;
+        return;
     }
-);
+    using var socket = await context.WebSockets.AcceptWebSocketAsync();
+    await hub.HandleConnection(new WebSocketTransport(socket), context.RequestAborted);
+});
 
 // ---- Sim loop: fixed 50 ms steps, wall-clock accumulator, bench stats ----
 var cts = new CancellationTokenSource();

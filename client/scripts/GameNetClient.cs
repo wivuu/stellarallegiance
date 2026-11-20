@@ -701,8 +701,7 @@ public partial class GameNetClient : Node, INetClientHost
         try
         {
             // Fetch this server's ICE config (STUN/TURN) and confirm it's still listed.
-            var entry =
-                await Http.GetFromJsonAsync<ServerEntryDto>($"{shareBase}/servers/{sessionId}", ct)
+            var entry = await Http.GetFromJsonAsync<ServerEntryDto>($"{shareBase}/servers/{sessionId}", ct)
                 ?? throw new Exception("server not found in lobby");
             EmitStage(seq, ConnectionManager.ConnectStage.Negotiate); // entry located
 

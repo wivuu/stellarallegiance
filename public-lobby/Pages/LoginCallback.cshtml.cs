@@ -36,8 +36,7 @@ public sealed class LoginCallbackModel(
         LobbyUser user;
         if (existingSignIn.Succeeded)
         {
-            user =
-                await signInManager.UserManager.FindByLoginAsync(info.LoginProvider, info.ProviderKey)
+            user = await signInManager.UserManager.FindByLoginAsync(info.LoginProvider, info.ProviderKey)
                 ?? throw new InvalidOperationException(
                     "ExternalLoginSignInAsync succeeded but the user could not be reloaded."
                 );

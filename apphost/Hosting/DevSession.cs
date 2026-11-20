@@ -30,8 +30,7 @@ public static class DevSession
             throw new DistributedApplicationException(
                 $"Dev token request failed ({(int)response.StatusCode}); is auth-dev-login=true on the lobby? {body}"
             );
-        var token =
-            JsonSerializer.Deserialize<TokenResponse>(body)
+        var token = JsonSerializer.Deserialize<TokenResponse>(body)
             ?? throw new DistributedApplicationException("Empty token response from the lobby.");
 
         var file = AuthFilePath();

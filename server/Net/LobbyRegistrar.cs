@@ -541,6 +541,9 @@ public sealed class LobbyRegistrar : ILobbyIdentity
 
     // Sends state updates when values change, plus a periodic ping to keep LastSeen fresh. Returns
     // why it stopped, or null when it was cancelled (the other loop ended first, or shutdown).
+    // The roster an idle server advertises; shared and never mutated (only serialized).
+    static readonly List<LobbyStatus.RosterDto> NoRoster = [];
+
     private async Task<string?> WsSendLoop(ClientWebSocket ws, CancellationToken ct)
     {
         const int CheckMs = 2_000;
@@ -550,6 +553,9 @@ public sealed class LobbyRegistrar : ILobbyIdentity
         string? lastState = null;
         string? lastRosterSig = null; // null so the first update always carries the roster
         int ticks = 0;
+        // One timer for the life of the socket: its ticks are allocation-free, where a Task.Delay per
+        // wake allocated a Task and a timer every 2 s for as long as the server stayed listed.
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(CheckMs));
 
         try
         {
@@ -557,8 +563,20 @@ public sealed class LobbyRegistrar : ILobbyIdentity
             {
                 int players = _hub.PlayerCount;
                 string state = _hub.GameState;
-                var roster = LobbyStatus.BuildRoster(_hub.RosterSnapshot());
-                string rosterSig = LobbyStatus.RosterSignature(roster);
+                // Idle (nobody in the lobby) is most of a hosted server's life: skip the snapshot, the
+                // LINQ sort and the signature string, which are exactly an empty roster and "".
+                List<LobbyStatus.RosterDto> roster;
+                string rosterSig;
+                if (_hub.RosterEmpty)
+                {
+                    roster = NoRoster;
+                    rosterSig = "";
+                }
+                else
+                {
+                    roster = LobbyStatus.BuildRoster(_hub.RosterSnapshot());
+                    rosterSig = LobbyStatus.RosterSignature(roster);
+                }
 
                 if (players != lastPlayers || state != lastState || rosterSig != lastRosterSig)
                 {
@@ -579,7 +597,7 @@ public sealed class LobbyRegistrar : ILobbyIdentity
                     ticks = 0;
                 }
 
-                await Task.Delay(CheckMs, ct);
+                await timer.WaitForNextTickAsync(ct);
             }
             return ct.IsCancellationRequested ? null : $"socket {ws.State}";
         }

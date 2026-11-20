@@ -1000,15 +1000,11 @@ public partial class ServerLobbyOverlay : Control
         // then dials via the same transport branch below. Open servers dial straight through.
         if (s.Protected)
         {
-            ServerPasswordModal.Open(
-                this,
-                s.Name,
-                pw =>
-                {
-                    _cm.SetJoinSecret(pw);
-                    JoinWithIdentity(s);
-                }
-            );
+            ServerPasswordModal.Open(this, s.Name, pw =>
+            {
+                _cm.SetJoinSecret(pw);
+                JoinWithIdentity(s);
+            });
             return;
         }
         JoinWithIdentity(s);

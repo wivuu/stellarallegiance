@@ -1,6 +1,6 @@
 # server/
 
-The **standalone .NET 10 authoritative sim server** — the single source of truth for a match.
+The **standalone .NET 11 authoritative sim server** — the single source of truth for a match.
 A dedicated thread runs the fixed-dt **20 Hz** simulation against a wall-clock accumulator and
 fans out area-of-interest (AOI) snapshots after every step. The same process also **hosts the
 lobby** (teams + ready-up). Clients connect directly by `ip:port`, download all content from
@@ -11,7 +11,7 @@ the server, and never touch a database. The deterministic physics and content de
 
 ```
 Program.cs              entry point: Kestrel hosts /game (WebSocket), spins up the sim thread + lobby
-SimServer.csproj        .NET 10 web project; references ../shared; `dotnet publish` = NativeAOT (see below)
+SimServer.csproj        .NET 11 web project; references ../shared; `dotnet publish` = NativeAOT (see below)
 TrimmerRoots.xml        types a dependency reflects over that the AOT trimmer must keep (SIPSorcery's SCTP cookie)
 Dockerfile              container image (used by docker-compose.server.yml and Railway deploys)
 

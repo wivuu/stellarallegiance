@@ -691,8 +691,7 @@ public static class FactionsContentProjection
             DirZ = (float)(h.DirZ ?? 0),
             // Null WeaponId = an authored/appended EMPTY weapon mount, or an UNAUTHORED mesh
             // HP_Turret node (a marker, not a station). Other kinds ignore it.
-            WeaponId =
-                h.WeaponId
+            WeaponId = h.WeaponId
                 ?? (
                     h.Kind is Factions.RuntimeHardpointKind.Weapon or Factions.RuntimeHardpointKind.Turret
                         ? HardpointDef.NoWeapon

@@ -292,17 +292,13 @@ public partial class SettingsDialog : Control
         grid.AddThemeConstantOverride("v_separation", 20);
         page.AddChild(grid);
 
-        _modeRow = MakeVideoSegmented(
-            ["WINDOWED", "BORDERLESS", "FULLSCREEN"],
-            (int)UserPrefs.CurrentDisplayMode,
-            i => UserPrefs.SetDisplayMode((UserPrefs.DisplayMode)i)
+        _modeRow = MakeVideoSegmented(["WINDOWED", "BORDERLESS", "FULLSCREEN"], (int)UserPrefs.CurrentDisplayMode, i =>
+            UserPrefs.SetDisplayMode((UserPrefs.DisplayMode)i)
         );
         AddVideoRow(grid, "WINDOW MODE", MakeSubCaption("desktop resolution"), _modeRow);
 
-        _vsyncRow = MakeVideoSegmented(
-            ["OFF", "ON", "ADAPTIVE"],
-            (int)UserPrefs.Vsync,
-            i => UserPrefs.SetVsync((UserPrefs.VsyncMode)i)
+        _vsyncRow = MakeVideoSegmented(["OFF", "ON", "ADAPTIVE"], (int)UserPrefs.Vsync, i =>
+            UserPrefs.SetVsync((UserPrefs.VsyncMode)i)
         );
         AddVideoRow(grid, "VSYNC", MakeSubCaption("sync to the display"), _vsyncRow);
 
@@ -389,13 +385,8 @@ public partial class SettingsDialog : Control
         var page = MakePage();
         foreach (string bus in UserPrefs.AudioBuses)
         {
-            var row = UiKit.MakeSliderRow(
-                bus.ToUpperInvariant(),
-                0,
-                1,
-                0.01,
-                UserPrefs.GetBusVolume(bus),
-                v => UserPrefs.SetBusVolume(bus, (float)v)
+            var row = UiKit.MakeSliderRow(bus.ToUpperInvariant(), 0, 1, 0.01, UserPrefs.GetBusVolume(bus), v =>
+                UserPrefs.SetBusVolume(bus, (float)v)
             );
             _busSliders[bus] = FindSlider(row);
             page.AddChild(row);

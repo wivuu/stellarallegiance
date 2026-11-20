@@ -9,7 +9,7 @@
        built on a current runner would raise the glibc floor above what the game itself needs. -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <AssemblyName>StellarLauncher</AssemblyName>
     <RootNamespace>StellarAllegiance.Launcher</RootNamespace>
     <Nullable>enable</Nullable>

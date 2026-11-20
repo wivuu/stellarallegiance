@@ -119,16 +119,11 @@ public sealed class LobbyStatusClient : ILobbyStatus
             StreamOutcome outcome;
             try
             {
-                outcome = await StreamOnceAsync(
-                        parser,
-                        ct,
-                        deadline,
-                        snap =>
-                        {
-                            attempt = 0; // a live snapshot means the connection is healthy again
-                            Changed?.Invoke(snap);
-                        }
-                    )
+                outcome = await StreamOnceAsync(parser, ct, deadline, snap =>
+                    {
+                        attempt = 0; // a live snapshot means the connection is healthy again
+                        Changed?.Invoke(snap);
+                    })
                     .ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)

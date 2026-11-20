@@ -318,15 +318,12 @@ static class WebHosting
             }
         );
 
-        app.MapPost(
-            "/login/passkey/request-options",
-            async (SignInManager<LobbyUser> signInManager) =>
-            {
-                // user: null => discoverable-credential request (no server-side hint which account).
-                var optionsJson = await signInManager.MakePasskeyRequestOptionsAsync(null);
-                return Results.Content(optionsJson, "application/json");
-            }
-        );
+        app.MapPost("/login/passkey/request-options", async (SignInManager<LobbyUser> signInManager) =>
+        {
+            // user: null => discoverable-credential request (no server-side hint which account).
+            var optionsJson = await signInManager.MakePasskeyRequestOptionsAsync(null);
+            return Results.Content(optionsJson, "application/json");
+        });
 
         app.MapPost(
             "/login/passkey/assert",

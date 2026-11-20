@@ -129,8 +129,8 @@ public partial class WeaponsPanel : Control
 
         // The cargo hold (v40): one HOLD row per inert salvaged item, and nothing at all when the
         // hold is empty — the common case, which must cost the panel no height.
-        IReadOnlyList<(byte Kind, uint ItemId, byte Count)> hold =
-            pilot?.Hold ?? System.Array.Empty<(byte Kind, uint ItemId, byte Count)>();
+        IReadOnlyList<(byte Kind, uint ItemId, byte Count)> hold = pilot?.Hold
+            ?? System.Array.Empty<(byte Kind, uint ItemId, byte Count)>();
         _localHoldCount = hold.Count;
 
         int secCount =

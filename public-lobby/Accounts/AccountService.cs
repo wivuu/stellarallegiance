@@ -61,8 +61,7 @@ public sealed class AccountService(
         var existingUser = await userManager.FindByLoginAsync(info.LoginProvider, info.ProviderKey);
         if (existingUser is not null)
         {
-            var existingPlayer =
-                await db.Players.FindAsync([existingUser.Id], ct)
+            var existingPlayer = await db.Players.FindAsync([existingUser.Id], ct)
                 ?? throw new InvalidOperationException(
                     $"LobbyUser {existingUser.Id} ({info.LoginProvider}) has no players row — accounts are always created with one."
                 );
@@ -207,8 +206,7 @@ public sealed class AccountService(
         if (admins.Length == 0)
             return;
 
-        var player =
-            await db.Players.FindAsync([user.Id], ct)
+        var player = await db.Players.FindAsync([user.Id], ct)
             ?? throw new InvalidOperationException($"players row missing for {user.Id}.");
 
         var candidates = new List<string> { $"name:{player.DisplayName}" };

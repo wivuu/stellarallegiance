@@ -12,7 +12,7 @@
 # never see the AppImage at all. release.yml assembles that same shape from two CI artifacts before
 # building. Directory names under the context root are DOCKER's arch names (amd64/arm64), which is
 # also what $TARGETARCH resolves to on a multi-platform buildx build.
-FROM mcr.microsoft.com/dotnet/runtime-deps:10.0
+FROM mcr.microsoft.com/dotnet/runtime-deps:11.0
 ARG TARGETARCH
 WORKDIR /opt/stellar
 # --chmod=0755: CI artifact round-trips (upload-artifact / download-artifact) do not preserve the
