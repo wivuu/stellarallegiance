@@ -29,8 +29,9 @@ by both sides so their physics and content stay bit-identical.
 ## Prerequisites
 
 - **.NET 11 SDK** (`dotnet --version` ≥ 11.0.100) — newer SDKs work too.
-- **Aspire CLI** — `dotnet tool install -g Aspire.Cli` or
-  `curl -sSL https://aspire.dev/install.sh | bash`. Orchestrates the local stack (`aspire run`).
+- **Aspire CLI 17+** — `curl -sSL https://aspire.dev/install.sh | bash` (or
+  `dotnet tool install -g Aspire.Cli`); `aspire update --self` upgrades it. Orchestrates the local
+  stack (`aspire run`), and a C# AppHost on Aspire 17 needs the CLI's bundle to build and run.
 - **Docker** — runs the local Postgres container the public lobby needs.
 - **Godot 4.7.2 — Mono/.NET build**, to run the client. Auto-detected from the `GODOT` env var, the
   `godot.executablePath` user secret, PATH, or standard install locations; the Aspire dashboard

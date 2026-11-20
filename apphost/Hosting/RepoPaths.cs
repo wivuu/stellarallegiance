@@ -7,6 +7,10 @@ public sealed record RepoPaths(string Root)
     public string ClientProject => Path.Combine(ClientDir, "stellarallegiance.csproj");
     public string EnvFile => Path.Combine(Root, ".env");
 
+    // Project resources, added by path (AddDotnetProject) - the AppHost holds no ProjectReference to them.
+    public string LobbyProject => Path.Combine(Root, "public-lobby", "PublicLobby.csproj");
+    public string ServerProject => Path.Combine(Root, "server", "SimServer.csproj");
+
     // Game Launcher (Avalonia): unlike the Godot client, the AppHost runs its BUILT BINARY directly
     // (see Hosting/GameLauncher.cs) rather than a `dotnet run`-style host, so the resource needs the
     // exact output path.
