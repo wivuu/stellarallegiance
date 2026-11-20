@@ -16,6 +16,9 @@
        Compare only from a clean obj: EmitCompilerGeneratedFiles never deletes orphans, so a renamed
        record leaves a stale .g.cs behind and fakes a difference. This bump is currency, not behaviour.
 
+       2026-11-20: moved 5.9.0 -> 5.12.0 to match the Roslyn in SDK 11.0.100 (global.json's floor since
+       the .NET 11 move). Clean-obj codecs identical to 5.9 (sha256 231cda84, 104 files).
+
        These are VersionOverrides rather than Directory.Packages.props entries on purpose: a central
        entry would apply this floor to EVERY project (transitive pinning is on) and collide with
        what Microsoft.EntityFrameworkCore.Design and Microsoft.Orleans.Server resolve -> NU1109. -->
@@ -31,7 +34,7 @@
     <NoWarn>$(NoWarn);RS2008</NoWarn>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="5.9.0" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" VersionOverride="5.9.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="5.12.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" VersionOverride="5.12.0" PrivateAssets="all" />
   </ItemGroup>
 </Project>
