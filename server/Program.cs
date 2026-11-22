@@ -440,11 +440,52 @@ double? emptySinceMs = null;
 // a gen0 a minute recycles what idling itself allocates (timers, the lobby socket): left alone, that keeps
 // touching fresh memory until the gen0 budget runs out, which took a hosted server 65 MB and more of billed
 // memory on Railway, about 4 MB an hour.
+// The gen0s don't reach everything idling leaves behind, though: a listed server idle for two weeks on
+// 0.0.19 still grew about 0.9 MB an hour (65 to 367 MB) until a match's full collection took it back to
+// 123 MB. So the full collection also repeats every SIM_DORMANT_GC_MINUTES (default 60, 0 = only once per
+// dormant stretch) and logs what it found. Blocking costs nothing here: nobody is connected.
 const int DormantNapMs = 1_000;
 const int DormantCollectAfterNaps = 5;
 const int DormantGen0EveryNaps = 60;
+int dormantGcMinutes = int.TryParse(Environment.GetEnvironmentVariable("SIM_DORMANT_GC_MINUTES"), out var gcMinutes)
+    ? Math.Clamp(gcMinutes, 0, 7 * 24 * 60)
+    : 60;
+int dormantFullEveryNaps = dormantGcMinutes * 60_000 / DormantNapMs;
 WaitHandle[] dormantWakers = [hub.ClientArrived, cts.Token.WaitHandle];
 int dormantNaps = 0;
+
+// The dormant full collection (once per dormant stretch, then every SIM_DORMANT_GC_MINUTES), logged with
+// what it found. The generation sizes the previous collection left (normally the minute gen0) say where
+// the build-up sits: gen1/gen2 garbage the gen0s promoted, or memory the GC freed but kept committed. The
+// working set is roughly what the host bills.
+void CollectDormantFull()
+{
+    var lastGc = GC.GetGCMemoryInfo();
+    long heapBefore = GC.GetTotalMemory(forceFullCollection: false);
+    long workingSetBefore = Environment.WorkingSet;
+    long started = Stopwatch.GetTimestamp();
+    GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+    double ms = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+    var after = GC.GetGCMemoryInfo();
+    Log.DormantFullCollection(
+        log,
+        Mb(heapBefore),
+        Mb(GC.GetTotalMemory(forceFullCollection: false)),
+        Mb(lastGc.GenerationInfo[1].SizeAfterBytes),
+        Mb(lastGc.GenerationInfo[2].SizeAfterBytes),
+        Mb(lastGc.GenerationInfo[3].SizeAfterBytes),
+        Mb(lastGc.TotalCommittedBytes),
+        Mb(after.TotalCommittedBytes),
+        Mb(workingSetBefore),
+        Mb(Environment.WorkingSet),
+        ms,
+        GC.CollectionCount(1),
+        GC.CollectionCount(2)
+    );
+
+    static double Mb(long bytes) => Math.Round(bytes / 1048576.0, 1);
+}
+
 var simThread = new Thread(() =>
 {
     double dtMs = 1000.0 / Simulation.TickHz;
@@ -503,8 +544,14 @@ var simThread = new Thread(() =>
 
         if (empty && sim.IsIdle)
         {
-            if (++dormantNaps == DormantCollectAfterNaps)
-                GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+            ++dormantNaps;
+            if (
+                dormantNaps == DormantCollectAfterNaps
+                || dormantFullEveryNaps > 0
+                    && dormantNaps > DormantCollectAfterNaps
+                    && (dormantNaps - DormantCollectAfterNaps) % dormantFullEveryNaps == 0
+            )
+                CollectDormantFull();
             else if (dormantNaps % DormantGen0EveryNaps == 0)
                 GC.Collect(0, GCCollectionMode.Forced, blocking: true);
             WaitHandle.WaitAny(dormantWakers, DormantNapMs);

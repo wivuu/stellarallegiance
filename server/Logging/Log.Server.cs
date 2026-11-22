@@ -56,4 +56,31 @@ internal static partial class Log
         Message = "ws://localhost:{Port}/game  seed={Seed}  asteroids={Asteroids}  20 Hz"
     )]
     public static partial void ServerListening(ILogger logger, int port, ulong seed, int asteroids);
+
+    // Program.cs's dormant full collection (once per dormant stretch, then every SIM_DORMANT_GC_MINUTES).
+    // Heap and working set are read right before and after it. The generation sizes and the first committed
+    // figure are what the previous collection left (normally the minute gen0). The collection counts include
+    // this one.
+    [LoggerMessage(
+        EventId = 1008,
+        Level = LogLevel.Information,
+        Message = "dormant full GC: heap {HeapBefore} -> {HeapAfter} MB (last GC left gen1 {Gen1} MB, gen2 {Gen2} MB, LOH {Loh} MB), "
+            + "committed {CommittedBefore} -> {CommittedAfter} MB, working set {WorkingSetBefore} -> {WorkingSetAfter} MB, "
+            + "{Ms:F1} ms, gen1/gen2 collections so far {Gen1Count}/{Gen2Count}"
+    )]
+    public static partial void DormantFullCollection(
+        ILogger logger,
+        double heapBefore,
+        double heapAfter,
+        double gen1,
+        double gen2,
+        double loh,
+        double committedBefore,
+        double committedAfter,
+        double workingSetBefore,
+        double workingSetAfter,
+        double ms,
+        int gen1Count,
+        int gen2Count
+    );
 }

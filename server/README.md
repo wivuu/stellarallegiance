@@ -60,6 +60,9 @@ For a raw run outside Aspire (perf/benchmark measurements, or just this project)
   `--seed`. Seeds are server-side only — clients receive every static streamed per-entity.
 - **Public name** — `SIM_PUBLIC_NAME` is the name shown in the public-lobby server browser.
 - AOI tuning lives behind `SIM_*_RADIUS` / `SIM_*_EVERY` env knobs (distance-tiered LOD).
+- **Idle memory** — while empty, the sim loop runs a full blocking GC a few seconds in, then repeats it every
+  `SIM_DORMANT_GC_MINUTES` (default `60`, `0` = only once per empty stretch), with a gen0 every minute in
+  between. Each full collection logs a `dormant full GC:` line (event 1008) with what it found.
 - **Auto-update** (`server/Update/`, [`docs/adr/0005`](../docs/adr/0005-game-servers-self-update-via-velopack.md)) —
   `SIM_AUTO_UPDATE` / `--auto-update` (`off`/`warn`/`on`; default `on` inside a container, else `warn`)
   gates whether this server swaps itself onto a newer release (Velopack) once it has been empty for a
