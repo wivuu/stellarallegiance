@@ -27,15 +27,16 @@ namespace PublicLobby.Data;
 // Convention level, so anything configured explicitly (ToTable, HasColumnName, HasName,
 // HasDatabaseName, HasConstraintName) wins and is left alone, such as Identity's "UserNameIndex",
 // "EmailIndex" and "RoleNameIndex", or device_codes.device_code. The one exception is the JSON
-// container column: Identity's OwnsOne(p => p.Data).ToJson() names it after the navigation
-// EXPLICITLY ("Data"), the package rewrote it anyway ("data"), and the table has that column, so
-// it is rewritten unconditionally here too. Property names INSIDE the JSON document are not
-// columns and stay as they are, as with the package.
+// container column of asp_net_user_passkeys: Identity names it after the property EXPLICITLY
+// ("Data"), the package rewrote it anyway ("data"), and the table has that column, so it is
+// rewritten unconditionally here too. Identity 10 mapped it as OwnsOne(p => p.Data).ToJson(),
+// Identity 11 as ComplexProperty(p => p.Data).ToJson(): same jsonb column either way. Property
+// names INSIDE the JSON document are not columns and stay as they are, as with the package.
 //
 // Only the mapping shapes this schema uses are handled. Anything else (inheritance, table
-// splitting or sharing, owned types outside JSON, nested JSON types, views, functions, SQL
-// queries, complex properties) throws when the model is built, so a new shape gets its naming rules added on
-// purpose instead of quietly drifting from what the package would have produced.
+// splitting or sharing, owned types, complex properties not mapped to JSON, views, functions, SQL
+// queries) throws when the model is built, so a new shape gets its naming rules added on purpose
+// instead of quietly drifting from what the package would have produced.
 public sealed class SnakeCaseNamingConvention : IModelFinalizingConvention
 {
     public void ProcessModelFinalizing(
@@ -48,7 +49,7 @@ public sealed class SnakeCaseNamingConvention : IModelFinalizingConvention
 
         // Tables, then columns, then constraints: EF derives the default key, FK and index names
         // from the CURRENT table and column names, so those must be snake_case before they're read.
-        var tableTypes = entityTypes.Where(e => !e.IsMappedToJson() && e.GetTableName() is not null).ToList();
+        var tableTypes = entityTypes.Where(e => e.GetTableName() is not null).ToList();
         foreach (var entityType in tableTypes)
             entityType.Builder.ToTable(ToSnakeCase(entityType.GetTableName()!), entityType.GetSchema());
 
@@ -60,12 +61,12 @@ public sealed class SnakeCaseNamingConvention : IModelFinalizingConvention
                 if (property.GetDefaultColumnName(table) is { } columnName)
                     property.Builder.HasColumnName(ToSnakeCase(columnName));
             }
-        }
 
-        foreach (var entityType in entityTypes.Where(IsJsonRoot))
-        {
-            if (entityType.GetContainerColumnName() is { } containerColumnName)
-                entityType.SetContainerColumnName(ToSnakeCase(containerColumnName));
+            foreach (var complexProperty in entityType.GetComplexProperties())
+            {
+                if (complexProperty.ComplexType.GetContainerColumnName() is { } containerColumnName)
+                    complexProperty.ComplexType.SetContainerColumnName(ToSnakeCase(containerColumnName));
+            }
         }
 
         foreach (var entityType in tableTypes)
@@ -87,37 +88,10 @@ public sealed class SnakeCaseNamingConvention : IModelFinalizingConvention
         {
             foreach (var foreignKey in entityType.GetDeclaredForeignKeys())
             {
-                var foreignKeyName =
-                    IsJsonRoot(entityType) && foreignKey.IsOwnership
-                        ? JsonOwnershipDefaultName(foreignKey)
-                        : foreignKey.GetDefaultName();
-                if (foreignKeyName is not null)
+                if (foreignKey.GetDefaultName() is { } foreignKeyName)
                     foreignKey.Builder.HasConstraintName(ToSnakeCase(foreignKeyName));
             }
         }
-    }
-
-    static bool IsJsonRoot(IConventionEntityType entityType) =>
-        entityType.IsMappedToJson() && entityType.FindOwnership()?.PrincipalEntityType.IsMappedToJson() == false;
-
-    // The ownership FK of a JSON-mapped type is never created in the database, but its name is
-    // recorded in the model snapshot, so it still has to match. EF's default spells its dependent
-    // properties by their in-document names (IdentityUserPasskeyCredentialId). The package named it
-    // earlier, while the owned type still shared its owner's table and those properties were the
-    // owner's key columns, so this builds EF's FK_{table}_{principal table}_{columns} shape from the
-    // owner's key columns instead, truncated to the identifier limit the way EF truncates.
-    static string? JsonOwnershipDefaultName(IConventionForeignKey foreignKey)
-    {
-        if (
-            foreignKey.DeclaringEntityType.GetTableName() is not { } tableName
-            || foreignKey.PrincipalEntityType.GetTableName() is not { } principalTableName
-        )
-            return null;
-
-        var columns = string.Join("_", foreignKey.PrincipalKey.Properties.Select(p => p.GetColumnName()));
-        var name = $"FK_{tableName}_{principalTableName}_{columns}";
-        var maxLength = foreignKey.DeclaringEntityType.Model.GetMaxIdentifierLength();
-        return name.Length <= maxLength ? name : name[..maxLength];
     }
 
     static void ThrowIfUnsupported(List<IConventionEntityType> entityTypes)
@@ -126,19 +100,19 @@ public sealed class SnakeCaseNamingConvention : IModelFinalizingConvention
         {
             var unsupported =
                 entityType.BaseType is not null || entityType.GetDirectlyDerivedTypes().Any() ? "an inheritance hierarchy"
-                : entityType.FindOwnership() is not null && !entityType.IsMappedToJson() ? "an owned type not mapped to JSON"
-                : entityType.IsMappedToJson() && !IsJsonRoot(entityType) ? "a JSON type nested in another JSON type"
+                : entityType.FindOwnership() is not null ? "an owned type"
                 : entityType.GetViewName() is not null ? "a view mapping"
                 : entityType.GetSqlQuery() is not null ? "a SQL query mapping"
                 : entityType.GetFunctionName() is not null ? "a function mapping"
-                : entityType.GetComplexProperties().Any() ? "complex properties"
+                : entityType.GetComplexProperties().Any(p => !p.ComplexType.IsMappedToJson())
+                    ? "a complex property not mapped to JSON"
                 : null;
             if (unsupported is not null)
                 throw Unsupported(entityType, unsupported);
         }
 
         var sharedTable = entityTypes
-            .Where(e => !e.IsMappedToJson() && e.GetTableName() is not null)
+            .Where(e => e.GetTableName() is not null)
             .GroupBy(e => (e.GetSchema(), e.GetTableName()))
             .FirstOrDefault(g => g.Count() > 1);
         if (sharedTable is not null)

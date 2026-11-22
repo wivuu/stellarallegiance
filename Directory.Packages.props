@@ -23,25 +23,24 @@
   </ItemGroup>
 
   <!-- Public lobby (public-lobby/, public-lobby-data/): identity, Orleans, EF Core, telemetry.
-       The lobby targets net11.0, but its EF Core stack stays on the 10.0 line ON PURPOSE: the
-       Npgsql provider has no GA 11.x build (11.0.0-rc.3 pins EF Core to exactly rc.3). The two
-       ASP.NET packages that sit ON EF Core (DataProtection.EntityFrameworkCore,
-       Identity.EntityFrameworkCore) depend on EF Core 11 from 11.0.0 up, so they stay 10.0.x with
-       it; they run fine on the 11 shared framework. Move these four (plus dotnet-ef in
-       dotnet-tools.json) to 11 together, once Npgsql ships a GA 11.x. Snake-case naming is the
-       in-repo public-lobby-data/SnakeCaseNamingConvention.cs, not the EFCore.NamingConventions
-       package, because that package's releases trail each EF Core major and cap EF Core below it. -->
+       The EF Core stack moves as ONE unit: Npgsql.EntityFrameworkCore.PostgreSQL pins its EF Core
+       major, and the two ASP.NET packages that sit ON EF Core (DataProtection.EntityFrameworkCore,
+       Identity.EntityFrameworkCore) require the matching EF Core major. Bump these four together
+       with dotnet-ef in dotnet-tools.json, then run the has-pending-model-changes check. Snake-case
+       naming is the in-repo public-lobby-data/SnakeCaseNamingConvention.cs, not the
+       EFCore.NamingConventions package, because that package's releases trail each EF Core major
+       and cap EF Core below it. -->
   <ItemGroup>
     <PackageVersion Include="AspNet.Security.OAuth.GitHub" Version="11.0.0" />
     <PackageVersion Include="AspNet.Security.OpenId.Steam" Version="11.0.0" />
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.Google" Version="11.0.0" />
-    <PackageVersion Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.15" />
-    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.15" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="11.0.0" />
     <PackageVersion Include="Microsoft.Orleans.Clustering.AdoNet" Version="10.4.2" />
     <PackageVersion Include="Microsoft.Orleans.Reminders.AdoNet" Version="10.4.2" />
     <PackageVersion Include="Microsoft.Orleans.Server" Version="10.4.2" />
-    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="11.0.0" />
     <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.21.0" />
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.21.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.21.0" />
