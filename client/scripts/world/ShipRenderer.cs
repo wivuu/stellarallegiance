@@ -818,8 +818,7 @@ public sealed class ShipRenderer : IShipQuery, IShipObstacleSource
     {
         // Roster first (own team), then the MsgShipLoadout turret tail — the only source for an ENEMY
         // ship, whose crew record we never see — and the authored gun last.
-        uint id =
-            (_crew?.ShipByShipId(row.ShipId) is { } ship ? CrewStore.MannedGunAt(ship, hp.Index) : null)
+        uint id = (_crew?.ShipByShipId(row.ShipId) is { } ship ? CrewStore.MannedGunAt(ship, hp.Index) : null)
             ?? (_turretGuns.TryGetValue(row.ShipId, out var guns) && slot < guns.Length ? guns[slot] : (uint?)null)
             ?? hp.WeaponId;
         var w = _defs.GetWeapon(id);

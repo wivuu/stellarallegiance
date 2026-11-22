@@ -63,7 +63,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
-          # Single source of truth for the SDK: root global.json (>= 10.0.401, which is the
+          # Single source of truth for the SDK: root global.json (>= 11.0.100, which also clears the
           # Roslyn 5.9.0 floor tools/wire-gen needs). Bump it there, not here.
           global-json-file: global.json
 

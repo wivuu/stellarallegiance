@@ -107,120 +107,114 @@ public sealed class QueryGrain(IDbContextFactory<LobbyDbContext> dbFactory, IMem
     public Task<LadderPage> LadderGlobal(int page, int pageSize)
     {
         (page, pageSize) = Clamp(page, pageSize);
-        return cache.GetOrCreateAsync(
-            $"ladder:global:{page}:{pageSize}",
-            async entry =>
-            {
-                entry.AbsoluteExpirationRelativeToNow = ListTtl;
-                await using var db = await dbFactory.CreateDbContextAsync();
-                var query = db.Players.AsNoTracking().Where(p => p.MatchesPlayed > 0);
-                var total = await query.CountAsync();
-                var rows = await query
-                    .OrderByDescending(p => p.Points)
-                    .ThenByDescending(p => p.Wins)
-                    .ThenBy(p => p.DisplayName)
-                    .Skip((page - 1) * pageSize)
-                    .Take(pageSize)
-                    .Select(p => new
-                    {
-                        p.Id,
-                        p.DisplayName,
-                        p.MatchesPlayed,
-                        p.Wins,
-                        p.Losses,
-                        p.Kills,
-                        p.Deaths,
-                        p.Ejects,
-                        p.Points,
-                    })
-                    .ToListAsync();
-                var ranked = rows.Select(
-                        (r, i) =>
-                            new LadderRow(
-                                (page - 1) * pageSize + i + 1,
-                                r.Id,
-                                r.DisplayName,
-                                r.MatchesPlayed,
-                                r.Wins,
-                                r.Losses,
-                                r.Kills,
-                                r.Deaths,
-                                r.Ejects,
-                                r.Points
-                            )
-                    )
-                    .ToArray();
-                return new LadderPage(ranked, total, page, pageSize);
-            }
-        )!;
+        return cache.GetOrCreateAsync($"ladder:global:{page}:{pageSize}", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = ListTtl;
+            await using var db = await dbFactory.CreateDbContextAsync();
+            var query = db.Players.AsNoTracking().Where(p => p.MatchesPlayed > 0);
+            var total = await query.CountAsync();
+            var rows = await query
+                .OrderByDescending(p => p.Points)
+                .ThenByDescending(p => p.Wins)
+                .ThenBy(p => p.DisplayName)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(p => new
+                {
+                    p.Id,
+                    p.DisplayName,
+                    p.MatchesPlayed,
+                    p.Wins,
+                    p.Losses,
+                    p.Kills,
+                    p.Deaths,
+                    p.Ejects,
+                    p.Points,
+                })
+                .ToListAsync();
+            var ranked = rows.Select(
+                    (r, i) =>
+                        new LadderRow(
+                            (page - 1) * pageSize + i + 1,
+                            r.Id,
+                            r.DisplayName,
+                            r.MatchesPlayed,
+                            r.Wins,
+                            r.Losses,
+                            r.Kills,
+                            r.Deaths,
+                            r.Ejects,
+                            r.Points
+                        )
+                )
+                .ToArray();
+            return new LadderPage(ranked, total, page, pageSize);
+        })!;
     }
 
     public Task<LadderPage> LadderByServer(Guid gameServerId, int page, int pageSize)
     {
         (page, pageSize) = Clamp(page, pageSize);
-        return cache.GetOrCreateAsync(
-            $"ladder:server:{gameServerId:N}:{page}:{pageSize}",
-            async entry =>
-            {
-                entry.AbsoluteExpirationRelativeToNow = ListTtl;
-                await using var db = await dbFactory.CreateDbContextAsync();
-                // Every ended match on this server counts here, ranked or not (plan §1.2 "per-server
-                // history is recorded for every verified server regardless").
-                var pilots =
-                    from mp in db.MatchPilots.AsNoTracking()
-                    join m in db.Matches.AsNoTracking() on mp.MatchId equals m.Id
-                    where m.GameServerId == gameServerId && m.Status == MatchStatus.Ended
-                    select new { mp, m };
-                var grouped = pilots
-                    .GroupBy(x => x.mp.PlayerId)
-                    .Select(g => new
-                    {
-                        PlayerId = g.Key,
-                        MatchesPlayed = g.Count(),
-                        Wins = g.Count(x => x.mp.Won),
-                        Losses = g.Count(x => !x.mp.Won),
-                        Kills = g.Sum(x => x.mp.Kills),
-                        Deaths = g.Sum(x => x.mp.Deaths),
-                        Ejects = g.Sum(x => x.mp.Ejects),
-                        Points = g.Sum(x => x.mp.Points),
-                        // Fallback name for a pilot line that outlived its player row (a deleted
-                        // account): every surviving line of theirs carries the same tombstone name.
-                        FrozenName = g.Max(x => x.mp.DisplayNameAtMatch),
-                    });
-                var total = await grouped.CountAsync();
-                // LEFT join, deliberately: an inner join here would drop a deleted player's line
-                // AFTER Skip/Take, so the page would come back short, `total` would over-count, and
-                // every rank below them would be wrong.
-                var rows = await grouped
-                    .OrderByDescending(r => r.Points)
-                    .ThenByDescending(r => r.Wins)
-                    .Skip((page - 1) * pageSize)
-                    .Take(pageSize)
-                    .GroupJoin(db.Players.AsNoTracking(), r => r.PlayerId, p => p.Id, (r, ps) => new { r, ps })
-                    .SelectMany(
-                        x => x.ps.DefaultIfEmpty(),
-                        (x, p) => new { x.r, DisplayName = p == null ? x.r.FrozenName : p.DisplayName }
-                    )
-                    .ToListAsync();
-                var ranked = rows.Select(
-                        (x, i) =>
-                            new LadderRow(
-                                (page - 1) * pageSize + i + 1,
-                                x.r.PlayerId,
-                                x.DisplayName ?? "<deleted>",
-                                x.r.MatchesPlayed,
-                                x.r.Wins,
-                                x.r.Losses,
-                                x.r.Kills,
-                                x.r.Deaths,
-                                x.r.Ejects,
-                                x.r.Points
-                            )
-                    )
-                    .ToArray();
-                return new LadderPage(ranked, total, page, pageSize);
-            }
-        )!;
+        return cache.GetOrCreateAsync($"ladder:server:{gameServerId:N}:{page}:{pageSize}", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = ListTtl;
+            await using var db = await dbFactory.CreateDbContextAsync();
+            // Every ended match on this server counts here, ranked or not (plan §1.2 "per-server
+            // history is recorded for every verified server regardless").
+            var pilots =
+                from mp in db.MatchPilots.AsNoTracking()
+                join m in db.Matches.AsNoTracking() on mp.MatchId equals m.Id
+                where m.GameServerId == gameServerId && m.Status == MatchStatus.Ended
+                select new { mp, m };
+            var grouped = pilots
+                .GroupBy(x => x.mp.PlayerId)
+                .Select(g => new
+                {
+                    PlayerId = g.Key,
+                    MatchesPlayed = g.Count(),
+                    Wins = g.Count(x => x.mp.Won),
+                    Losses = g.Count(x => !x.mp.Won),
+                    Kills = g.Sum(x => x.mp.Kills),
+                    Deaths = g.Sum(x => x.mp.Deaths),
+                    Ejects = g.Sum(x => x.mp.Ejects),
+                    Points = g.Sum(x => x.mp.Points),
+                    // Fallback name for a pilot line that outlived its player row (a deleted
+                    // account): every surviving line of theirs carries the same tombstone name.
+                    FrozenName = g.Max(x => x.mp.DisplayNameAtMatch),
+                });
+            var total = await grouped.CountAsync();
+            // LEFT join, deliberately: an inner join here would drop a deleted player's line
+            // AFTER Skip/Take, so the page would come back short, `total` would over-count, and
+            // every rank below them would be wrong.
+            var rows = await grouped
+                .OrderByDescending(r => r.Points)
+                .ThenByDescending(r => r.Wins)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .GroupJoin(db.Players.AsNoTracking(), r => r.PlayerId, p => p.Id, (r, ps) => new { r, ps })
+                .SelectMany(
+                    x => x.ps.DefaultIfEmpty(),
+                    (x, p) => new { x.r, DisplayName = p == null ? x.r.FrozenName : p.DisplayName }
+                )
+                .ToListAsync();
+            var ranked = rows.Select(
+                    (x, i) =>
+                        new LadderRow(
+                            (page - 1) * pageSize + i + 1,
+                            x.r.PlayerId,
+                            x.DisplayName ?? "<deleted>",
+                            x.r.MatchesPlayed,
+                            x.r.Wins,
+                            x.r.Losses,
+                            x.r.Kills,
+                            x.r.Deaths,
+                            x.r.Ejects,
+                            x.r.Points
+                        )
+                )
+                .ToArray();
+            return new LadderPage(ranked, total, page, pageSize);
+        })!;
     }
 
     public async Task<PlayerProfileView?> PlayerByName(string displayName)

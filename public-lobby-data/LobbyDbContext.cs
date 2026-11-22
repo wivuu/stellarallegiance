@@ -2,13 +2,14 @@ using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using PublicLobby.Data.Entities;
 
 namespace PublicLobby.Data;
 
 // System of record for the public lobby (ADR-0002). Grains are the single writers of their rows;
 // endpoints never write through this context directly. Tables below are exactly plan
-// .PLAN/LobbyRankingService.md §3.4 — column names come from EFCore.NamingConventions
+// .PLAN/LobbyRankingService.md §3.4 — column names come from SnakeCaseNamingConvention
 // snake-casing the CLR property names, table names are set explicitly to match the plan's names.
 //
 // Identity's own tables ship as-is from IdentityDbContext EXCEPT for two things WP0.1 had to work
@@ -18,8 +19,8 @@ namespace PublicLobby.Data;
 //      9-argument form. Widened below to IdentityUserPasskey<Guid> so the schema carries it now;
 //      no passkey *handlers* (ceremony endpoints, ".AddPasskeys()") are added — that's WP0.3.
 //   2. IdentityDbContext's own OnModelCreating calls ToTable("AspNetUsers") etc. EXPLICITLY, and
-//      EFCore.NamingConventions does not rewrite a name that's already been set explicitly (only
-//      convention-assigned names) — so left alone, Identity's tables stay PascalCase
+//      SnakeCaseNamingConvention (like the EFCore.NamingConventions package it replaced) does not
+//      rewrite a name that's already been set explicitly, only convention-assigned names, so left alone, Identity's tables stay PascalCase
 //      ("AspNetUsers") while every table below is snake_case. Plan §1.4 says Identity's tables
 //      "get snake_cased too (renamed by the convention)", so OnModelCreating re-maps them below,
 //      after base.OnModelCreating, to match every other table in this schema.
@@ -52,6 +53,19 @@ public class LobbyDbContext(DbContextOptions<LobbyDbContext> options)
     // (wired in public-lobby/Hosting/Persistence.cs).
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
+    // Snake-case naming lives on the context, not in each host's options, so the lobby, the
+    // design-time factory and the tests can't build different models. It goes in as an options
+    // extension rather than through ConfigureConventions so it also names EF's migrations history
+    // table (see SnakeCaseNamingOptionsExtension).
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        base.OnConfiguring(optionsBuilder);
+        if (optionsBuilder.Options.FindExtension<SnakeCaseNamingOptionsExtension>() is null)
+            ((IDbContextOptionsBuilderInfrastructure)optionsBuilder).AddOrUpdateExtension(
+                new SnakeCaseNamingOptionsExtension()
+            );
+    }
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -61,7 +75,7 @@ public class LobbyDbContext(DbContextOptions<LobbyDbContext> options)
         builder.HasPostgresExtension("citext");
 
         // Re-map Identity's own explicit ToTable names to snake_case (see the class comment for
-        // why EFCore.NamingConventions doesn't do this on its own).
+        // why SnakeCaseNamingConvention doesn't do this on its own).
         builder.Entity<LobbyUser>().ToTable("asp_net_users");
         builder.Entity<IdentityRole<Guid>>().ToTable("asp_net_roles");
         builder.Entity<IdentityUserClaim<Guid>>().ToTable("asp_net_user_claims");

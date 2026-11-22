@@ -83,8 +83,10 @@ still needs the user.
   over a no-tracking EF context with a short cache. Leaderboards are SQL views.
 - **The live listing registry and signaling stay in memory** for slice 1 (`InMemoryServerRegistry`,
   `SignalingRelay`). Moving them into grains waits for a real second replica.
-- **Schema** snake_cased via `EFCore.NamingConventions`; Identity tables as shipped (renamed by the
-  convention). All history kept; no retention policy.
+- **Schema** snake_cased by `public-lobby-data/SnakeCaseNamingConvention.cs` (replaced the
+  `EFCore.NamingConventions` package in 2026-11 with byte-identical names, so the EF stack can follow
+  each EF major without waiting for it); Identity's own tables are re-mapped to snake_case explicitly
+  in `LobbyDbContext.OnModelCreating`. All history kept; no retention policy.
 - **Persisted in v1:** identity, external logins, display name, sessions, game servers, matches,
   match pilots, aggregates. **No loadouts.**
 - **Hosting:** Railway + Railway Postgres. dotnet-postgres skill contributes model, connection

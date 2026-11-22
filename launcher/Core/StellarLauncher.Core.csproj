@@ -4,7 +4,7 @@
        console suite (tests/LauncherTest) can reference this project without pulling a UI stack.
        IsAotCompatible turns the trim/AOT analyzers on for every build, not just at publish. -->
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>StellarAllegiance.Launcher</RootNamespace>
@@ -16,7 +16,7 @@
     <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
   <ItemGroup>
-    <!-- Pure managed, zero dependencies on net10.0. MUST match the `vpk` version in the root
+    <!-- Pure managed, zero dependencies on net11.0. MUST match the `vpk` version in the root
          dotnet-tools.json — vpk warns (and may one day fail) when the two drift apart. -->
     <PackageReference Include="Velopack" />
   </ItemGroup>

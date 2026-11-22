@@ -1898,14 +1898,19 @@ the PowerShell deploy scripts (`scripts/run-server.ps1` / `run-client.ps1` remai
 against the HOSTED public lobby). `aspire run` (foreground, dashboard attached) or `aspire
 start` (background, for agents/harnesses) brings up a Postgres container, applies the public
 lobby's EF Core migrations, then starts `public-lobby` (`http://localhost:8091`) and `server`
-(`ws://localhost:8090/game`).
+(`ws://localhost:8090/game`). Aspire 17: the AppHost is a plain `Microsoft.NET.Sdk` project with NO
+ProjectReference to the lobby or server; both are added by path (`AddDotnetProject`) and compiled by
+Aspire's coordinated pre-start build, so a lobby/server compile error fails that resource (see its
+console log) instead of the AppHost build.
 - **Frequency:** Common
 - **Key Files:**
   - `apphost/AppHost.cs` — resource graph (Postgres, `lobby`, `server`, `client`, `launcher`) + custom commands
   - `apphost/Hosting/GameLauncher.cs` — the [[Game Launcher]] as an explicit-start resource for UI review + its `show` command
   - `.env` / `.env.example` — read by both `docker compose` and the AppHost; every `KEY=VALUE`
-    becomes a parameter in kebab-case (`SIM_AUTOSTART=1` → `sim-autostart`); unresolved
-    parameters are prompted for in the dashboard and can be saved to user secrets
+    becomes a parameter in kebab-case (`SIM_AUTOSTART=1` → `sim-autostart`); every knob is an
+    optional parameter (an explicit empty value such as `SIM_PUBLIC_NAME=` stays empty; unset ones
+    are left out of the environment), so only `godot-path` can prompt in the dashboard, where it
+    can be saved to user secrets
   - `apphost/.local/` — untracked per-workstation state: the server's `sim-cache/` and the paired
     `lobby-auth.json` device-code credential
 - **Related:** [[Public Lobby]], [[Game Server]], [[Ranked]]

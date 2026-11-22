@@ -28,7 +28,7 @@ public static class RailwayExtensions
                 Label = "Railway project / service name",
                 InputType = InputType.Text,
                 Required = true,
-                Value = Current(projectParam),
+                DynamicLoading = PrefillFrom(projectParam),
             },
             new()
             {
@@ -36,7 +36,7 @@ public static class RailwayExtensions
                 Label = "Environment",
                 InputType = InputType.Text,
                 Required = true,
-                Value = Current(p.RailwayEnvironment),
+                DynamicLoading = PrefillFrom(p.RailwayEnvironment),
             },
         };
         foreach (var v in target.Vars)
@@ -47,7 +47,7 @@ public static class RailwayExtensions
                     Label = v.Label,
                     InputType = v.Secret ? InputType.SecretText : InputType.Text,
                     Placeholder = "blank = leave the Railway value untouched",
-                    Value = v.Secret ? null : Current(DeployDefault(p, v.Key)),
+                    DynamicLoading = v.Secret ? null : PrefillFrom(DeployDefault(p, v.Key)),
                     MaxLength = 2000,
                 }
             );
@@ -194,20 +194,20 @@ public static class RailwayExtensions
             _ => null, // ALLOW_UNVERIFIED_SERVERS, SIM_AUTOSTART, SIM_MAX_PLAYERS: dialog-only, no local default is pushed
         };
 
-    // Dialog pre-fill: parameter values are config-backed constants, safe to read at model-build time.
-    static string? Current(IResourceBuilder<ParameterResource>? param)
-    {
-        if (param is null)
-            return null;
-        try
-        {
-            // Model-build time, config-backed constants: blocking here is safe and keeps the dialog static.
-            var v = param.Resource.GetValueAsync(CancellationToken.None).AsTask().GetAwaiter().GetResult();
-            return string.IsNullOrEmpty(v) ? null : v;
-        }
-        catch (MissingParameterValueException)
-        {
-            return null;
-        }
-    }
+    // Dialog pre-fill, loaded each time the dialog opens (dashboard, CLI or MCP) instead of being frozen at
+    // model-build time, so a parameter edited in the dashboard after startup shows up. TryGetCurrentValue
+    // never waits: an unresolved or empty parameter leaves the field blank.
+    static InputLoadOptions? PrefillFrom(IResourceBuilder<ParameterResource>? param) =>
+        param is null
+            ? null
+            : new InputLoadOptions
+            {
+                AlwaysLoadOnStart = true,
+                LoadCallback = ctx =>
+                {
+                    if (param.Resource.TryGetCurrentValue(out var value))
+                        ctx.Input.Value = value;
+                    return Task.CompletedTask;
+                },
+            };
 }

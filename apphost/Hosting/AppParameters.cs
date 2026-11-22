@@ -45,11 +45,8 @@ public sealed class AppParameters
     {
         return new AppParameters
         {
-            GodotPath = b.AddParameter(
-                    "godot-path",
-                    () =>
-                        GodotLocator.Resolve(b.Configuration)
-                        ?? throw new MissingParameterValueException(GodotLocator.Guidance)
+            GodotPath = b.AddParameter("godot-path", () =>
+                    GodotLocator.Resolve(b.Configuration) ?? throw new MissingParameterValueException(GodotLocator.Guidance)
                 )
                 .WithDescription(
                     "Godot 4 .NET (mono) EXECUTABLE (not the macOS .app folder). Auto-detected from GODOT, the "
@@ -218,13 +215,25 @@ public sealed class AppParameters
         };
     }
 
+    // Every knob is OPTIONAL, so nothing here trips the dashboard's unresolved-parameters prompt and an
+    // explicit empty value (`SIM_PUBLIC_NAME=` = private server) stays a real "" instead of being rejected
+    // (Aspire 17 refuses empty values for required parameters). An empty default means "no default": the
+    // parameter resolves to null when nothing configures it, and WithEnvironment then omits the variable,
+    // which every consumer reads the same as empty.
     static IResourceBuilder<ParameterResource> Param(
         IDistributedApplicationBuilder b,
         string name,
         string @default,
         string description,
         bool secret = false
-    ) => b.AddParameter(name, new ConstantParameterDefault(@default), secret: secret).WithDescription(description);
+    ) =>
+        (
+            @default.Length == 0
+                ? b.AddParameter(name, secret: secret)
+                : b.AddParameter(name, new ConstantParameterDefault(@default), secret: secret)
+        )
+            .AsOptional()
+            .WithDescription(description);
 
     static string DefaultServerName()
     {

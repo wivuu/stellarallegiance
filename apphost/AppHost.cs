@@ -24,15 +24,18 @@ var db = postgres.AddDatabase("postgres-database", databaseName: "lobby");
 
 // ---- Public lobby: migrate first (same `--migrate` Railway runs pre-deploy), then serve on a fixed,
 // proxyless :8091 so PUBLIC_LOBBY / LOBBY_PUBLIC_URL are the stable http://localhost:8091 everywhere.
+// Added by path (no ProjectReference): Aspire's coordinated pre-start build compiles the shared csproj once for
+// both lobby resources, then each runs the built binary. A compile error fails only the resources that need it
+// (see their console logs), never the AppHost build.
 var lobbyMigrate = builder
-    .AddProject<Projects.PublicLobby>("lobby-migrate", launchProfileName: null)
+    .AddDotnetProject("lobby-migrate", repo.LobbyProject, NoLaunchProfile)
     .WithArgs("--migrate")
     .WithReference(db)
     .WaitFor(db)
     .WithEnvironment("LOBBY_ORLEANS_CLUSTERING", p.LobbyOrleansClustering);
 
 var lobby = builder
-    .AddProject<Projects.PublicLobby>("lobby", launchProfileName: null)
+    .AddDotnetProject("lobby", repo.LobbyProject, NoLaunchProfile)
     .WithHttpEndpoint(port: 8091, targetPort: 8091, name: "http", env: "PORT", isProxied: false)
     .WithHttpHealthCheck("/health/orleans")
     .WithReference(db)
@@ -62,7 +65,7 @@ lobby
 
 // ---- Sim server: fixed proxyless :8090 (the lobby probes host:port/health and clients dial it directly).
 var server = builder
-    .AddProject<Projects.SimServer>("server", launchProfileName: null)
+    .AddDotnetProject("server", repo.ServerProject, NoLaunchProfile)
     .WithHttpEndpoint(port: 8090, targetPort: 8090, name: "http", env: "PORT", isProxied: false)
     .WithHttpHealthCheck("/health")
     .WaitFor(lobby)
@@ -94,3 +97,6 @@ if (godot is null)
 else
     log.LogInformation("Godot: {Path}", godot);
 app.Run();
+
+// Endpoints, ports and env come from this file only - never from a project's launchSettings.json.
+static void NoLaunchProfile(ProjectResourceOptions o) => o.ExcludeLaunchProfile = true;

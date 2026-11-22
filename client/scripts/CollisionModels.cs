@@ -109,8 +109,7 @@ public static class CollisionModels
             string? rawWhy = null;
             string? sidecarWhy = null;
             if (SidecarsOnly || !OS.HasFeature("editor"))
-                model =
-                    FromSidecar(resPath, out fromSidecar, out sidecarWhy)
+                model = FromSidecar(resPath, out fromSidecar, out sidecarWhy)
                     ?? (SidecarsOnly ? null : FromRaw(resPath, pre, out rawWhy));
             else
                 model = FromRaw(resPath, pre, out rawWhy) ?? FromSidecar(resPath, out fromSidecar, out sidecarWhy);

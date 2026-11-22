@@ -64,6 +64,16 @@ public sealed class Lobby
         }
     }
 
+    // Lets a poller skip building a Snapshot when there is nobody to list (an idle server).
+    public bool IsEmpty
+    {
+        get
+        {
+            lock (_lock)
+                return _players.Count == 0;
+        }
+    }
+
     public void Remove(int clientId)
     {
         lock (_lock)

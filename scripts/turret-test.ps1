@@ -93,7 +93,7 @@ $exit = 1
 try {
     $serverEnv = @{ SIM_PUBLIC_NAME = ''; SIM_PIGS = $(if ($Pigs) { '1' } else { '0' }) }
     $procs += Start-Logged 'server' 'dotnet' @(
-        "$RepoRoot/server/bin/Release/net10.0/SimServer.dll", '--port', "$Port", '--autostart',
+        "$RepoRoot/server/bin/Release/net11.0/SimServer.dll", '--port', "$Port", '--autostart',
         '--content', "$Content/core.manifest.yaml", '--world', "$Content/world.yaml"
     ) $serverEnv
 

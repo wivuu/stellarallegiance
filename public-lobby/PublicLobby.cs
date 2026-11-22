@@ -117,18 +117,14 @@ app.MapGet("/health", () => Results.Text("public-lobby"));
 // GitHub releases page says the same), and it lets an operator - or a tool that is not connected to
 // either stream - ask the one watcher instead of GitHub. `latest` is what game servers are told,
 // `confirmed` what game clients are told (see ReleaseState).
-app.MapGet(
-    "/release",
-    (ReleaseState releases) =>
-        Results.Json(
-            new
-            {
-                latest = releases.Latest,
-                confirmed = releases.Confirmed,
-                baked = releases.Baked,
-            }
-        )
-);
+app.MapGet("/release", (ReleaseState releases) => Results.Json(
+        new
+        {
+            latest = releases.Latest,
+            confirmed = releases.Confirmed,
+            baked = releases.Baked,
+        }
+    ));
 app.MapOrleansHealth();
 app.MapAuthEndpoints();
 app.MapDevWebLogin();
@@ -310,8 +306,10 @@ app.MapGet(
             var first = await Task.WhenAny(recvTask, sendTask);
             pair.Cancel();
             await Task.WhenAll(recvTask, sendTask);
-            ended =
-                await first ?? await recvTask ?? await sendTask ?? new WsEnd("the request was aborted", Deliberate: false);
+            ended = await first
+                ?? await recvTask
+                ?? await sendTask
+                ?? new WsEnd("the request was aborted", Deliberate: false);
         }
         finally
         {
@@ -369,21 +367,17 @@ app.MapGet(
 );
 
 // Look up a single server by session id.
-app.MapGet(
-    "/servers/{sessionId}",
-    (string sessionId, IServerRegistry registry) =>
-    {
-        var entry = registry.Get(sessionId);
-        return entry is null ? Results.NotFound() : Results.Ok(entry);
-    }
-);
+app.MapGet("/servers/{sessionId}", (string sessionId, IServerRegistry registry) =>
+{
+    var entry = registry.Get(sessionId);
+    return entry is null ? Results.NotFound() : Results.Ok(entry);
+});
 
 // List currently active servers (the lobby/browser view). Kept for backwards compat with clients
 // that have not yet adopted the SSE stream. The optional ?protocol=N query filters to servers on
 // that wire-protocol version. Player bearer required (plan §1.5: anonymous sees no server list).
-app.MapGet(
-        "/servers",
-        (IServerRegistry registry, int? protocol) => Results.Ok(FilterProtocol(registry.ListActive(), protocol))
+app.MapGet("/servers", (IServerRegistry registry, int? protocol) =>
+        Results.Ok(FilterProtocol(registry.ListActive(), protocol))
     )
     .RequireAuthorization(LobbyBearer.PlayerPolicy);
 
@@ -492,64 +486,61 @@ app.MapGet(
 // payload is a handful of rows, and one snapshot type means the page's render path is identical on
 // first paint and on every update (no client-side merge/ordering to drift from the Razor partial).
 // Identical snapshots are suppressed, so roster-only churn on a listing costs nothing.
-app.MapGet(
-    "/servers/live",
-    async (HttpContext ctx, IServerRegistry registry, LobbyEventBus bus, CancellationToken ct) =>
+app.MapGet("/servers/live", async (HttpContext ctx, IServerRegistry registry, LobbyEventBus bus, CancellationToken ct) =>
+{
+    // Anonymous + long-lived, so cap concurrency: a public SSE route is otherwise an easy way to
+    // pin one connection (and one bus subscription) per request forever.
+    if (!PublicStreams.TryEnter())
     {
-        // Anonymous + long-lived, so cap concurrency: a public SSE route is otherwise an easy way to
-        // pin one connection (and one bus subscription) per request forever.
-        if (!PublicStreams.TryEnter())
+        ctx.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        return;
+    }
+    try
+    {
+        ctx.Response.Headers["Content-Type"] = "text/event-stream; charset=utf-8";
+        ctx.Response.Headers["Cache-Control"] = "no-cache";
+        ctx.Response.Headers["X-Accel-Buffering"] = "no"; // disable nginx/Railway proxy buffering
+        await ctx.Response.Body.FlushAsync(ct);
+
+        using var sub = bus.Subscribe(out var reader);
+
+        var last = SseJson(PublicServerStrip.From(registry.ListActive(), PublicServerStrip.Shown));
+        await WriteSseEvent(ctx.Response.Body, "snapshot", last, ct);
+
+        // Single writer: one loop does both the events and the 20 s keepalive comment, waking on
+        // whichever comes first. (The player stream above runs its keepalive as a second task
+        // because it doubles as a mid-stream ban check; this one has nothing to re-check.)
+        while (!ct.IsCancellationRequested)
         {
-            ctx.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
-            return;
-        }
-        try
-        {
-            ctx.Response.Headers["Content-Type"] = "text/event-stream; charset=utf-8";
-            ctx.Response.Headers["Cache-Control"] = "no-cache";
-            ctx.Response.Headers["X-Accel-Buffering"] = "no"; // disable nginx/Railway proxy buffering
-            await ctx.Response.Body.FlushAsync(ct);
-
-            using var sub = bus.Subscribe(out var reader);
-
-            var last = SseJson(PublicServerStrip.From(registry.ListActive(), PublicServerStrip.Shown));
-            await WriteSseEvent(ctx.Response.Body, "snapshot", last, ct);
-
-            // Single writer: one loop does both the events and the 20 s keepalive comment, waking on
-            // whichever comes first. (The player stream above runs its keepalive as a second task
-            // because it doubles as a mid-stream ban check; this one has nothing to re-check.)
-            while (!ct.IsCancellationRequested)
+            using var wake = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            wake.CancelAfter(PublicStreams.KeepaliveInterval);
+            try
             {
-                using var wake = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                wake.CancelAfter(PublicStreams.KeepaliveInterval);
-                try
-                {
-                    if (!await reader.WaitToReadAsync(wake.Token))
-                        return; // bus closed the subscription
-                }
-                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-                {
-                    await WriteSseComment(ctx.Response.Body, ct);
-                    continue;
-                }
-
-                // Coalesce: several listings can change between wakeups, and one snapshot covers them.
-                while (reader.TryRead(out _)) { }
-
-                var snapshot = SseJson(PublicServerStrip.From(registry.ListActive(), PublicServerStrip.Shown));
-                if (snapshot == last)
-                    continue; // nothing the strip shows actually moved (e.g. a roster-only update)
-                last = snapshot;
-                await WriteSseEvent(ctx.Response.Body, "snapshot", snapshot, ct);
+                if (!await reader.WaitToReadAsync(wake.Token))
+                    return; // bus closed the subscription
             }
-        }
-        catch (OperationCanceledException) { }
-        finally
-        {
-            PublicStreams.Exit();
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                await WriteSseComment(ctx.Response.Body, ct);
+                continue;
+            }
+
+            // Coalesce: several listings can change between wakeups, and one snapshot covers them.
+            while (reader.TryRead(out _)) { }
+
+            var snapshot = SseJson(PublicServerStrip.From(registry.ListActive(), PublicServerStrip.Shown));
+            if (snapshot == last)
+                continue; // nothing the strip shows actually moved (e.g. a roster-only update)
+            last = snapshot;
+            await WriteSseEvent(ctx.Response.Body, "snapshot", snapshot, ct);
         }
     }
-);
+    catch (OperationCanceledException) { }
+    finally
+    {
+        PublicStreams.Exit();
+    }
+});
 
 // ---- Signaling: WebRTC SDP relay ------------------------------------------
 
@@ -569,32 +560,24 @@ app.MapPost(
 
 // Game server long-polls for offers addressed to it. Still supported as fallback for servers
 // without a WS connection (direct-mode or reconnecting). New servers receive offers via WS.
-app.MapGet(
-    "/servers/{sessionId}/pending",
-    async (string sessionId, SignalingRelay relay, CancellationToken ct) =>
-        Results.Ok(await relay.TakePendingAsync(sessionId, ct))
+app.MapGet("/servers/{sessionId}/pending", async (string sessionId, SignalingRelay relay, CancellationToken ct) =>
+    Results.Ok(await relay.TakePendingAsync(sessionId, ct))
 );
 
 // Game server posts its SDP answer for a ticket.
-app.MapPost(
-    "/connect/{ticket}/answer",
-    (string ticket, AnswerRequest req, SignalingRelay relay) =>
-    {
-        if (string.IsNullOrWhiteSpace(req.SdpAnswer))
-            return Results.BadRequest(new { error = "empty answer" });
-        return relay.PostAnswer(ticket, req.SdpAnswer) ? Results.NoContent() : Results.NotFound();
-    }
-);
+app.MapPost("/connect/{ticket}/answer", (string ticket, AnswerRequest req, SignalingRelay relay) =>
+{
+    if (string.IsNullOrWhiteSpace(req.SdpAnswer))
+        return Results.BadRequest(new { error = "empty answer" });
+    return relay.PostAnswer(ticket, req.SdpAnswer) ? Results.NoContent() : Results.NotFound();
+});
 
 // Client long-polls for the answer to its ticket.
-app.MapGet(
-    "/connect/{ticket}/answer",
-    async (string ticket, SignalingRelay relay, CancellationToken ct) =>
-    {
-        var answer = await relay.WaitAnswerAsync(ticket, ct);
-        return answer is null ? Results.NoContent() : Results.Ok(new AnswerResponse(answer));
-    }
-);
+app.MapGet("/connect/{ticket}/answer", async (string ticket, SignalingRelay relay, CancellationToken ct) =>
+{
+    var answer = await relay.WaitAnswerAsync(ticket, ct);
+    return answer is null ? Results.NoContent() : Results.Ok(new AnswerResponse(answer));
+});
 
 var startupLog = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("PublicLobby");
 

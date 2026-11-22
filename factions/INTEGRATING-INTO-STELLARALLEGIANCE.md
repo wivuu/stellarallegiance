@@ -11,7 +11,7 @@ surface you actually call.
 
 ## 1. What the library gives you
 
-`Allegiance.Factions` is a standalone **.NET (net10.0) class library** (no game-engine dependencies,
+`Allegiance.Factions` is a standalone **.NET (net11.0) class library** (no game-engine dependencies,
 only `YamlDotNet`). It owns:
 
 - **The data model** — a `Core` (the complete static dataset) holding catalogs of `Hull`, `Part`
@@ -35,7 +35,7 @@ multipliers after these developments?". StellarAllegiance owns everything else.
 ```
 factions/                                       # vendored in-repo at the monorepo root
   src/Allegiance.Factions/                      # <-- the library you depend on
-    Allegiance.Factions.csproj                  #     net10.0, RootNamespace "Allegiance.Factions", refs YamlDotNet 18.1.0
+    Allegiance.Factions.csproj                  #     net11.0, RootNamespace "Allegiance.Factions", refs YamlDotNet 18.1.0
   src/Allegiance.Factions.Cli/                  # validate/roundtrip/schema CLI (optional tooling, do not ship)
   tests/Allegiance.Factions.Tests/              # xUnit tests (reference for usage patterns)
   sample-data/                                  # a runnable 3-faction bundle (manifest + catalog + factions/)
@@ -62,8 +62,8 @@ The server project's `.csproj` references the vendored library directly:
 </ItemGroup>
 ```
 
-(Adjust the relative path to wherever the consuming project sits. Both target `net10.0`; if the game
-targets a later TFM that's fine, net10.0 libs load into later runtimes.)
+(Adjust the relative path to wherever the consuming project sits. Both target `net11.0`; if the game
+targets a later TFM that's fine, net11.0 libs load into later runtimes.)
 
 ### Option B — Package it as NuGet
 
@@ -301,7 +301,7 @@ public sealed class TeamState
 
 ```bash
 # From factions/
-dotnet build src/Allegiance.Factions/Allegiance.Factions.csproj   # compiles clean on net10.0
+dotnet build src/Allegiance.Factions/Allegiance.Factions.csproj   # compiles clean on net11.0
 dotnet test                               # xUnit tests (model round-trip, resolution, validation)
 dotnet run --project src/Allegiance.Factions.Cli -- validate sample-data/core.manifest.yaml
 ```

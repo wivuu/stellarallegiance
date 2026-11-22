@@ -445,14 +445,11 @@ foreach (int lead in new[] { 0, 5 })
     // Cloak held (and the Gat firing) for 700 ticks — past the ~524 it takes Sig Cloak 1 to drain an
     // Iron Scout's 1440 net of recharge — then released for 200.
     uint start = sim.Tick;
-    var t = Drive(
-        sim,
-        s,
-        client,
-        ticks: 900,
-        lead: lead,
-        clientInput: tick => new ShipInputState { Firing = true, Cloak = tick <= start + 700 }
-    );
+    var t = Drive(sim, s, client, ticks: 900, lead: lead, clientInput: tick => new ShipInputState
+    {
+        Firing = true,
+        Cloak = tick <= start + 700,
+    });
     Check(
         (lead == 0 ? Exact(t) : t.PredMismatches == 0 && t.ResyncTicks.Count == 0) && t.PeakCloak == full,
         $"cloak held then released (client {lead} ticks ahead): the u16 level + f32 energy matched exactly every tick, peaking at MaxCloaking ({full}) ({Describe(t)})",

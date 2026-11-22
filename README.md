@@ -14,9 +14,9 @@ lobby. Clients connect directly to a server by `ip:port` and download everything
 (world, content defs, live state) from it — there is no database to stand up.
 
 ```
-client/        Godot 4.7 (C#/.NET 10) — rendering, input, client-side prediction
-server/        .NET 10 console — authoritative 20 Hz sim + lobby host (the only gameplay authority)
-public-lobby/  .NET 10 web — PUBLIC LOBBY: player accounts + game-server registry + WebRTC signaling + match ladder (Postgres/Orleans)
+client/        Godot 4.7 (C#/.NET 11) — rendering, input, client-side prediction
+server/        .NET 11 console — authoritative 20 Hz sim + lobby host (the only gameplay authority)
+public-lobby/  .NET 11 web — PUBLIC LOBBY: player accounts + game-server registry + WebRTC signaling + match ladder (Postgres/Orleans)
 shared/        deterministic FlightModel + content defs, compiled into BOTH client and server
 tools/         simbot (load bot swarm), asteroid-gen (mesh catalog)
 tests/         ~20 test suites (FlightModel determinism/golden, Crypto, …) + factions/tests
@@ -28,9 +28,10 @@ by both sides so their physics and content stay bit-identical.
 
 ## Prerequisites
 
-- **.NET 10 SDK** (`dotnet --version` ≥ 10) — newer SDKs work too.
-- **Aspire CLI** — `dotnet tool install -g Aspire.Cli` or
-  `curl -sSL https://aspire.dev/install.sh | bash`. Orchestrates the local stack (`aspire run`).
+- **.NET 11 SDK** (`dotnet --version` ≥ 11.0.100) — newer SDKs work too.
+- **Aspire CLI 17+** — `curl -sSL https://aspire.dev/install.sh | bash` (or
+  `dotnet tool install -g Aspire.Cli`); `aspire update --self` upgrades it. Orchestrates the local
+  stack (`aspire run`), and a C# AppHost on Aspire 17 needs the CLI's bundle to build and run.
 - **Docker** — runs the local Postgres container the public lobby needs.
 - **Godot 4.7.2 — Mono/.NET build**, to run the client. Auto-detected from the `GODOT` env var, the
   `godot.executablePath` user secret, PATH, or standard install locations; the Aspire dashboard

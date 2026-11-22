@@ -1,4 +1,4 @@
-<Project Sdk="Aspire.AppHost.Sdk/13.6.4">
+<Project Sdk="Microsoft.NET.Sdk">
   <!--
     Aspire AppHost: one `aspire run` boots Postgres -> lobby migrations -> public lobby -> sim server,
     with dashboard commands to launch Godot clients, approve a server's device code, and deploy the
@@ -7,31 +7,18 @@
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>StellarAllegiance.AppHost</RootNamespace>
     <!-- Shared with scripts/godot-bin.ps1 and the "Godot: set executable path" VS Code task, so the
          godot.executablePath secret and the dashboard's "Save to user secret" land in one file. -->
     <UserSecretsId>stellarallegiance</UserSecretsId>
-    <!-- Custom commands / parameters / pipeline steps use APIs Aspire still marks experimental. -->
-    <NoWarn>$(NoWarn);ASPIREINTERACTION001;ASPIREPIPELINES001;ASPIREPUBLISHERS001</NoWarn>
-    <AspireUseCliBundle>true</AspireUseCliBundle>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting.AppHost" />
+    <PackageReference Include="Aspire.Hosting.Dotnet" />
     <PackageReference Include="Aspire.Hosting.PostgreSQL" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- Aspire project resources (generate Projects.PublicLobby / Projects.SimServer). The Godot client
-         is NOT referenced: it is a Godot.NET.Sdk project launched by the Godot binary (executable resource).
-         The Game Launcher (launcher/App/StellarLauncher.csproj) is NOT referenced either: it is an
-         executable resource that runs its own BUILT BINARY, built via `dotnet build` in
-         OnBeforeResourceStarted (see Hosting/GameLauncher.cs), so a launcher compile error only fails
-         that one resource, with the build output in its console log. -->
-    <ProjectReference Include="../public-lobby/PublicLobby.csproj" />
-    <ProjectReference Include="../server/SimServer.csproj" />
   </ItemGroup>
 </Project>

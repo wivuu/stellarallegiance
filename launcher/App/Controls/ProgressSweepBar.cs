@@ -28,17 +28,13 @@ public sealed class ProgressSweepBar : Control
     public ProgressSweepBar()
     {
         Height = 6;
-        _timer = new DispatcherTimer(
-            TimeSpan.FromMilliseconds(33),
-            DispatcherPriority.Render,
-            (_, _) =>
-            {
-                if (IsEffectivelyVisible)
-                    InvalidateVisual();
-                else
-                    UpdateTimer(); // window hidden: stop; Configure() restarts us with the next view
-            }
-        );
+        _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(33), DispatcherPriority.Render, (_, _) =>
+        {
+            if (IsEffectivelyVisible)
+                InvalidateVisual();
+            else
+                UpdateTimer(); // window hidden: stop; Configure() restarts us with the next view
+        });
     }
 
     public void Configure(BarMode mode, int percent, GColor color)
