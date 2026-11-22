@@ -108,6 +108,9 @@ public partial class ShieldFlash : Node3D
         AddChild(_sphere);
     }
 
+    // Cached: a string literal passed per frame is converted to a StringName on every call.
+    private static readonly StringName TimeParam = "u_t";
+
     public override void _Process(double delta)
     {
         _age += delta;
@@ -118,6 +121,6 @@ public partial class ShieldFlash : Node3D
             return;
         }
         _sphere.Scale = Vector3.One * _radius;
-        _mat.SetShaderParameter("u_t", t);
+        _mat.SetShaderParameter(TimeParam, t);
     }
 }
