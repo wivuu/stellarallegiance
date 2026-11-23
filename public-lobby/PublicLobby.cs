@@ -66,6 +66,10 @@ builder.Services.AddSingleton(
 builder.Services.AddSingleton(releaseOptions);
 builder.Services.AddSingleton(ReleaseWatcher.CreateFetcher(releaseOptions));
 builder.Services.AddHostedService<ReleaseWatcher>();
+
+// An hourly full collection hands back what the routine ones leave committed (Hosting/PeriodicFullGc.cs).
+builder.Services.AddSingleton(PeriodicFullGcOptions.FromEnv(Environment.GetEnvironmentVariable));
+builder.Services.AddHostedService<PeriodicFullGc>();
 builder.Services.AddSingleton<ServerConnectionManager>();
 builder.Services.AddSingleton<IServerRegistry>(new InMemoryServerRegistry(stunServers, bus));
 builder.Services.AddSingleton<SignalingRelay>();

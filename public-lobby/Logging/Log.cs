@@ -70,4 +70,32 @@ internal static partial class Log
         Message = "server {SessionId}: listing bookkeeping failed ({Error}: {Reason}); keeping the socket"
     )]
     public static partial void ServerListedBookkeepingFailed(ILogger logger, string sessionId, string error, string reason);
+
+    // ---- Memory (Hosting/PeriodicFullGc.cs) ----
+
+    // Same shape as the game server's event 1008, plus the JIT'd method count. The collection counts
+    // include this one.
+    [LoggerMessage(
+        EventId = 30,
+        Level = LogLevel.Information,
+        Message = "periodic full GC: heap {HeapBefore} -> {HeapAfter} MB (last GC left gen1 {Gen1} MB, gen2 {Gen2} MB, LOH {Loh} MB), "
+            + "committed {CommittedBefore} -> {CommittedAfter} MB, working set {WorkingSetBefore} -> {WorkingSetAfter} MB, "
+            + "{Ms:F1} ms, gen1/gen2 collections so far {Gen1Count}/{Gen2Count}, {JitMethods} methods compiled"
+    )]
+    public static partial void PeriodicFullCollection(
+        ILogger logger,
+        double heapBefore,
+        double heapAfter,
+        double gen1,
+        double gen2,
+        double loh,
+        double committedBefore,
+        double committedAfter,
+        double workingSetBefore,
+        double workingSetAfter,
+        double ms,
+        int gen1Count,
+        int gen2Count,
+        long jitMethods
+    );
 }

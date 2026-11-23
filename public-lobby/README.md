@@ -99,6 +99,7 @@ Environment variables (see [`PublicLobby.cs`](PublicLobby.cs)):
 | `LOBBY_RELEASE_VERSION` | unset | The lobby's baked-in "latest game release" ([`ReleaseState`](ReleaseAdverts/ReleaseState.cs)), known the instant the process boots — which is exactly when every game server reconnects, so a lobby redeploy is usually what flips the fleet. Set by `aspire do deploy-lobby` from the latest stable git tag; blank/unset means no baked version (adverts then come from the polled feed alone). |
 | `LOBBY_RELEASE_FEED_URL` | the project's own GitHub "latest release" server feed | Feed the lobby polls for the *confirmed* version: an `http(s)` URL, or a local file path (dev / verification). Empty = the default. |
 | `LOBBY_RELEASE_POLL_SECONDS` | `300` (min `5`) | Poll cadence. `0` disables polling — baked-only, and game clients then hear nothing (they're only ever told the *confirmed* version, never the baked one — see "Release Adverts" below). |
+| `LOBBY_FULL_GC_MINUTES` | `60` | Minutes between full, blocking, compacting garbage collections ([`PeriodicFullGc`](Hosting/PeriodicFullGc.cs)), which hand back memory the routine collections leave committed. Each one pauses the process for its duration and logs a `periodic full GC:` line (event 30) with the heap before and after, the pause, and the JIT'd method count. `0` turns it off. |
 
 A public STUN server is fine — there's nothing to host for it. The live server registry and
 signaling relay still hold everything in memory (registry entries expire 30 s after the last
